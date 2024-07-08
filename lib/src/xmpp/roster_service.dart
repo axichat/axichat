@@ -1,4 +1,4 @@
-part of '../../main.dart';
+part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin RosterService on XmppBase {
   Stream<List<RosterItem>>? get rosterStream => _database.value?.watchRoster();
@@ -55,7 +55,8 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   final XmppService owner;
 
   static const keyPrefix = 'roster_state';
-  final rosterVersionKey = RegisteredStateKey._('${keyPrefix}_last_version');
+  final rosterVersionKey =
+      XmppStateStore.registerKey('${keyPrefix}_last_version');
 
   @override
   Future<void> commitRoster(
@@ -64,7 +65,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> modified,
     List<mox.XmppRosterItem> added,
   ) async {
-    await _dbOp<_XmppDatabase>(owner, (db) async {
+    await owner._dbOp<XmppDatabase>((db) async {
       for (final jid in removed) {
         await db.deleteRosterItem(jid);
         await db.deleteChat(jid);
@@ -96,7 +97,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     });
 
     if (version != null) {
-      await _dbOp<_XmppStateStore>(owner, (ss) async {
+      await owner._dbOp<XmppStateStore>((ss) async {
         await ss.write(key: rosterVersionKey, value: version);
       });
     }
@@ -105,12 +106,12 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   @override
   Future<mox.RosterCacheLoadResult> loadRosterCache() async {
     String? version;
-    await _dbOp<_XmppStateStore>(owner, (ss) {
+    await owner._dbOp<XmppStateStore>((ss) {
       version = ss.read(key: rosterVersionKey) as String?;
     });
 
     final rosterItems = <mox.XmppRosterItem>[];
-    await _dbOp<_XmppDatabase>(owner, (db) async {
+    await owner._dbOp<XmppDatabase>((db) async {
       for (final item in (await db.selectRoster())) {
         rosterItems.add(mox.XmppRosterItem(
           jid: item.jid,

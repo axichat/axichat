@@ -48,6 +48,7 @@ dependencies:
   popover: ^0.3.0+1
   hive_generator: ^2.0.1
   async: ^2.11.0
+  mocktail: ^1.0.4
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@ import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_bloc.dart';
 import 'package:chat/src/roster/view/roster_card.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

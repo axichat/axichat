@@ -1,7 +1,7 @@
-import 'package:chat/main.dart';
 import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
 import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
+import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';

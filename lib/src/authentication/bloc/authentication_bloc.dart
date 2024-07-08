@@ -1,6 +1,7 @@
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:chat/main.dart';
+import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
 import 'package:logging/logging.dart';
 

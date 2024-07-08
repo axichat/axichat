@@ -1,4 +1,3 @@
-import 'package:chat/main.dart' hide Chat, Chats;
 import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_list.dart';
@@ -12,6 +11,7 @@ import 'package:chat/src/roster/bloc/roster_bloc.dart';
 import 'package:chat/src/roster/view/roster_add_button.dart';
 import 'package:chat/src/roster/view/roster_invites_list.dart';
 import 'package:chat/src/roster/view/roster_list.dart';
+import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

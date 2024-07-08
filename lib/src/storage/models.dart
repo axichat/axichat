@@ -1,4 +1,16 @@
-part of '../../main.dart';
+import 'dart:convert';
+
+import 'package:drift/drift.dart' hide JsonKey;
+import 'package:flutter/material.dart' hide Table, Column;
+import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:hive/hive.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:uuid/uuid.dart';
+
+import 'database.dart';
+
+part 'models.freezed.dart';
+part 'models.g.dart';
 
 const uuid = Uuid();
 
@@ -463,7 +475,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         lastMessageID: Value.absentIfNull(lastMessageID),
         lastChangeTimestamp: Value(lastChangeTimestamp),
         unreadCount: Value(unreadCount),
-        open: Value(this.open),
+        open: Value(open),
         muted: Value(muted),
         encrypted: Value(encrypted),
         favourited: Value(favourited),

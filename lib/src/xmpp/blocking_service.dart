@@ -1,4 +1,4 @@
-part of '../../main.dart';
+part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin BlockingService on XmppBase {
   Stream<List<BlocklistData>>? get blocklistStream =>
@@ -7,7 +7,7 @@ mixin BlockingService on XmppBase {
   Future<void> requestBlocklist() async {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
-      await _dbOp<_XmppDatabase>(owner, (db) async {
+      await _dbOp<XmppDatabase>((db) async {
         await db.deleteBlocklist();
         for (final blocked in await bm.getBlocklist()) {
           await db.insertBlocklistData(blocked);

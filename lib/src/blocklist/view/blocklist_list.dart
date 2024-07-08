@@ -2,6 +2,7 @@ import 'package:chat/main.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_tile.dart';
+import 'package:chat/src/storage/database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

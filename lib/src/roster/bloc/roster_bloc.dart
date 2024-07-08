@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:chat/main.dart';
+import 'package:chat/src/storage/models.dart';
+import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
 
 part 'roster_event.dart';

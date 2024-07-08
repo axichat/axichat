@@ -1,14 +1,23 @@
-part of '../../main.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
-abstract interface class Database {}
+import 'package:crypto/crypto.dart';
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
+import 'package:sqlite3/open.dart';
 
-abstract interface class RelationalDatabase implements Database {}
+import 'models.dart';
 
-abstract class ProtectedDatabase {
-  ProtectedDatabase._(this.username, this.passphrase);
+part 'database.g.dart';
 
-  final String username;
-  final String passphrase;
+abstract interface class Database {
+  Future<void> close();
 }
 
 @DriftDatabase(tables: [
@@ -24,16 +33,18 @@ abstract class ProtectedDatabase {
   Stickers,
   StickerPacks,
 ])
-class _XmppDatabase extends _$XmppDatabase
-    implements ProtectedDatabase, RelationalDatabase {
-  _XmppDatabase._(this.username, this.passphrase)
-      : super(_openDatabase(username, passphrase));
+class XmppDatabase extends _$XmppDatabase implements Database {
+  XmppDatabase._(super.e) : super();
 
-  @override
-  final String username;
+  static XmppDatabase? _instance;
 
-  @override
-  final String passphrase;
+  factory XmppDatabase({
+    required String username,
+    required String passphrase,
+    QueryExecutor? executor,
+  }) =>
+      _instance ??=
+          XmppDatabase._(executor ?? _openDatabase(username, passphrase));
 
   @override
   int get schemaVersion => 1;
@@ -65,11 +76,11 @@ class _XmppDatabase extends _$XmppDatabase
   Future<RosterItem?> selectRosterItem(String jid) =>
       (select(roster)..where((roster) => roster.jid.equals(jid)))
           .getSingleOrNull();
-  Future<void> insertRosterItem(Insertable<RosterItem> item) =>
+  Future<void> insertRosterItem(RosterItem item) =>
       into(roster).insert(item, mode: InsertMode.insertOrIgnore);
-  Future<void> insertOrUpdateRosterItem(Insertable<RosterItem> item) =>
+  Future<void> insertOrUpdateRosterItem(RosterItem item) =>
       into(roster).insertOnConflictUpdate(item);
-  Future<void> updateRosterItem(Insertable<RosterItem> item) =>
+  Future<void> updateRosterItem(RosterItem item) =>
       update(roster).replace(item);
   Future<void> deleteRosterItem(String jid) =>
       (delete(roster)..where((item) => item.jid.equals(jid))).go();
@@ -79,7 +90,7 @@ class _XmppDatabase extends _$XmppDatabase
   Future<Invite?> selectInvite(String jid) =>
       (select(invites)..where((invites) => invites.jid.equals(jid)))
           .getSingleOrNull();
-  Future<void> insertInvite(Insertable<Invite> item) =>
+  Future<void> insertInvite(Invite item) =>
       into(invites).insert(item, mode: InsertMode.insertOrIgnore);
   Future<void> deleteInvite(String jid) =>
       (delete(invites)..where((item) => item.jid.equals(jid))).go();
@@ -108,6 +119,12 @@ class _XmppDatabase extends _$XmppDatabase
   Future<void> updateChat(Insertable<Chat> item) => update(chats).replace(item);
   Future<void> deleteChat(String jid) =>
       (delete(roster)..where((item) => item.jid.equals(jid))).go();
+
+  @override
+  Future<void> close() async {
+    await super.close();
+    _instance = null;
+  }
 }
 
 QueryExecutor _openDatabase(String username, String passphrase) {

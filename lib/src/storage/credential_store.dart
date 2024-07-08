@@ -1,4 +1,8 @@
-part of '../../main.dart';
+import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/common/policy.dart';
+import 'package:chat/src/storage/state_store.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:logging/logging.dart';
 
 class RegisteredCredentialKey {
   RegisteredCredentialKey._(this.value) {
@@ -14,17 +18,27 @@ class RegisteredCredentialKey {
 }
 
 class CredentialStore
-    implements KeyValueDatabase<RegisteredCredentialKey, String> {
-  CredentialStore._();
+    extends KeyValueDatabase<RegisteredCredentialKey, String> {
+  CredentialStore._(this.capability, this.policy);
+
+  static CredentialStore? _instance;
+
+  factory CredentialStore({
+    required Capability capability,
+    required Policy policy,
+  }) =>
+      _instance ??= CredentialStore._(capability, policy);
+
+  final Capability capability;
+  final Policy policy;
 
   final Logger _log = Logger('CredentialStore');
 
-  final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
-    aOptions: Policy().getFssAndroidOptions(),
+  late final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: policy.getFssAndroidOptions(),
   );
 
-  @override
-  RegisteredCredentialKey registerKey(String key) =>
+  static RegisteredCredentialKey registerKey(String key) =>
       RegisteredCredentialKey._(key);
 
   @override
@@ -66,7 +80,7 @@ class CredentialStore
   Future<Map<String, String?>> readAll() async {
     final values = <String, String?>{};
     try {
-      if (!Capability().canFssBatchOperation) {
+      if (!capability.canFssBatchOperation) {
         for (final key in RegisteredCredentialKey._registeredKeys) {
           values[key.value] = await read(key: key);
         }
@@ -97,7 +111,7 @@ class CredentialStore
   Future<bool> deleteAll({bool burn = false}) async {
     try {
       _log.info('Deleting all values...');
-      if (!Capability().canFssBatchOperation) {
+      if (!capability.canFssBatchOperation) {
         for (final key in RegisteredCredentialKey._registeredKeys) {
           await _secureStorage.delete(key: key.value);
         }
@@ -109,5 +123,10 @@ class CredentialStore
       _log.severe('Failed to delete all values:', e);
     }
     return false;
+  }
+
+  @override
+  Future<void> close() async {
+    _instance = null;
   }
 }

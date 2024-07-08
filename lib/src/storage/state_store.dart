@@ -1,7 +1,11 @@
-part of '../../main.dart';
+import 'dart:async';
 
-abstract interface class KeyValueDatabase<K, V> implements Database {
-  K registerKey(String key);
+import 'package:hive/hive.dart';
+import 'package:logging/logging.dart';
+
+import 'database.dart';
+
+abstract class KeyValueDatabase<K, V> implements Database {
   FutureOr<V?> read({required K key});
   Future<bool> write({required K key, required V? value});
   Future<bool> delete({required K key});
@@ -23,8 +27,12 @@ class RegisteredStateKey {
   static final _registeredKeys = <RegisteredStateKey>{};
 }
 
-class _XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
-  _XmppStateStore._();
+class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
+  XmppStateStore._();
+
+  static XmppStateStore? _instance;
+
+  factory XmppStateStore() => _instance ??= XmppStateStore._();
 
   final _log = Logger('XmppStateStore');
 
@@ -32,8 +40,8 @@ class _XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
 
   bool get initialized => Hive.isBoxOpen(boxName);
 
-  @override
-  RegisteredStateKey registerKey(String key) => RegisteredStateKey._(key);
+  static RegisteredStateKey registerKey(String key) =>
+      RegisteredStateKey._(key);
 
   Stream<S>? watch<S>({required RegisteredStateKey key}) {
     if (!initialized) return null;
@@ -92,8 +100,10 @@ class _XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
     return true;
   }
 
+  @override
   Future<void> close() async {
     if (!initialized) return;
     await Hive.box(boxName).close();
+    _instance = null;
   }
 }

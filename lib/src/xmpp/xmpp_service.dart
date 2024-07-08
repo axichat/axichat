@@ -1,4 +1,22 @@
-part of '../../main.dart';
+import 'dart:async';
+import 'dart:io';
+
+import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/common/policy.dart';
+import 'package:chat/src/storage/credential_store.dart';
+import 'package:chat/src/storage/database.dart';
+import 'package:chat/src/storage/impatient_completer.dart';
+import 'package:chat/src/storage/models.dart';
+import 'package:chat/src/storage/state_store.dart';
+import 'package:flutter/foundation.dart';
+import 'package:logging/logging.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
+import 'package:retry/retry.dart' show RetryOptions;
+
+part 'blocking_service.dart';
+part 'presence_service.dart';
+part 'roster_service.dart';
 
 sealed class XmppException implements Exception {
   XmppException([this.wrapped]) : super();
@@ -16,6 +34,8 @@ final class XmppDatabaseCreationException extends XmppException {
   XmppDatabaseCreationException([super.wrapped]);
 }
 
+final class XmppNoDatabaseException extends XmppException {}
+
 final class XmppAbortedException extends XmppException {}
 
 final class XmppRosterException extends XmppException {}
@@ -25,10 +45,6 @@ final class XmppPresenceException extends XmppException {}
 final class XmppBlocklistException extends XmppException {}
 
 final class XmppBlockUnsupportedException extends XmppException {}
-
-// extension on Completer {
-//   Future<T?> value<T>() async => isCompleted ? await future as T : null;
-// }
 
 final _devServerLookup = <String, IOEndpoint>{
   'draugr.de': IOEndpoint(
@@ -46,8 +62,8 @@ abstract class XmppBase {
 
   final String domain;
   late XmppConnection _connection;
-  var _stateStore = ImpatientCompleter(Completer<_XmppStateStore>());
-  var _database = ImpatientCompleter(Completer<_XmppDatabase>());
+  var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
+  var _database = ImpatientCompleter(Completer<XmppDatabase>());
 
   XmppBase get owner;
 
@@ -56,51 +72,62 @@ abstract class XmppBase {
   Future<bool> login(String? username, String? password);
   Future<void> logout();
 
-  Completer<T>? _getDatabaseOfType<T extends Database>();
+  Future _dbOp<T extends Database>(
+    FutureOr Function(T) operation, {
+    bool awaitDatabase = false,
+  });
 }
 
 class XmppService extends XmppBase
     with RosterService, PresenceService, BlockingService {
   XmppService._(
-    super.domain, {
-    required FutureOr<CredentialStore> Function() buildCredentialStore,
-    required FutureOr<_XmppStateStore> Function(String, String) buildStateStore,
-    required FutureOr<_XmppDatabase> Function(String, String) buildDatabase,
-    required Capability capability,
-    required Policy policy,
-    XmppReconnectionPolicy? reconnectionPolicy,
-    XmppConnectivityManager? connectivityManager,
-    XmppClientNegotiator? negotiationsHandler,
-    XmppSocketWrapper? socketWrapper,
-  })  : _buildDatabase = buildDatabase,
-        _buildStateStore = buildStateStore,
-        _buildCredentialStore = buildCredentialStore,
-        _buildConnection = (() => XmppConnection(
-              reconnectionPolicy: reconnectionPolicy,
-              connectivityManager: connectivityManager,
-              negotiationsHandler: negotiationsHandler,
-              socketWrapper: socketWrapper,
-            )),
-        _capability = capability,
-        _policy = policy {
+    super.domain,
+    this._buildConnection,
+    this._buildCredentialStore,
+    this._buildStateStore,
+    this._buildDatabase,
+    this._capability,
+    this._policy,
+  ) {
     _connection = _buildConnection();
   }
+
+  static XmppService? _instance;
+
+  factory XmppService(
+    String domain, {
+    required XmppConnection Function() buildConnection,
+    required FutureOr<CredentialStore> Function() buildCredentialStore,
+    required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
+    required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
+    required Capability capability,
+    required Policy policy,
+  }) =>
+      _instance ??= XmppService._(
+        domain,
+        buildConnection,
+        buildCredentialStore,
+        buildStateStore,
+        buildDatabase,
+        capability,
+        policy,
+      );
 
   final _log = Logger('XmppService');
 
   final XmppConnection Function() _buildConnection;
   final FutureOr<CredentialStore> Function() _buildCredentialStore;
-  final FutureOr<_XmppStateStore> Function(String, String) _buildStateStore;
-  final FutureOr<_XmppDatabase> Function(String, String) _buildDatabase;
+  final FutureOr<XmppStateStore> Function(String, String) _buildStateStore;
+  final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
   final Capability _capability;
   final Policy _policy;
 
-  final usernameStorageKey = RegisteredCredentialKey._('username');
-  final passwordStorageKey = RegisteredCredentialKey._('password');
+  final usernameStorageKey = CredentialStore.registerKey('username');
+  final passwordStorageKey = CredentialStore.registerKey('password');
 
-  final resourceStorageKey = RegisteredStateKey._('last_resource');
-  final fastTokenStorageKey = RegisteredStateKey._('fast_token');
-  final userAgentStorageKey = RegisteredStateKey._('user_agent');
+  final resourceStorageKey = XmppStateStore.registerKey('last_resource');
+  final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
+  final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
 
   Completer<CredentialStore> _credentialStore = Completer<CredentialStore>();
 
@@ -116,8 +143,6 @@ class XmppService extends XmppBase
       _credentialStore.isCompleted &&
       _stateStore.isCompleted &&
       _database.isCompleted;
-
-  bool get authenticated => user != null && databasesInitialized;
 
   bool get needsReset =>
       user != null ||
@@ -145,20 +170,20 @@ class XmppService extends XmppBase
         await requestBlocklist();
       case mox.ResourceBoundEvent event:
         _log.info('Saving resource...');
-        await _dbOp<_XmppStateStore>(owner, (ss) async {
+        await _dbOp<XmppStateStore>((ss) async {
           await ss.write(key: resourceStorageKey, value: event.resource);
           _log.info('Saved resource: ${event.resource}.');
         });
       case mox.NewFASTTokenReceivedEvent event:
         _log.info('Saving FAST token...');
-        await _dbOp<_XmppStateStore>(owner, (ss) async {
+        await _dbOp<XmppStateStore>((ss) async {
           await ss.write(key: fastTokenStorageKey, value: event.token.token);
           _log.info('Saved FAST token: ${event.token.token}.');
         });
       case mox.SubscriptionRequestReceivedEvent event:
         final requester = event.from.toBare().toString();
         _log.info('Subscription request received from $requester');
-        await _dbOp<_XmppDatabase>(owner, (db) async {
+        await _dbOp<XmppDatabase>((db) async {
           final item = await db.selectRosterItem(requester);
           if (item != null) {
             _log.info('Accepting subscription request from $requester...');
@@ -173,21 +198,21 @@ class XmppService extends XmppBase
           ));
         });
       case mox.BlocklistBlockPushEvent event:
-        await _dbOp<_XmppDatabase>(owner, (db) async {
+        await _dbOp<XmppDatabase>((db) async {
           for (final blocked in event.items) {
             _log.info('Adding $blocked to blocklist...');
             await db.insertBlocklistData(blocked);
           }
         });
       case mox.BlocklistUnblockPushEvent event:
-        await _dbOp<_XmppDatabase>(owner, (db) async {
+        await _dbOp<XmppDatabase>((db) async {
           for (final unblocked in event.items) {
             _log.info('Removing $unblocked from blocklist...');
             await db.deleteBlocklistData(unblocked);
           }
         });
       case mox.BlocklistUnblockAllPushEvent _:
-        await _dbOp<_XmppDatabase>(owner, (db) async {
+        await _dbOp<XmppDatabase>((db) async {
           _log.info('Removing entire blocklist...');
           await db.deleteBlocklist();
         });
@@ -201,7 +226,6 @@ class XmppService extends XmppBase
     bool saveCredentials = true,
   ]) async {
     assert((username == null) == (password == null));
-    if (authenticated) return true;
 
     if (needsReset) await _reset();
 
@@ -215,8 +239,8 @@ class XmppService extends XmppBase
             'Attempting to authenticate directly with server...');
 
         bool attemptResumeStream = false;
-        await _dbOp<CredentialStore>(owner, (cs) async {
-          final databasePassphraseStorageKey = cs.registerKey(
+        await _dbOp<CredentialStore>((cs) async {
+          final databasePassphraseStorageKey = CredentialStore.registerKey(
               '${storagePrefixFor(username!)}_database_passphrase');
           final databasePassphrase =
               await cs.read(key: databasePassphraseStorageKey);
@@ -255,13 +279,13 @@ class XmppService extends XmppBase
 
         _log.info('Login successful. Initializing databases...');
 
-        await _dbOp<CredentialStore>(owner, (cs) async {
+        await _dbOp<CredentialStore>((cs) async {
           if (saveCredentials) {
             await cs.write(key: usernameStorageKey, value: username);
             await cs.write(key: passwordStorageKey, value: password);
           }
 
-          final databasePassphraseStorageKey = cs.registerKey(
+          final databasePassphraseStorageKey = CredentialStore.registerKey(
               '${storagePrefixFor(username!)}_database_passphrase');
           var databasePassphrase =
               await cs.read(key: databasePassphraseStorageKey);
@@ -278,8 +302,6 @@ class XmppService extends XmppBase
           await _initDatabases(username!, databasePassphrase);
         });
 
-        assert(authenticated);
-
         return;
       }
 
@@ -287,7 +309,7 @@ class XmppService extends XmppBase
           'Attempting to log in from stored user...');
 
       String? databasePassphrase;
-      await _dbOp<CredentialStore>(owner, (cs) async {
+      await _dbOp<CredentialStore>((cs) async {
         username = await cs.read(key: usernameStorageKey);
         password = await cs.read(key: passwordStorageKey);
 
@@ -301,8 +323,8 @@ class XmppService extends XmppBase
           throw XmppUserNotFoundException();
         }
 
-        final databasePassphraseStorageKey = cs
-            .registerKey('${storagePrefixFor(username!)}_database_passphrase');
+        final databasePassphraseStorageKey = CredentialStore.registerKey(
+            '${storagePrefixFor(username!)}_database_passphrase');
         databasePassphrase = await cs.read(key: databasePassphraseStorageKey);
 
         if (databasePassphrase == null || databasePassphrase!.isEmpty) {
@@ -327,8 +349,6 @@ class XmppService extends XmppBase
 
       _connection.connectionSettings = XmppConnectionSettings(user: newUser);
       _connection.connect();
-
-      assert(authenticated);
 
       return;
     });
@@ -395,7 +415,7 @@ class XmppService extends XmppBase
 
     if (attemptResumeStream) {
       await _connection.getStreamManagementManager()!.loadState();
-      await _dbOp<_XmppStateStore>(owner, (ss) {
+      await _dbOp<XmppStateStore>((ss) {
         _log.info('Loaded resource: ${ss.read(key: resourceStorageKey)}');
         _connection
           ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
@@ -433,15 +453,15 @@ class XmppService extends XmppBase
   }
 
   Future<void> _wipeDatabases(String username, String passphrase) async {
-    await _dbOp<CredentialStore>(owner, (cs) async {
+    await _dbOp<CredentialStore>((cs) async {
       await cs.deleteAll(burn: true);
     });
 
-    await _dbOp<_XmppStateStore>(owner, (ss) async {
+    await _dbOp<XmppStateStore>((ss) async {
       await ss.deleteAll(burn: true);
     });
 
-    await _dbOp<_XmppDatabase>(owner, (db) async {
+    await _dbOp<XmppDatabase>((db) async {
       await db.deleteAll();
       await db.close();
       (await dbFilePathFor(username)).delete();
@@ -450,18 +470,17 @@ class XmppService extends XmppBase
 
   @override
   Future<void> logout({bool burn = false}) async {
-    if (!authenticated) return;
     _log.info('Logging out...');
     await _deferReset(() async {
       final username = user!.username;
 
       String? passphrase;
-      await _dbOp<CredentialStore>(owner, (cs) async {
+      await _dbOp<CredentialStore>((cs) async {
         await cs.delete(key: usernameStorageKey);
         await cs.delete(key: passwordStorageKey);
 
-        final databasePassphraseStorageKey =
-            cs.registerKey('${storagePrefixFor(username)}_database_passphrase');
+        final databasePassphraseStorageKey = CredentialStore.registerKey(
+            '${storagePrefixFor(username)}_database_passphrase');
         passphrase = await cs.read(key: databasePassphraseStorageKey);
       });
 
@@ -470,7 +489,6 @@ class XmppService extends XmppBase
       await _wipeDatabases(username, passphrase!);
     });
     _log.info('Logged out.');
-    assert(!authenticated);
   }
 
   Future<void> _reset() async {
@@ -496,16 +514,21 @@ class XmppService extends XmppBase
     } else {
       await (await _stateStore.future).close();
     }
-    _stateStore = ImpatientCompleter(Completer<_XmppStateStore>());
+    _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
 
     if (!_database.isCompleted) {
       _database.completeError(XmppAbortedException());
     } else {
       await (await _database.future).close();
     }
-    _database = ImpatientCompleter(Completer<_XmppDatabase>());
+    _database = ImpatientCompleter(Completer<XmppDatabase>());
 
     assert(!needsReset);
+  }
+
+  Future<void> close() async {
+    await _reset();
+    _instance = null;
   }
 
   Future<T> _deferReset<T>(FutureOr<T> Function() operation) async {
@@ -526,17 +549,32 @@ class XmppService extends XmppBase
   }
 
   @override
-  Completer<T>? _getDatabaseOfType<T extends Database>() {
+  Future _dbOp<T extends Database>(
+    FutureOr Function(T) operation, {
+    bool awaitDatabase = false,
+  }) async {
     _log.info('Retrieving completer for $T...');
+
+    late final Completer<T> completer;
     switch (T) {
       case == CredentialStore:
-        return _credentialStore as Completer<T>;
-      case == _XmppStateStore:
-        return _stateStore.completer as Completer<T>;
-      case == _XmppDatabase:
-        return _database.completer as Completer<T>;
+        completer = _credentialStore as Completer<T>;
+      case == XmppStateStore:
+        completer = _stateStore.completer as Completer<T>;
+      case == XmppDatabase:
+        completer = _database.completer as Completer<T>;
       default:
-        return null;
+        throw UnimplementedError('No database of type: $T exists.');
+    }
+
+    if (!awaitDatabase && !completer.isCompleted) return;
+    try {
+      _log.info('Awaiting completer for $T...');
+      final db = await completer.future;
+      _log.info('Completed completer for $T.');
+      return await operation(db);
+    } on XmppAbortedException catch (_) {
+      _log.warning('Owner called reset before $T initialized.');
     }
   }
 }
@@ -775,15 +813,16 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   final XmppService owner;
 
   static const keyPrefix = 'stream_management';
-  final clientToServerCountKey = RegisteredStateKey._('${keyPrefix}_c2s');
-  final serverToClientCountKey = RegisteredStateKey._('${keyPrefix}_s2c');
-  final streamResumptionIDKey = RegisteredStateKey._('${keyPrefix}_resID');
+  final clientToServerCountKey = XmppStateStore.registerKey('${keyPrefix}_c2s');
+  final serverToClientCountKey = XmppStateStore.registerKey('${keyPrefix}_s2c');
+  final streamResumptionIDKey =
+      XmppStateStore.registerKey('${keyPrefix}_resID');
   final streamResumptionLocationKey =
-      RegisteredStateKey._('${keyPrefix}_resLoc');
+      XmppStateStore.registerKey('${keyPrefix}_resLoc');
 
   @override
   Future<void> commitState() async {
-    await _dbOp<_XmppStateStore>(owner, (ss) async {
+    await owner._dbOp<XmppStateStore>((ss) async {
       await ss.write(key: clientToServerCountKey, value: state.c2s);
       await ss.write(key: serverToClientCountKey, value: state.s2c);
       if (state.streamResumptionId case String resID) {
@@ -797,7 +836,7 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
 
   @override
   Future<void> loadState() async {
-    await _dbOp<_XmppStateStore>(owner, (ss) async {
+    await owner._dbOp<XmppStateStore>((ss) async {
       var newState = state;
       if (ss.read(key: clientToServerCountKey) case int c2s) {
         newState = newState.copyWith(c2s: c2s);
@@ -829,25 +868,5 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
                   xmlns: mox.fileUploadNotificationXmlns,
                 ) !=
                 null);
-  }
-}
-
-/// Database operation
-Future _dbOp<T extends Database>(
-  XmppBase owner,
-  FutureOr Function(T) operation, {
-  bool awaitDatabase = false,
-}) async {
-  if (owner._getDatabaseOfType<T>() case final completer?) {
-    if (!awaitDatabase && !completer.isCompleted) return;
-    try {
-      Logger('XmppService').info('Awaiting completer for $T...');
-      final db = await completer.future;
-      Logger('XmppService').info('Completed completer for $T.');
-      return await operation(db);
-    } on XmppAbortedException catch (_) {
-      Logger('XmppService')
-          .warning('Owner called reset before $T initialized.');
-    }
   }
 }

@@ -3,7 +3,7 @@
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
-part of 'main.dart';
+part of 'models.dart';
 
 // **************************************************************************
 // FreezedGenerator
@@ -430,7 +430,7 @@ class __$$MessageImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$MessageImpl with DiagnosticableTreeMixin implements _Message {
+class _$MessageImpl implements _Message {
   const _$MessageImpl(
       {required this.id,
       required this.stanzaID,
@@ -534,43 +534,8 @@ class _$MessageImpl with DiagnosticableTreeMixin implements _Message {
   }
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Message(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, myJid: $myJid, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Message'))
-      ..add(DiagnosticsProperty('id', id))
-      ..add(DiagnosticsProperty('stanzaID', stanzaID))
-      ..add(DiagnosticsProperty('originID', originID))
-      ..add(DiagnosticsProperty('occupantID', occupantID))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('senderJid', senderJid))
-      ..add(DiagnosticsProperty('chatJid', chatJid))
-      ..add(DiagnosticsProperty('body', body))
-      ..add(DiagnosticsProperty('timestamp', timestamp))
-      ..add(DiagnosticsProperty('error', error))
-      ..add(DiagnosticsProperty('warning', warning))
-      ..add(DiagnosticsProperty('encrypted', encrypted))
-      ..add(DiagnosticsProperty('noStore', noStore))
-      ..add(DiagnosticsProperty('acked', acked))
-      ..add(DiagnosticsProperty('received', received))
-      ..add(DiagnosticsProperty('displayed', displayed))
-      ..add(DiagnosticsProperty('edited', edited))
-      ..add(DiagnosticsProperty('retracted', retracted))
-      ..add(DiagnosticsProperty(
-          'isFileUploadNotification', isFileUploadNotification))
-      ..add(DiagnosticsProperty('fileDownloading', fileDownloading))
-      ..add(DiagnosticsProperty('fileUploading', fileUploading))
-      ..add(DiagnosticsProperty('fileMetadataID', fileMetadataID))
-      ..add(DiagnosticsProperty('quoting', quoting))
-      ..add(DiagnosticsProperty('stickerPackID', stickerPackID))
-      ..add(DiagnosticsProperty('pseudoMessageType', pseudoMessageType))
-      ..add(DiagnosticsProperty('pseudoMessageData', pseudoMessageData))
-      ..add(DiagnosticsProperty('reactionsPreview', reactionsPreview));
   }
 
   @override
@@ -863,7 +828,7 @@ class __$$ReactionImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$ReactionImpl with DiagnosticableTreeMixin implements _Reaction {
+class _$ReactionImpl implements _Reaction {
   const _$ReactionImpl(
       {required this.messageID,
       required this.myJid,
@@ -880,19 +845,8 @@ class _$ReactionImpl with DiagnosticableTreeMixin implements _Reaction {
   final String emoji;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Reaction(messageID: $messageID, myJid: $myJid, senderJid: $senderJid, emoji: $emoji)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Reaction'))
-      ..add(DiagnosticsProperty('messageID', messageID))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('senderJid', senderJid))
-      ..add(DiagnosticsProperty('emoji', emoji));
   }
 
   @override
@@ -1123,7 +1077,7 @@ class __$$NotificationImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$NotificationImpl with DiagnosticableTreeMixin implements _Notification {
+class _$NotificationImpl implements _Notification {
   const _$NotificationImpl(
       {required this.id,
       required this.senderJid,
@@ -1155,24 +1109,8 @@ class _$NotificationImpl with DiagnosticableTreeMixin implements _Notification {
   final String? mediaPath;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Notification(id: $id, senderJid: $senderJid, chatJid: $chatJid, senderName: $senderName, body: $body, timestamp: $timestamp, avatarPath: $avatarPath, mediaMimeType: $mediaMimeType, mediaPath: $mediaPath)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Notification'))
-      ..add(DiagnosticsProperty('id', id))
-      ..add(DiagnosticsProperty('senderJid', senderJid))
-      ..add(DiagnosticsProperty('chatJid', chatJid))
-      ..add(DiagnosticsProperty('senderName', senderName))
-      ..add(DiagnosticsProperty('body', body))
-      ..add(DiagnosticsProperty('timestamp', timestamp))
-      ..add(DiagnosticsProperty('avatarPath', avatarPath))
-      ..add(DiagnosticsProperty('mediaMimeType', mediaMimeType))
-      ..add(DiagnosticsProperty('mediaPath', mediaPath));
   }
 
   @override
@@ -1614,7 +1552,7 @@ class __$$RosterItemImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$RosterItemImpl extends _RosterItem with DiagnosticableTreeMixin {
+class _$RosterItemImpl extends _RosterItem {
   const _$RosterItemImpl(
       {required this.jid,
       required this.myJid,
@@ -1674,28 +1612,8 @@ class _$RosterItemImpl extends _RosterItem with DiagnosticableTreeMixin {
   final String $type;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'RosterItem(jid: $jid, myJid: $myJid, title: $title, presence: $presence, subscription: $subscription, status: $status, ask: $ask, avatarPath: $avatarPath, avatarHash: $avatarHash, contactID: $contactID, contactAvatarPath: $contactAvatarPath, contactDisplayName: $contactDisplayName, groups: $groups)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'RosterItem'))
-      ..add(DiagnosticsProperty('jid', jid))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('title', title))
-      ..add(DiagnosticsProperty('presence', presence))
-      ..add(DiagnosticsProperty('subscription', subscription))
-      ..add(DiagnosticsProperty('status', status))
-      ..add(DiagnosticsProperty('ask', ask))
-      ..add(DiagnosticsProperty('avatarPath', avatarPath))
-      ..add(DiagnosticsProperty('avatarHash', avatarHash))
-      ..add(DiagnosticsProperty('contactID', contactID))
-      ..add(DiagnosticsProperty('contactAvatarPath', contactAvatarPath))
-      ..add(DiagnosticsProperty('contactDisplayName', contactDisplayName))
-      ..add(DiagnosticsProperty('groups', groups));
   }
 
   @override
@@ -2102,8 +2020,7 @@ class __$$RosterItemFromDbImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$RosterItemFromDbImpl extends _RosterItemFromDb
-    with DiagnosticableTreeMixin {
+class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   const _$RosterItemFromDbImpl(
       {required this.jid,
       required this.myJid,
@@ -2163,28 +2080,8 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb
   final String $type;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'RosterItem.fromDb(jid: $jid, myJid: $myJid, title: $title, presence: $presence, status: $status, avatarPath: $avatarPath, avatarHash: $avatarHash, subscription: $subscription, ask: $ask, contactID: $contactID, contactAvatarPath: $contactAvatarPath, contactDisplayName: $contactDisplayName, groups: $groups)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'RosterItem.fromDb'))
-      ..add(DiagnosticsProperty('jid', jid))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('title', title))
-      ..add(DiagnosticsProperty('presence', presence))
-      ..add(DiagnosticsProperty('status', status))
-      ..add(DiagnosticsProperty('avatarPath', avatarPath))
-      ..add(DiagnosticsProperty('avatarHash', avatarHash))
-      ..add(DiagnosticsProperty('subscription', subscription))
-      ..add(DiagnosticsProperty('ask', ask))
-      ..add(DiagnosticsProperty('contactID', contactID))
-      ..add(DiagnosticsProperty('contactAvatarPath', contactAvatarPath))
-      ..add(DiagnosticsProperty('contactDisplayName', contactDisplayName))
-      ..add(DiagnosticsProperty('groups', groups));
   }
 
   @override
@@ -2580,7 +2477,7 @@ class __$$InviteImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$InviteImpl extends _Invite with DiagnosticableTreeMixin {
+class _$InviteImpl extends _Invite {
   const _$InviteImpl(
       {required this.jid, required this.myJid, required this.title})
       : super._();
@@ -2593,18 +2490,8 @@ class _$InviteImpl extends _Invite with DiagnosticableTreeMixin {
   final String title;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Invite(jid: $jid, myJid: $myJid, title: $title)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Invite'))
-      ..add(DiagnosticsProperty('jid', jid))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('title', title));
   }
 
   @override
@@ -3113,7 +3000,7 @@ class __$$ChatImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$ChatImpl extends _Chat with DiagnosticableTreeMixin {
+class _$ChatImpl extends _Chat {
   const _$ChatImpl(
       {required this.jid,
       required this.myJid,
@@ -3181,34 +3068,8 @@ class _$ChatImpl extends _Chat with DiagnosticableTreeMixin {
   final mox.ChatState? chatState;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Chat(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessageID: $lastMessageID, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Chat'))
-      ..add(DiagnosticsProperty('jid', jid))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('myNickname', myNickname))
-      ..add(DiagnosticsProperty('title', title))
-      ..add(DiagnosticsProperty('type', type))
-      ..add(DiagnosticsProperty('lastChangeTimestamp', lastChangeTimestamp))
-      ..add(DiagnosticsProperty('avatarPath', avatarPath))
-      ..add(DiagnosticsProperty('avatarHash', avatarHash))
-      ..add(DiagnosticsProperty('lastMessageID', lastMessageID))
-      ..add(DiagnosticsProperty('unreadCount', unreadCount))
-      ..add(DiagnosticsProperty('open', open))
-      ..add(DiagnosticsProperty('muted', muted))
-      ..add(DiagnosticsProperty('encrypted', encrypted))
-      ..add(DiagnosticsProperty('favourited', favourited))
-      ..add(DiagnosticsProperty('contactID', contactID))
-      ..add(DiagnosticsProperty('contactDisplayName', contactDisplayName))
-      ..add(DiagnosticsProperty('contactAvatarPath', contactAvatarPath))
-      ..add(DiagnosticsProperty('contactAvatarHash', contactAvatarHash))
-      ..add(DiagnosticsProperty('chatState', chatState));
   }
 
   @override
@@ -3730,7 +3591,7 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$ChatFromDbImpl extends _ChatFromDb with DiagnosticableTreeMixin {
+class _$ChatFromDbImpl extends _ChatFromDb {
   const _$ChatFromDbImpl(
       {required this.jid,
       required this.myJid,
@@ -3793,34 +3654,8 @@ class _$ChatFromDbImpl extends _ChatFromDb with DiagnosticableTreeMixin {
   final mox.ChatState? chatState;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Chat.fromDb(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessageID: $lastMessageID, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Chat.fromDb'))
-      ..add(DiagnosticsProperty('jid', jid))
-      ..add(DiagnosticsProperty('myJid', myJid))
-      ..add(DiagnosticsProperty('myNickname', myNickname))
-      ..add(DiagnosticsProperty('title', title))
-      ..add(DiagnosticsProperty('type', type))
-      ..add(DiagnosticsProperty('avatarPath', avatarPath))
-      ..add(DiagnosticsProperty('avatarHash', avatarHash))
-      ..add(DiagnosticsProperty('lastMessageID', lastMessageID))
-      ..add(DiagnosticsProperty('lastChangeTimestamp', lastChangeTimestamp))
-      ..add(DiagnosticsProperty('unreadCount', unreadCount))
-      ..add(DiagnosticsProperty('open', open))
-      ..add(DiagnosticsProperty('muted', muted))
-      ..add(DiagnosticsProperty('encrypted', encrypted))
-      ..add(DiagnosticsProperty('favourited', favourited))
-      ..add(DiagnosticsProperty('contactID', contactID))
-      ..add(DiagnosticsProperty('contactDisplayName', contactDisplayName))
-      ..add(DiagnosticsProperty('contactAvatarPath', contactAvatarPath))
-      ..add(DiagnosticsProperty('contactAvatarHash', contactAvatarHash))
-      ..add(DiagnosticsProperty('chatState', chatState));
   }
 
   @override
@@ -4327,7 +4162,7 @@ class __$$StickerImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$StickerImpl with DiagnosticableTreeMixin implements _Sticker {
+class _$StickerImpl implements _Sticker {
   const _$StickerImpl(
       {required this.id,
       required this.stickerPackID,
@@ -4353,20 +4188,8 @@ class _$StickerImpl with DiagnosticableTreeMixin implements _Sticker {
   }
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Sticker(id: $id, stickerPackID: $stickerPackID, fileMetadataID: $fileMetadataID, description: $description, suggestions: $suggestions)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'Sticker'))
-      ..add(DiagnosticsProperty('id', id))
-      ..add(DiagnosticsProperty('stickerPackID', stickerPackID))
-      ..add(DiagnosticsProperty('fileMetadataID', fileMetadataID))
-      ..add(DiagnosticsProperty('description', description))
-      ..add(DiagnosticsProperty('suggestions', suggestions));
   }
 
   @override
@@ -4621,7 +4444,7 @@ class __$$StickerPackImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$StickerPackImpl with DiagnosticableTreeMixin implements _StickerPack {
+class _$StickerPackImpl implements _StickerPack {
   const _$StickerPackImpl(
       {required this.id,
       required this.name,
@@ -4666,25 +4489,8 @@ class _$StickerPackImpl with DiagnosticableTreeMixin implements _StickerPack {
   final bool local;
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'StickerPack(id: $id, name: $name, description: $description, hashAlgorithm: $hashAlgorithm, hashValue: $hashValue, restricted: $restricted, addedTimestamp: $addedTimestamp, stickers: $stickers, sizeBytes: $sizeBytes, local: $local)';
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties
-      ..add(DiagnosticsProperty('type', 'StickerPack'))
-      ..add(DiagnosticsProperty('id', id))
-      ..add(DiagnosticsProperty('name', name))
-      ..add(DiagnosticsProperty('description', description))
-      ..add(DiagnosticsProperty('hashAlgorithm', hashAlgorithm))
-      ..add(DiagnosticsProperty('hashValue', hashValue))
-      ..add(DiagnosticsProperty('restricted', restricted))
-      ..add(DiagnosticsProperty('addedTimestamp', addedTimestamp))
-      ..add(DiagnosticsProperty('stickers', stickers))
-      ..add(DiagnosticsProperty('sizeBytes', sizeBytes))
-      ..add(DiagnosticsProperty('local', local));
   }
 
   @override

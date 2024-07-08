@@ -1,5 +1,6 @@
 import 'package:chat/main.dart';
 import 'package:chat/src/common/ui/presence_indicator.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:moxxmpp_color/moxxmpp_color.dart';
 

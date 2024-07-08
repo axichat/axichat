@@ -1,8 +1,8 @@
-part of '../../main.dart';
+part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin PresenceService on XmppBase {
-  final presenceStorageKey = RegisteredStateKey._('my_presence');
-  final statusStorageKey = RegisteredStateKey._('my_status');
+  final presenceStorageKey = XmppStateStore.registerKey('my_presence');
+  final statusStorageKey = XmppStateStore.registerKey('my_status');
 
   Presence get presence =>
       _stateStore.value?.read(key: presenceStorageKey) as Presence? ??
@@ -35,14 +35,14 @@ mixin PresenceService on XmppBase {
     String? status,
   ) async {
     if (jid == user!.jid.toString()) {
-      await _dbOp<_XmppStateStore>(owner, (ss) async {
+      await owner._dbOp<XmppStateStore>((ss) async {
         await ss.writeAll(data: {
           presenceStorageKey: presence,
           statusStorageKey: status,
         });
       });
     } else {
-      await _dbOp<_XmppDatabase>(owner, (db) async {
+      await owner._dbOp<XmppDatabase>((db) async {
         if (await db.selectRosterItem(jid.toString()) case final item?) {
           db.updateRosterItem(item.copyWith(
             presence: presence,
@@ -80,7 +80,7 @@ class XmppPresenceManager extends mox.PresenceManager {
                 mox.SubscriptionRequestReceivedEvent(from: jid),
               );
             } else if (stanza.type?.contains('unsubscribe') ?? false) {
-              await _dbOp<_XmppDatabase>(owner, (db) async {
+              await owner._dbOp<XmppDatabase>((db) async {
                 await db.deleteInvite(jid.toString());
               });
             }
@@ -137,7 +137,7 @@ class XmppPresenceManager extends mox.PresenceManager {
   Future<void> sendInitialPresence() async {
     Presence? presence;
     String? status;
-    await _dbOp<_XmppStateStore>(owner, (ss) {
+    await owner._dbOp<XmppStateStore>((ss) {
       presence = ss.read(key: owner.presenceStorageKey) as Presence?;
       status = ss.read(key: owner.statusStorageKey) as String?;
     });

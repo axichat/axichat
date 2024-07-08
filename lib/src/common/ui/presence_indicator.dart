@@ -1,6 +1,6 @@
-import 'package:chat/main.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -99,7 +99,7 @@ class PresenceIndicator extends StatelessWidget {
 }
 
 class _PresenceCircle extends StatelessWidget {
-  const _PresenceCircle({super.key, required this.presence});
+  const _PresenceCircle({required this.presence});
 
   final Presence presence;
 
