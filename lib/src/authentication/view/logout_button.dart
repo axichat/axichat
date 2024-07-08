@@ -1,0 +1,68 @@
+import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
+import 'package:chat/src/common/ui/ui.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+class LogoutButton extends StatelessWidget {
+  const LogoutButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final locate = context.read;
+    return AxiIconButton(
+      iconData: Icons.logout,
+      onPressed: () => showDialog(
+        context: context,
+        builder: (context) {
+          var severity = LogoutSeverity.normal;
+          return BlocProvider.value(
+            value: locate<AuthenticationBloc>(),
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                return AxiInputDialog(
+                  title: const Text('Log Out'),
+                  content: ListTileTheme.merge(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    selectedColor: Theme.of(context).colorScheme.onSurface,
+                    selectedTileColor:
+                        Theme.of(context).colorScheme.surfaceContainerHigh,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          title: const Text('Normal'),
+                          subtitle: const Text('Clear JID and password.'),
+                          selected: severity.isNormal,
+                          onTap: () => setState(() {
+                            severity = LogoutSeverity.normal;
+                          }),
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          title: const Text('Burn'),
+                          subtitle: const Text(
+                              'Permanently delete all data and messages '
+                              'for account on this device.'),
+                          isThreeLine: true,
+                          selected: severity.isBurn,
+                          onTap: () => setState(() {
+                            severity = LogoutSeverity.burn;
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                  callback: () => context
+                      .read<AuthenticationBloc>()
+                      .add(AuthenticationLogoutRequested(severity: severity)),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

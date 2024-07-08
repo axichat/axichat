@@ -1,0 +1,14 @@
+  name:
+  parts:
+    uet-lms:
+      source: .
+      plugin: flutter
+      flutter-target: lib/main.dart
+      build-packages:
+        - libsecret-devel
+        - jsoncpp-devel
+      stage-packages:
+        - libsecret
+        - jsoncpp
+    adopt-info:
+  build-base:
