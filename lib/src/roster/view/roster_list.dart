@@ -5,7 +5,6 @@ import 'package:chat/src/roster/bloc/roster_bloc.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RosterList extends StatelessWidget {
   const RosterList({super.key});
@@ -29,64 +28,53 @@ class RosterList extends StatelessWidget {
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final item = items[index];
-              return ShadCard(
-                padding: const EdgeInsets.all(12.0),
-                leading: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxHeight: 50.0,
-                    maxWidth: 50.0,
-                  ),
-                  child: AxiAvatar(
-                    jid: item.jid,
-                    presence: item.subscription.isTo || item.subscription.isBoth
-                        ? item.presence
-                        : null,
-                    status: item.status,
-                  ),
+              return AxiListTile(
+                leading: AxiAvatar(
+                  jid: item.jid,
+                  presence: item.subscription.isTo || item.subscription.isBoth
+                      ? item.presence
+                      : null,
+                  status: item.status,
                 ),
-                title: Text(item.title),
-                description: Text(item.jid),
-                trailing: OverflowBar(
-                  spacing: 4.0,
-                  overflowSpacing: 4.0,
-                  overflowAlignment: OverflowBarAlignment.center,
-                  children: [
-                    BlocSelector<RosterBloc, RosterState, bool>(
-                      selector: (state) =>
-                          state is RosterLoading && state.jid == item.jid,
-                      builder: (context, disabled) {
-                        return TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => context.read<RosterBloc>().add(
-                                  RosterSubscriptionRemoved(jid: item.jid)),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.orange,
-                          ),
-                          child: const Text('Remove'),
-                        );
-                      },
-                    ),
-                    BlocSelector<BlocklistBloc, BlocklistState, bool>(
-                      selector: (state) =>
-                          state is BlocklistLoading &&
-                          (state.jid == item.jid || state.jid == null),
-                      builder: (context, disabled) {
-                        return TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => context
-                                  .read<BlocklistBloc>()
-                                  .add(BlocklistBlocked(jid: item.jid)),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          child: const Text('Block'),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                title: item.title,
+                subtitle: item.jid,
+                actions: [
+                  BlocSelector<RosterBloc, RosterState, bool>(
+                    selector: (state) =>
+                        state is RosterLoading && state.jid == item.jid,
+                    builder: (context, disabled) {
+                      return TextButton(
+                        onPressed: disabled
+                            ? null
+                            : () => context
+                                .read<RosterBloc>()
+                                .add(RosterSubscriptionRemoved(jid: item.jid)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                        ),
+                        child: const Text('Remove'),
+                      );
+                    },
+                  ),
+                  BlocSelector<BlocklistBloc, BlocklistState, bool>(
+                    selector: (state) =>
+                        state is BlocklistLoading &&
+                        (state.jid == item.jid || state.jid == null),
+                    builder: (context, disabled) {
+                      return TextButton(
+                        onPressed: disabled
+                            ? null
+                            : () => context
+                                .read<BlocklistBloc>()
+                                .add(BlocklistBlocked(jid: item.jid)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        child: const Text('Block'),
+                      );
+                    },
+                  ),
+                ],
               );
             },
             childCount: items.length,

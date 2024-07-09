@@ -1,3 +1,4 @@
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class WideLayout extends StatelessWidget {
@@ -13,7 +14,7 @@ class WideLayout extends StatelessWidget {
       builder: (context, constraints) {
         final splitRatio = constraints.maxWidth < 900
             ? 5
-            : constraints.maxWidth < 1200
+            : constraints.maxWidth < largeScreen
                 ? 4
                 : 3;
         return Row(

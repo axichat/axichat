@@ -14,18 +14,19 @@ class BlocklistTile extends StatelessWidget {
       selector: (state) =>
           state is BlocklistLoading && (state.jid == jid || state.jid == null),
       builder: (context, disabled) {
-        return ListTile(
+        return AxiListTile(
           leading: AxiAvatar(jid: jid),
-          title: Text(jid),
-          enabled: !disabled,
-          trailing: TextButton(
-            onPressed: disabled
-                ? null
-                : () => context
-                    .read<BlocklistBloc>()
-                    .add(BlocklistUnblocked(jid: jid)),
-            child: const Text('Unblock'),
-          ),
+          title: jid,
+          actions: [
+            TextButton(
+              onPressed: disabled
+                  ? null
+                  : () => context
+                      .read<BlocklistBloc>()
+                      .add(BlocklistUnblocked(jid: jid)),
+              child: const Text('Unblock'),
+            ),
+          ],
         );
       },
     );

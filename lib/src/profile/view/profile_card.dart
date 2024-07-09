@@ -44,8 +44,18 @@ class ProfileCard extends StatelessWidget {
                   status: state.status,
                   active: true,
                 ),
-                title: Text(state.title),
-                description: Text(state.jid),
+                title: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(state.title),
+                  ],
+                ),
+                description: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(state.jid),
+                  ],
+                ),
                 trailing: const LogoutButton(),
               );
       },

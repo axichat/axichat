@@ -1,3 +1,4 @@
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class NarrowLayout extends StatelessWidget {
@@ -9,7 +10,7 @@ class NarrowLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: const BoxConstraints(maxWidth: smallScreen),
         child: child,
       ),
     );

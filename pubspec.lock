@@ -334,14 +334,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_adaptive_scaffold:
-    dependency: "direct main"
-    description:
-      name: flutter_adaptive_scaffold
-      sha256: "794791e6fc0cc23e375d07ea987e76cf7f0eb7cd753532e45dc35b7e90575e2d"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.11"
   flutter_animate:
     dependency: transitive
     description:
@@ -981,14 +973,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.1"
-  popover:
-    dependency: "direct main"
-    description:
-      name: popover
-      sha256: "5cba40e04115cbbf15c35e00767b91e8bf3f769763a34beb2f8a1b9e8b5fc876"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0+1"
   protobuf:
     dependency: transitive
     description:

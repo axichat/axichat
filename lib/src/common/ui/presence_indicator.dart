@@ -34,15 +34,13 @@ class _PresenceIndicatorState extends State<PresenceIndicator> {
 
   @override
   Widget build(BuildContext context) {
-    final options =
-        Presence.values.getRange(1, Presence.values.length).toList();
-    final locate = context.read;
-    final colorScheme = context.colorScheme;
-    return ShadTooltip(
-      builder: (_) => Text(widget.status == null
-          ? '(${widget.presence.tooltip})'
-          : '${widget.status} (${widget.presence.tooltip})'),
-      child: ShadPopover(
+    Widget child = _PresenceCircle(presence: widget.presence);
+
+    if (widget.active) {
+      final options =
+          Presence.values.getRange(1, Presence.values.length).toList();
+      final locate = context.read;
+      child = ShadPopover(
         controller: popoverController,
         popover: (context) {
           var newStatus = widget.status;
@@ -113,9 +111,15 @@ class _PresenceIndicatorState extends State<PresenceIndicator> {
         child: ShadGestureDetector(
           cursor: SystemMouseCursors.click,
           onTap: popoverController.toggle,
-          child: _PresenceCircle(presence: widget.presence),
+          child: child,
         ),
-      ),
+      );
+    }
+    return ShadTooltip(
+      builder: (_) => Text(widget.status == null
+          ? '(${widget.presence.tooltip})'
+          : '${widget.status} (${widget.presence.tooltip})'),
+      child: child,
     );
   }
 }

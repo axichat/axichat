@@ -23,9 +23,9 @@ class HomeScreen extends StatelessWidget {
   final tabs = const [
     ('Chats', Chats(), null),
     ('Contacts', RosterList(), RosterAddButton()),
-    ('Invites', RosterInvitesList(), null),
+    ('New', RosterInvitesList(), null),
     (
-      'Blocklist',
+      'Blocked',
       BlocklistList(),
       BlocklistAddButton(),
     ),
@@ -58,7 +58,7 @@ class HomeScreen extends StatelessWidget {
             ],
             child: LayoutBuilder(
               builder: (context, constraints) {
-                if (constraints.maxWidth > 600) {
+                if (constraints.maxWidth > smallScreen) {
                   return WideLayout(
                     smallChild: Nexus(tabs: tabs),
                     largeChild: const Chat(),
@@ -86,110 +86,113 @@ class Nexus extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: NestedScrollView(
-            floatHeaderSlivers: true,
-            headerSliverBuilder: (context, innerBoxIsScrolled) => [
-              SliverOverlapAbsorber(
-                handle:
-                    NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-                sliver: SliverAppBar(
-                  title: Text(
-                    'Axichat',
-                    style: context.textTheme.h3,
+          child: LayoutBuilder(
+            builder: (context, constraints) => NestedScrollView(
+              floatHeaderSlivers: true,
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                SliverOverlapAbsorber(
+                  handle:
+                      NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+                  sliver: SliverAppBar(
+                    title: Text(
+                      'Axichat',
+                      style: context.textTheme.h3,
+                    ),
+                    floating: true,
+                    forceElevated: innerBoxIsScrolled,
+                    bottom: TabBar(
+                      isScrollable: constraints.maxWidth < smallScreen / 2,
+                      tabAlignment: constraints.maxWidth < smallScreen / 2
+                          ? TabAlignment.center
+                          : TabAlignment.fill,
+                      dividerColor: context.colorScheme.border,
+                      tabs: tabs.map((e) {
+                        final (label, _, _) = e;
+                        if (label == 'New') {
+                          final length =
+                              context.watch<RosterBloc>().state.invites.length;
+                          return Tab(
+                            child: Badge.count(
+                              count: length,
+                              offset: const Offset(12, -12),
+                              largeSize: 19,
+                              isLabelVisible: length > 0,
+                              child: Text(label),
+                            ),
+                          );
+                        }
+                        return Tab(text: label);
+                      }).toList(),
+                    ),
                   ),
-                  floating: true,
-                  forceElevated: innerBoxIsScrolled,
-                  bottom: TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.center,
-                    dividerColor: context.colorScheme.border,
-                    tabs: tabs.map((e) {
-                      final (label, _, _) = e;
-                      if (label == 'Invites') {
-                        final length =
-                            context.watch<RosterBloc>().state.invites.length;
-                        return Tab(
-                          child: Badge.count(
-                            count: length,
-                            offset: const Offset(12, -12),
-                            largeSize: 19,
-                            isLabelVisible: length > 0,
-                            child: Text(label),
+                ),
+              ],
+              body: MultiBlocListener(
+                listeners: [
+                  BlocListener<RosterBloc, RosterState>(
+                    listener: (context, state) {
+                      if (showToast == null) return;
+                      if (state is RosterFailure) {
+                        showToast(
+                          ShadToast.destructive(
+                            title: const Text('Whoops!'),
+                            description: Text(state.message),
+                          ),
+                        );
+                      } else if (state is RosterSuccess) {
+                        showToast(
+                          ShadToast(
+                            title: const Text('Success!'),
+                            description: Text(state.message),
                           ),
                         );
                       }
-                      return Tab(text: label);
-                    }).toList(),
+                    },
                   ),
-                ),
-              ),
-            ],
-            body: MultiBlocListener(
-              listeners: [
-                BlocListener<RosterBloc, RosterState>(
-                  listener: (context, state) {
-                    if (showToast == null) return;
-                    if (state is RosterFailure) {
-                      showToast(
-                        ShadToast.destructive(
-                          title: const Text('Whoops!'),
-                          description: Text(state.message),
-                        ),
-                      );
-                    } else if (state is RosterSuccess) {
-                      showToast(
-                        ShadToast(
-                          title: const Text('Success!'),
-                          description: Text(state.message),
-                        ),
-                      );
-                    }
-                  },
-                ),
-                BlocListener<BlocklistBloc, BlocklistState>(
-                  listener: (context, state) {
-                    if (showToast == null) return;
-                    if (state is BlocklistFailure) {
-                      showToast(
-                        ShadToast.destructive(
-                          title: const Text('Whoops!'),
-                          description: Text(state.message),
-                        ),
-                      );
-                    } else if (state is BlocklistSuccess) {
-                      showToast(
-                        ShadToast(
-                          title: const Text('Success!'),
-                          description: Text(state.message),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ],
-              child: TabBarView(
-                children: tabs.map((e) {
-                  final (label, sliver, fab) = e;
-                  return Builder(builder: (context) {
-                    return Scaffold(
-                      body: CustomScrollView(
-                        key: PageStorageKey(label),
-                        slivers: [
-                          SliverOverlapInjector(
-                            handle:
-                                NestedScrollView.sliverOverlapAbsorberHandleFor(
-                                    context),
+                  BlocListener<BlocklistBloc, BlocklistState>(
+                    listener: (context, state) {
+                      if (showToast == null) return;
+                      if (state is BlocklistFailure) {
+                        showToast(
+                          ShadToast.destructive(
+                            title: const Text('Whoops!'),
+                            description: Text(state.message),
                           ),
-                          SliverPadding(
-                            padding: const EdgeInsets.all(12.0),
-                            sliver: sliver,
+                        );
+                      } else if (state is BlocklistSuccess) {
+                        showToast(
+                          ShadToast(
+                            title: const Text('Success!'),
+                            description: Text(state.message),
                           ),
-                        ],
-                      ),
-                      floatingActionButton: fab,
-                    );
-                  });
-                }).toList(),
+                        );
+                      }
+                    },
+                  ),
+                ],
+                child: TabBarView(
+                  children: tabs.map((e) {
+                    final (label, sliver, fab) = e;
+                    return Builder(builder: (context) {
+                      return Scaffold(
+                        body: CustomScrollView(
+                          key: PageStorageKey(label),
+                          slivers: [
+                            SliverOverlapInjector(
+                              handle: NestedScrollView
+                                  .sliverOverlapAbsorberHandleFor(context),
+                            ),
+                            SliverPadding(
+                              padding: const EdgeInsets.all(12.0),
+                              sliver: sliver,
+                            ),
+                          ],
+                        ),
+                        floatingActionButton: fab,
+                      );
+                    });
+                  }).toList(),
+                ),
               ),
             ),
           ),
