@@ -9,25 +9,31 @@ class WideLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Flexible(
-          flex: 3,
-          child: Center(
-            child: smallChild,
-          ),
-        ),
-        Flexible(
-          flex: 7,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: largeChild,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final splitRatio = constraints.maxWidth < 900
+            ? 5
+            : constraints.maxWidth < 1200
+                ? 4
+                : 3;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Flexible(
+              flex: splitRatio,
+              child: Center(
+                child: smallChild,
+              ),
             ),
-          ),
-        ),
-      ],
+            Flexible(
+              flex: 10 - splitRatio,
+              child: Center(
+                child: largeChild,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

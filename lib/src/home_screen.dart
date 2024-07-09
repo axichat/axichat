@@ -58,7 +58,7 @@ class HomeScreen extends StatelessWidget {
             ],
             child: LayoutBuilder(
               builder: (context, constraints) {
-                if (constraints.maxWidth > 1200) {
+                if (constraints.maxWidth > 600) {
                   return WideLayout(
                     smallChild: Nexus(tabs: tabs),
                     largeChild: const Chat(),
@@ -102,6 +102,7 @@ class Nexus extends StatelessWidget {
                   bottom: TabBar(
                     isScrollable: true,
                     tabAlignment: TabAlignment.center,
+                    dividerColor: context.colorScheme.border,
                     tabs: tabs.map((e) {
                       final (label, _, _) = e;
                       if (label == 'Invites') {

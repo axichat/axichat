@@ -21,7 +21,7 @@ class LoginScreen extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth > 1200) {
+            if (constraints.maxWidth > 600) {
               return const WideLayout(
                 smallChild: Padding(
                   padding: EdgeInsets.all(16.0),
@@ -32,10 +32,11 @@ class LoginScreen extends StatelessWidget {
             }
 
             return const NarrowLayout(
-                child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: LoginForm(),
-            ));
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: LoginForm(),
+              ),
+            );
           },
         ),
       ),

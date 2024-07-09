@@ -1,3 +1,4 @@
+import 'package:chat/src/app.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:flutter/material.dart';
 
@@ -19,15 +20,22 @@ class _ChatState extends State<Chat> {
 
   @override
   Widget build(BuildContext context) {
-    return DashChat(
-      currentUser: ChatUser(id: 'me', firstName: 'You'),
-      onSend: (message) {
-        setState(() {
-          messages.insert(0, message);
-        });
-      },
-      messages: messages,
-      inputOptions: const InputOptions(alwaysShowSend: true),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.fromBorderSide(
+          BorderSide(color: context.colorScheme.border, width: 1.0),
+        ),
+      ),
+      child: DashChat(
+        currentUser: ChatUser(id: 'me', firstName: 'You'),
+        onSend: (message) {
+          setState(() {
+            messages.insert(0, message);
+          });
+        },
+        messages: messages,
+        inputOptions: const InputOptions(alwaysShowSend: true),
+      ),
     );
   }
 }
