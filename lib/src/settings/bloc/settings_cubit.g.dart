@@ -19,16 +19,26 @@ _$SettingsStateImpl _$$SettingsStateImplFromJson(Map<String, dynamic> json) =>
               (v) =>
                   $enumDecodeNullable(_$ThemeModeEnumMap, v) ??
                   ThemeMode.system),
+          shadColor: $checkedConvert(
+              'shad_color',
+              (v) =>
+                  $enumDecodeNullable(_$ShadColorEnumMap, v) ??
+                  ShadColor.neutral),
           lowMotion: $checkedConvert('low_motion', (v) => v as bool? ?? false),
         );
         return val;
       },
-      fieldKeyMap: const {'themeMode': 'theme_mode', 'lowMotion': 'low_motion'},
+      fieldKeyMap: const {
+        'themeMode': 'theme_mode',
+        'shadColor': 'shad_color',
+        'lowMotion': 'low_motion'
+      },
     );
 
 Map<String, dynamic> _$$SettingsStateImplToJson(_$SettingsStateImpl instance) =>
     <String, dynamic>{
       'theme_mode': _$ThemeModeEnumMap[instance.themeMode]!,
+      'shad_color': _$ShadColorEnumMap[instance.shadColor]!,
       'low_motion': instance.lowMotion,
     };
 
@@ -36,4 +46,19 @@ const _$ThemeModeEnumMap = {
   ThemeMode.system: 'system',
   ThemeMode.light: 'light',
   ThemeMode.dark: 'dark',
+};
+
+const _$ShadColorEnumMap = {
+  ShadColor.blue: 'blue',
+  ShadColor.gray: 'gray',
+  ShadColor.green: 'green',
+  ShadColor.neutral: 'neutral',
+  ShadColor.orange: 'orange',
+  ShadColor.red: 'red',
+  ShadColor.rose: 'rose',
+  ShadColor.slate: 'slate',
+  ShadColor.stone: 'stone',
+  ShadColor.violet: 'violet',
+  ShadColor.yellow: 'yellow',
+  ShadColor.zinc: 'zinc',
 };

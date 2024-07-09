@@ -25,7 +25,11 @@ class ProfileScreen extends StatelessWidget {
               return const NarrowLayout(
                 child: Column(
                   children: [
-                    ProfileCard(),
+                    Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: ProfileCard(),
+                    ),
+                    SizedBox(height: 8),
                     SettingsControls(),
                   ],
                 ),

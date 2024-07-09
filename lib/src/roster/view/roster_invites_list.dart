@@ -1,8 +1,9 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_bloc.dart';
-import 'package:chat/src/roster/view/roster_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RosterInvitesList extends StatelessWidget {
   const RosterInvitesList({super.key});
@@ -17,7 +18,7 @@ class RosterInvitesList extends StatelessWidget {
             child: Center(
               child: Text(
                 'No invites yet',
-                style: Theme.of(context).textTheme.labelMedium,
+                style: context.textTheme.muted,
               ),
             ),
           );
@@ -28,38 +29,39 @@ class RosterInvitesList extends StatelessWidget {
               final invite = invites[index];
               final disabled =
                   state is RosterLoading && state.jid == invite.jid;
-              return RosterCard(
-                content: ListTile(
-                  leading: AxiAvatar(jid: invite.jid),
-                  title: Text(invite.title),
-                  subtitle: Text(invite.jid),
-                  titleAlignment: ListTileTitleAlignment.titleHeight,
-                  minTileHeight: 80.0,
+              return ShadCard(
+                leading: AxiAvatar(jid: invite.jid),
+                title: Text(invite.title),
+                description: Text(invite.jid),
+                trailing: OverflowBar(
+                  spacing: 4.0,
+                  overflowSpacing: 4.0,
+                  overflowAlignment: OverflowBarAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: disabled
+                          ? null
+                          : () => context.read<RosterBloc>().add(
+                              RosterSubscriptionAdded(
+                                  jid: invite.jid, title: invite.title)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.green,
+                      ),
+                      child: const Text('Connect'),
+                    ),
+                    TextButton(
+                      onPressed: disabled
+                          ? null
+                          : () => context
+                              .read<RosterBloc>()
+                              .add(RosterSubscriptionRejected(item: invite)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
+                      child: const Text('Reject'),
+                    ),
+                  ],
                 ),
-                buttons: [
-                  TextButton(
-                    onPressed: disabled
-                        ? null
-                        : () => context.read<RosterBloc>().add(
-                            RosterSubscriptionAdded(
-                                jid: invite.jid, title: invite.title)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.green,
-                    ),
-                    child: const Text('Connect'),
-                  ),
-                  TextButton(
-                    onPressed: disabled
-                        ? null
-                        : () => context
-                            .read<RosterBloc>()
-                            .add(RosterSubscriptionRejected(item: invite)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
-                    ),
-                    child: const Text('Reject'),
-                  ),
-                ],
               );
             },
             childCount: invites.length,

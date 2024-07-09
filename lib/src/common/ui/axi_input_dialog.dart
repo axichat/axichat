@@ -1,36 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
-class AxiInputDialog extends AlertDialog {
+class AxiInputDialog extends StatelessWidget {
   const AxiInputDialog({
     super.key,
-    super.title,
-    super.content,
+    required this.title,
+    required this.content,
     required this.callback,
   });
 
+  final Widget title;
+  final Widget content;
   final void Function() callback;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return ShadDialog(
       title: title,
       content: content,
       actions: [
-        TextButton(
+        ShadButton.outline(
           onPressed: () {
             context.pop();
           },
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          child: const Text('Cancel'),
+          text: const Text('Cancel'),
         ),
-        TextButton(
+        ShadButton(
           onPressed: () {
             callback();
             context.pop();
           },
-          style: TextButton.styleFrom(foregroundColor: Colors.green),
-          child: const Text('Continue'),
+          text: const Text('Continue'),
         ),
       ],
     );

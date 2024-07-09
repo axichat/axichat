@@ -1,3 +1,4 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_list.dart';
@@ -14,6 +15,7 @@ import 'package:chat/src/roster/view/roster_list.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -80,7 +82,7 @@ class Nexus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showSnackBar = ScaffoldMessenger.maybeOf(context)?.showSnackBar;
+    final showToast = ShadToaster.maybeOf(context)?.show;
     return Column(
       children: [
         Expanded(
@@ -93,7 +95,7 @@ class Nexus extends StatelessWidget {
                 sliver: SliverAppBar(
                   title: Text(
                     'Axichat',
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    style: context.textTheme.h3,
                   ),
                   floating: true,
                   forceElevated: innerBoxIsScrolled,
@@ -102,6 +104,19 @@ class Nexus extends StatelessWidget {
                     tabAlignment: TabAlignment.center,
                     tabs: tabs.map((e) {
                       final (label, _, _) = e;
+                      if (label == 'Invites') {
+                        final length =
+                            context.watch<RosterBloc>().state.invites.length;
+                        return Tab(
+                          child: Badge.count(
+                            count: length,
+                            offset: const Offset(12, -12),
+                            largeSize: 19,
+                            isLabelVisible: length > 0,
+                            child: Text(label),
+                          ),
+                        );
+                      }
                       return Tab(text: label);
                     }).toList(),
                   ),
@@ -112,40 +127,40 @@ class Nexus extends StatelessWidget {
               listeners: [
                 BlocListener<RosterBloc, RosterState>(
                   listener: (context, state) {
-                    if (showSnackBar == null) return;
+                    if (showToast == null) return;
                     if (state is RosterFailure) {
-                      showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            state.message,
-                            style: TextStyle(
-                                color: Theme.of(context).colorScheme.error),
-                          ),
+                      showToast(
+                        ShadToast.destructive(
+                          title: const Text('Whoops!'),
+                          description: Text(state.message),
                         ),
                       );
                     } else if (state is RosterSuccess) {
-                      showSnackBar(
-                        SnackBar(content: Text(state.message)),
+                      showToast(
+                        ShadToast(
+                          title: const Text('Success!'),
+                          description: Text(state.message),
+                        ),
                       );
                     }
                   },
                 ),
                 BlocListener<BlocklistBloc, BlocklistState>(
                   listener: (context, state) {
-                    if (showSnackBar == null) return;
+                    if (showToast == null) return;
                     if (state is BlocklistFailure) {
-                      showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            state.message,
-                            style: TextStyle(
-                                color: Theme.of(context).colorScheme.error),
-                          ),
+                      showToast(
+                        ShadToast.destructive(
+                          title: const Text('Whoops!'),
+                          description: Text(state.message),
                         ),
                       );
                     } else if (state is BlocklistSuccess) {
-                      showSnackBar(
-                        SnackBar(content: Text(state.message)),
+                      showToast(
+                        ShadToast(
+                          title: const Text('Success!'),
+                          description: Text(state.message),
+                        ),
                       );
                     }
                   },

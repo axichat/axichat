@@ -34,7 +34,9 @@ final class XmppDatabaseCreationException extends XmppException {
   XmppDatabaseCreationException([super.wrapped]);
 }
 
-final class XmppUnknownException extends XmppException {}
+final class XmppUnknownException extends XmppException {
+  XmppUnknownException([super.wrapped]);
+}
 
 final class XmppAbortedException extends XmppException {}
 
@@ -562,7 +564,7 @@ class XmppService extends XmppBase
   Future<T> _deferResetToError<T>(FutureOr<T> Function() operation) async {
     try {
       return await operation();
-    } catch (_) {
+    } catch (e) {
       await _reset();
       rethrow;
     }
@@ -595,9 +597,11 @@ class XmppService extends XmppBase
       return await operation(db);
     } on XmppAbortedException catch (_) {
       _log.warning('Owner called reset before $T initialized.');
+    } on XmppException {
+      rethrow;
     } on Exception catch (e, s) {
       _log.severe('Unexpected exception during operation on $T.', e, s);
-      throw XmppUnknownException();
+      throw XmppUnknownException(e);
     }
   }
 }

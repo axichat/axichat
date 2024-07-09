@@ -1,6 +1,7 @@
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class SettingsControls extends StatelessWidget {
   const SettingsControls({super.key});
@@ -14,25 +15,47 @@ class SettingsControls extends StatelessWidget {
           children: [
             ListTile(
               title: const Text('Theme Mode'),
-              trailing: DropdownButton<ThemeMode>(
-                value: state.themeMode,
+              trailing: ShadSelect<ThemeMode>(
+                initialValue: state.themeMode,
                 onChanged: (themeMode) =>
-                    context.read<SettingsCubit>().updateTheme(themeMode),
-                items: ThemeMode.values
-                    .map((themeMode) => DropdownMenuItem<ThemeMode>(
+                    context.read<SettingsCubit>().updateThemeMode(themeMode),
+                options: ThemeMode.values
+                    .map((themeMode) => ShadOption<ThemeMode>(
                           value: themeMode,
                           child: Text(themeMode.name),
                         ))
                     .toList(),
+                selectedOptionBuilder:
+                    (BuildContext context, ThemeMode value) => Text(value.name),
               ),
             ),
-            SwitchListTile(
-              title: const Text('Low Motion'),
-              subtitle: const Text(
-                  'Disables most animations. Better for slow devices.'),
-              value: state.lowMotion,
-              onChanged: (lowMotion) =>
-                  context.read<SettingsCubit>().toggleLowMotion(lowMotion),
+            ListTile(
+              title: const Text('Color Scheme'),
+              trailing: ShadSelect<ShadColor>(
+                initialValue: state.shadColor,
+                onChanged: (colorScheme) => context
+                    .read<SettingsCubit>()
+                    .updateColorScheme(colorScheme),
+                options: ShadColor.values
+                    .map((colorScheme) => ShadOption<ShadColor>(
+                          value: colorScheme,
+                          child: Text(colorScheme.name),
+                        ))
+                    .toList(),
+                selectedOptionBuilder:
+                    (BuildContext context, ShadColor value) => Text(value.name),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Low Motion'),
+                sublabel: const Text(
+                    'Disables most animations. Better for slow devices.'),
+                value: state.lowMotion,
+                onChanged: (lowMotion) =>
+                    context.read<SettingsCubit>().toggleLowMotion(lowMotion),
+              ),
             ),
           ],
         );

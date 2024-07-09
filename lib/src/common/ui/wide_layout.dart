@@ -18,11 +18,6 @@ class WideLayout extends StatelessWidget {
             child: smallChild,
           ),
         ),
-        Container(
-          height: double.infinity,
-          width: 1.0,
-          color: const Color(0xffdadcde),
-        ),
         Flexible(
           flex: 7,
           child: Center(

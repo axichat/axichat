@@ -1,7 +1,9 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class SignupForm extends StatefulWidget {
   const SignupForm({super.key});
@@ -56,28 +58,23 @@ class _SignupFormState extends State<SignupForm> {
             children: [
               Text(
                 'Login',
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: context.textTheme.h3,
               ),
               const SizedBox(height: 40),
               AxiTextFormField(
-                labelText: 'Username',
+                placeholder: const Text('Username'),
                 enabled: state is! AuthenticationInProgress,
                 controller: _jidTextController,
-                validator: (text) {
-                  if (text == null || text.isEmpty) {
-                    return 'Enter a username';
-                  }
-                  return null;
-                },
+                validator: (text) => text.isEmpty ? 'Enter a username' : null,
               ),
               const SizedBox(height: 20),
               AxiTextFormField(
-                labelText: 'Password',
+                placeholder: const Text('Password'),
                 enabled: state is! AuthenticationInProgress,
                 obscureText: true,
                 controller: _passwordTextController,
                 validator: (text) {
-                  if (text == null || text.isEmpty) {
+                  if (text.isEmpty) {
                     return 'Enter a password';
                   }
                   if (text.length < 8 || text.length > 64) {
@@ -88,16 +85,13 @@ class _SignupFormState extends State<SignupForm> {
               ),
               const SizedBox(height: 20),
               AxiTextFormField(
-                labelText: 'Confirm Password',
+                placeholder: const Text('Confirm Password'),
                 enabled: state is! AuthenticationInProgress,
                 obscureText: true,
                 controller: _password2TextController,
-                validator: (text) {
-                  if (text != _passwordTextController?.text) {
-                    return 'Passwords don\'t match';
-                  }
-                  return null;
-                },
+                validator: (text) => text != _passwordTextController?.text
+                    ? 'Passwords don\'t match'
+                    : null,
               ),
               const SizedBox(height: 40),
               CheckboxListTile(
@@ -138,10 +132,10 @@ class _SignupFormState extends State<SignupForm> {
                 },
               ),
               const SizedBox(height: 40),
-              ElevatedButton(
+              ShadButton(
                 onPressed:
                     state is! AuthenticationInProgress ? _onPressed : null,
-                child: const Text('Log In'),
+                text: const Text('Log In'),
               ),
             ],
           ),

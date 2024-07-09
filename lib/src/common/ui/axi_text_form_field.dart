@@ -1,21 +1,16 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
-class AxiTextFormField extends TextFormField {
+class AxiTextFormField extends ShadInputFormField {
   AxiTextFormField({
     super.key,
     super.controller,
-    String? labelText,
-    String? hintText,
+    super.placeholder,
     super.keyboardType,
     super.enabled,
     super.obscureText,
     super.validator,
     super.onChanged,
-  }) : super(
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            labelText: labelText,
-            hintText: hintText,
-          ),
-        );
+    super.initialValue,
+    super.description,
+  });
 }

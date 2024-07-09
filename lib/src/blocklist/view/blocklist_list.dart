@@ -1,4 +1,4 @@
-import 'package:chat/main.dart';
+import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_tile.dart';
@@ -19,7 +19,7 @@ class BlocklistList extends StatelessWidget {
             child: Center(
               child: Text(
                 'Nobody blocked',
-                style: Theme.of(context).textTheme.labelMedium,
+                style: context.textTheme.muted,
               ),
             ),
           );

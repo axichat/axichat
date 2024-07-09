@@ -1,7 +1,9 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -52,36 +54,37 @@ class _LoginFormState extends State<LoginForm> {
             children: [
               Text(
                 'Login',
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: context.textTheme.h3,
               ),
               state is AuthenticationFailure
                   ? Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: Text(
                         state.errorText,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(
+                          color: context.colorScheme.destructive,
+                        ),
                       ),
                     )
                   : const SizedBox(height: 40),
               AxiTextFormField(
-                labelText: 'Username',
+                placeholder: const Text('Username'),
                 enabled: state is! AuthenticationInProgress,
                 controller: _jidTextController,
                 validator: (text) {
-                  if (text == null || text.isEmpty) {
+                  if (text.isEmpty) {
                     return 'Enter a username';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 20),
               AxiTextFormField(
-                labelText: 'Password',
+                placeholder: const Text('Password'),
                 enabled: state is! AuthenticationInProgress,
                 obscureText: true,
                 controller: _passwordTextController,
                 validator: (text) {
-                  if (text == null || text.isEmpty) {
+                  if (text.isEmpty) {
                     return 'Enter a password';
                   }
                   if (text.length < 8 || text.length > 64) {
@@ -90,26 +93,40 @@ class _LoginFormState extends State<LoginForm> {
                   return null;
                 },
               ),
-              const SizedBox(height: 40),
-              CheckboxListTile(
-                title: const Text('Remember Me'),
-                subtitle: const Text('Save login details'),
-                checkboxSemanticLabel: 'Remember me',
-                enabled: state is! AuthenticationInProgress,
-                value: rememberMe,
-                onChanged: (checked) => setState(() {
-                  rememberMe = checked ?? rememberMe;
-                }),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 30.0,
+                  ),
+                  child: ShadCheckbox(
+                    label: const Text('Remember Me'),
+                    sublabel: const Text('Save login details'),
+                    enabled: state is! AuthenticationInProgress,
+                    value: rememberMe,
+                    onChanged: (checked) => setState(() {
+                      rememberMe = checked ?? rememberMe;
+                    }),
+                  ),
+                ),
               ),
-              const SizedBox(height: 40),
-              Builder(builder: (context) {
-                return ElevatedButton(
-                  onPressed: state is! AuthenticationInProgress
-                      ? () => _onPressed(context)
-                      : null,
-                  child: const Text('Log In'),
-                );
-              }),
+              Builder(
+                builder: (context) {
+                  final loading = state is AuthenticationInProgress;
+                  return ShadButton(
+                    enabled: !loading,
+                    onPressed: () => _onPressed(context),
+                    text: const Text('Log In'),
+                    icon: loading
+                        ? AxiProgressIndicator(
+                            color: context.colorScheme.primaryForeground,
+                            semanticsLabel: 'Waiting for login',
+                          )
+                        : null,
+                  );
+                },
+              ),
             ],
           ),
         );

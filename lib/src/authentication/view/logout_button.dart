@@ -1,7 +1,9 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LogoutButton extends StatelessWidget {
   const LogoutButton({super.key});
@@ -10,7 +12,7 @@ class LogoutButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final locate = context.read;
     return AxiIconButton(
-      iconData: Icons.logout,
+      iconData: LucideIcons.logOut,
       onPressed: () => showDialog(
         context: context,
         builder: (context) {
@@ -21,37 +23,38 @@ class LogoutButton extends StatelessWidget {
               builder: (context, setState) {
                 return AxiInputDialog(
                   title: const Text('Log Out'),
-                  content: ListTileTheme.merge(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    selectedColor: Theme.of(context).colorScheme.onSurface,
-                    selectedTileColor:
-                        Theme.of(context).colorScheme.surfaceContainerHigh,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          title: const Text('Normal'),
-                          subtitle: const Text('Clear JID and password.'),
-                          selected: severity.isNormal,
-                          onTap: () => setState(() {
-                            severity = LogoutSeverity.normal;
-                          }),
-                        ),
-                        const SizedBox(height: 12),
-                        ListTile(
-                          title: const Text('Burn'),
-                          subtitle: const Text(
-                              'Permanently delete all data and messages '
-                              'for account on this device.'),
-                          isThreeLine: true,
-                          selected: severity.isBurn,
-                          onTap: () => setState(() {
-                            severity = LogoutSeverity.burn;
-                          }),
-                        ),
-                      ],
+                  content: Material(
+                    child: ListTileTheme.merge(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      selectedColor: context.colorScheme.accentForeground,
+                      selectedTileColor: context.colorScheme.accent,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            title: const Text('Normal'),
+                            subtitle: const Text('Clear JID and password.'),
+                            selected: severity.isNormal,
+                            onTap: () => setState(() {
+                              severity = LogoutSeverity.normal;
+                            }),
+                          ),
+                          const SizedBox(height: 12),
+                          ListTile(
+                            title: const Text('Burn'),
+                            subtitle: const Text(
+                                'Permanently delete all data and messages '
+                                'for account on this device.'),
+                            isThreeLine: true,
+                            selected: severity.isBurn,
+                            onTap: () => setState(() {
+                              severity = LogoutSeverity.burn;
+                            }),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   callback: () => context

@@ -1,98 +1,120 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:popover/popover.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
-class PresenceIndicator extends StatelessWidget {
-  const PresenceIndicator(
-      {super.key, required this.presence, this.status, this.active = false});
+class PresenceIndicator extends StatefulWidget {
+  const PresenceIndicator({
+    super.key,
+    required this.presence,
+    this.status,
+    this.active = false,
+  });
 
   final Presence presence;
   final String? status;
   final bool active;
 
   @override
+  State<PresenceIndicator> createState() => _PresenceIndicatorState();
+}
+
+class _PresenceIndicatorState extends State<PresenceIndicator> {
+  final popoverController = ShadPopoverController();
+
+  @override
+  void dispose() {
+    popoverController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final options =
         Presence.values.getRange(1, Presence.values.length).toList();
     final locate = context.read;
-    return Tooltip(
-      message: status == null
-          ? '(${presence.tooltip})'
-          : '$status (${presence.tooltip})',
-      verticalOffset: 12.0,
-      child: InkWell(
-        onTap: active
-            ? () async {
-                await showPopover(
-                  context: context,
-                  bodyBuilder: (context) {
-                    var newStatus = status;
-                    return BlocProvider.value(
-                      value: locate<ProfileCubit>(),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 250.0,
+    final colorScheme = context.colorScheme;
+    return ShadTooltip(
+      builder: (_) => Text(widget.status == null
+          ? '(${widget.presence.tooltip})'
+          : '${widget.status} (${widget.presence.tooltip})'),
+      child: ShadPopover(
+        controller: popoverController,
+        popover: (context) {
+          var newStatus = widget.status;
+          return BlocProvider.value(
+            value: locate<ProfileCubit>(),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 250.0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final value = options[index];
+                      return Material(
+                        child: ListTile(
+                          title: Text(value.tooltip),
+                          leading: _PresenceCircle(presence: value),
+                          selected: widget.presence.name == value.name,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                          selectedColor: context.colorScheme.accentForeground,
+                          selectedTileColor: context.colorScheme.accent,
+                          onTap: () {
+                            context
+                                .read<ProfileCubit>()
+                                .updatePresence(presence: value);
+                            context.pop();
+                          },
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              itemBuilder: (context, index) {
-                                final value = options[index];
-                                return ListTile(
-                                  title: Text(value.tooltip),
-                                  leading: _PresenceCircle(presence: value),
-                                  onTap: () {
-                                    context
-                                        .read<ProfileCubit>()
-                                        .updatePresence(presence: value);
-                                    context.pop();
-                                  },
-                                );
-                              },
+                      );
+                    },
+                  ),
+                  StatefulBuilder(
+                    builder: (context, setState) => Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: AxiTextFormField(
+                              placeholder: const Text('Status message'),
+                              initialValue: widget.status,
+                              onChanged: (value) => setState(() {
+                                newStatus = value;
+                              }),
                             ),
-                            StatefulBuilder(builder: (context, setState) {
-                              return Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: AxiTextFormField(
-                                        labelText: 'Status message',
-                                        hintText: status,
-                                        onChanged: (value) => setState(() {
-                                          newStatus = value;
-                                        }),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5.0),
-                                    AxiIconButton(
-                                      iconData: Icons.check,
-                                      onPressed: () {
-                                        context
-                                            .read<ProfileCubit>()
-                                            .updatePresence(status: newStatus);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 5.0),
+                          AxiIconButton(
+                            iconData: LucideIcons.check,
+                            onPressed: () => context
+                                .read<ProfileCubit>()
+                                .updatePresence(status: newStatus),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                );
-              }
-            : null,
-        child: _PresenceCircle(presence: presence),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        child: ShadGestureDetector(
+          cursor: SystemMouseCursors.click,
+          onTap: popoverController.toggle,
+          child: _PresenceCircle(presence: widget.presence),
+        ),
       ),
     );
   }
@@ -109,9 +131,9 @@ class _PresenceCircle extends StatelessWidget {
       height: 16.0,
       width: 16.0,
       decoration: ShapeDecoration(
-        shape: const CircleBorder(
+        shape: CircleBorder(
           side: BorderSide(
-            color: Colors.white,
+            color: Color.lerp(presence.toColor, Colors.white, 0.6)!,
             width: 2.0,
           ),
         ),
@@ -119,7 +141,7 @@ class _PresenceCircle extends StatelessWidget {
       ),
       child: presence.isDnd
           ? const Icon(
-              Icons.remove,
+              LucideIcons.minus,
               color: Colors.white,
               size: 12.0,
             )
