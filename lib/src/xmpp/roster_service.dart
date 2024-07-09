@@ -4,25 +4,33 @@ mixin RosterService on XmppBase {
   Stream<List<RosterItem>>? get rosterStream => _database.value?.watchRoster();
   Stream<List<Invite>>? get invitesStream => _database.value?.watchInvites();
 
+  final _log = Logger('RosterService');
+
   Future<void> addToRoster({required String jid, String? title}) async {
     if (_connection.getRosterManager() case final rm?) {
-      Logger('XmppService').info('Adding $jid to roster...');
+      _log.info('Requesting to add $jid to roster...');
       if (!await rm.addToRoster(jid, title ?? mox.JID.fromString(jid).local)) {
         throw XmppRosterException();
       }
     }
 
     if (_connection.getPresenceManager() case final pm?) {
-      Logger('XmppService').info('Requesting subscription to $jid...');
+      _log.info('Requesting to subscribe to $jid...');
       final to = mox.JID.fromString(jid);
       if (!await pm.preApproveSubscription(to)) {
-        await pm.requestSubscription(to);
+        try {
+          await pm.requestSubscription(to);
+        } on Exception catch (e, s) {
+          _log.severe('Failed to request subscription to $jid.', e, s);
+          throw XmppRosterException();
+        }
       }
     }
   }
 
   Future<void> removeFromRoster({required String jid}) async {
     if (_connection.getRosterManager() case final rm?) {
+      _log.info('Requesting to remove $jid from roster...');
       if (await rm.removeFromRoster(jid) != mox.RosterRemovalResult.okay) {
         throw XmppRosterException();
       }
@@ -30,19 +38,26 @@ mixin RosterService on XmppBase {
   }
 
   Future<void> _acceptSubscriptionRequest(RosterItem item) async {
-    _connection.getPresenceManager()
-      ?..acceptSubscriptionRequest(mox.JID.fromString(item.jid))
-      ..requestSubscription(mox.JID.fromString(item.jid));
+    final jid = mox.JID.fromString(item.jid);
+    try {
+      _connection.getPresenceManager()
+        ?..acceptSubscriptionRequest(jid)
+        ..requestSubscription(jid);
+    } on Exception catch (e) {
+      _log.severe('Failed to accept subscription from $jid.', e);
+      throw XmppRosterException();
+    }
     _database.value
         ?.updateRosterItem(item.copyWith(subscription: Subscription.both));
   }
 
   Future<void> rejectSubscriptionRequest(Invite item) async {
+    final jid = mox.JID.fromString(item.jid);
     try {
-      await _connection
-          .getPresenceManager()
-          ?.rejectSubscriptionRequest(mox.JID.fromString(item.jid));
-    } catch (e) {
+      _log.info('Requesting to reject subscription from $jid...');
+      await _connection.getPresenceManager()?.rejectSubscriptionRequest(jid);
+    } on Exception catch (e) {
+      _log.severe('Failed to reject subscription from $jid.', e);
       throw XmppRosterException();
     }
     _database.value?.deleteInvite(item.jid);
@@ -51,6 +66,8 @@ mixin RosterService on XmppBase {
 
 class XmppRosterStateManager extends mox.BaseRosterStateManager {
   XmppRosterStateManager({required this.owner}) : super();
+
+  final _log = Logger('XmppRosterStateManager');
 
   final XmppService owner;
 
@@ -67,12 +84,14 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   ) async {
     await owner._dbOp<XmppDatabase>((db) async {
       for (final jid in removed) {
+        _log.info('Removing $jid from roster...');
         await db.deleteRosterItem(jid);
         await db.deleteChat(jid);
       }
 
       final myJid = owner.user!.jid.toString();
       for (final item in added) {
+        _log.info('Adding ${item.jid} to roster...');
         await db.insertChat(Chat(
           jid: item.jid,
           myJid: myJid,
@@ -89,6 +108,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
       }
 
       for (final item in modified) {
+        _log.info('Updating ${item.jid} in roster...');
         await db.updateRosterItem(RosterItem.fromMox(
           myJid: myJid,
           item: item,
@@ -97,6 +117,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     });
 
     if (version != null) {
+      _log.info('Saving roster version: $version...');
       await owner._dbOp<XmppStateStore>((ss) async {
         await ss.write(key: rosterVersionKey, value: version);
       });
@@ -109,7 +130,9 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     await owner._dbOp<XmppStateStore>((ss) {
       version = ss.read(key: rosterVersionKey) as String?;
     });
+    _log.info('Loaded roster version: $version.');
 
+    _log.info('Loading roster from database...');
     final rosterItems = <mox.XmppRosterItem>[];
     await owner._dbOp<XmppDatabase>((db) async {
       for (final item in (await db.selectRoster())) {

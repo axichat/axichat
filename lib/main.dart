@@ -21,6 +21,8 @@ import 'src/app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Prefer log level INFO to distinguish from mox logs.
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen(
     (record) => kDebugMode

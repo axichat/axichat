@@ -15,18 +15,15 @@ mixin PresenceService on XmppBase {
   Stream<String?>? get statusStream =>
       _stateStore.value?.watch<String?>(key: statusStorageKey);
 
+  final _log = Logger('PresenceService');
+
   Future<void> sendPresence({
     required Presence? presence,
     required String? status,
   }) async {
-    try {
-      await _connection
-          .getManager<XmppPresenceManager>()
-          ?.sendPresence(presence: presence, status: status);
-    } on Exception catch (e) {
-      Logger('XmppService').severe('Failed to update presence:', e);
-      throw XmppPresenceException();
-    }
+    await _connection
+        .getManager<XmppPresenceManager>()
+        ?.sendPresence(presence: presence, status: status);
   }
 
   Future<void> receivePresence(
@@ -35,6 +32,7 @@ mixin PresenceService on XmppBase {
     String? status,
   ) async {
     if (jid == user!.jid.toString()) {
+      _log.info('Saving profile presence: $presence and status: $status...');
       await owner._dbOp<XmppStateStore>((ss) async {
         await ss.writeAll(data: {
           presenceStorageKey: presence,
@@ -42,9 +40,11 @@ mixin PresenceService on XmppBase {
         });
       });
     } else {
+      _log.info('Saving ${jid.toString()} presence: $presence '
+          'and status: $status...');
       await owner._dbOp<XmppDatabase>((db) async {
         if (await db.selectRosterItem(jid.toString()) case final item?) {
-          db.updateRosterItem(item.copyWith(
+          await db.updateRosterItem(item.copyWith(
             presence: presence,
             status: status,
           ));
@@ -56,6 +56,8 @@ mixin PresenceService on XmppBase {
 
 class XmppPresenceManager extends mox.PresenceManager {
   XmppPresenceManager({required this.owner}) : super();
+
+  final _log = Logger('XmppPresenceManager');
 
   final XmppService owner;
 
@@ -80,13 +82,13 @@ class XmppPresenceManager extends mox.PresenceManager {
                 mox.SubscriptionRequestReceivedEvent(from: jid),
               );
             } else if (stanza.type?.contains('unsubscribe') ?? false) {
+              _log.info('Deleting invite from ${jid.toString()}');
               await owner._dbOp<XmppDatabase>((db) async {
                 await db.deleteInvite(jid.toString());
               });
             }
 
-            Logger('XmppService')
-                .info('Incoming presence from: ${jid.toString()}...');
+            _log.info('Incoming presence from: ${jid.toString()}...');
 
             final show = stanza.children.singleWhere(
               (e) => e.tag == 'show',
@@ -124,13 +126,21 @@ class XmppPresenceManager extends mox.PresenceManager {
       ],
     );
 
-    await getAttributes().sendStanza(
-      mox.StanzaDetails(
-        stanza,
-        addId: false,
-        awaitable: false,
-      ),
-    );
+    _log.info('Requesting to send presence: ${presence?.name} '
+        'and status: $status...');
+
+    try {
+      await getAttributes().sendStanza(
+        mox.StanzaDetails(
+          stanza,
+          addId: false,
+          awaitable: false,
+        ),
+      );
+    } on Exception catch (e) {
+      _log.severe('Failed to update presence:', e);
+      throw XmppPresenceException();
+    }
   }
 
   @override

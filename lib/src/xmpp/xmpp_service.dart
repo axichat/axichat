@@ -34,7 +34,7 @@ final class XmppDatabaseCreationException extends XmppException {
   XmppDatabaseCreationException([super.wrapped]);
 }
 
-final class XmppNoDatabaseException extends XmppException {}
+final class XmppUnknownException extends XmppException {}
 
 final class XmppAbortedException extends XmppException {}
 
@@ -187,7 +187,9 @@ class XmppService extends XmppBase
           final item = await db.selectRosterItem(requester);
           if (item != null) {
             _log.info('Accepting subscription request from $requester...');
-            _acceptSubscriptionRequest(item);
+            try {
+              await _acceptSubscriptionRequest(item);
+            } on XmppRosterException catch (_) {}
             return;
           }
           _log.info('Adding subscription request from $requester...');
@@ -281,6 +283,7 @@ class XmppService extends XmppBase
 
         await _dbOp<CredentialStore>((cs) async {
           if (saveCredentials) {
+            _log.info('Saving username and password...');
             await cs.write(key: usernameStorageKey, value: username);
             await cs.write(key: passwordStorageKey, value: password);
           }
@@ -292,6 +295,7 @@ class XmppService extends XmppBase
 
           if (databasePassphrase == null || databasePassphrase.isEmpty) {
             assert(!databasesInitialized);
+            _log.info('Generating new database passphrase...');
             databasePassphrase = generatePassphrase();
             cs.write(
               key: databasePassphraseStorageKey,
@@ -329,6 +333,7 @@ class XmppService extends XmppBase
 
         if (databasePassphrase == null || databasePassphrase!.isEmpty) {
           assert(!databasesInitialized);
+          _log.info('Generating new database passphrase...');
           databasePassphrase = generatePassphrase();
           cs.write(
             key: databasePassphraseStorageKey,
@@ -414,6 +419,7 @@ class XmppService extends XmppBase
     ]);
 
     if (attemptResumeStream) {
+      _log.info('Attempting to resume stream...');
       await _connection.getStreamManagementManager()!.loadState();
       await _dbOp<XmppStateStore>((ss) {
         _log.info('Loaded resource: ${ss.read(key: resourceStorageKey)}');
@@ -454,14 +460,17 @@ class XmppService extends XmppBase
 
   Future<void> _wipeDatabases(String username, String passphrase) async {
     await _dbOp<CredentialStore>((cs) async {
+      _log.info('Wiping credential store...');
       await cs.deleteAll(burn: true);
     });
 
     await _dbOp<XmppStateStore>((ss) async {
+      _log.info('Wiping state store...');
       await ss.deleteAll(burn: true);
     });
 
     await _dbOp<XmppDatabase>((db) async {
+      _log.info('Wiping database...');
       await db.deleteAll();
       await db.close();
       (await dbFilePathFor(username)).delete();
@@ -494,32 +503,43 @@ class XmppService extends XmppBase
   Future<void> _reset() async {
     if (!needsReset) return;
 
+    _log.info('Resetting...');
+
     _eventSubscription?.cancel();
     _eventSubscription = null;
 
     try {
       await _connection.disconnect();
+      _log.info('Gracefully disconnected.');
     } catch (e, s) {
       _log.severe('Graceful disconnect failed. Closing forcefully...', e, s);
     }
     _connection = _buildConnection();
 
     if (!_credentialStore.isCompleted) {
+      _log.warning('Cancelling credential store initialization...');
       _credentialStore.completeError(XmppAbortedException());
+    } else {
+      _log.info('Closing credential store...');
+      await (await _credentialStore.future).close();
     }
     _credentialStore = Completer<CredentialStore>();
 
     if (!_stateStore.isCompleted) {
+      _log.warning('Cancelling state store initialization...');
       _stateStore.completeError(XmppAbortedException());
     } else {
-      await (await _stateStore.future).close();
+      _log.info('Closing state store...');
+      await _stateStore.value?.close();
     }
     _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
 
     if (!_database.isCompleted) {
+      _log.warning('Cancelling database initialization...');
       _database.completeError(XmppAbortedException());
     } else {
-      await (await _database.future).close();
+      _log.info('Closing database...');
+      await _database.value?.close();
     }
     _database = ImpatientCompleter(Completer<XmppDatabase>());
 
@@ -575,6 +595,9 @@ class XmppService extends XmppBase
       return await operation(db);
     } on XmppAbortedException catch (_) {
       _log.warning('Owner called reset before $T initialized.');
+    } on Exception catch (e, s) {
+      _log.severe('Unexpected exception during operation on $T.', e, s);
+      throw XmppUnknownException();
     }
   }
 }
@@ -684,7 +707,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   void register(mox.PerformReconnectFunction performReconnect) =>
       this.performReconnect = performReconnect;
 
-  // Have to do Future based API to match moxxmpp implementation.
+  // Have to do Future based API to match mox implementation.
   @override
   Future<bool> getIsReconnecting() async => _reconnectionInProgress;
 
@@ -812,6 +835,8 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
 
   final XmppService owner;
 
+  final _log = Logger('XmppStreamManagementManager');
+
   static const keyPrefix = 'stream_management';
   final clientToServerCountKey = XmppStateStore.registerKey('${keyPrefix}_c2s');
   final serverToClientCountKey = XmppStateStore.registerKey('${keyPrefix}_s2c');
@@ -823,7 +848,9 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   @override
   Future<void> commitState() async {
     await owner._dbOp<XmppStateStore>((ss) async {
+      _log.info('Saving c2s: ${state.c2s}...');
       await ss.write(key: clientToServerCountKey, value: state.c2s);
+      _log.info('Saving s2c: ${state.s2c}...');
       await ss.write(key: serverToClientCountKey, value: state.s2c);
       if (state.streamResumptionId case String resID) {
         await ss.write(key: streamResumptionIDKey, value: resID);
@@ -839,9 +866,11 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
     await owner._dbOp<XmppStateStore>((ss) async {
       var newState = state;
       if (ss.read(key: clientToServerCountKey) case int c2s) {
+        _log.info('Loading c2s: ${state.c2s}...');
         newState = newState.copyWith(c2s: c2s);
       }
       if (ss.read(key: serverToClientCountKey) case int s2c) {
+        _log.info('Loading s2c: ${state.s2c}...');
         newState = newState.copyWith(s2c: s2c);
       }
       if (ss.read(key: streamResumptionIDKey) case String resID) {

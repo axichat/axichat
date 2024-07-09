@@ -4,6 +4,8 @@ mixin BlockingService on XmppBase {
   Stream<List<BlocklistData>>? get blocklistStream =>
       _database.value?.watchBlocklist();
 
+  final _log = Logger('BlockingService');
+
   Future<void> requestBlocklist() async {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
@@ -19,6 +21,7 @@ mixin BlockingService on XmppBase {
   Future<void> block({required String jid}) async {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      _log.info('Requesting to block $jid...');
       if (!await bm.block([jid])) throw XmppBlocklistException();
     }
   }
@@ -26,6 +29,7 @@ mixin BlockingService on XmppBase {
   Future<void> unblock({required String jid}) async {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      _log.info('Requesting to unblock $jid...');
       if (!await bm.unblock([jid])) throw XmppBlocklistException();
     }
   }
@@ -33,6 +37,7 @@ mixin BlockingService on XmppBase {
   Future<void> unblockAll() async {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      _log.info('Requesting to unblock all...');
       if (!await bm.unblockAll()) throw XmppBlocklistException();
     }
   }
