@@ -2,7 +2,7 @@ part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin BlockingService on XmppBase {
   Stream<List<BlocklistData>>? get blocklistStream =>
-      _database.value?.watchBlocklist();
+      _database.value?.blocklistAccessor.watchAll();
 
   final _log = Logger('BlockingService');
 
@@ -10,9 +10,9 @@ mixin BlockingService on XmppBase {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
       await _dbOp<XmppDatabase>((db) async {
-        await db.deleteBlocklist();
+        await db.blocklistAccessor.deleteAll();
         for (final blocked in await bm.getBlocklist()) {
-          await db.insertBlocklistData(blocked);
+          await db.blocklistAccessor.insertOne(BlocklistData(jid: blocked));
         }
       });
     }

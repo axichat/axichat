@@ -22,8 +22,8 @@ class _ChatState extends State<Chat> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        border: Border.fromBorderSide(
-          BorderSide(color: context.colorScheme.border, width: 1.0),
+        border: Border(
+          left: BorderSide(color: context.colorScheme.border, width: 1.0),
         ),
       ),
       child: DashChat(

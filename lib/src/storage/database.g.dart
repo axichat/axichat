@@ -5,6 +5,36 @@
 part of 'database.dart';
 
 // ignore_for_file: type=lint
+mixin _$MessagesAccessorMixin on DatabaseAccessor<XmppDatabase> {
+  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
+  $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
+  $MessagesTable get messages => attachedDatabase.messages;
+}
+mixin _$FileMetadataAccessorMixin on DatabaseAccessor<XmppDatabase> {
+  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
+}
+mixin _$ChatsAccessorMixin on DatabaseAccessor<XmppDatabase> {
+  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
+  $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
+  $MessagesTable get messages => attachedDatabase.messages;
+  $ContactsTable get contacts => attachedDatabase.contacts;
+  $ChatsTable get chats => attachedDatabase.chats;
+}
+mixin _$RosterAccessorMixin on DatabaseAccessor<XmppDatabase> {
+  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
+  $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
+  $MessagesTable get messages => attachedDatabase.messages;
+  $ContactsTable get contacts => attachedDatabase.contacts;
+  $ChatsTable get chats => attachedDatabase.chats;
+  $RosterTable get roster => attachedDatabase.roster;
+}
+mixin _$InvitesAccessorMixin on DatabaseAccessor<XmppDatabase> {
+  $InvitesTable get invites => attachedDatabase.invites;
+}
+mixin _$BlocklistAccessorMixin on DatabaseAccessor<XmppDatabase> {
+  $BlocklistTable get blocklist => attachedDatabase.blocklist;
+}
+
 class $FileMetadataTable extends FileMetadata
     with TableInfo<$FileMetadataTable, FileMetadataData> {
   @override
@@ -1399,24 +1429,24 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
   Message map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Message(
-      id: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
       stanzaID: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}stanza_i_d'])!,
-      originID: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}origin_i_d']),
-      occupantID: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}occupant_i_d']),
       myJid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}my_jid'])!,
       senderJid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}sender_jid'])!,
       chatJid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}chat_jid'])!,
-      body: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}body']),
       timestamp: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}timestamp'])!,
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      originID: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}origin_i_d']),
+      occupantID: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}occupant_i_d']),
+      body: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}body']),
       error: $MessagesTable.$convertererror.fromSql(attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}error'])!),
       warning: $MessagesTable.$converterwarning.fromSql(attachedDatabase
@@ -4003,6 +4033,17 @@ abstract class _$XmppDatabase extends GeneratedDatabase {
   late final $InvitesTable invites = $InvitesTable(this);
   late final $BlocklistTable blocklist = $BlocklistTable(this);
   late final $StickersTable stickers = $StickersTable(this);
+  late final MessagesAccessor messagesAccessor =
+      MessagesAccessor(this as XmppDatabase);
+  late final FileMetadataAccessor fileMetadataAccessor =
+      FileMetadataAccessor(this as XmppDatabase);
+  late final ChatsAccessor chatsAccessor = ChatsAccessor(this as XmppDatabase);
+  late final RosterAccessor rosterAccessor =
+      RosterAccessor(this as XmppDatabase);
+  late final InvitesAccessor invitesAccessor =
+      InvitesAccessor(this as XmppDatabase);
+  late final BlocklistAccessor blocklistAccessor =
+      BlocklistAccessor(this as XmppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();

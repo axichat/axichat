@@ -20,6 +20,140 @@ abstract interface class Database {
   Future<void> close();
 }
 
+abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
+    extends DatabaseAccessor<XmppDatabase> {
+  BaseAccessor(super.attachedDatabase);
+
+  T get table;
+
+  Stream<List<D>> watchAll() => select(table).watch();
+  Future<List<D>> selectAll() => select(table).get();
+  Future<D?> selectOne(Object value);
+  Future<void> insertOne(Insertable<D> data) =>
+      into(table).insert(data, mode: InsertMode.insertOrIgnore);
+  Future<void> insertOrUpdateOne(Insertable<D> data) =>
+      into(table).insertOnConflictUpdate(data);
+  Future<void> updateOne(Insertable<D> data) => update(table).replace(data);
+  Future<void> deleteOne(Object value);
+}
+
+@DriftAccessor(tables: [Messages])
+class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
+    with _$MessagesAccessorMixin {
+  MessagesAccessor(super.attachedDatabase);
+
+  @override
+  $MessagesTable get table => messages;
+
+  @override
+  Future<Message?> selectOne(Object value) {
+    // TODO: implement selectOne
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteOne(Object value) {
+    // TODO: implement deleteOne
+    throw UnimplementedError();
+  }
+}
+
+@DriftAccessor(tables: [FileMetadata])
+class FileMetadataAccessor
+    extends BaseAccessor<FileMetadataData, $FileMetadataTable>
+    with _$FileMetadataAccessorMixin {
+  FileMetadataAccessor(super.attachedDatabase);
+
+  @override
+  $FileMetadataTable get table => fileMetadata;
+
+  @override
+  Future<FileMetadataData?> selectOne(Object value) {
+    // TODO: implement selectOne
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteOne(Object value) {
+    // TODO: implement deleteOne
+    throw UnimplementedError();
+  }
+}
+
+@DriftAccessor(tables: [Chats])
+class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
+    with _$ChatsAccessorMixin {
+  ChatsAccessor(super.attachedDatabase);
+
+  @override
+  $ChatsTable get table => chats;
+
+  @override
+  Future<Chat?> selectOne(covariant String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(covariant String value) =>
+      (delete(table)..where((item) => item.jid.equals(value))).go();
+}
+
+@DriftAccessor(tables: [Roster])
+class RosterAccessor extends BaseAccessor<RosterItem, $RosterTable>
+    with _$RosterAccessorMixin {
+  RosterAccessor(super.attachedDatabase);
+
+  @override
+  $RosterTable get table => roster;
+
+  @override
+  Future<RosterItem?> selectOne(covariant String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(covariant String value) =>
+      (delete(table)..where((item) => item.jid.equals(value))).go();
+}
+
+@DriftAccessor(tables: [Invites])
+class InvitesAccessor extends BaseAccessor<Invite, $InvitesTable>
+    with _$InvitesAccessorMixin {
+  InvitesAccessor(super.attachedDatabase);
+
+  @override
+  $InvitesTable get table => invites;
+
+  @override
+  Future<Invite?> selectOne(covariant String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(covariant String value) =>
+      (delete(table)..where((item) => item.jid.equals(value))).go();
+}
+
+@DriftAccessor(tables: [Blocklist])
+class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
+    with _$BlocklistAccessorMixin {
+  BlocklistAccessor(super.attachedDatabase);
+
+  @override
+  $BlocklistTable get table => blocklist;
+
+  @override
+  Future<BlocklistData?> selectOne(covariant String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(covariant String value) =>
+      (delete(table)..where((item) => item.jid.equals(value))).go();
+
+  Future<void> deleteAll() => delete(blocklist).go();
+}
+
 @DriftDatabase(tables: [
   Messages,
   Reactions,
@@ -32,6 +166,13 @@ abstract interface class Database {
   Blocklist,
   Stickers,
   StickerPacks,
+], daos: [
+  MessagesAccessor,
+  FileMetadataAccessor,
+  ChatsAccessor,
+  RosterAccessor,
+  InvitesAccessor,
+  BlocklistAccessor,
 ])
 class XmppDatabase extends _$XmppDatabase implements Database {
   XmppDatabase._(super.e) : super();
@@ -70,55 +211,6 @@ class XmppDatabase extends _$XmppDatabase implements Database {
       await customStatement('PRAGMA foreign_keys = ON');
     }
   }
-
-  Stream<List<RosterItem>> watchRoster() => select(roster).watch();
-  Future<List<RosterItem>> selectRoster() => select(roster).get();
-  Future<RosterItem?> selectRosterItem(String jid) =>
-      (select(roster)..where((roster) => roster.jid.equals(jid)))
-          .getSingleOrNull();
-  Future<void> insertRosterItem(RosterItem item) =>
-      into(roster).insert(item, mode: InsertMode.insertOrIgnore);
-  Future<void> insertOrUpdateRosterItem(RosterItem item) =>
-      into(roster).insertOnConflictUpdate(item);
-  Future<void> updateRosterItem(RosterItem item) =>
-      update(roster).replace(item);
-  Future<void> deleteRosterItem(String jid) =>
-      (delete(roster)..where((item) => item.jid.equals(jid))).go();
-
-  Stream<List<Invite>> watchInvites() => select(invites).watch();
-  Future<List<Invite>> selectInvites() => select(invites).get();
-  Future<Invite?> selectInvite(String jid) =>
-      (select(invites)..where((invites) => invites.jid.equals(jid)))
-          .getSingleOrNull();
-  Future<void> insertInvite(Invite item) =>
-      into(invites).insert(item, mode: InsertMode.insertOrIgnore);
-  Future<void> deleteInvite(String jid) =>
-      (delete(invites)..where((item) => item.jid.equals(jid))).go();
-
-  Stream<List<BlocklistData>> watchBlocklist() => select(blocklist).watch();
-  Future<List<BlocklistData>> selectBlocklist() => select(blocklist).get();
-  Future<BlocklistData?> selectBlocklistData(String jid) =>
-      (select(blocklist)..where((blocklist) => blocklist.jid.equals(jid)))
-          .getSingleOrNull();
-  Future<void> insertBlocklistData(String jid) =>
-      into(blocklist).insert(BlocklistCompanion(jid: Value(jid)),
-          mode: InsertMode.insertOrIgnore);
-  Future<void> deleteBlocklistData(String jid) =>
-      (delete(blocklist)..where((item) => item.jid.equals(jid))).go();
-  Future<void> deleteBlocklist() => delete(blocklist).go();
-
-  Stream<List<Chat>> watchChats() => select(chats).watch();
-  Future<List<Chat>> selectChats() => select(chats).get();
-  Future<Chat?> selectChat(String jid) =>
-      (select(chats)..where((chats) => chats.jid.equals(jid)))
-          .getSingleOrNull();
-  Future<void> insertChat(Insertable<Chat> item) =>
-      into(chats).insert(item, mode: InsertMode.insertOrIgnore);
-  Future<void> insertOrUpdateChat(Insertable<Chat> item) =>
-      into(chats).insertOnConflictUpdate(item);
-  Future<void> updateChat(Insertable<Chat> item) => update(chats).replace(item);
-  Future<void> deleteChat(String jid) =>
-      (delete(roster)..where((item) => item.jid.equals(jid))).go();
 
   @override
   Future<void> close() async {

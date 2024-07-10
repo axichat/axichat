@@ -115,6 +115,7 @@ class XmppService extends XmppBase
         policy,
       );
 
+  @override
   final _log = Logger('XmppService');
 
   final XmppConnection Function() _buildConnection;
@@ -186,7 +187,7 @@ class XmppService extends XmppBase
         final requester = event.from.toBare().toString();
         _log.info('Subscription request received from $requester');
         await _dbOp<XmppDatabase>((db) async {
-          final item = await db.selectRosterItem(requester);
+          final item = await db.rosterAccessor.selectOne(requester);
           if (item != null) {
             _log.info('Accepting subscription request from $requester...');
             try {
@@ -195,7 +196,7 @@ class XmppService extends XmppBase
             return;
           }
           _log.info('Adding subscription request from $requester...');
-          db.insertInvite(Invite(
+          db.invitesAccessor.insertOne(Invite(
             jid: requester,
             myJid: user!.jid.toString(),
             title: event.from.local,
@@ -205,20 +206,20 @@ class XmppService extends XmppBase
         await _dbOp<XmppDatabase>((db) async {
           for (final blocked in event.items) {
             _log.info('Adding $blocked to blocklist...');
-            await db.insertBlocklistData(blocked);
+            await db.blocklistAccessor.insertOne(BlocklistData(jid: blocked));
           }
         });
       case mox.BlocklistUnblockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
           for (final unblocked in event.items) {
             _log.info('Removing $unblocked from blocklist...');
-            await db.deleteBlocklistData(unblocked);
+            await db.blocklistAccessor.deleteOne(unblocked);
           }
         });
       case mox.BlocklistUnblockAllPushEvent _:
         await _dbOp<XmppDatabase>((db) async {
           _log.info('Removing entire blocklist...');
-          await db.deleteBlocklist();
+          await db.blocklistAccessor.deleteAll();
         });
     }
   }

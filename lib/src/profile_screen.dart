@@ -1,4 +1,3 @@
-import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/profile/view/profile_card.dart';
 import 'package:chat/src/settings/view/settings_controls.dart';
@@ -21,31 +20,25 @@ class ProfileScreen extends StatelessWidget {
       body: SafeArea(
         child: BlocProvider.value(
           value: locate<ProfileCubit>(),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return NarrowLayout(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.all(12.0),
-                      child: ProfileCard(),
-                    ),
-                    ShadButton.ghost(
-                      onPressed: () {
-                        showAboutDialog(
-                          context: context,
-                          applicationName: 'Axichat',
-                        );
-                      },
-                      text: const Text('Legal'),
-                    ),
-                    const SizedBox(height: 8),
-                    const SettingsControls(),
-                  ],
-                ),
-              );
-            },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(12.0),
+                child: ProfileCard(),
+              ),
+              ShadButton.ghost(
+                onPressed: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'Axichat',
+                  );
+                },
+                text: const Text('Legal'),
+              ),
+              const SizedBox(height: 8),
+              const SettingsControls(),
+            ],
           ),
         ),
       ),

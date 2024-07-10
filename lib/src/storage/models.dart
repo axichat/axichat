@@ -47,8 +47,38 @@ enum PseudoMessageType {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Message with _$Message {
+class Message with _$Message implements Insertable<Message> {
   const factory Message({
+    required String stanzaID,
+    required String myJid,
+    required String senderJid,
+    required String chatJid,
+    required DateTime timestamp,
+    String? id,
+    String? originID,
+    String? occupantID,
+    String? body,
+    @Default(MessageError.none) MessageError error,
+    @Default(MessageWarning.none) MessageWarning warning,
+    @Default(false) bool encrypted,
+    @Default(false) bool noStore,
+    @Default(false) bool acked,
+    @Default(false) bool received,
+    @Default(false) bool displayed,
+    @Default(false) bool edited,
+    @Default(false) bool retracted,
+    @Default(false) bool isFileUploadNotification,
+    @Default(false) bool fileDownloading,
+    @Default(false) bool fileUploading,
+    String? fileMetadataID,
+    String? quoting,
+    String? stickerPackID,
+    PseudoMessageType? pseudoMessageType,
+    Map<String, dynamic>? pseudoMessageData,
+    @Default(<String>[]) List<String> reactionsPreview,
+  }) = _Message;
+
+  const factory Message.fromDb({
     required String id,
     required String stanzaID,
     required String? originID,
@@ -76,7 +106,40 @@ class Message with _$Message {
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
     @Default(<String>[]) List<String> reactionsPreview,
-  }) = _Message;
+  }) = _MessageFromDb;
+
+  const Message._();
+
+  @override
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
+      MessagesCompanion(
+        id: Value.absentIfNull(id),
+        stanzaID: Value(stanzaID),
+        originID: Value.absentIfNull(originID),
+        occupantID: Value.absentIfNull(occupantID),
+        myJid: Value(myJid),
+        senderJid: Value(senderJid),
+        chatJid: Value(chatJid),
+        body: Value.absentIfNull(body),
+        timestamp: Value(timestamp),
+        error: Value(error),
+        warning: Value(warning),
+        encrypted: Value(encrypted),
+        noStore: Value(noStore),
+        acked: Value(acked),
+        received: Value(received),
+        displayed: Value(displayed),
+        edited: Value(edited),
+        retracted: Value(retracted),
+        isFileUploadNotification: Value(isFileUploadNotification),
+        fileDownloading: Value(fileDownloading),
+        fileUploading: Value(fileUploading),
+        fileMetadataID: Value.absentIfNull(fileMetadataID),
+        quoting: Value.absentIfNull(quoting),
+        stickerPackID: Value.absentIfNull(stickerPackID),
+        pseudoMessageType: Value.absentIfNull(pseudoMessageType),
+        pseudoMessageData: Value.absentIfNull(pseudoMessageData),
+      ).toColumns(nullToAbsent);
 }
 
 @UseRowClass(Message)

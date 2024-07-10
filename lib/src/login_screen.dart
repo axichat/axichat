@@ -1,3 +1,4 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:chat/src/authentication/view/login_form.dart';
 import 'package:chat/src/chat/view/chat.dart';
@@ -12,31 +13,21 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        shape: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
+        ),
         title: const Text('Axichat'),
         actions: kDebugMode
             ? [DeleteCredentialsButton(), const SizedBox(width: 50)]
             : null,
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth > smallScreen) {
-              return const WideLayout(
-                smallChild: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: LoginForm(),
-                ),
-                largeChild: Chat(),
-              );
-            }
-
-            return const NarrowLayout(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: LoginForm(),
-              ),
-            );
-          },
+      body: const SafeArea(
+        child: AxiAdaptiveLayout(
+          primaryChild: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: LoginForm(),
+          ),
+          secondaryChild: Chat(),
         ),
       ),
     );

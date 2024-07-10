@@ -56,17 +56,9 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ],
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth > smallScreen) {
-                  return WideLayout(
-                    smallChild: Nexus(tabs: tabs),
-                    largeChild: const Chat(),
-                  );
-                }
-
-                return NarrowLayout(child: Nexus(tabs: tabs));
-              },
+            child: AxiAdaptiveLayout(
+              primaryChild: Nexus(tabs: tabs),
+              secondaryChild: const Chat(),
             ),
           ),
         ),

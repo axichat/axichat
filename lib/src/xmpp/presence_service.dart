@@ -43,11 +43,14 @@ mixin PresenceService on XmppBase {
       _log.info('Saving ${jid.toString()} presence: $presence '
           'and status: $status...');
       await owner._dbOp<XmppDatabase>((db) async {
-        if (await db.selectRosterItem(jid.toString()) case final item?) {
-          await db.updateRosterItem(item.copyWith(
-            presence: presence,
-            status: status,
-          ));
+        if (await db.rosterAccessor.selectOne(jid.toString())
+            case final item?) {
+          await db.rosterAccessor.updateOne(
+            item.copyWith(
+              presence: presence,
+              status: status,
+            ),
+          );
         }
       });
     }
@@ -84,7 +87,7 @@ class XmppPresenceManager extends mox.PresenceManager {
             } else if (stanza.type?.contains('unsubscribe') ?? false) {
               _log.info('Deleting invite from ${jid.toString()}');
               await owner._dbOp<XmppDatabase>((db) async {
-                await db.deleteInvite(jid.toString());
+                await db.invitesAccessor.deleteOne(jid.toString());
               });
             }
 

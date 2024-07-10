@@ -1,4 +1,3 @@
-import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/profile/view/profile_card.dart';
 import 'package:chat/src/settings/view/settings_controls.dart';
 import 'package:flutter/material.dart';
@@ -13,18 +12,12 @@ class SettingsScreen extends StatelessWidget {
         automaticallyImplyLeading: true,
         title: const Text('Settings'),
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return const NarrowLayout(
-              child: Column(
-                children: [
-                  ProfileCard(),
-                  SettingsControls(),
-                ],
-              ),
-            );
-          },
+      body: const SafeArea(
+        child: Column(
+          children: [
+            ProfileCard(),
+            SettingsControls(),
+          ],
         ),
       ),
     );

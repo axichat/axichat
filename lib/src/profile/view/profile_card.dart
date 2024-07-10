@@ -29,7 +29,9 @@ class ProfileCard extends StatelessWidget {
                 subtitle: Text(state.jid),
                 onTap: () => context.push(const ProfileRoute().location,
                     extra: context.read),
-                tileColor: context.colorScheme.accent,
+                shape: Border(
+                  top: BorderSide(color: context.colorScheme.border),
+                ),
                 contentPadding: const EdgeInsets.symmetric(
                   vertical: 6.0,
                   horizontal: 12.0,

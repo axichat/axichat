@@ -16,15 +16,15 @@ final _privateConstructorUsedError = UnsupportedError(
 
 /// @nodoc
 mixin _$Message {
-  String get id => throw _privateConstructorUsedError;
   String get stanzaID => throw _privateConstructorUsedError;
-  String? get originID => throw _privateConstructorUsedError;
-  String? get occupantID => throw _privateConstructorUsedError;
   String get myJid => throw _privateConstructorUsedError;
   String get senderJid => throw _privateConstructorUsedError;
   String get chatJid => throw _privateConstructorUsedError;
-  String? get body => throw _privateConstructorUsedError;
   DateTime get timestamp => throw _privateConstructorUsedError;
+  String? get id => throw _privateConstructorUsedError;
+  String? get originID => throw _privateConstructorUsedError;
+  String? get occupantID => throw _privateConstructorUsedError;
+  String? get body => throw _privateConstructorUsedError;
   MessageError get error => throw _privateConstructorUsedError;
   MessageWarning get warning => throw _privateConstructorUsedError;
   bool get encrypted => throw _privateConstructorUsedError;
@@ -45,6 +45,212 @@ mixin _$Message {
   Map<String, dynamic>? get pseudoMessageData =>
       throw _privateConstructorUsedError;
   List<String> get reactionsPreview => throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)
+        $default, {
+    required TResult Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)
+        fromDb,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        $default, {
+    TResult? Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        fromDb,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        $default, {
+    TResult Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        fromDb,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_Message value) $default, {
+    required TResult Function(_MessageFromDb value) fromDb,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_Message value)? $default, {
+    TResult? Function(_MessageFromDb value)? fromDb,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_Message value)? $default, {
+    TResult Function(_MessageFromDb value)? fromDb,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
 
   @JsonKey(ignore: true)
   $MessageCopyWith<Message> get copyWith => throw _privateConstructorUsedError;
@@ -56,15 +262,15 @@ abstract class $MessageCopyWith<$Res> {
       _$MessageCopyWithImpl<$Res, Message>;
   @useResult
   $Res call(
-      {String id,
-      String stanzaID,
-      String? originID,
-      String? occupantID,
+      {String stanzaID,
       String myJid,
       String senderJid,
       String chatJid,
-      String? body,
       DateTime timestamp,
+      String id,
+      String? originID,
+      String? occupantID,
+      String? body,
       MessageError error,
       MessageWarning warning,
       bool encrypted,
@@ -98,15 +304,15 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? id = null,
     Object? stanzaID = null,
-    Object? originID = freezed,
-    Object? occupantID = freezed,
     Object? myJid = null,
     Object? senderJid = null,
     Object? chatJid = null,
-    Object? body = freezed,
     Object? timestamp = null,
+    Object? id = null,
+    Object? originID = freezed,
+    Object? occupantID = freezed,
+    Object? body = freezed,
     Object? error = null,
     Object? warning = null,
     Object? encrypted = null,
@@ -127,22 +333,10 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
     Object? reactionsPreview = null,
   }) {
     return _then(_value.copyWith(
-      id: null == id
-          ? _value.id
-          : id // ignore: cast_nullable_to_non_nullable
-              as String,
       stanzaID: null == stanzaID
           ? _value.stanzaID
           : stanzaID // ignore: cast_nullable_to_non_nullable
               as String,
-      originID: freezed == originID
-          ? _value.originID
-          : originID // ignore: cast_nullable_to_non_nullable
-              as String?,
-      occupantID: freezed == occupantID
-          ? _value.occupantID
-          : occupantID // ignore: cast_nullable_to_non_nullable
-              as String?,
       myJid: null == myJid
           ? _value.myJid
           : myJid // ignore: cast_nullable_to_non_nullable
@@ -155,14 +349,26 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
           ? _value.chatJid
           : chatJid // ignore: cast_nullable_to_non_nullable
               as String,
-      body: freezed == body
-          ? _value.body
-          : body // ignore: cast_nullable_to_non_nullable
-              as String?,
       timestamp: null == timestamp
           ? _value.timestamp
           : timestamp // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      id: null == id
+          ? _value.id!
+          : id // ignore: cast_nullable_to_non_nullable
+              as String,
+      originID: freezed == originID
+          ? _value.originID
+          : originID // ignore: cast_nullable_to_non_nullable
+              as String?,
+      occupantID: freezed == occupantID
+          ? _value.occupantID
+          : occupantID // ignore: cast_nullable_to_non_nullable
+              as String?,
+      body: freezed == body
+          ? _value.body
+          : body // ignore: cast_nullable_to_non_nullable
+              as String?,
       error: null == error
           ? _value.error
           : error // ignore: cast_nullable_to_non_nullable
@@ -247,6 +453,812 @@ abstract class _$$MessageImplCopyWith<$Res> implements $MessageCopyWith<$Res> {
   @override
   @useResult
   $Res call(
+      {String stanzaID,
+      String myJid,
+      String senderJid,
+      String chatJid,
+      DateTime timestamp,
+      String? id,
+      String? originID,
+      String? occupantID,
+      String? body,
+      MessageError error,
+      MessageWarning warning,
+      bool encrypted,
+      bool noStore,
+      bool acked,
+      bool received,
+      bool displayed,
+      bool edited,
+      bool retracted,
+      bool isFileUploadNotification,
+      bool fileDownloading,
+      bool fileUploading,
+      String? fileMetadataID,
+      String? quoting,
+      String? stickerPackID,
+      PseudoMessageType? pseudoMessageType,
+      Map<String, dynamic>? pseudoMessageData,
+      List<String> reactionsPreview});
+}
+
+/// @nodoc
+class __$$MessageImplCopyWithImpl<$Res>
+    extends _$MessageCopyWithImpl<$Res, _$MessageImpl>
+    implements _$$MessageImplCopyWith<$Res> {
+  __$$MessageImplCopyWithImpl(
+      _$MessageImpl _value, $Res Function(_$MessageImpl) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? stanzaID = null,
+    Object? myJid = null,
+    Object? senderJid = null,
+    Object? chatJid = null,
+    Object? timestamp = null,
+    Object? id = freezed,
+    Object? originID = freezed,
+    Object? occupantID = freezed,
+    Object? body = freezed,
+    Object? error = null,
+    Object? warning = null,
+    Object? encrypted = null,
+    Object? noStore = null,
+    Object? acked = null,
+    Object? received = null,
+    Object? displayed = null,
+    Object? edited = null,
+    Object? retracted = null,
+    Object? isFileUploadNotification = null,
+    Object? fileDownloading = null,
+    Object? fileUploading = null,
+    Object? fileMetadataID = freezed,
+    Object? quoting = freezed,
+    Object? stickerPackID = freezed,
+    Object? pseudoMessageType = freezed,
+    Object? pseudoMessageData = freezed,
+    Object? reactionsPreview = null,
+  }) {
+    return _then(_$MessageImpl(
+      stanzaID: null == stanzaID
+          ? _value.stanzaID
+          : stanzaID // ignore: cast_nullable_to_non_nullable
+              as String,
+      myJid: null == myJid
+          ? _value.myJid
+          : myJid // ignore: cast_nullable_to_non_nullable
+              as String,
+      senderJid: null == senderJid
+          ? _value.senderJid
+          : senderJid // ignore: cast_nullable_to_non_nullable
+              as String,
+      chatJid: null == chatJid
+          ? _value.chatJid
+          : chatJid // ignore: cast_nullable_to_non_nullable
+              as String,
+      timestamp: null == timestamp
+          ? _value.timestamp
+          : timestamp // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      id: freezed == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as String?,
+      originID: freezed == originID
+          ? _value.originID
+          : originID // ignore: cast_nullable_to_non_nullable
+              as String?,
+      occupantID: freezed == occupantID
+          ? _value.occupantID
+          : occupantID // ignore: cast_nullable_to_non_nullable
+              as String?,
+      body: freezed == body
+          ? _value.body
+          : body // ignore: cast_nullable_to_non_nullable
+              as String?,
+      error: null == error
+          ? _value.error
+          : error // ignore: cast_nullable_to_non_nullable
+              as MessageError,
+      warning: null == warning
+          ? _value.warning
+          : warning // ignore: cast_nullable_to_non_nullable
+              as MessageWarning,
+      encrypted: null == encrypted
+          ? _value.encrypted
+          : encrypted // ignore: cast_nullable_to_non_nullable
+              as bool,
+      noStore: null == noStore
+          ? _value.noStore
+          : noStore // ignore: cast_nullable_to_non_nullable
+              as bool,
+      acked: null == acked
+          ? _value.acked
+          : acked // ignore: cast_nullable_to_non_nullable
+              as bool,
+      received: null == received
+          ? _value.received
+          : received // ignore: cast_nullable_to_non_nullable
+              as bool,
+      displayed: null == displayed
+          ? _value.displayed
+          : displayed // ignore: cast_nullable_to_non_nullable
+              as bool,
+      edited: null == edited
+          ? _value.edited
+          : edited // ignore: cast_nullable_to_non_nullable
+              as bool,
+      retracted: null == retracted
+          ? _value.retracted
+          : retracted // ignore: cast_nullable_to_non_nullable
+              as bool,
+      isFileUploadNotification: null == isFileUploadNotification
+          ? _value.isFileUploadNotification
+          : isFileUploadNotification // ignore: cast_nullable_to_non_nullable
+              as bool,
+      fileDownloading: null == fileDownloading
+          ? _value.fileDownloading
+          : fileDownloading // ignore: cast_nullable_to_non_nullable
+              as bool,
+      fileUploading: null == fileUploading
+          ? _value.fileUploading
+          : fileUploading // ignore: cast_nullable_to_non_nullable
+              as bool,
+      fileMetadataID: freezed == fileMetadataID
+          ? _value.fileMetadataID
+          : fileMetadataID // ignore: cast_nullable_to_non_nullable
+              as String?,
+      quoting: freezed == quoting
+          ? _value.quoting
+          : quoting // ignore: cast_nullable_to_non_nullable
+              as String?,
+      stickerPackID: freezed == stickerPackID
+          ? _value.stickerPackID
+          : stickerPackID // ignore: cast_nullable_to_non_nullable
+              as String?,
+      pseudoMessageType: freezed == pseudoMessageType
+          ? _value.pseudoMessageType
+          : pseudoMessageType // ignore: cast_nullable_to_non_nullable
+              as PseudoMessageType?,
+      pseudoMessageData: freezed == pseudoMessageData
+          ? _value._pseudoMessageData
+          : pseudoMessageData // ignore: cast_nullable_to_non_nullable
+              as Map<String, dynamic>?,
+      reactionsPreview: null == reactionsPreview
+          ? _value._reactionsPreview
+          : reactionsPreview // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$MessageImpl extends _Message {
+  const _$MessageImpl(
+      {required this.stanzaID,
+      required this.myJid,
+      required this.senderJid,
+      required this.chatJid,
+      required this.timestamp,
+      this.id,
+      this.originID,
+      this.occupantID,
+      this.body,
+      this.error = MessageError.none,
+      this.warning = MessageWarning.none,
+      this.encrypted = false,
+      this.noStore = false,
+      this.acked = false,
+      this.received = false,
+      this.displayed = false,
+      this.edited = false,
+      this.retracted = false,
+      this.isFileUploadNotification = false,
+      this.fileDownloading = false,
+      this.fileUploading = false,
+      this.fileMetadataID,
+      this.quoting,
+      this.stickerPackID,
+      this.pseudoMessageType,
+      final Map<String, dynamic>? pseudoMessageData,
+      final List<String> reactionsPreview = const <String>[]})
+      : _pseudoMessageData = pseudoMessageData,
+        _reactionsPreview = reactionsPreview,
+        super._();
+
+  @override
+  final String stanzaID;
+  @override
+  final String myJid;
+  @override
+  final String senderJid;
+  @override
+  final String chatJid;
+  @override
+  final DateTime timestamp;
+  @override
+  final String? id;
+  @override
+  final String? originID;
+  @override
+  final String? occupantID;
+  @override
+  final String? body;
+  @override
+  @JsonKey()
+  final MessageError error;
+  @override
+  @JsonKey()
+  final MessageWarning warning;
+  @override
+  @JsonKey()
+  final bool encrypted;
+  @override
+  @JsonKey()
+  final bool noStore;
+  @override
+  @JsonKey()
+  final bool acked;
+  @override
+  @JsonKey()
+  final bool received;
+  @override
+  @JsonKey()
+  final bool displayed;
+  @override
+  @JsonKey()
+  final bool edited;
+  @override
+  @JsonKey()
+  final bool retracted;
+  @override
+  @JsonKey()
+  final bool isFileUploadNotification;
+  @override
+  @JsonKey()
+  final bool fileDownloading;
+  @override
+  @JsonKey()
+  final bool fileUploading;
+  @override
+  final String? fileMetadataID;
+  @override
+  final String? quoting;
+  @override
+  final String? stickerPackID;
+  @override
+  final PseudoMessageType? pseudoMessageType;
+  final Map<String, dynamic>? _pseudoMessageData;
+  @override
+  Map<String, dynamic>? get pseudoMessageData {
+    final value = _pseudoMessageData;
+    if (value == null) return null;
+    if (_pseudoMessageData is EqualUnmodifiableMapView)
+      return _pseudoMessageData;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(value);
+  }
+
+  final List<String> _reactionsPreview;
+  @override
+  @JsonKey()
+  List<String> get reactionsPreview {
+    if (_reactionsPreview is EqualUnmodifiableListView)
+      return _reactionsPreview;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_reactionsPreview);
+  }
+
+  @override
+  String toString() {
+    return 'Message(stanzaID: $stanzaID, myJid: $myJid, senderJid: $senderJid, chatJid: $chatJid, timestamp: $timestamp, id: $id, originID: $originID, occupantID: $occupantID, body: $body, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MessageImpl &&
+            (identical(other.stanzaID, stanzaID) ||
+                other.stanzaID == stanzaID) &&
+            (identical(other.myJid, myJid) || other.myJid == myJid) &&
+            (identical(other.senderJid, senderJid) ||
+                other.senderJid == senderJid) &&
+            (identical(other.chatJid, chatJid) || other.chatJid == chatJid) &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.originID, originID) ||
+                other.originID == originID) &&
+            (identical(other.occupantID, occupantID) ||
+                other.occupantID == occupantID) &&
+            (identical(other.body, body) || other.body == body) &&
+            (identical(other.error, error) || other.error == error) &&
+            (identical(other.warning, warning) || other.warning == warning) &&
+            (identical(other.encrypted, encrypted) ||
+                other.encrypted == encrypted) &&
+            (identical(other.noStore, noStore) || other.noStore == noStore) &&
+            (identical(other.acked, acked) || other.acked == acked) &&
+            (identical(other.received, received) ||
+                other.received == received) &&
+            (identical(other.displayed, displayed) ||
+                other.displayed == displayed) &&
+            (identical(other.edited, edited) || other.edited == edited) &&
+            (identical(other.retracted, retracted) ||
+                other.retracted == retracted) &&
+            (identical(
+                    other.isFileUploadNotification, isFileUploadNotification) ||
+                other.isFileUploadNotification == isFileUploadNotification) &&
+            (identical(other.fileDownloading, fileDownloading) ||
+                other.fileDownloading == fileDownloading) &&
+            (identical(other.fileUploading, fileUploading) ||
+                other.fileUploading == fileUploading) &&
+            (identical(other.fileMetadataID, fileMetadataID) ||
+                other.fileMetadataID == fileMetadataID) &&
+            (identical(other.quoting, quoting) || other.quoting == quoting) &&
+            (identical(other.stickerPackID, stickerPackID) ||
+                other.stickerPackID == stickerPackID) &&
+            (identical(other.pseudoMessageType, pseudoMessageType) ||
+                other.pseudoMessageType == pseudoMessageType) &&
+            const DeepCollectionEquality()
+                .equals(other._pseudoMessageData, _pseudoMessageData) &&
+            const DeepCollectionEquality()
+                .equals(other._reactionsPreview, _reactionsPreview));
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        stanzaID,
+        myJid,
+        senderJid,
+        chatJid,
+        timestamp,
+        id,
+        originID,
+        occupantID,
+        body,
+        error,
+        warning,
+        encrypted,
+        noStore,
+        acked,
+        received,
+        displayed,
+        edited,
+        retracted,
+        isFileUploadNotification,
+        fileDownloading,
+        fileUploading,
+        fileMetadataID,
+        quoting,
+        stickerPackID,
+        pseudoMessageType,
+        const DeepCollectionEquality().hash(_pseudoMessageData),
+        const DeepCollectionEquality().hash(_reactionsPreview)
+      ]);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MessageImplCopyWith<_$MessageImpl> get copyWith =>
+      __$$MessageImplCopyWithImpl<_$MessageImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)
+        $default, {
+    required TResult Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)
+        fromDb,
+  }) {
+    return $default(
+        stanzaID,
+        myJid,
+        senderJid,
+        chatJid,
+        timestamp,
+        id,
+        originID,
+        occupantID,
+        body,
+        error,
+        warning,
+        encrypted,
+        noStore,
+        acked,
+        received,
+        displayed,
+        edited,
+        retracted,
+        isFileUploadNotification,
+        fileDownloading,
+        fileUploading,
+        fileMetadataID,
+        quoting,
+        stickerPackID,
+        pseudoMessageType,
+        pseudoMessageData,
+        reactionsPreview);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        $default, {
+    TResult? Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        fromDb,
+  }) {
+    return $default?.call(
+        stanzaID,
+        myJid,
+        senderJid,
+        chatJid,
+        timestamp,
+        id,
+        originID,
+        occupantID,
+        body,
+        error,
+        warning,
+        encrypted,
+        noStore,
+        acked,
+        received,
+        displayed,
+        edited,
+        retracted,
+        isFileUploadNotification,
+        fileDownloading,
+        fileUploading,
+        fileMetadataID,
+        quoting,
+        stickerPackID,
+        pseudoMessageType,
+        pseudoMessageData,
+        reactionsPreview);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        $default, {
+    TResult Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        fromDb,
+    required TResult orElse(),
+  }) {
+    if ($default != null) {
+      return $default(
+          stanzaID,
+          myJid,
+          senderJid,
+          chatJid,
+          timestamp,
+          id,
+          originID,
+          occupantID,
+          body,
+          error,
+          warning,
+          encrypted,
+          noStore,
+          acked,
+          received,
+          displayed,
+          edited,
+          retracted,
+          isFileUploadNotification,
+          fileDownloading,
+          fileUploading,
+          fileMetadataID,
+          quoting,
+          stickerPackID,
+          pseudoMessageType,
+          pseudoMessageData,
+          reactionsPreview);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_Message value) $default, {
+    required TResult Function(_MessageFromDb value) fromDb,
+  }) {
+    return $default(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_Message value)? $default, {
+    TResult? Function(_MessageFromDb value)? fromDb,
+  }) {
+    return $default?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_Message value)? $default, {
+    TResult Function(_MessageFromDb value)? fromDb,
+    required TResult orElse(),
+  }) {
+    if ($default != null) {
+      return $default(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class _Message extends Message {
+  const factory _Message(
+      {required final String stanzaID,
+      required final String myJid,
+      required final String senderJid,
+      required final String chatJid,
+      required final DateTime timestamp,
+      final String? id,
+      final String? originID,
+      final String? occupantID,
+      final String? body,
+      final MessageError error,
+      final MessageWarning warning,
+      final bool encrypted,
+      final bool noStore,
+      final bool acked,
+      final bool received,
+      final bool displayed,
+      final bool edited,
+      final bool retracted,
+      final bool isFileUploadNotification,
+      final bool fileDownloading,
+      final bool fileUploading,
+      final String? fileMetadataID,
+      final String? quoting,
+      final String? stickerPackID,
+      final PseudoMessageType? pseudoMessageType,
+      final Map<String, dynamic>? pseudoMessageData,
+      final List<String> reactionsPreview}) = _$MessageImpl;
+  const _Message._() : super._();
+
+  @override
+  String get stanzaID;
+  @override
+  String get myJid;
+  @override
+  String get senderJid;
+  @override
+  String get chatJid;
+  @override
+  DateTime get timestamp;
+  @override
+  String? get id;
+  @override
+  String? get originID;
+  @override
+  String? get occupantID;
+  @override
+  String? get body;
+  @override
+  MessageError get error;
+  @override
+  MessageWarning get warning;
+  @override
+  bool get encrypted;
+  @override
+  bool get noStore;
+  @override
+  bool get acked;
+  @override
+  bool get received;
+  @override
+  bool get displayed;
+  @override
+  bool get edited;
+  @override
+  bool get retracted;
+  @override
+  bool get isFileUploadNotification;
+  @override
+  bool get fileDownloading;
+  @override
+  bool get fileUploading;
+  @override
+  String? get fileMetadataID;
+  @override
+  String? get quoting;
+  @override
+  String? get stickerPackID;
+  @override
+  PseudoMessageType? get pseudoMessageType;
+  @override
+  Map<String, dynamic>? get pseudoMessageData;
+  @override
+  List<String> get reactionsPreview;
+  @override
+  @JsonKey(ignore: true)
+  _$$MessageImplCopyWith<_$MessageImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MessageFromDbImplCopyWith<$Res>
+    implements $MessageCopyWith<$Res> {
+  factory _$$MessageFromDbImplCopyWith(
+          _$MessageFromDbImpl value, $Res Function(_$MessageFromDbImpl) then) =
+      __$$MessageFromDbImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
       {String id,
       String stanzaID,
       String? originID,
@@ -277,11 +1289,11 @@ abstract class _$$MessageImplCopyWith<$Res> implements $MessageCopyWith<$Res> {
 }
 
 /// @nodoc
-class __$$MessageImplCopyWithImpl<$Res>
-    extends _$MessageCopyWithImpl<$Res, _$MessageImpl>
-    implements _$$MessageImplCopyWith<$Res> {
-  __$$MessageImplCopyWithImpl(
-      _$MessageImpl _value, $Res Function(_$MessageImpl) _then)
+class __$$MessageFromDbImplCopyWithImpl<$Res>
+    extends _$MessageCopyWithImpl<$Res, _$MessageFromDbImpl>
+    implements _$$MessageFromDbImplCopyWith<$Res> {
+  __$$MessageFromDbImplCopyWithImpl(
+      _$MessageFromDbImpl _value, $Res Function(_$MessageFromDbImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -315,7 +1327,7 @@ class __$$MessageImplCopyWithImpl<$Res>
     Object? pseudoMessageData = freezed,
     Object? reactionsPreview = null,
   }) {
-    return _then(_$MessageImpl(
+    return _then(_$MessageFromDbImpl(
       id: null == id
           ? _value.id
           : id // ignore: cast_nullable_to_non_nullable
@@ -430,8 +1442,8 @@ class __$$MessageImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$MessageImpl implements _Message {
-  const _$MessageImpl(
+class _$MessageFromDbImpl extends _MessageFromDb {
+  const _$MessageFromDbImpl(
       {required this.id,
       required this.stanzaID,
       required this.originID,
@@ -460,7 +1472,8 @@ class _$MessageImpl implements _Message {
       required final Map<String, dynamic>? pseudoMessageData,
       final List<String> reactionsPreview = const <String>[]})
       : _pseudoMessageData = pseudoMessageData,
-        _reactionsPreview = reactionsPreview;
+        _reactionsPreview = reactionsPreview,
+        super._();
 
   @override
   final String id;
@@ -535,14 +1548,14 @@ class _$MessageImpl implements _Message {
 
   @override
   String toString() {
-    return 'Message(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, myJid: $myJid, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
+    return 'Message.fromDb(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, myJid: $myJid, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
   }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$MessageImpl &&
+            other is _$MessageFromDbImpl &&
             (identical(other.id, id) || other.id == id) &&
             (identical(other.stanzaID, stanzaID) ||
                 other.stanzaID == stanzaID) &&
@@ -625,12 +1638,323 @@ class _$MessageImpl implements _Message {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$MessageImplCopyWith<_$MessageImpl> get copyWith =>
-      __$$MessageImplCopyWithImpl<_$MessageImpl>(this, _$identity);
+  _$$MessageFromDbImplCopyWith<_$MessageFromDbImpl> get copyWith =>
+      __$$MessageFromDbImplCopyWithImpl<_$MessageFromDbImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)
+        $default, {
+    required TResult Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)
+        fromDb,
+  }) {
+    return fromDb(
+        id,
+        stanzaID,
+        originID,
+        occupantID,
+        myJid,
+        senderJid,
+        chatJid,
+        body,
+        timestamp,
+        error,
+        warning,
+        encrypted,
+        noStore,
+        acked,
+        received,
+        displayed,
+        edited,
+        retracted,
+        isFileUploadNotification,
+        fileDownloading,
+        fileUploading,
+        fileMetadataID,
+        quoting,
+        stickerPackID,
+        pseudoMessageType,
+        pseudoMessageData,
+        reactionsPreview);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        $default, {
+    TResult? Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        fromDb,
+  }) {
+    return fromDb?.call(
+        id,
+        stanzaID,
+        originID,
+        occupantID,
+        myJid,
+        senderJid,
+        chatJid,
+        body,
+        timestamp,
+        error,
+        warning,
+        encrypted,
+        noStore,
+        acked,
+        received,
+        displayed,
+        edited,
+        retracted,
+        isFileUploadNotification,
+        fileDownloading,
+        fileUploading,
+        fileMetadataID,
+        quoting,
+        stickerPackID,
+        pseudoMessageType,
+        pseudoMessageData,
+        reactionsPreview);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(
+            String stanzaID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            DateTime timestamp,
+            String? id,
+            String? originID,
+            String? occupantID,
+            String? body,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        $default, {
+    TResult Function(
+            String id,
+            String stanzaID,
+            String? originID,
+            String? occupantID,
+            String myJid,
+            String senderJid,
+            String chatJid,
+            String? body,
+            DateTime timestamp,
+            MessageError error,
+            MessageWarning warning,
+            bool encrypted,
+            bool noStore,
+            bool acked,
+            bool received,
+            bool displayed,
+            bool edited,
+            bool retracted,
+            bool isFileUploadNotification,
+            bool fileDownloading,
+            bool fileUploading,
+            String? fileMetadataID,
+            String? quoting,
+            String? stickerPackID,
+            PseudoMessageType? pseudoMessageType,
+            Map<String, dynamic>? pseudoMessageData,
+            List<String> reactionsPreview)?
+        fromDb,
+    required TResult orElse(),
+  }) {
+    if (fromDb != null) {
+      return fromDb(
+          id,
+          stanzaID,
+          originID,
+          occupantID,
+          myJid,
+          senderJid,
+          chatJid,
+          body,
+          timestamp,
+          error,
+          warning,
+          encrypted,
+          noStore,
+          acked,
+          received,
+          displayed,
+          edited,
+          retracted,
+          isFileUploadNotification,
+          fileDownloading,
+          fileUploading,
+          fileMetadataID,
+          quoting,
+          stickerPackID,
+          pseudoMessageType,
+          pseudoMessageData,
+          reactionsPreview);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_Message value) $default, {
+    required TResult Function(_MessageFromDb value) fromDb,
+  }) {
+    return fromDb(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_Message value)? $default, {
+    TResult? Function(_MessageFromDb value)? fromDb,
+  }) {
+    return fromDb?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_Message value)? $default, {
+    TResult Function(_MessageFromDb value)? fromDb,
+    required TResult orElse(),
+  }) {
+    if (fromDb != null) {
+      return fromDb(this);
+    }
+    return orElse();
+  }
 }
 
-abstract class _Message implements Message {
-  const factory _Message(
+abstract class _MessageFromDb extends Message {
+  const factory _MessageFromDb(
       {required final String id,
       required final String stanzaID,
       required final String? originID,
@@ -657,7 +1981,8 @@ abstract class _Message implements Message {
       required final String? stickerPackID,
       required final PseudoMessageType? pseudoMessageType,
       required final Map<String, dynamic>? pseudoMessageData,
-      final List<String> reactionsPreview}) = _$MessageImpl;
+      final List<String> reactionsPreview}) = _$MessageFromDbImpl;
+  const _MessageFromDb._() : super._();
 
   @override
   String get id;
@@ -715,7 +2040,7 @@ abstract class _Message implements Message {
   List<String> get reactionsPreview;
   @override
   @JsonKey(ignore: true)
-  _$$MessageImplCopyWith<_$MessageImpl> get copyWith =>
+  _$$MessageFromDbImplCopyWith<_$MessageFromDbImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
