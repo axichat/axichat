@@ -20,7 +20,7 @@ mixin _$Message {
   String get myJid => throw _privateConstructorUsedError;
   String get senderJid => throw _privateConstructorUsedError;
   String get chatJid => throw _privateConstructorUsedError;
-  DateTime get timestamp => throw _privateConstructorUsedError;
+  DateTime? get timestamp => throw _privateConstructorUsedError;
   String? get id => throw _privateConstructorUsedError;
   String? get originID => throw _privateConstructorUsedError;
   String? get occupantID => throw _privateConstructorUsedError;
@@ -52,7 +52,7 @@ mixin _$Message {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -114,7 +114,7 @@ mixin _$Message {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -176,7 +176,7 @@ mixin _$Message {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -350,7 +350,7 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
           : chatJid // ignore: cast_nullable_to_non_nullable
               as String,
       timestamp: null == timestamp
-          ? _value.timestamp
+          ? _value.timestamp!
           : timestamp // ignore: cast_nullable_to_non_nullable
               as DateTime,
       id: null == id
@@ -457,7 +457,7 @@ abstract class _$$MessageImplCopyWith<$Res> implements $MessageCopyWith<$Res> {
       String myJid,
       String senderJid,
       String chatJid,
-      DateTime timestamp,
+      DateTime? timestamp,
       String? id,
       String? originID,
       String? occupantID,
@@ -497,7 +497,7 @@ class __$$MessageImplCopyWithImpl<$Res>
     Object? myJid = null,
     Object? senderJid = null,
     Object? chatJid = null,
-    Object? timestamp = null,
+    Object? timestamp = freezed,
     Object? id = freezed,
     Object? originID = freezed,
     Object? occupantID = freezed,
@@ -538,10 +538,10 @@ class __$$MessageImplCopyWithImpl<$Res>
           ? _value.chatJid
           : chatJid // ignore: cast_nullable_to_non_nullable
               as String,
-      timestamp: null == timestamp
+      timestamp: freezed == timestamp
           ? _value.timestamp
           : timestamp // ignore: cast_nullable_to_non_nullable
-              as DateTime,
+              as DateTime?,
       id: freezed == id
           ? _value.id
           : id // ignore: cast_nullable_to_non_nullable
@@ -642,7 +642,7 @@ class _$MessageImpl extends _Message {
       required this.myJid,
       required this.senderJid,
       required this.chatJid,
-      required this.timestamp,
+      this.timestamp,
       this.id,
       this.originID,
       this.occupantID,
@@ -678,7 +678,7 @@ class _$MessageImpl extends _Message {
   @override
   final String chatJid;
   @override
-  final DateTime timestamp;
+  final DateTime? timestamp;
   @override
   final String? id;
   @override
@@ -855,7 +855,7 @@ class _$MessageImpl extends _Message {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -947,7 +947,7 @@ class _$MessageImpl extends _Message {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -1039,7 +1039,7 @@ class _$MessageImpl extends _Message {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -1165,7 +1165,7 @@ abstract class _Message extends Message {
       required final String myJid,
       required final String senderJid,
       required final String chatJid,
-      required final DateTime timestamp,
+      final DateTime? timestamp,
       final String? id,
       final String? originID,
       final String? occupantID,
@@ -1199,7 +1199,7 @@ abstract class _Message extends Message {
   @override
   String get chatJid;
   @override
-  DateTime get timestamp;
+  DateTime? get timestamp;
   @override
   String? get id;
   @override
@@ -1649,7 +1649,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -1741,7 +1741,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,
@@ -1833,7 +1833,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String myJid,
             String senderJid,
             String chatJid,
-            DateTime timestamp,
+            DateTime? timestamp,
             String? id,
             String? originID,
             String? occupantID,

@@ -15,6 +15,7 @@ import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 import 'package:retry/retry.dart' show RetryOptions;
 
 part 'blocking_service.dart';
+part 'message_service.dart';
 part 'presence_service.dart';
 part 'roster_service.dart';
 
@@ -81,7 +82,7 @@ abstract class XmppBase {
 }
 
 class XmppService extends XmppBase
-    with RosterService, PresenceService, BlockingService {
+    with MessageService, RosterService, PresenceService, BlockingService {
   XmppService._(
     super.domain,
     this._buildConnection,
@@ -158,6 +159,60 @@ class XmppService extends XmppBase
 
   void _onEvent(mox.XmppEvent event) async {
     switch (event) {
+      case mox.MessageEvent event:
+        if (event.type == 'error') {
+          _log.info('Handling error message...');
+          await _handleError(event);
+          return;
+        }
+        final get = event.extensions.get;
+        final isCarbon = get<mox.CarbonsData>()?.isCarbon ?? false;
+        final to = event.to.toBare().toString();
+        final from = event.from.toBare().toString();
+        final chatJid = isCarbon ? to : from;
+
+        if (get<mox.ChatState>() case final state?) {
+          _log.info('Updating chat state to ${state.name}...');
+          await _dbOp<XmppDatabase>((db) async {
+            if (await db.chatsAccessor.selectOne(chatJid) case final chat?) {
+              await db.chatsAccessor.updateOne(chat.copyWith(chatState: state));
+            }
+          });
+        }
+        if (await _handleCorrection(event, chatJid)) return;
+        if (await _handleFileUploadNotificationReplacement(event, chatJid)) {
+          return;
+        }
+        if (await _handleRetraction(event, chatJid)) return;
+        if (await _handleReactions(event, chatJid)) return;
+
+        // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
+        if (!event.displayable && event.encryptionError == null) return;
+        if (get<mox.FileUploadNotificationData>() case final data?) {
+          if (data.metadata.name == null) return;
+        }
+
+        await _handleFile(event, chatJid);
+
+        _log.info('Saving message to database...');
+        await _dbOp<XmppDatabase>((db) async {
+          await db.messagesAccessor.insertOne(Message(
+            stanzaID: event.id ?? '',
+            myJid: user!.jid.toString(),
+            senderJid: event.from.toString(),
+            chatJid: chatJid,
+            body: get<mox.ReplyData>()?.withoutFallback ??
+                get<mox.MessageBodyData>()?.body ??
+                '',
+            noStore: get<mox.MessageProcessingHintData>()
+                    ?.hints
+                    .contains(mox.MessageProcessingHint.noStore) ??
+                false,
+            quoting: get<mox.ReplyData>()?.id,
+            originID: get<mox.StableIdData>()?.originId,
+            occupantID: get<mox.OccupantIdData>()?.id,
+          ));
+        });
       case mox.StreamNegotiationsDoneEvent event:
         if (event.resumed) return;
         final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
