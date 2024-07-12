@@ -19,6 +19,7 @@ const uuid = Uuid();
 
 enum MessageError {
   none,
+  unknown,
   serviceUnavailable,
   serverNotFound,
   serverTimeout,
@@ -32,13 +33,17 @@ enum MessageError {
   encryptionFailure,
   fileDecryptionFailure,
   fileEncryptionFailure,
-  plaintextFileInOmemo,
+  plaintextFileInOmemo;
+
+  bool get isNotNone => this != none;
 }
 
 enum MessageWarning {
   none,
   fileIntegrityFailure,
-  plaintextFileInOmemo,
+  plaintextFileInOmemo;
+
+  bool get isNotNone => this != none;
 }
 
 enum PseudoMessageType {
@@ -110,6 +115,19 @@ class Message with _$Message implements Insertable<Message> {
 
   const Message._();
 
+  bool authorized(mox.JID jid) =>
+      mox.JID.fromString(senderJid).toBare() == jid.toBare();
+
+  bool get editable =>
+      error.isNotNone &&
+      fileMetadataID == null &&
+      !isFileUploadNotification &&
+      !fileUploading &&
+      !fileDownloading;
+
+  bool get isPseudoMessage =>
+      pseudoMessageType != null && pseudoMessageData != null;
+
   @override
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
       MessagesCompanion(
@@ -134,7 +152,7 @@ class Message with _$Message implements Insertable<Message> {
         isFileUploadNotification: Value(isFileUploadNotification),
         fileDownloading: Value(fileDownloading),
         fileUploading: Value(fileUploading),
-        fileMetadataID: Value.absentIfNull(fileMetadataID),
+        fileMetadataID: Value(fileMetadataID),
         quoting: Value.absentIfNull(quoting),
         stickerPackID: Value.absentIfNull(stickerPackID),
         pseudoMessageType: Value.absentIfNull(pseudoMessageType),
@@ -173,7 +191,7 @@ class Messages extends Table {
       boolean().withDefault(const Constant(false))();
   TextColumn get fileMetadataID =>
       text().nullable().references(FileMetadata, #id)();
-  TextColumn get quoting => text().nullable().references(Messages, #id)();
+  TextColumn get quoting => text().nullable()();
   TextColumn get stickerPackID =>
       text().nullable().references(StickerPacks, #id)();
   IntColumn get pseudoMessageType => intEnum<PseudoMessageType>().nullable()();
@@ -237,7 +255,7 @@ class FileMetadata extends Table {
   TextColumn get id => text().clientDefault(() => uuid.v4())();
   TextColumn get filename => text()();
   TextColumn get path => text().nullable()();
-  TextColumn get sourceUrl => text().nullable()();
+  TextColumn get sourceUrls => text().map(ListConverter()).nullable()();
   TextColumn get mimeType => text().nullable()();
   IntColumn get sizeBytes => integer().nullable()();
   IntColumn get width => integer().nullable()();
@@ -245,8 +263,8 @@ class FileMetadata extends Table {
   TextColumn get encryptionKey => text().nullable()();
   TextColumn get encryptionIV => text().nullable()();
   TextColumn get encryptionScheme => text().nullable()();
-  TextColumn get cipherTextHashes => text().map(JsonConverter()).nullable()();
-  TextColumn get plainTextHashes => text().map(JsonConverter()).nullable()();
+  TextColumn get cipherTextHashes => text().map(HashesConverter()).nullable()();
+  TextColumn get plainTextHashes => text().map(HashesConverter()).nullable()();
   TextColumn get thumbnailType => text().nullable()();
   TextColumn get thumbnailData => text().nullable()();
 
@@ -488,7 +506,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required DateTime lastChangeTimestamp,
     String? avatarPath,
     String? avatarHash,
-    String? lastMessageID,
+    String? lastMessage,
     @Default(0) int unreadCount,
     @Default(false) bool open,
     @Default(false) bool muted,
@@ -509,7 +527,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required ChatType type,
     required String? avatarPath,
     required String? avatarHash,
-    required String? lastMessageID,
+    required String? lastMessage,
     required DateTime lastChangeTimestamp,
     required int unreadCount,
     required bool open,
@@ -535,7 +553,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         type: Value(type),
         avatarPath: Value.absentIfNull(avatarPath),
         avatarHash: Value.absentIfNull(avatarHash),
-        lastMessageID: Value.absentIfNull(lastMessageID),
+        lastMessage: Value.absentIfNull(lastMessage),
         lastChangeTimestamp: Value(lastChangeTimestamp),
         unreadCount: Value(unreadCount),
         open: Value(open),
@@ -558,7 +576,7 @@ class Chats extends Table {
   IntColumn get type => intEnum<ChatType>()();
   TextColumn get avatarPath => text().nullable()();
   TextColumn get avatarHash => text().nullable()();
-  TextColumn get lastMessageID => text().nullable().references(Messages, #id)();
+  TextColumn get lastMessage => text().nullable()();
   DateTimeColumn get lastChangeTimestamp => dateTime()();
   IntColumn get unreadCount => integer().withDefault(const Constant(0))();
   BoolColumn get open => boolean().withDefault(const Constant(false))();
@@ -649,4 +667,23 @@ class JsonConverter<V> extends TypeConverter<Map<String, V>, String> {
 
   @override
   String toSql(Map<String, V> value) => jsonEncode(value);
+}
+
+class HashesConverter extends TypeConverter<Map<HashFunction, String>, String> {
+  @override
+  Map<HashFunction, String> fromSql(String fromDb) =>
+      (jsonDecode(fromDb) as Map<String, dynamic>)
+          .map((k, v) => MapEntry(HashFunction.fromName(k), v as String));
+
+  @override
+  String toSql(Map<HashFunction, String> value) =>
+      jsonEncode(value.map((k, v) => MapEntry(k.toName(), value)));
+}
+
+class ListConverter extends TypeConverter<List<String>, String> {
+  @override
+  List<String> fromSql(String fromDb) => jsonDecode(fromDb);
+
+  @override
+  String toSql(List<String> value) => jsonEncode(value);
 }

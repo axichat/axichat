@@ -9,18 +9,21 @@ class AxiListTile extends StatelessWidget {
     this.title,
     this.subtitle,
     this.actions,
+    this.color,
   });
 
   final Widget? leading;
   final String? title;
   final String? subtitle;
   final List<Widget>? actions;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return ShadCard(
       padding: const EdgeInsets.all(12.0),
       rowCrossAxisAlignment: CrossAxisAlignment.center,
+      backgroundColor: color,
       leading: leading == null
           ? null
           : ConstrainedBox(
@@ -42,6 +45,7 @@ class AxiListTile extends StatelessWidget {
                   Text(
                     title!,
                     style: context.textTheme.small,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -52,7 +56,10 @@ class AxiListTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10.0),
               child: Row(
                 children: [
-                  Text(subtitle!),
+                  Text(
+                    subtitle!,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),

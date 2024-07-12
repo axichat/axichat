@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:chat/src/common/capability.dart';
@@ -12,9 +13,12 @@ import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
+import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:retry/retry.dart' show RetryOptions;
 
 part 'blocking_service.dart';
+part 'chats_service.dart';
 part 'message_service.dart';
 part 'presence_service.dart';
 part 'roster_service.dart';
@@ -82,7 +86,12 @@ abstract class XmppBase {
 }
 
 class XmppService extends XmppBase
-    with MessageService, RosterService, PresenceService, BlockingService {
+    with
+        MessageService,
+        RosterService,
+        PresenceService,
+        ChatsService,
+        BlockingService {
   XmppService._(
     super.domain,
     this._buildConnection,
@@ -160,29 +169,17 @@ class XmppService extends XmppBase
   void _onEvent(mox.XmppEvent event) async {
     switch (event) {
       case mox.MessageEvent event:
-        if (event.type == 'error') {
-          _log.info('Handling error message...');
-          await _handleError(event);
-          return;
-        }
+        if (await _handleError(event)) return;
+
         final get = event.extensions.get;
         final isCarbon = get<mox.CarbonsData>()?.isCarbon ?? false;
         final to = event.to.toBare().toString();
         final from = event.from.toBare().toString();
         final chatJid = isCarbon ? to : from;
 
-        if (get<mox.ChatState>() case final state?) {
-          _log.info('Updating chat state to ${state.name}...');
-          await _dbOp<XmppDatabase>((db) async {
-            if (await db.chatsAccessor.selectOne(chatJid) case final chat?) {
-              await db.chatsAccessor.updateOne(chat.copyWith(chatState: state));
-            }
-          });
-        }
+        await _handleChatState(event, chatJid);
+
         if (await _handleCorrection(event, chatJid)) return;
-        if (await _handleFileUploadNotificationReplacement(event, chatJid)) {
-          return;
-        }
         if (await _handleRetraction(event, chatJid)) return;
         if (await _handleReactions(event, chatJid)) return;
 
@@ -194,16 +191,26 @@ class XmppService extends XmppBase
 
         await _handleFile(event, chatJid);
 
-        _log.info('Saving message to database...');
+        final metadata = _extractFileMetadata(event);
+        if (metadata != null) {
+          await _dbOp<XmppDatabase>((db) async {
+            await db.fileMetadataAccessor.insertOne(metadata);
+          });
+        }
+
+        final body = get<mox.ReplyData>()?.withoutFallback ??
+            get<mox.MessageBodyData>()?.body ??
+            '';
+        _log.info(
+            'Saving message with chatJid: $chatJid and body: $body to database...');
         await _dbOp<XmppDatabase>((db) async {
           await db.messagesAccessor.insertOne(Message(
             stanzaID: event.id ?? '',
             myJid: user!.jid.toString(),
             senderJid: event.from.toString(),
             chatJid: chatJid,
-            body: get<mox.ReplyData>()?.withoutFallback ??
-                get<mox.MessageBodyData>()?.body ??
-                '',
+            body: body,
+            fileMetadataID: metadata?.id,
             noStore: get<mox.MessageProcessingHintData>()
                     ?.hints
                     .contains(mox.MessageProcessingHint.noStore) ??
@@ -212,6 +219,25 @@ class XmppService extends XmppBase
             originID: get<mox.StableIdData>()?.originId,
             occupantID: get<mox.OccupantIdData>()?.id,
           ));
+
+          if (await db.chatsAccessor.selectOne(chatJid) case final chat?) {
+            await db.chatsAccessor.updateOne(chat.copyWith(
+              unreadCount: chat.open ? 0 : chat.unreadCount + 1,
+              lastMessage: body,
+              lastChangeTimestamp: DateTime.timestamp(),
+            ));
+          } else {
+            await db.chatsAccessor.insertOne(Chat(
+              jid: chatJid,
+              myJid: user!.jid.toString(),
+              myNickname: user!.username,
+              title: mox.JID.fromString(chatJid).local,
+              type: ChatType.chat,
+              unreadCount: 1,
+              lastMessage: body,
+              lastChangeTimestamp: DateTime.timestamp(),
+            ));
+          }
         });
       case mox.StreamNegotiationsDoneEvent event:
         if (event.resumed) return;
@@ -656,6 +682,7 @@ class XmppService extends XmppBase
     } on XmppException {
       rethrow;
     } on Exception catch (e, s) {
+      print(e);
       _log.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
     }

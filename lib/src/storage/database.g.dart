@@ -14,16 +14,10 @@ mixin _$FileMetadataAccessorMixin on DatabaseAccessor<XmppDatabase> {
   $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
 }
 mixin _$ChatsAccessorMixin on DatabaseAccessor<XmppDatabase> {
-  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
-  $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
-  $MessagesTable get messages => attachedDatabase.messages;
   $ContactsTable get contacts => attachedDatabase.contacts;
   $ChatsTable get chats => attachedDatabase.chats;
 }
 mixin _$RosterAccessorMixin on DatabaseAccessor<XmppDatabase> {
-  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
-  $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
-  $MessagesTable get messages => attachedDatabase.messages;
   $ContactsTable get contacts => attachedDatabase.contacts;
   $ChatsTable get chats => attachedDatabase.chats;
   $RosterTable get roster => attachedDatabase.roster;
@@ -59,12 +53,14 @@ class $FileMetadataTable extends FileMetadata
   late final GeneratedColumn<String> path = GeneratedColumn<String>(
       'path', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _sourceUrlMeta =
-      const VerificationMeta('sourceUrl');
+  static const VerificationMeta _sourceUrlsMeta =
+      const VerificationMeta('sourceUrls');
   @override
-  late final GeneratedColumn<String> sourceUrl = GeneratedColumn<String>(
-      'source_url', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
+  late final GeneratedColumnWithTypeConverter<List<String>?, String>
+      sourceUrls = GeneratedColumn<String>('source_urls', aliasedName, true,
+              type: DriftSqlType.string, requiredDuringInsert: false)
+          .withConverter<List<String>?>(
+              $FileMetadataTable.$convertersourceUrlsn);
   static const VerificationMeta _mimeTypeMeta =
       const VerificationMeta('mimeType');
   @override
@@ -108,21 +104,21 @@ class $FileMetadataTable extends FileMetadata
   static const VerificationMeta _cipherTextHashesMeta =
       const VerificationMeta('cipherTextHashes');
   @override
-  late final GeneratedColumnWithTypeConverter<Map<String, dynamic>?, String>
-      cipherTextHashes = GeneratedColumn<String>(
-              'cipher_text_hashes', aliasedName, true,
-              type: DriftSqlType.string, requiredDuringInsert: false)
-          .withConverter<Map<String, dynamic>?>(
-              $FileMetadataTable.$convertercipherTextHashesn);
+  late final GeneratedColumnWithTypeConverter<Map<HashFunction, String>?,
+      String> cipherTextHashes = GeneratedColumn<String>(
+          'cipher_text_hashes', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false)
+      .withConverter<Map<HashFunction, String>?>(
+          $FileMetadataTable.$convertercipherTextHashesn);
   static const VerificationMeta _plainTextHashesMeta =
       const VerificationMeta('plainTextHashes');
   @override
-  late final GeneratedColumnWithTypeConverter<Map<String, dynamic>?, String>
-      plainTextHashes = GeneratedColumn<String>(
-              'plain_text_hashes', aliasedName, true,
-              type: DriftSqlType.string, requiredDuringInsert: false)
-          .withConverter<Map<String, dynamic>?>(
-              $FileMetadataTable.$converterplainTextHashesn);
+  late final GeneratedColumnWithTypeConverter<Map<HashFunction, String>?,
+      String> plainTextHashes = GeneratedColumn<String>(
+          'plain_text_hashes', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false)
+      .withConverter<Map<HashFunction, String>?>(
+          $FileMetadataTable.$converterplainTextHashesn);
   static const VerificationMeta _thumbnailTypeMeta =
       const VerificationMeta('thumbnailType');
   @override
@@ -140,7 +136,7 @@ class $FileMetadataTable extends FileMetadata
         id,
         filename,
         path,
-        sourceUrl,
+        sourceUrls,
         mimeType,
         sizeBytes,
         width,
@@ -176,10 +172,7 @@ class $FileMetadataTable extends FileMetadata
       context.handle(
           _pathMeta, path.isAcceptableOrUnknown(data['path']!, _pathMeta));
     }
-    if (data.containsKey('source_url')) {
-      context.handle(_sourceUrlMeta,
-          sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta));
-    }
+    context.handle(_sourceUrlsMeta, const VerificationResult.success());
     if (data.containsKey('mime_type')) {
       context.handle(_mimeTypeMeta,
           mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta));
@@ -243,8 +236,9 @@ class $FileMetadataTable extends FileMetadata
           .read(DriftSqlType.string, data['${effectivePrefix}filename'])!,
       path: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}path']),
-      sourceUrl: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}source_url']),
+      sourceUrls: $FileMetadataTable.$convertersourceUrlsn.fromSql(
+          attachedDatabase.typeMapping.read(
+              DriftSqlType.string, data['${effectivePrefix}source_urls'])),
       mimeType: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}mime_type']),
       sizeBytes: attachedDatabase.typeMapping
@@ -277,14 +271,18 @@ class $FileMetadataTable extends FileMetadata
     return $FileMetadataTable(attachedDatabase, alias);
   }
 
-  static TypeConverter<Map<String, dynamic>, String>
-      $convertercipherTextHashes = JsonConverter();
-  static TypeConverter<Map<String, dynamic>?, String?>
+  static TypeConverter<List<String>, String> $convertersourceUrls =
+      ListConverter();
+  static TypeConverter<List<String>?, String?> $convertersourceUrlsn =
+      NullAwareTypeConverter.wrap($convertersourceUrls);
+  static TypeConverter<Map<HashFunction, String>, String>
+      $convertercipherTextHashes = HashesConverter();
+  static TypeConverter<Map<HashFunction, String>?, String?>
       $convertercipherTextHashesn =
       NullAwareTypeConverter.wrap($convertercipherTextHashes);
-  static TypeConverter<Map<String, dynamic>, String> $converterplainTextHashes =
-      JsonConverter();
-  static TypeConverter<Map<String, dynamic>?, String?>
+  static TypeConverter<Map<HashFunction, String>, String>
+      $converterplainTextHashes = HashesConverter();
+  static TypeConverter<Map<HashFunction, String>?, String?>
       $converterplainTextHashesn =
       NullAwareTypeConverter.wrap($converterplainTextHashes);
 }
@@ -294,7 +292,7 @@ class FileMetadataData extends DataClass
   final String id;
   final String filename;
   final String? path;
-  final String? sourceUrl;
+  final List<String>? sourceUrls;
   final String? mimeType;
   final int? sizeBytes;
   final int? width;
@@ -302,15 +300,15 @@ class FileMetadataData extends DataClass
   final String? encryptionKey;
   final String? encryptionIV;
   final String? encryptionScheme;
-  final Map<String, dynamic>? cipherTextHashes;
-  final Map<String, dynamic>? plainTextHashes;
+  final Map<HashFunction, String>? cipherTextHashes;
+  final Map<HashFunction, String>? plainTextHashes;
   final String? thumbnailType;
   final String? thumbnailData;
   const FileMetadataData(
       {required this.id,
       required this.filename,
       this.path,
-      this.sourceUrl,
+      this.sourceUrls,
       this.mimeType,
       this.sizeBytes,
       this.width,
@@ -330,8 +328,9 @@ class FileMetadataData extends DataClass
     if (!nullToAbsent || path != null) {
       map['path'] = Variable<String>(path);
     }
-    if (!nullToAbsent || sourceUrl != null) {
-      map['source_url'] = Variable<String>(sourceUrl);
+    if (!nullToAbsent || sourceUrls != null) {
+      map['source_urls'] = Variable<String>(
+          $FileMetadataTable.$convertersourceUrlsn.toSql(sourceUrls));
     }
     if (!nullToAbsent || mimeType != null) {
       map['mime_type'] = Variable<String>(mimeType);
@@ -377,9 +376,9 @@ class FileMetadataData extends DataClass
       id: Value(id),
       filename: Value(filename),
       path: path == null && nullToAbsent ? const Value.absent() : Value(path),
-      sourceUrl: sourceUrl == null && nullToAbsent
+      sourceUrls: sourceUrls == null && nullToAbsent
           ? const Value.absent()
-          : Value(sourceUrl),
+          : Value(sourceUrls),
       mimeType: mimeType == null && nullToAbsent
           ? const Value.absent()
           : Value(mimeType),
@@ -421,7 +420,7 @@ class FileMetadataData extends DataClass
       id: serializer.fromJson<String>(json['id']),
       filename: serializer.fromJson<String>(json['filename']),
       path: serializer.fromJson<String?>(json['path']),
-      sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      sourceUrls: serializer.fromJson<List<String>?>(json['sourceUrls']),
       mimeType: serializer.fromJson<String?>(json['mimeType']),
       sizeBytes: serializer.fromJson<int?>(json['sizeBytes']),
       width: serializer.fromJson<int?>(json['width']),
@@ -429,10 +428,10 @@ class FileMetadataData extends DataClass
       encryptionKey: serializer.fromJson<String?>(json['encryptionKey']),
       encryptionIV: serializer.fromJson<String?>(json['encryptionIV']),
       encryptionScheme: serializer.fromJson<String?>(json['encryptionScheme']),
-      cipherTextHashes:
-          serializer.fromJson<Map<String, dynamic>?>(json['cipherTextHashes']),
-      plainTextHashes:
-          serializer.fromJson<Map<String, dynamic>?>(json['plainTextHashes']),
+      cipherTextHashes: serializer
+          .fromJson<Map<HashFunction, String>?>(json['cipherTextHashes']),
+      plainTextHashes: serializer
+          .fromJson<Map<HashFunction, String>?>(json['plainTextHashes']),
       thumbnailType: serializer.fromJson<String?>(json['thumbnailType']),
       thumbnailData: serializer.fromJson<String?>(json['thumbnailData']),
     );
@@ -444,7 +443,7 @@ class FileMetadataData extends DataClass
       'id': serializer.toJson<String>(id),
       'filename': serializer.toJson<String>(filename),
       'path': serializer.toJson<String?>(path),
-      'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'sourceUrls': serializer.toJson<List<String>?>(sourceUrls),
       'mimeType': serializer.toJson<String?>(mimeType),
       'sizeBytes': serializer.toJson<int?>(sizeBytes),
       'width': serializer.toJson<int?>(width),
@@ -453,9 +452,9 @@ class FileMetadataData extends DataClass
       'encryptionIV': serializer.toJson<String?>(encryptionIV),
       'encryptionScheme': serializer.toJson<String?>(encryptionScheme),
       'cipherTextHashes':
-          serializer.toJson<Map<String, dynamic>?>(cipherTextHashes),
+          serializer.toJson<Map<HashFunction, String>?>(cipherTextHashes),
       'plainTextHashes':
-          serializer.toJson<Map<String, dynamic>?>(plainTextHashes),
+          serializer.toJson<Map<HashFunction, String>?>(plainTextHashes),
       'thumbnailType': serializer.toJson<String?>(thumbnailType),
       'thumbnailData': serializer.toJson<String?>(thumbnailData),
     };
@@ -465,7 +464,7 @@ class FileMetadataData extends DataClass
           {String? id,
           String? filename,
           Value<String?> path = const Value.absent(),
-          Value<String?> sourceUrl = const Value.absent(),
+          Value<List<String>?> sourceUrls = const Value.absent(),
           Value<String?> mimeType = const Value.absent(),
           Value<int?> sizeBytes = const Value.absent(),
           Value<int?> width = const Value.absent(),
@@ -473,15 +472,17 @@ class FileMetadataData extends DataClass
           Value<String?> encryptionKey = const Value.absent(),
           Value<String?> encryptionIV = const Value.absent(),
           Value<String?> encryptionScheme = const Value.absent(),
-          Value<Map<String, dynamic>?> cipherTextHashes = const Value.absent(),
-          Value<Map<String, dynamic>?> plainTextHashes = const Value.absent(),
+          Value<Map<HashFunction, String>?> cipherTextHashes =
+              const Value.absent(),
+          Value<Map<HashFunction, String>?> plainTextHashes =
+              const Value.absent(),
           Value<String?> thumbnailType = const Value.absent(),
           Value<String?> thumbnailData = const Value.absent()}) =>
       FileMetadataData(
         id: id ?? this.id,
         filename: filename ?? this.filename,
         path: path.present ? path.value : this.path,
-        sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+        sourceUrls: sourceUrls.present ? sourceUrls.value : this.sourceUrls,
         mimeType: mimeType.present ? mimeType.value : this.mimeType,
         sizeBytes: sizeBytes.present ? sizeBytes.value : this.sizeBytes,
         width: width.present ? width.value : this.width,
@@ -510,7 +511,7 @@ class FileMetadataData extends DataClass
           ..write('id: $id, ')
           ..write('filename: $filename, ')
           ..write('path: $path, ')
-          ..write('sourceUrl: $sourceUrl, ')
+          ..write('sourceUrls: $sourceUrls, ')
           ..write('mimeType: $mimeType, ')
           ..write('sizeBytes: $sizeBytes, ')
           ..write('width: $width, ')
@@ -531,7 +532,7 @@ class FileMetadataData extends DataClass
       id,
       filename,
       path,
-      sourceUrl,
+      sourceUrls,
       mimeType,
       sizeBytes,
       width,
@@ -550,7 +551,7 @@ class FileMetadataData extends DataClass
           other.id == this.id &&
           other.filename == this.filename &&
           other.path == this.path &&
-          other.sourceUrl == this.sourceUrl &&
+          other.sourceUrls == this.sourceUrls &&
           other.mimeType == this.mimeType &&
           other.sizeBytes == this.sizeBytes &&
           other.width == this.width &&
@@ -568,7 +569,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
   final Value<String> id;
   final Value<String> filename;
   final Value<String?> path;
-  final Value<String?> sourceUrl;
+  final Value<List<String>?> sourceUrls;
   final Value<String?> mimeType;
   final Value<int?> sizeBytes;
   final Value<int?> width;
@@ -576,8 +577,8 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
   final Value<String?> encryptionKey;
   final Value<String?> encryptionIV;
   final Value<String?> encryptionScheme;
-  final Value<Map<String, dynamic>?> cipherTextHashes;
-  final Value<Map<String, dynamic>?> plainTextHashes;
+  final Value<Map<HashFunction, String>?> cipherTextHashes;
+  final Value<Map<HashFunction, String>?> plainTextHashes;
   final Value<String?> thumbnailType;
   final Value<String?> thumbnailData;
   final Value<int> rowid;
@@ -585,7 +586,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
     this.id = const Value.absent(),
     this.filename = const Value.absent(),
     this.path = const Value.absent(),
-    this.sourceUrl = const Value.absent(),
+    this.sourceUrls = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.sizeBytes = const Value.absent(),
     this.width = const Value.absent(),
@@ -603,7 +604,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
     this.id = const Value.absent(),
     required String filename,
     this.path = const Value.absent(),
-    this.sourceUrl = const Value.absent(),
+    this.sourceUrls = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.sizeBytes = const Value.absent(),
     this.width = const Value.absent(),
@@ -621,7 +622,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
     Expression<String>? id,
     Expression<String>? filename,
     Expression<String>? path,
-    Expression<String>? sourceUrl,
+    Expression<String>? sourceUrls,
     Expression<String>? mimeType,
     Expression<int>? sizeBytes,
     Expression<int>? width,
@@ -639,7 +640,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
       if (id != null) 'id': id,
       if (filename != null) 'filename': filename,
       if (path != null) 'path': path,
-      if (sourceUrl != null) 'source_url': sourceUrl,
+      if (sourceUrls != null) 'source_urls': sourceUrls,
       if (mimeType != null) 'mime_type': mimeType,
       if (sizeBytes != null) 'size_bytes': sizeBytes,
       if (width != null) 'width': width,
@@ -659,7 +660,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
       {Value<String>? id,
       Value<String>? filename,
       Value<String?>? path,
-      Value<String?>? sourceUrl,
+      Value<List<String>?>? sourceUrls,
       Value<String?>? mimeType,
       Value<int?>? sizeBytes,
       Value<int?>? width,
@@ -667,8 +668,8 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
       Value<String?>? encryptionKey,
       Value<String?>? encryptionIV,
       Value<String?>? encryptionScheme,
-      Value<Map<String, dynamic>?>? cipherTextHashes,
-      Value<Map<String, dynamic>?>? plainTextHashes,
+      Value<Map<HashFunction, String>?>? cipherTextHashes,
+      Value<Map<HashFunction, String>?>? plainTextHashes,
       Value<String?>? thumbnailType,
       Value<String?>? thumbnailData,
       Value<int>? rowid}) {
@@ -676,7 +677,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
       id: id ?? this.id,
       filename: filename ?? this.filename,
       path: path ?? this.path,
-      sourceUrl: sourceUrl ?? this.sourceUrl,
+      sourceUrls: sourceUrls ?? this.sourceUrls,
       mimeType: mimeType ?? this.mimeType,
       sizeBytes: sizeBytes ?? this.sizeBytes,
       width: width ?? this.width,
@@ -704,8 +705,9 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
     if (path.present) {
       map['path'] = Variable<String>(path.value);
     }
-    if (sourceUrl.present) {
-      map['source_url'] = Variable<String>(sourceUrl.value);
+    if (sourceUrls.present) {
+      map['source_urls'] = Variable<String>(
+          $FileMetadataTable.$convertersourceUrlsn.toSql(sourceUrls.value));
     }
     if (mimeType.present) {
       map['mime_type'] = Variable<String>(mimeType.value);
@@ -756,7 +758,7 @@ class FileMetadataCompanion extends UpdateCompanion<FileMetadataData> {
           ..write('id: $id, ')
           ..write('filename: $filename, ')
           ..write('path: $path, ')
-          ..write('sourceUrl: $sourceUrl, ')
+          ..write('sourceUrls: $sourceUrls, ')
           ..write('mimeType: $mimeType, ')
           ..write('sizeBytes: $sizeBytes, ')
           ..write('width: $width, ')
@@ -1238,10 +1240,7 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
   @override
   late final GeneratedColumn<String> quoting = GeneratedColumn<String>(
       'quoting', aliasedName, true,
-      type: DriftSqlType.string,
-      requiredDuringInsert: false,
-      defaultConstraints:
-          GeneratedColumn.constraintIsAlways('REFERENCES messages (id)'));
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _stickerPackIDMeta =
       const VerificationMeta('stickerPackID');
   @override
@@ -2581,15 +2580,12 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
   late final GeneratedColumn<String> avatarHash = GeneratedColumn<String>(
       'avatar_hash', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _lastMessageIDMeta =
-      const VerificationMeta('lastMessageID');
+  static const VerificationMeta _lastMessageMeta =
+      const VerificationMeta('lastMessage');
   @override
-  late final GeneratedColumn<String> lastMessageID = GeneratedColumn<String>(
-      'last_message_i_d', aliasedName, true,
-      type: DriftSqlType.string,
-      requiredDuringInsert: false,
-      defaultConstraints:
-          GeneratedColumn.constraintIsAlways('REFERENCES messages (id)'));
+  late final GeneratedColumn<String> lastMessage = GeneratedColumn<String>(
+      'last_message', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _lastChangeTimestampMeta =
       const VerificationMeta('lastChangeTimestamp');
   @override
@@ -2678,7 +2674,7 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
         type,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         lastChangeTimestamp,
         unreadCount,
         open,
@@ -2739,11 +2735,11 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
           avatarHash.isAcceptableOrUnknown(
               data['avatar_hash']!, _avatarHashMeta));
     }
-    if (data.containsKey('last_message_i_d')) {
+    if (data.containsKey('last_message')) {
       context.handle(
-          _lastMessageIDMeta,
-          lastMessageID.isAcceptableOrUnknown(
-              data['last_message_i_d']!, _lastMessageIDMeta));
+          _lastMessageMeta,
+          lastMessage.isAcceptableOrUnknown(
+              data['last_message']!, _lastMessageMeta));
     }
     if (data.containsKey('last_change_timestamp')) {
       context.handle(
@@ -2824,8 +2820,8 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
           .read(DriftSqlType.string, data['${effectivePrefix}avatar_path']),
       avatarHash: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}avatar_hash']),
-      lastMessageID: attachedDatabase.typeMapping.read(
-          DriftSqlType.string, data['${effectivePrefix}last_message_i_d']),
+      lastMessage: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}last_message']),
       lastChangeTimestamp: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime,
           data['${effectivePrefix}last_change_timestamp'])!,
@@ -2867,7 +2863,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   final Value<ChatType> type;
   final Value<String?> avatarPath;
   final Value<String?> avatarHash;
-  final Value<String?> lastMessageID;
+  final Value<String?> lastMessage;
   final Value<DateTime> lastChangeTimestamp;
   final Value<int> unreadCount;
   final Value<bool> open;
@@ -2887,7 +2883,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     this.type = const Value.absent(),
     this.avatarPath = const Value.absent(),
     this.avatarHash = const Value.absent(),
-    this.lastMessageID = const Value.absent(),
+    this.lastMessage = const Value.absent(),
     this.lastChangeTimestamp = const Value.absent(),
     this.unreadCount = const Value.absent(),
     this.open = const Value.absent(),
@@ -2908,7 +2904,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     required ChatType type,
     this.avatarPath = const Value.absent(),
     this.avatarHash = const Value.absent(),
-    this.lastMessageID = const Value.absent(),
+    this.lastMessage = const Value.absent(),
     required DateTime lastChangeTimestamp,
     this.unreadCount = const Value.absent(),
     this.open = const Value.absent(),
@@ -2934,7 +2930,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     Expression<int>? type,
     Expression<String>? avatarPath,
     Expression<String>? avatarHash,
-    Expression<String>? lastMessageID,
+    Expression<String>? lastMessage,
     Expression<DateTime>? lastChangeTimestamp,
     Expression<int>? unreadCount,
     Expression<bool>? open,
@@ -2955,7 +2951,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       if (type != null) 'type': type,
       if (avatarPath != null) 'avatar_path': avatarPath,
       if (avatarHash != null) 'avatar_hash': avatarHash,
-      if (lastMessageID != null) 'last_message_i_d': lastMessageID,
+      if (lastMessage != null) 'last_message': lastMessage,
       if (lastChangeTimestamp != null)
         'last_change_timestamp': lastChangeTimestamp,
       if (unreadCount != null) 'unread_count': unreadCount,
@@ -2980,7 +2976,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       Value<ChatType>? type,
       Value<String?>? avatarPath,
       Value<String?>? avatarHash,
-      Value<String?>? lastMessageID,
+      Value<String?>? lastMessage,
       Value<DateTime>? lastChangeTimestamp,
       Value<int>? unreadCount,
       Value<bool>? open,
@@ -3000,7 +2996,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       type: type ?? this.type,
       avatarPath: avatarPath ?? this.avatarPath,
       avatarHash: avatarHash ?? this.avatarHash,
-      lastMessageID: lastMessageID ?? this.lastMessageID,
+      lastMessage: lastMessage ?? this.lastMessage,
       lastChangeTimestamp: lastChangeTimestamp ?? this.lastChangeTimestamp,
       unreadCount: unreadCount ?? this.unreadCount,
       open: open ?? this.open,
@@ -3039,8 +3035,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     if (avatarHash.present) {
       map['avatar_hash'] = Variable<String>(avatarHash.value);
     }
-    if (lastMessageID.present) {
-      map['last_message_i_d'] = Variable<String>(lastMessageID.value);
+    if (lastMessage.present) {
+      map['last_message'] = Variable<String>(lastMessage.value);
     }
     if (lastChangeTimestamp.present) {
       map['last_change_timestamp'] =
@@ -3089,7 +3085,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
           ..write('type: $type, ')
           ..write('avatarPath: $avatarPath, ')
           ..write('avatarHash: $avatarHash, ')
-          ..write('lastMessageID: $lastMessageID, ')
+          ..write('lastMessage: $lastMessage, ')
           ..write('lastChangeTimestamp: $lastChangeTimestamp, ')
           ..write('unreadCount: $unreadCount, ')
           ..write('open: $open, ')
@@ -4080,7 +4076,7 @@ typedef $$FileMetadataTableInsertCompanionBuilder = FileMetadataCompanion
   Value<String> id,
   required String filename,
   Value<String?> path,
-  Value<String?> sourceUrl,
+  Value<List<String>?> sourceUrls,
   Value<String?> mimeType,
   Value<int?> sizeBytes,
   Value<int?> width,
@@ -4088,8 +4084,8 @@ typedef $$FileMetadataTableInsertCompanionBuilder = FileMetadataCompanion
   Value<String?> encryptionKey,
   Value<String?> encryptionIV,
   Value<String?> encryptionScheme,
-  Value<Map<String, dynamic>?> cipherTextHashes,
-  Value<Map<String, dynamic>?> plainTextHashes,
+  Value<Map<HashFunction, String>?> cipherTextHashes,
+  Value<Map<HashFunction, String>?> plainTextHashes,
   Value<String?> thumbnailType,
   Value<String?> thumbnailData,
   Value<int> rowid,
@@ -4099,7 +4095,7 @@ typedef $$FileMetadataTableUpdateCompanionBuilder = FileMetadataCompanion
   Value<String> id,
   Value<String> filename,
   Value<String?> path,
-  Value<String?> sourceUrl,
+  Value<List<String>?> sourceUrls,
   Value<String?> mimeType,
   Value<int?> sizeBytes,
   Value<int?> width,
@@ -4107,8 +4103,8 @@ typedef $$FileMetadataTableUpdateCompanionBuilder = FileMetadataCompanion
   Value<String?> encryptionKey,
   Value<String?> encryptionIV,
   Value<String?> encryptionScheme,
-  Value<Map<String, dynamic>?> cipherTextHashes,
-  Value<Map<String, dynamic>?> plainTextHashes,
+  Value<Map<HashFunction, String>?> cipherTextHashes,
+  Value<Map<HashFunction, String>?> plainTextHashes,
   Value<String?> thumbnailType,
   Value<String?> thumbnailData,
   Value<int> rowid,
@@ -4137,7 +4133,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             Value<String> id = const Value.absent(),
             Value<String> filename = const Value.absent(),
             Value<String?> path = const Value.absent(),
-            Value<String?> sourceUrl = const Value.absent(),
+            Value<List<String>?> sourceUrls = const Value.absent(),
             Value<String?> mimeType = const Value.absent(),
             Value<int?> sizeBytes = const Value.absent(),
             Value<int?> width = const Value.absent(),
@@ -4145,9 +4141,10 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             Value<String?> encryptionKey = const Value.absent(),
             Value<String?> encryptionIV = const Value.absent(),
             Value<String?> encryptionScheme = const Value.absent(),
-            Value<Map<String, dynamic>?> cipherTextHashes =
+            Value<Map<HashFunction, String>?> cipherTextHashes =
                 const Value.absent(),
-            Value<Map<String, dynamic>?> plainTextHashes = const Value.absent(),
+            Value<Map<HashFunction, String>?> plainTextHashes =
+                const Value.absent(),
             Value<String?> thumbnailType = const Value.absent(),
             Value<String?> thumbnailData = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -4156,7 +4153,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             id: id,
             filename: filename,
             path: path,
-            sourceUrl: sourceUrl,
+            sourceUrls: sourceUrls,
             mimeType: mimeType,
             sizeBytes: sizeBytes,
             width: width,
@@ -4174,7 +4171,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             Value<String> id = const Value.absent(),
             required String filename,
             Value<String?> path = const Value.absent(),
-            Value<String?> sourceUrl = const Value.absent(),
+            Value<List<String>?> sourceUrls = const Value.absent(),
             Value<String?> mimeType = const Value.absent(),
             Value<int?> sizeBytes = const Value.absent(),
             Value<int?> width = const Value.absent(),
@@ -4182,9 +4179,10 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             Value<String?> encryptionKey = const Value.absent(),
             Value<String?> encryptionIV = const Value.absent(),
             Value<String?> encryptionScheme = const Value.absent(),
-            Value<Map<String, dynamic>?> cipherTextHashes =
+            Value<Map<HashFunction, String>?> cipherTextHashes =
                 const Value.absent(),
-            Value<Map<String, dynamic>?> plainTextHashes = const Value.absent(),
+            Value<Map<HashFunction, String>?> plainTextHashes =
+                const Value.absent(),
             Value<String?> thumbnailType = const Value.absent(),
             Value<String?> thumbnailData = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -4193,7 +4191,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             id: id,
             filename: filename,
             path: path,
-            sourceUrl: sourceUrl,
+            sourceUrls: sourceUrls,
             mimeType: mimeType,
             sizeBytes: sizeBytes,
             width: width,
@@ -4240,10 +4238,12 @@ class $$FileMetadataTableFilterComposer
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
-  ColumnFilters<String> get sourceUrl => $state.composableBuilder(
-      column: $state.table.sourceUrl,
-      builder: (column, joinBuilders) =>
-          ColumnFilters(column, joinBuilders: joinBuilders));
+  ColumnWithTypeConverterFilters<List<String>?, List<String>, String>
+      get sourceUrls => $state.composableBuilder(
+          column: $state.table.sourceUrls,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
 
   ColumnFilters<String> get mimeType => $state.composableBuilder(
       column: $state.table.mimeType,
@@ -4280,16 +4280,16 @@ class $$FileMetadataTableFilterComposer
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
-  ColumnWithTypeConverterFilters<Map<String, dynamic>?, Map<String, dynamic>,
-          String>
+  ColumnWithTypeConverterFilters<Map<HashFunction, String>?,
+          Map<HashFunction, String>, String>
       get cipherTextHashes => $state.composableBuilder(
           column: $state.table.cipherTextHashes,
           builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
               column,
               joinBuilders: joinBuilders));
 
-  ColumnWithTypeConverterFilters<Map<String, dynamic>?, Map<String, dynamic>,
-          String>
+  ColumnWithTypeConverterFilters<Map<HashFunction, String>?,
+          Map<HashFunction, String>, String>
       get plainTextHashes => $state.composableBuilder(
           column: $state.table.plainTextHashes,
           builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
@@ -4325,8 +4325,8 @@ class $$FileMetadataTableOrderingComposer
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 
-  ColumnOrderings<String> get sourceUrl => $state.composableBuilder(
-      column: $state.table.sourceUrl,
+  ColumnOrderings<String> get sourceUrls => $state.composableBuilder(
+      column: $state.table.sourceUrls,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 

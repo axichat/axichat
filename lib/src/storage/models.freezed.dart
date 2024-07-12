@@ -3868,7 +3868,7 @@ mixin _$Chat {
   DateTime get lastChangeTimestamp => throw _privateConstructorUsedError;
   String? get avatarPath => throw _privateConstructorUsedError;
   String? get avatarHash => throw _privateConstructorUsedError;
-  String? get lastMessageID => throw _privateConstructorUsedError;
+  String? get lastMessage => throw _privateConstructorUsedError;
   int get unreadCount => throw _privateConstructorUsedError;
   bool get open => throw _privateConstructorUsedError;
   bool get muted => throw _privateConstructorUsedError;
@@ -3890,7 +3890,7 @@ mixin _$Chat {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -3910,7 +3910,7 @@ mixin _$Chat {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -3936,7 +3936,7 @@ mixin _$Chat {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -3956,7 +3956,7 @@ mixin _$Chat {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -3982,7 +3982,7 @@ mixin _$Chat {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -4002,7 +4002,7 @@ mixin _$Chat {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -4056,7 +4056,7 @@ abstract class $ChatCopyWith<$Res> {
       DateTime lastChangeTimestamp,
       String? avatarPath,
       String? avatarHash,
-      String? lastMessageID,
+      String? lastMessage,
       int unreadCount,
       bool open,
       bool muted,
@@ -4090,7 +4090,7 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
     Object? lastChangeTimestamp = null,
     Object? avatarPath = freezed,
     Object? avatarHash = freezed,
-    Object? lastMessageID = freezed,
+    Object? lastMessage = freezed,
     Object? unreadCount = null,
     Object? open = null,
     Object? muted = null,
@@ -4135,9 +4135,9 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
           ? _value.avatarHash
           : avatarHash // ignore: cast_nullable_to_non_nullable
               as String?,
-      lastMessageID: freezed == lastMessageID
-          ? _value.lastMessageID
-          : lastMessageID // ignore: cast_nullable_to_non_nullable
+      lastMessage: freezed == lastMessage
+          ? _value.lastMessage
+          : lastMessage // ignore: cast_nullable_to_non_nullable
               as String?,
       unreadCount: null == unreadCount
           ? _value.unreadCount
@@ -4199,7 +4199,7 @@ abstract class _$$ChatImplCopyWith<$Res> implements $ChatCopyWith<$Res> {
       DateTime lastChangeTimestamp,
       String? avatarPath,
       String? avatarHash,
-      String? lastMessageID,
+      String? lastMessage,
       int unreadCount,
       bool open,
       bool muted,
@@ -4230,7 +4230,7 @@ class __$$ChatImplCopyWithImpl<$Res>
     Object? lastChangeTimestamp = null,
     Object? avatarPath = freezed,
     Object? avatarHash = freezed,
-    Object? lastMessageID = freezed,
+    Object? lastMessage = freezed,
     Object? unreadCount = null,
     Object? open = null,
     Object? muted = null,
@@ -4275,9 +4275,9 @@ class __$$ChatImplCopyWithImpl<$Res>
           ? _value.avatarHash
           : avatarHash // ignore: cast_nullable_to_non_nullable
               as String?,
-      lastMessageID: freezed == lastMessageID
-          ? _value.lastMessageID
-          : lastMessageID // ignore: cast_nullable_to_non_nullable
+      lastMessage: freezed == lastMessage
+          ? _value.lastMessage
+          : lastMessage // ignore: cast_nullable_to_non_nullable
               as String?,
       unreadCount: null == unreadCount
           ? _value.unreadCount
@@ -4335,7 +4335,7 @@ class _$ChatImpl extends _Chat {
       required this.lastChangeTimestamp,
       this.avatarPath,
       this.avatarHash,
-      this.lastMessageID,
+      this.lastMessage,
       this.unreadCount = 0,
       this.open = false,
       this.muted = false,
@@ -4365,7 +4365,7 @@ class _$ChatImpl extends _Chat {
   @override
   final String? avatarHash;
   @override
-  final String? lastMessageID;
+  final String? lastMessage;
   @override
   @JsonKey()
   final int unreadCount;
@@ -4394,7 +4394,7 @@ class _$ChatImpl extends _Chat {
 
   @override
   String toString() {
-    return 'Chat(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessageID: $lastMessageID, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
+    return 'Chat(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
   }
 
   @override
@@ -4414,8 +4414,8 @@ class _$ChatImpl extends _Chat {
                 other.avatarPath == avatarPath) &&
             (identical(other.avatarHash, avatarHash) ||
                 other.avatarHash == avatarHash) &&
-            (identical(other.lastMessageID, lastMessageID) ||
-                other.lastMessageID == lastMessageID) &&
+            (identical(other.lastMessage, lastMessage) ||
+                other.lastMessage == lastMessage) &&
             (identical(other.unreadCount, unreadCount) ||
                 other.unreadCount == unreadCount) &&
             (identical(other.open, open) || other.open == open) &&
@@ -4447,7 +4447,7 @@ class _$ChatImpl extends _Chat {
         lastChangeTimestamp,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         unreadCount,
         open,
         muted,
@@ -4478,7 +4478,7 @@ class _$ChatImpl extends _Chat {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -4498,7 +4498,7 @@ class _$ChatImpl extends _Chat {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -4521,7 +4521,7 @@ class _$ChatImpl extends _Chat {
         lastChangeTimestamp,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         unreadCount,
         open,
         muted,
@@ -4546,7 +4546,7 @@ class _$ChatImpl extends _Chat {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -4566,7 +4566,7 @@ class _$ChatImpl extends _Chat {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -4589,7 +4589,7 @@ class _$ChatImpl extends _Chat {
         lastChangeTimestamp,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         unreadCount,
         open,
         muted,
@@ -4614,7 +4614,7 @@ class _$ChatImpl extends _Chat {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -4634,7 +4634,7 @@ class _$ChatImpl extends _Chat {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -4659,7 +4659,7 @@ class _$ChatImpl extends _Chat {
           lastChangeTimestamp,
           avatarPath,
           avatarHash,
-          lastMessageID,
+          lastMessage,
           unreadCount,
           open,
           muted,
@@ -4716,7 +4716,7 @@ abstract class _Chat extends Chat {
       required final DateTime lastChangeTimestamp,
       final String? avatarPath,
       final String? avatarHash,
-      final String? lastMessageID,
+      final String? lastMessage,
       final int unreadCount,
       final bool open,
       final bool muted,
@@ -4746,7 +4746,7 @@ abstract class _Chat extends Chat {
   @override
   String? get avatarHash;
   @override
-  String? get lastMessageID;
+  String? get lastMessage;
   @override
   int get unreadCount;
   @override
@@ -4788,7 +4788,7 @@ abstract class _$$ChatFromDbImplCopyWith<$Res> implements $ChatCopyWith<$Res> {
       ChatType type,
       String? avatarPath,
       String? avatarHash,
-      String? lastMessageID,
+      String? lastMessage,
       DateTime lastChangeTimestamp,
       int unreadCount,
       bool open,
@@ -4820,7 +4820,7 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
     Object? type = null,
     Object? avatarPath = freezed,
     Object? avatarHash = freezed,
-    Object? lastMessageID = freezed,
+    Object? lastMessage = freezed,
     Object? lastChangeTimestamp = null,
     Object? unreadCount = null,
     Object? open = null,
@@ -4862,9 +4862,9 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
           ? _value.avatarHash
           : avatarHash // ignore: cast_nullable_to_non_nullable
               as String?,
-      lastMessageID: freezed == lastMessageID
-          ? _value.lastMessageID
-          : lastMessageID // ignore: cast_nullable_to_non_nullable
+      lastMessage: freezed == lastMessage
+          ? _value.lastMessage
+          : lastMessage // ignore: cast_nullable_to_non_nullable
               as String?,
       lastChangeTimestamp: null == lastChangeTimestamp
           ? _value.lastChangeTimestamp
@@ -4925,7 +4925,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
       required this.type,
       required this.avatarPath,
       required this.avatarHash,
-      required this.lastMessageID,
+      required this.lastMessage,
       required this.lastChangeTimestamp,
       required this.unreadCount,
       required this.open,
@@ -4954,7 +4954,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   @override
   final String? avatarHash;
   @override
-  final String? lastMessageID;
+  final String? lastMessage;
   @override
   final DateTime lastChangeTimestamp;
   @override
@@ -4980,7 +4980,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
 
   @override
   String toString() {
-    return 'Chat.fromDb(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessageID: $lastMessageID, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
+    return 'Chat.fromDb(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
   }
 
   @override
@@ -4998,8 +4998,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
                 other.avatarPath == avatarPath) &&
             (identical(other.avatarHash, avatarHash) ||
                 other.avatarHash == avatarHash) &&
-            (identical(other.lastMessageID, lastMessageID) ||
-                other.lastMessageID == lastMessageID) &&
+            (identical(other.lastMessage, lastMessage) ||
+                other.lastMessage == lastMessage) &&
             (identical(other.lastChangeTimestamp, lastChangeTimestamp) ||
                 other.lastChangeTimestamp == lastChangeTimestamp) &&
             (identical(other.unreadCount, unreadCount) ||
@@ -5032,7 +5032,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         type,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         lastChangeTimestamp,
         unreadCount,
         open,
@@ -5064,7 +5064,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -5084,7 +5084,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -5106,7 +5106,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         type,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         lastChangeTimestamp,
         unreadCount,
         open,
@@ -5132,7 +5132,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -5152,7 +5152,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -5174,7 +5174,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         type,
         avatarPath,
         avatarHash,
-        lastMessageID,
+        lastMessage,
         lastChangeTimestamp,
         unreadCount,
         open,
@@ -5200,7 +5200,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             DateTime lastChangeTimestamp,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             int unreadCount,
             bool open,
             bool muted,
@@ -5220,7 +5220,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             ChatType type,
             String? avatarPath,
             String? avatarHash,
-            String? lastMessageID,
+            String? lastMessage,
             DateTime lastChangeTimestamp,
             int unreadCount,
             bool open,
@@ -5244,7 +5244,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
           type,
           avatarPath,
           avatarHash,
-          lastMessageID,
+          lastMessage,
           lastChangeTimestamp,
           unreadCount,
           open,
@@ -5301,7 +5301,7 @@ abstract class _ChatFromDb extends Chat {
       required final ChatType type,
       required final String? avatarPath,
       required final String? avatarHash,
-      required final String? lastMessageID,
+      required final String? lastMessage,
       required final DateTime lastChangeTimestamp,
       required final int unreadCount,
       required final bool open,
@@ -5330,7 +5330,7 @@ abstract class _ChatFromDb extends Chat {
   @override
   String? get avatarHash;
   @override
-  String? get lastMessageID;
+  String? get lastMessage;
   @override
   DateTime get lastChangeTimestamp;
   @override

@@ -27,7 +27,7 @@ class LoginScreen extends StatelessWidget {
             padding: EdgeInsets.all(16.0),
             child: LoginForm(),
           ),
-          secondaryChild: Chat(),
+          secondaryChild: GuestChat(),
         ),
       ),
     );

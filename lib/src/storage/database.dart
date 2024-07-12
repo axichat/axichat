@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_renaming_method_parameters
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -7,6 +9,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
@@ -27,14 +30,20 @@ abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
   T get table;
 
   Stream<List<D>> watchAll() => select(table).watch();
+
   Future<List<D>> selectAll() => select(table).get();
-  Future<D?> selectOne(Object value);
+
+  Future<D?> selectOne(covariant Object value);
+
   Future<void> insertOne(Insertable<D> data) =>
       into(table).insert(data, mode: InsertMode.insertOrIgnore);
+
   Future<void> insertOrUpdateOne(Insertable<D> data) =>
       into(table).insertOnConflictUpdate(data);
+
   Future<void> updateOne(Insertable<D> data) => update(table).replace(data);
-  Future<void> deleteOne(Object value);
+
+  Future<void> deleteOne(covariant Object value);
 }
 
 @DriftAccessor(tables: [Messages])
@@ -45,17 +54,21 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
   @override
   $MessagesTable get table => messages;
 
-  @override
-  Future<Message?> selectOne(Object value) {
-    // TODO: implement selectOne
-    throw UnimplementedError();
-  }
+  Stream<List<Message>> watchChat(String jid) =>
+      (select(table)..where((table) => table.chatJid.equals(jid))).watch();
 
   @override
-  Future<void> deleteOne(Object value) {
-    // TODO: implement deleteOne
-    throw UnimplementedError();
-  }
+  Future<Message?> selectOne(String stanzaID) =>
+      (select(table)..where((table) => table.stanzaID.equals(stanzaID)))
+          .getSingleOrNull();
+
+  Future<Message?> selectOneByOriginID(String originID) =>
+      (select(table)..where((table) => table.originID.equals(originID)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(String stanzaID) =>
+      (delete(table)..where((item) => item.stanzaID.equals(stanzaID))).go();
 }
 
 @DriftAccessor(tables: [FileMetadata])
@@ -73,11 +86,15 @@ class FileMetadataAccessor
     throw UnimplementedError();
   }
 
+  Future<FileMetadataData?> selectOneByPlaintextHashes(
+          Map<HashFunction, String> hashes) =>
+      (select(table)
+            ..where((table) => table.plainTextHashes.equalsValue(hashes)))
+          .getSingleOrNull();
+
   @override
-  Future<void> deleteOne(Object value) {
-    // TODO: implement deleteOne
-    throw UnimplementedError();
-  }
+  Future<void> deleteOne(String id) =>
+      (delete(table)..where((item) => item.id.equals(id))).go();
 }
 
 @DriftAccessor(tables: [Chats])
@@ -89,12 +106,20 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   $ChatsTable get table => chats;
 
   @override
-  Future<Chat?> selectOne(covariant String value) =>
+  Future<Chat?> selectOne(String value) =>
       (select(table)..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
+  Future<Chat?> selectOpen() =>
+      (select(table)..where((table) => table.open.equals(true)))
+          .getSingleOrNull();
+
+  Future<void> closeOpen() =>
+      (update(table)..where((table) => table.open.equals(true)))
+          .write(const ChatsCompanion(open: Value(false)));
+
   @override
-  Future<void> deleteOne(covariant String value) =>
+  Future<void> deleteOne(String value) =>
       (delete(table)..where((item) => item.jid.equals(value))).go();
 }
 
@@ -107,12 +132,12 @@ class RosterAccessor extends BaseAccessor<RosterItem, $RosterTable>
   $RosterTable get table => roster;
 
   @override
-  Future<RosterItem?> selectOne(covariant String value) =>
+  Future<RosterItem?> selectOne(String value) =>
       (select(table)..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
-  Future<void> deleteOne(covariant String value) =>
+  Future<void> deleteOne(String value) =>
       (delete(table)..where((item) => item.jid.equals(value))).go();
 }
 
@@ -125,12 +150,12 @@ class InvitesAccessor extends BaseAccessor<Invite, $InvitesTable>
   $InvitesTable get table => invites;
 
   @override
-  Future<Invite?> selectOne(covariant String value) =>
+  Future<Invite?> selectOne(String value) =>
       (select(table)..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
-  Future<void> deleteOne(covariant String value) =>
+  Future<void> deleteOne(String value) =>
       (delete(table)..where((item) => item.jid.equals(value))).go();
 }
 
@@ -143,12 +168,12 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   $BlocklistTable get table => blocklist;
 
   @override
-  Future<BlocklistData?> selectOne(covariant String value) =>
+  Future<BlocklistData?> selectOne(String value) =>
       (select(table)..where((table) => table.jid.equals(value)))
           .getSingleOrNull();
 
   @override
-  Future<void> deleteOne(covariant String value) =>
+  Future<void> deleteOne(String value) =>
       (delete(table)..where((item) => item.jid.equals(value))).go();
 
   Future<void> deleteAll() => delete(blocklist).go();
@@ -264,3 +289,5 @@ String generatePassphrase() {
 // Using SHA-1 as this is only to obfuscate the username in file paths.
 String storagePrefixFor(String username) =>
     sha1.convert(utf8.encode(username)).toString();
+
+typedef HashFunction = mox.HashFunction;

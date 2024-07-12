@@ -3,7 +3,7 @@ import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_list.dart';
 import 'package:chat/src/chat/view/chat.dart';
-import 'package:chat/src/chats/bloc/chats_bloc.dart';
+import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/chats/view/chats_list.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
@@ -17,11 +17,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'chat/bloc/chat_bloc.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   final tabs = const [
-    ('Chats', Chats(), null),
+    ('Chats', ChatsList(), null),
     ('Contacts', RosterList(), RosterAddButton()),
     ('New', RosterInvitesList(), null),
     (
@@ -39,7 +41,11 @@ class HomeScreen extends StatelessWidget {
           length: tabs.length,
           child: MultiBlocProvider(
             providers: [
-              BlocProvider(create: (context) => ChatsBloc()),
+              BlocProvider(
+                create: (context) => ChatsCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
+              ),
               BlocProvider(
                 create: (context) => RosterBloc(
                   xmppService: context.read<XmppService>(),
@@ -58,7 +64,17 @@ class HomeScreen extends StatelessWidget {
             ],
             child: AxiAdaptiveLayout(
               primaryChild: Nexus(tabs: tabs),
-              secondaryChild: const Chat(),
+              secondaryChild: Builder(builder: (context) {
+                final openJid = context.watch<ChatsCubit>().state.openJid;
+                return BlocProvider(
+                  key: Key(openJid ?? ''),
+                  create: (context) => ChatBloc(
+                    jid: openJid,
+                    xmppService: context.read<XmppService>(),
+                  ),
+                  child: const Chat(),
+                );
+              }),
             ),
           ),
         ),
@@ -104,11 +120,8 @@ class Nexus extends StatelessWidget {
                           final length =
                               context.watch<RosterBloc>().state.invites.length;
                           return Tab(
-                            child: Badge.count(
+                            child: AxiBadge(
                               count: length,
-                              offset: const Offset(12, -12),
-                              largeSize: 19,
-                              isLabelVisible: length > 0,
                               child: Text(label),
                             ),
                           );
