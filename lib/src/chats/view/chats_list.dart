@@ -42,6 +42,9 @@ class ChatsList extends StatelessWidget {
                     ),
                     title: item.title,
                     subtitle: item.lastMessage,
+                    actions: [
+                      DisplayTimeSince(timestamp: item.lastChangeTimestamp),
+                    ],
                   ),
                 ),
               );

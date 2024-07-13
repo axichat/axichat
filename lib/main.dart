@@ -26,7 +26,8 @@ void main() async {
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen(
     (record) => kDebugMode
-        ? print('${record.level.name}: ${record.time}: ${record.message}')
+        ? print('${record.level.name}: ${record.time}: ${record.message}'
+            '${record.stackTrace != null ? 'Exception: ${record.error} ' 'Stack Trace: ${record.stackTrace}' : ''}')
         : null,
   );
   final log = Logger('main');

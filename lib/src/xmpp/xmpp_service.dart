@@ -502,14 +502,20 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
+    await _dbOp<XmppStateStore>((ss) async {
+      _connection.getNegotiator<mox.StreamManagementNegotiator>()!.resource =
+          ss.read(key: resourceStorageKey) as String? ?? '';
+    });
+
     if (attemptResumeStream) {
       _log.info('Attempting to resume stream...');
       await _connection.getStreamManagementManager()!.loadState();
       await _dbOp<XmppStateStore>((ss) {
-        _log.info('Loaded resource: ${ss.read(key: resourceStorageKey)}');
+        final resource = ss.read(key: resourceStorageKey) as String?;
+        _log.info('Loaded resource: $resource');
         _connection
           ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
-              ss.read(key: resourceStorageKey) as String? ?? ''
+              resource ?? ''
           ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
               ss.read(key: fastTokenStorageKey) as String?
           ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
@@ -677,12 +683,11 @@ class XmppService extends XmppBase
       final db = await completer.future;
       _log.info('Completed completer for $T.');
       return await operation(db);
-    } on XmppAbortedException catch (_) {
-      _log.warning('Owner called reset before $T initialized.');
+    } on XmppAbortedException catch (e, s) {
+      _log.warning('Owner called reset before $T initialized.', e, s);
     } on XmppException {
       rethrow;
     } on Exception catch (e, s) {
-      print(e);
       _log.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
     }
