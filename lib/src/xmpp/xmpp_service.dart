@@ -239,6 +239,14 @@ class XmppService extends XmppBase
             ));
           }
         });
+      case mox.StanzaAckedEvent event:
+        await _dbOp<XmppDatabase>((db) async {
+          if (await db.messagesAccessor.selectOne(event.stanza.id!)
+              case final message?) {
+            _log.info('Marking message: ${message.stanzaID} as sent...');
+            await db.messagesAccessor.updateOne(message.copyWith(acked: true));
+          }
+        });
       case mox.StreamNegotiationsDoneEvent event:
         if (event.resumed) return;
         final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
@@ -502,11 +510,6 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
-    await _dbOp<XmppStateStore>((ss) async {
-      _connection.getNegotiator<mox.StreamManagementNegotiator>()!.resource =
-          ss.read(key: resourceStorageKey) as String? ?? '';
-    });
-
     if (attemptResumeStream) {
       _log.info('Attempting to resume stream...');
       await _connection.getStreamManagementManager()!.loadState();
@@ -735,8 +738,12 @@ class XmppConnection extends mox.XmppConnection {
 
   T? getManager<T extends mox.XmppManagerBase>() {
     switch (T) {
+      case == mox.MessageManager:
+        return getManagerById(mox.messageManager);
       case == XmppPresenceManager:
         return getManagerById(mox.presenceManager);
+      case == mox.ChatStateManager:
+        return getManagerById(mox.chatStateManager);
       case == mox.CarbonsManager:
         return getManagerById(mox.carbonsManager);
       case == mox.BlockingManager:

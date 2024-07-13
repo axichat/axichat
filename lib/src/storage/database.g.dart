@@ -2665,6 +2665,13 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
   late final GeneratedColumn<String> contactAvatarHash =
       GeneratedColumn<String>('contact_avatar_hash', aliasedName, true,
           type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _chatStateMeta =
+      const VerificationMeta('chatState');
+  @override
+  late final GeneratedColumnWithTypeConverter<mox.ChatState?, String>
+      chatState = GeneratedColumn<String>('chat_state', aliasedName, true,
+              type: DriftSqlType.string, requiredDuringInsert: false)
+          .withConverter<mox.ChatState?>($ChatsTable.$converterchatStaten);
   @override
   List<GeneratedColumn> get $columns => [
         jid,
@@ -2684,7 +2691,8 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
         contactID,
         contactDisplayName,
         contactAvatarPath,
-        contactAvatarHash
+        contactAvatarHash,
+        chatState
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2797,6 +2805,7 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
           contactAvatarHash.isAcceptableOrUnknown(
               data['contact_avatar_hash']!, _contactAvatarHashMeta));
     }
+    context.handle(_chatStateMeta, const VerificationResult.success());
     return context;
   }
 
@@ -2843,6 +2852,9 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
           DriftSqlType.string, data['${effectivePrefix}contact_avatar_path']),
       contactAvatarHash: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}contact_avatar_hash']),
+      chatState: $ChatsTable.$converterchatStaten.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}chat_state'])),
     );
   }
 
@@ -2853,6 +2865,10 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
 
   static JsonTypeConverter2<ChatType, int, int> $convertertype =
       const EnumIndexConverter<ChatType>(ChatType.values);
+  static JsonTypeConverter2<mox.ChatState, String, String> $converterchatState =
+      const EnumNameConverter<mox.ChatState>(mox.ChatState.values);
+  static JsonTypeConverter2<mox.ChatState?, String?, String?>
+      $converterchatStaten = JsonTypeConverter2.asNullable($converterchatState);
 }
 
 class ChatsCompanion extends UpdateCompanion<Chat> {
@@ -2874,6 +2890,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   final Value<String?> contactDisplayName;
   final Value<String?> contactAvatarPath;
   final Value<String?> contactAvatarHash;
+  final Value<mox.ChatState?> chatState;
   final Value<int> rowid;
   const ChatsCompanion({
     this.jid = const Value.absent(),
@@ -2894,6 +2911,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     this.contactDisplayName = const Value.absent(),
     this.contactAvatarPath = const Value.absent(),
     this.contactAvatarHash = const Value.absent(),
+    this.chatState = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ChatsCompanion.insert({
@@ -2915,6 +2933,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     this.contactDisplayName = const Value.absent(),
     this.contactAvatarPath = const Value.absent(),
     this.contactAvatarHash = const Value.absent(),
+    this.chatState = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : jid = Value(jid),
         myJid = Value(myJid),
@@ -2941,6 +2960,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     Expression<String>? contactDisplayName,
     Expression<String>? contactAvatarPath,
     Expression<String>? contactAvatarHash,
+    Expression<String>? chatState,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2964,6 +2984,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
         'contact_display_name': contactDisplayName,
       if (contactAvatarPath != null) 'contact_avatar_path': contactAvatarPath,
       if (contactAvatarHash != null) 'contact_avatar_hash': contactAvatarHash,
+      if (chatState != null) 'chat_state': chatState,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2987,6 +3008,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       Value<String?>? contactDisplayName,
       Value<String?>? contactAvatarPath,
       Value<String?>? contactAvatarHash,
+      Value<mox.ChatState?>? chatState,
       Value<int>? rowid}) {
     return ChatsCompanion(
       jid: jid ?? this.jid,
@@ -3007,6 +3029,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       contactDisplayName: contactDisplayName ?? this.contactDisplayName,
       contactAvatarPath: contactAvatarPath ?? this.contactAvatarPath,
       contactAvatarHash: contactAvatarHash ?? this.contactAvatarHash,
+      chatState: chatState ?? this.chatState,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3069,6 +3092,10 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     if (contactAvatarHash.present) {
       map['contact_avatar_hash'] = Variable<String>(contactAvatarHash.value);
     }
+    if (chatState.present) {
+      map['chat_state'] = Variable<String>(
+          $ChatsTable.$converterchatStaten.toSql(chatState.value));
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3096,6 +3123,7 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
           ..write('contactDisplayName: $contactDisplayName, ')
           ..write('contactAvatarPath: $contactAvatarPath, ')
           ..write('contactAvatarHash: $contactAvatarHash, ')
+          ..write('chatState: $chatState, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();

@@ -105,6 +105,9 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   @override
   $ChatsTable get table => chats;
 
+  Stream<Chat> watchOne(String jid) =>
+      (select(table)..where((table) => table.jid.equals(jid))).watchSingle();
+
   @override
   Future<Chat?> selectOne(String value) =>
       (select(table)..where((table) => table.jid.equals(value)))
@@ -114,9 +117,10 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
       (select(table)..where((table) => table.open.equals(true)))
           .getSingleOrNull();
 
-  Future<void> closeOpen() =>
-      (update(table)..where((table) => table.open.equals(true)))
-          .write(const ChatsCompanion(open: Value(false)));
+  Future<List<Chat>> closeOpen() =>
+      (update(table)..where((table) => table.open.equals(true))).writeReturning(
+          const ChatsCompanion(
+              open: Value(false), chatState: Value(mox.ChatState.gone)));
 
   @override
   Future<void> deleteOne(String value) =>

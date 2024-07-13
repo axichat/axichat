@@ -1,4 +1,6 @@
 import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
+import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
@@ -19,8 +21,12 @@ class Axichat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepositoryProvider.value(
-      value: _xmppService,
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider.value(value: _xmppService),
+        RepositoryProvider(create: (context) => Capability()),
+        RepositoryProvider(create: (context) => Policy()),
+      ],
       child: MultiBlocProvider(
         providers: [
           BlocProvider(

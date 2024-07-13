@@ -4936,7 +4936,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
       required this.contactDisplayName,
       required this.contactAvatarPath,
       required this.contactAvatarHash,
-      this.chatState})
+      required this.chatState})
       : super._();
 
   @override
@@ -5312,7 +5312,7 @@ abstract class _ChatFromDb extends Chat {
       required final String? contactDisplayName,
       required final String? contactAvatarPath,
       required final String? contactAvatarHash,
-      final mox.ChatState? chatState}) = _$ChatFromDbImpl;
+      required final mox.ChatState? chatState}) = _$ChatFromDbImpl;
   const _ChatFromDb._() : super._();
 
   @override

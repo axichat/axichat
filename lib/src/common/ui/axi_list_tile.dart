@@ -55,6 +55,7 @@ class AxiListTile extends StatelessWidget {
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0),
               child: Row(
+                mainAxisSize: MainAxisSize.max,
                 children: [
                   Text(
                     subtitle!,

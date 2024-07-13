@@ -5,10 +5,40 @@ sealed class ChatEvent extends Equatable {
 }
 
 final class _ChatUpdated extends ChatEvent {
-  const _ChatUpdated(this.items);
+  const _ChatUpdated(this.chat);
+
+  final Chat chat;
+
+  @override
+  List<Object?> get props => [chat];
+}
+
+final class _ChatMessagesUpdated extends ChatEvent {
+  const _ChatMessagesUpdated(this.items);
 
   final List<Message> items;
 
   @override
   List<Object?> get props => [items];
+}
+
+final class _ChatTypingStopped extends ChatEvent {
+  const _ChatTypingStopped();
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatTypingStarted extends ChatEvent {
+  const ChatTypingStarted();
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatMessageSent extends ChatEvent {
+  const ChatMessageSent({required this.text});
+
+  final String text;
+
+  @override
+  List<Object?> get props => [text];
 }

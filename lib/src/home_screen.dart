@@ -66,14 +66,16 @@ class HomeScreen extends StatelessWidget {
               primaryChild: Nexus(tabs: tabs),
               secondaryChild: Builder(builder: (context) {
                 final openJid = context.watch<ChatsCubit>().state.openJid;
-                return BlocProvider(
-                  key: Key(openJid ?? ''),
-                  create: (context) => ChatBloc(
-                    jid: openJid,
-                    xmppService: context.read<XmppService>(),
-                  ),
-                  child: const Chat(),
-                );
+                return openJid == null
+                    ? const GuestChat()
+                    : BlocProvider(
+                        key: Key(openJid),
+                        create: (context) => ChatBloc(
+                          jid: openJid,
+                          xmppService: context.read<XmppService>(),
+                        ),
+                        child: const Chat(),
+                      );
               }),
             ),
           ),

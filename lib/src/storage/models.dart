@@ -538,7 +538,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String? contactDisplayName,
     required String? contactAvatarPath,
     required String? contactAvatarHash,
-    mox.ChatState? chatState,
+    required mox.ChatState? chatState,
   }) = _ChatFromDb;
 
   const Chat._();
@@ -564,6 +564,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         contactDisplayName: Value.absentIfNull(contactDisplayName),
         contactAvatarPath: Value.absentIfNull(contactAvatarPath),
         contactAvatarHash: Value.absentIfNull(contactAvatarHash),
+        chatState: Value.absentIfNull(chatState),
       ).toColumns(nullToAbsent);
 }
 
@@ -588,6 +589,7 @@ class Chats extends Table {
   TextColumn get contactDisplayName => text().nullable()();
   TextColumn get contactAvatarPath => text().nullable()();
   TextColumn get contactAvatarHash => text().nullable()();
+  TextColumn get chatState => textEnum<mox.ChatState>().nullable()();
 
   @override
   Set<Column> get primaryKey => {jid};

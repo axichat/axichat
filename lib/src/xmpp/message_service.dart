@@ -12,6 +12,53 @@ extension on mox.MessageEvent {
 mixin MessageService on XmppBase {
   final _log = Logger('MessageService');
 
+  Future<void> sendMessage({required String jid, required String text}) async {
+    if (_connection.getManager<mox.MessageManager>() case final mm?) {
+      final stanzaID = _connection.generateId();
+      final originID = _connection.generateId();
+      await _dbOp<XmppDatabase>((db) async {
+        await db.messagesAccessor.insertOne(Message(
+          stanzaID: stanzaID,
+          originID: originID,
+          myJid: user!.jid.toString(),
+          senderJid: user!.jid.toString(),
+          chatJid: jid,
+          body: text,
+        ));
+      });
+      await mm.sendMessage(
+        mox.JID.fromString(jid),
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          mox.MessageBodyData(text),
+          mox.MarkableData(true),
+          mox.MessageIdData(stanzaID),
+          mox.StableIdData(originID, null),
+          mox.ChatState.active,
+        ]),
+      );
+      await _dbOp<XmppDatabase>((db) async {
+        if (await db.chatsAccessor.selectOne(jid) case final chat?) {
+          await db.chatsAccessor.updateOne(chat.copyWith(
+            unreadCount: chat.open ? 0 : chat.unreadCount + 1,
+            lastMessage: text,
+            lastChangeTimestamp: DateTime.timestamp(),
+          ));
+        } else {
+          await db.chatsAccessor.insertOne(Chat(
+            jid: jid,
+            myJid: user!.jid.toString(),
+            myNickname: user!.username,
+            title: mox.JID.fromString(jid).local,
+            type: ChatType.chat,
+            unreadCount: 1,
+            lastMessage: text,
+            lastChangeTimestamp: DateTime.timestamp(),
+          ));
+        }
+      });
+    }
+  }
+
   Future<bool> _handleError(mox.MessageEvent event) async {
     if (event.type != 'error') return false;
 
@@ -35,9 +82,9 @@ mixin MessageService on XmppBase {
 
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
-      _log.info('Updating chat state to ${state.name}...');
       await _dbOp<XmppDatabase>((db) async {
         if (await db.chatsAccessor.selectOne(jid) case final chat?) {
+          _log.info('Updating chat state to ${state.name}...');
           await db.chatsAccessor.updateOne(chat.copyWith(chatState: state));
         }
       });
