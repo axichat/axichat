@@ -510,9 +510,9 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
+    await _connection.getStreamManagementManager()!.loadState();
     if (attemptResumeStream) {
       _log.info('Attempting to resume stream...');
-      await _connection.getStreamManagementManager()!.loadState();
       await _dbOp<XmppStateStore>((ss) {
         final resource = ss.read(key: resourceStorageKey) as String?;
         _log.info('Loaded resource: $resource');
@@ -919,14 +919,7 @@ class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   XmppSocketWrapper() : super(false);
 
   @override
-  bool onBadCertificate(certificate, String domain) {
-    // TODO: implement onBadCertificate
-    // for (final endpoint in _devServerLookup.values) {
-    //   if (endpoint.host.host == domain) return true;
-    // }
-    // return false;
-    return true;
-  }
+  bool onBadCertificate(certificate, String domain) => kDebugMode;
 }
 
 class XmppStreamManagementManager extends mox.StreamManagementManager {

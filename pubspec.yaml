@@ -63,6 +63,15 @@ dev_dependencies:
   drift_dev: ^2.18.0
   lint: ^2.3.0
   freezed: ^2.5.2
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  image_path_android: "assets/images/ic_launcher.png"
+  android: true # can specify file name here e.g. "ic_launcher"
+  adaptive_icon_background: "assets/images/ic_launcher_background.png" # only available for Android 8.0 devices and above
+  adaptive_icon_foreground: "assets/images/ic_launcher_foreground.png" # only available for Android 8.0 devices and above
+  adaptive_icon_monochrome: "assets/images/ic_launcher_monochrome.png" # only available for Android 13 devices and above
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true

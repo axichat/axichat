@@ -62,21 +62,24 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ],
-            child: AxiAdaptiveLayout(
-              primaryChild: Nexus(tabs: tabs),
-              secondaryChild: Builder(builder: (context) {
+            child: Builder(
+              builder: (context) {
                 final openJid = context.watch<ChatsCubit>().state.openJid;
-                return openJid == null
-                    ? const GuestChat()
-                    : BlocProvider(
-                        key: Key(openJid),
-                        create: (context) => ChatBloc(
-                          jid: openJid,
-                          xmppService: context.read<XmppService>(),
+                return AxiAdaptiveLayout(
+                  invertPriority: openJid != null,
+                  primaryChild: Nexus(tabs: tabs),
+                  secondaryChild: openJid == null
+                      ? const GuestChat()
+                      : BlocProvider(
+                          key: Key(openJid),
+                          create: (context) => ChatBloc(
+                            jid: openJid,
+                            xmppService: context.read<XmppService>(),
+                          ),
+                          child: const Chat(),
                         ),
-                        child: const Chat(),
-                      );
-              }),
+                );
+              },
             ),
           ),
         ),

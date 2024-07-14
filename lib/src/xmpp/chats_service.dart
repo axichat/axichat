@@ -28,8 +28,7 @@ mixin ChatsService on XmppBase {
   Future<void> openChat(String jid) async {
     await _dbOp<XmppDatabase>((db) async {
       if (await db.chatsAccessor.selectOne(jid) case final chat?) {
-        final closed = (await db.chatsAccessor.closeOpen()).first;
-        await sendChatState(jid: closed.jid, state: mox.ChatState.gone);
+        await closeChat();
         await db.chatsAccessor.updateOne(chat.copyWith(
           open: true,
           unreadCount: 0,
@@ -37,6 +36,14 @@ mixin ChatsService on XmppBase {
         ));
         await sendChatState(jid: jid, state: mox.ChatState.active);
       }
+    });
+  }
+
+  Future<void> closeChat() async {
+    await _dbOp<XmppDatabase>((db) async {
+      final closed = (await db.chatsAccessor.closeOpen()).firstOrNull;
+      if (closed == null) return;
+      await sendChatState(jid: closed.jid, state: mox.ChatState.gone);
     });
   }
 }

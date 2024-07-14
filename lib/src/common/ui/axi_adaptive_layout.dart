@@ -25,30 +25,32 @@ class AxiAdaptiveLayout extends StatelessWidget {
         };
         final secondaryFlex = 10 - primaryFlex;
         final secondaryVisible = secondaryFlex > 0;
-        final swap = invertPriority && !secondaryVisible;
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Flexible(
-              flex: primaryFlex,
-              child: Center(
-                child: AnimatedSwitcher(
-                  duration: animationDuration,
-                  child: swap ? secondaryChild : primaryChild,
+        return ConstrainedBox(
+          constraints: constraints,
+          child: !secondaryVisible
+              ? Center(
+                  child: AnimatedSwitcher(
+                    duration: animationDuration,
+                    child: invertPriority ? secondaryChild : primaryChild,
+                  ),
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      flex: primaryFlex,
+                      child: Center(
+                        child: primaryChild,
+                      ),
+                    ),
+                    Flexible(
+                      flex: secondaryFlex,
+                      child: Center(
+                        child: secondaryChild,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ),
-            Flexible(
-              flex: secondaryFlex,
-              child: Visibility(
-                visible: secondaryVisible,
-                maintainState: true,
-                child: Center(
-                  child: swap ? primaryChild : secondaryChild,
-                ),
-              ),
-            ),
-          ],
         );
       },
     );

@@ -129,4 +129,6 @@ class MaterialAxichat extends StatelessWidget {
 extension ThemeExtension on BuildContext {
   ShadColorScheme get colorScheme => ShadTheme.of(this).colorScheme;
   ShadTextTheme get textTheme => ShadTheme.of(this).textTheme;
+  ShadDecoration get decoration => ShadTheme.of(this).decoration;
+  BorderRadius get radius => ShadTheme.of(this).radius;
 }

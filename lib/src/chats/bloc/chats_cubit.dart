@@ -32,8 +32,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     ));
   }
 
-  Future<void> openChat(String jid) async {
-    if (jid == state.openJid) return;
+  Future<void> toggleChat(String jid) async {
+    if (jid == state.openJid) {
+      await _xmppService.closeChat();
+      return;
+    }
     await _xmppService.openChat(jid);
   }
 }

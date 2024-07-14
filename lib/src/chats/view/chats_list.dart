@@ -29,8 +29,7 @@ class ChatsList extends StatelessWidget {
             (context, index) {
               final item = items[index];
               return ShadGestureDetector(
-                onTap: () async =>
-                    await context.read<ChatsCubit>().openChat(item.jid),
+                onTap: () => context.read<ChatsCubit>().toggleChat(item.jid),
                 cursor: SystemMouseCursors.click,
                 child: AxiBadge(
                   count: item.unreadCount,

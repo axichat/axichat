@@ -18,25 +18,29 @@ class ProfileCard extends StatelessWidget {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         return active
-            ? ListTile(
-                leading: AxiAvatar(
-                  jid: state.jid,
-                  presence: state.presence,
-                  status: state.status,
-                  active: true,
+            ? ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
+                child: ListTile(
+                  leading: AxiAvatar(
+                    jid: state.jid,
+                    presence: state.presence,
+                    status: state.status,
+                    active: true,
+                  ),
+                  title: Text(state.title),
+                  subtitle: Text(state.jid),
+                  onTap: () => context.push(const ProfileRoute().location,
+                      extra: context.read),
+                  shape: Border(
+                    top: BorderSide(color: context.colorScheme.border),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 6.0,
+                    horizontal: 12.0,
+                  ),
+                  trailing: const LogoutButton(),
                 ),
-                title: Text(state.title),
-                subtitle: Text(state.jid),
-                onTap: () => context.push(const ProfileRoute().location,
-                    extra: context.read),
-                shape: Border(
-                  top: BorderSide(color: context.colorScheme.border),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 6.0,
-                  horizontal: 12.0,
-                ),
-                trailing: const LogoutButton(),
               )
             : ShadCard(
                 rowMainAxisSize: MainAxisSize.max,

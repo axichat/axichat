@@ -1,5 +1,6 @@
 import 'package:chat/src/app.dart';
 import 'package:chat/src/chat/bloc/chat_bloc.dart';
+import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
@@ -30,8 +31,11 @@ class _ChatState extends State<Chat> {
   final _textController = TextEditingController();
   final _popoverController = ShadPopoverController();
 
-  void _typingListener() =>
+  void _typingListener() {
+    if (_textController.text.isNotEmpty) {
       context.read<ChatBloc>().add(const ChatTypingStarted());
+    }
+  }
 
   @override
   void initState() {
@@ -64,8 +68,21 @@ class _ChatState extends State<Chat> {
           );
           return Scaffold(
             appBar: AppBar(
+              scrolledUnderElevation: 0.0,
               shape: Border(
                 bottom: BorderSide(color: context.colorScheme.border),
+              ),
+              leading: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  icon: const Icon(
+                    LucideIcons.arrowLeft,
+                    size: 20.0,
+                  ),
+                  onPressed: () =>
+                      context.read<ChatsCubit>().toggleChat(state.chat!.jid),
+                ),
               ),
               title: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -102,6 +119,7 @@ class _ChatState extends State<Chat> {
                   .toList(),
               messageOptions: MessageOptions(
                 borderRadius: 8,
+                messagePadding: EdgeInsets.all(7.0),
                 messageTextBuilder: (message, _, __) {
                   final extraStyle = context.textTheme.muted.copyWith(
                     fontStyle: FontStyle.italic,
@@ -110,39 +128,41 @@ class _ChatState extends State<Chat> {
                   final textColor = self
                       ? context.colorScheme.primaryForeground
                       : Colors.black;
-                  const iconSize = 8.0;
-                  return Stack(
-                    clipBehavior: Clip.none,
+                  const iconSize = 9.0;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            message.text,
-                            style: TextStyle(color: textColor),
-                          ),
-                          if (message.customProperties?['retracted'] ?? false)
-                            Text(
-                              '(retracted)',
-                              style: extraStyle,
-                            )
-                          else if (message.customProperties?['edited'] ?? false)
-                            Text('(edited)', style: extraStyle),
-                        ],
+                      Text(
+                        message.text,
+                        style: TextStyle(color: textColor),
                       ),
+                      if (message.customProperties?['retracted'] ?? false)
+                        Text(
+                          '(retracted)',
+                          style: extraStyle,
+                        )
+                      else if (message.customProperties?['edited'] ?? false)
+                        Text('(edited)', style: extraStyle),
                       if (self)
-                        Positioned(
-                          right: -iconSize,
-                          bottom: -iconSize,
-                          width: iconSize,
-                          height: iconSize,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
                           child: Icon(
                             message.status!.icon,
                             color: context.colorScheme.primaryForeground,
                             size: iconSize,
-                            weight: 1.0,
                           ),
                         ),
+                      // Positioned(
+                      //   right: -iconSize * 0.8,
+                      //   bottom: -iconSize,
+                      //   width: iconSize,
+                      //   height: iconSize,
+                      //   child: Icon(
+                      //     message.status!.icon,
+                      //     color: context.colorScheme.primaryForeground,
+                      //     size: iconSize,
+                      //   ),
+                      // ),
                     ],
                   );
                 },
@@ -151,6 +171,22 @@ class _ChatState extends State<Chat> {
                 sendOnEnter: true,
                 alwaysShowSend: true,
                 textController: _textController,
+                sendButtonBuilder: (send) => ShadButton.ghost(
+                  icon: const Icon(
+                    Icons.send,
+                  ),
+                  onPressed: send,
+                ),
+                inputDecoration: defaultInputDecoration().copyWith(
+                  fillColor: context.colorScheme.input,
+                  border: OutlineInputBorder(
+                    borderRadius: context.radius,
+                    borderSide: const BorderSide(
+                      width: 0.0,
+                      style: BorderStyle.none,
+                    ),
+                  ),
+                ),
                 leading: [
                   ShadPopover(
                     controller: _popoverController,
@@ -202,7 +238,7 @@ class _GuestChatState extends State<GuestChat> {
     ChatMessage(
       user: ChatUser(id: 'axichat', firstName: 'Axichat'),
       createdAt: DateTime.now(),
-      text: 'Login... unless you just want to chat to yourself.',
+      text: 'Open a chat! Unless you just want to talk to yourself.',
     )
   ];
 
@@ -216,11 +252,9 @@ class _GuestChatState extends State<GuestChat> {
       ),
       child: DashChat(
         currentUser: ChatUser(id: 'me', firstName: 'You'),
-        onSend: (message) {
-          setState(() {
-            messages.insert(0, message);
-          });
-        },
+        onSend: (message) => setState(() {
+          messages.insert(0, message);
+        }),
         messages: messages,
         inputOptions: const InputOptions(alwaysShowSend: true),
       ),
