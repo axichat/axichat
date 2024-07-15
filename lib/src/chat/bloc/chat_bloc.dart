@@ -40,7 +40,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final StreamSubscription<Chat>? _chatSubscription;
   late final StreamSubscription<List<Message>>? _messageSubscription;
 
-  Timer? _typingTimer;
+  RestartableTimer? _typingTimer;
 
   @override
   Future<void> close() {
@@ -63,7 +63,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _onChatTypingStarted(
       ChatTypingStarted event, Emitter<ChatState> emit) async {
     if (_typingTimer case final timer?) {
-      if (timer.isActive) return;
+      if (timer.isActive) {
+        timer.reset();
+      }
+      return;
     } else {
       _typingTimer = RestartableTimer(
         const Duration(seconds: 3),

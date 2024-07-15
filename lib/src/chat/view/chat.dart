@@ -119,7 +119,7 @@ class _ChatState extends State<Chat> {
                   .toList(),
               messageOptions: MessageOptions(
                 borderRadius: 8,
-                messagePadding: EdgeInsets.all(7.0),
+                messagePadding: const EdgeInsets.all(7.0),
                 messageTextBuilder: (message, _, __) {
                   final extraStyle = context.textTheme.muted.copyWith(
                     fontStyle: FontStyle.italic,
@@ -152,17 +152,6 @@ class _ChatState extends State<Chat> {
                             size: iconSize,
                           ),
                         ),
-                      // Positioned(
-                      //   right: -iconSize * 0.8,
-                      //   bottom: -iconSize,
-                      //   width: iconSize,
-                      //   height: iconSize,
-                      //   child: Icon(
-                      //     message.status!.icon,
-                      //     color: context.colorScheme.primaryForeground,
-                      //     size: iconSize,
-                      //   ),
-                      // ),
                     ],
                   );
                 },

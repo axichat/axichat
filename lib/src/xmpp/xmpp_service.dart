@@ -247,6 +247,14 @@ class XmppService extends XmppBase
             await db.messagesAccessor.updateOne(message.copyWith(acked: true));
           }
         });
+      case mox.DeliveryReceiptReceivedEvent event:
+        await _dbOp<XmppDatabase>((db) async {
+          if (await db.messagesAccessor.selectOne(event.id)
+              case final message?) {
+            await db.messagesAccessor
+                .updateOne(message.copyWith(received: true));
+          }
+        });
       case mox.StreamNegotiationsDoneEvent event:
         if (event.resumed) return;
         final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
@@ -514,11 +522,11 @@ class XmppService extends XmppBase
     if (attemptResumeStream) {
       _log.info('Attempting to resume stream...');
       await _dbOp<XmppStateStore>((ss) {
-        final resource = ss.read(key: resourceStorageKey) as String?;
+        final resource = ss.read(key: resourceStorageKey) ?? '';
         _log.info('Loaded resource: $resource');
         _connection
           ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
-              resource ?? ''
+              resource as String
           ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
               ss.read(key: fastTokenStorageKey) as String?
           ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
@@ -918,8 +926,10 @@ class XmppClientNegotiator extends mox.ClientToServerNegotiator {
 class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   XmppSocketWrapper() : super(false);
 
+  // TODO: onBadCertificate
   @override
-  bool onBadCertificate(certificate, String domain) => kDebugMode;
+  bool onBadCertificate(certificate, String domain) =>
+      _devServerLookup.keys.contains(domain);
 }
 
 class XmppStreamManagementManager extends mox.StreamManagementManager {

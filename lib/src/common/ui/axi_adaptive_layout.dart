@@ -1,3 +1,4 @@
+import 'package:animations/animations.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -29,8 +30,22 @@ class AxiAdaptiveLayout extends StatelessWidget {
           constraints: constraints,
           child: !secondaryVisible
               ? Center(
-                  child: AnimatedSwitcher(
+                  child: PageTransitionSwitcher(
+                    reverse: !invertPriority,
                     duration: animationDuration,
+                    transitionBuilder: (
+                      child,
+                      primaryAnimation,
+                      secondaryAnimation,
+                    ) {
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(1.0, 0),
+                          end: Offset.zero,
+                        ).animate(primaryAnimation),
+                        child: child,
+                      );
+                    },
                     child: invertPriority ? secondaryChild : primaryChild,
                   ),
                 )
