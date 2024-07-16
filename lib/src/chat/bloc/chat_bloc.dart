@@ -87,8 +87,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     _stopTyping();
-    await _xmppService.sendMessage(jid: jid!, text: event.text);
     emit(state.copyWith(typing: false));
+    try {
+      await _xmppService.sendMessage(jid: jid!, text: event.text);
+    } on XmppMessageException catch (_) {
+      // Don't panic. User will see a visual difference in the message bubble.
+    }
   }
 
   Future<void> _stopTyping() async {

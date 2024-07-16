@@ -43,7 +43,7 @@ mixin ChatsService on XmppBase {
     await _dbOp<XmppDatabase>((db) async {
       final closed = (await db.chatsAccessor.closeOpen()).firstOrNull;
       if (closed == null) return;
-      await sendChatState(jid: closed.jid, state: mox.ChatState.gone);
+      await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     });
   }
 }

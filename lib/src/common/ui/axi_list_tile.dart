@@ -23,6 +23,7 @@ class AxiListTile extends StatelessWidget {
     return ShadCard(
       padding: const EdgeInsets.all(12.0),
       rowCrossAxisAlignment: CrossAxisAlignment.center,
+      rowMainAxisSize: MainAxisSize.max,
       backgroundColor: color,
       leading: leading == null
           ? null
@@ -42,39 +43,44 @@ class AxiListTile extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Text(
-                    title!,
-                    style: context.textTheme.small,
-                    overflow: TextOverflow.ellipsis,
+                  Expanded(
+                    child: Text(
+                      title!,
+                      style: context.textTheme.small,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
             ),
       description: subtitle == null
           ? null
-          : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  Text(
-                    subtitle!,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+          : ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 150.0),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        subtitle!,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
       trailing: actions == null
           ? null
-          : Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: OverflowBar(
-                  spacing: 4.0,
-                  overflowSpacing: 4.0,
-                  overflowAlignment: OverflowBarAlignment.center,
-                  children: actions!,
-                ),
+          : Align(
+              alignment: Alignment.centerRight,
+              child: OverflowBar(
+                spacing: 4.0,
+                overflowSpacing: 4.0,
+                overflowAlignment: OverflowBarAlignment.center,
+                children: actions!,
               ),
             ),
     );

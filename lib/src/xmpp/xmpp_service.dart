@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
@@ -44,6 +45,8 @@ final class XmppUnknownException extends XmppException {
 }
 
 final class XmppAbortedException extends XmppException {}
+
+final class XmppMessageException extends XmppException {}
 
 final class XmppRosterException extends XmppException {}
 
@@ -207,7 +210,7 @@ class XmppService extends XmppBase
           await db.messagesAccessor.insertOne(Message(
             stanzaID: event.id ?? '',
             myJid: user!.jid.toString(),
-            senderJid: event.from.toString(),
+            senderJid: chatJid,
             chatJid: chatJid,
             body: body,
             fileMetadataID: metadata?.id,
@@ -340,7 +343,6 @@ class XmppService extends XmppBase
         _log.info('New username and password provided. '
             'Attempting to authenticate directly with server...');
 
-        bool attemptResumeStream = false;
         await _dbOp<CredentialStore>((cs) async {
           final databasePassphraseStorageKey = CredentialStore.registerKey(
               '${storagePrefixFor(username!)}_database_passphrase');
@@ -354,11 +356,10 @@ class XmppService extends XmppBase
               _stateStore
                   .complete(await _buildStateStore(username!, passphrase));
             }
-            attemptResumeStream = true;
           }
         });
 
-        await _initConnection(attemptResumeStream);
+        await _initConnection();
 
         final newUser = User(
           jid: mox.JID.fromString('$username@$domain'),
@@ -460,7 +461,7 @@ class XmppService extends XmppBase
     return true;
   }
 
-  Future<void> _initConnection([bool attemptResumeStream = true]) async {
+  Future<void> _initConnection() async {
     _log.info('Initializing connection object...');
     await _connection.registerFeatureNegotiators([
       mox.ResourceBindingNegotiator(),
@@ -518,28 +519,25 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
-    await _connection.getStreamManagementManager()!.loadState();
-    if (attemptResumeStream) {
-      _log.info('Attempting to resume stream...');
-      await _dbOp<XmppStateStore>((ss) {
-        final resource = ss.read(key: resourceStorageKey) ?? '';
-        _log.info('Loaded resource: $resource');
-        _connection
-          ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
-              resource as String
-          ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
-              ss.read(key: fastTokenStorageKey) as String?
-          ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
-            software: 'Axichat',
-            id: ss.read(key: userAgentStorageKey) as String? ??
-                () {
-                  final id = uuid.v4();
-                  ss.write(key: userAgentStorageKey, value: id);
-                  return id;
-                }(),
-          );
-      });
-    }
+    await _connection.getManager<XmppStreamManagementManager>()!.loadState();
+    await _dbOp<XmppStateStore>((ss) {
+      final resource = ss.read(key: resourceStorageKey) ?? '';
+      _log.info('Loaded resource: $resource');
+      _connection
+        ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
+            resource as String
+        ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
+            ss.read(key: fastTokenStorageKey) as String?
+        ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
+          software: 'Axichat',
+          id: ss.read(key: userAgentStorageKey) as String? ??
+              () {
+                final id = uuid.v4();
+                ss.write(key: userAgentStorageKey, value: id);
+                return id;
+              }(),
+        );
+    });
   }
 
   Future<void> _initDatabases(String username, String passphrase) async {
@@ -750,6 +748,8 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.messageManager);
       case == XmppPresenceManager:
         return getManagerById(mox.presenceManager);
+      case == XmppStreamManagementManager:
+        return getManagerById(mox.smManager);
       case == mox.ChatStateManager:
         return getManagerById(mox.chatStateManager);
       case == mox.CarbonsManager:
@@ -873,7 +873,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
   final List<IOEndpoint> endpoints;
 
-  // fdns1.dismail.de, fdns2.dismail.de
+  // fdns1.dismail.de, fdns2.dismail.de, 1.1.1.1
   XmppConnectivityManager.pingDns()
       : this._([
           IOEndpoint(
@@ -882,6 +882,10 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
           ),
           IOEndpoint(
             InternetAddress('159.69.114.157', type: InternetAddressType.IPv4),
+            853,
+          ),
+          IOEndpoint(
+            InternetAddress('1.1.1.1', type: InternetAddressType.IPv4),
             853,
           ),
         ]);
@@ -893,7 +897,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
   @override
   Future<void> waitForConnection() async {
-    bool connected = false;
+    bool connected = await hasConnection();
     while (!connected) {
       await Future.delayed(timeoutDuration);
       connected = await hasConnection();

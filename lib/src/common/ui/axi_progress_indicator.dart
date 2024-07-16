@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 class AxiProgressIndicator extends StatelessWidget {
   const AxiProgressIndicator({
     super.key,
-    required this.color,
-    required this.semanticsLabel,
+    this.color,
+    this.semanticsLabel,
   });
 
-  final Color color;
-  final String semanticsLabel;
+  final Color? color;
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {

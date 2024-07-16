@@ -132,7 +132,7 @@ class _ChatState extends State<Chat> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
+                      SelectableText(
                         message.text,
                         style: TextStyle(color: textColor),
                       ),

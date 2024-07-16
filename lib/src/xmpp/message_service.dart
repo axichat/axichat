@@ -16,7 +16,39 @@ mixin MessageService on XmppBase {
     if (_connection.getManager<mox.MessageManager>() case final mm?) {
       final stanzaID = _connection.generateId();
       final originID = _connection.generateId();
+      _log.info('Sending message: $stanzaID '
+          'with body: ${text.substring(0, min(10, text.length))}...');
+      try {
+        await mm.sendMessage(
+          mox.JID.fromString(jid),
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageBodyData(text),
+            mox.MarkableData(true),
+            mox.MessageIdData(stanzaID),
+            mox.StableIdData(originID, null),
+            mox.ChatState.active,
+          ]),
+        );
+      } on Exception catch (e) {
+        _log.info(
+            'Failed to send message: $stanzaID. '
+            'Storing with error to allow resend...',
+            e);
+        await _dbOp<XmppDatabase>((db) async {
+          await db.messagesAccessor.insertOne(Message(
+            error: MessageError.unknown,
+            stanzaID: stanzaID,
+            originID: originID,
+            myJid: user!.jid.toString(),
+            senderJid: user!.jid.toString(),
+            chatJid: jid,
+            body: text,
+          ));
+        });
+        throw XmppMessageException();
+      }
       await _dbOp<XmppDatabase>((db) async {
+        _log.info('Storing message: $stanzaID...');
         await db.messagesAccessor.insertOne(Message(
           stanzaID: stanzaID,
           originID: originID,
@@ -26,24 +58,16 @@ mixin MessageService on XmppBase {
           body: text,
         ));
       });
-      await mm.sendMessage(
-        mox.JID.fromString(jid),
-        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-          mox.MessageBodyData(text),
-          mox.MarkableData(true),
-          mox.MessageIdData(stanzaID),
-          mox.StableIdData(originID, null),
-          mox.ChatState.active,
-        ]),
-      );
       await _dbOp<XmppDatabase>((db) async {
         if (await db.chatsAccessor.selectOne(jid) case final chat?) {
+          _log.info('Bumping unread count for chat: $jid...');
           await db.chatsAccessor.updateOne(chat.copyWith(
             unreadCount: chat.open ? 0 : chat.unreadCount + 1,
             lastMessage: text,
             lastChangeTimestamp: DateTime.timestamp(),
           ));
         } else {
+          _log.info('First message in chat: $jid. Creating new entry.');
           await db.chatsAccessor.insertOne(Chat(
             jid: jid,
             myJid: user!.jid.toString(),
@@ -74,6 +98,7 @@ mixin MessageService on XmppBase {
           _ => MessageError.unknown,
         };
 
+        _log.info('Updating message: ${event.id} with error: ${error.name}...');
         await db.messagesAccessor.updateOne(message.copyWith(error: error));
       }
     });
