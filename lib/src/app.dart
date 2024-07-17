@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
@@ -9,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logging/logging.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class Axichat extends StatelessWidget {
@@ -38,14 +41,21 @@ class Axichat extends StatelessWidget {
             ),
           ),
         ],
-        child: MaterialAxichat(),
+        child: const MaterialAxichat(),
       ),
     );
   }
 }
 
-class MaterialAxichat extends StatelessWidget {
-  MaterialAxichat({super.key});
+class MaterialAxichat extends StatefulWidget {
+  const MaterialAxichat({super.key});
+
+  @override
+  State<MaterialAxichat> createState() => _MaterialAxichatState();
+}
+
+class _MaterialAxichatState extends State<MaterialAxichat> {
+  final _log = Logger('MaterialAxichat');
 
   final _router = GoRouter(
     restorationScopeId: 'app',
@@ -58,6 +68,38 @@ class MaterialAxichat extends StatelessWidget {
     },
     routes: $appRoutes,
   );
+
+  AppLifecycleListener? _lifecycleListener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _lifecycleListener = _lifecycleListener ??
+        AppLifecycleListener(
+          onStateChange: (state) async {
+            if (state == AppLifecycleState.resumed) {
+              if (context.read<XmppService>().user != null) return;
+              try {
+                await context.read<AuthenticationCubit>().login();
+              } on XmppException catch (_) {
+                _log.info('Redirecting to login screen...');
+              }
+            } else if (state == AppLifecycleState.detached) {
+              await context.read<AuthenticationCubit>().logout();
+            }
+          },
+          onExitRequested: () async {
+            await context.read<AuthenticationCubit>().logout();
+            return AppExitResponse.exit;
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

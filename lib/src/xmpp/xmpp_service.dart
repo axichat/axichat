@@ -79,7 +79,7 @@ abstract class XmppBase {
 
   User? get user;
 
-  Future<bool> authenticateAndConnect(String? username, String? password);
+  Future<void> authenticateAndConnect(String? username, String? password);
   Future<void> disconnect();
 
   Future _dbOp<T extends Database>(
@@ -325,7 +325,7 @@ class XmppService extends XmppBase
   }
 
   @override
-  Future<bool> authenticateAndConnect(
+  Future<void> authenticateAndConnect(
     String? username,
     String? password, [
     bool saveCredentials = true,
@@ -458,7 +458,7 @@ class XmppService extends XmppBase
 
       return;
     });
-    return true;
+    return;
   }
 
   Future<void> _initConnection() async {

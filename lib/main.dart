@@ -22,7 +22,6 @@ import 'src/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Prefer log level INFO to distinguish from mox logs.
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen(
     (record) => kDebugMode
@@ -30,8 +29,7 @@ void main() async {
             '${record.stackTrace != null ? 'Exception: ${record.error} ' 'Stack Trace: ${record.stackTrace}' : ''}')
         : null,
   );
-  final log = Logger('main');
-  Bloc.observer = BlocLogger(log);
+  Bloc.observer = BlocLogger();
 
   HydratedBloc.storage = await HydratedStorage.build(
     storageDirectory: await getApplicationDocumentsDirectory(),
@@ -68,19 +66,11 @@ void main() async {
     policy: Policy(),
   );
 
-  try {
-    await xmppService.authenticateAndConnect(null, null);
-  } on XmppUserNotFoundException catch (_) {
-    log.info('Redirecting to login screen...');
-  }
-
   runApp(Axichat(xmppService: xmppService));
 }
 
 class BlocLogger extends BlocObserver {
-  BlocLogger(this.logger);
-
-  final Logger logger;
+  final logger = Logger('Bloc');
 
   @override
   void onChange(BlocBase bloc, Change change) {

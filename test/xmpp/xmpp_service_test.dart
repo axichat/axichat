@@ -111,7 +111,6 @@ void main() {
             value: password,
           )).called(1);
 
-      expect(result, true);
       await xmppService.close();
     });
   });

@@ -1,6 +1,5 @@
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
-import 'package:logging/logging.dart';
 
 part 'authentication_state.dart';
 
@@ -29,12 +28,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final XmppService _xmppService;
 
-  final _log = Logger('AuthenticationBloc');
-
-  void login({
-    required String username,
-    required String password,
-    required bool rememberMe,
+  Future<void> login({
+    String? username,
+    String? password,
+    bool rememberMe = false,
   }) async {
     emit(AuthenticationInProgress());
     try {
@@ -42,21 +39,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on XmppAuthenticationException catch (_) {
       emit(const AuthenticationFailure('Incorrect username or password'));
       return;
-    } on Exception catch (e, s) {
-      _log.severe('Login failure...', e, s);
+    } on Exception catch (e) {
       emit(const AuthenticationFailure(
           'Network error. Please try again later.'));
       return;
-    } catch (e, s) {
-      _log.severe('Login failure...', e, s);
-      emit(
-          const AuthenticationFailure('Unknown error. Please try again later'));
-      rethrow;
     }
     emit(AuthenticationComplete());
   }
 
-  void signup({
+  Future<void> signup({
     required String username,
     required String password,
     required bool rememberMe,
@@ -65,12 +56,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     // TODO: In-band registration.
   }
 
-  void logout({required LogoutSeverity severity}) {
+  Future<void> logout({LogoutSeverity severity = LogoutSeverity.normal}) async {
     switch (severity) {
       case LogoutSeverity.normal:
-        _xmppService.disconnect();
+        await _xmppService.disconnect();
       case LogoutSeverity.burn:
-        _xmppService.disconnect(burn: true);
+        await _xmppService.disconnect(burn: true);
     }
 
     emit(AuthenticationNone());
