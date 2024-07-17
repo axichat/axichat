@@ -29,8 +29,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final XmppService _xmppService;
 
   Future<void> login({
-    String? username,
-    String? password,
+    required String username,
+    required String password,
     bool rememberMe = false,
   }) async {
     emit(AuthenticationInProgress());

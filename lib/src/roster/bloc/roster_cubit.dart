@@ -1,13 +1,14 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:chat/src/common/bloc_cache.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
 
 part 'roster_state.dart';
 
-class RosterCubit extends Cubit<RosterState> {
+class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   RosterCubit({required XmppService xmppService})
       : _xmppService = xmppService,
         super(const RosterInitial()) {
@@ -25,6 +26,17 @@ class RosterCubit extends Cubit<RosterState> {
   int get inviteCount => state is RosterInvitesAvailable
       ? (state as RosterInvitesAvailable).invites.length
       : 0;
+
+  @override
+  void onChange(Change<RosterState> change) {
+    super.onChange(change);
+    final current = change.currentState;
+    if (current is RosterAvailable) {
+      cache['items'] = current.items;
+    } else if (current is RosterInvitesAvailable) {
+      cache['invites'] = current.invites;
+    }
+  }
 
   @override
   Future<void> close() {

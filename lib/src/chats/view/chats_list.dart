@@ -28,22 +28,24 @@ class ChatsList extends StatelessWidget {
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final item = items[index];
-              return ShadGestureDetector(
-                onTap: () => context.read<ChatsCubit>().toggleChat(item.jid),
-                cursor: SystemMouseCursors.click,
-                child: AxiBadge(
-                  count: item.unreadCount,
-                  offset: const Offset(-5, 10),
-                  child: AxiListTile(
-                    color: item.open ? context.colorScheme.accent : null,
-                    leading: AxiAvatar(
-                      jid: item.jid,
+              return ListItemPadding(
+                child: ShadGestureDetector(
+                  onTap: () => context.read<ChatsCubit>().toggleChat(item.jid),
+                  cursor: SystemMouseCursors.click,
+                  child: AxiBadge(
+                    count: item.unreadCount,
+                    offset: const Offset(-5, 10),
+                    child: AxiListTile(
+                      color: item.open ? context.colorScheme.accent : null,
+                      leading: AxiAvatar(
+                        jid: item.jid,
+                      ),
+                      title: item.title,
+                      subtitle: item.lastMessage,
+                      actions: [
+                        DisplayTimeSince(timestamp: item.lastChangeTimestamp),
+                      ],
                     ),
-                    title: item.title,
-                    subtitle: item.lastMessage,
-                    actions: [
-                      DisplayTimeSince(timestamp: item.lastChangeTimestamp),
-                    ],
                   ),
                 ),
               );

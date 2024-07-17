@@ -80,16 +80,21 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             if (state == AppLifecycleState.resumed) {
               if (context.read<XmppService>().user != null) return;
               try {
-                await context.read<AuthenticationCubit>().login();
+                await context
+                    .read<XmppService>()
+                    .authenticateAndConnect(null, null);
               } on XmppException catch (_) {
                 _log.info('Redirecting to login screen...');
               }
             } else if (state == AppLifecycleState.detached) {
+              if (context.read<XmppService>().user == null) return;
               await context.read<AuthenticationCubit>().logout();
             }
           },
           onExitRequested: () async {
-            await context.read<AuthenticationCubit>().logout();
+            if (context.read<XmppService>().user != null) {
+              await context.read<AuthenticationCubit>().logout();
+            }
             return AppExitResponse.exit;
           },
         );

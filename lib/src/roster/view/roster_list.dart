@@ -3,6 +3,7 @@ import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -15,7 +16,12 @@ class RosterList extends StatelessWidget {
     return BlocBuilder<RosterCubit, RosterState>(
       buildWhen: (_, current) => current is RosterAvailable,
       builder: (context, state) {
-        final items = (state as RosterAvailable).items;
+        late List<RosterItem> items;
+        if (state is! RosterAvailable) {
+          items = context.read<RosterCubit>()['items'];
+        } else {
+          items = state.items;
+        }
         if (items.isEmpty) {
           return SliverToBoxAdapter(
             child: Center(
@@ -32,57 +38,60 @@ class RosterList extends StatelessWidget {
               final item = items[index];
               final open =
                   context.watch<ChatsCubit>().state.openJid == item.jid;
-              return ShadGestureDetector(
-                onTap: () => context.read<ChatsCubit>().toggleChat(item.jid),
-                cursor: SystemMouseCursors.click,
-                child: AxiListTile(
-                  color: open ? context.colorScheme.accent : null,
-                  leading: AxiAvatar(
-                    jid: item.jid,
-                    presence: item.subscription.isTo || item.subscription.isBoth
-                        ? item.presence
-                        : null,
-                    status: item.status,
+              return ListItemPadding(
+                child: ShadGestureDetector(
+                  onTap: () => context.read<ChatsCubit>().toggleChat(item.jid),
+                  cursor: SystemMouseCursors.click,
+                  child: AxiListTile(
+                    color: open ? context.colorScheme.accent : null,
+                    leading: AxiAvatar(
+                      jid: item.jid,
+                      presence:
+                          item.subscription.isTo || item.subscription.isBoth
+                              ? item.presence
+                              : null,
+                      status: item.status,
+                    ),
+                    title: item.title,
+                    subtitle: item.jid,
+                    actions: [
+                      BlocSelector<RosterCubit, RosterState, bool>(
+                        selector: (state) =>
+                            state is RosterLoading && state.jid == item.jid,
+                        builder: (context, disabled) {
+                          return TextButton(
+                            onPressed: disabled
+                                ? null
+                                : () => context
+                                    .read<RosterCubit>()
+                                    .removeContact(jid: item.jid),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.orange,
+                            ),
+                            child: const Text('Remove'),
+                          );
+                        },
+                      ),
+                      BlocSelector<BlocklistCubit, BlocklistState, bool>(
+                        selector: (state) =>
+                            state is BlocklistLoading &&
+                            (state.jid == item.jid || state.jid == null),
+                        builder: (context, disabled) {
+                          return TextButton(
+                            onPressed: disabled
+                                ? null
+                                : () => context
+                                    .read<BlocklistCubit>()
+                                    .block(jid: item.jid),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                            child: const Text('Block'),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                  title: item.title,
-                  subtitle: item.jid,
-                  actions: [
-                    BlocSelector<RosterCubit, RosterState, bool>(
-                      selector: (state) =>
-                          state is RosterLoading && state.jid == item.jid,
-                      builder: (context, disabled) {
-                        return TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => context
-                                  .read<RosterCubit>()
-                                  .removeContact(jid: item.jid),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.orange,
-                          ),
-                          child: const Text('Remove'),
-                        );
-                      },
-                    ),
-                    BlocSelector<BlocklistCubit, BlocklistState, bool>(
-                      selector: (state) =>
-                          state is BlocklistLoading &&
-                          (state.jid == item.jid || state.jid == null),
-                      builder: (context, disabled) {
-                        return TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => context
-                                  .read<BlocklistCubit>()
-                                  .block(jid: item.jid),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          child: const Text('Block'),
-                        );
-                      },
-                    ),
-                  ],
                 ),
               );
             },

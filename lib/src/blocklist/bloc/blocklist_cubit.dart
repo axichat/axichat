@@ -1,13 +1,15 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:chat/src/common/bloc_cache.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
 
 part 'blocklist_state.dart';
 
-class BlocklistCubit extends Cubit<BlocklistState> {
+class BlocklistCubit extends Cubit<BlocklistState>
+    with BlocCache<BlocklistState> {
   BlocklistCubit({required XmppService xmppService})
       : _xmppService = xmppService,
         super(const BlocklistAvailable(items: [])) {
@@ -18,6 +20,15 @@ class BlocklistCubit extends Cubit<BlocklistState> {
   final XmppService _xmppService;
 
   late final StreamSubscription<List<BlocklistData>>? _blocklistSubscription;
+
+  @override
+  void onChange(Change<BlocklistState> change) {
+    super.onChange(change);
+    final current = change.currentState;
+    if (current is BlocklistAvailable) {
+      cache['items'] = current.items;
+    }
+  }
 
   @override
   Future<void> close() {
