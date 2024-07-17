@@ -79,8 +79,8 @@ abstract class XmppBase {
 
   User? get user;
 
-  Future<bool> login(String? username, String? password);
-  Future<void> logout();
+  Future<bool> authenticateAndConnect(String? username, String? password);
+  Future<void> disconnect();
 
   Future _dbOp<T extends Database>(
     FutureOr Function(T) operation, {
@@ -325,7 +325,7 @@ class XmppService extends XmppBase
   }
 
   @override
-  Future<bool> login(
+  Future<bool> authenticateAndConnect(
     String? username,
     String? password, [
     bool saveCredentials = true,
@@ -577,7 +577,7 @@ class XmppService extends XmppBase
   }
 
   @override
-  Future<void> logout({bool burn = false}) async {
+  Future<void> disconnect({bool burn = false}) async {
     _log.info('Logging out...');
     await _deferReset(() async {
       final username = user!.username;

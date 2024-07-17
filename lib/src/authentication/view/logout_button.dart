@@ -1,5 +1,5 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
+import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,7 +18,7 @@ class LogoutButton extends StatelessWidget {
         builder: (context) {
           var severity = LogoutSeverity.normal;
           return BlocProvider.value(
-            value: locate<AuthenticationBloc>(),
+            value: locate<AuthenticationCubit>(),
             child: StatefulBuilder(
               builder: (context, setState) {
                 return AxiInputDialog(
@@ -58,8 +58,8 @@ class LogoutButton extends StatelessWidget {
                     ),
                   ),
                   callback: () => context
-                      .read<AuthenticationBloc>()
-                      .add(AuthenticationLogoutRequested(severity: severity)),
+                      .read<AuthenticationCubit>()
+                      .logout(severity: severity),
                 );
               },
             ),

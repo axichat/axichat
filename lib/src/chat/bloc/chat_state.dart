@@ -5,6 +5,6 @@ class ChatState with _$ChatState {
   const factory ChatState({
     @Default(null) Chat? chat,
     required List<Message> items,
-    @Default(bool) bool typing,
+    @Default(false) bool typing,
   }) = _ChatState;
 }

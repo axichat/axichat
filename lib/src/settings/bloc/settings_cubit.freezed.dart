@@ -22,6 +22,7 @@ SettingsState _$SettingsStateFromJson(Map<String, dynamic> json) {
 mixin _$SettingsState {
   ThemeMode get themeMode => throw _privateConstructorUsedError;
   ShadColor get shadColor => throw _privateConstructorUsedError;
+  bool get indicateTyping => throw _privateConstructorUsedError;
   bool get lowMotion => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -36,7 +37,11 @@ abstract class $SettingsStateCopyWith<$Res> {
           SettingsState value, $Res Function(SettingsState) then) =
       _$SettingsStateCopyWithImpl<$Res, SettingsState>;
   @useResult
-  $Res call({ThemeMode themeMode, ShadColor shadColor, bool lowMotion});
+  $Res call(
+      {ThemeMode themeMode,
+      ShadColor shadColor,
+      bool indicateTyping,
+      bool lowMotion});
 }
 
 /// @nodoc
@@ -54,6 +59,7 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
   $Res call({
     Object? themeMode = null,
     Object? shadColor = null,
+    Object? indicateTyping = null,
     Object? lowMotion = null,
   }) {
     return _then(_value.copyWith(
@@ -65,6 +71,10 @@ class _$SettingsStateCopyWithImpl<$Res, $Val extends SettingsState>
           ? _value.shadColor
           : shadColor // ignore: cast_nullable_to_non_nullable
               as ShadColor,
+      indicateTyping: null == indicateTyping
+          ? _value.indicateTyping
+          : indicateTyping // ignore: cast_nullable_to_non_nullable
+              as bool,
       lowMotion: null == lowMotion
           ? _value.lowMotion
           : lowMotion // ignore: cast_nullable_to_non_nullable
@@ -81,7 +91,11 @@ abstract class _$$SettingsStateImplCopyWith<$Res>
       __$$SettingsStateImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({ThemeMode themeMode, ShadColor shadColor, bool lowMotion});
+  $Res call(
+      {ThemeMode themeMode,
+      ShadColor shadColor,
+      bool indicateTyping,
+      bool lowMotion});
 }
 
 /// @nodoc
@@ -97,6 +111,7 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
   $Res call({
     Object? themeMode = null,
     Object? shadColor = null,
+    Object? indicateTyping = null,
     Object? lowMotion = null,
   }) {
     return _then(_$SettingsStateImpl(
@@ -108,6 +123,10 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
           ? _value.shadColor
           : shadColor // ignore: cast_nullable_to_non_nullable
               as ShadColor,
+      indicateTyping: null == indicateTyping
+          ? _value.indicateTyping
+          : indicateTyping // ignore: cast_nullable_to_non_nullable
+              as bool,
       lowMotion: null == lowMotion
           ? _value.lowMotion
           : lowMotion // ignore: cast_nullable_to_non_nullable
@@ -122,6 +141,7 @@ class _$SettingsStateImpl implements _SettingsState {
   const _$SettingsStateImpl(
       {this.themeMode = ThemeMode.system,
       this.shadColor = ShadColor.neutral,
+      this.indicateTyping = true,
       this.lowMotion = false});
 
   factory _$SettingsStateImpl.fromJson(Map<String, dynamic> json) =>
@@ -135,11 +155,14 @@ class _$SettingsStateImpl implements _SettingsState {
   final ShadColor shadColor;
   @override
   @JsonKey()
+  final bool indicateTyping;
+  @override
+  @JsonKey()
   final bool lowMotion;
 
   @override
   String toString() {
-    return 'SettingsState(themeMode: $themeMode, shadColor: $shadColor, lowMotion: $lowMotion)';
+    return 'SettingsState(themeMode: $themeMode, shadColor: $shadColor, indicateTyping: $indicateTyping, lowMotion: $lowMotion)';
   }
 
   @override
@@ -151,13 +174,16 @@ class _$SettingsStateImpl implements _SettingsState {
                 other.themeMode == themeMode) &&
             (identical(other.shadColor, shadColor) ||
                 other.shadColor == shadColor) &&
+            (identical(other.indicateTyping, indicateTyping) ||
+                other.indicateTyping == indicateTyping) &&
             (identical(other.lowMotion, lowMotion) ||
                 other.lowMotion == lowMotion));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, themeMode, shadColor, lowMotion);
+  int get hashCode =>
+      Object.hash(runtimeType, themeMode, shadColor, indicateTyping, lowMotion);
 
   @JsonKey(ignore: true)
   @override
@@ -177,6 +203,7 @@ abstract class _SettingsState implements SettingsState {
   const factory _SettingsState(
       {final ThemeMode themeMode,
       final ShadColor shadColor,
+      final bool indicateTyping,
       final bool lowMotion}) = _$SettingsStateImpl;
 
   factory _SettingsState.fromJson(Map<String, dynamic> json) =
@@ -186,6 +213,8 @@ abstract class _SettingsState implements SettingsState {
   ThemeMode get themeMode;
   @override
   ShadColor get shadColor;
+  @override
+  bool get indicateTyping;
   @override
   bool get lowMotion;
   @override

@@ -92,7 +92,8 @@ void main() {
 
       when(() => stateStore.close()).thenAnswer((_) async {});
 
-      final result = await xmppService.login(username, password);
+      final result =
+          await xmppService.authenticateAndConnect(username, password);
 
       verify(() => connection.connect(
             shouldReconnect: false,

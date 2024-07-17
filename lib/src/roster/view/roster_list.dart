@@ -1,9 +1,8 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
+import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/roster/bloc/roster_bloc.dart';
-import 'package:chat/src/storage/models.dart';
+import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -13,9 +12,10 @@ class RosterList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<RosterBloc, RosterState, List<RosterItem>>(
-      selector: (state) => state.items,
-      builder: (context, items) {
+    return BlocBuilder<RosterCubit, RosterState>(
+      buildWhen: (_, current) => current is RosterAvailable,
+      builder: (context, state) {
+        final items = (state as RosterAvailable).items;
         if (items.isEmpty) {
           return SliverToBoxAdapter(
             child: Center(
@@ -47,15 +47,16 @@ class RosterList extends StatelessWidget {
                   title: item.title,
                   subtitle: item.jid,
                   actions: [
-                    BlocSelector<RosterBloc, RosterState, bool>(
+                    BlocSelector<RosterCubit, RosterState, bool>(
                       selector: (state) =>
                           state is RosterLoading && state.jid == item.jid,
                       builder: (context, disabled) {
                         return TextButton(
                           onPressed: disabled
                               ? null
-                              : () => context.read<RosterBloc>().add(
-                                  RosterSubscriptionRemoved(jid: item.jid)),
+                              : () => context
+                                  .read<RosterCubit>()
+                                  .removeContact(jid: item.jid),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.orange,
                           ),
@@ -63,7 +64,7 @@ class RosterList extends StatelessWidget {
                         );
                       },
                     ),
-                    BlocSelector<BlocklistBloc, BlocklistState, bool>(
+                    BlocSelector<BlocklistCubit, BlocklistState, bool>(
                       selector: (state) =>
                           state is BlocklistLoading &&
                           (state.jid == item.jid || state.jid == null),
@@ -72,8 +73,8 @@ class RosterList extends StatelessWidget {
                           onPressed: disabled
                               ? null
                               : () => context
-                                  .read<BlocklistBloc>()
-                                  .add(BlocklistBlocked(jid: item.jid)),
+                                  .read<BlocklistCubit>()
+                                  .block(jid: item.jid),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.red,
                           ),

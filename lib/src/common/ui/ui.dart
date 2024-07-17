@@ -14,4 +14,4 @@ const smallScreen = 700.0;
 const mediumScreen = 900.0;
 const largeScreen = 1200.0;
 
-const animationDuration = Duration(milliseconds: 300);
+const baseAnimationDuration = Duration(milliseconds: 300);

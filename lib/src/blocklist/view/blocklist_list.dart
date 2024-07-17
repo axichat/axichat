@@ -1,8 +1,7 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
+import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_tile.dart';
-import 'package:chat/src/storage/database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,9 +10,10 @@ class BlocklistList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<BlocklistBloc, BlocklistState, List<BlocklistData>>(
-      selector: (state) => state.items,
-      builder: (context, items) {
+    return BlocBuilder<BlocklistCubit, BlocklistState>(
+      buildWhen: (_, current) => current is BlocklistAvailable,
+      builder: (context, state) {
+        final items = (state as BlocklistAvailable).items;
         if (items.isEmpty) {
           return SliverToBoxAdapter(
             child: Center(

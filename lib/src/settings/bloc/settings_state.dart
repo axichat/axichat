@@ -20,6 +20,7 @@ class SettingsState with _$SettingsState {
   const factory SettingsState({
     @Default(ThemeMode.system) ThemeMode themeMode,
     @Default(ShadColor.neutral) ShadColor shadColor,
+    @Default(true) bool indicateTyping,
     @Default(false) bool lowMotion,
   }) = _SettingsState;
 

@@ -1,6 +1,8 @@
 import 'package:animations/animations.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class AxiAdaptiveLayout extends StatelessWidget {
   const AxiAdaptiveLayout({
@@ -32,7 +34,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
               ? Center(
                   child: PageTransitionSwitcher(
                     reverse: !invertPriority,
-                    duration: animationDuration,
+                    duration: context.watch<SettingsCubit>().animationDuration,
                     transitionBuilder: (
                       child,
                       primaryAnimation,
@@ -42,7 +44,10 @@ class AxiAdaptiveLayout extends StatelessWidget {
                         position: Tween<Offset>(
                           begin: const Offset(1.0, 0),
                           end: Offset.zero,
-                        ).animate(primaryAnimation),
+                        ).animate(CurvedAnimation(
+                          parent: primaryAnimation,
+                          curve: Curves.decelerate,
+                        )),
                         child: child,
                       );
                     },

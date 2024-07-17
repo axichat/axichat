@@ -16,55 +16,53 @@ class ProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ProfileCubit, ProfileState>(
-      builder: (context, state) {
-        return active
-            ? ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
-                child: ListTile(
-                  leading: AxiAvatar(
-                    jid: state.jid,
-                    presence: state.presence,
-                    status: state.status,
-                    active: true,
-                  ),
-                  title: Text(state.title),
-                  subtitle: Text(state.jid),
-                  onTap: () => context.push(const ProfileRoute().location,
-                      extra: context.read),
-                  shape: Border(
-                    top: BorderSide(color: context.colorScheme.border),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 6.0,
-                    horizontal: 12.0,
-                  ),
-                  trailing: const LogoutButton(),
-                ),
-              )
-            : ShadCard(
-                rowMainAxisSize: MainAxisSize.max,
+      builder: (context, state) => active
+          ? ConstrainedBox(
+              constraints:
+                  BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
+              child: ListTile(
                 leading: AxiAvatar(
                   jid: state.jid,
                   presence: state.presence,
                   status: state.status,
                   active: true,
                 ),
-                title: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(state.title),
-                  ],
+                title: Text(state.title),
+                subtitle: Text(state.jid),
+                onTap: () => context.push(const ProfileRoute().location,
+                    extra: context.read),
+                shape: Border(
+                  top: BorderSide(color: context.colorScheme.border),
                 ),
-                description: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(state.jid),
-                  ],
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 6.0,
+                  horizontal: 12.0,
                 ),
                 trailing: const LogoutButton(),
-              );
-      },
+              ),
+            )
+          : ShadCard(
+              rowMainAxisSize: MainAxisSize.max,
+              leading: AxiAvatar(
+                jid: state.jid,
+                presence: state.presence,
+                status: state.status,
+                active: true,
+              ),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(state.title),
+                ],
+              ),
+              description: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(state.jid),
+                ],
+              ),
+              trailing: const LogoutButton(),
+            ),
     );
   }
 }

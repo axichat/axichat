@@ -1,62 +1,64 @@
-part of 'roster_bloc.dart';
+part of 'roster_cubit.dart';
 
 sealed class RosterState extends Equatable {
-  const RosterState({required this.items, required this.invites});
+  const RosterState();
+}
 
-  final List<RosterItem> items;
-  final List<Invite> invites;
+final class RosterInitial extends RosterState
+    implements RosterAvailable, RosterInvitesAvailable {
+  const RosterInitial();
+
+  @override
+  final items = const [];
+
+  @override
+  final invites = const [];
 
   @override
   List<Object?> get props => [items, invites];
 }
 
-final class RosterInitial extends RosterState {
-  const RosterInitial({required super.items, required super.invites});
-}
-
 final class RosterAvailable extends RosterState {
-  const RosterAvailable({required super.items, required super.invites});
+  const RosterAvailable({required this.items});
+
+  final List<RosterItem> items;
+
+  @override
+  List<Object?> get props => [items];
 }
 
 final class RosterInvitesAvailable extends RosterState {
-  const RosterInvitesAvailable({required super.invites, required super.items});
+  const RosterInvitesAvailable({required this.invites});
+
+  final List<Invite> invites;
+
+  @override
+  List<Object?> get props => [invites];
 }
 
 final class RosterLoading extends RosterState {
-  const RosterLoading({
-    required this.jid,
-    required super.items,
-    required super.invites,
-  });
+  const RosterLoading({required this.jid});
 
   final String jid;
 
   @override
-  List<Object?> get props => [...super.props, jid];
+  List<Object?> get props => [jid];
 }
 
 final class RosterSuccess extends RosterState {
-  const RosterSuccess(
-    this.message, {
-    required super.items,
-    required super.invites,
-  });
+  const RosterSuccess(this.message);
 
   final String message;
 
   @override
-  List<Object?> get props => [...super.props, message];
+  List<Object?> get props => [message];
 }
 
 final class RosterFailure extends RosterState {
-  const RosterFailure(
-    this.message, {
-    required super.items,
-    required super.invites,
-  });
+  const RosterFailure(this.message);
 
   final String message;
 
   @override
-  List<Object?> get props => [...super.props, message];
+  List<Object?> get props => [message];
 }

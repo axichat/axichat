@@ -1,29 +1,17 @@
-part of 'authentication_bloc.dart';
+part of 'authentication_cubit.dart';
 
-sealed class AuthenticationState extends Equatable {
+sealed class AuthenticationState {
   const AuthenticationState();
 }
 
-final class AuthenticationNone extends AuthenticationState {
-  @override
-  List<Object> get props => [];
-}
+final class AuthenticationNone extends AuthenticationState {}
 
-final class AuthenticationInProgress extends AuthenticationState {
-  @override
-  List<Object> get props => [];
-}
+final class AuthenticationInProgress extends AuthenticationState {}
 
-final class AuthenticationComplete extends AuthenticationState {
-  @override
-  List<Object> get props => [];
-}
+final class AuthenticationComplete extends AuthenticationState {}
 
 final class AuthenticationFailure extends AuthenticationState {
   const AuthenticationFailure(this.errorText);
 
   final String errorText;
-
-  @override
-  List<Object> get props => [errorText];
 }

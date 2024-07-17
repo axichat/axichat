@@ -1,5 +1,5 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
+import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,18 +35,16 @@ class _LoginFormState extends State<LoginForm> {
 
   void _onPressed(BuildContext context) {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    context.read<AuthenticationBloc>().add(
-          AuthenticationLoginRequested(
-            username: _jidTextController!.value.text,
-            password: _passwordTextController!.value.text,
-            rememberMe: rememberMe,
-          ),
+    context.read<AuthenticationCubit>().login(
+          username: _jidTextController!.value.text,
+          password: _passwordTextController!.value.text,
+          rememberMe: rememberMe,
         );
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthenticationBloc, AuthenticationState>(
+    return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         return Form(
           child: Column(
@@ -106,7 +104,7 @@ class _LoginFormState extends State<LoginForm> {
                     enabled: state is! AuthenticationInProgress,
                     value: rememberMe,
                     onChanged: (checked) => setState(() {
-                      rememberMe = checked ?? rememberMe;
+                      rememberMe = checked;
                     }),
                   ),
                 ),

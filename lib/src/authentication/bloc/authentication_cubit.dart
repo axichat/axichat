@@ -1,43 +1,44 @@
 import 'package:bloc/bloc.dart';
-import 'package:bloc_concurrency/bloc_concurrency.dart';
-import 'package:chat/main.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
-import 'package:equatable/equatable.dart';
 import 'package:logging/logging.dart';
 
-part 'authentication_event.dart';
 part 'authentication_state.dart';
 
-class AuthenticationBloc
-    extends Bloc<AuthenticationEvent, AuthenticationState> {
-  AuthenticationBloc({
+enum LogoutSeverity {
+  normal,
+  burn;
+
+  bool get isNormal => this == normal;
+  bool get isBurn => this == burn;
+
+  String get asString => switch (this) {
+        LogoutSeverity.normal => 'Normal',
+        LogoutSeverity.burn => 'Burn',
+      };
+}
+
+class AuthenticationCubit extends Cubit<AuthenticationState> {
+  AuthenticationCubit({
     required XmppService xmppService,
   })  : _xmppService = xmppService,
         super(
           xmppService.user != null
               ? AuthenticationComplete()
               : AuthenticationNone(),
-        ) {
-    on<AuthenticationLoginRequested>(
-      _onLoginRequested,
-      transformer: sequential(),
-    );
-    on<AuthenticationLogoutRequested>(
-      _onLogoutRequested,
-      transformer: sequential(),
-    );
-  }
+        );
 
   final XmppService _xmppService;
 
   final _log = Logger('AuthenticationBloc');
 
-  void _onLoginRequested(
-      AuthenticationLoginRequested event, Emitter emit) async {
+  void login({
+    required String username,
+    required String password,
+    required bool rememberMe,
+  }) async {
     emit(AuthenticationInProgress());
     try {
-      await _xmppService.login(
-          event.username, event.password, event.rememberMe);
+      await _xmppService.authenticateAndConnect(username, password, rememberMe);
     } on XmppAuthenticationException catch (_) {
       emit(const AuthenticationFailure('Incorrect username or password'));
       return;
@@ -55,12 +56,21 @@ class AuthenticationBloc
     emit(AuthenticationComplete());
   }
 
-  void _onLogoutRequested(AuthenticationLogoutRequested event, Emitter emit) {
-    switch (event.severity) {
+  void signup({
+    required String username,
+    required String password,
+    required bool rememberMe,
+    required bool agreeToTerms,
+  }) async {
+    // TODO: In-band registration.
+  }
+
+  void logout({required LogoutSeverity severity}) {
+    switch (severity) {
       case LogoutSeverity.normal:
-        _xmppService.logout();
+        _xmppService.disconnect();
       case LogoutSeverity.burn:
-        _xmppService.logout(burn: true);
+        _xmppService.disconnect(burn: true);
     }
 
     emit(AuthenticationNone());

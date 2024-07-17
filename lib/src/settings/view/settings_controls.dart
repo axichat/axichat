@@ -57,6 +57,18 @@ class SettingsControls extends StatelessWidget {
                     context.read<SettingsCubit>().toggleLowMotion(lowMotion),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Send Typing Indicators'),
+                sublabel: const Text(
+                    'Let other people in a chat see when you are typing.'),
+                value: state.indicateTyping,
+                onChanged: (indicateTyping) => context
+                    .read<SettingsCubit>()
+                    .toggleLowMotion(indicateTyping),
+              ),
+            ),
           ],
         );
       },

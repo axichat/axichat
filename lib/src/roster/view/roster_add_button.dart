@@ -1,5 +1,5 @@
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/roster/bloc/roster_bloc.dart';
+import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -20,7 +20,7 @@ class RosterAddButton extends StatelessWidget {
             String jid = '';
             String? title;
             return BlocProvider.value(
-              value: locate<RosterBloc>(),
+              value: locate<RosterCubit>(),
               child: StatefulBuilder(
                 builder: (context, setState) {
                   return AxiInputDialog(
@@ -46,8 +46,9 @@ class RosterAddButton extends StatelessWidget {
                     ),
                     callback: () => jid.isEmpty
                         ? null
-                        : context.read<RosterBloc>().add(
-                            RosterSubscriptionAdded(jid: jid, title: title)),
+                        : context
+                            .read<RosterCubit>()
+                            .addContact(jid: jid, title: title),
                   );
                 },
               ),

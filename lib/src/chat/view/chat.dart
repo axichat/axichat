@@ -3,6 +3,7 @@ import 'package:chat/src/chat/bloc/chat_bloc.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
+import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
@@ -32,9 +33,9 @@ class _ChatState extends State<Chat> {
   final _popoverController = ShadPopoverController();
 
   void _typingListener() {
-    if (_textController.text.isNotEmpty) {
-      context.read<ChatBloc>().add(const ChatTypingStarted());
-    }
+    if (!context.read<SettingsCubit>().state.indicateTyping) return;
+    if (_textController.text.isEmpty) return;
+    context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
   @override

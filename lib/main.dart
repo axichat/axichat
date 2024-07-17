@@ -69,7 +69,7 @@ void main() async {
   );
 
   try {
-    await xmppService.login(null, null);
+    await xmppService.authenticateAndConnect(null, null);
   } on XmppUserNotFoundException catch (_) {
     log.info('Redirecting to login screen...');
   }

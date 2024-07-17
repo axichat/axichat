@@ -1,3 +1,4 @@
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -8,6 +9,9 @@ part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsCubit() : super(const SettingsState());
+
+  Duration get animationDuration =>
+      state.lowMotion ? Duration.zero : baseAnimationDuration;
 
   void updateThemeMode(ThemeMode? themeMode) {
     if (themeMode == null) return;
@@ -21,6 +25,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void toggleLowMotion(bool lowMotion) {
     emit(state.copyWith(lowMotion: lowMotion));
+  }
+
+  void toggleIndicateTyping(bool indicateTyping) {
+    emit(state.copyWith(indicateTyping: indicateTyping));
   }
 
   @override

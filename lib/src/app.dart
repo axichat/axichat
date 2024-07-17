@@ -1,4 +1,4 @@
-import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
+import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/routes.dart';
@@ -33,7 +33,7 @@ class Axichat extends StatelessWidget {
             create: (context) => SettingsCubit(),
           ),
           BlocProvider(
-            create: (context) => AuthenticationBloc(
+            create: (context) => AuthenticationCubit(
               xmppService: context.read<XmppService>(),
             ),
           ),
@@ -50,7 +50,8 @@ class MaterialAxichat extends StatelessWidget {
   final _router = GoRouter(
     restorationScopeId: 'app',
     redirect: (context, routerState) {
-      if (context.read<AuthenticationBloc>().state is! AuthenticationComplete) {
+      if (context.read<AuthenticationCubit>().state
+          is! AuthenticationComplete) {
         return const LoginRoute().location;
       }
       return null;
@@ -109,7 +110,7 @@ class MaterialAxichat extends StatelessWidget {
           },
           routerConfig: _router,
           builder: (context, child) {
-            return BlocListener<AuthenticationBloc, AuthenticationState>(
+            return BlocListener<AuthenticationCubit, AuthenticationState>(
               listener: (context, state) {
                 if (state is AuthenticationNone) {
                   _router.go(const LoginRoute().location);

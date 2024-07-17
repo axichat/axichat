@@ -49,20 +49,23 @@ mixin RosterService on XmppBase {
       _log.severe('Failed to accept subscription from $jid.', e);
       throw XmppRosterException();
     }
-    _database.value?.rosterAccessor
-        .updateOne(item.copyWith(subscription: Subscription.both));
+    await _dbOp<XmppDatabase>((db) async {
+      await db.rosterAccessor
+          .updateOne(item.copyWith(subscription: Subscription.both));
+      await db.invitesAccessor.deleteOne(item.jid);
+    });
   }
 
-  Future<void> rejectSubscriptionRequest(Invite item) async {
-    final jid = mox.JID.fromString(item.jid);
+  Future<void> rejectSubscriptionRequest(String jid) async {
+    final from = mox.JID.fromString(jid);
     try {
-      _log.info('Requesting to reject subscription from $jid...');
-      await _connection.getPresenceManager()?.rejectSubscriptionRequest(jid);
+      _log.info('Requesting to reject subscription from $from...');
+      await _connection.getPresenceManager()?.rejectSubscriptionRequest(from);
     } on Exception catch (e) {
-      _log.severe('Failed to reject subscription from $jid.', e);
+      _log.severe('Failed to reject subscription from $from.', e);
       throw XmppRosterException();
     }
-    _database.value?.invitesAccessor.deleteOne(item.jid);
+    _database.value?.invitesAccessor.deleteOne(jid);
   }
 }
 

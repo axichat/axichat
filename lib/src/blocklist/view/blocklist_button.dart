@@ -1,5 +1,5 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_bloc.dart';
+import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,7 +20,7 @@ class BlocklistAddButton extends StatelessWidget {
           builder: (context) {
             String jid = '';
             return BlocProvider.value(
-              value: locate<BlocklistBloc>(),
+              value: locate<BlocklistCubit>(),
               child: StatefulBuilder(
                 builder: (context, setState) {
                   return AxiInputDialog(
@@ -34,9 +34,7 @@ class BlocklistAddButton extends StatelessWidget {
                     ),
                     callback: () => jid.isEmpty
                         ? null
-                        : context
-                            .read<BlocklistBloc>()
-                            .add(BlocklistBlocked(jid: jid)),
+                        : context.read<BlocklistCubit>().block(jid: jid),
                   );
                 },
               ),
@@ -53,14 +51,14 @@ class BlocklistUnblockAllButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<BlocklistBloc, BlocklistState, bool>(
+    return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) => state is BlocklistLoading && state.jid == null,
       builder: (context, disabled) {
         return ShadButton.destructive(
           enabled: !disabled,
           onPressed: () async {
             if ((await confirm(context) ?? false) && context.mounted) {
-              context.read<BlocklistBloc>().add(const BlocklistAllUnblocked());
+              context.read<BlocklistCubit>().unblockAll();
             }
           },
           text: const Text('Unblock all'),

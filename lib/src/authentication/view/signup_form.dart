@@ -1,5 +1,5 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/authentication/bloc/authentication_bloc.dart';
+import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -38,19 +38,17 @@ class _SignupFormState extends State<SignupForm> {
 
   void _onPressed() {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    context.read<AuthenticationBloc>().add(
-          AuthenticationSignupRequested(
-            username: _jidTextController!.value.text,
-            password: _passwordTextController!.value.text,
-            rememberMe: rememberMe,
-            agreeToTerms: agreeToTerms,
-          ),
+    context.read<AuthenticationCubit>().signup(
+          username: _jidTextController!.value.text,
+          password: _passwordTextController!.value.text,
+          rememberMe: rememberMe,
+          agreeToTerms: agreeToTerms,
         );
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthenticationBloc, AuthenticationState>(
+    return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         return Form(
           child: Column(

@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
-import 'package:equatable/equatable.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
+part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
 
 class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({required XmppService xmppService})
       : _xmppService = xmppService,
-        super(const ChatsInitial(openJid: null, items: [])) {
+        super(const ChatsState(openJid: null, items: [])) {
     _chatsSubscription =
         _xmppService.chatsStream?.listen((items) => _updateChats(items));
   }
@@ -26,7 +27,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   void _updateChats(List<Chat> items) {
-    emit(ChatsAvailable(
+    emit(ChatsState(
       openJid: items.where((e) => e.open).firstOrNull?.jid,
       items: items,
     ));
