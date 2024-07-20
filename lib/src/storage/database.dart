@@ -46,7 +46,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> saveFileMetadata(FileMetadataData metadata);
   Stream<List<Chat>> watchChats({required int start, required int end});
   Stream<Chat> watchChat(String jid);
-  Future<void> openChat(String jid);
+  Future<Chat?> openChat(String jid);
   Future<Chat?> closeChat();
   Future<void> updateChatState({
     required String chatJid,
@@ -400,13 +400,17 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  Future<void> openChat(String jid) async {
-    await chatsAccessor.updateOne(ChatsCompanion(
-      jid: Value(jid),
-      open: const Value(true),
-      unreadCount: const Value(0),
-      chatState: const Value(mox.ChatState.active),
-    ));
+  Future<Chat?> openChat(String jid) async {
+    return await transaction(() async {
+      final closed = await closeChat();
+      await chatsAccessor.updateOne(ChatsCompanion(
+        jid: Value(jid),
+        open: const Value(true),
+        unreadCount: const Value(0),
+        chatState: const Value(mox.ChatState.active),
+      ));
+      return closed;
+    });
   }
 
   @override

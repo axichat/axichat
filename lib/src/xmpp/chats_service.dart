@@ -41,10 +41,12 @@ mixin ChatsService on XmppBase {
   }
 
   Future<void> openChat(String jid) async {
-    await closeChat();
-    await _dbOp<XmppDatabase>((db) async {
-      await db.openChat(jid);
+    final closed = await _dbOpReturning<XmppDatabase, Chat?>((db) async {
+      return await db.openChat(jid);
     });
+    if (closed != null) {
+      await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
+    }
     await sendChatState(jid: jid, state: mox.ChatState.active);
   }
 

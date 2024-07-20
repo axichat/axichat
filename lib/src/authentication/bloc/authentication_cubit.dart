@@ -44,6 +44,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
       } on XmppUserNotFoundException catch (_) {
         emit(AuthenticationNone());
+        return;
+      } on Exception catch (_) {
+        emit(const AuthenticationFailure(
+            'Network error. Please try again later.'));
+        return;
       }
     } else {
       try {
@@ -60,8 +65,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             'Network error. Please try again later.'));
         return;
       }
-      emit(AuthenticationComplete());
     }
+    emit(AuthenticationComplete());
   }
 
   Future<void> signup({
