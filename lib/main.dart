@@ -39,14 +39,13 @@ void main() async {
   final policy = Policy();
 
   final xmppService = XmppService(
-    'draugr.de',
     buildConnection: () => XmppConnection(),
     buildCredentialStore: () => CredentialStore(
       capability: capability,
       policy: policy,
     ),
-    buildStateStore: (username, passphrase) async {
-      await Hive.initFlutter(storagePrefixFor(username));
+    buildStateStore: (jid, passphrase) async {
+      await Hive.initFlutter(storagePrefixFor(jid));
       if (!Hive.isAdapterRegistered(1)) {
         Hive.registerAdapter(PresenceAdapter());
       }
@@ -56,9 +55,9 @@ void main() async {
       );
       return XmppStateStore();
     },
-    buildDatabase: (username, passphrase) {
+    buildDatabase: (jid, passphrase) {
       return XmppDrift(
-        username: username,
+        jid: jid,
         passphrase: passphrase,
       );
     },

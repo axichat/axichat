@@ -259,12 +259,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   static XmppDrift? _instance;
 
   factory XmppDrift({
-    required String username,
+    required String jid,
     required String passphrase,
     QueryExecutor? executor,
   }) =>
-      _instance ??=
-          XmppDrift._(executor ?? _openDatabase(username, passphrase));
+      _instance ??= XmppDrift._(executor ?? _openDatabase(jid, passphrase));
 
   final _log = Logger('XmppDrift');
 
@@ -578,10 +577,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 }
 
-QueryExecutor _openDatabase(String username, String passphrase) {
+QueryExecutor _openDatabase(String jid, String passphrase) {
   return LazyDatabase(() async {
     final token = RootIsolateToken.instance!;
-    final file = await dbFilePathFor(username);
+    final file = await dbFilePathFor(jid);
     if (kDebugMode) {
       // await file.delete();
     }
@@ -610,9 +609,9 @@ QueryExecutor _openDatabase(String username, String passphrase) {
   });
 }
 
-Future<File> dbFilePathFor(String username) async {
+Future<File> dbFilePathFor(String jid) async {
   final path = (await getApplicationDocumentsDirectory()).path;
-  return File(p.join(path, '${storagePrefixFor(username)}.axichat.drift'));
+  return File(p.join(path, '${storagePrefixFor(jid)}.axichat.drift'));
 }
 
 String generatePassphrase() {
@@ -620,8 +619,8 @@ String generatePassphrase() {
   return utf8.decode(List<int>.generate(32, (_) => random.nextInt(33) + 89));
 }
 
-// Using SHA-1 as this is only to obfuscate the username in file paths.
-String storagePrefixFor(String username) =>
-    sha1.convert(utf8.encode(username)).toString();
+// Using SHA-1 as this is only to obfuscate the jid in file paths.
+String storagePrefixFor(String jid) =>
+    sha1.convert(utf8.encode(jid)).toString();
 
 typedef HashFunction = mox.HashFunction;

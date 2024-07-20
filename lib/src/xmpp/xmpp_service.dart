@@ -69,9 +69,8 @@ final _devServerLookup = <String, IOEndpoint>{
 };
 
 abstract class XmppBase {
-  XmppBase(this.domain);
+  XmppBase();
 
-  final String domain;
   late XmppConnection _connection;
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
@@ -80,7 +79,7 @@ abstract class XmppBase {
 
   User? get user;
 
-  Future<void> authenticateAndConnect(String? username, String? password);
+  Future<void> authenticateAndConnect(String? jid, String? password);
   Future<void> disconnect();
 
   Future<V> _dbOpReturning<D extends Database, V>(
@@ -100,7 +99,6 @@ class XmppService extends XmppBase
         ChatsService,
         BlockingService {
   XmppService._(
-    super.domain,
     this._buildConnection,
     this._buildCredentialStore,
     this._buildStateStore,
@@ -113,8 +111,7 @@ class XmppService extends XmppBase
 
   static XmppService? _instance;
 
-  factory XmppService(
-    String domain, {
+  factory XmppService({
     required XmppConnection Function() buildConnection,
     required FutureOr<CredentialStore> Function() buildCredentialStore,
     required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
@@ -123,7 +120,6 @@ class XmppService extends XmppBase
     required Policy policy,
   }) =>
       _instance ??= XmppService._(
-        domain,
         buildConnection,
         buildCredentialStore,
         buildStateStore,
@@ -142,7 +138,7 @@ class XmppService extends XmppBase
   final Capability _capability;
   final Policy _policy;
 
-  final usernameStorageKey = CredentialStore.registerKey('username');
+  final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
 
   final resourceStorageKey = XmppStateStore.registerKey('last_resource');
@@ -296,11 +292,11 @@ class XmppService extends XmppBase
 
   @override
   Future<void> authenticateAndConnect(
-    String? username,
+    String? jid,
     String? password, [
     bool saveCredentials = true,
   ]) async {
-    assert((username == null) == (password == null));
+    assert((jid == null) == (password == null));
 
     if (needsReset) await _reset();
 
@@ -309,13 +305,13 @@ class XmppService extends XmppBase
 
       _credentialStore.complete(_buildCredentialStore());
 
-      if (username != null && password != null) {
-        _log.info('New username and password provided. '
+      if (jid != null && password != null) {
+        _log.info('New jid and password provided. '
             'Attempting to authenticate directly with server...');
 
         await _dbOp<CredentialStore>((cs) async {
           final databasePassphraseStorageKey = CredentialStore.registerKey(
-              '${storagePrefixFor(username!)}_database_passphrase');
+              '${storagePrefixFor(jid!)}_database_passphrase');
           final databasePassphrase =
               await cs.read(key: databasePassphraseStorageKey);
 
@@ -323,8 +319,7 @@ class XmppService extends XmppBase
             _log.info('User has authenticated in the past. '
                 'Opening state store for potential stream resumption...');
             if (!_stateStore.isCompleted) {
-              _stateStore
-                  .complete(await _buildStateStore(username!, passphrase));
+              _stateStore.complete(await _buildStateStore(jid!, passphrase));
             }
           }
         });
@@ -332,7 +327,7 @@ class XmppService extends XmppBase
         await _initConnection();
 
         final newUser = User(
-          jid: mox.JID.fromString('$username@$domain'),
+          jid: mox.JID.fromString(jid!),
           password: password!,
         );
 
@@ -354,13 +349,13 @@ class XmppService extends XmppBase
 
         await _dbOp<CredentialStore>((cs) async {
           if (saveCredentials) {
-            _log.info('Saving username and password...');
-            await cs.write(key: usernameStorageKey, value: username);
+            _log.info('Saving jid and password...');
+            await cs.write(key: jidStorageKey, value: jid);
             await cs.write(key: passwordStorageKey, value: password);
           }
 
           final databasePassphraseStorageKey = CredentialStore.registerKey(
-              '${storagePrefixFor(username!)}_database_passphrase');
+              '${storagePrefixFor(jid!)}_database_passphrase');
           var databasePassphrase =
               await cs.read(key: databasePassphraseStorageKey);
 
@@ -374,24 +369,24 @@ class XmppService extends XmppBase
             );
           }
 
-          await _initDatabases(username!, databasePassphrase);
+          await _initDatabases(jid!, databasePassphrase);
         });
 
         return;
       }
 
-      _log.info('No username or password provided. '
+      _log.info('No jid or password provided. '
           'Attempting to log in from stored user...');
 
       String? databasePassphrase;
       await _dbOp<CredentialStore>((cs) async {
-        username = await cs.read(key: usernameStorageKey);
+        jid = await cs.read(key: jidStorageKey);
         password = await cs.read(key: passwordStorageKey);
 
-        assert((username == null) == (password == null));
+        assert((jid == null) == (password == null));
 
-        if (username == null ||
-            username!.isEmpty ||
+        if (jid == null ||
+            jid!.isEmpty ||
             password == null ||
             password!.isEmpty) {
           _log.info('No saved user. Should redirect to login screen.');
@@ -399,7 +394,7 @@ class XmppService extends XmppBase
         }
 
         final databasePassphraseStorageKey = CredentialStore.registerKey(
-            '${storagePrefixFor(username!)}_database_passphrase');
+            '${storagePrefixFor(jid!)}_database_passphrase');
         databasePassphrase = await cs.read(key: databasePassphraseStorageKey);
 
         if (databasePassphrase == null || databasePassphrase!.isEmpty) {
@@ -413,11 +408,11 @@ class XmppService extends XmppBase
         }
       });
 
-      await _initDatabases(username!, databasePassphrase!);
+      await _initDatabases(jid!, databasePassphrase!);
       await _initConnection();
 
       final newUser = User(
-        jid: mox.JID.fromString('$username@$domain'),
+        jid: mox.JID.fromString(jid!),
         password: password!,
       );
 
@@ -510,15 +505,15 @@ class XmppService extends XmppBase
     });
   }
 
-  Future<void> _initDatabases(String username, String passphrase) async {
+  Future<void> _initDatabases(String jid, String passphrase) async {
     await _deferResetToError(() async {
       try {
         _log.info('Opening databases...');
         if (!_stateStore.isCompleted) {
-          _stateStore.complete(await _buildStateStore(username, passphrase));
+          _stateStore.complete(await _buildStateStore(jid, passphrase));
         }
         if (!_database.isCompleted) {
-          _database.complete(await _buildDatabase(username, passphrase));
+          _database.complete(await _buildDatabase(jid, passphrase));
         }
       } on Exception catch (e) {
         _log.severe('Failed to create databases:', e);
@@ -527,7 +522,7 @@ class XmppService extends XmppBase
     });
   }
 
-  Future<void> _wipeDatabases(String username, String passphrase) async {
+  Future<void> _wipeDatabases(String jid, String passphrase) async {
     await _dbOp<CredentialStore>((cs) async {
       _log.info('Wiping credential store...');
       await cs.deleteAll(burn: true);
@@ -542,7 +537,7 @@ class XmppService extends XmppBase
       _log.info('Wiping database...');
       await db.wipe();
       await db.close();
-      (await dbFilePathFor(username)).delete();
+      (await dbFilePathFor(jid)).delete();
     });
   }
 
@@ -550,21 +545,21 @@ class XmppService extends XmppBase
   Future<void> disconnect({bool burn = false}) async {
     _log.info('Logging out...');
     await _deferReset(() async {
-      final username = user!.username;
+      final jid = user!.jid.toString();
 
       String? passphrase;
       await _dbOp<CredentialStore>((cs) async {
-        await cs.delete(key: usernameStorageKey);
+        await cs.delete(key: jidStorageKey);
         await cs.delete(key: passwordStorageKey);
 
         final databasePassphraseStorageKey = CredentialStore.registerKey(
-            '${storagePrefixFor(username)}_database_passphrase');
+            '${storagePrefixFor(jid)}_database_passphrase');
         passphrase = await cs.read(key: databasePassphraseStorageKey);
       });
 
       if (!burn || passphrase == null) return;
 
-      await _wipeDatabases(username, passphrase!);
+      await _wipeDatabases(jid, passphrase!);
     });
     _log.info('Logged out.');
   }

@@ -14,7 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:logging/logging.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class Axichat extends StatefulWidget {
+class Axichat extends StatelessWidget {
   const Axichat({
     super.key,
     required XmppService xmppService,
@@ -23,52 +23,10 @@ class Axichat extends StatefulWidget {
   final XmppService _xmppService;
 
   @override
-  State<Axichat> createState() => _AxichatState();
-}
-
-class _AxichatState extends State<Axichat> {
-  final _log = Logger('MaterialAxichat');
-
-  late final AppLifecycleListener _lifecycleListener;
-
-  @override
-  void initState() {
-    super.initState();
-    final xmpp = widget._xmppService;
-    _lifecycleListener = AppLifecycleListener(
-      onStateChange: (state) async {
-        if (state == AppLifecycleState.resumed) {
-          if (xmpp.user != null) return;
-          try {
-            await xmpp.authenticateAndConnect(null, null);
-          } on XmppException catch (_) {
-            _log.info('Redirecting to login screen...');
-          }
-        } else if (state == AppLifecycleState.detached) {
-          if (xmpp.user == null) return;
-          xmpp.disconnect();
-        }
-      },
-      onExitRequested: () async {
-        if (xmpp.user != null) {
-          xmpp.disconnect();
-        }
-        return AppExitResponse.exit;
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _lifecycleListener.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider.value(value: widget._xmppService),
+        RepositoryProvider.value(value: _xmppService),
         RepositoryProvider(create: (context) => Capability()),
         RepositoryProvider(create: (context) => Policy()),
       ],
@@ -83,14 +41,53 @@ class _AxichatState extends State<Axichat> {
             ),
           ),
         ],
-        child: MaterialAxichat(),
+        child: const MaterialAxichat(),
       ),
     );
   }
 }
 
-class MaterialAxichat extends StatelessWidget {
-  MaterialAxichat({super.key});
+class MaterialAxichat extends StatefulWidget {
+  const MaterialAxichat({super.key});
+
+  @override
+  State<MaterialAxichat> createState() => _MaterialAxichatState();
+}
+
+class _MaterialAxichatState extends State<MaterialAxichat> {
+  final _log = Logger('MaterialAxichat');
+
+  AppLifecycleListener? _lifecycleListener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = context.read<AuthenticationCubit>();
+    _lifecycleListener = _lifecycleListener ??
+        AppLifecycleListener(
+          onStateChange: (state) async {
+            if (state == AppLifecycleState.resumed) {
+              if (auth.state is! AuthenticationNone) return;
+              auth.login();
+            } else if (state == AppLifecycleState.detached) {
+              if (auth.state is! AuthenticationComplete) return;
+              auth.logout();
+            }
+          },
+          onExitRequested: () async {
+            if (auth.state is AuthenticationComplete) {
+              auth.logout();
+            }
+            return AppExitResponse.exit;
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener?.dispose();
+    super.dispose();
+  }
 
   final _router = GoRouter(
     restorationScopeId: 'app',

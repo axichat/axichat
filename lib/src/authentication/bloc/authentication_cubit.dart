@@ -29,22 +29,39 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final XmppService _xmppService;
 
   Future<void> login({
-    required String username,
-    required String password,
+    String? username,
+    String? password,
+    String domain = 'draugr.de',
     bool rememberMe = false,
   }) async {
     emit(AuthenticationInProgress());
-    try {
-      await _xmppService.authenticateAndConnect(username, password, rememberMe);
-    } on XmppAuthenticationException catch (_) {
-      emit(const AuthenticationFailure('Incorrect username or password'));
-      return;
-    } on Exception catch (e) {
-      emit(const AuthenticationFailure(
-          'Network error. Please try again later.'));
-      return;
+    if (username == null) {
+      try {
+        await _xmppService.authenticateAndConnect(
+          null,
+          null,
+          true,
+        );
+      } on XmppUserNotFoundException catch (_) {
+        emit(AuthenticationNone());
+      }
+    } else {
+      try {
+        await _xmppService.authenticateAndConnect(
+          '$username@$domain',
+          password,
+          rememberMe,
+        );
+      } on XmppAuthenticationException catch (_) {
+        emit(const AuthenticationFailure('Incorrect username or password'));
+        return;
+      } on Exception catch (_) {
+        emit(const AuthenticationFailure(
+            'Network error. Please try again later.'));
+        return;
+      }
+      emit(AuthenticationComplete());
     }
-    emit(AuthenticationComplete());
   }
 
   Future<void> signup({

@@ -35,7 +35,7 @@ void main() {
 
   setUp(() {
     database = XmppDrift(
-      username: '',
+      jid: '',
       passphrase: '',
       executor: NativeDatabase.memory(),
     );
@@ -57,7 +57,6 @@ void main() {
       final stateStore = MockXmppStateStore();
 
       final xmppService = XmppService(
-        domain,
         buildConnection: () => connection,
         buildCredentialStore: () => credentialStore,
         buildStateStore: (_, __) => stateStore,
@@ -101,7 +100,7 @@ void main() {
           )).called(1);
 
       verify(() => credentialStore.write(
-            key: xmppService.usernameStorageKey,
+            key: xmppService.jidStorageKey,
             value: username,
           )).called(1);
 
