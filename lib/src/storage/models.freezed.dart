@@ -17,7 +17,6 @@ final _privateConstructorUsedError = UnsupportedError(
 /// @nodoc
 mixin _$Message {
   String get stanzaID => throw _privateConstructorUsedError;
-  String get myJid => throw _privateConstructorUsedError;
   String get senderJid => throw _privateConstructorUsedError;
   String get chatJid => throw _privateConstructorUsedError;
   DateTime? get timestamp => throw _privateConstructorUsedError;
@@ -49,7 +48,6 @@ mixin _$Message {
   TResult when<TResult extends Object?>(
     TResult Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -81,7 +79,6 @@ mixin _$Message {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -111,7 +108,6 @@ mixin _$Message {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -143,7 +139,6 @@ mixin _$Message {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -173,7 +168,6 @@ mixin _$Message {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -205,7 +199,6 @@ mixin _$Message {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -263,7 +256,6 @@ abstract class $MessageCopyWith<$Res> {
   @useResult
   $Res call(
       {String stanzaID,
-      String myJid,
       String senderJid,
       String chatJid,
       DateTime timestamp,
@@ -305,7 +297,6 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
   @override
   $Res call({
     Object? stanzaID = null,
-    Object? myJid = null,
     Object? senderJid = null,
     Object? chatJid = null,
     Object? timestamp = null,
@@ -336,10 +327,6 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
       stanzaID: null == stanzaID
           ? _value.stanzaID
           : stanzaID // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       senderJid: null == senderJid
           ? _value.senderJid
@@ -454,7 +441,6 @@ abstract class _$$MessageImplCopyWith<$Res> implements $MessageCopyWith<$Res> {
   @useResult
   $Res call(
       {String stanzaID,
-      String myJid,
       String senderJid,
       String chatJid,
       DateTime? timestamp,
@@ -494,7 +480,6 @@ class __$$MessageImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? stanzaID = null,
-    Object? myJid = null,
     Object? senderJid = null,
     Object? chatJid = null,
     Object? timestamp = freezed,
@@ -525,10 +510,6 @@ class __$$MessageImplCopyWithImpl<$Res>
       stanzaID: null == stanzaID
           ? _value.stanzaID
           : stanzaID // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       senderJid: null == senderJid
           ? _value.senderJid
@@ -639,7 +620,6 @@ class __$$MessageImplCopyWithImpl<$Res>
 class _$MessageImpl extends _Message {
   const _$MessageImpl(
       {required this.stanzaID,
-      required this.myJid,
       required this.senderJid,
       required this.chatJid,
       this.timestamp,
@@ -671,8 +651,6 @@ class _$MessageImpl extends _Message {
 
   @override
   final String stanzaID;
-  @override
-  final String myJid;
   @override
   final String senderJid;
   @override
@@ -754,7 +732,7 @@ class _$MessageImpl extends _Message {
 
   @override
   String toString() {
-    return 'Message(stanzaID: $stanzaID, myJid: $myJid, senderJid: $senderJid, chatJid: $chatJid, timestamp: $timestamp, id: $id, originID: $originID, occupantID: $occupantID, body: $body, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
+    return 'Message(stanzaID: $stanzaID, senderJid: $senderJid, chatJid: $chatJid, timestamp: $timestamp, id: $id, originID: $originID, occupantID: $occupantID, body: $body, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
   }
 
   @override
@@ -764,7 +742,6 @@ class _$MessageImpl extends _Message {
             other is _$MessageImpl &&
             (identical(other.stanzaID, stanzaID) ||
                 other.stanzaID == stanzaID) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
             (identical(other.senderJid, senderJid) ||
                 other.senderJid == senderJid) &&
             (identical(other.chatJid, chatJid) || other.chatJid == chatJid) &&
@@ -813,7 +790,6 @@ class _$MessageImpl extends _Message {
   int get hashCode => Object.hashAll([
         runtimeType,
         stanzaID,
-        myJid,
         senderJid,
         chatJid,
         timestamp,
@@ -852,7 +828,6 @@ class _$MessageImpl extends _Message {
   TResult when<TResult extends Object?>(
     TResult Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -884,7 +859,6 @@ class _$MessageImpl extends _Message {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -911,7 +885,6 @@ class _$MessageImpl extends _Message {
   }) {
     return $default(
         stanzaID,
-        myJid,
         senderJid,
         chatJid,
         timestamp,
@@ -944,7 +917,6 @@ class _$MessageImpl extends _Message {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -976,7 +948,6 @@ class _$MessageImpl extends _Message {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -1003,7 +974,6 @@ class _$MessageImpl extends _Message {
   }) {
     return $default?.call(
         stanzaID,
-        myJid,
         senderJid,
         chatJid,
         timestamp,
@@ -1036,7 +1006,6 @@ class _$MessageImpl extends _Message {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -1068,7 +1037,6 @@ class _$MessageImpl extends _Message {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -1097,7 +1065,6 @@ class _$MessageImpl extends _Message {
     if ($default != null) {
       return $default(
           stanzaID,
-          myJid,
           senderJid,
           chatJid,
           timestamp,
@@ -1162,7 +1129,6 @@ class _$MessageImpl extends _Message {
 abstract class _Message extends Message {
   const factory _Message(
       {required final String stanzaID,
-      required final String myJid,
       required final String senderJid,
       required final String chatJid,
       final DateTime? timestamp,
@@ -1192,8 +1158,6 @@ abstract class _Message extends Message {
 
   @override
   String get stanzaID;
-  @override
-  String get myJid;
   @override
   String get senderJid;
   @override
@@ -1263,7 +1227,6 @@ abstract class _$$MessageFromDbImplCopyWith<$Res>
       String stanzaID,
       String? originID,
       String? occupantID,
-      String myJid,
       String senderJid,
       String chatJid,
       String? body,
@@ -1303,7 +1266,6 @@ class __$$MessageFromDbImplCopyWithImpl<$Res>
     Object? stanzaID = null,
     Object? originID = freezed,
     Object? occupantID = freezed,
-    Object? myJid = null,
     Object? senderJid = null,
     Object? chatJid = null,
     Object? body = freezed,
@@ -1344,10 +1306,6 @@ class __$$MessageFromDbImplCopyWithImpl<$Res>
           ? _value.occupantID
           : occupantID // ignore: cast_nullable_to_non_nullable
               as String?,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
-              as String,
       senderJid: null == senderJid
           ? _value.senderJid
           : senderJid // ignore: cast_nullable_to_non_nullable
@@ -1448,7 +1406,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
       required this.stanzaID,
       required this.originID,
       required this.occupantID,
-      required this.myJid,
       required this.senderJid,
       required this.chatJid,
       required this.body,
@@ -1483,8 +1440,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
   final String? originID;
   @override
   final String? occupantID;
-  @override
-  final String myJid;
   @override
   final String senderJid;
   @override
@@ -1548,7 +1503,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
 
   @override
   String toString() {
-    return 'Message.fromDb(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, myJid: $myJid, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
+    return 'Message.fromDb(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
   }
 
   @override
@@ -1563,7 +1518,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
                 other.originID == originID) &&
             (identical(other.occupantID, occupantID) ||
                 other.occupantID == occupantID) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
             (identical(other.senderJid, senderJid) ||
                 other.senderJid == senderJid) &&
             (identical(other.chatJid, chatJid) || other.chatJid == chatJid) &&
@@ -1610,7 +1564,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
         stanzaID,
         originID,
         occupantID,
-        myJid,
         senderJid,
         chatJid,
         body,
@@ -1646,7 +1599,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
   TResult when<TResult extends Object?>(
     TResult Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -1678,7 +1630,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -1708,7 +1659,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
         stanzaID,
         originID,
         occupantID,
-        myJid,
         senderJid,
         chatJid,
         body,
@@ -1738,7 +1688,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -1770,7 +1719,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -1800,7 +1748,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
         stanzaID,
         originID,
         occupantID,
-        myJid,
         senderJid,
         chatJid,
         body,
@@ -1830,7 +1777,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String stanzaID,
-            String myJid,
             String senderJid,
             String chatJid,
             DateTime? timestamp,
@@ -1862,7 +1808,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String stanzaID,
             String? originID,
             String? occupantID,
-            String myJid,
             String senderJid,
             String chatJid,
             String? body,
@@ -1894,7 +1839,6 @@ class _$MessageFromDbImpl extends _MessageFromDb {
           stanzaID,
           originID,
           occupantID,
-          myJid,
           senderJid,
           chatJid,
           body,
@@ -1959,7 +1903,6 @@ abstract class _MessageFromDb extends Message {
       required final String stanzaID,
       required final String? originID,
       required final String? occupantID,
-      required final String myJid,
       required final String senderJid,
       required final String chatJid,
       required final String? body,
@@ -1992,8 +1935,6 @@ abstract class _MessageFromDb extends Message {
   String? get originID;
   @override
   String? get occupantID;
-  @override
-  String get myJid;
   @override
   String get senderJid;
   @override
@@ -2047,7 +1988,6 @@ abstract class _MessageFromDb extends Message {
 /// @nodoc
 mixin _$Reaction {
   String get messageID => throw _privateConstructorUsedError;
-  String get myJid => throw _privateConstructorUsedError;
   String get senderJid => throw _privateConstructorUsedError;
   String get emoji => throw _privateConstructorUsedError;
 
@@ -2061,7 +2001,7 @@ abstract class $ReactionCopyWith<$Res> {
   factory $ReactionCopyWith(Reaction value, $Res Function(Reaction) then) =
       _$ReactionCopyWithImpl<$Res, Reaction>;
   @useResult
-  $Res call({String messageID, String myJid, String senderJid, String emoji});
+  $Res call({String messageID, String senderJid, String emoji});
 }
 
 /// @nodoc
@@ -2078,7 +2018,6 @@ class _$ReactionCopyWithImpl<$Res, $Val extends Reaction>
   @override
   $Res call({
     Object? messageID = null,
-    Object? myJid = null,
     Object? senderJid = null,
     Object? emoji = null,
   }) {
@@ -2086,10 +2025,6 @@ class _$ReactionCopyWithImpl<$Res, $Val extends Reaction>
       messageID: null == messageID
           ? _value.messageID
           : messageID // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       senderJid: null == senderJid
           ? _value.senderJid
@@ -2111,7 +2046,7 @@ abstract class _$$ReactionImplCopyWith<$Res>
       __$$ReactionImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String messageID, String myJid, String senderJid, String emoji});
+  $Res call({String messageID, String senderJid, String emoji});
 }
 
 /// @nodoc
@@ -2126,7 +2061,6 @@ class __$$ReactionImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? messageID = null,
-    Object? myJid = null,
     Object? senderJid = null,
     Object? emoji = null,
   }) {
@@ -2134,10 +2068,6 @@ class __$$ReactionImplCopyWithImpl<$Res>
       messageID: null == messageID
           ? _value.messageID
           : messageID // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       senderJid: null == senderJid
           ? _value.senderJid
@@ -2155,15 +2085,10 @@ class __$$ReactionImplCopyWithImpl<$Res>
 
 class _$ReactionImpl implements _Reaction {
   const _$ReactionImpl(
-      {required this.messageID,
-      required this.myJid,
-      required this.senderJid,
-      required this.emoji});
+      {required this.messageID, required this.senderJid, required this.emoji});
 
   @override
   final String messageID;
-  @override
-  final String myJid;
   @override
   final String senderJid;
   @override
@@ -2171,7 +2096,7 @@ class _$ReactionImpl implements _Reaction {
 
   @override
   String toString() {
-    return 'Reaction(messageID: $messageID, myJid: $myJid, senderJid: $senderJid, emoji: $emoji)';
+    return 'Reaction(messageID: $messageID, senderJid: $senderJid, emoji: $emoji)';
   }
 
   @override
@@ -2181,15 +2106,13 @@ class _$ReactionImpl implements _Reaction {
             other is _$ReactionImpl &&
             (identical(other.messageID, messageID) ||
                 other.messageID == messageID) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
             (identical(other.senderJid, senderJid) ||
                 other.senderJid == senderJid) &&
             (identical(other.emoji, emoji) || other.emoji == emoji));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, messageID, myJid, senderJid, emoji);
+  int get hashCode => Object.hash(runtimeType, messageID, senderJid, emoji);
 
   @JsonKey(ignore: true)
   @override
@@ -2201,14 +2124,11 @@ class _$ReactionImpl implements _Reaction {
 abstract class _Reaction implements Reaction {
   const factory _Reaction(
       {required final String messageID,
-      required final String myJid,
       required final String senderJid,
       required final String emoji}) = _$ReactionImpl;
 
   @override
   String get messageID;
-  @override
-  String get myJid;
   @override
   String get senderJid;
   @override
@@ -2523,7 +2443,6 @@ RosterItem _$RosterItemFromJson(Map<String, dynamic> json) {
 /// @nodoc
 mixin _$RosterItem {
   String get jid => throw _privateConstructorUsedError;
-  String get myJid => throw _privateConstructorUsedError;
   String get title => throw _privateConstructorUsedError;
   Presence get presence => throw _privateConstructorUsedError;
   Subscription get subscription => throw _privateConstructorUsedError;
@@ -2539,7 +2458,6 @@ mixin _$RosterItem {
   TResult when<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -2554,7 +2472,6 @@ mixin _$RosterItem {
         $default, {
     required TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -2573,7 +2490,6 @@ mixin _$RosterItem {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -2588,7 +2504,6 @@ mixin _$RosterItem {
         $default, {
     TResult? Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -2607,7 +2522,6 @@ mixin _$RosterItem {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -2622,7 +2536,6 @@ mixin _$RosterItem {
         $default, {
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -2671,7 +2584,6 @@ abstract class $RosterItemCopyWith<$Res> {
   @useResult
   $Res call(
       {String jid,
-      String myJid,
       String title,
       Presence presence,
       Subscription subscription,
@@ -2699,7 +2611,6 @@ class _$RosterItemCopyWithImpl<$Res, $Val extends RosterItem>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
     Object? title = null,
     Object? presence = null,
     Object? subscription = null,
@@ -2716,10 +2627,6 @@ class _$RosterItemCopyWithImpl<$Res, $Val extends RosterItem>
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -2779,7 +2686,6 @@ abstract class _$$RosterItemImplCopyWith<$Res>
   @useResult
   $Res call(
       {String jid,
-      String myJid,
       String title,
       Presence presence,
       Subscription subscription,
@@ -2805,7 +2711,6 @@ class __$$RosterItemImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
     Object? title = null,
     Object? presence = null,
     Object? subscription = null,
@@ -2822,10 +2727,6 @@ class __$$RosterItemImplCopyWithImpl<$Res>
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -2880,7 +2781,6 @@ class __$$RosterItemImplCopyWithImpl<$Res>
 class _$RosterItemImpl extends _RosterItem {
   const _$RosterItemImpl(
       {required this.jid,
-      required this.myJid,
       required this.title,
       required this.presence,
       required this.subscription,
@@ -2902,8 +2802,6 @@ class _$RosterItemImpl extends _RosterItem {
 
   @override
   final String jid;
-  @override
-  final String myJid;
   @override
   final String title;
   @override
@@ -2938,7 +2836,7 @@ class _$RosterItemImpl extends _RosterItem {
 
   @override
   String toString() {
-    return 'RosterItem(jid: $jid, myJid: $myJid, title: $title, presence: $presence, subscription: $subscription, status: $status, ask: $ask, avatarPath: $avatarPath, avatarHash: $avatarHash, contactID: $contactID, contactAvatarPath: $contactAvatarPath, contactDisplayName: $contactDisplayName, groups: $groups)';
+    return 'RosterItem(jid: $jid, title: $title, presence: $presence, subscription: $subscription, status: $status, ask: $ask, avatarPath: $avatarPath, avatarHash: $avatarHash, contactID: $contactID, contactAvatarPath: $contactAvatarPath, contactDisplayName: $contactDisplayName, groups: $groups)';
   }
 
   @override
@@ -2947,7 +2845,6 @@ class _$RosterItemImpl extends _RosterItem {
         (other.runtimeType == runtimeType &&
             other is _$RosterItemImpl &&
             (identical(other.jid, jid) || other.jid == jid) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.presence, presence) ||
                 other.presence == presence) &&
@@ -2973,7 +2870,6 @@ class _$RosterItemImpl extends _RosterItem {
   int get hashCode => Object.hash(
       runtimeType,
       jid,
-      myJid,
       title,
       presence,
       subscription,
@@ -2997,7 +2893,6 @@ class _$RosterItemImpl extends _RosterItem {
   TResult when<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -3012,7 +2907,6 @@ class _$RosterItemImpl extends _RosterItem {
         $default, {
     required TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -3026,20 +2920,8 @@ class _$RosterItemImpl extends _RosterItem {
             List<String> groups)
         fromDb,
   }) {
-    return $default(
-        jid,
-        myJid,
-        title,
-        presence,
-        subscription,
-        status,
-        ask,
-        avatarPath,
-        avatarHash,
-        contactID,
-        contactAvatarPath,
-        contactDisplayName,
-        groups);
+    return $default(jid, title, presence, subscription, status, ask, avatarPath,
+        avatarHash, contactID, contactAvatarPath, contactDisplayName, groups);
   }
 
   @override
@@ -3047,7 +2929,6 @@ class _$RosterItemImpl extends _RosterItem {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -3062,7 +2943,6 @@ class _$RosterItemImpl extends _RosterItem {
         $default, {
     TResult? Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -3078,7 +2958,6 @@ class _$RosterItemImpl extends _RosterItem {
   }) {
     return $default?.call(
         jid,
-        myJid,
         title,
         presence,
         subscription,
@@ -3097,7 +2976,6 @@ class _$RosterItemImpl extends _RosterItem {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -3112,7 +2990,6 @@ class _$RosterItemImpl extends _RosterItem {
         $default, {
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -3130,7 +3007,6 @@ class _$RosterItemImpl extends _RosterItem {
     if ($default != null) {
       return $default(
           jid,
-          myJid,
           title,
           presence,
           subscription,
@@ -3188,7 +3064,6 @@ class _$RosterItemImpl extends _RosterItem {
 abstract class _RosterItem extends RosterItem {
   const factory _RosterItem(
       {required final String jid,
-      required final String myJid,
       required final String title,
       required final Presence presence,
       required final Subscription subscription,
@@ -3207,8 +3082,6 @@ abstract class _RosterItem extends RosterItem {
 
   @override
   String get jid;
-  @override
-  String get myJid;
   @override
   String get title;
   @override
@@ -3247,7 +3120,6 @@ abstract class _$$RosterItemFromDbImplCopyWith<$Res>
   @useResult
   $Res call(
       {String jid,
-      String myJid,
       String title,
       Presence presence,
       String? status,
@@ -3273,7 +3145,6 @@ class __$$RosterItemFromDbImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
     Object? title = null,
     Object? presence = null,
     Object? status = freezed,
@@ -3290,10 +3161,6 @@ class __$$RosterItemFromDbImplCopyWithImpl<$Res>
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -3348,7 +3215,6 @@ class __$$RosterItemFromDbImplCopyWithImpl<$Res>
 class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   const _$RosterItemFromDbImpl(
       {required this.jid,
-      required this.myJid,
       required this.title,
       required this.presence,
       required this.status,
@@ -3370,8 +3236,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
 
   @override
   final String jid;
-  @override
-  final String myJid;
   @override
   final String title;
   @override
@@ -3406,7 +3270,7 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
 
   @override
   String toString() {
-    return 'RosterItem.fromDb(jid: $jid, myJid: $myJid, title: $title, presence: $presence, status: $status, avatarPath: $avatarPath, avatarHash: $avatarHash, subscription: $subscription, ask: $ask, contactID: $contactID, contactAvatarPath: $contactAvatarPath, contactDisplayName: $contactDisplayName, groups: $groups)';
+    return 'RosterItem.fromDb(jid: $jid, title: $title, presence: $presence, status: $status, avatarPath: $avatarPath, avatarHash: $avatarHash, subscription: $subscription, ask: $ask, contactID: $contactID, contactAvatarPath: $contactAvatarPath, contactDisplayName: $contactDisplayName, groups: $groups)';
   }
 
   @override
@@ -3415,7 +3279,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
         (other.runtimeType == runtimeType &&
             other is _$RosterItemFromDbImpl &&
             (identical(other.jid, jid) || other.jid == jid) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.presence, presence) ||
                 other.presence == presence) &&
@@ -3441,7 +3304,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   int get hashCode => Object.hash(
       runtimeType,
       jid,
-      myJid,
       title,
       presence,
       status,
@@ -3466,7 +3328,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   TResult when<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -3481,7 +3342,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
         $default, {
     required TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -3497,7 +3357,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   }) {
     return fromDb(
         jid,
-        myJid,
         title,
         presence,
         status,
@@ -3516,7 +3375,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -3531,7 +3389,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
         $default, {
     TResult? Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -3547,7 +3404,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   }) {
     return fromDb?.call(
         jid,
-        myJid,
         title,
         presence,
         status,
@@ -3566,7 +3422,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             Subscription subscription,
@@ -3581,7 +3436,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
         $default, {
     TResult Function(
             String jid,
-            String myJid,
             String title,
             Presence presence,
             String? status,
@@ -3599,7 +3453,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
     if (fromDb != null) {
       return fromDb(
           jid,
-          myJid,
           title,
           presence,
           status,
@@ -3657,7 +3510,6 @@ class _$RosterItemFromDbImpl extends _RosterItemFromDb {
 abstract class _RosterItemFromDb extends RosterItem {
   const factory _RosterItemFromDb(
       {required final String jid,
-      required final String myJid,
       required final String title,
       required final Presence presence,
       required final String? status,
@@ -3676,8 +3528,6 @@ abstract class _RosterItemFromDb extends RosterItem {
 
   @override
   String get jid;
-  @override
-  String get myJid;
   @override
   String get title;
   @override
@@ -3709,7 +3559,6 @@ abstract class _RosterItemFromDb extends RosterItem {
 /// @nodoc
 mixin _$Invite {
   String get jid => throw _privateConstructorUsedError;
-  String get myJid => throw _privateConstructorUsedError;
   String get title => throw _privateConstructorUsedError;
 
   @JsonKey(ignore: true)
@@ -3721,7 +3570,7 @@ abstract class $InviteCopyWith<$Res> {
   factory $InviteCopyWith(Invite value, $Res Function(Invite) then) =
       _$InviteCopyWithImpl<$Res, Invite>;
   @useResult
-  $Res call({String jid, String myJid, String title});
+  $Res call({String jid, String title});
 }
 
 /// @nodoc
@@ -3738,17 +3587,12 @@ class _$InviteCopyWithImpl<$Res, $Val extends Invite>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
     Object? title = null,
   }) {
     return _then(_value.copyWith(
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -3765,7 +3609,7 @@ abstract class _$$InviteImplCopyWith<$Res> implements $InviteCopyWith<$Res> {
       __$$InviteImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String jid, String myJid, String title});
+  $Res call({String jid, String title});
 }
 
 /// @nodoc
@@ -3780,17 +3624,12 @@ class __$$InviteImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
     Object? title = null,
   }) {
     return _then(_$InviteImpl(
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -3803,20 +3642,16 @@ class __$$InviteImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$InviteImpl extends _Invite {
-  const _$InviteImpl(
-      {required this.jid, required this.myJid, required this.title})
-      : super._();
+  const _$InviteImpl({required this.jid, required this.title}) : super._();
 
   @override
   final String jid;
-  @override
-  final String myJid;
   @override
   final String title;
 
   @override
   String toString() {
-    return 'Invite(jid: $jid, myJid: $myJid, title: $title)';
+    return 'Invite(jid: $jid, title: $title)';
   }
 
   @override
@@ -3825,12 +3660,11 @@ class _$InviteImpl extends _Invite {
         (other.runtimeType == runtimeType &&
             other is _$InviteImpl &&
             (identical(other.jid, jid) || other.jid == jid) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
             (identical(other.title, title) || other.title == title));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, jid, myJid, title);
+  int get hashCode => Object.hash(runtimeType, jid, title);
 
   @JsonKey(ignore: true)
   @override
@@ -3841,15 +3675,11 @@ class _$InviteImpl extends _Invite {
 
 abstract class _Invite extends Invite {
   const factory _Invite(
-      {required final String jid,
-      required final String myJid,
-      required final String title}) = _$InviteImpl;
+      {required final String jid, required final String title}) = _$InviteImpl;
   const _Invite._() : super._();
 
   @override
   String get jid;
-  @override
-  String get myJid;
   @override
   String get title;
   @override
@@ -3861,11 +3691,10 @@ abstract class _Invite extends Invite {
 /// @nodoc
 mixin _$Chat {
   String get jid => throw _privateConstructorUsedError;
-  String get myJid => throw _privateConstructorUsedError;
-  String get myNickname => throw _privateConstructorUsedError;
   String get title => throw _privateConstructorUsedError;
   ChatType get type => throw _privateConstructorUsedError;
   DateTime get lastChangeTimestamp => throw _privateConstructorUsedError;
+  String? get myNickname => throw _privateConstructorUsedError;
   String? get avatarPath => throw _privateConstructorUsedError;
   String? get avatarHash => throw _privateConstructorUsedError;
   String? get lastMessage => throw _privateConstructorUsedError;
@@ -3883,11 +3712,10 @@ mixin _$Chat {
   TResult when<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -3904,10 +3732,9 @@ mixin _$Chat {
         $default, {
     required TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -3929,11 +3756,10 @@ mixin _$Chat {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -3950,10 +3776,9 @@ mixin _$Chat {
         $default, {
     TResult? Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -3975,11 +3800,10 @@ mixin _$Chat {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -3996,10 +3820,9 @@ mixin _$Chat {
         $default, {
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4049,11 +3872,10 @@ abstract class $ChatCopyWith<$Res> {
   @useResult
   $Res call(
       {String jid,
-      String myJid,
-      String myNickname,
       String title,
       ChatType type,
       DateTime lastChangeTimestamp,
+      String? myNickname,
       String? avatarPath,
       String? avatarHash,
       String? lastMessage,
@@ -4083,11 +3905,10 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
-    Object? myNickname = null,
     Object? title = null,
     Object? type = null,
     Object? lastChangeTimestamp = null,
+    Object? myNickname = freezed,
     Object? avatarPath = freezed,
     Object? avatarHash = freezed,
     Object? lastMessage = freezed,
@@ -4107,14 +3928,6 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
               as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myNickname: null == myNickname
-          ? _value.myNickname
-          : myNickname // ignore: cast_nullable_to_non_nullable
-              as String,
       title: null == title
           ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
@@ -4127,6 +3940,10 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
           ? _value.lastChangeTimestamp
           : lastChangeTimestamp // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      myNickname: freezed == myNickname
+          ? _value.myNickname
+          : myNickname // ignore: cast_nullable_to_non_nullable
+              as String?,
       avatarPath: freezed == avatarPath
           ? _value.avatarPath
           : avatarPath // ignore: cast_nullable_to_non_nullable
@@ -4192,11 +4009,10 @@ abstract class _$$ChatImplCopyWith<$Res> implements $ChatCopyWith<$Res> {
   @useResult
   $Res call(
       {String jid,
-      String myJid,
-      String myNickname,
       String title,
       ChatType type,
       DateTime lastChangeTimestamp,
+      String? myNickname,
       String? avatarPath,
       String? avatarHash,
       String? lastMessage,
@@ -4223,11 +4039,10 @@ class __$$ChatImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
-    Object? myNickname = null,
     Object? title = null,
     Object? type = null,
     Object? lastChangeTimestamp = null,
+    Object? myNickname = freezed,
     Object? avatarPath = freezed,
     Object? avatarHash = freezed,
     Object? lastMessage = freezed,
@@ -4247,14 +4062,6 @@ class __$$ChatImplCopyWithImpl<$Res>
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
               as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myNickname: null == myNickname
-          ? _value.myNickname
-          : myNickname // ignore: cast_nullable_to_non_nullable
-              as String,
       title: null == title
           ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
@@ -4267,6 +4074,10 @@ class __$$ChatImplCopyWithImpl<$Res>
           ? _value.lastChangeTimestamp
           : lastChangeTimestamp // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      myNickname: freezed == myNickname
+          ? _value.myNickname
+          : myNickname // ignore: cast_nullable_to_non_nullable
+              as String?,
       avatarPath: freezed == avatarPath
           ? _value.avatarPath
           : avatarPath // ignore: cast_nullable_to_non_nullable
@@ -4328,11 +4139,10 @@ class __$$ChatImplCopyWithImpl<$Res>
 class _$ChatImpl extends _Chat {
   const _$ChatImpl(
       {required this.jid,
-      required this.myJid,
-      required this.myNickname,
       required this.title,
       required this.type,
       required this.lastChangeTimestamp,
+      this.myNickname,
       this.avatarPath,
       this.avatarHash,
       this.lastMessage,
@@ -4351,15 +4161,13 @@ class _$ChatImpl extends _Chat {
   @override
   final String jid;
   @override
-  final String myJid;
-  @override
-  final String myNickname;
-  @override
   final String title;
   @override
   final ChatType type;
   @override
   final DateTime lastChangeTimestamp;
+  @override
+  final String? myNickname;
   @override
   final String? avatarPath;
   @override
@@ -4394,7 +4202,7 @@ class _$ChatImpl extends _Chat {
 
   @override
   String toString() {
-    return 'Chat(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
+    return 'Chat(jid: $jid, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, myNickname: $myNickname, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
   }
 
   @override
@@ -4403,13 +4211,12 @@ class _$ChatImpl extends _Chat {
         (other.runtimeType == runtimeType &&
             other is _$ChatImpl &&
             (identical(other.jid, jid) || other.jid == jid) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
-            (identical(other.myNickname, myNickname) ||
-                other.myNickname == myNickname) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.type, type) || other.type == type) &&
             (identical(other.lastChangeTimestamp, lastChangeTimestamp) ||
                 other.lastChangeTimestamp == lastChangeTimestamp) &&
+            (identical(other.myNickname, myNickname) ||
+                other.myNickname == myNickname) &&
             (identical(other.avatarPath, avatarPath) ||
                 other.avatarPath == avatarPath) &&
             (identical(other.avatarHash, avatarHash) ||
@@ -4437,28 +4244,26 @@ class _$ChatImpl extends _Chat {
   }
 
   @override
-  int get hashCode => Object.hashAll([
-        runtimeType,
-        jid,
-        myJid,
-        myNickname,
-        title,
-        type,
-        lastChangeTimestamp,
-        avatarPath,
-        avatarHash,
-        lastMessage,
-        unreadCount,
-        open,
-        muted,
-        encrypted,
-        favourited,
-        contactID,
-        contactDisplayName,
-        contactAvatarPath,
-        contactAvatarHash,
-        chatState
-      ]);
+  int get hashCode => Object.hash(
+      runtimeType,
+      jid,
+      title,
+      type,
+      lastChangeTimestamp,
+      myNickname,
+      avatarPath,
+      avatarHash,
+      lastMessage,
+      unreadCount,
+      open,
+      muted,
+      encrypted,
+      favourited,
+      contactID,
+      contactDisplayName,
+      contactAvatarPath,
+      contactAvatarHash,
+      chatState);
 
   @JsonKey(ignore: true)
   @override
@@ -4471,11 +4276,10 @@ class _$ChatImpl extends _Chat {
   TResult when<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4492,10 +4296,9 @@ class _$ChatImpl extends _Chat {
         $default, {
     required TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4514,11 +4317,10 @@ class _$ChatImpl extends _Chat {
   }) {
     return $default(
         jid,
-        myJid,
-        myNickname,
         title,
         type,
         lastChangeTimestamp,
+        myNickname,
         avatarPath,
         avatarHash,
         lastMessage,
@@ -4539,11 +4341,10 @@ class _$ChatImpl extends _Chat {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4560,10 +4361,9 @@ class _$ChatImpl extends _Chat {
         $default, {
     TResult? Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4582,11 +4382,10 @@ class _$ChatImpl extends _Chat {
   }) {
     return $default?.call(
         jid,
-        myJid,
-        myNickname,
         title,
         type,
         lastChangeTimestamp,
+        myNickname,
         avatarPath,
         avatarHash,
         lastMessage,
@@ -4607,11 +4406,10 @@ class _$ChatImpl extends _Chat {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4628,10 +4426,9 @@ class _$ChatImpl extends _Chat {
         $default, {
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -4652,11 +4449,10 @@ class _$ChatImpl extends _Chat {
     if ($default != null) {
       return $default(
           jid,
-          myJid,
-          myNickname,
           title,
           type,
           lastChangeTimestamp,
+          myNickname,
           avatarPath,
           avatarHash,
           lastMessage,
@@ -4709,11 +4505,10 @@ class _$ChatImpl extends _Chat {
 abstract class _Chat extends Chat {
   const factory _Chat(
       {required final String jid,
-      required final String myJid,
-      required final String myNickname,
       required final String title,
       required final ChatType type,
       required final DateTime lastChangeTimestamp,
+      final String? myNickname,
       final String? avatarPath,
       final String? avatarHash,
       final String? lastMessage,
@@ -4732,15 +4527,13 @@ abstract class _Chat extends Chat {
   @override
   String get jid;
   @override
-  String get myJid;
-  @override
-  String get myNickname;
-  @override
   String get title;
   @override
   ChatType get type;
   @override
   DateTime get lastChangeTimestamp;
+  @override
+  String? get myNickname;
   @override
   String? get avatarPath;
   @override
@@ -4782,10 +4575,9 @@ abstract class _$$ChatFromDbImplCopyWith<$Res> implements $ChatCopyWith<$Res> {
   @useResult
   $Res call(
       {String jid,
-      String myJid,
-      String myNickname,
       String title,
       ChatType type,
+      String? myNickname,
       String? avatarPath,
       String? avatarHash,
       String? lastMessage,
@@ -4814,10 +4606,9 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? jid = null,
-    Object? myJid = null,
-    Object? myNickname = null,
     Object? title = null,
     Object? type = null,
+    Object? myNickname = freezed,
     Object? avatarPath = freezed,
     Object? avatarHash = freezed,
     Object? lastMessage = freezed,
@@ -4838,14 +4629,6 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
               as String,
-      myJid: null == myJid
-          ? _value.myJid
-          : myJid // ignore: cast_nullable_to_non_nullable
-              as String,
-      myNickname: null == myNickname
-          ? _value.myNickname
-          : myNickname // ignore: cast_nullable_to_non_nullable
-              as String,
       title: null == title
           ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
@@ -4854,6 +4637,10 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
           ? _value.type
           : type // ignore: cast_nullable_to_non_nullable
               as ChatType,
+      myNickname: freezed == myNickname
+          ? _value.myNickname
+          : myNickname // ignore: cast_nullable_to_non_nullable
+              as String?,
       avatarPath: freezed == avatarPath
           ? _value.avatarPath
           : avatarPath // ignore: cast_nullable_to_non_nullable
@@ -4919,10 +4706,9 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
 class _$ChatFromDbImpl extends _ChatFromDb {
   const _$ChatFromDbImpl(
       {required this.jid,
-      required this.myJid,
-      required this.myNickname,
       required this.title,
       required this.type,
+      required this.myNickname,
       required this.avatarPath,
       required this.avatarHash,
       required this.lastMessage,
@@ -4942,13 +4728,11 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   @override
   final String jid;
   @override
-  final String myJid;
-  @override
-  final String myNickname;
-  @override
   final String title;
   @override
   final ChatType type;
+  @override
+  final String? myNickname;
   @override
   final String? avatarPath;
   @override
@@ -4980,7 +4764,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
 
   @override
   String toString() {
-    return 'Chat.fromDb(jid: $jid, myJid: $myJid, myNickname: $myNickname, title: $title, type: $type, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
+    return 'Chat.fromDb(jid: $jid, title: $title, type: $type, myNickname: $myNickname, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
   }
 
   @override
@@ -4989,11 +4773,10 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         (other.runtimeType == runtimeType &&
             other is _$ChatFromDbImpl &&
             (identical(other.jid, jid) || other.jid == jid) &&
-            (identical(other.myJid, myJid) || other.myJid == myJid) &&
-            (identical(other.myNickname, myNickname) ||
-                other.myNickname == myNickname) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.type, type) || other.type == type) &&
+            (identical(other.myNickname, myNickname) ||
+                other.myNickname == myNickname) &&
             (identical(other.avatarPath, avatarPath) ||
                 other.avatarPath == avatarPath) &&
             (identical(other.avatarHash, avatarHash) ||
@@ -5023,28 +4806,26 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   }
 
   @override
-  int get hashCode => Object.hashAll([
-        runtimeType,
-        jid,
-        myJid,
-        myNickname,
-        title,
-        type,
-        avatarPath,
-        avatarHash,
-        lastMessage,
-        lastChangeTimestamp,
-        unreadCount,
-        open,
-        muted,
-        encrypted,
-        favourited,
-        contactID,
-        contactDisplayName,
-        contactAvatarPath,
-        contactAvatarHash,
-        chatState
-      ]);
+  int get hashCode => Object.hash(
+      runtimeType,
+      jid,
+      title,
+      type,
+      myNickname,
+      avatarPath,
+      avatarHash,
+      lastMessage,
+      lastChangeTimestamp,
+      unreadCount,
+      open,
+      muted,
+      encrypted,
+      favourited,
+      contactID,
+      contactDisplayName,
+      contactAvatarPath,
+      contactAvatarHash,
+      chatState);
 
   @JsonKey(ignore: true)
   @override
@@ -5057,11 +4838,10 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   TResult when<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -5078,10 +4858,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         $default, {
     required TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -5100,10 +4879,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   }) {
     return fromDb(
         jid,
-        myJid,
-        myNickname,
         title,
         type,
+        myNickname,
         avatarPath,
         avatarHash,
         lastMessage,
@@ -5125,11 +4903,10 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -5146,10 +4923,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         $default, {
     TResult? Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -5168,10 +4944,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   }) {
     return fromDb?.call(
         jid,
-        myJid,
-        myNickname,
         title,
         type,
+        myNickname,
         avatarPath,
         avatarHash,
         lastMessage,
@@ -5193,11 +4968,10 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
             DateTime lastChangeTimestamp,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -5214,10 +4988,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         $default, {
     TResult Function(
             String jid,
-            String myJid,
-            String myNickname,
             String title,
             ChatType type,
+            String? myNickname,
             String? avatarPath,
             String? avatarHash,
             String? lastMessage,
@@ -5238,10 +5011,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
     if (fromDb != null) {
       return fromDb(
           jid,
-          myJid,
-          myNickname,
           title,
           type,
+          myNickname,
           avatarPath,
           avatarHash,
           lastMessage,
@@ -5295,10 +5067,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
 abstract class _ChatFromDb extends Chat {
   const factory _ChatFromDb(
       {required final String jid,
-      required final String myJid,
-      required final String myNickname,
       required final String title,
       required final ChatType type,
+      required final String? myNickname,
       required final String? avatarPath,
       required final String? avatarHash,
       required final String? lastMessage,
@@ -5318,13 +5089,11 @@ abstract class _ChatFromDb extends Chat {
   @override
   String get jid;
   @override
-  String get myJid;
-  @override
-  String get myNickname;
-  @override
   String get title;
   @override
   ChatType get type;
+  @override
+  String? get myNickname;
   @override
   String? get avatarPath;
   @override

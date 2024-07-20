@@ -13,8 +13,9 @@ class BlocklistCubit extends Cubit<BlocklistState>
   BlocklistCubit({required XmppService xmppService})
       : _xmppService = xmppService,
         super(const BlocklistAvailable(items: [])) {
-    _blocklistSubscription = _xmppService.blocklistStream
-        ?.listen((items) => emit(BlocklistAvailable(items: items)));
+    _blocklistSubscription = _xmppService
+        .blocklistStream()
+        .listen((items) => emit(BlocklistAvailable(items: items)));
   }
 
   final XmppService _xmppService;

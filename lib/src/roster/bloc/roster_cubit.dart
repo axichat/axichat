@@ -12,10 +12,12 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   RosterCubit({required XmppService xmppService})
       : _xmppService = xmppService,
         super(const RosterInitial()) {
-    _rosterSubscription = _xmppService.rosterStream
-        ?.listen((items) => emit(RosterAvailable(items: items)));
-    _invitesSubscription = _xmppService.invitesStream
-        ?.listen((invites) => emit(RosterInvitesAvailable(invites: invites)));
+    _rosterSubscription = _xmppService
+        .rosterStream()
+        .listen((items) => emit(RosterAvailable(items: items)));
+    _invitesSubscription = _xmppService
+        .invitesStream()
+        .listen((invites) => emit(RosterInvitesAvailable(invites: invites)));
   }
 
   final XmppService _xmppService;

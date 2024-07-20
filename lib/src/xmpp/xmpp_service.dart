@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:async/async.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/impatient_completer.dart';
@@ -15,7 +17,6 @@ import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 import 'package:path/path.dart' as p;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:retry/retry.dart' show RetryOptions;
 
 part 'blocking_service.dart';
@@ -82,8 +83,11 @@ abstract class XmppBase {
   Future<void> authenticateAndConnect(String? username, String? password);
   Future<void> disconnect();
 
-  Future _dbOp<T extends Database>(
-    FutureOr Function(T) operation, {
+  Future<V> _dbOpReturning<D extends Database, V>(
+      FutureOr<V> Function(D) operation);
+
+  Future<void> _dbOp<T extends Database>(
+    FutureOr<void> Function(T) operation, {
     bool awaitDatabase = false,
   });
 }
@@ -184,7 +188,6 @@ class XmppService extends XmppBase
 
         if (await _handleCorrection(event, chatJid)) return;
         if (await _handleRetraction(event, chatJid)) return;
-        if (await _handleReactions(event, chatJid)) return;
 
         // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
         if (!event.displayable && event.encryptionError == null) return;
@@ -197,66 +200,38 @@ class XmppService extends XmppBase
         final metadata = _extractFileMetadata(event);
         if (metadata != null) {
           await _dbOp<XmppDatabase>((db) async {
-            await db.fileMetadataAccessor.insertOne(metadata);
+            await db.saveFileMetadata(metadata);
           });
         }
 
         final body = get<mox.ReplyData>()?.withoutFallback ??
             get<mox.MessageBodyData>()?.body ??
             '';
-        _log.info(
-            'Saving message with chatJid: $chatJid and body: $body to database...');
+        final message = Message(
+          stanzaID: event.id ?? '',
+          senderJid: chatJid,
+          chatJid: chatJid,
+          body: body,
+          fileMetadataID: metadata?.id,
+          noStore: get<mox.MessageProcessingHintData>()
+                  ?.hints
+                  .contains(mox.MessageProcessingHint.noStore) ??
+              false,
+          quoting: get<mox.ReplyData>()?.id,
+          originID: get<mox.StableIdData>()?.originId,
+          occupantID: get<mox.OccupantIdData>()?.id,
+        );
         await _dbOp<XmppDatabase>((db) async {
-          await db.messagesAccessor.insertOne(Message(
-            stanzaID: event.id ?? '',
-            myJid: user!.jid.toString(),
-            senderJid: chatJid,
-            chatJid: chatJid,
-            body: body,
-            fileMetadataID: metadata?.id,
-            noStore: get<mox.MessageProcessingHintData>()
-                    ?.hints
-                    .contains(mox.MessageProcessingHint.noStore) ??
-                false,
-            quoting: get<mox.ReplyData>()?.id,
-            originID: get<mox.StableIdData>()?.originId,
-            occupantID: get<mox.OccupantIdData>()?.id,
-          ));
-
-          if (await db.chatsAccessor.selectOne(chatJid) case final chat?) {
-            await db.chatsAccessor.updateOne(chat.copyWith(
-              unreadCount: chat.open ? 0 : chat.unreadCount + 1,
-              lastMessage: body,
-              lastChangeTimestamp: DateTime.timestamp(),
-            ));
-          } else {
-            await db.chatsAccessor.insertOne(Chat(
-              jid: chatJid,
-              myJid: user!.jid.toString(),
-              myNickname: user!.username,
-              title: mox.JID.fromString(chatJid).local,
-              type: ChatType.chat,
-              unreadCount: 1,
-              lastMessage: body,
-              lastChangeTimestamp: DateTime.timestamp(),
-            ));
-          }
+          await db.saveMessage(message);
         });
       case mox.StanzaAckedEvent event:
+        if (event.stanza.id == null) return;
         await _dbOp<XmppDatabase>((db) async {
-          if (await db.messagesAccessor.selectOne(event.stanza.id!)
-              case final message?) {
-            _log.info('Marking message: ${message.stanzaID} as sent...');
-            await db.messagesAccessor.updateOne(message.copyWith(acked: true));
-          }
+          await db.markMessageAcked(event.stanza.id!);
         });
       case mox.DeliveryReceiptReceivedEvent event:
         await _dbOp<XmppDatabase>((db) async {
-          if (await db.messagesAccessor.selectOne(event.id)
-              case final message?) {
-            await db.messagesAccessor
-                .updateOne(message.copyWith(received: true));
-          }
+          await db.markMessageReceived(event.id);
         });
       case mox.StreamNegotiationsDoneEvent event:
         if (event.resumed) return;
@@ -284,10 +259,10 @@ class XmppService extends XmppBase
           _log.info('Saved FAST token: ${event.token.token}.');
         });
       case mox.SubscriptionRequestReceivedEvent event:
-        final requester = event.from.toBare().toString();
+        final requester = event.from.toBare().toString().toLowerCase();
         _log.info('Subscription request received from $requester');
         await _dbOp<XmppDatabase>((db) async {
-          final item = await db.rosterAccessor.selectOne(requester);
+          final item = await db.getRosterItem(requester);
           if (item != null) {
             _log.info('Accepting subscription request from $requester...');
             try {
@@ -295,31 +270,26 @@ class XmppService extends XmppBase
             } on XmppRosterException catch (_) {}
             return;
           }
-          _log.info('Adding subscription request from $requester...');
-          db.invitesAccessor.insertOne(Invite(
+          db.saveInvite(Invite(
             jid: requester,
-            myJid: user!.jid.toString(),
             title: event.from.local,
           ));
         });
       case mox.BlocklistBlockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
           for (final blocked in event.items) {
-            _log.info('Adding $blocked to blocklist...');
-            await db.blocklistAccessor.insertOne(BlocklistData(jid: blocked));
+            await db.blockOne(blocked);
           }
         });
       case mox.BlocklistUnblockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
           for (final unblocked in event.items) {
-            _log.info('Removing $unblocked from blocklist...');
-            await db.blocklistAccessor.deleteOne(unblocked);
+            await db.unblockOne(unblocked);
           }
         });
       case mox.BlocklistUnblockAllPushEvent _:
         await _dbOp<XmppDatabase>((db) async {
-          _log.info('Removing entire blocklist...');
-          await db.blocklistAccessor.deleteAll();
+          await db.deleteBlocklist();
         });
     }
   }
@@ -570,7 +540,7 @@ class XmppService extends XmppBase
 
     await _dbOp<XmppDatabase>((db) async {
       _log.info('Wiping database...');
-      await db.deleteAll();
+      await db.wipe();
       await db.close();
       (await dbFilePathFor(username)).delete();
     });
@@ -668,8 +638,41 @@ class XmppService extends XmppBase
   }
 
   @override
-  Future _dbOp<T extends Database>(
-    FutureOr Function(T) operation, {
+  Future<V> _dbOpReturning<D extends Database, V>(
+      FutureOr<V> Function(D) operation) async {
+    _log.info('Retrieving completer for $D...');
+
+    late final Completer<D> completer;
+    switch (D) {
+      case == CredentialStore:
+        completer = _credentialStore as Completer<D>;
+      case == XmppStateStore:
+        completer = _stateStore.completer as Completer<D>;
+      case == XmppDatabase:
+        completer = _database.completer as Completer<D>;
+      default:
+        throw UnimplementedError('No database of type: $D exists.');
+    }
+
+    try {
+      _log.info('Awaiting completer for $D...');
+      final db = await completer.future;
+      _log.info('Completed completer for $D.');
+      return await operation(db);
+    } on XmppAbortedException catch (e, s) {
+      _log.warning('Owner called reset before $D initialized.', e, s);
+      rethrow;
+    } on XmppException {
+      rethrow;
+    } on Exception catch (e, s) {
+      _log.severe('Unexpected exception during operation on $D.', e, s);
+      throw XmppUnknownException(e);
+    }
+  }
+
+  @override
+  Future<void> _dbOp<T extends Database>(
+    FutureOr<void> Function(T) operation, {
     bool awaitDatabase = false,
   }) async {
     _log.info('Retrieving completer for $T...');

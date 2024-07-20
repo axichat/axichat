@@ -5,27 +5,27 @@
 part of 'database.dart';
 
 // ignore_for_file: type=lint
-mixin _$MessagesAccessorMixin on DatabaseAccessor<XmppDatabase> {
+mixin _$MessagesAccessorMixin on DatabaseAccessor<XmppDrift> {
   $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
   $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
   $MessagesTable get messages => attachedDatabase.messages;
 }
-mixin _$FileMetadataAccessorMixin on DatabaseAccessor<XmppDatabase> {
+mixin _$FileMetadataAccessorMixin on DatabaseAccessor<XmppDrift> {
   $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
 }
-mixin _$ChatsAccessorMixin on DatabaseAccessor<XmppDatabase> {
+mixin _$ChatsAccessorMixin on DatabaseAccessor<XmppDrift> {
   $ContactsTable get contacts => attachedDatabase.contacts;
   $ChatsTable get chats => attachedDatabase.chats;
 }
-mixin _$RosterAccessorMixin on DatabaseAccessor<XmppDatabase> {
+mixin _$RosterAccessorMixin on DatabaseAccessor<XmppDrift> {
   $ContactsTable get contacts => attachedDatabase.contacts;
   $ChatsTable get chats => attachedDatabase.chats;
   $RosterTable get roster => attachedDatabase.roster;
 }
-mixin _$InvitesAccessorMixin on DatabaseAccessor<XmppDatabase> {
+mixin _$InvitesAccessorMixin on DatabaseAccessor<XmppDrift> {
   $InvitesTable get invites => attachedDatabase.invites;
 }
-mixin _$BlocklistAccessorMixin on DatabaseAccessor<XmppDatabase> {
+mixin _$BlocklistAccessorMixin on DatabaseAccessor<XmppDrift> {
   $BlocklistTable get blocklist => attachedDatabase.blocklist;
 }
 
@@ -1080,11 +1080,6 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
   late final GeneratedColumn<String> occupantID = GeneratedColumn<String>(
       'occupant_i_d', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _myJidMeta = const VerificationMeta('myJid');
-  @override
-  late final GeneratedColumn<String> myJid = GeneratedColumn<String>(
-      'my_jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _senderJidMeta =
       const VerificationMeta('senderJid');
   @override
@@ -1274,7 +1269,6 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
         stanzaID,
         originID,
         occupantID,
-        myJid,
         senderJid,
         chatJid,
         body,
@@ -1325,12 +1319,6 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
           _occupantIDMeta,
           occupantID.isAcceptableOrUnknown(
               data['occupant_i_d']!, _occupantIDMeta));
-    }
-    if (data.containsKey('my_jid')) {
-      context.handle(
-          _myJidMeta, myJid.isAcceptableOrUnknown(data['my_jid']!, _myJidMeta));
-    } else if (isInserting) {
-      context.missing(_myJidMeta);
     }
     if (data.containsKey('sender_jid')) {
       context.handle(_senderJidMeta,
@@ -1423,15 +1411,13 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {id};
+  Set<GeneratedColumn> get $primaryKey => {stanzaID};
   @override
   Message map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Message(
       stanzaID: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}stanza_i_d'])!,
-      myJid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}my_jid'])!,
       senderJid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}sender_jid'])!,
       chatJid: attachedDatabase.typeMapping
@@ -1514,7 +1500,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
   final Value<String> stanzaID;
   final Value<String?> originID;
   final Value<String?> occupantID;
-  final Value<String> myJid;
   final Value<String> senderJid;
   final Value<String> chatJid;
   final Value<String?> body;
@@ -1542,7 +1527,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     this.stanzaID = const Value.absent(),
     this.originID = const Value.absent(),
     this.occupantID = const Value.absent(),
-    this.myJid = const Value.absent(),
     this.senderJid = const Value.absent(),
     this.chatJid = const Value.absent(),
     this.body = const Value.absent(),
@@ -1571,7 +1555,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     required String stanzaID,
     this.originID = const Value.absent(),
     this.occupantID = const Value.absent(),
-    required String myJid,
     required String senderJid,
     required String chatJid,
     this.body = const Value.absent(),
@@ -1595,7 +1578,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     this.pseudoMessageData = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : stanzaID = Value(stanzaID),
-        myJid = Value(myJid),
         senderJid = Value(senderJid),
         chatJid = Value(chatJid);
   static Insertable<Message> custom({
@@ -1603,7 +1585,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     Expression<String>? stanzaID,
     Expression<String>? originID,
     Expression<String>? occupantID,
-    Expression<String>? myJid,
     Expression<String>? senderJid,
     Expression<String>? chatJid,
     Expression<String>? body,
@@ -1632,7 +1613,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       if (stanzaID != null) 'stanza_i_d': stanzaID,
       if (originID != null) 'origin_i_d': originID,
       if (occupantID != null) 'occupant_i_d': occupantID,
-      if (myJid != null) 'my_jid': myJid,
       if (senderJid != null) 'sender_jid': senderJid,
       if (chatJid != null) 'chat_jid': chatJid,
       if (body != null) 'body': body,
@@ -1664,7 +1644,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       Value<String>? stanzaID,
       Value<String?>? originID,
       Value<String?>? occupantID,
-      Value<String>? myJid,
       Value<String>? senderJid,
       Value<String>? chatJid,
       Value<String?>? body,
@@ -1692,7 +1671,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       stanzaID: stanzaID ?? this.stanzaID,
       originID: originID ?? this.originID,
       occupantID: occupantID ?? this.occupantID,
-      myJid: myJid ?? this.myJid,
       senderJid: senderJid ?? this.senderJid,
       chatJid: chatJid ?? this.chatJid,
       body: body ?? this.body,
@@ -1733,9 +1711,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     }
     if (occupantID.present) {
       map['occupant_i_d'] = Variable<String>(occupantID.value);
-    }
-    if (myJid.present) {
-      map['my_jid'] = Variable<String>(myJid.value);
     }
     if (senderJid.present) {
       map['sender_jid'] = Variable<String>(senderJid.value);
@@ -1820,7 +1795,6 @@ class MessagesCompanion extends UpdateCompanion<Message> {
           ..write('stanzaID: $stanzaID, ')
           ..write('originID: $originID, ')
           ..write('occupantID: $occupantID, ')
-          ..write('myJid: $myJid, ')
           ..write('senderJid: $senderJid, ')
           ..write('chatJid: $chatJid, ')
           ..write('body: $body, ')
@@ -1863,11 +1837,6 @@ class $ReactionsTable extends Reactions
       requiredDuringInsert: true,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('REFERENCES messages (id)'));
-  static const VerificationMeta _myJidMeta = const VerificationMeta('myJid');
-  @override
-  late final GeneratedColumn<String> myJid = GeneratedColumn<String>(
-      'my_jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _senderJidMeta =
       const VerificationMeta('senderJid');
   @override
@@ -1880,7 +1849,7 @@ class $ReactionsTable extends Reactions
       'emoji', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
   @override
-  List<GeneratedColumn> get $columns => [messageID, myJid, senderJid, emoji];
+  List<GeneratedColumn> get $columns => [messageID, senderJid, emoji];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1898,12 +1867,6 @@ class $ReactionsTable extends Reactions
               data['message_i_d']!, _messageIDMeta));
     } else if (isInserting) {
       context.missing(_messageIDMeta);
-    }
-    if (data.containsKey('my_jid')) {
-      context.handle(
-          _myJidMeta, myJid.isAcceptableOrUnknown(data['my_jid']!, _myJidMeta));
-    } else if (isInserting) {
-      context.missing(_myJidMeta);
     }
     if (data.containsKey('sender_jid')) {
       context.handle(_senderJidMeta,
@@ -1928,8 +1891,6 @@ class $ReactionsTable extends Reactions
     return Reaction(
       messageID: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}message_i_d'])!,
-      myJid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}my_jid'])!,
       senderJid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}sender_jid'])!,
       emoji: attachedDatabase.typeMapping
@@ -1945,37 +1906,31 @@ class $ReactionsTable extends Reactions
 
 class ReactionsCompanion extends UpdateCompanion<Reaction> {
   final Value<String> messageID;
-  final Value<String> myJid;
   final Value<String> senderJid;
   final Value<String> emoji;
   final Value<int> rowid;
   const ReactionsCompanion({
     this.messageID = const Value.absent(),
-    this.myJid = const Value.absent(),
     this.senderJid = const Value.absent(),
     this.emoji = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ReactionsCompanion.insert({
     required String messageID,
-    required String myJid,
     required String senderJid,
     required String emoji,
     this.rowid = const Value.absent(),
   })  : messageID = Value(messageID),
-        myJid = Value(myJid),
         senderJid = Value(senderJid),
         emoji = Value(emoji);
   static Insertable<Reaction> custom({
     Expression<String>? messageID,
-    Expression<String>? myJid,
     Expression<String>? senderJid,
     Expression<String>? emoji,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (messageID != null) 'message_i_d': messageID,
-      if (myJid != null) 'my_jid': myJid,
       if (senderJid != null) 'sender_jid': senderJid,
       if (emoji != null) 'emoji': emoji,
       if (rowid != null) 'rowid': rowid,
@@ -1984,13 +1939,11 @@ class ReactionsCompanion extends UpdateCompanion<Reaction> {
 
   ReactionsCompanion copyWith(
       {Value<String>? messageID,
-      Value<String>? myJid,
       Value<String>? senderJid,
       Value<String>? emoji,
       Value<int>? rowid}) {
     return ReactionsCompanion(
       messageID: messageID ?? this.messageID,
-      myJid: myJid ?? this.myJid,
       senderJid: senderJid ?? this.senderJid,
       emoji: emoji ?? this.emoji,
       rowid: rowid ?? this.rowid,
@@ -2002,9 +1955,6 @@ class ReactionsCompanion extends UpdateCompanion<Reaction> {
     final map = <String, Expression>{};
     if (messageID.present) {
       map['message_i_d'] = Variable<String>(messageID.value);
-    }
-    if (myJid.present) {
-      map['my_jid'] = Variable<String>(myJid.value);
     }
     if (senderJid.present) {
       map['sender_jid'] = Variable<String>(senderJid.value);
@@ -2022,7 +1972,6 @@ class ReactionsCompanion extends UpdateCompanion<Reaction> {
   String toString() {
     return (StringBuffer('ReactionsCompanion(')
           ..write('messageID: $messageID, ')
-          ..write('myJid: $myJid, ')
           ..write('senderJid: $senderJid, ')
           ..write('emoji: $emoji, ')
           ..write('rowid: $rowid')
@@ -2046,11 +1995,6 @@ class $NotificationsTable extends Notifications
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
-  static const VerificationMeta _myJidMeta = const VerificationMeta('myJid');
-  @override
-  late final GeneratedColumn<String> myJid = GeneratedColumn<String>(
-      'my_jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _senderJidMeta =
       const VerificationMeta('senderJid');
   @override
@@ -2101,7 +2045,6 @@ class $NotificationsTable extends Notifications
   @override
   List<GeneratedColumn> get $columns => [
         id,
-        myJid,
         senderJid,
         chatJid,
         senderName,
@@ -2123,12 +2066,6 @@ class $NotificationsTable extends Notifications
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    }
-    if (data.containsKey('my_jid')) {
-      context.handle(
-          _myJidMeta, myJid.isAcceptableOrUnknown(data['my_jid']!, _myJidMeta));
-    } else if (isInserting) {
-      context.missing(_myJidMeta);
     }
     if (data.containsKey('sender_jid')) {
       context.handle(_senderJidMeta,
@@ -2212,7 +2149,6 @@ class $NotificationsTable extends Notifications
 
 class NotificationsCompanion extends UpdateCompanion<Notification> {
   final Value<int> id;
-  final Value<String> myJid;
   final Value<String?> senderJid;
   final Value<String> chatJid;
   final Value<String?> senderName;
@@ -2223,7 +2159,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
   final Value<String?> mediaPath;
   const NotificationsCompanion({
     this.id = const Value.absent(),
-    this.myJid = const Value.absent(),
     this.senderJid = const Value.absent(),
     this.chatJid = const Value.absent(),
     this.senderName = const Value.absent(),
@@ -2235,7 +2170,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
   });
   NotificationsCompanion.insert({
     this.id = const Value.absent(),
-    required String myJid,
     this.senderJid = const Value.absent(),
     required String chatJid,
     this.senderName = const Value.absent(),
@@ -2244,13 +2178,11 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
     this.avatarPath = const Value.absent(),
     this.mediaMimeType = const Value.absent(),
     this.mediaPath = const Value.absent(),
-  })  : myJid = Value(myJid),
-        chatJid = Value(chatJid),
+  })  : chatJid = Value(chatJid),
         body = Value(body),
         timestamp = Value(timestamp);
   static Insertable<Notification> custom({
     Expression<int>? id,
-    Expression<String>? myJid,
     Expression<String>? senderJid,
     Expression<String>? chatJid,
     Expression<String>? senderName,
@@ -2262,7 +2194,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (myJid != null) 'my_jid': myJid,
       if (senderJid != null) 'sender_jid': senderJid,
       if (chatJid != null) 'chat_jid': chatJid,
       if (senderName != null) 'sender_name': senderName,
@@ -2276,7 +2207,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
 
   NotificationsCompanion copyWith(
       {Value<int>? id,
-      Value<String>? myJid,
       Value<String?>? senderJid,
       Value<String>? chatJid,
       Value<String?>? senderName,
@@ -2287,7 +2217,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
       Value<String?>? mediaPath}) {
     return NotificationsCompanion(
       id: id ?? this.id,
-      myJid: myJid ?? this.myJid,
       senderJid: senderJid ?? this.senderJid,
       chatJid: chatJid ?? this.chatJid,
       senderName: senderName ?? this.senderName,
@@ -2304,9 +2233,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
-    }
-    if (myJid.present) {
-      map['my_jid'] = Variable<String>(myJid.value);
     }
     if (senderJid.present) {
       map['sender_jid'] = Variable<String>(senderJid.value);
@@ -2339,7 +2265,6 @@ class NotificationsCompanion extends UpdateCompanion<Notification> {
   String toString() {
     return (StringBuffer('NotificationsCompanion(')
           ..write('id: $id, ')
-          ..write('myJid: $myJid, ')
           ..write('senderJid: $senderJid, ')
           ..write('chatJid: $chatJid, ')
           ..write('senderName: $senderName, ')
@@ -2546,17 +2471,6 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
   late final GeneratedColumn<String> jid = GeneratedColumn<String>(
       'jid', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _myJidMeta = const VerificationMeta('myJid');
-  @override
-  late final GeneratedColumn<String> myJid = GeneratedColumn<String>(
-      'my_jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _myNicknameMeta =
-      const VerificationMeta('myNickname');
-  @override
-  late final GeneratedColumn<String> myNickname = GeneratedColumn<String>(
-      'my_nickname', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
@@ -2568,6 +2482,12 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
       GeneratedColumn<int>('type', aliasedName, false,
               type: DriftSqlType.int, requiredDuringInsert: true)
           .withConverter<ChatType>($ChatsTable.$convertertype);
+  static const VerificationMeta _myNicknameMeta =
+      const VerificationMeta('myNickname');
+  @override
+  late final GeneratedColumn<String> myNickname = GeneratedColumn<String>(
+      'my_nickname', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _avatarPathMeta =
       const VerificationMeta('avatarPath');
   @override
@@ -2675,10 +2595,9 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
   @override
   List<GeneratedColumn> get $columns => [
         jid,
-        myJid,
-        myNickname,
         title,
         type,
+        myNickname,
         avatarPath,
         avatarHash,
         lastMessage,
@@ -2710,20 +2629,6 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
     } else if (isInserting) {
       context.missing(_jidMeta);
     }
-    if (data.containsKey('my_jid')) {
-      context.handle(
-          _myJidMeta, myJid.isAcceptableOrUnknown(data['my_jid']!, _myJidMeta));
-    } else if (isInserting) {
-      context.missing(_myJidMeta);
-    }
-    if (data.containsKey('my_nickname')) {
-      context.handle(
-          _myNicknameMeta,
-          myNickname.isAcceptableOrUnknown(
-              data['my_nickname']!, _myNicknameMeta));
-    } else if (isInserting) {
-      context.missing(_myNicknameMeta);
-    }
     if (data.containsKey('title')) {
       context.handle(
           _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
@@ -2731,6 +2636,12 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
       context.missing(_titleMeta);
     }
     context.handle(_typeMeta, const VerificationResult.success());
+    if (data.containsKey('my_nickname')) {
+      context.handle(
+          _myNicknameMeta,
+          myNickname.isAcceptableOrUnknown(
+              data['my_nickname']!, _myNicknameMeta));
+    }
     if (data.containsKey('avatar_path')) {
       context.handle(
           _avatarPathMeta,
@@ -2817,14 +2728,12 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
     return Chat.fromDb(
       jid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
-      myJid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}my_jid'])!,
-      myNickname: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}my_nickname'])!,
       title: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
       type: $ChatsTable.$convertertype.fromSql(attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}type'])!),
+      myNickname: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}my_nickname']),
       avatarPath: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}avatar_path']),
       avatarHash: attachedDatabase.typeMapping
@@ -2873,10 +2782,9 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
 
 class ChatsCompanion extends UpdateCompanion<Chat> {
   final Value<String> jid;
-  final Value<String> myJid;
-  final Value<String> myNickname;
   final Value<String> title;
   final Value<ChatType> type;
+  final Value<String?> myNickname;
   final Value<String?> avatarPath;
   final Value<String?> avatarHash;
   final Value<String?> lastMessage;
@@ -2894,10 +2802,9 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   final Value<int> rowid;
   const ChatsCompanion({
     this.jid = const Value.absent(),
-    this.myJid = const Value.absent(),
-    this.myNickname = const Value.absent(),
     this.title = const Value.absent(),
     this.type = const Value.absent(),
+    this.myNickname = const Value.absent(),
     this.avatarPath = const Value.absent(),
     this.avatarHash = const Value.absent(),
     this.lastMessage = const Value.absent(),
@@ -2916,10 +2823,9 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   });
   ChatsCompanion.insert({
     required String jid,
-    required String myJid,
-    required String myNickname,
     required String title,
     required ChatType type,
+    this.myNickname = const Value.absent(),
     this.avatarPath = const Value.absent(),
     this.avatarHash = const Value.absent(),
     this.lastMessage = const Value.absent(),
@@ -2936,17 +2842,14 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     this.chatState = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : jid = Value(jid),
-        myJid = Value(myJid),
-        myNickname = Value(myNickname),
         title = Value(title),
         type = Value(type),
         lastChangeTimestamp = Value(lastChangeTimestamp);
   static Insertable<Chat> custom({
     Expression<String>? jid,
-    Expression<String>? myJid,
-    Expression<String>? myNickname,
     Expression<String>? title,
     Expression<int>? type,
+    Expression<String>? myNickname,
     Expression<String>? avatarPath,
     Expression<String>? avatarHash,
     Expression<String>? lastMessage,
@@ -2965,10 +2868,9 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   }) {
     return RawValuesInsertable({
       if (jid != null) 'jid': jid,
-      if (myJid != null) 'my_jid': myJid,
-      if (myNickname != null) 'my_nickname': myNickname,
       if (title != null) 'title': title,
       if (type != null) 'type': type,
+      if (myNickname != null) 'my_nickname': myNickname,
       if (avatarPath != null) 'avatar_path': avatarPath,
       if (avatarHash != null) 'avatar_hash': avatarHash,
       if (lastMessage != null) 'last_message': lastMessage,
@@ -2991,10 +2893,9 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
 
   ChatsCompanion copyWith(
       {Value<String>? jid,
-      Value<String>? myJid,
-      Value<String>? myNickname,
       Value<String>? title,
       Value<ChatType>? type,
+      Value<String?>? myNickname,
       Value<String?>? avatarPath,
       Value<String?>? avatarHash,
       Value<String?>? lastMessage,
@@ -3012,10 +2913,9 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       Value<int>? rowid}) {
     return ChatsCompanion(
       jid: jid ?? this.jid,
-      myJid: myJid ?? this.myJid,
-      myNickname: myNickname ?? this.myNickname,
       title: title ?? this.title,
       type: type ?? this.type,
+      myNickname: myNickname ?? this.myNickname,
       avatarPath: avatarPath ?? this.avatarPath,
       avatarHash: avatarHash ?? this.avatarHash,
       lastMessage: lastMessage ?? this.lastMessage,
@@ -3040,17 +2940,14 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     if (jid.present) {
       map['jid'] = Variable<String>(jid.value);
     }
-    if (myJid.present) {
-      map['my_jid'] = Variable<String>(myJid.value);
-    }
-    if (myNickname.present) {
-      map['my_nickname'] = Variable<String>(myNickname.value);
-    }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
     }
     if (type.present) {
       map['type'] = Variable<int>($ChatsTable.$convertertype.toSql(type.value));
+    }
+    if (myNickname.present) {
+      map['my_nickname'] = Variable<String>(myNickname.value);
     }
     if (avatarPath.present) {
       map['avatar_path'] = Variable<String>(avatarPath.value);
@@ -3106,10 +3003,9 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   String toString() {
     return (StringBuffer('ChatsCompanion(')
           ..write('jid: $jid, ')
-          ..write('myJid: $myJid, ')
-          ..write('myNickname: $myNickname, ')
           ..write('title: $title, ')
           ..write('type: $type, ')
+          ..write('myNickname: $myNickname, ')
           ..write('avatarPath: $avatarPath, ')
           ..write('avatarHash: $avatarHash, ')
           ..write('lastMessage: $lastMessage, ')
@@ -3143,11 +3039,6 @@ class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
       requiredDuringInsert: true,
       defaultConstraints: GeneratedColumn.constraintIsAlways(
           'REFERENCES chats (jid) ON DELETE CASCADE'));
-  static const VerificationMeta _myJidMeta = const VerificationMeta('myJid');
-  @override
-  late final GeneratedColumn<String> myJid = GeneratedColumn<String>(
-      'my_jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
@@ -3214,7 +3105,6 @@ class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
   @override
   List<GeneratedColumn> get $columns => [
         jid,
-        myJid,
         title,
         presence,
         status,
@@ -3241,12 +3131,6 @@ class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
           _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
     } else if (isInserting) {
       context.missing(_jidMeta);
-    }
-    if (data.containsKey('my_jid')) {
-      context.handle(
-          _myJidMeta, myJid.isAcceptableOrUnknown(data['my_jid']!, _myJidMeta));
-    } else if (isInserting) {
-      context.missing(_myJidMeta);
     }
     if (data.containsKey('title')) {
       context.handle(
@@ -3302,8 +3186,6 @@ class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
     return RosterItem.fromDb(
       jid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
-      myJid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}my_jid'])!,
       title: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
       presence: $RosterTable.$converterpresence.fromSql(attachedDatabase
@@ -3347,7 +3229,6 @@ class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
 
 class RosterCompanion extends UpdateCompanion<RosterItem> {
   final Value<String> jid;
-  final Value<String> myJid;
   final Value<String> title;
   final Value<Presence> presence;
   final Value<String?> status;
@@ -3361,7 +3242,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
   final Value<int> rowid;
   const RosterCompanion({
     this.jid = const Value.absent(),
-    this.myJid = const Value.absent(),
     this.title = const Value.absent(),
     this.presence = const Value.absent(),
     this.status = const Value.absent(),
@@ -3376,7 +3256,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
   });
   RosterCompanion.insert({
     required String jid,
-    required String myJid,
     required String title,
     required Presence presence,
     this.status = const Value.absent(),
@@ -3389,13 +3268,11 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
     this.contactDisplayName = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : jid = Value(jid),
-        myJid = Value(myJid),
         title = Value(title),
         presence = Value(presence),
         subscription = Value(subscription);
   static Insertable<RosterItem> custom({
     Expression<String>? jid,
-    Expression<String>? myJid,
     Expression<String>? title,
     Expression<String>? presence,
     Expression<String>? status,
@@ -3410,7 +3287,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
   }) {
     return RawValuesInsertable({
       if (jid != null) 'jid': jid,
-      if (myJid != null) 'my_jid': myJid,
       if (title != null) 'title': title,
       if (presence != null) 'presence': presence,
       if (status != null) 'status': status,
@@ -3428,7 +3304,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
 
   RosterCompanion copyWith(
       {Value<String>? jid,
-      Value<String>? myJid,
       Value<String>? title,
       Value<Presence>? presence,
       Value<String?>? status,
@@ -3442,7 +3317,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
       Value<int>? rowid}) {
     return RosterCompanion(
       jid: jid ?? this.jid,
-      myJid: myJid ?? this.myJid,
       title: title ?? this.title,
       presence: presence ?? this.presence,
       status: status ?? this.status,
@@ -3462,9 +3336,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
     final map = <String, Expression>{};
     if (jid.present) {
       map['jid'] = Variable<String>(jid.value);
-    }
-    if (myJid.present) {
-      map['my_jid'] = Variable<String>(myJid.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
@@ -3509,7 +3380,6 @@ class RosterCompanion extends UpdateCompanion<RosterItem> {
   String toString() {
     return (StringBuffer('RosterCompanion(')
           ..write('jid: $jid, ')
-          ..write('myJid: $myJid, ')
           ..write('title: $title, ')
           ..write('presence: $presence, ')
           ..write('status: $status, ')
@@ -3536,18 +3406,13 @@ class $InvitesTable extends Invites with TableInfo<$InvitesTable, Invite> {
   late final GeneratedColumn<String> jid = GeneratedColumn<String>(
       'jid', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _myJidMeta = const VerificationMeta('myJid');
-  @override
-  late final GeneratedColumn<String> myJid = GeneratedColumn<String>(
-      'my_jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
       'title', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
   @override
-  List<GeneratedColumn> get $columns => [jid, myJid, title];
+  List<GeneratedColumn> get $columns => [jid, title];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3563,12 +3428,6 @@ class $InvitesTable extends Invites with TableInfo<$InvitesTable, Invite> {
           _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
     } else if (isInserting) {
       context.missing(_jidMeta);
-    }
-    if (data.containsKey('my_jid')) {
-      context.handle(
-          _myJidMeta, myJid.isAcceptableOrUnknown(data['my_jid']!, _myJidMeta));
-    } else if (isInserting) {
-      context.missing(_myJidMeta);
     }
     if (data.containsKey('title')) {
       context.handle(
@@ -3587,8 +3446,6 @@ class $InvitesTable extends Invites with TableInfo<$InvitesTable, Invite> {
     return Invite(
       jid: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
-      myJid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}my_jid'])!,
       title: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
     );
@@ -3602,45 +3459,35 @@ class $InvitesTable extends Invites with TableInfo<$InvitesTable, Invite> {
 
 class InvitesCompanion extends UpdateCompanion<Invite> {
   final Value<String> jid;
-  final Value<String> myJid;
   final Value<String> title;
   final Value<int> rowid;
   const InvitesCompanion({
     this.jid = const Value.absent(),
-    this.myJid = const Value.absent(),
     this.title = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   InvitesCompanion.insert({
     required String jid,
-    required String myJid,
     required String title,
     this.rowid = const Value.absent(),
   })  : jid = Value(jid),
-        myJid = Value(myJid),
         title = Value(title);
   static Insertable<Invite> custom({
     Expression<String>? jid,
-    Expression<String>? myJid,
     Expression<String>? title,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (jid != null) 'jid': jid,
-      if (myJid != null) 'my_jid': myJid,
       if (title != null) 'title': title,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   InvitesCompanion copyWith(
-      {Value<String>? jid,
-      Value<String>? myJid,
-      Value<String>? title,
-      Value<int>? rowid}) {
+      {Value<String>? jid, Value<String>? title, Value<int>? rowid}) {
     return InvitesCompanion(
       jid: jid ?? this.jid,
-      myJid: myJid ?? this.myJid,
       title: title ?? this.title,
       rowid: rowid ?? this.rowid,
     );
@@ -3651,9 +3498,6 @@ class InvitesCompanion extends UpdateCompanion<Invite> {
     final map = <String, Expression>{};
     if (jid.present) {
       map['jid'] = Variable<String>(jid.value);
-    }
-    if (myJid.present) {
-      map['my_jid'] = Variable<String>(myJid.value);
     }
     if (title.present) {
       map['title'] = Variable<String>(title.value);
@@ -3668,7 +3512,6 @@ class InvitesCompanion extends UpdateCompanion<Invite> {
   String toString() {
     return (StringBuffer('InvitesCompanion(')
           ..write('jid: $jid, ')
-          ..write('myJid: $myJid, ')
           ..write('title: $title, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4043,9 +3886,9 @@ class StickersCompanion extends UpdateCompanion<Sticker> {
   }
 }
 
-abstract class _$XmppDatabase extends GeneratedDatabase {
-  _$XmppDatabase(QueryExecutor e) : super(e);
-  _$XmppDatabaseManager get managers => _$XmppDatabaseManager(this);
+abstract class _$XmppDrift extends GeneratedDatabase {
+  _$XmppDrift(QueryExecutor e) : super(e);
+  _$XmppDriftManager get managers => _$XmppDriftManager(this);
   late final $FileMetadataTable fileMetadata = $FileMetadataTable(this);
   late final $StickerPacksTable stickerPacks = $StickerPacksTable(this);
   late final $MessagesTable messages = $MessagesTable(this);
@@ -4058,16 +3901,15 @@ abstract class _$XmppDatabase extends GeneratedDatabase {
   late final $BlocklistTable blocklist = $BlocklistTable(this);
   late final $StickersTable stickers = $StickersTable(this);
   late final MessagesAccessor messagesAccessor =
-      MessagesAccessor(this as XmppDatabase);
+      MessagesAccessor(this as XmppDrift);
   late final FileMetadataAccessor fileMetadataAccessor =
-      FileMetadataAccessor(this as XmppDatabase);
-  late final ChatsAccessor chatsAccessor = ChatsAccessor(this as XmppDatabase);
-  late final RosterAccessor rosterAccessor =
-      RosterAccessor(this as XmppDatabase);
+      FileMetadataAccessor(this as XmppDrift);
+  late final ChatsAccessor chatsAccessor = ChatsAccessor(this as XmppDrift);
+  late final RosterAccessor rosterAccessor = RosterAccessor(this as XmppDrift);
   late final InvitesAccessor invitesAccessor =
-      InvitesAccessor(this as XmppDatabase);
+      InvitesAccessor(this as XmppDrift);
   late final BlocklistAccessor blocklistAccessor =
-      BlocklistAccessor(this as XmppDatabase);
+      BlocklistAccessor(this as XmppDrift);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4139,7 +3981,7 @@ typedef $$FileMetadataTableUpdateCompanionBuilder = FileMetadataCompanion
 });
 
 class $$FileMetadataTableTableManager extends RootTableManager<
-    _$XmppDatabase,
+    _$XmppDrift,
     $FileMetadataTable,
     FileMetadataData,
     $$FileMetadataTableFilterComposer,
@@ -4147,7 +3989,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
     $$FileMetadataTableProcessedTableManager,
     $$FileMetadataTableInsertCompanionBuilder,
     $$FileMetadataTableUpdateCompanionBuilder> {
-  $$FileMetadataTableTableManager(_$XmppDatabase db, $FileMetadataTable table)
+  $$FileMetadataTableTableManager(_$XmppDrift db, $FileMetadataTable table)
       : super(TableManagerState(
           db: db,
           table: table,
@@ -4237,7 +4079,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
 }
 
 class $$FileMetadataTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDatabase,
+    _$XmppDrift,
     $FileMetadataTable,
     FileMetadataData,
     $$FileMetadataTableFilterComposer,
@@ -4249,7 +4091,7 @@ class $$FileMetadataTableProcessedTableManager extends ProcessedTableManager<
 }
 
 class $$FileMetadataTableFilterComposer
-    extends FilterComposer<_$XmppDatabase, $FileMetadataTable> {
+    extends FilterComposer<_$XmppDrift, $FileMetadataTable> {
   $$FileMetadataTableFilterComposer(super.$state);
   ColumnFilters<String> get id => $state.composableBuilder(
       column: $state.table.id,
@@ -4336,7 +4178,7 @@ class $$FileMetadataTableFilterComposer
 }
 
 class $$FileMetadataTableOrderingComposer
-    extends OrderingComposer<_$XmppDatabase, $FileMetadataTable> {
+    extends OrderingComposer<_$XmppDrift, $FileMetadataTable> {
   $$FileMetadataTableOrderingComposer(super.$state);
   ColumnOrderings<String> get id => $state.composableBuilder(
       column: $state.table.id,
@@ -4426,7 +4268,7 @@ typedef $$ContactsTableUpdateCompanionBuilder = ContactsCompanion Function({
 });
 
 class $$ContactsTableTableManager extends RootTableManager<
-    _$XmppDatabase,
+    _$XmppDrift,
     $ContactsTable,
     Contact,
     $$ContactsTableFilterComposer,
@@ -4434,7 +4276,7 @@ class $$ContactsTableTableManager extends RootTableManager<
     $$ContactsTableProcessedTableManager,
     $$ContactsTableInsertCompanionBuilder,
     $$ContactsTableUpdateCompanionBuilder> {
-  $$ContactsTableTableManager(_$XmppDatabase db, $ContactsTable table)
+  $$ContactsTableTableManager(_$XmppDrift db, $ContactsTable table)
       : super(TableManagerState(
           db: db,
           table: table,
@@ -4468,7 +4310,7 @@ class $$ContactsTableTableManager extends RootTableManager<
 }
 
 class $$ContactsTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDatabase,
+    _$XmppDrift,
     $ContactsTable,
     Contact,
     $$ContactsTableFilterComposer,
@@ -4480,7 +4322,7 @@ class $$ContactsTableProcessedTableManager extends ProcessedTableManager<
 }
 
 class $$ContactsTableFilterComposer
-    extends FilterComposer<_$XmppDatabase, $ContactsTable> {
+    extends FilterComposer<_$XmppDrift, $ContactsTable> {
   $$ContactsTableFilterComposer(super.$state);
   ColumnFilters<String> get nativeID => $state.composableBuilder(
       column: $state.table.nativeID,
@@ -4494,7 +4336,7 @@ class $$ContactsTableFilterComposer
 }
 
 class $$ContactsTableOrderingComposer
-    extends OrderingComposer<_$XmppDatabase, $ContactsTable> {
+    extends OrderingComposer<_$XmppDrift, $ContactsTable> {
   $$ContactsTableOrderingComposer(super.$state);
   ColumnOrderings<String> get nativeID => $state.composableBuilder(
       column: $state.table.nativeID,
@@ -4517,7 +4359,7 @@ typedef $$BlocklistTableUpdateCompanionBuilder = BlocklistCompanion Function({
 });
 
 class $$BlocklistTableTableManager extends RootTableManager<
-    _$XmppDatabase,
+    _$XmppDrift,
     $BlocklistTable,
     BlocklistData,
     $$BlocklistTableFilterComposer,
@@ -4525,7 +4367,7 @@ class $$BlocklistTableTableManager extends RootTableManager<
     $$BlocklistTableProcessedTableManager,
     $$BlocklistTableInsertCompanionBuilder,
     $$BlocklistTableUpdateCompanionBuilder> {
-  $$BlocklistTableTableManager(_$XmppDatabase db, $BlocklistTable table)
+  $$BlocklistTableTableManager(_$XmppDrift db, $BlocklistTable table)
       : super(TableManagerState(
           db: db,
           table: table,
@@ -4555,7 +4397,7 @@ class $$BlocklistTableTableManager extends RootTableManager<
 }
 
 class $$BlocklistTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDatabase,
+    _$XmppDrift,
     $BlocklistTable,
     BlocklistData,
     $$BlocklistTableFilterComposer,
@@ -4567,7 +4409,7 @@ class $$BlocklistTableProcessedTableManager extends ProcessedTableManager<
 }
 
 class $$BlocklistTableFilterComposer
-    extends FilterComposer<_$XmppDatabase, $BlocklistTable> {
+    extends FilterComposer<_$XmppDrift, $BlocklistTable> {
   $$BlocklistTableFilterComposer(super.$state);
   ColumnFilters<String> get jid => $state.composableBuilder(
       column: $state.table.jid,
@@ -4576,7 +4418,7 @@ class $$BlocklistTableFilterComposer
 }
 
 class $$BlocklistTableOrderingComposer
-    extends OrderingComposer<_$XmppDatabase, $BlocklistTable> {
+    extends OrderingComposer<_$XmppDrift, $BlocklistTable> {
   $$BlocklistTableOrderingComposer(super.$state);
   ColumnOrderings<String> get jid => $state.composableBuilder(
       column: $state.table.jid,
@@ -4584,9 +4426,9 @@ class $$BlocklistTableOrderingComposer
           ColumnOrderings(column, joinBuilders: joinBuilders));
 }
 
-class _$XmppDatabaseManager {
-  final _$XmppDatabase _db;
-  _$XmppDatabaseManager(this._db);
+class _$XmppDriftManager {
+  final _$XmppDrift _db;
+  _$XmppDriftManager(this._db);
   $$FileMetadataTableTableManager get fileMetadata =>
       $$FileMetadataTableTableManager(_db, _db.fileMetadata);
   $$ContactsTableTableManager get contacts =>

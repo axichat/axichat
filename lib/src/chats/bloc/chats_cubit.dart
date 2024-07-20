@@ -13,7 +13,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       : _xmppService = xmppService,
         super(const ChatsState(openJid: null, items: [])) {
     _chatsSubscription =
-        _xmppService.chatsStream?.listen((items) => _updateChats(items));
+        _xmppService.chatsStream().listen((items) => _updateChats(items));
   }
 
   final XmppService _xmppService;

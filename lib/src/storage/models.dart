@@ -55,7 +55,6 @@ enum PseudoMessageType {
 class Message with _$Message implements Insertable<Message> {
   const factory Message({
     required String stanzaID,
-    required String myJid,
     required String senderJid,
     required String chatJid,
     DateTime? timestamp,
@@ -88,7 +87,6 @@ class Message with _$Message implements Insertable<Message> {
     required String stanzaID,
     required String? originID,
     required String? occupantID,
-    required String myJid,
     required String senderJid,
     required String chatJid,
     required String? body,
@@ -135,7 +133,6 @@ class Message with _$Message implements Insertable<Message> {
         stanzaID: Value(stanzaID),
         originID: Value.absentIfNull(originID),
         occupantID: Value.absentIfNull(occupantID),
-        myJid: Value(myJid),
         senderJid: Value(senderJid),
         chatJid: Value(chatJid),
         body: Value.absentIfNull(body),
@@ -166,7 +163,6 @@ class Messages extends Table {
   TextColumn get stanzaID => text()();
   TextColumn get originID => text().nullable()();
   TextColumn get occupantID => text().nullable()();
-  TextColumn get myJid => text()();
   TextColumn get senderJid => text()();
   TextColumn get chatJid => text()();
   TextColumn get body => text().nullable()();
@@ -198,14 +194,13 @@ class Messages extends Table {
   TextColumn get pseudoMessageData => text().map(JsonConverter()).nullable()();
 
   @override
-  Set<Column<Object>>? get primaryKey => {id};
+  Set<Column<Object>>? get primaryKey => {stanzaID};
 }
 
 @Freezed(toJson: false, fromJson: false)
 class Reaction with _$Reaction {
   const factory Reaction({
     required String messageID,
-    required String myJid,
     required String senderJid,
     required String emoji,
   }) = _Reaction;
@@ -214,7 +209,6 @@ class Reaction with _$Reaction {
 @UseRowClass(Reaction)
 class Reactions extends Table {
   TextColumn get messageID => text().references(Messages, #id)();
-  TextColumn get myJid => text()();
   TextColumn get senderJid => text()();
   TextColumn get emoji => text()();
 
@@ -240,7 +234,6 @@ class Notification with _$Notification {
 @UseRowClass(Notification)
 class Notifications extends Table {
   IntColumn get id => integer().autoIncrement()();
-  TextColumn get myJid => text()();
   TextColumn get senderJid => text().nullable()();
   TextColumn get chatJid => text()();
   TextColumn get senderName => text().nullable()();
@@ -354,7 +347,6 @@ enum Presence {
 class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   const factory RosterItem({
     required String jid,
-    required String myJid,
     required String title,
     required Presence presence,
     required Subscription subscription,
@@ -370,7 +362,6 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
 
   const factory RosterItem.fromDb({
     required String jid,
-    required String myJid,
     required String title,
     required Presence presence,
     required String? status,
@@ -389,21 +380,18 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
 
   factory RosterItem.fromJid(mox.JID jid) => RosterItem(
         jid: jid.toString(),
-        myJid: jid.toString(),
         title: jid.local,
         presence: Presence.chat,
         subscription: Subscription.both,
       );
 
   static RosterItem fromMox({
-    required String myJid,
     required mox.XmppRosterItem item,
     bool isGhost = false,
   }) {
     final subscription = Subscription.fromString(item.subscription);
     return RosterItem(
       jid: item.jid,
-      myJid: myJid,
       title: item.name ?? mox.JID.fromString(item.jid).local,
       presence: subscription.isNone || subscription.isFrom
           ? Presence.unavailable
@@ -425,7 +413,6 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) => RosterCompanion(
         jid: Value(jid),
-        myJid: Value(myJid),
         title: Value(title),
         presence: Value(presence),
         status: Value.absentIfNull(status),
@@ -443,7 +430,6 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
 class Roster extends Table {
   TextColumn get jid =>
       text().references(Chats, #jid, onDelete: KeyAction.cascade)();
-  TextColumn get myJid => text()();
   TextColumn get title => text()();
   TextColumn get presence => textEnum<Presence>()();
   TextColumn get status => text().nullable()();
@@ -464,7 +450,6 @@ class Roster extends Table {
 class Invite with _$Invite implements Insertable<Invite> {
   const factory Invite({
     required String jid,
-    required String myJid,
     required String title,
   }) = _Invite;
 
@@ -474,7 +459,6 @@ class Invite with _$Invite implements Insertable<Invite> {
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
       InvitesCompanion(
         jid: Value(jid),
-        myJid: Value(myJid),
         title: Value(title),
       ).toColumns(nullToAbsent);
 }
@@ -482,7 +466,6 @@ class Invite with _$Invite implements Insertable<Invite> {
 @UseRowClass(Invite)
 class Invites extends Table {
   TextColumn get jid => text()();
-  TextColumn get myJid => text()();
   TextColumn get title => text()();
 
   @override
@@ -499,11 +482,10 @@ enum ChatType {
 class Chat with _$Chat implements Insertable<Chat> {
   const factory Chat({
     required String jid,
-    required String myJid,
-    required String myNickname,
     required String title,
     required ChatType type,
     required DateTime lastChangeTimestamp,
+    String? myNickname,
     String? avatarPath,
     String? avatarHash,
     String? lastMessage,
@@ -521,10 +503,9 @@ class Chat with _$Chat implements Insertable<Chat> {
 
   const factory Chat.fromDb({
     required String jid,
-    required String myJid,
-    required String myNickname,
     required String title,
     required ChatType type,
+    required String? myNickname,
     required String? avatarPath,
     required String? avatarHash,
     required String? lastMessage,
@@ -547,10 +528,9 @@ class Chat with _$Chat implements Insertable<Chat> {
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
       ChatsCompanion(
         jid: Value(jid),
-        myJid: Value(myJid),
-        myNickname: Value(myNickname),
         title: Value(title),
         type: Value(type),
+        myNickname: Value.absentIfNull(myNickname),
         avatarPath: Value.absentIfNull(avatarPath),
         avatarHash: Value.absentIfNull(avatarHash),
         lastMessage: Value.absentIfNull(lastMessage),
@@ -571,10 +551,9 @@ class Chat with _$Chat implements Insertable<Chat> {
 @UseRowClass(Chat, constructor: 'fromDb')
 class Chats extends Table {
   TextColumn get jid => text()();
-  TextColumn get myJid => text()();
-  TextColumn get myNickname => text()();
   TextColumn get title => text()();
   IntColumn get type => intEnum<ChatType>()();
+  TextColumn get myNickname => text().nullable()();
   TextColumn get avatarPath => text().nullable()();
   TextColumn get avatarHash => text().nullable()();
   TextColumn get lastMessage => text().nullable()();

@@ -73,7 +73,6 @@ _$RosterItemImpl _$$RosterItemImplFromJson(Map<String, dynamic> json) =>
       ($checkedConvert) {
         final val = _$RosterItemImpl(
           jid: $checkedConvert('jid', (v) => v as String),
-          myJid: $checkedConvert('my_jid', (v) => v as String),
           title: $checkedConvert('title', (v) => v as String),
           presence: $checkedConvert(
               'presence', (v) => $enumDecode(_$PresenceEnumMap, v)),
@@ -99,7 +98,6 @@ _$RosterItemImpl _$$RosterItemImplFromJson(Map<String, dynamic> json) =>
         return val;
       },
       fieldKeyMap: const {
-        'myJid': 'my_jid',
         'avatarPath': 'avatar_path',
         'avatarHash': 'avatar_hash',
         'contactID': 'contact_i_d',
@@ -112,7 +110,6 @@ _$RosterItemImpl _$$RosterItemImplFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$$RosterItemImplToJson(_$RosterItemImpl instance) =>
     <String, dynamic>{
       'jid': instance.jid,
-      'my_jid': instance.myJid,
       'title': instance.title,
       'presence': _$PresenceEnumMap[instance.presence]!,
       'subscription': _$SubscriptionEnumMap[instance.subscription]!,
@@ -155,7 +152,6 @@ _$RosterItemFromDbImpl _$$RosterItemFromDbImplFromJson(
       ($checkedConvert) {
         final val = _$RosterItemFromDbImpl(
           jid: $checkedConvert('jid', (v) => v as String),
-          myJid: $checkedConvert('my_jid', (v) => v as String),
           title: $checkedConvert('title', (v) => v as String),
           presence: $checkedConvert(
               'presence', (v) => $enumDecode(_$PresenceEnumMap, v)),
@@ -181,7 +177,6 @@ _$RosterItemFromDbImpl _$$RosterItemFromDbImplFromJson(
         return val;
       },
       fieldKeyMap: const {
-        'myJid': 'my_jid',
         'avatarPath': 'avatar_path',
         'avatarHash': 'avatar_hash',
         'contactID': 'contact_i_d',
@@ -195,7 +190,6 @@ Map<String, dynamic> _$$RosterItemFromDbImplToJson(
         _$RosterItemFromDbImpl instance) =>
     <String, dynamic>{
       'jid': instance.jid,
-      'my_jid': instance.myJid,
       'title': instance.title,
       'presence': _$PresenceEnumMap[instance.presence]!,
       'status': instance.status,

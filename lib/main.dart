@@ -57,7 +57,7 @@ void main() async {
       return XmppStateStore();
     },
     buildDatabase: (username, passphrase) {
-      return XmppDatabase(
+      return XmppDrift(
         username: username,
         passphrase: passphrase,
       );

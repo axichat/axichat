@@ -1,10 +1,22 @@
 part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin RosterService on XmppBase {
-  Stream<List<RosterItem>>? get rosterStream =>
-      _database.value?.rosterAccessor.watchAll();
-  Stream<List<Invite>>? get invitesStream =>
-      _database.value?.invitesAccessor.watchAll();
+  Stream<List<RosterItem>> rosterStream({
+    int start = 0,
+    int end = basePageItemLimit,
+  }) =>
+      StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<List<RosterItem>>>((db) async {
+        return db.watchRoster(start: start, end: end);
+      }));
+  Stream<List<Invite>> invitesStream({
+    int start = 0,
+    int end = basePageItemLimit,
+  }) =>
+      StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<List<Invite>>>((db) async {
+        return db.watchInvites(start: start, end: end);
+      }));
 
   final _log = Logger('RosterService');
 
@@ -50,9 +62,7 @@ mixin RosterService on XmppBase {
       throw XmppRosterException();
     }
     await _dbOp<XmppDatabase>((db) async {
-      await db.rosterAccessor
-          .updateOne(item.copyWith(subscription: Subscription.both));
-      await db.invitesAccessor.deleteOne(item.jid);
+      await db.markSubscriptionBoth(item.jid);
     });
   }
 
@@ -65,7 +75,9 @@ mixin RosterService on XmppBase {
       _log.severe('Failed to reject subscription from $from.', e);
       throw XmppRosterException();
     }
-    _database.value?.invitesAccessor.deleteOne(jid);
+    await _dbOp<XmppDatabase>((db) async {
+      await db.deleteInvite(jid);
+    });
   }
 }
 
@@ -89,35 +101,15 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   ) async {
     await owner._dbOp<XmppDatabase>((db) async {
       for (final jid in removed) {
-        _log.info('Removing $jid from roster...');
-        await db.rosterAccessor.deleteOne(jid);
-        await db.chatsAccessor.deleteOne(jid);
+        await db.removeRosterItem(jid);
       }
 
-      final myJid = owner.user!.jid.toString();
       for (final item in added) {
-        _log.info('Adding ${item.jid} to roster...');
-        await db.chatsAccessor.insertOne(Chat(
-          jid: item.jid,
-          myJid: myJid,
-          myNickname: owner.user!.username,
-          title: item.name ?? mox.JID.fromString(item.jid).local,
-          type: ChatType.chat,
-          lastChangeTimestamp: DateTime.now(),
-        ));
-        await db.rosterAccessor.insertOrUpdateOne(RosterItem.fromMox(
-          myJid: myJid,
-          item: item,
-        ));
-        await db.invitesAccessor.deleteOne(item.jid);
+        await db.saveRosterItem(RosterItem.fromMox(item: item));
       }
 
       for (final item in modified) {
-        _log.info('Updating ${item.jid} in roster...');
-        await db.rosterAccessor.updateOne(RosterItem.fromMox(
-          myJid: myJid,
-          item: item,
-        ));
+        await db.updateRosterItem(RosterItem.fromMox(item: item));
       }
     });
 
@@ -137,10 +129,9 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     });
     _log.info('Loaded roster version: $version.');
 
-    _log.info('Loading roster from database...');
     final rosterItems = <mox.XmppRosterItem>[];
     await owner._dbOp<XmppDatabase>((db) async {
-      for (final item in (await db.rosterAccessor.selectAll())) {
+      for (final item in (await db.getRoster())) {
         rosterItems.add(mox.XmppRosterItem(
           jid: item.jid,
           name: item.title,

@@ -1,19 +1,23 @@
 part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin BlockingService on XmppBase {
-  Stream<List<BlocklistData>>? get blocklistStream =>
-      _database.value?.blocklistAccessor.watchAll();
+  Stream<List<BlocklistData>> blocklistStream({
+    int start = 0,
+    int end = basePageItemLimit,
+  }) =>
+      StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>((db) async {
+        return db.watchBlocklist(start: start, end: end);
+      }));
 
   final _log = Logger('BlockingService');
 
   Future<void> requestBlocklist() async {
     if (_connection.getManager<mox.BlockingManager>() case final bm?) {
       if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      final blocked = await bm.getBlocklist();
       await _dbOp<XmppDatabase>((db) async {
-        await db.blocklistAccessor.deleteAll();
-        for (final blocked in await bm.getBlocklist()) {
-          await db.blocklistAccessor.insertOne(BlocklistData(jid: blocked));
-        }
+        db.replaceBlocklist(blocked);
       });
     }
   }

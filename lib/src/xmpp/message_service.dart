@@ -35,11 +35,10 @@ mixin MessageService on XmppBase {
             'Storing with error to allow resend...',
             e);
         await _dbOp<XmppDatabase>((db) async {
-          await db.messagesAccessor.insertOne(Message(
+          await db.saveMessage(Message(
             error: MessageError.unknown,
             stanzaID: stanzaID,
             originID: originID,
-            myJid: user!.jid.toString(),
             senderJid: user!.jid.toString(),
             chatJid: jid,
             body: text,
@@ -48,37 +47,13 @@ mixin MessageService on XmppBase {
         throw XmppMessageException();
       }
       await _dbOp<XmppDatabase>((db) async {
-        _log.info('Storing message: $stanzaID...');
-        await db.messagesAccessor.insertOne(Message(
+        await db.saveMessage(Message(
           stanzaID: stanzaID,
           originID: originID,
-          myJid: user!.jid.toString(),
           senderJid: user!.jid.toString(),
           chatJid: jid,
           body: text,
         ));
-      });
-      await _dbOp<XmppDatabase>((db) async {
-        if (await db.chatsAccessor.selectOne(jid) case final chat?) {
-          _log.info('Bumping unread count for chat: $jid...');
-          await db.chatsAccessor.updateOne(chat.copyWith(
-            unreadCount: chat.open ? 0 : chat.unreadCount + 1,
-            lastMessage: text,
-            lastChangeTimestamp: DateTime.timestamp(),
-          ));
-        } else {
-          _log.info('First message in chat: $jid. Creating new entry.');
-          await db.chatsAccessor.insertOne(Chat(
-            jid: jid,
-            myJid: user!.jid.toString(),
-            myNickname: user!.username,
-            title: mox.JID.fromString(jid).local,
-            type: ChatType.chat,
-            unreadCount: 1,
-            lastMessage: text,
-            lastChangeTimestamp: DateTime.timestamp(),
-          ));
-        }
       });
     }
   }
@@ -89,18 +64,15 @@ mixin MessageService on XmppBase {
     _log.info('Handling error message...');
     if (event.error == null || event.id == null) return true;
 
-    await _dbOp<XmppDatabase>((db) async {
-      if (await db.messagesAccessor.selectOne(event.id!) case final message?) {
-        final error = switch (event.error!) {
-          mox.ServiceUnavailableError _ => MessageError.serviceUnavailable,
-          mox.RemoteServerNotFoundError _ => MessageError.serverNotFound,
-          mox.RemoteServerTimeoutError _ => MessageError.serverTimeout,
-          _ => MessageError.unknown,
-        };
+    final error = switch (event.error!) {
+      mox.ServiceUnavailableError _ => MessageError.serviceUnavailable,
+      mox.RemoteServerNotFoundError _ => MessageError.serverNotFound,
+      mox.RemoteServerTimeoutError _ => MessageError.serverTimeout,
+      _ => MessageError.unknown,
+    };
 
-        _log.info('Updating message: ${event.id} with error: ${error.name}...');
-        await db.messagesAccessor.updateOne(message.copyWith(error: error));
-      }
+    await _dbOp<XmppDatabase>((db) async {
+      await db.saveMessageError(stanzaID: event.id!, error: error);
     });
     return true;
   }
@@ -108,10 +80,7 @@ mixin MessageService on XmppBase {
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
       await _dbOp<XmppDatabase>((db) async {
-        if (await db.chatsAccessor.selectOne(jid) case final chat?) {
-          _log.info('Updating chat state to ${state.name}...');
-          await db.chatsAccessor.updateOne(chat.copyWith(chatState: state));
-        }
+        await db.updateChatState(chatJid: jid, state: state);
       });
     }
   }
@@ -119,17 +88,18 @@ mixin MessageService on XmppBase {
   Future<bool> _handleCorrection(mox.MessageEvent event, String jid) async {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
+    var edited = false;
     await _dbOp<XmppDatabase>((db) async {
-      if (await db.messagesAccessor.selectOneByOriginID(correction.id)
-          case final message?) {
+      if (await db.getMessageByOriginID(correction.id) case final message?) {
         if (!message.authorized(event.from) || !message.editable) return;
-        await db.messagesAccessor.updateOne(message.copyWith(
-          edited: true,
+        await db.saveMessageEdit(
+          stanzaID: message.stanzaID,
           body: event.extensions.get<mox.MessageBodyData>()?.body,
-        ));
+        );
+        edited = true;
       }
     });
-    return true;
+    return edited;
   }
 
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
@@ -137,34 +107,24 @@ mixin MessageService on XmppBase {
     if (retraction == null) return false;
     var retracted = false;
     await _dbOp<XmppDatabase>((db) async {
-      if (await db.messagesAccessor.selectOneByOriginID(retraction.id)
-          case final message?) {
+      if (await db.getMessageByOriginID(retraction.id) case final message?) {
         if (!message.authorized(event.from)) return;
-        if (message.fileMetadataID case final id?) {
-          await db.fileMetadataAccessor.deleteOne(id);
-        }
-        await db.messagesAccessor.updateOne(message.copyWith(
-          body: '',
-          retracted: true,
-          fileMetadataID: null,
-          error: MessageError.none,
-          warning: MessageWarning.none,
-        ));
+        await db.markMessageRetracted(message.stanzaID);
         retracted = true;
       }
     });
     return retracted;
   }
 
-  Future<bool> _handleReactions(mox.MessageEvent event, String jid) async {
-    final reactions = event.extensions.get<mox.MessageReactionsData>();
-    if (reactions == null || event.type == 'groupchat') return false;
-    await _dbOp<XmppDatabase>((db) async {
-      if (await db.messagesAccessor.selectOne(reactions.messageId)
-          case final message?) {}
-    });
-    return true;
-  }
+  // Future<bool> _handleReactions(mox.MessageEvent event, String jid) async {
+  //   final reactions = event.extensions.get<mox.MessageReactionsData>();
+  //   if (reactions == null || event.type == 'groupchat') return false;
+  //   await _dbOp<XmppDatabase>((db) async {
+  //     if (await db.messagesAccessor.selectOne(reactions.messageId)
+  //         case final message?) {}
+  //   });
+  //   return true;
+  // }
 
   Future<void> _handleFile(mox.MessageEvent event, String jid) async {}
 
@@ -212,14 +172,14 @@ mixin MessageService on XmppBase {
     }
   }
 
-  Future<bool> _downloadAllowed(String chatJid) async {
-    if (!(await Permission.storage.status).isGranted) return false;
-    if ((await _connection.getConnectionState()) !=
-        mox.XmppConnectionState.connected) return false;
-    var allowed = false;
-    await _dbOp<XmppDatabase>((db) async {
-      allowed = (await db.rosterAccessor.selectOne(chatJid) != null);
-    });
-    return allowed;
-  }
+  // Future<bool> _downloadAllowed(String chatJid) async {
+  //   if (!(await Permission.storage.status).isGranted) return false;
+  //   if ((await _connection.getConnectionState()) !=
+  //       mox.XmppConnectionState.connected) return false;
+  //   var allowed = false;
+  //   await _dbOp<XmppDatabase>((db) async {
+  //     allowed = (await db.rosterAccessor.selectOne(chatJid) != null);
+  //   });
+  //   return allowed;
+  // }
 }

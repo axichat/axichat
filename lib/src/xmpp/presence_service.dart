@@ -10,10 +10,14 @@ mixin PresenceService on XmppBase {
   String? get status =>
       _stateStore.value?.read(key: statusStorageKey) as String?;
 
-  Stream<Presence>? get presenceStream =>
-      _stateStore.value?.watch<Presence>(key: presenceStorageKey);
-  Stream<String?>? get statusStream =>
-      _stateStore.value?.watch<String?>(key: statusStorageKey);
+  Stream<Presence> get presenceStream => StreamCompleter.fromFuture(
+          _dbOpReturning<XmppStateStore, Stream<Presence>>((ss) async {
+        return Future.value(ss.watch<Presence>(key: presenceStorageKey));
+      }));
+  Stream<String?> get statusStream => StreamCompleter.fromFuture(
+          _dbOpReturning<XmppStateStore, Stream<String?>>((ss) async {
+        return Future.value(ss.watch<String?>(key: statusStorageKey));
+      }));
 
   final _log = Logger('PresenceService');
 
@@ -40,18 +44,12 @@ mixin PresenceService on XmppBase {
         });
       });
     } else {
-      _log.info('Saving ${jid.toString()} presence: $presence '
-          'and status: $status...');
       await owner._dbOp<XmppDatabase>((db) async {
-        if (await db.rosterAccessor.selectOne(jid.toString())
-            case final item?) {
-          await db.rosterAccessor.updateOne(
-            item.copyWith(
-              presence: presence,
-              status: status,
-            ),
-          );
-        }
+        await db.updatePresence(
+          jid: jid,
+          presence: presence,
+          status: status,
+        );
       });
     }
   }
@@ -85,9 +83,8 @@ class XmppPresenceManager extends mox.PresenceManager {
                 mox.SubscriptionRequestReceivedEvent(from: jid),
               );
             } else if (stanza.type?.contains('unsubscribe') ?? false) {
-              _log.info('Deleting invite from ${jid.toString()}');
               await owner._dbOp<XmppDatabase>((db) async {
-                await db.invitesAccessor.deleteOne(jid.toString());
+                await db.deleteInvite(jid.toString());
               });
             }
 

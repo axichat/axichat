@@ -1,12 +1,27 @@
 part of 'xmpp_service.dart';
 
 mixin ChatsService on XmppBase {
-  Stream<List<Chat>>? get chatsStream =>
-      _database.value?.chatsAccessor.watchAll();
-  Stream<List<Message>>? messageStream(String jid) =>
-      _database.value?.messagesAccessor.watchChat(jid);
-  Stream<Chat>? chatStream(String jid) =>
-      _database.value?.chatsAccessor.watchOne(jid);
+  Stream<List<Chat>> chatsStream({
+    int start = 0,
+    int end = basePageItemLimit,
+  }) =>
+      StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<List<Chat>>>((db) async {
+        return db.watchChats(start: start, end: end);
+      }));
+  Stream<List<Message>> messageStream(
+    String jid, {
+    int start = 0,
+    int end = basePageItemLimit,
+  }) =>
+      StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<List<Message>>>((db) async {
+        return db.watchChatMessages(jid, start: start, end: end);
+      }));
+  Stream<Chat> chatStream(String jid) => StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<Chat>>((db) async {
+        return db.watchChat(jid);
+      }));
 
   Future<void> sendTyping({
     required String jid,
@@ -26,22 +41,16 @@ mixin ChatsService on XmppBase {
   }
 
   Future<void> openChat(String jid) async {
+    await closeChat();
     await _dbOp<XmppDatabase>((db) async {
-      if (await db.chatsAccessor.selectOne(jid) case final chat?) {
-        await closeChat();
-        await db.chatsAccessor.updateOne(chat.copyWith(
-          open: true,
-          unreadCount: 0,
-          chatState: mox.ChatState.active,
-        ));
-        await sendChatState(jid: jid, state: mox.ChatState.active);
-      }
+      await db.openChat(jid);
     });
+    await sendChatState(jid: jid, state: mox.ChatState.active);
   }
 
   Future<void> closeChat() async {
     await _dbOp<XmppDatabase>((db) async {
-      final closed = (await db.chatsAccessor.closeOpen()).firstOrNull;
+      final closed = await db.closeChat();
       if (closed == null) return;
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     });

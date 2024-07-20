@@ -34,7 +34,7 @@ void main() {
   late XmppDatabase database;
 
   setUp(() {
-    database = XmppDatabase(
+    database = XmppDrift(
       username: '',
       passphrase: '',
       executor: NativeDatabase.memory(),

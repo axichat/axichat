@@ -16,3 +16,4 @@ const mediumScreen = 900.0;
 const largeScreen = 1200.0;
 
 const baseAnimationDuration = Duration(milliseconds: 300);
+const basePageItemLimit = 15;
