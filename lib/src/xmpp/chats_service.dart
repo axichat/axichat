@@ -7,7 +7,9 @@ mixin ChatsService on XmppBase {
   }) =>
       StreamCompleter.fromFuture(
           _dbOpReturning<XmppDatabase, Stream<List<Chat>>>((db) async {
-        return db.watchChats(start: start, end: end);
+        return db
+            .watchChats(start: start, end: end)
+            .startWith(await db.getChats(start: start, end: end));
       }));
   Stream<List<Message>> messageStream(
     String jid, {

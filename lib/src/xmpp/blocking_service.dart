@@ -7,7 +7,9 @@ mixin BlockingService on XmppBase {
   }) =>
       StreamCompleter.fromFuture(
           _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>((db) async {
-        return db.watchBlocklist(start: start, end: end);
+        return db
+            .watchBlocklist(start: start, end: end)
+            .startWith(await db.getBlocklist(start: start, end: end));
       }));
 
   final _log = Logger('BlockingService');

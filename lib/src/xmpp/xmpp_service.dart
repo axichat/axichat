@@ -14,10 +14,13 @@ import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 import 'package:path/path.dart' as p;
 import 'package:retry/retry.dart' show RetryOptions;
+import 'package:stream_transform/stream_transform.dart';
+import 'package:uuid/uuid.dart';
 
 part 'blocking_service.dart';
 part 'chats_service.dart';
@@ -362,7 +365,7 @@ class XmppService extends XmppBase
           if (databasePassphrase == null || databasePassphrase.isEmpty) {
             assert(!databasesInitialized);
             _log.info('Generating new database passphrase...');
-            databasePassphrase = generatePassphrase();
+            databasePassphrase = generateRandomString();
             cs.write(
               key: databasePassphraseStorageKey,
               value: databasePassphrase,
@@ -400,7 +403,7 @@ class XmppService extends XmppBase
         if (databasePassphrase == null || databasePassphrase!.isEmpty) {
           assert(!databasesInitialized);
           _log.info('Generating new database passphrase...');
-          databasePassphrase = generatePassphrase();
+          databasePassphrase = generateRandomString();
           cs.write(
             key: databasePassphraseStorageKey,
             value: databasePassphrase,
@@ -428,8 +431,13 @@ class XmppService extends XmppBase
 
   Future<void> _initConnection() async {
     _log.info('Initializing connection object...');
+    String? resource;
+    await _dbOp<XmppStateStore>((ss) {
+      resource = ss.read(key: resourceStorageKey) as String?;
+      _log.info('Loaded resource: $resource');
+    });
     await _connection.registerFeatureNegotiators([
-      mox.ResourceBindingNegotiator(),
+      XmppResourceNegotiator()..resource = resource,
       mox.StartTlsNegotiator(),
       mox.StreamManagementNegotiator(),
       mox.CSINegotiator(),
@@ -486,11 +494,9 @@ class XmppService extends XmppBase
 
     await _connection.getManager<XmppStreamManagementManager>()!.loadState();
     await _dbOp<XmppStateStore>((ss) {
-      final resource = ss.read(key: resourceStorageKey) ?? '';
-      _log.info('Loaded resource: $resource');
       _connection
         ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
-            resource as String
+            resource ?? ''
         ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
             ss.read(key: fastTokenStorageKey) as String?
         ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
@@ -569,7 +575,7 @@ class XmppService extends XmppBase
 
     _log.info('Resetting...');
 
-    _eventSubscription?.cancel();
+    await _eventSubscription?.cancel();
     _eventSubscription = null;
 
     try {
@@ -923,6 +929,62 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
 class XmppClientNegotiator extends mox.ClientToServerNegotiator {
   XmppClientNegotiator() : super();
+}
+
+class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
+  String? resource;
+  bool _attempted = false;
+
+  String generateResource() {
+    return 'axichat.${generateRandomString(length: 10)}';
+  }
+
+  @override
+  Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
+      mox.XMLNode nonza) async {
+    if (!_attempted) {
+      final stanza = mox.XMLNode.xmlns(
+        tag: 'iq',
+        xmlns: mox.stanzaXmlns,
+        attributes: {
+          'type': 'set',
+          'id': const Uuid().v4(),
+        },
+        children: [
+          mox.XMLNode.xmlns(
+            tag: 'bind',
+            xmlns: mox.bindXmlns,
+            children: [
+              mox.XMLNode(
+                tag: 'resource',
+                text: resource ?? generateResource(),
+              ),
+            ],
+          ),
+        ],
+      );
+
+      _attempted = true;
+      attributes.sendNonza(stanza);
+      return const moxlib.Result(mox.NegotiatorState.ready);
+    } else {
+      if (nonza.tag != 'iq' || nonza.attributes['type'] != 'result') {
+        return moxlib.Result(mox.ResourceBindingFailedError());
+      }
+
+      final bind = nonza.firstTag('bind')!;
+      final rawJid = bind.firstTag('jid')!.innerText();
+      final resource = mox.JID.fromString(rawJid).resource;
+      attributes.setResource(resource);
+      return const moxlib.Result(mox.NegotiatorState.done);
+    }
+  }
+
+  @override
+  void reset() {
+    _attempted = false;
+    super.reset();
+  }
 }
 
 class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {

@@ -30,6 +30,11 @@ abstract interface class XmppDatabase implements Database {
     required int start,
     required int end,
   });
+  Future<List<Message>> getChatMessages(
+    String jid, {
+    required int start,
+    required int end,
+  });
   Future<Message?> getMessageByOriginID(String originID);
   Future<void> saveMessage(Message message);
   Future<void> saveMessageError({
@@ -45,6 +50,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markMessageReceived(String stanzaID);
   Future<void> saveFileMetadata(FileMetadataData metadata);
   Stream<List<Chat>> watchChats({required int start, required int end});
+  Future<List<Chat>> getChats({required int start, required int end});
   Stream<Chat> watchChat(String jid);
   Future<Chat?> openChat(String jid);
   Future<Chat?> closeChat();
@@ -65,9 +71,14 @@ abstract interface class XmppDatabase implements Database {
   });
   Future<void> markSubscriptionBoth(String jid);
   Stream<List<Invite>> watchInvites({required int start, required int end});
+  Future<List<Invite>> getInvites({required int start, required int end});
   Future<void> saveInvite(Invite invite);
   Future<void> deleteInvite(String jid);
   Stream<List<BlocklistData>> watchBlocklist({
+    required int start,
+    required int end,
+  });
+  Future<List<BlocklistData>> getBlocklist({
     required int start,
     required int end,
   });
@@ -106,6 +117,9 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
 
   Stream<List<Message>> watchChat(String jid) =>
       (select(table)..where((table) => table.chatJid.equals(jid))).watch();
+
+  Future<List<Message>> selectChatMessages(String jid) =>
+      (select(table)..where((table) => table.chatJid.equals(jid))).get();
 
   @override
   Future<Message?> selectOne(String stanzaID) =>
@@ -289,6 +303,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Future<List<Message>> getChatMessages(
+    String jid, {
+    required int start,
+    required int end,
+  }) {
+    return messagesAccessor.selectChatMessages(jid);
+  }
+
+  @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
 
@@ -392,6 +415,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   @override
   Stream<List<Chat>> watchChats({required int start, required int end}) {
     return chatsAccessor.watchAll();
+  }
+
+  @override
+  Future<List<Chat>> getChats({required int start, required int end}) {
+    return chatsAccessor.selectAll();
   }
 
   @override
@@ -512,6 +540,12 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Future<List<Invite>> getInvites(
+      {required int start, required int end}) async {
+    return await invitesAccessor.selectAll();
+  }
+
+  @override
   Future<void> saveInvite(Invite invite) async {
     _log.info('Saving invite from ${invite.jid}...');
     await invitesAccessor.insertOne(invite);
@@ -529,6 +563,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required int end,
   }) {
     return blocklistAccessor.watchAll();
+  }
+
+  @override
+  Future<List<BlocklistData>> getBlocklist({
+    required int start,
+    required int end,
+  }) {
+    return blocklistAccessor.selectAll();
   }
 
   @override
@@ -618,9 +660,10 @@ Future<File> dbFilePathFor(String jid) async {
   return File(p.join(path, '${storagePrefixFor(jid)}.axichat.drift'));
 }
 
-String generatePassphrase() {
+String generateRandomString({int length = 32}) {
   final random = Random.secure();
-  return utf8.decode(List<int>.generate(32, (_) => random.nextInt(33) + 89));
+  return utf8
+      .decode(List<int>.generate(length, (_) => random.nextInt(33) + 89));
 }
 
 // Using SHA-1 as this is only to obfuscate the jid in file paths.

@@ -7,7 +7,9 @@ mixin RosterService on XmppBase {
   }) =>
       StreamCompleter.fromFuture(
           _dbOpReturning<XmppDatabase, Stream<List<RosterItem>>>((db) async {
-        return db.watchRoster(start: start, end: end);
+        return db
+            .watchRoster(start: start, end: end)
+            .startWith(await db.getRoster());
       }));
   Stream<List<Invite>> invitesStream({
     int start = 0,
@@ -15,7 +17,9 @@ mixin RosterService on XmppBase {
   }) =>
       StreamCompleter.fromFuture(
           _dbOpReturning<XmppDatabase, Stream<List<Invite>>>((db) async {
-        return db.watchInvites(start: start, end: end);
+        return db
+            .watchInvites(start: start, end: end)
+            .startWith(await db.getInvites(start: start, end: end));
       }));
 
   final _log = Logger('RosterService');
