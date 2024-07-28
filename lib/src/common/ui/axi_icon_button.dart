@@ -1,4 +1,5 @@
 import 'package:chat/src/app.dart';
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -28,7 +29,7 @@ class AxiIconButton extends StatelessWidget {
 
     if (tooltip == null) return child;
 
-    return ShadTooltip(
+    return AxiTooltip(
       builder: (context) => Text(
         tooltip!,
         style: context.textTheme.muted,

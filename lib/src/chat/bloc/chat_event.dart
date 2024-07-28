@@ -22,6 +22,22 @@ final class _ChatMessagesUpdated extends ChatEvent {
   List<Object?> get props => [items];
 }
 
+final class ChatMessageFocused extends ChatEvent {
+  const ChatMessageFocused(this.messageID);
+
+  final String messageID;
+
+  @override
+  List<Object?> get props => [messageID];
+}
+
+final class ChatMessageUnfocused extends ChatEvent {
+  const ChatMessageUnfocused();
+
+  @override
+  List<Object?> get props => [];
+}
+
 final class _ChatTypingStopped extends ChatEvent {
   const _ChatTypingStopped();
   @override

@@ -11,7 +11,7 @@ class BlocklistAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
-    return ShadTooltip(
+    return AxiTooltip(
       builder: (_) => const Text('Add to blocklist'),
       child: FloatingActionButton(
         child: const Icon(LucideIcons.userX),

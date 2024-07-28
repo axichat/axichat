@@ -28,6 +28,11 @@ mixin PresenceService on XmppBase {
     await _connection
         .getManager<XmppPresenceManager>()
         ?.sendPresence(presence: presence, status: status);
+    if (presence != null && presence.isUnavailable) {
+      await owner._dbOp<XmppStateStore>((ss) async {
+        await ss.write(key: presenceStorageKey, value: presence);
+      });
+    }
   }
 
   Future<void> receivePresence(
@@ -78,7 +83,8 @@ class XmppPresenceManager extends mox.PresenceManager {
           callback: (stanza, state) async {
             if (stanza.from == null) return state..done = true;
             final jid = mox.JID.fromString(stanza.from!).toBare();
-            if (stanza.type == 'subscribe' || stanza.type == 'subscribed') {
+            if (stanza.type == Ask.subscribe.name ||
+                stanza.type == Ask.subscribed.name) {
               getAttributes().sendEvent(
                 mox.SubscriptionRequestReceivedEvent(from: jid),
               );
@@ -90,10 +96,17 @@ class XmppPresenceManager extends mox.PresenceManager {
 
             _log.info('Incoming presence from: ${jid.toString()}...');
 
-            final show = stanza.children.singleWhere(
-              (e) => e.tag == 'show',
-              orElse: () => mox.XMLNode(tag: 'show', text: 'chat'),
-            );
+            String? presence;
+            if (stanza.type == Presence.unavailable.name) {
+              presence = Presence.unavailable.name;
+            } else {
+              presence = stanza.children
+                  .singleWhere(
+                    (e) => e.tag == 'show',
+                    orElse: () => mox.XMLNode(tag: 'show', text: 'chat'),
+                  )
+                  .text;
+            }
 
             // TODO: xml lang i18n
             final status = stanza.children.singleWhere(
@@ -106,7 +119,7 @@ class XmppPresenceManager extends mox.PresenceManager {
 
             await owner.receivePresence(
               jid.toString(),
-              Presence.fromString(show.text),
+              Presence.fromString(presence),
               status.text,
             );
 
@@ -119,8 +132,12 @@ class XmppPresenceManager extends mox.PresenceManager {
 
   Future<void> sendPresence({Presence? presence, String? status}) async {
     final stanza = mox.Stanza.presence(
+      type: presence != null && presence.isUnavailable
+          ? Presence.unavailable.name
+          : null,
       children: [
-        if (presence != null) mox.XMLNode(tag: 'show', text: presence.name),
+        if (presence != null && !presence.isUnavailable)
+          mox.XMLNode(tag: 'show', text: presence.name),
         if (status != null) mox.XMLNode(tag: 'status', text: status),
         for (final attachment in _attachments) ...await attachment(),
       ],

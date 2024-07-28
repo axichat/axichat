@@ -18,6 +18,16 @@ mixin MessageService on XmppBase {
       final originID = _connection.generateId();
       _log.info('Sending message: $stanzaID '
           'with body: ${text.substring(0, min(10, text.length))}...');
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveMessage(Message(
+          stanzaID: stanzaID,
+          originID: originID,
+          senderJid: user!.jid.toString(),
+          chatJid: jid,
+          body: text,
+        ));
+      });
+
       try {
         await mm.sendMessage(
           mox.JID.fromString(jid),
@@ -35,26 +45,13 @@ mixin MessageService on XmppBase {
             'Storing with error to allow resend...',
             e);
         await _dbOp<XmppDatabase>((db) async {
-          await db.saveMessage(Message(
+          await db.saveMessageError(
             error: MessageError.unknown,
             stanzaID: stanzaID,
-            originID: originID,
-            senderJid: user!.jid.toString(),
-            chatJid: jid,
-            body: text,
-          ));
+          );
         });
         throw XmppMessageException();
       }
-      await _dbOp<XmppDatabase>((db) async {
-        await db.saveMessage(Message(
-          stanzaID: stanzaID,
-          originID: originID,
-          senderJid: user!.jid.toString(),
-          chatJid: jid,
-          body: text,
-        ));
-      });
     }
   }
 

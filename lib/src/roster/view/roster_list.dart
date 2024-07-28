@@ -46,6 +46,7 @@ class RosterList extends StatelessWidget {
                     color: open ? context.colorScheme.accent : null,
                     leading: AxiAvatar(
                       jid: item.jid,
+                      subscription: item.subscription,
                       presence:
                           item.subscription.isTo || item.subscription.isBoth
                               ? item.presence

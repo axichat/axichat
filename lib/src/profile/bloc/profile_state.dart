@@ -4,6 +4,7 @@ part of 'profile_cubit.dart';
 class ProfileState with _$ProfileState {
   const factory ProfileState({
     required String jid,
+    required String resource,
     required String title,
     @Default(Presence.chat) Presence presence,
     String? status,

@@ -18,6 +18,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
+    on<ChatMessageFocused>(_onChatMessageFocused);
+    on<ChatMessageUnfocused>(_onChatMessageUnfocused);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<ChatMessageSent>(
@@ -56,8 +58,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _onChatMessagesUpdated(
-      _ChatMessagesUpdated event, Emitter<ChatState> emit) {
+    _ChatMessagesUpdated event,
+    Emitter<ChatState> emit,
+  ) {
     emit(state.copyWith(items: event.items));
+  }
+
+  void _onChatMessageFocused(
+    ChatMessageFocused event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        focused:
+            state.items.where((e) => e.stanzaID == event.messageID).firstOrNull,
+      ),
+    );
+  }
+
+  void _onChatMessageUnfocused(
+    ChatMessageUnfocused event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state.focused == null) return;
+    emit(state.copyWith(focused: null));
   }
 
   Future<void> _onChatTypingStarted(

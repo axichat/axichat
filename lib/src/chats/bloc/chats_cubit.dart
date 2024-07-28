@@ -40,4 +40,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
     await _xmppService.openChat(jid);
   }
+
+  Future<void> toggleFavourited({
+    required String jid,
+    required bool favourited,
+  }) async {
+    await _xmppService.toggleChatFavourited(jid: jid, favourited: favourited);
+  }
 }

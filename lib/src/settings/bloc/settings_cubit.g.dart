@@ -18,7 +18,7 @@ _$SettingsStateImpl _$$SettingsStateImplFromJson(Map<String, dynamic> json) =>
               'theme_mode',
               (v) =>
                   $enumDecodeNullable(_$ThemeModeEnumMap, v) ??
-                  ThemeMode.system),
+                  ThemeMode.light),
           shadColor: $checkedConvert(
               'shad_color',
               (v) =>

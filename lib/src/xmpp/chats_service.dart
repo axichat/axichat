@@ -59,4 +59,13 @@ mixin ChatsService on XmppBase {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     });
   }
+
+  Future<void> toggleChatFavourited({
+    required String jid,
+    required bool favourited,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markChatFavourited(jid: jid, favourited: favourited);
+    });
+  }
 }

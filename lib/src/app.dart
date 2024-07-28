@@ -59,25 +59,38 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   AppLifecycleListener? _lifecycleListener;
 
+  Future<void> login() async {
+    final auth = context.read<AuthenticationCubit>();
+    if (!await context.read<XmppService>().connected) {
+      await auth.logout();
+    }
+    if (auth.state is! AuthenticationNone) return;
+    await auth.login();
+  }
+
+  Future<void> logout() async {
+    final auth = context.read<AuthenticationCubit>();
+    if (auth.state is! AuthenticationComplete) return;
+    await auth.logout();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    login();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final auth = context.read<AuthenticationCubit>();
     _lifecycleListener = _lifecycleListener ??
         AppLifecycleListener(
-          onStateChange: (state) async {
-            if (state == AppLifecycleState.resumed) {
-              if (auth.state is! AuthenticationNone) return;
-              auth.login();
-            } else if (state == AppLifecycleState.detached) {
-              if (auth.state is! AuthenticationComplete) return;
-              auth.logout();
-            }
-          },
+          onResume: login,
+          onShow: login,
+          onRestart: login,
+          onDetach: logout,
           onExitRequested: () async {
-            if (auth.state is AuthenticationComplete) {
-              auth.logout();
-            }
+            await logout();
             return AppExitResponse.exit;
           },
         );

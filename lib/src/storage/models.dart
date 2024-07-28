@@ -36,6 +36,13 @@ enum MessageError {
   plaintextFileInOmemo;
 
   bool get isNotNone => this != none;
+
+  String? get tooltip {
+    if (this == serviceUnavailable) {
+      return 'Recipient\'s client or server does not support this action.';
+    }
+    return null;
+  }
 }
 
 enum MessageWarning {

@@ -44,6 +44,21 @@ class ChatsList extends StatelessWidget {
                       subtitle: item.lastMessage,
                       actions: [
                         DisplayTimeSince(timestamp: item.lastChangeTimestamp),
+                        ShadButton.ghost(
+                          width: 30.0,
+                          height: 30.0,
+                          icon: Icon(
+                            item.favourited
+                                ? Icons.star_rounded
+                                : Icons.star_border_rounded,
+                            size: 22.0,
+                          ),
+                          onPressed: () =>
+                              context.read<ChatsCubit>().toggleFavourited(
+                                    jid: item.jid,
+                                    favourited: !item.favourited,
+                                  ),
+                        ),
                       ],
                     ),
                   ),

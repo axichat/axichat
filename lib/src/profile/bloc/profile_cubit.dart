@@ -13,14 +13,15 @@ class ProfileCubit extends Cubit<ProfileState> {
       : _xmppService = xmppService,
         super(ProfileState(
           jid: xmppService.user!.jid.toString(),
+          resource: xmppService.resource,
           title: xmppService.user!.username,
           presence: xmppService.presence,
           status: xmppService.status,
         )) {
-    _presenceSubscription = _xmppService.presenceStream?.listen(
+    _presenceSubscription = _xmppService.presenceStream.listen(
       (presence) => emit(state.copyWith(presence: presence)),
     );
-    _statusSubscription = _xmppService.statusStream?.listen(
+    _statusSubscription = _xmppService.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
   }

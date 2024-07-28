@@ -158,6 +158,12 @@ class XmppService extends XmppBase
       ? _connection.connectionSettings.user
       : null;
 
+  Future<bool> get connected async =>
+      (await _connection.getConnectionState()) ==
+      mox.XmppConnectionState.connected;
+
+  String get resource => _connection.resource;
+
   bool get databasesInitialized =>
       _credentialStore.isCompleted &&
       _stateStore.isCompleted &&
@@ -551,6 +557,7 @@ class XmppService extends XmppBase
   Future<void> disconnect({bool burn = false}) async {
     _log.info('Logging out...');
     await _deferReset(() async {
+      if (user == null) return;
       final jid = user!.jid.toString();
 
       String? passphrase;
@@ -935,10 +942,6 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   String? resource;
   bool _attempted = false;
 
-  String generateResource() {
-    return 'axichat.${generateRandomString(length: 10)}';
-  }
-
   @override
   Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
       mox.XMLNode nonza) async {
@@ -954,12 +957,14 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
           mox.XMLNode.xmlns(
             tag: 'bind',
             xmlns: mox.bindXmlns,
-            children: [
-              mox.XMLNode(
-                tag: 'resource',
-                text: resource ?? generateResource(),
-              ),
-            ],
+            children: resource == null
+                ? []
+                : [
+                    mox.XMLNode(
+                      tag: 'resource',
+                      text: resource,
+                    ),
+                  ],
           ),
         ],
       );

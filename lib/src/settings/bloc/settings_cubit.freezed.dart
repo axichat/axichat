@@ -139,7 +139,7 @@ class __$$SettingsStateImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$SettingsStateImpl implements _SettingsState {
   const _$SettingsStateImpl(
-      {this.themeMode = ThemeMode.system,
+      {this.themeMode = ThemeMode.light,
       this.shadColor = ShadColor.neutral,
       this.indicateTyping = true,
       this.lowMotion = false});

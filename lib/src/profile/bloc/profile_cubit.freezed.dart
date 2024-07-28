@@ -17,6 +17,7 @@ final _privateConstructorUsedError = UnsupportedError(
 /// @nodoc
 mixin _$ProfileState {
   String get jid => throw _privateConstructorUsedError;
+  String get resource => throw _privateConstructorUsedError;
   String get title => throw _privateConstructorUsedError;
   Presence get presence => throw _privateConstructorUsedError;
   String? get status => throw _privateConstructorUsedError;
@@ -32,7 +33,12 @@ abstract class $ProfileStateCopyWith<$Res> {
           ProfileState value, $Res Function(ProfileState) then) =
       _$ProfileStateCopyWithImpl<$Res, ProfileState>;
   @useResult
-  $Res call({String jid, String title, Presence presence, String? status});
+  $Res call(
+      {String jid,
+      String resource,
+      String title,
+      Presence presence,
+      String? status});
 }
 
 /// @nodoc
@@ -49,6 +55,7 @@ class _$ProfileStateCopyWithImpl<$Res, $Val extends ProfileState>
   @override
   $Res call({
     Object? jid = null,
+    Object? resource = null,
     Object? title = null,
     Object? presence = null,
     Object? status = freezed,
@@ -57,6 +64,10 @@ class _$ProfileStateCopyWithImpl<$Res, $Val extends ProfileState>
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
+              as String,
+      resource: null == resource
+          ? _value.resource
+          : resource // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -82,7 +93,12 @@ abstract class _$$ProfileStateImplCopyWith<$Res>
       __$$ProfileStateImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String jid, String title, Presence presence, String? status});
+  $Res call(
+      {String jid,
+      String resource,
+      String title,
+      Presence presence,
+      String? status});
 }
 
 /// @nodoc
@@ -97,6 +113,7 @@ class __$$ProfileStateImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? jid = null,
+    Object? resource = null,
     Object? title = null,
     Object? presence = null,
     Object? status = freezed,
@@ -105,6 +122,10 @@ class __$$ProfileStateImplCopyWithImpl<$Res>
       jid: null == jid
           ? _value.jid
           : jid // ignore: cast_nullable_to_non_nullable
+              as String,
+      resource: null == resource
+          ? _value.resource
+          : resource // ignore: cast_nullable_to_non_nullable
               as String,
       title: null == title
           ? _value.title
@@ -127,12 +148,15 @@ class __$$ProfileStateImplCopyWithImpl<$Res>
 class _$ProfileStateImpl implements _ProfileState {
   const _$ProfileStateImpl(
       {required this.jid,
+      required this.resource,
       required this.title,
       this.presence = Presence.chat,
       this.status});
 
   @override
   final String jid;
+  @override
+  final String resource;
   @override
   final String title;
   @override
@@ -143,7 +167,7 @@ class _$ProfileStateImpl implements _ProfileState {
 
   @override
   String toString() {
-    return 'ProfileState(jid: $jid, title: $title, presence: $presence, status: $status)';
+    return 'ProfileState(jid: $jid, resource: $resource, title: $title, presence: $presence, status: $status)';
   }
 
   @override
@@ -152,6 +176,8 @@ class _$ProfileStateImpl implements _ProfileState {
         (other.runtimeType == runtimeType &&
             other is _$ProfileStateImpl &&
             (identical(other.jid, jid) || other.jid == jid) &&
+            (identical(other.resource, resource) ||
+                other.resource == resource) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.presence, presence) ||
                 other.presence == presence) &&
@@ -159,7 +185,8 @@ class _$ProfileStateImpl implements _ProfileState {
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, jid, title, presence, status);
+  int get hashCode =>
+      Object.hash(runtimeType, jid, resource, title, presence, status);
 
   @JsonKey(ignore: true)
   @override
@@ -171,12 +198,15 @@ class _$ProfileStateImpl implements _ProfileState {
 abstract class _ProfileState implements ProfileState {
   const factory _ProfileState(
       {required final String jid,
+      required final String resource,
       required final String title,
       final Presence presence,
       final String? status}) = _$ProfileStateImpl;
 
   @override
   String get jid;
+  @override
+  String get resource;
   @override
   String get title;
   @override

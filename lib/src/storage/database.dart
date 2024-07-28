@@ -54,6 +54,10 @@ abstract interface class XmppDatabase implements Database {
   Stream<Chat> watchChat(String jid);
   Future<Chat?> openChat(String jid);
   Future<Chat?> closeChat();
+  Future<void> markChatFavourited({
+    required String jid,
+    required bool favourited,
+  });
   Future<void> updateChatState({
     required String chatJid,
     required mox.ChatState state,
@@ -168,6 +172,20 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
 
   @override
   $ChatsTable get table => chats;
+
+  @override
+  Stream<List<Chat>> watchAll() => (select(table)
+        ..orderBy([
+          (t) => OrderingTerm(
+                expression: t.favourited,
+                mode: OrderingMode.desc,
+              ),
+          (t) => OrderingTerm(
+                expression: t.lastChangeTimestamp,
+                mode: OrderingMode.desc,
+              ),
+        ]))
+      .watch();
 
   Stream<Chat> watchOne(String jid) =>
       (select(table)..where((table) => table.jid.equals(jid))).watchSingle();
@@ -446,6 +464,16 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       (await chatsAccessor.closeOpen()).firstOrNull;
 
   @override
+  Future<void> markChatFavourited({
+    required String jid,
+    required bool favourited,
+  }) async {
+    _log.info('Marking chat: $jid as favourited: $favourited');
+    await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(favourited: Value(favourited)));
+  }
+
+  @override
   Future<void> updateChatState({
     required String chatJid,
     required mox.ChatState state,
@@ -662,8 +690,9 @@ Future<File> dbFilePathFor(String jid) async {
 
 String generateRandomString({int length = 32}) {
   final random = Random.secure();
-  return utf8
-      .decode(List<int>.generate(length, (_) => random.nextInt(33) + 89));
+  return utf8.decode(
+    List<int>.generate(length, (_) => random.nextInt(33) + 89),
+  );
 }
 
 // Using SHA-1 as this is only to obfuscate the jid in file paths.

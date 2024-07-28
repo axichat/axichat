@@ -10,7 +10,7 @@ class RosterAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
-    return ShadTooltip(
+    return AxiTooltip(
       builder: (_) => const Text('Add to roster'),
       child: FloatingActionButton(
         child: const Icon(LucideIcons.userPlus),
