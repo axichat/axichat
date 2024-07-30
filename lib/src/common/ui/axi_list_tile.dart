@@ -21,10 +21,11 @@ class AxiListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShadCard(
-      padding: const EdgeInsets.all(12.0),
+      padding: const EdgeInsets.all(8.0),
       rowCrossAxisAlignment: CrossAxisAlignment.center,
       rowMainAxisSize: MainAxisSize.max,
       backgroundColor: color,
+      height: 70.0,
       leading: leading == null
           ? null
           : ConstrainedBox(

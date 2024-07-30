@@ -21,6 +21,7 @@ import 'models.dart';
 part 'database.g.dart';
 
 abstract interface class Database {
+  /// Must be idempotent.
   Future<void> close();
 }
 
@@ -90,7 +91,8 @@ abstract interface class XmppDatabase implements Database {
   Future<void> unblockOne(String jid);
   Future<void> replaceBlocklist(List<String> blocks);
   Future<void> deleteBlocklist();
-  Future<void> wipe();
+  Future<void> deleteAll();
+  Future<void> deleteFile();
 }
 
 abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
@@ -286,7 +288,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   BlocklistAccessor,
 ])
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
-  XmppDrift._(super.e) : super();
+  XmppDrift._(this.jid, super.e) : super();
 
   static XmppDrift? _instance;
 
@@ -295,9 +297,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required String passphrase,
     QueryExecutor? executor,
   }) =>
-      _instance ??= XmppDrift._(executor ?? _openDatabase(jid, passphrase));
+      _instance ??=
+          XmppDrift._(jid, executor ?? _openDatabase(jid, passphrase));
 
   final _log = Logger('XmppDrift');
+  final String jid;
 
   @override
   int get schemaVersion => 1;
@@ -631,7 +635,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  Future<void> wipe() async {
+  Future<void> deleteAll() async {
     await customStatement('PRAGMA foreign_keys = OFF');
     try {
       await transaction(() async {
@@ -648,6 +652,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> close() async {
     await super.close();
     _instance = null;
+  }
+
+  @override
+  Future<void> deleteFile() async {
+    (await dbFilePathFor(jid)).delete();
   }
 }
 

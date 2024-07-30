@@ -13,5 +13,6 @@ class AxiTextFormField extends ShadInputFormField {
     super.onSubmitted,
     super.initialValue,
     super.description,
+    super.inputFormatters,
   });
 }

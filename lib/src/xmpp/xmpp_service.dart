@@ -7,7 +7,6 @@ import 'package:async/async.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/impatient_completer.dart';
 import 'package:chat/src/storage/models.dart';
@@ -71,6 +70,8 @@ final _devServerLookup = <String, IOEndpoint>{
   )
 };
 
+typedef ConnectionState = mox.XmppConnectionState;
+
 abstract class XmppBase {
   XmppBase();
 
@@ -82,7 +83,11 @@ abstract class XmppBase {
 
   User? get user;
 
-  Future<void> authenticateAndConnect(String? jid, String? password);
+  Future<void> connect({
+    required String jid,
+    required String password,
+    required String databasePassphrase,
+  });
   Future<void> disconnect();
 
   Future<V> _dbOpReturning<D extends Database, V>(
@@ -103,7 +108,6 @@ class XmppService extends XmppBase
         BlockingService {
   XmppService._(
     this._buildConnection,
-    this._buildCredentialStore,
     this._buildStateStore,
     this._buildDatabase,
     this._capability,
@@ -116,7 +120,6 @@ class XmppService extends XmppBase
 
   factory XmppService({
     required XmppConnection Function() buildConnection,
-    required FutureOr<CredentialStore> Function() buildCredentialStore,
     required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
     required Capability capability,
@@ -124,7 +127,6 @@ class XmppService extends XmppBase
   }) =>
       _instance ??= XmppService._(
         buildConnection,
-        buildCredentialStore,
         buildStateStore,
         buildDatabase,
         capability,
@@ -135,20 +137,14 @@ class XmppService extends XmppBase
   final _log = Logger('XmppService');
 
   final XmppConnection Function() _buildConnection;
-  final FutureOr<CredentialStore> Function() _buildCredentialStore;
   final FutureOr<XmppStateStore> Function(String, String) _buildStateStore;
   final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
   final Capability _capability;
   final Policy _policy;
 
-  final jidStorageKey = CredentialStore.registerKey('jid');
-  final passwordStorageKey = CredentialStore.registerKey('password');
-
   final resourceStorageKey = XmppStateStore.registerKey('last_resource');
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
-
-  Completer<CredentialStore> _credentialStore = Completer<CredentialStore>();
 
   @override
   XmppService get owner => this;
@@ -159,24 +155,26 @@ class XmppService extends XmppBase
       : null;
 
   Future<bool> get connected async =>
-      (await _connection.getConnectionState()) ==
-      mox.XmppConnectionState.connected;
+      connectionState == mox.XmppConnectionState.connected;
 
   String get resource => _connection.resource;
 
   bool get databasesInitialized =>
-      _credentialStore.isCompleted &&
-      _stateStore.isCompleted &&
-      _database.isCompleted;
+      _stateStore.isCompleted && _database.isCompleted;
 
   bool get needsReset =>
       user != null ||
       _eventSubscription != null ||
-      _credentialStore.isCompleted ||
       _stateStore.isCompleted ||
       _database.isCompleted;
 
   StreamSubscription<mox.XmppEvent>? _eventSubscription;
+
+  ConnectionState get connectionState => _connectionState;
+  var _connectionState = ConnectionState.notConnected;
+
+  Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
+  final _connectivityStream = StreamController<ConnectionState>.broadcast();
 
   void _onEvent(mox.XmppEvent event) async {
     switch (event) {
@@ -229,6 +227,9 @@ class XmppService extends XmppBase
         await _dbOp<XmppDatabase>((db) async {
           await db.saveMessage(message);
         });
+      case mox.ConnectionStateChangedEvent event:
+        _connectionState = event.state;
+        _connectivityStream.add(event.state);
       case mox.StanzaAckedEvent event:
         if (event.stanza.id == null) return;
         await _dbOp<XmppDatabase>((db) async {
@@ -300,49 +301,32 @@ class XmppService extends XmppBase
   }
 
   @override
-  Future<void> authenticateAndConnect(
-    String? jid,
-    String? password, [
-    bool saveCredentials = true,
-  ]) async {
-    assert((jid == null) == (password == null));
-
+  Future<void> connect({
+    required String jid,
+    required String password,
+    required String databasePassphrase,
+    bool awaitAuthentication = true,
+  }) async {
     if (needsReset) await _reset();
 
     await _deferResetToError(() async {
       _log.info('Attempting login...');
 
-      _credentialStore.complete(_buildCredentialStore());
+      if (!awaitAuthentication && !_stateStore.isCompleted) {
+        _stateStore.complete(await _buildStateStore(jid, databasePassphrase));
+      }
 
-      if (jid != null && password != null) {
-        _log.info('New jid and password provided. '
-            'Attempting to authenticate directly with server...');
+      await _initConnection();
 
-        await _dbOp<CredentialStore>((cs) async {
-          final databasePassphraseStorageKey = CredentialStore.registerKey(
-              '${storagePrefixFor(jid!)}_database_passphrase');
-          final databasePassphrase =
-              await cs.read(key: databasePassphraseStorageKey);
+      final newUser = User(
+        jid: mox.JID.fromString(jid),
+        password: password,
+      );
 
-          if (databasePassphrase case final passphrase?) {
-            _log.info('User has authenticated in the past. '
-                'Opening state store for potential stream resumption...');
-            if (!_stateStore.isCompleted) {
-              _stateStore.complete(await _buildStateStore(jid!, passphrase));
-            }
-          }
-        });
+      _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
 
-        await _initConnection();
-
-        final newUser = User(
-          jid: mox.JID.fromString(jid!),
-          password: password!,
-        );
-
-        _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
-
-        _connection.connectionSettings = XmppConnectionSettings(user: newUser);
+      _connection.connectionSettings = XmppConnectionSettings(user: newUser);
+      if (awaitAuthentication) {
         final result = await _connection.connect(
           shouldReconnect: false,
           waitForConnection: true,
@@ -353,86 +337,13 @@ class XmppService extends XmppBase
           _log.info('Login rejected by server.');
           throw XmppAuthenticationException();
         }
-
         _log.info('Login successful. Initializing databases...');
-
-        await _dbOp<CredentialStore>((cs) async {
-          if (saveCredentials) {
-            _log.info('Saving jid and password...');
-            await cs.write(key: jidStorageKey, value: jid);
-            await cs.write(key: passwordStorageKey, value: password);
-          }
-
-          final databasePassphraseStorageKey = CredentialStore.registerKey(
-              '${storagePrefixFor(jid!)}_database_passphrase');
-          var databasePassphrase =
-              await cs.read(key: databasePassphraseStorageKey);
-
-          if (databasePassphrase == null || databasePassphrase.isEmpty) {
-            assert(!databasesInitialized);
-            _log.info('Generating new database passphrase...');
-            databasePassphrase = generateRandomString();
-            cs.write(
-              key: databasePassphraseStorageKey,
-              value: databasePassphrase,
-            );
-          }
-
-          await _initDatabases(jid!, databasePassphrase);
-        });
-
-        return;
+        await _initDatabases(jid, databasePassphrase);
+      } else {
+        await _initDatabases(jid, databasePassphrase);
+        await _connection.connect();
       }
-
-      _log.info('No jid or password provided. '
-          'Attempting to log in from stored user...');
-
-      String? databasePassphrase;
-      await _dbOp<CredentialStore>((cs) async {
-        jid = await cs.read(key: jidStorageKey);
-        password = await cs.read(key: passwordStorageKey);
-
-        assert((jid == null) == (password == null));
-
-        if (jid == null ||
-            jid!.isEmpty ||
-            password == null ||
-            password!.isEmpty) {
-          _log.info('No saved user. Should redirect to login screen.');
-          throw XmppUserNotFoundException();
-        }
-
-        final databasePassphraseStorageKey = CredentialStore.registerKey(
-            '${storagePrefixFor(jid!)}_database_passphrase');
-        databasePassphrase = await cs.read(key: databasePassphraseStorageKey);
-
-        if (databasePassphrase == null || databasePassphrase!.isEmpty) {
-          assert(!databasesInitialized);
-          _log.info('Generating new database passphrase...');
-          databasePassphrase = generateRandomString();
-          cs.write(
-            key: databasePassphraseStorageKey,
-            value: databasePassphrase,
-          );
-        }
-      });
-
-      await _initDatabases(jid!, databasePassphrase!);
-      await _initConnection();
-
-      final newUser = User(
-        jid: mox.JID.fromString(jid!),
-        password: password!,
-      );
-
-      _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
-
-      _connection.connectionSettings = XmppConnectionSettings(user: newUser);
-      _connection.connect();
-
-      return;
     });
-    return;
   }
 
   Future<void> _initConnection() async {
@@ -474,27 +385,27 @@ class XmppService extends XmppBase
       mox.CSIManager(),
       mox.CarbonsManager(),
       mox.PubSubManager(),
-      mox.UserAvatarManager(),
+      // mox.UserAvatarManager(),
       mox.StableIdManager(),
       mox.MessageDeliveryReceiptManager(),
       mox.ChatMarkerManager(),
-      mox.OOBManager(),
-      mox.SFSManager(),
+      // mox.OOBManager(),
+      // mox.SFSManager(),
       mox.MessageRepliesManager(),
       mox.BlockingManager(),
       mox.ChatStateManager(),
-      mox.HttpFileUploadManager(),
-      mox.FileUploadNotificationManager(),
+      // mox.HttpFileUploadManager(),
+      // mox.FileUploadNotificationManager(),
       mox.EmeManager(),
-      mox.CryptographicHashManager(),
+      // mox.CryptographicHashManager(),
       mox.DelayedDeliveryManager(),
       mox.MessageRetractionManager(),
       mox.LastMessageCorrectionManager(),
       mox.MessageReactionsManager(),
-      mox.StickersManager(),
+      // mox.StickersManager(),
       mox.MessageProcessingHintManager(),
-      mox.MUCManager(),
-      mox.VCardManager(),
+      // mox.MUCManager(),
+      // mox.VCardManager(),
       mox.OccupantIdManager(),
     ]);
 
@@ -534,12 +445,7 @@ class XmppService extends XmppBase
     });
   }
 
-  Future<void> _wipeDatabases(String jid, String passphrase) async {
-    await _dbOp<CredentialStore>((cs) async {
-      _log.info('Wiping credential store...');
-      await cs.deleteAll(burn: true);
-    });
-
+  Future<void> burn() async {
     await _dbOp<XmppStateStore>((ss) async {
       _log.info('Wiping state store...');
       await ss.deleteAll(burn: true);
@@ -547,33 +453,16 @@ class XmppService extends XmppBase
 
     await _dbOp<XmppDatabase>((db) async {
       _log.info('Wiping database...');
-      await db.wipe();
+      await db.deleteAll();
       await db.close();
-      (await dbFilePathFor(jid)).delete();
+      await db.deleteFile();
     });
   }
 
   @override
-  Future<void> disconnect({bool burn = false}) async {
+  Future<void> disconnect() async {
     _log.info('Logging out...');
-    await _deferReset(() async {
-      if (user == null) return;
-      final jid = user!.jid.toString();
-
-      String? passphrase;
-      await _dbOp<CredentialStore>((cs) async {
-        await cs.delete(key: jidStorageKey);
-        await cs.delete(key: passwordStorageKey);
-
-        final databasePassphraseStorageKey = CredentialStore.registerKey(
-            '${storagePrefixFor(jid)}_database_passphrase');
-        passphrase = await cs.read(key: databasePassphraseStorageKey);
-      });
-
-      if (!burn || passphrase == null) return;
-
-      await _wipeDatabases(jid, passphrase!);
-    });
+    await _reset();
     _log.info('Logged out.');
   }
 
@@ -585,22 +474,15 @@ class XmppService extends XmppBase
     await _eventSubscription?.cancel();
     _eventSubscription = null;
 
-    try {
-      await _connection.disconnect();
-      _log.info('Gracefully disconnected.');
-    } catch (e, s) {
-      _log.severe('Graceful disconnect failed. Closing forcefully...', e, s);
+    if (await connected) {
+      try {
+        await _connection.disconnect();
+        _log.info('Gracefully disconnected.');
+      } catch (e, s) {
+        _log.severe('Graceful disconnect failed. Closing forcefully...', e, s);
+      }
     }
     _connection = _buildConnection();
-
-    if (!_credentialStore.isCompleted) {
-      _log.warning('Cancelling credential store initialization...');
-      _credentialStore.completeError(XmppAbortedException());
-    } else {
-      _log.info('Closing credential store...');
-      await (await _credentialStore.future).close();
-    }
-    _credentialStore = Completer<CredentialStore>();
 
     if (!_stateStore.isCompleted) {
       _log.warning('Cancelling state store initialization...');
@@ -628,14 +510,6 @@ class XmppService extends XmppBase
     _instance = null;
   }
 
-  Future<T> _deferReset<T>(FutureOr<T> Function() operation) async {
-    try {
-      return await operation();
-    } finally {
-      await _reset();
-    }
-  }
-
   Future<T> _deferResetToError<T>(FutureOr<T> Function() operation) async {
     try {
       return await operation();
@@ -652,8 +526,6 @@ class XmppService extends XmppBase
 
     late final Completer<D> completer;
     switch (D) {
-      case == CredentialStore:
-        completer = _credentialStore as Completer<D>;
       case == XmppStateStore:
         completer = _stateStore.completer as Completer<D>;
       case == XmppDatabase:
@@ -687,8 +559,6 @@ class XmppService extends XmppBase
 
     late final Completer<T> completer;
     switch (T) {
-      case == CredentialStore:
-        completer = _credentialStore as Completer<T>;
       case == XmppStateStore:
         completer = _stateStore.completer as Completer<T>;
       case == XmppDatabase:
@@ -739,7 +609,7 @@ class XmppConnection extends mox.XmppConnection {
           socketWrapper ?? XmppSocketWrapper(),
         );
 
-  // Check if we have a connectionSettings as it is marked 'late' in mox.
+  // Check if we have a connectionSettings as it is marked [late] in mox.
   bool get hasConnectionSettings => _hasConnectionSettings;
   bool _hasConnectionSettings = false;
 

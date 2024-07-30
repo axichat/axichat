@@ -1,17 +1,15 @@
-import 'dart:ui';
-
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
+import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
-import 'package:logging/logging.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class Axichat extends StatelessWidget {
@@ -37,70 +35,22 @@ class Axichat extends StatelessWidget {
           ),
           BlocProvider(
             create: (context) => AuthenticationCubit(
+              credentialStore: CredentialStore(
+                capability: context.read<Capability>(),
+                policy: context.read<Policy>(),
+              ),
               xmppService: context.read<XmppService>(),
             ),
           ),
         ],
-        child: const MaterialAxichat(),
+        child: MaterialAxichat(),
       ),
     );
   }
 }
 
-class MaterialAxichat extends StatefulWidget {
-  const MaterialAxichat({super.key});
-
-  @override
-  State<MaterialAxichat> createState() => _MaterialAxichatState();
-}
-
-class _MaterialAxichatState extends State<MaterialAxichat> {
-  final _log = Logger('MaterialAxichat');
-
-  AppLifecycleListener? _lifecycleListener;
-
-  Future<void> login() async {
-    final auth = context.read<AuthenticationCubit>();
-    if (!await context.read<XmppService>().connected) {
-      await auth.logout();
-    }
-    if (auth.state is! AuthenticationNone) return;
-    await auth.login();
-  }
-
-  Future<void> logout() async {
-    final auth = context.read<AuthenticationCubit>();
-    if (auth.state is! AuthenticationComplete) return;
-    await auth.logout();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    login();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _lifecycleListener = _lifecycleListener ??
-        AppLifecycleListener(
-          onResume: login,
-          onShow: login,
-          onRestart: login,
-          onDetach: logout,
-          onExitRequested: () async {
-            await logout();
-            return AppExitResponse.exit;
-          },
-        );
-  }
-
-  @override
-  void dispose() {
-    _lifecycleListener?.dispose();
-    super.dispose();
-  }
+class MaterialAxichat extends StatelessWidget {
+  MaterialAxichat({super.key});
 
   final _router = GoRouter(
     restorationScopeId: 'app',

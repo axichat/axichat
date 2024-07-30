@@ -22,8 +22,8 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
 
   final XmppService _xmppService;
 
-  late final StreamSubscription<List<RosterItem>>? _rosterSubscription;
-  late final StreamSubscription<List<Invite>>? _invitesSubscription;
+  late final StreamSubscription<List<RosterItem>> _rosterSubscription;
+  late final StreamSubscription<List<Invite>> _invitesSubscription;
 
   int get inviteCount => state is RosterInvitesAvailable
       ? (state as RosterInvitesAvailable).invites.length
@@ -42,8 +42,8 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
 
   @override
   Future<void> close() {
-    _rosterSubscription?.cancel();
-    _invitesSubscription?.cancel();
+    _rosterSubscription.cancel();
+    _invitesSubscription.cancel();
     return super.close();
   }
 

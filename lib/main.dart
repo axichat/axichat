@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
-import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
@@ -35,15 +34,8 @@ void main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
 
-  final capability = Capability();
-  final policy = Policy();
-
   final xmppService = XmppService(
     buildConnection: () => XmppConnection(),
-    buildCredentialStore: () => CredentialStore(
-      capability: capability,
-      policy: policy,
-    ),
     buildStateStore: (jid, passphrase) async {
       await Hive.initFlutter(storagePrefixFor(jid));
       if (!Hive.isAdapterRegistered(1)) {

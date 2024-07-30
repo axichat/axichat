@@ -20,7 +20,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
 
   final XmppService _xmppService;
 
-  late final StreamSubscription<List<BlocklistData>>? _blocklistSubscription;
+  late final StreamSubscription<List<BlocklistData>> _blocklistSubscription;
 
   @override
   void onChange(Change<BlocklistState> change) {
@@ -33,7 +33,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
 
   @override
   Future<void> close() {
-    _blocklistSubscription?.cancel();
+    _blocklistSubscription.cancel();
     return super.close();
   }
 

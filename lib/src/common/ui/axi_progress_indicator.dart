@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 class AxiProgressIndicator extends StatelessWidget {
   const AxiProgressIndicator({
     super.key,
+    this.dimension = 16.0,
     this.color,
     this.semanticsLabel,
   });
 
+  final double dimension;
   final Color? color;
   final String? semanticsLabel;
 
@@ -15,7 +17,7 @@ class AxiProgressIndicator extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: SizedBox.square(
-        dimension: 16,
+        dimension: dimension,
         child: CircularProgressIndicator(
           color: color,
           semanticsLabel: semanticsLabel,

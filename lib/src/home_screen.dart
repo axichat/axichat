@@ -6,6 +6,7 @@ import 'package:chat/src/chat/view/chat.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/chats/view/chats_list.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/profile/view/profile_card.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
@@ -19,6 +20,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'chat/bloc/chat_bloc.dart';
+import 'connectivity/bloc/connectivity_cubit.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -63,23 +65,39 @@ class HomeScreen extends StatelessWidget {
                   xmppService: context.read<XmppService>(),
                 ),
               ),
+              BlocProvider(
+                create: (context) => ConnectivityCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
+              ),
             ],
-            child: Builder(
-              builder: (context) {
+            child: LayoutBuilder(
+              builder: (context, constraints) {
                 final openJid = context.watch<ChatsCubit>().state.openJid;
-                return AxiAdaptiveLayout(
-                  invertPriority: openJid != null,
-                  primaryChild: Nexus(tabs: tabs),
-                  secondaryChild: openJid == null
-                      ? const GuestChat()
-                      : BlocProvider(
-                          key: Key(openJid),
-                          create: (context) => ChatBloc(
-                            jid: openJid,
-                            xmppService: context.read<XmppService>(),
-                          ),
-                          child: const Chat(),
+                return ConstrainedBox(
+                  constraints: constraints,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const ConnectivityIndicator(),
+                      Expanded(
+                        child: AxiAdaptiveLayout(
+                          invertPriority: openJid != null,
+                          primaryChild: Nexus(tabs: tabs),
+                          secondaryChild: openJid == null
+                              ? const GuestChat()
+                              : BlocProvider(
+                                  key: Key(openJid),
+                                  create: (context) => ChatBloc(
+                                    jid: openJid,
+                                    xmppService: context.read<XmppService>(),
+                                  ),
+                                  child: const Chat(),
+                                ),
                         ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),

@@ -18,11 +18,11 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   final XmppService _xmppService;
 
-  late final StreamSubscription<List<Chat>>? _chatsSubscription;
+  late final StreamSubscription<List<Chat>> _chatsSubscription;
 
   @override
   Future<void> close() {
-    _chatsSubscription?.cancel();
+    _chatsSubscription.cancel();
     return super.close();
   }
 

@@ -39,15 +39,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String? jid;
   final XmppService _xmppService;
 
-  late final StreamSubscription<Chat>? _chatSubscription;
-  late final StreamSubscription<List<Message>>? _messageSubscription;
+  late final StreamSubscription<Chat> _chatSubscription;
+  late final StreamSubscription<List<Message>> _messageSubscription;
 
   RestartableTimer? _typingTimer;
 
   @override
   Future<void> close() {
-    _chatSubscription?.cancel();
-    _messageSubscription?.cancel();
+    _chatSubscription.cancel();
+    _messageSubscription.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     return super.close();
