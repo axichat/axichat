@@ -26,7 +26,8 @@ mixin _$Message {
   String? get body => throw _privateConstructorUsedError;
   MessageError get error => throw _privateConstructorUsedError;
   MessageWarning get warning => throw _privateConstructorUsedError;
-  bool get encrypted => throw _privateConstructorUsedError;
+  EncryptionProtocol get encryptionProtocol =>
+      throw _privateConstructorUsedError;
   bool get noStore => throw _privateConstructorUsedError;
   bool get acked => throw _privateConstructorUsedError;
   bool get received => throw _privateConstructorUsedError;
@@ -57,7 +58,7 @@ mixin _$Message {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -85,7 +86,7 @@ mixin _$Message {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -117,7 +118,7 @@ mixin _$Message {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -145,7 +146,7 @@ mixin _$Message {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -177,7 +178,7 @@ mixin _$Message {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -205,7 +206,7 @@ mixin _$Message {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -265,7 +266,7 @@ abstract class $MessageCopyWith<$Res> {
       String? body,
       MessageError error,
       MessageWarning warning,
-      bool encrypted,
+      EncryptionProtocol encryptionProtocol,
       bool noStore,
       bool acked,
       bool received,
@@ -306,7 +307,7 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
     Object? body = freezed,
     Object? error = null,
     Object? warning = null,
-    Object? encrypted = null,
+    Object? encryptionProtocol = null,
     Object? noStore = null,
     Object? acked = null,
     Object? received = null,
@@ -364,10 +365,10 @@ class _$MessageCopyWithImpl<$Res, $Val extends Message>
           ? _value.warning
           : warning // ignore: cast_nullable_to_non_nullable
               as MessageWarning,
-      encrypted: null == encrypted
-          ? _value.encrypted
-          : encrypted // ignore: cast_nullable_to_non_nullable
-              as bool,
+      encryptionProtocol: null == encryptionProtocol
+          ? _value.encryptionProtocol
+          : encryptionProtocol // ignore: cast_nullable_to_non_nullable
+              as EncryptionProtocol,
       noStore: null == noStore
           ? _value.noStore
           : noStore // ignore: cast_nullable_to_non_nullable
@@ -450,7 +451,7 @@ abstract class _$$MessageImplCopyWith<$Res> implements $MessageCopyWith<$Res> {
       String? body,
       MessageError error,
       MessageWarning warning,
-      bool encrypted,
+      EncryptionProtocol encryptionProtocol,
       bool noStore,
       bool acked,
       bool received,
@@ -489,7 +490,7 @@ class __$$MessageImplCopyWithImpl<$Res>
     Object? body = freezed,
     Object? error = null,
     Object? warning = null,
-    Object? encrypted = null,
+    Object? encryptionProtocol = null,
     Object? noStore = null,
     Object? acked = null,
     Object? received = null,
@@ -547,10 +548,10 @@ class __$$MessageImplCopyWithImpl<$Res>
           ? _value.warning
           : warning // ignore: cast_nullable_to_non_nullable
               as MessageWarning,
-      encrypted: null == encrypted
-          ? _value.encrypted
-          : encrypted // ignore: cast_nullable_to_non_nullable
-              as bool,
+      encryptionProtocol: null == encryptionProtocol
+          ? _value.encryptionProtocol
+          : encryptionProtocol // ignore: cast_nullable_to_non_nullable
+              as EncryptionProtocol,
       noStore: null == noStore
           ? _value.noStore
           : noStore // ignore: cast_nullable_to_non_nullable
@@ -629,7 +630,7 @@ class _$MessageImpl extends _Message {
       this.body,
       this.error = MessageError.none,
       this.warning = MessageWarning.none,
-      this.encrypted = false,
+      this.encryptionProtocol = EncryptionProtocol.none,
       this.noStore = false,
       this.acked = false,
       this.received = false,
@@ -673,7 +674,7 @@ class _$MessageImpl extends _Message {
   final MessageWarning warning;
   @override
   @JsonKey()
-  final bool encrypted;
+  final EncryptionProtocol encryptionProtocol;
   @override
   @JsonKey()
   final bool noStore;
@@ -732,7 +733,7 @@ class _$MessageImpl extends _Message {
 
   @override
   String toString() {
-    return 'Message(stanzaID: $stanzaID, senderJid: $senderJid, chatJid: $chatJid, timestamp: $timestamp, id: $id, originID: $originID, occupantID: $occupantID, body: $body, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
+    return 'Message(stanzaID: $stanzaID, senderJid: $senderJid, chatJid: $chatJid, timestamp: $timestamp, id: $id, originID: $originID, occupantID: $occupantID, body: $body, error: $error, warning: $warning, encryptionProtocol: $encryptionProtocol, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
   }
 
   @override
@@ -755,8 +756,8 @@ class _$MessageImpl extends _Message {
             (identical(other.body, body) || other.body == body) &&
             (identical(other.error, error) || other.error == error) &&
             (identical(other.warning, warning) || other.warning == warning) &&
-            (identical(other.encrypted, encrypted) ||
-                other.encrypted == encrypted) &&
+            (identical(other.encryptionProtocol, encryptionProtocol) ||
+                other.encryptionProtocol == encryptionProtocol) &&
             (identical(other.noStore, noStore) || other.noStore == noStore) &&
             (identical(other.acked, acked) || other.acked == acked) &&
             (identical(other.received, received) ||
@@ -799,7 +800,7 @@ class _$MessageImpl extends _Message {
         body,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -837,7 +838,7 @@ class _$MessageImpl extends _Message {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -865,7 +866,7 @@ class _$MessageImpl extends _Message {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -894,7 +895,7 @@ class _$MessageImpl extends _Message {
         body,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -926,7 +927,7 @@ class _$MessageImpl extends _Message {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -954,7 +955,7 @@ class _$MessageImpl extends _Message {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -983,7 +984,7 @@ class _$MessageImpl extends _Message {
         body,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -1015,7 +1016,7 @@ class _$MessageImpl extends _Message {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1043,7 +1044,7 @@ class _$MessageImpl extends _Message {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1074,7 +1075,7 @@ class _$MessageImpl extends _Message {
           body,
           error,
           warning,
-          encrypted,
+          encryptionProtocol,
           noStore,
           acked,
           received,
@@ -1138,7 +1139,7 @@ abstract class _Message extends Message {
       final String? body,
       final MessageError error,
       final MessageWarning warning,
-      final bool encrypted,
+      final EncryptionProtocol encryptionProtocol,
       final bool noStore,
       final bool acked,
       final bool received,
@@ -1177,7 +1178,7 @@ abstract class _Message extends Message {
   @override
   MessageWarning get warning;
   @override
-  bool get encrypted;
+  EncryptionProtocol get encryptionProtocol;
   @override
   bool get noStore;
   @override
@@ -1233,7 +1234,7 @@ abstract class _$$MessageFromDbImplCopyWith<$Res>
       DateTime timestamp,
       MessageError error,
       MessageWarning warning,
-      bool encrypted,
+      EncryptionProtocol encryptionProtocol,
       bool noStore,
       bool acked,
       bool received,
@@ -1272,7 +1273,7 @@ class __$$MessageFromDbImplCopyWithImpl<$Res>
     Object? timestamp = null,
     Object? error = null,
     Object? warning = null,
-    Object? encrypted = null,
+    Object? encryptionProtocol = null,
     Object? noStore = null,
     Object? acked = null,
     Object? received = null,
@@ -1330,10 +1331,10 @@ class __$$MessageFromDbImplCopyWithImpl<$Res>
           ? _value.warning
           : warning // ignore: cast_nullable_to_non_nullable
               as MessageWarning,
-      encrypted: null == encrypted
-          ? _value.encrypted
-          : encrypted // ignore: cast_nullable_to_non_nullable
-              as bool,
+      encryptionProtocol: null == encryptionProtocol
+          ? _value.encryptionProtocol
+          : encryptionProtocol // ignore: cast_nullable_to_non_nullable
+              as EncryptionProtocol,
       noStore: null == noStore
           ? _value.noStore
           : noStore // ignore: cast_nullable_to_non_nullable
@@ -1412,7 +1413,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
       required this.timestamp,
       required this.error,
       required this.warning,
-      required this.encrypted,
+      required this.encryptionProtocol,
       required this.noStore,
       required this.acked,
       required this.received,
@@ -1453,7 +1454,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
   @override
   final MessageWarning warning;
   @override
-  final bool encrypted;
+  final EncryptionProtocol encryptionProtocol;
   @override
   final bool noStore;
   @override
@@ -1503,7 +1504,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
 
   @override
   String toString() {
-    return 'Message.fromDb(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encrypted: $encrypted, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
+    return 'Message.fromDb(id: $id, stanzaID: $stanzaID, originID: $originID, occupantID: $occupantID, senderJid: $senderJid, chatJid: $chatJid, body: $body, timestamp: $timestamp, error: $error, warning: $warning, encryptionProtocol: $encryptionProtocol, noStore: $noStore, acked: $acked, received: $received, displayed: $displayed, edited: $edited, retracted: $retracted, isFileUploadNotification: $isFileUploadNotification, fileDownloading: $fileDownloading, fileUploading: $fileUploading, fileMetadataID: $fileMetadataID, quoting: $quoting, stickerPackID: $stickerPackID, pseudoMessageType: $pseudoMessageType, pseudoMessageData: $pseudoMessageData, reactionsPreview: $reactionsPreview)';
   }
 
   @override
@@ -1526,8 +1527,8 @@ class _$MessageFromDbImpl extends _MessageFromDb {
                 other.timestamp == timestamp) &&
             (identical(other.error, error) || other.error == error) &&
             (identical(other.warning, warning) || other.warning == warning) &&
-            (identical(other.encrypted, encrypted) ||
-                other.encrypted == encrypted) &&
+            (identical(other.encryptionProtocol, encryptionProtocol) ||
+                other.encryptionProtocol == encryptionProtocol) &&
             (identical(other.noStore, noStore) || other.noStore == noStore) &&
             (identical(other.acked, acked) || other.acked == acked) &&
             (identical(other.received, received) ||
@@ -1570,7 +1571,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
         timestamp,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -1608,7 +1609,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1636,7 +1637,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1665,7 +1666,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
         timestamp,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -1697,7 +1698,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1725,7 +1726,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1754,7 +1755,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
         timestamp,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -1786,7 +1787,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             String? body,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1814,7 +1815,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
             DateTime timestamp,
             MessageError error,
             MessageWarning warning,
-            bool encrypted,
+            EncryptionProtocol encryptionProtocol,
             bool noStore,
             bool acked,
             bool received,
@@ -1845,7 +1846,7 @@ class _$MessageFromDbImpl extends _MessageFromDb {
           timestamp,
           error,
           warning,
-          encrypted,
+          encryptionProtocol,
           noStore,
           acked,
           received,
@@ -1909,7 +1910,7 @@ abstract class _MessageFromDb extends Message {
       required final DateTime timestamp,
       required final MessageError error,
       required final MessageWarning warning,
-      required final bool encrypted,
+      required final EncryptionProtocol encryptionProtocol,
       required final bool noStore,
       required final bool acked,
       required final bool received,
@@ -1948,7 +1949,7 @@ abstract class _MessageFromDb extends Message {
   @override
   MessageWarning get warning;
   @override
-  bool get encrypted;
+  EncryptionProtocol get encryptionProtocol;
   @override
   bool get noStore;
   @override
@@ -3701,8 +3702,9 @@ mixin _$Chat {
   int get unreadCount => throw _privateConstructorUsedError;
   bool get open => throw _privateConstructorUsedError;
   bool get muted => throw _privateConstructorUsedError;
-  bool get encrypted => throw _privateConstructorUsedError;
   bool get favourited => throw _privateConstructorUsedError;
+  EncryptionProtocol get encryptionProtocol =>
+      throw _privateConstructorUsedError;
   String? get contactID => throw _privateConstructorUsedError;
   String? get contactDisplayName => throw _privateConstructorUsedError;
   String? get contactAvatarPath => throw _privateConstructorUsedError;
@@ -3722,8 +3724,8 @@ mixin _$Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -3742,8 +3744,8 @@ mixin _$Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -3766,8 +3768,8 @@ mixin _$Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -3786,8 +3788,8 @@ mixin _$Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -3810,8 +3812,8 @@ mixin _$Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -3830,8 +3832,8 @@ mixin _$Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -3882,8 +3884,8 @@ abstract class $ChatCopyWith<$Res> {
       int unreadCount,
       bool open,
       bool muted,
-      bool encrypted,
       bool favourited,
+      EncryptionProtocol encryptionProtocol,
       String? contactID,
       String? contactDisplayName,
       String? contactAvatarPath,
@@ -3915,8 +3917,8 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
     Object? unreadCount = null,
     Object? open = null,
     Object? muted = null,
-    Object? encrypted = null,
     Object? favourited = null,
+    Object? encryptionProtocol = null,
     Object? contactID = freezed,
     Object? contactDisplayName = freezed,
     Object? contactAvatarPath = freezed,
@@ -3968,14 +3970,14 @@ class _$ChatCopyWithImpl<$Res, $Val extends Chat>
           ? _value.muted
           : muted // ignore: cast_nullable_to_non_nullable
               as bool,
-      encrypted: null == encrypted
-          ? _value.encrypted
-          : encrypted // ignore: cast_nullable_to_non_nullable
-              as bool,
       favourited: null == favourited
           ? _value.favourited
           : favourited // ignore: cast_nullable_to_non_nullable
               as bool,
+      encryptionProtocol: null == encryptionProtocol
+          ? _value.encryptionProtocol
+          : encryptionProtocol // ignore: cast_nullable_to_non_nullable
+              as EncryptionProtocol,
       contactID: freezed == contactID
           ? _value.contactID
           : contactID // ignore: cast_nullable_to_non_nullable
@@ -4019,8 +4021,8 @@ abstract class _$$ChatImplCopyWith<$Res> implements $ChatCopyWith<$Res> {
       int unreadCount,
       bool open,
       bool muted,
-      bool encrypted,
       bool favourited,
+      EncryptionProtocol encryptionProtocol,
       String? contactID,
       String? contactDisplayName,
       String? contactAvatarPath,
@@ -4049,8 +4051,8 @@ class __$$ChatImplCopyWithImpl<$Res>
     Object? unreadCount = null,
     Object? open = null,
     Object? muted = null,
-    Object? encrypted = null,
     Object? favourited = null,
+    Object? encryptionProtocol = null,
     Object? contactID = freezed,
     Object? contactDisplayName = freezed,
     Object? contactAvatarPath = freezed,
@@ -4102,14 +4104,14 @@ class __$$ChatImplCopyWithImpl<$Res>
           ? _value.muted
           : muted // ignore: cast_nullable_to_non_nullable
               as bool,
-      encrypted: null == encrypted
-          ? _value.encrypted
-          : encrypted // ignore: cast_nullable_to_non_nullable
-              as bool,
       favourited: null == favourited
           ? _value.favourited
           : favourited // ignore: cast_nullable_to_non_nullable
               as bool,
+      encryptionProtocol: null == encryptionProtocol
+          ? _value.encryptionProtocol
+          : encryptionProtocol // ignore: cast_nullable_to_non_nullable
+              as EncryptionProtocol,
       contactID: freezed == contactID
           ? _value.contactID
           : contactID // ignore: cast_nullable_to_non_nullable
@@ -4149,8 +4151,8 @@ class _$ChatImpl extends _Chat {
       this.unreadCount = 0,
       this.open = false,
       this.muted = false,
-      this.encrypted = false,
       this.favourited = false,
+      this.encryptionProtocol = EncryptionProtocol.none,
       this.contactID,
       this.contactDisplayName,
       this.contactAvatarPath,
@@ -4185,10 +4187,10 @@ class _$ChatImpl extends _Chat {
   final bool muted;
   @override
   @JsonKey()
-  final bool encrypted;
+  final bool favourited;
   @override
   @JsonKey()
-  final bool favourited;
+  final EncryptionProtocol encryptionProtocol;
   @override
   final String? contactID;
   @override
@@ -4202,7 +4204,7 @@ class _$ChatImpl extends _Chat {
 
   @override
   String toString() {
-    return 'Chat(jid: $jid, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, myNickname: $myNickname, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
+    return 'Chat(jid: $jid, title: $title, type: $type, lastChangeTimestamp: $lastChangeTimestamp, myNickname: $myNickname, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, unreadCount: $unreadCount, open: $open, muted: $muted, favourited: $favourited, encryptionProtocol: $encryptionProtocol, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
   }
 
   @override
@@ -4227,10 +4229,10 @@ class _$ChatImpl extends _Chat {
                 other.unreadCount == unreadCount) &&
             (identical(other.open, open) || other.open == open) &&
             (identical(other.muted, muted) || other.muted == muted) &&
-            (identical(other.encrypted, encrypted) ||
-                other.encrypted == encrypted) &&
             (identical(other.favourited, favourited) ||
                 other.favourited == favourited) &&
+            (identical(other.encryptionProtocol, encryptionProtocol) ||
+                other.encryptionProtocol == encryptionProtocol) &&
             (identical(other.contactID, contactID) ||
                 other.contactID == contactID) &&
             (identical(other.contactDisplayName, contactDisplayName) ||
@@ -4257,8 +4259,8 @@ class _$ChatImpl extends _Chat {
       unreadCount,
       open,
       muted,
-      encrypted,
       favourited,
+      encryptionProtocol,
       contactID,
       contactDisplayName,
       contactAvatarPath,
@@ -4286,8 +4288,8 @@ class _$ChatImpl extends _Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4306,8 +4308,8 @@ class _$ChatImpl extends _Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4327,8 +4329,8 @@ class _$ChatImpl extends _Chat {
         unreadCount,
         open,
         muted,
-        encrypted,
         favourited,
+        encryptionProtocol,
         contactID,
         contactDisplayName,
         contactAvatarPath,
@@ -4351,8 +4353,8 @@ class _$ChatImpl extends _Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4371,8 +4373,8 @@ class _$ChatImpl extends _Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4392,8 +4394,8 @@ class _$ChatImpl extends _Chat {
         unreadCount,
         open,
         muted,
-        encrypted,
         favourited,
+        encryptionProtocol,
         contactID,
         contactDisplayName,
         contactAvatarPath,
@@ -4416,8 +4418,8 @@ class _$ChatImpl extends _Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4436,8 +4438,8 @@ class _$ChatImpl extends _Chat {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4459,8 +4461,8 @@ class _$ChatImpl extends _Chat {
           unreadCount,
           open,
           muted,
-          encrypted,
           favourited,
+          encryptionProtocol,
           contactID,
           contactDisplayName,
           contactAvatarPath,
@@ -4515,8 +4517,8 @@ abstract class _Chat extends Chat {
       final int unreadCount,
       final bool open,
       final bool muted,
-      final bool encrypted,
       final bool favourited,
+      final EncryptionProtocol encryptionProtocol,
       final String? contactID,
       final String? contactDisplayName,
       final String? contactAvatarPath,
@@ -4547,9 +4549,9 @@ abstract class _Chat extends Chat {
   @override
   bool get muted;
   @override
-  bool get encrypted;
-  @override
   bool get favourited;
+  @override
+  EncryptionProtocol get encryptionProtocol;
   @override
   String? get contactID;
   @override
@@ -4585,8 +4587,8 @@ abstract class _$$ChatFromDbImplCopyWith<$Res> implements $ChatCopyWith<$Res> {
       int unreadCount,
       bool open,
       bool muted,
-      bool encrypted,
       bool favourited,
+      EncryptionProtocol encryptionProtocol,
       String? contactID,
       String? contactDisplayName,
       String? contactAvatarPath,
@@ -4616,8 +4618,8 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
     Object? unreadCount = null,
     Object? open = null,
     Object? muted = null,
-    Object? encrypted = null,
     Object? favourited = null,
+    Object? encryptionProtocol = null,
     Object? contactID = freezed,
     Object? contactDisplayName = freezed,
     Object? contactAvatarPath = freezed,
@@ -4669,14 +4671,14 @@ class __$$ChatFromDbImplCopyWithImpl<$Res>
           ? _value.muted
           : muted // ignore: cast_nullable_to_non_nullable
               as bool,
-      encrypted: null == encrypted
-          ? _value.encrypted
-          : encrypted // ignore: cast_nullable_to_non_nullable
-              as bool,
       favourited: null == favourited
           ? _value.favourited
           : favourited // ignore: cast_nullable_to_non_nullable
               as bool,
+      encryptionProtocol: null == encryptionProtocol
+          ? _value.encryptionProtocol
+          : encryptionProtocol // ignore: cast_nullable_to_non_nullable
+              as EncryptionProtocol,
       contactID: freezed == contactID
           ? _value.contactID
           : contactID // ignore: cast_nullable_to_non_nullable
@@ -4716,8 +4718,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
       required this.unreadCount,
       required this.open,
       required this.muted,
-      required this.encrypted,
       required this.favourited,
+      required this.encryptionProtocol,
       required this.contactID,
       required this.contactDisplayName,
       required this.contactAvatarPath,
@@ -4748,9 +4750,9 @@ class _$ChatFromDbImpl extends _ChatFromDb {
   @override
   final bool muted;
   @override
-  final bool encrypted;
-  @override
   final bool favourited;
+  @override
+  final EncryptionProtocol encryptionProtocol;
   @override
   final String? contactID;
   @override
@@ -4764,7 +4766,7 @@ class _$ChatFromDbImpl extends _ChatFromDb {
 
   @override
   String toString() {
-    return 'Chat.fromDb(jid: $jid, title: $title, type: $type, myNickname: $myNickname, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, encrypted: $encrypted, favourited: $favourited, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
+    return 'Chat.fromDb(jid: $jid, title: $title, type: $type, myNickname: $myNickname, avatarPath: $avatarPath, avatarHash: $avatarHash, lastMessage: $lastMessage, lastChangeTimestamp: $lastChangeTimestamp, unreadCount: $unreadCount, open: $open, muted: $muted, favourited: $favourited, encryptionProtocol: $encryptionProtocol, contactID: $contactID, contactDisplayName: $contactDisplayName, contactAvatarPath: $contactAvatarPath, contactAvatarHash: $contactAvatarHash, chatState: $chatState)';
   }
 
   @override
@@ -4789,10 +4791,10 @@ class _$ChatFromDbImpl extends _ChatFromDb {
                 other.unreadCount == unreadCount) &&
             (identical(other.open, open) || other.open == open) &&
             (identical(other.muted, muted) || other.muted == muted) &&
-            (identical(other.encrypted, encrypted) ||
-                other.encrypted == encrypted) &&
             (identical(other.favourited, favourited) ||
                 other.favourited == favourited) &&
+            (identical(other.encryptionProtocol, encryptionProtocol) ||
+                other.encryptionProtocol == encryptionProtocol) &&
             (identical(other.contactID, contactID) ||
                 other.contactID == contactID) &&
             (identical(other.contactDisplayName, contactDisplayName) ||
@@ -4819,8 +4821,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
       unreadCount,
       open,
       muted,
-      encrypted,
       favourited,
+      encryptionProtocol,
       contactID,
       contactDisplayName,
       contactAvatarPath,
@@ -4848,8 +4850,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4868,8 +4870,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4889,8 +4891,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         unreadCount,
         open,
         muted,
-        encrypted,
         favourited,
+        encryptionProtocol,
         contactID,
         contactDisplayName,
         contactAvatarPath,
@@ -4913,8 +4915,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4933,8 +4935,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4954,8 +4956,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
         unreadCount,
         open,
         muted,
-        encrypted,
         favourited,
+        encryptionProtocol,
         contactID,
         contactDisplayName,
         contactAvatarPath,
@@ -4978,8 +4980,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -4998,8 +5000,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
             int unreadCount,
             bool open,
             bool muted,
-            bool encrypted,
             bool favourited,
+            EncryptionProtocol encryptionProtocol,
             String? contactID,
             String? contactDisplayName,
             String? contactAvatarPath,
@@ -5021,8 +5023,8 @@ class _$ChatFromDbImpl extends _ChatFromDb {
           unreadCount,
           open,
           muted,
-          encrypted,
           favourited,
+          encryptionProtocol,
           contactID,
           contactDisplayName,
           contactAvatarPath,
@@ -5077,8 +5079,8 @@ abstract class _ChatFromDb extends Chat {
       required final int unreadCount,
       required final bool open,
       required final bool muted,
-      required final bool encrypted,
       required final bool favourited,
+      required final EncryptionProtocol encryptionProtocol,
       required final String? contactID,
       required final String? contactDisplayName,
       required final String? contactAvatarPath,
@@ -5109,9 +5111,9 @@ abstract class _ChatFromDb extends Chat {
   @override
   bool get muted;
   @override
-  bool get encrypted;
-  @override
   bool get favourited;
+  @override
+  EncryptionProtocol get encryptionProtocol;
   @override
   String? get contactID;
   @override

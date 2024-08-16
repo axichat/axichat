@@ -7,12 +7,16 @@ class AxiInputDialog extends StatelessWidget {
     super.key,
     required this.title,
     required this.content,
-    required this.callback,
+    this.callback,
+    this.callbackText = 'Continue',
+    this.actions = const [],
   });
 
   final Widget title;
   final Widget content;
-  final void Function() callback;
+  final void Function()? callback;
+  final String callbackText;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -21,17 +25,18 @@ class AxiInputDialog extends StatelessWidget {
       content: content,
       actions: [
         ShadButton.outline(
-          onPressed: () {
-            context.pop();
-          },
+          onPressed: () => context.pop(),
           text: const Text('Cancel'),
         ),
+        ...actions,
         ShadButton(
-          onPressed: () {
-            callback();
-            context.pop();
-          },
-          text: const Text('Continue'),
+          onPressed: callback == null
+              ? null
+              : () {
+                  callback!();
+                  context.pop();
+                },
+          text: Text(callbackText),
         ),
       ],
     );

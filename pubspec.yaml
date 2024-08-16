@@ -4,7 +4,7 @@ description: "XMPP chat app."
 # Prevent accidental publishing to pub.dev.
 publish_to: 'none'
 
-version: 0.0.1
+version: 0.1.0
 
 environment:
   sdk: '>=3.4.3 <4.0.0'
@@ -51,6 +51,8 @@ dependencies:
   stream_transform: ^2.1.0
   emoji_picker_flutter: ^2.2.0
   animations: ^2.0.11
+  libsignal_protocol_dart: ^0.7.1
+  package_info_plus: ^8.0.2
 
 dev_dependencies:
   flutter_test:

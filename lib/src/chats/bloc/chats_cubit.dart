@@ -21,8 +21,8 @@ class ChatsCubit extends Cubit<ChatsState> {
   late final StreamSubscription<List<Chat>> _chatsSubscription;
 
   @override
-  Future<void> close() {
-    _chatsSubscription.cancel();
+  Future<void> close() async {
+    await _chatsSubscription.cancel();
     return super.close();
   }
 
@@ -33,7 +33,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     ));
   }
 
-  Future<void> toggleChat(String jid) async {
+  Future<void> toggleChat({required String jid}) async {
     if (jid == state.openJid) {
       await _xmppService.closeChat();
       return;
@@ -46,5 +46,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     required bool favourited,
   }) async {
     await _xmppService.toggleChatFavourited(jid: jid, favourited: favourited);
+  }
+
+  Future<void> deleteChat({required String jid}) async {
+    await _xmppService.deleteChat(jid: jid);
   }
 }

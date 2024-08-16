@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
@@ -49,10 +50,24 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markMessageRetracted(String stanzaID);
   Future<void> markMessageAcked(String stanzaID);
   Future<void> markMessageReceived(String stanzaID);
+  Stream<List<Draft>> watchDrafts({required int start, required int end});
+  Future<List<Draft>> getDrafts({required int start, required int end});
+  Future<Draft?> getDraft(int id);
+  Future<void> saveDraft({int? id, required String jid, required String body});
+  Future<void> removeDraft(int id);
+  Future<OmemoDevice?> getOmemoDevice(String jid);
+  Future<void> saveOmemoDevice(OmemoDevice device);
+  Future<void> setOmemoTrust(omemo.BTBVTrustData trust);
+  Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid);
+  Future<void> resetOmemoTrust(String jid);
+  Future<List<OmemoRatchet>> getOmemoRatchets(String jid);
+  Future<void> saveOmemoRatchets(List<OmemoRatchet> ratchets);
+  Future<void> removeOmemoRatchets(List<(String, int)> ratchets);
   Future<void> saveFileMetadata(FileMetadataData metadata);
   Stream<List<Chat>> watchChats({required int start, required int end});
   Future<List<Chat>> getChats({required int start, required int end});
-  Stream<Chat> watchChat(String jid);
+  Future<Chat?> getChat(String jid);
+  Stream<Chat?> watchChat(String jid);
   Future<Chat?> openChat(String jid);
   Future<Chat?> closeChat();
   Future<void> markChatFavourited({
@@ -63,6 +78,11 @@ abstract interface class XmppDatabase implements Database {
     required String chatJid,
     required mox.ChatState state,
   });
+  Future<void> updateChatEncryption({
+    required String chatJid,
+    required EncryptionProtocol protocol,
+  });
+  Future<void> removeChat(String jid);
   Stream<List<RosterItem>> watchRoster({required int start, required int end});
   Future<List<RosterItem>> getRoster();
   Future<RosterItem?> getRosterItem(String jid);
@@ -121,8 +141,17 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
   @override
   $MessagesTable get table => messages;
 
-  Stream<List<Message>> watchChat(String jid) =>
-      (select(table)..where((table) => table.chatJid.equals(jid))).watch();
+  Stream<List<Message>> watchChat(String jid, {int limit = 50}) =>
+      (select(table)
+            ..where((table) => table.chatJid.equals(jid))
+            ..orderBy([
+              (t) => OrderingTerm(
+                    expression: t.timestamp,
+                    mode: OrderingMode.desc,
+                  )
+            ])
+            ..limit(limit))
+          .watch();
 
   Future<List<Message>> selectChatMessages(String jid) =>
       (select(table)..where((table) => table.chatJid.equals(jid))).get();
@@ -139,6 +168,66 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
   @override
   Future<void> deleteOne(String stanzaID) =>
       (delete(table)..where((item) => item.stanzaID.equals(stanzaID))).go();
+}
+
+@DriftAccessor(tables: [Drafts])
+class DraftsAccessor extends BaseAccessor<Draft, $DraftsTable>
+    with _$DraftsAccessorMixin {
+  DraftsAccessor(super.attachedDatabase);
+
+  @override
+  $DraftsTable get table => drafts;
+
+  @override
+  Future<Draft?> selectOne(int id) =>
+      (select(table)..where((table) => table.id.equals(id))).getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(int id) =>
+      (delete(table)..where((item) => item.id.equals(id))).go();
+}
+
+@DriftAccessor(tables: [OmemoDevices])
+class OmemoDevicesAccessor extends BaseAccessor<OmemoDevice, $OmemoDevicesTable>
+    with _$OmemoDevicesAccessorMixin {
+  OmemoDevicesAccessor(super.attachedDatabase);
+
+  @override
+  $OmemoDevicesTable get table => omemoDevices;
+
+  @override
+  Future<OmemoDevice?> selectOne(String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
+
+  Future<List<OmemoDevice>> selectByJid(String jid) =>
+      (select(table)..where((table) => table.jid.equals(jid))).get();
+
+  @override
+  Future<void> deleteOne(String value) =>
+      (delete(table)..where((table) => table.jid.equals(value))).go();
+}
+
+@DriftAccessor(tables: [OmemoRatchets])
+class OmemoRatchetsAccessor
+    extends BaseAccessor<OmemoRatchet, $OmemoRatchetsTable>
+    with _$OmemoRatchetsAccessorMixin {
+  OmemoRatchetsAccessor(super.attachedDatabase);
+
+  @override
+  $OmemoRatchetsTable get table => omemoRatchets;
+
+  @override
+  Future<OmemoRatchet?> selectOne(String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
+
+  Future<List<OmemoRatchet>> selectByJid(String jid) =>
+      (select(table)..where((table) => table.jid.equals(jid))).get();
+
+  @override
+  Future<void> deleteOne(String value) =>
+      (delete(table)..where((table) => table.jid.equals(value))).go();
 }
 
 @DriftAccessor(tables: [FileMetadata])
@@ -189,8 +278,9 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
         ]))
       .watch();
 
-  Stream<Chat> watchOne(String jid) =>
-      (select(table)..where((table) => table.jid.equals(jid))).watchSingle();
+  Stream<Chat?> watchOne(String jid) =>
+      (select(table)..where((table) => table.jid.equals(jid)))
+          .watchSingleOrNull();
 
   @override
   Future<Chat?> selectOne(String value) =>
@@ -269,6 +359,9 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
 
 @DriftDatabase(tables: [
   Messages,
+  Drafts,
+  OmemoDevices,
+  OmemoRatchets,
   Reactions,
   Notifications,
   FileMetadata,
@@ -281,6 +374,9 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   StickerPacks,
 ], daos: [
   MessagesAccessor,
+  DraftsAccessor,
+  OmemoDevicesAccessor,
+  OmemoRatchetsAccessor,
   FileMetadataAccessor,
   ChatsAccessor,
   RosterAccessor,
@@ -321,7 +417,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required int start,
     required int end,
   }) {
-    return messagesAccessor.watchChat(jid);
+    return messagesAccessor.watchChat(jid, limit: end);
   }
 
   @override
@@ -342,8 +438,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     _log.info('Saving message: ${message.stanzaID} with body: '
         '${message.body?.substring(0, min(10, message.body!.length))}...');
     await transaction(() async {
-      await messagesAccessor.insertOne(message);
-      await into(chats).insert(
+      final chat = await into(chats).insertReturning(
         ChatsCompanion.insert(
           jid: message.chatJid,
           title: mox.JID.fromString(message.chatJid).local,
@@ -351,6 +446,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           unreadCount: const Value(1),
           lastMessage: Value(message.body),
           lastChangeTimestamp: DateTime.timestamp(),
+          encryptionProtocol: Value(message.encryptionProtocol),
         ),
         onConflict: DoUpdate.withExcluded(
           (old, excluded) => ChatsCompanion.custom(
@@ -363,6 +459,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           ),
         ),
       );
+      await messagesAccessor.insertOne(message.copyWith(
+        encryptionProtocol: chat.encryptionProtocol,
+      ));
     });
   }
 
@@ -430,6 +529,101 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Stream<List<Draft>> watchDrafts({required int start, required int end}) {
+    return draftsAccessor.watchAll();
+  }
+
+  @override
+  Future<List<Draft>> getDrafts({required int start, required int end}) {
+    return draftsAccessor.selectAll();
+  }
+
+  @override
+  Future<Draft?> getDraft(int id) => draftsAccessor.selectOne(id);
+
+  @override
+  Future<void> saveDraft({
+    int? id,
+    required String jid,
+    required String body,
+  }) =>
+      draftsAccessor.insertOrUpdateOne(DraftsCompanion(
+        id: Value.absentIfNull(id),
+        jid: Value(jid),
+        body: Value(body),
+      ));
+
+  @override
+  Future<void> removeDraft(int id) => draftsAccessor.deleteOne(id);
+
+  @override
+  Future<OmemoDevice?> getOmemoDevice(String jid) =>
+      omemoDevicesAccessor.selectOne(jid);
+
+  @override
+  Future<void> saveOmemoDevice(OmemoDevice device) async {
+    _log.info('Saving OMEMO device: $device from jid: $jid');
+    await omemoDevicesAccessor.insertOrUpdateOne(await device.toDb());
+  }
+
+  @override
+  Future<void> setOmemoTrust(omemo.BTBVTrustData trust) =>
+      omemoDevicesAccessor.updateOne(OmemoDevicesCompanion(
+        id: Value(trust.device),
+        jid: Value(trust.jid),
+        trust: Value(trust.state),
+        enabled: Value(trust.enabled),
+      ));
+
+  @override
+  Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid) async {
+    final devices = await omemoDevicesAccessor.selectByJid(jid);
+    return devices
+        .map((e) => omemo.BTBVTrustData(
+              e.jid,
+              e.id,
+              e.trust,
+              e.enabled,
+              false,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<void> resetOmemoTrust(String jid) =>
+      omemoDevicesAccessor.updateOne(OmemoDevicesCompanion(
+        jid: Value(jid),
+        trust: const Value(BTBVTrustState.blindTrust),
+        enabled: const Value(true),
+      ));
+
+  @override
+  Future<List<OmemoRatchet>> getOmemoRatchets(String jid) =>
+      omemoRatchetsAccessor.selectByJid(jid);
+
+  @override
+  Future<void> saveOmemoRatchets(List<OmemoRatchet> ratchets) async {
+    await transaction(() async {
+      for (final ratchet in ratchets) {
+        await omemoRatchetsAccessor.insertOrUpdateOne(await ratchet.toDb());
+      }
+    });
+  }
+
+  @override
+  Future<void> removeOmemoRatchets(List<(String, int)> ratchets) async {
+    await transaction(() async {
+      for (final (jid, deviceID) in ratchets) {
+        await (delete(omemoRatchets)
+              ..where((omemoRatchets) =>
+                  omemoRatchets.jid.equals(jid) &
+                  omemoRatchets.device.equals(deviceID)))
+            .go();
+      }
+    });
+  }
+
+  @override
   Future<void> saveFileMetadata(FileMetadataData metadata) async {
     await fileMetadataAccessor.insertOne(metadata);
   }
@@ -445,7 +639,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  Stream<Chat> watchChat(String jid) {
+  Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
+
+  @override
+  Stream<Chat?> watchChat(String jid) {
     return chatsAccessor.watchOne(jid);
   }
 
@@ -453,12 +650,24 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<Chat?> openChat(String jid) async {
     return await transaction(() async {
       final closed = await closeChat();
-      await chatsAccessor.updateOne(ChatsCompanion(
-        jid: Value(jid),
-        open: const Value(true),
-        unreadCount: const Value(0),
-        chatState: const Value(mox.ChatState.active),
-      ));
+      await into(chats).insert(
+        ChatsCompanion.insert(
+          jid: jid,
+          title: mox.JID.fromString(jid).local,
+          type: ChatType.chat,
+          open: const Value(true),
+          unreadCount: const Value(0),
+          chatState: const Value(mox.ChatState.active),
+          lastChangeTimestamp: DateTime.timestamp(),
+        ),
+        onConflict: DoUpdate(
+          (old) => const ChatsCompanion(
+            open: Value(true),
+            unreadCount: Value(0),
+            chatState: Value(mox.ChatState.active),
+          ),
+        ),
+      );
       return closed;
     });
   }
@@ -487,6 +696,23 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       jid: Value(chatJid),
       chatState: Value(state),
     ));
+  }
+
+  @override
+  Future<void> updateChatEncryption({
+    required String chatJid,
+    required EncryptionProtocol protocol,
+  }) async {
+    _log.info('Updating chat encryption protocol to ${protocol.name}...');
+    await chatsAccessor.updateOne(ChatsCompanion(
+      jid: Value(chatJid),
+      encryptionProtocol: Value(protocol),
+    ));
+  }
+
+  @override
+  Future<void> removeChat(String jid) {
+    return chatsAccessor.deleteOne(jid);
   }
 
   @override
@@ -697,15 +923,24 @@ Future<File> dbFilePathFor(String jid) async {
   return File(p.join(path, '${storagePrefixFor(jid)}.axichat.drift'));
 }
 
-String generateRandomString({int length = 32}) {
-  final random = Random.secure();
-  return utf8.decode(
-    List<int>.generate(length, (_) => random.nextInt(33) + 89),
-  );
+String generateRandomString({int length = 32, int? seed}) {
+  final random = seed != null ? Random(seed) : Random.secure();
+  const field =
+      'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
+  const fieldSize = field.length;
+  final buffer = StringBuffer();
+  while (length > 0) {
+    buffer.writeCharCode(field.codeUnitAt(random.nextInt(fieldSize)));
+    length--;
+  }
+  final result = buffer.toString();
+  buffer.clear();
+  return result;
 }
 
 // Using SHA-1 as this is only to obfuscate the jid in file paths.
 String storagePrefixFor(String jid) =>
     sha1.convert(utf8.encode(jid)).toString();
 
+typedef BTBVTrustState = omemo.BTBVTrustState;
 typedef HashFunction = mox.HashFunction;

@@ -21,36 +21,39 @@ class RosterAddButton extends StatelessWidget {
             String? title;
             return BlocProvider.value(
               value: locate<RosterCubit>(),
-              child: StatefulBuilder(
-                builder: (context, setState) {
-                  return AxiInputDialog(
-                    title: const Text('Add contact'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AxiTextFormField(
-                          placeholder: const Text('JID'),
-                          description: const Text('Example: friend@axi.im'),
-                          onChanged: (value) {
-                            setState(() => jid = value);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        AxiTextFormField(
-                          placeholder: const Text('Nickname (optional)'),
-                          onChanged: (value) {
-                            setState(() => title = value);
-                          },
-                        ),
-                      ],
-                    ),
-                    callback: () => jid.isEmpty
-                        ? null
-                        : context
-                            .read<RosterCubit>()
-                            .addContact(jid: jid, title: title),
-                  );
-                },
+              child: Form(
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    return AxiInputDialog(
+                      title: const Text('Add contact'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          JidInput(
+                            onChanged: (value) {
+                              setState(() => jid = value);
+                            },
+                          ),
+                          // const SizedBox(height: 12),
+                          // AxiTextFormField(
+                          //   placeholder: const Text('Nickname (optional)'),
+                          //   onChanged: (value) {
+                          //     setState(() => title = value);
+                          //   },
+                          // ),
+                        ],
+                      ),
+                      callback: jid.isEmpty
+                          ? null
+                          : () {
+                              if (!Form.of(context).validate()) return;
+                              context
+                                  .read<RosterCubit>()
+                                  .addContact(jid: jid, title: title);
+                            },
+                    );
+                  },
+                ),
               ),
             );
           },

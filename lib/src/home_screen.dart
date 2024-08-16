@@ -7,6 +7,9 @@ import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/chats/view/chats_list.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:chat/src/draft/bloc/draft_cubit.dart';
+import 'package:chat/src/draft/view/draft_button.dart';
+import 'package:chat/src/draft/view/drafts_list.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/profile/view/profile_card.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
@@ -26,61 +29,71 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   final tabs = const [
-    ('Chats', ChatsList(), null),
-    ('Contacts', RosterList(), RosterAddButton()),
-    ('New', RosterInvitesList(), null),
+    ('Chats', ChatsList(key: PageStorageKey('Chats')), DraftButton()),
+    (
+      'Contacts',
+      RosterList(key: PageStorageKey('Contacts')),
+      RosterAddButton()
+    ),
+    ('New', RosterInvitesList(key: PageStorageKey('New')), null),
     (
       'Blocked',
-      BlocklistList(),
+      BlocklistList(key: PageStorageKey('Blocked')),
       BlocklistAddButton(),
     ),
+    ('Drafts', DraftsList(key: PageStorageKey('Drafts')), null),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: DefaultTabController(
-          length: tabs.length,
-          animationDuration: context.watch<SettingsCubit>().animationDuration,
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (context) => ChatsCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+      body: DefaultTabController(
+        length: tabs.length,
+        animationDuration: context.watch<SettingsCubit>().animationDuration,
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (context) => ChatsCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => RosterCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => DraftCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => ProfileCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => RosterCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => BlocklistCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => ProfileCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => ConnectivityCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => BlocklistCubit(
+                xmppService: context.read<XmppService>(),
               ),
-            ],
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final openJid = context.watch<ChatsCubit>().state.openJid;
-                return ConstrainedBox(
-                  constraints: constraints,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const ConnectivityIndicator(),
-                      Expanded(
+            ),
+            BlocProvider(
+              create: (context) => ConnectivityCubit(
+                xmppService: context.read<XmppService>(),
+              ),
+            ),
+          ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final openJid = context.watch<ChatsCubit>().state.openJid;
+              return ConstrainedBox(
+                constraints: constraints,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ConnectivityIndicator(),
+                    Expanded(
+                      child: SafeArea(
                         child: AxiAdaptiveLayout(
                           invertPriority: openJid != null,
                           primaryChild: Nexus(tabs: tabs),
@@ -96,11 +109,11 @@ class HomeScreen extends StatelessWidget {
                                 ),
                         ),
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -116,121 +129,101 @@ class Nexus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
-    return Column(
-      children: [
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) => NestedScrollView(
-              floatHeaderSlivers: true,
-              headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                SliverOverlapAbsorber(
-                  handle:
-                      NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-                  sliver: SliverAppBar(
-                    title: Text(
-                      'Axichat',
-                      style: context.textTheme.h3,
-                    ),
-                    floating: true,
-                    forceElevated: innerBoxIsScrolled,
-                    bottom: TabBar(
-                      isScrollable: constraints.maxWidth < smallScreen / 2,
-                      tabAlignment: constraints.maxWidth < smallScreen / 2
-                          ? TabAlignment.center
-                          : TabAlignment.fill,
-                      dividerColor: context.colorScheme.border,
-                      tabs: tabs.map((e) {
-                        final (label, _, _) = e;
-                        if (label == 'New') {
-                          final length =
-                              context.watch<RosterCubit>().inviteCount;
-                          return Tab(
-                            child: AxiBadge(
-                              count: length,
-                              child: Text(label),
-                            ),
-                          );
-                        }
-                        return Tab(text: label);
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
-              body: MultiBlocListener(
-                listeners: [
-                  BlocListener<RosterCubit, RosterState>(
-                    listener: (context, state) {
-                      if (showToast == null) return;
-                      if (state is RosterFailure) {
-                        showToast(
-                          ShadToast.destructive(
-                            title: const Text('Whoops!'),
-                            description: Text(state.message),
-                          ),
-                        );
-                      } else if (state is RosterSuccess) {
-                        showToast(
-                          ShadToast(
-                            title: const Text('Success!'),
-                            description: Text(state.message),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  BlocListener<BlocklistCubit, BlocklistState>(
-                    listener: (context, state) {
-                      if (showToast == null) return;
-                      if (state is BlocklistFailure) {
-                        showToast(
-                          ShadToast.destructive(
-                            title: const Text('Whoops!'),
-                            description: Text(state.message),
-                          ),
-                        );
-                      } else if (state is BlocklistSuccess) {
-                        showToast(
-                          ShadToast(
-                            title: const Text('Success!'),
-                            description: Text(state.message),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-                child: TabBarView(
-                  children: tabs.map((e) {
-                    final (label, sliver, fab) = e;
-                    return Builder(builder: (context) {
-                      return Scaffold(
-                        body: CustomScrollView(
-                          key: PageStorageKey(label),
-                          slivers: [
-                            SliverOverlapInjector(
-                              handle: NestedScrollView
-                                  .sliverOverlapAbsorberHandleFor(context),
-                            ),
-                            SliverPadding(
-                              padding: const EdgeInsets.all(12.0),
-                              sliver: sliver,
-                            ),
-                          ],
-                        ),
-                        floatingActionButton: fab,
-                      );
-                    });
-                  }).toList(),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        children: [
+          const AxiAppBar(),
+          MultiBlocListener(
+            listeners: [
+              BlocListener<RosterCubit, RosterState>(
+                listener: (context, state) {
+                  if (showToast == null) return;
+                  if (state is RosterFailure) {
+                    showToast(
+                      ShadToast.destructive(
+                        title: const Text('Whoops!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  } else if (state is RosterSuccess) {
+                    showToast(
+                      ShadToast(
+                        title: const Text('Success!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  }
+                },
+              ),
+              BlocListener<BlocklistCubit, BlocklistState>(
+                listener: (context, state) {
+                  if (showToast == null) return;
+                  if (state is BlocklistFailure) {
+                    showToast(
+                      ShadToast.destructive(
+                        title: const Text('Whoops!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  } else if (state is BlocklistSuccess) {
+                    showToast(
+                      ShadToast(
+                        title: const Text('Success!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+            child: Expanded(
+              child: TabBarView(
+                children: tabs.map((e) {
+                  final (_, sliver, fab) = e;
+                  return Scaffold(
+                    body: sliver,
+                    floatingActionButton: fab,
+                  );
+                }).toList(),
               ),
             ),
           ),
-        ),
-        const ProfileCard(
-          active: true,
-        ),
-      ],
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: context.colorScheme.border),
+              ),
+            ),
+            child: TabBar(
+              isScrollable: constraints.maxWidth < tabs.length * 77,
+              tabAlignment: constraints.maxWidth < tabs.length * 77
+                  ? TabAlignment.center
+                  : TabAlignment.fill,
+              dividerHeight: 0.0,
+              tabs: tabs.map((e) {
+                final (label, _, _) = e;
+                if (label == 'New') {
+                  final length = context.watch<RosterCubit>().inviteCount;
+                  return Tab(
+                    child: AxiBadge(
+                      count: length,
+                      child: Text(label),
+                    ),
+                  );
+                }
+                return Tab(text: label);
+              }).toList(),
+            ),
+          ),
+          const ProfileCard(
+            active: true,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -12,14 +12,14 @@ mixin PresenceService on XmppBase {
 
   Stream<Presence> get presenceStream => StreamCompleter.fromFuture(
           _dbOpReturning<XmppStateStore, Stream<Presence>>((ss) async {
-        return Future.value(ss.watch<Presence>(key: presenceStorageKey));
+        return await Future.value(ss
+            .watch<Presence?>(key: presenceStorageKey)
+            ?.map<Presence>((e) => e ?? Presence.chat));
       }));
   Stream<String?> get statusStream => StreamCompleter.fromFuture(
           _dbOpReturning<XmppStateStore, Stream<String?>>((ss) async {
         return Future.value(ss.watch<String?>(key: statusStorageKey));
       }));
-
-  final _log = Logger('PresenceService');
 
   Future<void> sendPresence({
     required Presence? presence,
@@ -28,11 +28,6 @@ mixin PresenceService on XmppBase {
     await _connection
         .getManager<XmppPresenceManager>()
         ?.sendPresence(presence: presence, status: status);
-    if (presence != null && presence.isUnavailable) {
-      await owner._dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: presenceStorageKey, value: presence);
-      });
-    }
   }
 
   Future<void> receivePresence(
@@ -40,23 +35,15 @@ mixin PresenceService on XmppBase {
     Presence presence,
     String? status,
   ) async {
-    if (jid == user!.jid.toString()) {
-      _log.info('Saving profile presence: $presence and status: $status...');
-      await owner._dbOp<XmppStateStore>((ss) async {
-        await ss.writeAll(data: {
-          presenceStorageKey: presence,
-          statusStorageKey: status,
-        });
-      });
-    } else {
-      await owner._dbOp<XmppDatabase>((db) async {
-        await db.updatePresence(
-          jid: jid,
-          presence: presence,
-          status: status,
-        );
-      });
-    }
+    if (jid == myJid?.toString()) return;
+
+    await owner._dbOp<XmppDatabase>((db) async {
+      await db.updatePresence(
+        jid: jid,
+        presence: presence,
+        status: status,
+      );
+    });
   }
 }
 
@@ -158,6 +145,14 @@ class XmppPresenceManager extends mox.PresenceManager {
       _log.severe('Failed to update presence:', e);
       throw XmppPresenceException();
     }
+
+    _log.info('Saving profile presence: $presence and status: $status...');
+    await owner._dbOp<XmppStateStore>((ss) async {
+      await ss.writeAll(data: {
+        owner.presenceStorageKey: presence,
+        owner.statusStorageKey: status,
+      });
+    });
   }
 
   @override

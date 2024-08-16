@@ -26,13 +26,13 @@ class PresenceCircle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 16.0,
-      width: 16.0,
+      height: 14.0,
+      width: 14.0,
       decoration: ShapeDecoration(
         shape: CircleBorder(
           side: BorderSide(
             color: Color.lerp(presence.toColor, Colors.white, 0.6)!,
-            width: 2.0,
+            width: 1.0,
           ),
         ),
         color: presence.toColor,
@@ -41,7 +41,7 @@ class PresenceCircle extends StatelessWidget {
           ? const Icon(
               LucideIcons.minus,
               color: Colors.white,
-              size: 12.0,
+              size: 10.0,
             )
           : null,
     );

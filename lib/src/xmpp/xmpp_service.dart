@@ -16,6 +16,7 @@ import 'package:logging/logging.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
+import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
@@ -24,6 +25,7 @@ import 'package:uuid/uuid.dart';
 part 'blocking_service.dart';
 part 'chats_service.dart';
 part 'message_service.dart';
+part 'omemo_service.dart';
 part 'presence_service.dart';
 part 'roster_service.dart';
 
@@ -60,6 +62,22 @@ final class XmppBlocklistException extends XmppException {}
 final class XmppBlockUnsupportedException extends XmppException {}
 
 final _devServerLookup = <String, IOEndpoint>{
+  'hookipa.net': IOEndpoint(
+    InternetAddress('31.172.31.205', type: InternetAddressType.IPv4),
+    5222,
+  ),
+  'xmpp.social': IOEndpoint(
+    InternetAddress('31.172.31.205', type: InternetAddressType.IPv4),
+    5222,
+  ),
+  'trashserver.net': IOEndpoint(
+    InternetAddress('5.1.72.136', type: InternetAddressType.IPv4),
+    5222,
+  ),
+  'conversations.im': IOEndpoint(
+    InternetAddress('78.47.177.120', type: InternetAddressType.IPv4),
+    5222,
+  ),
   'draugr.de': IOEndpoint(
     InternetAddress('23.88.8.69', type: InternetAddressType.IPv4),
     5222,
@@ -81,7 +99,7 @@ abstract class XmppBase {
 
   XmppBase get owner;
 
-  User? get user;
+  String? get myJid;
 
   Future<void> connect({
     required String jid,
@@ -102,6 +120,7 @@ abstract class XmppBase {
 class XmppService extends XmppBase
     with
         MessageService,
+        OmemoService,
         RosterService,
         PresenceService,
         ChatsService,
@@ -142,7 +161,6 @@ class XmppService extends XmppBase
   final Capability _capability;
   final Policy _policy;
 
-  final resourceStorageKey = XmppStateStore.registerKey('last_resource');
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
 
@@ -150,20 +168,21 @@ class XmppService extends XmppBase
   XmppService get owner => this;
 
   @override
-  User? get user => _connection.hasConnectionSettings
-      ? _connection.connectionSettings.user
-      : null;
+  String? get myJid => _myJid?.toBare().toString();
+  mox.JID? _myJid;
+
+  String? get resource => _myJid?.resource;
+
+  String? get username => _myJid?.local;
 
   Future<bool> get connected async =>
       connectionState == mox.XmppConnectionState.connected;
-
-  String get resource => _connection.resource;
 
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
 
   bool get needsReset =>
-      user != null ||
+      _myJid != null ||
       _eventSubscription != null ||
       _stateStore.isCompleted ||
       _database.isCompleted;
@@ -210,6 +229,43 @@ class XmppService extends XmppBase
         final body = get<mox.ReplyData>()?.withoutFallback ??
             get<mox.MessageBodyData>()?.body ??
             '';
+
+        if (event.get<mox.OmemoData>() case final data?) {
+          final newRatchets = data.newRatchets.values.map((e) => e.length);
+          final newCount = newRatchets.fold(0, (v, e) => v + e);
+          final replacedRatchets =
+              data.replacedRatchets.values.map((e) => e.length);
+          final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
+          final pseudoMessageData = {
+            'ratchetsAdded': newRatchets,
+            'ratchetsReplaced': replacedRatchets,
+          };
+
+          if (newCount > 0) {
+            await _dbOp<XmppDatabase>((db) async {
+              await db.saveMessage(Message(
+                stanzaID: _connection.generateId(),
+                senderJid: myJid!.toString(),
+                chatJid: chatJid,
+                pseudoMessageType: PseudoMessageType.newDevice,
+                pseudoMessageData: pseudoMessageData,
+              ));
+            });
+          }
+
+          if (replacedCount > 0) {
+            await _dbOp<XmppDatabase>((db) async {
+              await db.saveMessage(Message(
+                stanzaID: _connection.generateId(),
+                senderJid: myJid!.toString(),
+                chatJid: chatJid,
+                pseudoMessageType: PseudoMessageType.changedDevice,
+                pseudoMessageData: pseudoMessageData,
+              ));
+            });
+          }
+        }
+
         final message = Message(
           stanzaID: event.id ?? '',
           senderJid: chatJid,
@@ -223,6 +279,9 @@ class XmppService extends XmppBase
           quoting: get<mox.ReplyData>()?.id,
           originID: get<mox.StableIdData>()?.originId,
           occupantID: get<mox.OccupantIdData>()?.id,
+          encryptionProtocol: event.encrypted
+              ? EncryptionProtocol.omemo
+              : EncryptionProtocol.none,
         );
         await _dbOp<XmppDatabase>((db) async {
           await db.saveMessage(message);
@@ -240,7 +299,16 @@ class XmppService extends XmppBase
           await db.markMessageReceived(event.id);
         });
       case mox.StreamNegotiationsDoneEvent event:
+        // _connection.setResource(
+        //   _connection.getNegotiator<mox.StreamManagementNegotiator>()!.resource,
+        //   triggerEvent: false,
+        // );
+        await _omemoManager.value?.commitDevice(await _device);
+        if (await _ensureOmemoDevicePublished() case final result?) {
+          _log.severe('Failed to publish OMEMO device. $result');
+        }
         if (event.resumed) return;
+        await _omemoManager.value?.onNewConnection();
         final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
         if (!carbonsManager.isEnabled) {
           _log.info('Enabling carbons...');
@@ -253,11 +321,7 @@ class XmppService extends XmppBase
         _log.info('Fetching blocklist...');
         await requestBlocklist();
       case mox.ResourceBoundEvent event:
-        _log.info('Saving resource...');
-        await _dbOp<XmppStateStore>((ss) async {
-          await ss.write(key: resourceStorageKey, value: event.resource);
-          _log.info('Saved resource: ${event.resource}.');
-        });
+        _log.info('Bound resource: ${event.resource}...');
       case mox.NewFASTTokenReceivedEvent event:
         _log.info('Saving FAST token...');
         await _dbOp<XmppStateStore>((ss) async {
@@ -305,6 +369,7 @@ class XmppService extends XmppBase
     required String jid,
     required String password,
     required String databasePassphrase,
+    String resource = '',
     bool awaitAuthentication = true,
   }) async {
     if (needsReset) await _reset();
@@ -316,16 +381,16 @@ class XmppService extends XmppBase
         _stateStore.complete(await _buildStateStore(jid, databasePassphrase));
       }
 
-      await _initConnection();
+      _myJid = mox.JID.fromString('$jid/$resource');
 
-      final newUser = User(
-        jid: mox.JID.fromString(jid),
-        password: password,
-      );
+      await _initConnection();
 
       _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
 
-      _connection.connectionSettings = XmppConnectionSettings(user: newUser);
+      _connection.connectionSettings = XmppConnectionSettings(
+        jid: _myJid!,
+        password: password,
+      );
       if (awaitAuthentication) {
         final result = await _connection.connect(
           shouldReconnect: false,
@@ -348,21 +413,15 @@ class XmppService extends XmppBase
 
   Future<void> _initConnection() async {
     _log.info('Initializing connection object...');
-    String? resource;
-    await _dbOp<XmppStateStore>((ss) {
-      resource = ss.read(key: resourceStorageKey) as String?;
-      _log.info('Loaded resource: $resource');
-    });
+    final resource = this.resource ?? '';
     await _connection.registerFeatureNegotiators([
-      XmppResourceNegotiator()..resource = resource,
+      XmppResourceNegotiator(resource: resource),
       mox.StartTlsNegotiator(),
-      mox.StreamManagementNegotiator(),
+      mox.StreamManagementNegotiator()..resource = resource,
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
       mox.PresenceNegotiator(),
-      mox.SaslScramNegotiator(10, '', '', mox.ScramHashType.sha512),
-      mox.SaslScramNegotiator(9, '', '', mox.ScramHashType.sha256),
-      mox.SaslScramNegotiator(8, '', '', mox.ScramHashType.sha1),
+      mox.SaslScramNegotiator(10, '', '', mox.ScramHashType.sha1),
       mox.SaslPlainNegotiator(),
       mox.Sasl2Negotiator(),
       mox.Bind2Negotiator(),
@@ -377,6 +436,13 @@ class XmppService extends XmppBase
           name: 'Axichat',
         ),
       ]),
+      mox.OmemoManager(
+        () => _omemoManager.future,
+        (to, _) => _dbOpReturning<XmppDatabase, bool>((db) async {
+          final chat = await db.getChat(to.toBare().toString());
+          return chat?.encryptionProtocol == EncryptionProtocol.omemo;
+        }),
+      ),
       mox.RosterManager(XmppRosterStateManager(owner: this)),
       mox.PingManager(const Duration(minutes: 3)),
       mox.MessageManager(),
@@ -384,7 +450,7 @@ class XmppService extends XmppBase
       // mox.EntityCapabilitiesManager(),
       mox.CSIManager(),
       mox.CarbonsManager(),
-      mox.PubSubManager(),
+      PubSubManager(),
       // mox.UserAvatarManager(),
       mox.StableIdManager(),
       mox.MessageDeliveryReceiptManager(),
@@ -397,7 +463,7 @@ class XmppService extends XmppBase
       // mox.HttpFileUploadManager(),
       // mox.FileUploadNotificationManager(),
       mox.EmeManager(),
-      // mox.CryptographicHashManager(),
+      mox.CryptographicHashManager(),
       mox.DelayedDeliveryManager(),
       mox.MessageRetractionManager(),
       mox.LastMessageCorrectionManager(),
@@ -409,11 +475,75 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
+    OmemoDevice? device;
+    await _dbOp<XmppDatabase>((db) async {
+      _log.info('Loading omemo device for $myJid...');
+      device = await db.getOmemoDevice(myJid!);
+    });
+
+    final om = _connection.getManager<mox.OmemoManager>()!;
+
+    _omemoManager.complete(
+      omemo.OmemoManager(
+        device ??= OmemoDevice.fromMox(
+            await compute(omemo.OmemoDevice.generateNewDevice, myJid!)),
+        omemo.BlindTrustBeforeVerificationTrustManager(
+          commit: (trust) => _dbOp<XmppDatabase>(
+            (db) => db.setOmemoTrust(trust),
+            awaitDatabase: true,
+          ),
+          loadData: (jid) =>
+              _dbOpReturning<XmppDatabase, List<omemo.BTBVTrustData>>(
+            (db) => db.getOmemoTrust(jid),
+          ),
+          removeTrust: (jid) => _dbOp<XmppDatabase>(
+            (db) => db.resetOmemoTrust(jid),
+            awaitDatabase: true,
+          ),
+        ),
+        om.sendEmptyMessageImpl,
+        om.fetchDeviceList,
+        om.fetchDeviceBundle,
+        om.subscribeToDeviceListImpl,
+        om.publishDeviceImpl,
+        commitDevice: (device) => _dbOp<XmppDatabase>(
+          (db) => db.saveOmemoDevice(OmemoDevice.fromMox(device)),
+          awaitDatabase: true,
+        ),
+        commitRatchets: (ratchets) => _dbOp<XmppDatabase>(
+          (db) => db.saveOmemoRatchets(
+            ratchets.map((e) => OmemoRatchet.fromMox(e)).toList(),
+          ),
+          awaitDatabase: true,
+        ),
+        loadRatchets: (jid) async {
+          final devices = await om.fetchDeviceList(jid);
+          if (devices == null || devices.isEmpty) return null;
+          return _dbOpReturning<XmppDatabase, omemo.OmemoDataPackage?>(
+              (db) async {
+            final ratchets = await db.getOmemoRatchets(jid);
+            if (ratchets.isEmpty) return null;
+            return omemo.OmemoDataPackage(
+              devices,
+              <omemo.RatchetMapKey, OmemoRatchet>{
+                for (final ratchet in ratchets)
+                  omemo.RatchetMapKey(ratchet.jid, ratchet.device): ratchet,
+              },
+            );
+          });
+        },
+        removeRatchets: (keys) => _dbOp<XmppDatabase>(
+          (db) => db.removeOmemoRatchets(
+            keys.map((e) => (e.jid, e.deviceId)).toList(),
+          ),
+          awaitDatabase: true,
+        ),
+      ),
+    );
+
     await _connection.getManager<XmppStreamManagementManager>()!.loadState();
     await _dbOp<XmppStateStore>((ss) {
       _connection
-        ..getNegotiator<mox.StreamManagementNegotiator>()!.resource =
-            resource ?? ''
         ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
             ss.read(key: fastTokenStorageKey) as String?
         ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
@@ -483,6 +613,7 @@ class XmppService extends XmppBase
       }
     }
     _connection = _buildConnection();
+    _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
     if (!_stateStore.isCompleted) {
       _log.warning('Cancelling state store initialization...');
@@ -501,6 +632,8 @@ class XmppService extends XmppBase
       await _database.value?.close();
     }
     _database = ImpatientCompleter(Completer<XmppDatabase>());
+
+    _myJid = null;
 
     assert(!needsReset);
   }
@@ -582,18 +715,11 @@ class XmppService extends XmppBase
       throw XmppUnknownException(e);
     }
   }
-}
 
-class User {
-  User({required this.jid, required this.password});
-
-  final mox.JID jid;
-  final String password;
-
-  String? displayName;
-
-  String get username => jid.local;
-  String get domain => jid.domain;
+  static String generateResource() => 'axi.${generateRandomString(
+        length: 7,
+        seed: DateTime.now().millisecondsSinceEpoch,
+      )}';
 }
 
 class XmppConnection extends mox.XmppConnection {
@@ -627,6 +753,12 @@ class XmppConnection extends mox.XmppConnection {
     switch (T) {
       case == mox.MessageManager:
         return getManagerById(mox.messageManager);
+      case == mox.OmemoManager:
+        return getManagerById(mox.omemoManager);
+      case == mox.DiscoManager:
+        return getManagerById(mox.discoManager);
+      case == PubSubManager:
+        return getManagerById(mox.pubsubManager);
       case == XmppPresenceManager:
         return getManagerById(mox.presenceManager);
       case == XmppStreamManagementManager:
@@ -657,10 +789,7 @@ class XmppConnection extends mox.XmppConnection {
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
-  XmppConnectionSettings({required this.user})
-      : super(jid: user.jid, password: user.password);
-
-  final User user;
+  XmppConnectionSettings({required super.jid, required super.password});
 
   @override
   String? get host {
@@ -809,7 +938,10 @@ class XmppClientNegotiator extends mox.ClientToServerNegotiator {
 }
 
 class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
-  String? resource;
+  XmppResourceNegotiator({required this.resource}) : super();
+
+  final String resource;
+
   bool _attempted = false;
 
   @override
@@ -827,14 +959,12 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
           mox.XMLNode.xmlns(
             tag: 'bind',
             xmlns: mox.bindXmlns,
-            children: resource == null
-                ? []
-                : [
-                    mox.XMLNode(
-                      tag: 'resource',
-                      text: resource,
-                    ),
-                  ],
+            children: [
+              mox.XMLNode(
+                tag: 'resource',
+                text: resource,
+              ),
+            ],
           ),
         ],
       );
@@ -937,6 +1067,64 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
                   'file-upload',
                   xmlns: mox.fileUploadNotificationXmlns,
                 ) !=
-                null);
+                null ||
+            stanza.firstTag('encrypted', xmlns: mox.omemoXmlns) != null);
+  }
+}
+
+class PubSubManager extends mox.PubSubManager {
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
+    mox.JID jid,
+    String node,
+    String? id,
+  ) async {
+    final result = await getAttributes().sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          type: 'get',
+          to: jid.toString(),
+          children: [
+            mox.XMLNode.xmlns(
+              tag: 'pubsub',
+              xmlns: mox.pubsubXmlns,
+              children: [
+                mox.XMLNode(
+                  tag: 'items',
+                  attributes: <String, String>{'node': node},
+                  children: id != null
+                      ? [
+                          mox.XMLNode(
+                            tag: 'item',
+                            attributes: <String, String>{'id': id},
+                          ),
+                        ]
+                      : [],
+                ),
+              ],
+            ),
+          ],
+        ),
+        shouldEncrypt: false,
+      ),
+    );
+
+    if (result!.attributes['type'] != 'result') {
+      return moxlib.Result(mox.getPubSubError(result));
+    }
+
+    final pubsub = result.firstTag('pubsub', xmlns: mox.pubsubXmlns);
+    if (pubsub == null) return moxlib.Result(mox.getPubSubError(result));
+
+    final itemElement = pubsub.firstTag('items')?.firstTag('item');
+    if (itemElement == null) return moxlib.Result(mox.NoItemReturnedError());
+
+    final item = mox.PubSubItem(
+      id: itemElement.attributes['id']! as String,
+      payload: itemElement.children[0],
+      node: node,
+    );
+
+    return moxlib.Result(item);
   }
 }

@@ -10,6 +10,16 @@ mixin _$MessagesAccessorMixin on DatabaseAccessor<XmppDrift> {
   $StickerPacksTable get stickerPacks => attachedDatabase.stickerPacks;
   $MessagesTable get messages => attachedDatabase.messages;
 }
+mixin _$DraftsAccessorMixin on DatabaseAccessor<XmppDrift> {
+  $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
+  $DraftsTable get drafts => attachedDatabase.drafts;
+}
+mixin _$OmemoDevicesAccessorMixin on DatabaseAccessor<XmppDrift> {
+  $OmemoDevicesTable get omemoDevices => attachedDatabase.omemoDevices;
+}
+mixin _$OmemoRatchetsAccessorMixin on DatabaseAccessor<XmppDrift> {
+  $OmemoRatchetsTable get omemoRatchets => attachedDatabase.omemoRatchets;
+}
 mixin _$FileMetadataAccessorMixin on DatabaseAccessor<XmppDrift> {
   $FileMetadataTable get fileMetadata => attachedDatabase.fileMetadata;
 }
@@ -1122,16 +1132,17 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
               requiredDuringInsert: false,
               defaultValue: const Constant(0))
           .withConverter<MessageWarning>($MessagesTable.$converterwarning);
-  static const VerificationMeta _encryptedMeta =
-      const VerificationMeta('encrypted');
+  static const VerificationMeta _encryptionProtocolMeta =
+      const VerificationMeta('encryptionProtocol');
   @override
-  late final GeneratedColumn<bool> encrypted = GeneratedColumn<bool>(
-      'encrypted', aliasedName, false,
-      type: DriftSqlType.bool,
-      requiredDuringInsert: false,
-      defaultConstraints:
-          GeneratedColumn.constraintIsAlways('CHECK ("encrypted" IN (0, 1))'),
-      defaultValue: const Constant(false));
+  late final GeneratedColumnWithTypeConverter<EncryptionProtocol, int>
+      encryptionProtocol = GeneratedColumn<int>(
+              'encryption_protocol', aliasedName, false,
+              type: DriftSqlType.int,
+              requiredDuringInsert: false,
+              defaultValue: const Constant(0))
+          .withConverter<EncryptionProtocol>(
+              $MessagesTable.$converterencryptionProtocol);
   static const VerificationMeta _noStoreMeta =
       const VerificationMeta('noStore');
   @override
@@ -1275,7 +1286,7 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
         timestamp,
         error,
         warning,
-        encrypted,
+        encryptionProtocol,
         noStore,
         acked,
         received,
@@ -1342,10 +1353,7 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
     }
     context.handle(_errorMeta, const VerificationResult.success());
     context.handle(_warningMeta, const VerificationResult.success());
-    if (data.containsKey('encrypted')) {
-      context.handle(_encryptedMeta,
-          encrypted.isAcceptableOrUnknown(data['encrypted']!, _encryptedMeta));
-    }
+    context.handle(_encryptionProtocolMeta, const VerificationResult.success());
     if (data.containsKey('no_store')) {
       context.handle(_noStoreMeta,
           noStore.isAcceptableOrUnknown(data['no_store']!, _noStoreMeta));
@@ -1437,8 +1445,9 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
       warning: $MessagesTable.$converterwarning.fromSql(attachedDatabase
           .typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}warning'])!),
-      encrypted: attachedDatabase.typeMapping
-          .read(DriftSqlType.bool, data['${effectivePrefix}encrypted'])!,
+      encryptionProtocol: $MessagesTable.$converterencryptionProtocol.fromSql(
+          attachedDatabase.typeMapping.read(DriftSqlType.int,
+              data['${effectivePrefix}encryption_protocol'])!),
       noStore: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}no_store'])!,
       acked: attachedDatabase.typeMapping
@@ -1482,6 +1491,9 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
       const EnumIndexConverter<MessageError>(MessageError.values);
   static JsonTypeConverter2<MessageWarning, int, int> $converterwarning =
       const EnumIndexConverter<MessageWarning>(MessageWarning.values);
+  static JsonTypeConverter2<EncryptionProtocol, int, int>
+      $converterencryptionProtocol =
+      const EnumIndexConverter<EncryptionProtocol>(EncryptionProtocol.values);
   static JsonTypeConverter2<PseudoMessageType, int, int>
       $converterpseudoMessageType =
       const EnumIndexConverter<PseudoMessageType>(PseudoMessageType.values);
@@ -1506,7 +1518,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
   final Value<DateTime> timestamp;
   final Value<MessageError> error;
   final Value<MessageWarning> warning;
-  final Value<bool> encrypted;
+  final Value<EncryptionProtocol> encryptionProtocol;
   final Value<bool> noStore;
   final Value<bool> acked;
   final Value<bool> received;
@@ -1533,7 +1545,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     this.timestamp = const Value.absent(),
     this.error = const Value.absent(),
     this.warning = const Value.absent(),
-    this.encrypted = const Value.absent(),
+    this.encryptionProtocol = const Value.absent(),
     this.noStore = const Value.absent(),
     this.acked = const Value.absent(),
     this.received = const Value.absent(),
@@ -1561,7 +1573,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     this.timestamp = const Value.absent(),
     this.error = const Value.absent(),
     this.warning = const Value.absent(),
-    this.encrypted = const Value.absent(),
+    this.encryptionProtocol = const Value.absent(),
     this.noStore = const Value.absent(),
     this.acked = const Value.absent(),
     this.received = const Value.absent(),
@@ -1591,7 +1603,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     Expression<DateTime>? timestamp,
     Expression<int>? error,
     Expression<int>? warning,
-    Expression<bool>? encrypted,
+    Expression<int>? encryptionProtocol,
     Expression<bool>? noStore,
     Expression<bool>? acked,
     Expression<bool>? received,
@@ -1619,7 +1631,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       if (timestamp != null) 'timestamp': timestamp,
       if (error != null) 'error': error,
       if (warning != null) 'warning': warning,
-      if (encrypted != null) 'encrypted': encrypted,
+      if (encryptionProtocol != null) 'encryption_protocol': encryptionProtocol,
       if (noStore != null) 'no_store': noStore,
       if (acked != null) 'acked': acked,
       if (received != null) 'received': received,
@@ -1650,7 +1662,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       Value<DateTime>? timestamp,
       Value<MessageError>? error,
       Value<MessageWarning>? warning,
-      Value<bool>? encrypted,
+      Value<EncryptionProtocol>? encryptionProtocol,
       Value<bool>? noStore,
       Value<bool>? acked,
       Value<bool>? received,
@@ -1677,7 +1689,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       timestamp: timestamp ?? this.timestamp,
       error: error ?? this.error,
       warning: warning ?? this.warning,
-      encrypted: encrypted ?? this.encrypted,
+      encryptionProtocol: encryptionProtocol ?? this.encryptionProtocol,
       noStore: noStore ?? this.noStore,
       acked: acked ?? this.acked,
       received: received ?? this.received,
@@ -1732,8 +1744,10 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       map['warning'] =
           Variable<int>($MessagesTable.$converterwarning.toSql(warning.value));
     }
-    if (encrypted.present) {
-      map['encrypted'] = Variable<bool>(encrypted.value);
+    if (encryptionProtocol.present) {
+      map['encryption_protocol'] = Variable<int>($MessagesTable
+          .$converterencryptionProtocol
+          .toSql(encryptionProtocol.value));
     }
     if (noStore.present) {
       map['no_store'] = Variable<bool>(noStore.value);
@@ -1801,7 +1815,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
           ..write('timestamp: $timestamp, ')
           ..write('error: $error, ')
           ..write('warning: $warning, ')
-          ..write('encrypted: $encrypted, ')
+          ..write('encryptionProtocol: $encryptionProtocol, ')
           ..write('noStore: $noStore, ')
           ..write('acked: $acked, ')
           ..write('received: $received, ')
@@ -1816,6 +1830,1028 @@ class MessagesCompanion extends UpdateCompanion<Message> {
           ..write('stickerPackID: $stickerPackID, ')
           ..write('pseudoMessageType: $pseudoMessageType, ')
           ..write('pseudoMessageData: $pseudoMessageData, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DraftsTable extends Drafts with TableInfo<$DraftsTable, Draft> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DraftsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  @override
+  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
+      'jid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+      'body', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _fileMetadataIDMeta =
+      const VerificationMeta('fileMetadataID');
+  @override
+  late final GeneratedColumn<String> fileMetadataID = GeneratedColumn<String>(
+      'file_metadata_i_d', aliasedName, true,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES file_metadata (id)'));
+  @override
+  List<GeneratedColumn> get $columns => [id, jid, body, fileMetadataID];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'drafts';
+  @override
+  VerificationContext validateIntegrity(Insertable<Draft> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('jid')) {
+      context.handle(
+          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
+    } else if (isInserting) {
+      context.missing(_jidMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+          _bodyMeta, body.isAcceptableOrUnknown(data['body']!, _bodyMeta));
+    }
+    if (data.containsKey('file_metadata_i_d')) {
+      context.handle(
+          _fileMetadataIDMeta,
+          fileMetadataID.isAcceptableOrUnknown(
+              data['file_metadata_i_d']!, _fileMetadataIDMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Draft map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Draft(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      jid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      body: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}body']),
+      fileMetadataID: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}file_metadata_i_d']),
+    );
+  }
+
+  @override
+  $DraftsTable createAlias(String alias) {
+    return $DraftsTable(attachedDatabase, alias);
+  }
+}
+
+class Draft extends DataClass implements Insertable<Draft> {
+  final int id;
+  final String jid;
+  final String? body;
+  final String? fileMetadataID;
+  const Draft(
+      {required this.id, required this.jid, this.body, this.fileMetadataID});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['jid'] = Variable<String>(jid);
+    if (!nullToAbsent || body != null) {
+      map['body'] = Variable<String>(body);
+    }
+    if (!nullToAbsent || fileMetadataID != null) {
+      map['file_metadata_i_d'] = Variable<String>(fileMetadataID);
+    }
+    return map;
+  }
+
+  DraftsCompanion toCompanion(bool nullToAbsent) {
+    return DraftsCompanion(
+      id: Value(id),
+      jid: Value(jid),
+      body: body == null && nullToAbsent ? const Value.absent() : Value(body),
+      fileMetadataID: fileMetadataID == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fileMetadataID),
+    );
+  }
+
+  factory Draft.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Draft(
+      id: serializer.fromJson<int>(json['id']),
+      jid: serializer.fromJson<String>(json['jid']),
+      body: serializer.fromJson<String?>(json['body']),
+      fileMetadataID: serializer.fromJson<String?>(json['fileMetadataID']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'jid': serializer.toJson<String>(jid),
+      'body': serializer.toJson<String?>(body),
+      'fileMetadataID': serializer.toJson<String?>(fileMetadataID),
+    };
+  }
+
+  Draft copyWith(
+          {int? id,
+          String? jid,
+          Value<String?> body = const Value.absent(),
+          Value<String?> fileMetadataID = const Value.absent()}) =>
+      Draft(
+        id: id ?? this.id,
+        jid: jid ?? this.jid,
+        body: body.present ? body.value : this.body,
+        fileMetadataID:
+            fileMetadataID.present ? fileMetadataID.value : this.fileMetadataID,
+      );
+  @override
+  String toString() {
+    return (StringBuffer('Draft(')
+          ..write('id: $id, ')
+          ..write('jid: $jid, ')
+          ..write('body: $body, ')
+          ..write('fileMetadataID: $fileMetadataID')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, jid, body, fileMetadataID);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Draft &&
+          other.id == this.id &&
+          other.jid == this.jid &&
+          other.body == this.body &&
+          other.fileMetadataID == this.fileMetadataID);
+}
+
+class DraftsCompanion extends UpdateCompanion<Draft> {
+  final Value<int> id;
+  final Value<String> jid;
+  final Value<String?> body;
+  final Value<String?> fileMetadataID;
+  const DraftsCompanion({
+    this.id = const Value.absent(),
+    this.jid = const Value.absent(),
+    this.body = const Value.absent(),
+    this.fileMetadataID = const Value.absent(),
+  });
+  DraftsCompanion.insert({
+    this.id = const Value.absent(),
+    required String jid,
+    this.body = const Value.absent(),
+    this.fileMetadataID = const Value.absent(),
+  }) : jid = Value(jid);
+  static Insertable<Draft> custom({
+    Expression<int>? id,
+    Expression<String>? jid,
+    Expression<String>? body,
+    Expression<String>? fileMetadataID,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (jid != null) 'jid': jid,
+      if (body != null) 'body': body,
+      if (fileMetadataID != null) 'file_metadata_i_d': fileMetadataID,
+    });
+  }
+
+  DraftsCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? jid,
+      Value<String?>? body,
+      Value<String?>? fileMetadataID}) {
+    return DraftsCompanion(
+      id: id ?? this.id,
+      jid: jid ?? this.jid,
+      body: body ?? this.body,
+      fileMetadataID: fileMetadataID ?? this.fileMetadataID,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (jid.present) {
+      map['jid'] = Variable<String>(jid.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (fileMetadataID.present) {
+      map['file_metadata_i_d'] = Variable<String>(fileMetadataID.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DraftsCompanion(')
+          ..write('id: $id, ')
+          ..write('jid: $jid, ')
+          ..write('body: $body, ')
+          ..write('fileMetadataID: $fileMetadataID')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OmemoDevicesTable extends OmemoDevices
+    with TableInfo<$OmemoDevicesTable, OmemoDevice> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OmemoDevicesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  @override
+  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
+      'jid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _identityKeyMeta =
+      const VerificationMeta('identityKey');
+  @override
+  late final GeneratedColumn<String> identityKey = GeneratedColumn<String>(
+      'identity_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _signedPreKeyMeta =
+      const VerificationMeta('signedPreKey');
+  @override
+  late final GeneratedColumn<String> signedPreKey = GeneratedColumn<String>(
+      'signed_pre_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _oldSignedPreKeyMeta =
+      const VerificationMeta('oldSignedPreKey');
+  @override
+  late final GeneratedColumn<String> oldSignedPreKey = GeneratedColumn<String>(
+      'old_signed_pre_key', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _trustMeta = const VerificationMeta('trust');
+  @override
+  late final GeneratedColumnWithTypeConverter<BTBVTrustState, int> trust =
+      GeneratedColumn<int>('trust', aliasedName, false,
+              type: DriftSqlType.int,
+              requiredDuringInsert: false,
+              defaultValue: const Constant(2))
+          .withConverter<BTBVTrustState>($OmemoDevicesTable.$convertertrust);
+  static const VerificationMeta _enabledMeta =
+      const VerificationMeta('enabled');
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+      'enabled', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("enabled" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _onetimePreKeysMeta =
+      const VerificationMeta('onetimePreKeys');
+  @override
+  late final GeneratedColumn<String> onetimePreKeys = GeneratedColumn<String>(
+      'onetime_pre_keys', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        jid,
+        id,
+        identityKey,
+        signedPreKey,
+        oldSignedPreKey,
+        trust,
+        enabled,
+        onetimePreKeys
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'omemo_devices';
+  @override
+  VerificationContext validateIntegrity(Insertable<OmemoDevice> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('jid')) {
+      context.handle(
+          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
+    } else if (isInserting) {
+      context.missing(_jidMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('identity_key')) {
+      context.handle(
+          _identityKeyMeta,
+          identityKey.isAcceptableOrUnknown(
+              data['identity_key']!, _identityKeyMeta));
+    } else if (isInserting) {
+      context.missing(_identityKeyMeta);
+    }
+    if (data.containsKey('signed_pre_key')) {
+      context.handle(
+          _signedPreKeyMeta,
+          signedPreKey.isAcceptableOrUnknown(
+              data['signed_pre_key']!, _signedPreKeyMeta));
+    } else if (isInserting) {
+      context.missing(_signedPreKeyMeta);
+    }
+    if (data.containsKey('old_signed_pre_key')) {
+      context.handle(
+          _oldSignedPreKeyMeta,
+          oldSignedPreKey.isAcceptableOrUnknown(
+              data['old_signed_pre_key']!, _oldSignedPreKeyMeta));
+    }
+    context.handle(_trustMeta, const VerificationResult.success());
+    if (data.containsKey('enabled')) {
+      context.handle(_enabledMeta,
+          enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta));
+    }
+    if (data.containsKey('onetime_pre_keys')) {
+      context.handle(
+          _onetimePreKeysMeta,
+          onetimePreKeys.isAcceptableOrUnknown(
+              data['onetime_pre_keys']!, _onetimePreKeysMeta));
+    } else if (isInserting) {
+      context.missing(_onetimePreKeysMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {jid};
+  @override
+  OmemoDevice map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OmemoDevice.fromDb(
+      jid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      identityKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}identity_key'])!,
+      signedPreKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}signed_pre_key'])!,
+      oldSignedPreKey: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}old_signed_pre_key']),
+      trust: $OmemoDevicesTable.$convertertrust.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}trust'])!),
+      enabled: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}enabled'])!,
+      onetimePreKeys: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}onetime_pre_keys'])!,
+    );
+  }
+
+  @override
+  $OmemoDevicesTable createAlias(String alias) {
+    return $OmemoDevicesTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<BTBVTrustState, int, int> $convertertrust =
+      const EnumIndexConverter<omemo.BTBVTrustState>(
+          omemo.BTBVTrustState.values);
+}
+
+class OmemoDevicesCompanion extends UpdateCompanion<OmemoDevice> {
+  final Value<String> jid;
+  final Value<int> id;
+  final Value<String> identityKey;
+  final Value<String> signedPreKey;
+  final Value<String?> oldSignedPreKey;
+  final Value<BTBVTrustState> trust;
+  final Value<bool> enabled;
+  final Value<String> onetimePreKeys;
+  final Value<int> rowid;
+  const OmemoDevicesCompanion({
+    this.jid = const Value.absent(),
+    this.id = const Value.absent(),
+    this.identityKey = const Value.absent(),
+    this.signedPreKey = const Value.absent(),
+    this.oldSignedPreKey = const Value.absent(),
+    this.trust = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.onetimePreKeys = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OmemoDevicesCompanion.insert({
+    required String jid,
+    required int id,
+    required String identityKey,
+    required String signedPreKey,
+    this.oldSignedPreKey = const Value.absent(),
+    this.trust = const Value.absent(),
+    this.enabled = const Value.absent(),
+    required String onetimePreKeys,
+    this.rowid = const Value.absent(),
+  })  : jid = Value(jid),
+        id = Value(id),
+        identityKey = Value(identityKey),
+        signedPreKey = Value(signedPreKey),
+        onetimePreKeys = Value(onetimePreKeys);
+  static Insertable<OmemoDevice> custom({
+    Expression<String>? jid,
+    Expression<int>? id,
+    Expression<String>? identityKey,
+    Expression<String>? signedPreKey,
+    Expression<String>? oldSignedPreKey,
+    Expression<int>? trust,
+    Expression<bool>? enabled,
+    Expression<String>? onetimePreKeys,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (jid != null) 'jid': jid,
+      if (id != null) 'id': id,
+      if (identityKey != null) 'identity_key': identityKey,
+      if (signedPreKey != null) 'signed_pre_key': signedPreKey,
+      if (oldSignedPreKey != null) 'old_signed_pre_key': oldSignedPreKey,
+      if (trust != null) 'trust': trust,
+      if (enabled != null) 'enabled': enabled,
+      if (onetimePreKeys != null) 'onetime_pre_keys': onetimePreKeys,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OmemoDevicesCompanion copyWith(
+      {Value<String>? jid,
+      Value<int>? id,
+      Value<String>? identityKey,
+      Value<String>? signedPreKey,
+      Value<String?>? oldSignedPreKey,
+      Value<BTBVTrustState>? trust,
+      Value<bool>? enabled,
+      Value<String>? onetimePreKeys,
+      Value<int>? rowid}) {
+    return OmemoDevicesCompanion(
+      jid: jid ?? this.jid,
+      id: id ?? this.id,
+      identityKey: identityKey ?? this.identityKey,
+      signedPreKey: signedPreKey ?? this.signedPreKey,
+      oldSignedPreKey: oldSignedPreKey ?? this.oldSignedPreKey,
+      trust: trust ?? this.trust,
+      enabled: enabled ?? this.enabled,
+      onetimePreKeys: onetimePreKeys ?? this.onetimePreKeys,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (jid.present) {
+      map['jid'] = Variable<String>(jid.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (identityKey.present) {
+      map['identity_key'] = Variable<String>(identityKey.value);
+    }
+    if (signedPreKey.present) {
+      map['signed_pre_key'] = Variable<String>(signedPreKey.value);
+    }
+    if (oldSignedPreKey.present) {
+      map['old_signed_pre_key'] = Variable<String>(oldSignedPreKey.value);
+    }
+    if (trust.present) {
+      map['trust'] =
+          Variable<int>($OmemoDevicesTable.$convertertrust.toSql(trust.value));
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (onetimePreKeys.present) {
+      map['onetime_pre_keys'] = Variable<String>(onetimePreKeys.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OmemoDevicesCompanion(')
+          ..write('jid: $jid, ')
+          ..write('id: $id, ')
+          ..write('identityKey: $identityKey, ')
+          ..write('signedPreKey: $signedPreKey, ')
+          ..write('oldSignedPreKey: $oldSignedPreKey, ')
+          ..write('trust: $trust, ')
+          ..write('enabled: $enabled, ')
+          ..write('onetimePreKeys: $onetimePreKeys, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OmemoRatchetsTable extends OmemoRatchets
+    with TableInfo<$OmemoRatchetsTable, OmemoRatchet> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OmemoRatchetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  @override
+  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
+      'jid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _deviceMeta = const VerificationMeta('device');
+  @override
+  late final GeneratedColumn<int> device = GeneratedColumn<int>(
+      'device', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _dhsMeta = const VerificationMeta('dhs');
+  @override
+  late final GeneratedColumn<String> dhs = GeneratedColumn<String>(
+      'dhs', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _dhrMeta = const VerificationMeta('dhr');
+  @override
+  late final GeneratedColumn<String> dhr = GeneratedColumn<String>(
+      'dhr', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _rkMeta = const VerificationMeta('rk');
+  @override
+  late final GeneratedColumnWithTypeConverter<List<int>, String> rk =
+      GeneratedColumn<String>('rk', aliasedName, false,
+              type: DriftSqlType.string, requiredDuringInsert: true)
+          .withConverter<List<int>>($OmemoRatchetsTable.$converterrk);
+  static const VerificationMeta _cksMeta = const VerificationMeta('cks');
+  @override
+  late final GeneratedColumnWithTypeConverter<List<int>?, String> cks =
+      GeneratedColumn<String>('cks', aliasedName, true,
+              type: DriftSqlType.string, requiredDuringInsert: false)
+          .withConverter<List<int>?>($OmemoRatchetsTable.$convertercksn);
+  static const VerificationMeta _ckrMeta = const VerificationMeta('ckr');
+  @override
+  late final GeneratedColumnWithTypeConverter<List<int>?, String> ckr =
+      GeneratedColumn<String>('ckr', aliasedName, true,
+              type: DriftSqlType.string, requiredDuringInsert: false)
+          .withConverter<List<int>?>($OmemoRatchetsTable.$converterckrn);
+  static const VerificationMeta _nsMeta = const VerificationMeta('ns');
+  @override
+  late final GeneratedColumn<int> ns = GeneratedColumn<int>(
+      'ns', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _nrMeta = const VerificationMeta('nr');
+  @override
+  late final GeneratedColumn<int> nr = GeneratedColumn<int>(
+      'nr', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _pnMeta = const VerificationMeta('pn');
+  @override
+  late final GeneratedColumn<int> pn = GeneratedColumn<int>(
+      'pn', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _identityKeyMeta =
+      const VerificationMeta('identityKey');
+  @override
+  late final GeneratedColumn<String> identityKey = GeneratedColumn<String>(
+      'identity_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _associatedDataMeta =
+      const VerificationMeta('associatedData');
+  @override
+  late final GeneratedColumnWithTypeConverter<List<int>, String>
+      associatedData = GeneratedColumn<String>(
+              'associated_data', aliasedName, false,
+              type: DriftSqlType.string, requiredDuringInsert: true)
+          .withConverter<List<int>>(
+              $OmemoRatchetsTable.$converterassociatedData);
+  static const VerificationMeta _mkSkippedMeta =
+      const VerificationMeta('mkSkipped');
+  @override
+  late final GeneratedColumn<String> mkSkipped = GeneratedColumn<String>(
+      'mk_skipped', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _keyExchangeDataMeta =
+      const VerificationMeta('keyExchangeData');
+  @override
+  late final GeneratedColumn<String> keyExchangeData = GeneratedColumn<String>(
+      'key_exchange_data', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _ackedMeta = const VerificationMeta('acked');
+  @override
+  late final GeneratedColumn<bool> acked = GeneratedColumn<bool>(
+      'acked', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("acked" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  @override
+  List<GeneratedColumn> get $columns => [
+        jid,
+        device,
+        dhs,
+        dhr,
+        rk,
+        cks,
+        ckr,
+        ns,
+        nr,
+        pn,
+        identityKey,
+        associatedData,
+        mkSkipped,
+        keyExchangeData,
+        acked
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'omemo_ratchets';
+  @override
+  VerificationContext validateIntegrity(Insertable<OmemoRatchet> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('jid')) {
+      context.handle(
+          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
+    } else if (isInserting) {
+      context.missing(_jidMeta);
+    }
+    if (data.containsKey('device')) {
+      context.handle(_deviceMeta,
+          device.isAcceptableOrUnknown(data['device']!, _deviceMeta));
+    } else if (isInserting) {
+      context.missing(_deviceMeta);
+    }
+    if (data.containsKey('dhs')) {
+      context.handle(
+          _dhsMeta, dhs.isAcceptableOrUnknown(data['dhs']!, _dhsMeta));
+    } else if (isInserting) {
+      context.missing(_dhsMeta);
+    }
+    if (data.containsKey('dhr')) {
+      context.handle(
+          _dhrMeta, dhr.isAcceptableOrUnknown(data['dhr']!, _dhrMeta));
+    }
+    context.handle(_rkMeta, const VerificationResult.success());
+    context.handle(_cksMeta, const VerificationResult.success());
+    context.handle(_ckrMeta, const VerificationResult.success());
+    if (data.containsKey('ns')) {
+      context.handle(_nsMeta, ns.isAcceptableOrUnknown(data['ns']!, _nsMeta));
+    } else if (isInserting) {
+      context.missing(_nsMeta);
+    }
+    if (data.containsKey('nr')) {
+      context.handle(_nrMeta, nr.isAcceptableOrUnknown(data['nr']!, _nrMeta));
+    } else if (isInserting) {
+      context.missing(_nrMeta);
+    }
+    if (data.containsKey('pn')) {
+      context.handle(_pnMeta, pn.isAcceptableOrUnknown(data['pn']!, _pnMeta));
+    } else if (isInserting) {
+      context.missing(_pnMeta);
+    }
+    if (data.containsKey('identity_key')) {
+      context.handle(
+          _identityKeyMeta,
+          identityKey.isAcceptableOrUnknown(
+              data['identity_key']!, _identityKeyMeta));
+    } else if (isInserting) {
+      context.missing(_identityKeyMeta);
+    }
+    context.handle(_associatedDataMeta, const VerificationResult.success());
+    if (data.containsKey('mk_skipped')) {
+      context.handle(_mkSkippedMeta,
+          mkSkipped.isAcceptableOrUnknown(data['mk_skipped']!, _mkSkippedMeta));
+    } else if (isInserting) {
+      context.missing(_mkSkippedMeta);
+    }
+    if (data.containsKey('key_exchange_data')) {
+      context.handle(
+          _keyExchangeDataMeta,
+          keyExchangeData.isAcceptableOrUnknown(
+              data['key_exchange_data']!, _keyExchangeDataMeta));
+    } else if (isInserting) {
+      context.missing(_keyExchangeDataMeta);
+    }
+    if (data.containsKey('acked')) {
+      context.handle(
+          _ackedMeta, acked.isAcceptableOrUnknown(data['acked']!, _ackedMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {jid, device};
+  @override
+  OmemoRatchet map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OmemoRatchet.fromDb(
+      jid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      device: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}device'])!,
+      dhs: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}dhs'])!,
+      dhr: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}dhr']),
+      rk: $OmemoRatchetsTable.$converterrk.fromSql(attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}rk'])!),
+      cks: $OmemoRatchetsTable.$convertercksn.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}cks'])),
+      ckr: $OmemoRatchetsTable.$converterckrn.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}ckr'])),
+      ns: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}ns'])!,
+      nr: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}nr'])!,
+      pn: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}pn'])!,
+      identityKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}identity_key'])!,
+      associatedData: $OmemoRatchetsTable.$converterassociatedData.fromSql(
+          attachedDatabase.typeMapping.read(
+              DriftSqlType.string, data['${effectivePrefix}associated_data'])!),
+      mkSkipped: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}mk_skipped'])!,
+      keyExchangeData: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}key_exchange_data'])!,
+      acked: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}acked'])!,
+    );
+  }
+
+  @override
+  $OmemoRatchetsTable createAlias(String alias) {
+    return $OmemoRatchetsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<List<int>, String> $converterrk = ListConverter();
+  static TypeConverter<List<int>, String> $convertercks = ListConverter();
+  static TypeConverter<List<int>?, String?> $convertercksn =
+      NullAwareTypeConverter.wrap($convertercks);
+  static TypeConverter<List<int>, String> $converterckr = ListConverter();
+  static TypeConverter<List<int>?, String?> $converterckrn =
+      NullAwareTypeConverter.wrap($converterckr);
+  static TypeConverter<List<int>, String> $converterassociatedData =
+      ListConverter();
+}
+
+class OmemoRatchetsCompanion extends UpdateCompanion<OmemoRatchet> {
+  final Value<String> jid;
+  final Value<int> device;
+  final Value<String> dhs;
+  final Value<String?> dhr;
+  final Value<List<int>> rk;
+  final Value<List<int>?> cks;
+  final Value<List<int>?> ckr;
+  final Value<int> ns;
+  final Value<int> nr;
+  final Value<int> pn;
+  final Value<String> identityKey;
+  final Value<List<int>> associatedData;
+  final Value<String> mkSkipped;
+  final Value<String> keyExchangeData;
+  final Value<bool> acked;
+  final Value<int> rowid;
+  const OmemoRatchetsCompanion({
+    this.jid = const Value.absent(),
+    this.device = const Value.absent(),
+    this.dhs = const Value.absent(),
+    this.dhr = const Value.absent(),
+    this.rk = const Value.absent(),
+    this.cks = const Value.absent(),
+    this.ckr = const Value.absent(),
+    this.ns = const Value.absent(),
+    this.nr = const Value.absent(),
+    this.pn = const Value.absent(),
+    this.identityKey = const Value.absent(),
+    this.associatedData = const Value.absent(),
+    this.mkSkipped = const Value.absent(),
+    this.keyExchangeData = const Value.absent(),
+    this.acked = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OmemoRatchetsCompanion.insert({
+    required String jid,
+    required int device,
+    required String dhs,
+    this.dhr = const Value.absent(),
+    required List<int> rk,
+    this.cks = const Value.absent(),
+    this.ckr = const Value.absent(),
+    required int ns,
+    required int nr,
+    required int pn,
+    required String identityKey,
+    required List<int> associatedData,
+    required String mkSkipped,
+    required String keyExchangeData,
+    this.acked = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : jid = Value(jid),
+        device = Value(device),
+        dhs = Value(dhs),
+        rk = Value(rk),
+        ns = Value(ns),
+        nr = Value(nr),
+        pn = Value(pn),
+        identityKey = Value(identityKey),
+        associatedData = Value(associatedData),
+        mkSkipped = Value(mkSkipped),
+        keyExchangeData = Value(keyExchangeData);
+  static Insertable<OmemoRatchet> custom({
+    Expression<String>? jid,
+    Expression<int>? device,
+    Expression<String>? dhs,
+    Expression<String>? dhr,
+    Expression<String>? rk,
+    Expression<String>? cks,
+    Expression<String>? ckr,
+    Expression<int>? ns,
+    Expression<int>? nr,
+    Expression<int>? pn,
+    Expression<String>? identityKey,
+    Expression<String>? associatedData,
+    Expression<String>? mkSkipped,
+    Expression<String>? keyExchangeData,
+    Expression<bool>? acked,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (jid != null) 'jid': jid,
+      if (device != null) 'device': device,
+      if (dhs != null) 'dhs': dhs,
+      if (dhr != null) 'dhr': dhr,
+      if (rk != null) 'rk': rk,
+      if (cks != null) 'cks': cks,
+      if (ckr != null) 'ckr': ckr,
+      if (ns != null) 'ns': ns,
+      if (nr != null) 'nr': nr,
+      if (pn != null) 'pn': pn,
+      if (identityKey != null) 'identity_key': identityKey,
+      if (associatedData != null) 'associated_data': associatedData,
+      if (mkSkipped != null) 'mk_skipped': mkSkipped,
+      if (keyExchangeData != null) 'key_exchange_data': keyExchangeData,
+      if (acked != null) 'acked': acked,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OmemoRatchetsCompanion copyWith(
+      {Value<String>? jid,
+      Value<int>? device,
+      Value<String>? dhs,
+      Value<String?>? dhr,
+      Value<List<int>>? rk,
+      Value<List<int>?>? cks,
+      Value<List<int>?>? ckr,
+      Value<int>? ns,
+      Value<int>? nr,
+      Value<int>? pn,
+      Value<String>? identityKey,
+      Value<List<int>>? associatedData,
+      Value<String>? mkSkipped,
+      Value<String>? keyExchangeData,
+      Value<bool>? acked,
+      Value<int>? rowid}) {
+    return OmemoRatchetsCompanion(
+      jid: jid ?? this.jid,
+      device: device ?? this.device,
+      dhs: dhs ?? this.dhs,
+      dhr: dhr ?? this.dhr,
+      rk: rk ?? this.rk,
+      cks: cks ?? this.cks,
+      ckr: ckr ?? this.ckr,
+      ns: ns ?? this.ns,
+      nr: nr ?? this.nr,
+      pn: pn ?? this.pn,
+      identityKey: identityKey ?? this.identityKey,
+      associatedData: associatedData ?? this.associatedData,
+      mkSkipped: mkSkipped ?? this.mkSkipped,
+      keyExchangeData: keyExchangeData ?? this.keyExchangeData,
+      acked: acked ?? this.acked,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (jid.present) {
+      map['jid'] = Variable<String>(jid.value);
+    }
+    if (device.present) {
+      map['device'] = Variable<int>(device.value);
+    }
+    if (dhs.present) {
+      map['dhs'] = Variable<String>(dhs.value);
+    }
+    if (dhr.present) {
+      map['dhr'] = Variable<String>(dhr.value);
+    }
+    if (rk.present) {
+      map['rk'] =
+          Variable<String>($OmemoRatchetsTable.$converterrk.toSql(rk.value));
+    }
+    if (cks.present) {
+      map['cks'] =
+          Variable<String>($OmemoRatchetsTable.$convertercksn.toSql(cks.value));
+    }
+    if (ckr.present) {
+      map['ckr'] =
+          Variable<String>($OmemoRatchetsTable.$converterckrn.toSql(ckr.value));
+    }
+    if (ns.present) {
+      map['ns'] = Variable<int>(ns.value);
+    }
+    if (nr.present) {
+      map['nr'] = Variable<int>(nr.value);
+    }
+    if (pn.present) {
+      map['pn'] = Variable<int>(pn.value);
+    }
+    if (identityKey.present) {
+      map['identity_key'] = Variable<String>(identityKey.value);
+    }
+    if (associatedData.present) {
+      map['associated_data'] = Variable<String>($OmemoRatchetsTable
+          .$converterassociatedData
+          .toSql(associatedData.value));
+    }
+    if (mkSkipped.present) {
+      map['mk_skipped'] = Variable<String>(mkSkipped.value);
+    }
+    if (keyExchangeData.present) {
+      map['key_exchange_data'] = Variable<String>(keyExchangeData.value);
+    }
+    if (acked.present) {
+      map['acked'] = Variable<bool>(acked.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OmemoRatchetsCompanion(')
+          ..write('jid: $jid, ')
+          ..write('device: $device, ')
+          ..write('dhs: $dhs, ')
+          ..write('dhr: $dhr, ')
+          ..write('rk: $rk, ')
+          ..write('cks: $cks, ')
+          ..write('ckr: $ckr, ')
+          ..write('ns: $ns, ')
+          ..write('nr: $nr, ')
+          ..write('pn: $pn, ')
+          ..write('identityKey: $identityKey, ')
+          ..write('associatedData: $associatedData, ')
+          ..write('mkSkipped: $mkSkipped, ')
+          ..write('keyExchangeData: $keyExchangeData, ')
+          ..write('acked: $acked, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2538,16 +3574,6 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("muted" IN (0, 1))'),
       defaultValue: const Constant(false));
-  static const VerificationMeta _encryptedMeta =
-      const VerificationMeta('encrypted');
-  @override
-  late final GeneratedColumn<bool> encrypted = GeneratedColumn<bool>(
-      'encrypted', aliasedName, false,
-      type: DriftSqlType.bool,
-      requiredDuringInsert: false,
-      defaultConstraints:
-          GeneratedColumn.constraintIsAlways('CHECK ("encrypted" IN (0, 1))'),
-      defaultValue: const Constant(false));
   static const VerificationMeta _favouritedMeta =
       const VerificationMeta('favourited');
   @override
@@ -2558,6 +3584,17 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("favourited" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _encryptionProtocolMeta =
+      const VerificationMeta('encryptionProtocol');
+  @override
+  late final GeneratedColumnWithTypeConverter<EncryptionProtocol, int>
+      encryptionProtocol = GeneratedColumn<int>(
+              'encryption_protocol', aliasedName, false,
+              type: DriftSqlType.int,
+              requiredDuringInsert: false,
+              defaultValue: const Constant(0))
+          .withConverter<EncryptionProtocol>(
+              $ChatsTable.$converterencryptionProtocol);
   static const VerificationMeta _contactIDMeta =
       const VerificationMeta('contactID');
   @override
@@ -2605,8 +3642,8 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
         unreadCount,
         open,
         muted,
-        encrypted,
         favourited,
+        encryptionProtocol,
         contactID,
         contactDisplayName,
         contactAvatarPath,
@@ -2682,16 +3719,13 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
       context.handle(
           _mutedMeta, muted.isAcceptableOrUnknown(data['muted']!, _mutedMeta));
     }
-    if (data.containsKey('encrypted')) {
-      context.handle(_encryptedMeta,
-          encrypted.isAcceptableOrUnknown(data['encrypted']!, _encryptedMeta));
-    }
     if (data.containsKey('favourited')) {
       context.handle(
           _favouritedMeta,
           favourited.isAcceptableOrUnknown(
               data['favourited']!, _favouritedMeta));
     }
+    context.handle(_encryptionProtocolMeta, const VerificationResult.success());
     if (data.containsKey('contact_i_d')) {
       context.handle(
           _contactIDMeta,
@@ -2749,10 +3783,11 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
           .read(DriftSqlType.bool, data['${effectivePrefix}open'])!,
       muted: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}muted'])!,
-      encrypted: attachedDatabase.typeMapping
-          .read(DriftSqlType.bool, data['${effectivePrefix}encrypted'])!,
       favourited: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}favourited'])!,
+      encryptionProtocol: $ChatsTable.$converterencryptionProtocol.fromSql(
+          attachedDatabase.typeMapping.read(DriftSqlType.int,
+              data['${effectivePrefix}encryption_protocol'])!),
       contactID: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}contact_i_d']),
       contactDisplayName: attachedDatabase.typeMapping.read(
@@ -2774,6 +3809,9 @@ class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
 
   static JsonTypeConverter2<ChatType, int, int> $convertertype =
       const EnumIndexConverter<ChatType>(ChatType.values);
+  static JsonTypeConverter2<EncryptionProtocol, int, int>
+      $converterencryptionProtocol =
+      const EnumIndexConverter<EncryptionProtocol>(EncryptionProtocol.values);
   static JsonTypeConverter2<mox.ChatState, String, String> $converterchatState =
       const EnumNameConverter<mox.ChatState>(mox.ChatState.values);
   static JsonTypeConverter2<mox.ChatState?, String?, String?>
@@ -2792,8 +3830,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   final Value<int> unreadCount;
   final Value<bool> open;
   final Value<bool> muted;
-  final Value<bool> encrypted;
   final Value<bool> favourited;
+  final Value<EncryptionProtocol> encryptionProtocol;
   final Value<String?> contactID;
   final Value<String?> contactDisplayName;
   final Value<String?> contactAvatarPath;
@@ -2812,8 +3850,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     this.unreadCount = const Value.absent(),
     this.open = const Value.absent(),
     this.muted = const Value.absent(),
-    this.encrypted = const Value.absent(),
     this.favourited = const Value.absent(),
+    this.encryptionProtocol = const Value.absent(),
     this.contactID = const Value.absent(),
     this.contactDisplayName = const Value.absent(),
     this.contactAvatarPath = const Value.absent(),
@@ -2833,8 +3871,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     this.unreadCount = const Value.absent(),
     this.open = const Value.absent(),
     this.muted = const Value.absent(),
-    this.encrypted = const Value.absent(),
     this.favourited = const Value.absent(),
+    this.encryptionProtocol = const Value.absent(),
     this.contactID = const Value.absent(),
     this.contactDisplayName = const Value.absent(),
     this.contactAvatarPath = const Value.absent(),
@@ -2857,8 +3895,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     Expression<int>? unreadCount,
     Expression<bool>? open,
     Expression<bool>? muted,
-    Expression<bool>? encrypted,
     Expression<bool>? favourited,
+    Expression<int>? encryptionProtocol,
     Expression<String>? contactID,
     Expression<String>? contactDisplayName,
     Expression<String>? contactAvatarPath,
@@ -2879,8 +3917,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       if (unreadCount != null) 'unread_count': unreadCount,
       if (open != null) 'open': open,
       if (muted != null) 'muted': muted,
-      if (encrypted != null) 'encrypted': encrypted,
       if (favourited != null) 'favourited': favourited,
+      if (encryptionProtocol != null) 'encryption_protocol': encryptionProtocol,
       if (contactID != null) 'contact_i_d': contactID,
       if (contactDisplayName != null)
         'contact_display_name': contactDisplayName,
@@ -2903,8 +3941,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       Value<int>? unreadCount,
       Value<bool>? open,
       Value<bool>? muted,
-      Value<bool>? encrypted,
       Value<bool>? favourited,
+      Value<EncryptionProtocol>? encryptionProtocol,
       Value<String?>? contactID,
       Value<String?>? contactDisplayName,
       Value<String?>? contactAvatarPath,
@@ -2923,8 +3961,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
       unreadCount: unreadCount ?? this.unreadCount,
       open: open ?? this.open,
       muted: muted ?? this.muted,
-      encrypted: encrypted ?? this.encrypted,
       favourited: favourited ?? this.favourited,
+      encryptionProtocol: encryptionProtocol ?? this.encryptionProtocol,
       contactID: contactID ?? this.contactID,
       contactDisplayName: contactDisplayName ?? this.contactDisplayName,
       contactAvatarPath: contactAvatarPath ?? this.contactAvatarPath,
@@ -2971,11 +4009,13 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
     if (muted.present) {
       map['muted'] = Variable<bool>(muted.value);
     }
-    if (encrypted.present) {
-      map['encrypted'] = Variable<bool>(encrypted.value);
-    }
     if (favourited.present) {
       map['favourited'] = Variable<bool>(favourited.value);
+    }
+    if (encryptionProtocol.present) {
+      map['encryption_protocol'] = Variable<int>($ChatsTable
+          .$converterencryptionProtocol
+          .toSql(encryptionProtocol.value));
     }
     if (contactID.present) {
       map['contact_i_d'] = Variable<String>(contactID.value);
@@ -3013,8 +4053,8 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
           ..write('unreadCount: $unreadCount, ')
           ..write('open: $open, ')
           ..write('muted: $muted, ')
-          ..write('encrypted: $encrypted, ')
           ..write('favourited: $favourited, ')
+          ..write('encryptionProtocol: $encryptionProtocol, ')
           ..write('contactID: $contactID, ')
           ..write('contactDisplayName: $contactDisplayName, ')
           ..write('contactAvatarPath: $contactAvatarPath, ')
@@ -3037,8 +4077,8 @@ class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
       'jid', aliasedName, false,
       type: DriftSqlType.string,
       requiredDuringInsert: true,
-      defaultConstraints: GeneratedColumn.constraintIsAlways(
-          'REFERENCES chats (jid) ON DELETE CASCADE'));
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES chats (jid)'));
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
@@ -3892,6 +4932,9 @@ abstract class _$XmppDrift extends GeneratedDatabase {
   late final $FileMetadataTable fileMetadata = $FileMetadataTable(this);
   late final $StickerPacksTable stickerPacks = $StickerPacksTable(this);
   late final $MessagesTable messages = $MessagesTable(this);
+  late final $DraftsTable drafts = $DraftsTable(this);
+  late final $OmemoDevicesTable omemoDevices = $OmemoDevicesTable(this);
+  late final $OmemoRatchetsTable omemoRatchets = $OmemoRatchetsTable(this);
   late final $ReactionsTable reactions = $ReactionsTable(this);
   late final $NotificationsTable notifications = $NotificationsTable(this);
   late final $ContactsTable contacts = $ContactsTable(this);
@@ -3902,6 +4945,11 @@ abstract class _$XmppDrift extends GeneratedDatabase {
   late final $StickersTable stickers = $StickersTable(this);
   late final MessagesAccessor messagesAccessor =
       MessagesAccessor(this as XmppDrift);
+  late final DraftsAccessor draftsAccessor = DraftsAccessor(this as XmppDrift);
+  late final OmemoDevicesAccessor omemoDevicesAccessor =
+      OmemoDevicesAccessor(this as XmppDrift);
+  late final OmemoRatchetsAccessor omemoRatchetsAccessor =
+      OmemoRatchetsAccessor(this as XmppDrift);
   late final FileMetadataAccessor fileMetadataAccessor =
       FileMetadataAccessor(this as XmppDrift);
   late final ChatsAccessor chatsAccessor = ChatsAccessor(this as XmppDrift);
@@ -3918,6 +4966,9 @@ abstract class _$XmppDrift extends GeneratedDatabase {
         fileMetadata,
         stickerPacks,
         messages,
+        drafts,
+        omemoDevices,
+        omemoRatchets,
         reactions,
         notifications,
         contacts,
@@ -3927,18 +4978,6 @@ abstract class _$XmppDrift extends GeneratedDatabase {
         blocklist,
         stickers
       ];
-  @override
-  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules(
-        [
-          WritePropagation(
-            on: TableUpdateQuery.onTableName('chats',
-                limitUpdateKind: UpdateKind.delete),
-            result: [
-              TableUpdate('roster', kind: UpdateKind.delete),
-            ],
-          ),
-        ],
-      );
 }
 
 typedef $$FileMetadataTableInsertCompanionBuilder = FileMetadataCompanion
@@ -4175,6 +5214,19 @@ class $$FileMetadataTableFilterComposer
       column: $state.table.thumbnailData,
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ComposableFilter draftsRefs(
+      ComposableFilter Function($$DraftsTableFilterComposer f) f) {
+    final $$DraftsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $state.db.drafts,
+        getReferencedColumn: (t) => t.fileMetadataID,
+        builder: (joinBuilder, parentComposers) => $$DraftsTableFilterComposer(
+            ComposerState(
+                $state.db, $state.db.drafts, joinBuilder, parentComposers)));
+    return f(composer);
+  }
 }
 
 class $$FileMetadataTableOrderingComposer
@@ -4254,6 +5306,138 @@ class $$FileMetadataTableOrderingComposer
       column: $state.table.thumbnailData,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
+}
+
+typedef $$DraftsTableInsertCompanionBuilder = DraftsCompanion Function({
+  Value<int> id,
+  required String jid,
+  Value<String?> body,
+  Value<String?> fileMetadataID,
+});
+typedef $$DraftsTableUpdateCompanionBuilder = DraftsCompanion Function({
+  Value<int> id,
+  Value<String> jid,
+  Value<String?> body,
+  Value<String?> fileMetadataID,
+});
+
+class $$DraftsTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $DraftsTable,
+    Draft,
+    $$DraftsTableFilterComposer,
+    $$DraftsTableOrderingComposer,
+    $$DraftsTableProcessedTableManager,
+    $$DraftsTableInsertCompanionBuilder,
+    $$DraftsTableUpdateCompanionBuilder> {
+  $$DraftsTableTableManager(_$XmppDrift db, $DraftsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$DraftsTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$DraftsTableOrderingComposer(ComposerState(db, table)),
+          getChildManagerBuilder: (p) => $$DraftsTableProcessedTableManager(p),
+          getUpdateCompanionBuilder: ({
+            Value<int> id = const Value.absent(),
+            Value<String> jid = const Value.absent(),
+            Value<String?> body = const Value.absent(),
+            Value<String?> fileMetadataID = const Value.absent(),
+          }) =>
+              DraftsCompanion(
+            id: id,
+            jid: jid,
+            body: body,
+            fileMetadataID: fileMetadataID,
+          ),
+          getInsertCompanionBuilder: ({
+            Value<int> id = const Value.absent(),
+            required String jid,
+            Value<String?> body = const Value.absent(),
+            Value<String?> fileMetadataID = const Value.absent(),
+          }) =>
+              DraftsCompanion.insert(
+            id: id,
+            jid: jid,
+            body: body,
+            fileMetadataID: fileMetadataID,
+          ),
+        ));
+}
+
+class $$DraftsTableProcessedTableManager extends ProcessedTableManager<
+    _$XmppDrift,
+    $DraftsTable,
+    Draft,
+    $$DraftsTableFilterComposer,
+    $$DraftsTableOrderingComposer,
+    $$DraftsTableProcessedTableManager,
+    $$DraftsTableInsertCompanionBuilder,
+    $$DraftsTableUpdateCompanionBuilder> {
+  $$DraftsTableProcessedTableManager(super.$state);
+}
+
+class $$DraftsTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $DraftsTable> {
+  $$DraftsTableFilterComposer(super.$state);
+  ColumnFilters<int> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get body => $state.composableBuilder(
+      column: $state.table.body,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  $$FileMetadataTableFilterComposer get fileMetadataID {
+    final $$FileMetadataTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.fileMetadataID,
+        referencedTable: $state.db.fileMetadata,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$FileMetadataTableFilterComposer(ComposerState($state.db,
+                $state.db.fileMetadata, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $$DraftsTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $DraftsTable> {
+  $$DraftsTableOrderingComposer(super.$state);
+  ColumnOrderings<int> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get body => $state.composableBuilder(
+      column: $state.table.body,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$FileMetadataTableOrderingComposer get fileMetadataID {
+    final $$FileMetadataTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.fileMetadataID,
+        referencedTable: $state.db.fileMetadata,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$FileMetadataTableOrderingComposer(ComposerState($state.db,
+                $state.db.fileMetadata, joinBuilder, parentComposers)));
+    return composer;
+  }
 }
 
 typedef $$ContactsTableInsertCompanionBuilder = ContactsCompanion Function({
@@ -4431,6 +5615,8 @@ class _$XmppDriftManager {
   _$XmppDriftManager(this._db);
   $$FileMetadataTableTableManager get fileMetadata =>
       $$FileMetadataTableTableManager(_db, _db.fileMetadata);
+  $$DraftsTableTableManager get drafts =>
+      $$DraftsTableTableManager(_db, _db.drafts);
   $$ContactsTableTableManager get contacts =>
       $$ContactsTableTableManager(_db, _db.contacts);
   $$BlocklistTableTableManager get blocklist =>

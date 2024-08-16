@@ -17,7 +17,7 @@ class _LoginFormState extends State<LoginForm> {
   TextEditingController? _jidTextController;
   TextEditingController? _passwordTextController;
 
-  bool rememberMe = false;
+  bool rememberMe = true;
   bool agreeToTerms = false;
 
   @override
@@ -25,6 +25,12 @@ class _LoginFormState extends State<LoginForm> {
     super.initState();
     _jidTextController = TextEditingController();
     _passwordTextController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    context.read<AuthenticationCubit>().login();
   }
 
   @override
@@ -67,12 +73,14 @@ class _LoginFormState extends State<LoginForm> {
                     )
                   : const SizedBox(height: 40),
               AxiTextFormField(
+                autocorrect: false,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
                 ],
                 placeholder: const Text('Username'),
                 enabled: state is! AuthenticationInProgress,
                 controller: _jidTextController,
+                suffix: const Text('@${AuthenticationCubit.defaultServer}'),
                 validator: (text) {
                   if (text.isEmpty) {
                     return 'Enter a username';
@@ -80,20 +88,9 @@ class _LoginFormState extends State<LoginForm> {
                   return null;
                 },
               ),
-              AxiTextFormField(
-                placeholder: const Text('Password'),
+              PasswordInput(
                 enabled: state is! AuthenticationInProgress,
-                obscureText: true,
-                controller: _passwordTextController,
-                validator: (text) {
-                  if (text.isEmpty) {
-                    return 'Enter a password';
-                  }
-                  if (text.length < 8 || text.length > 64) {
-                    return 'Must be between 8 and 64 characters';
-                  }
-                  return null;
-                },
+                controller: _passwordTextController!,
               ),
               Align(
                 alignment: Alignment.centerLeft,

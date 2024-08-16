@@ -21,22 +21,25 @@ class BlocklistAddButton extends StatelessWidget {
             String jid = '';
             return BlocProvider.value(
               value: locate<BlocklistCubit>(),
-              child: StatefulBuilder(
-                builder: (context, setState) {
-                  return AxiInputDialog(
-                    title: const Text('Block user'),
-                    content: AxiTextFormField(
-                      placeholder: const Text('JID'),
-                      description: const Text('Example: friend@axi.im'),
-                      onChanged: (value) {
-                        setState(() => jid = value);
-                      },
-                    ),
-                    callback: () => jid.isEmpty
-                        ? null
-                        : context.read<BlocklistCubit>().block(jid: jid),
-                  );
-                },
+              child: Form(
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    return AxiInputDialog(
+                      title: const Text('Block user'),
+                      content: JidInput(
+                        onChanged: (value) {
+                          setState(() => jid = value);
+                        },
+                      ),
+                      callback: jid.isEmpty
+                          ? null
+                          : () {
+                              if (!Form.of(context).validate()) return;
+                              context.read<BlocklistCubit>().block(jid: jid);
+                            },
+                    );
+                  },
+                ),
               ),
             );
           },

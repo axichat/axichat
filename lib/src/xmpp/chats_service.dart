@@ -11,17 +11,8 @@ mixin ChatsService on XmppBase {
             .watchChats(start: start, end: end)
             .startWith(await db.getChats(start: start, end: end));
       }));
-  Stream<List<Message>> messageStream(
-    String jid, {
-    int start = 0,
-    int end = basePageItemLimit,
-  }) =>
-      StreamCompleter.fromFuture(
-          _dbOpReturning<XmppDatabase, Stream<List<Message>>>((db) async {
-        return db.watchChatMessages(jid, start: start, end: end);
-      }));
-  Stream<Chat> chatStream(String jid) => StreamCompleter.fromFuture(
-          _dbOpReturning<XmppDatabase, Stream<Chat>>((db) async {
+  Stream<Chat?> chatStream(String jid) => StreamCompleter.fromFuture(
+          _dbOpReturning<XmppDatabase, Stream<Chat?>>((db) async {
         return db.watchChat(jid);
       }));
 
@@ -66,6 +57,21 @@ mixin ChatsService on XmppBase {
   }) async {
     await _dbOp<XmppDatabase>((db) async {
       await db.markChatFavourited(jid: jid, favourited: favourited);
+    });
+  }
+
+  Future<void> setChatEncryption({
+    required String jid,
+    required EncryptionProtocol protocol,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.updateChatEncryption(chatJid: jid, protocol: protocol);
+    });
+  }
+
+  Future<void> deleteChat({required String jid}) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.removeChat(jid);
     });
   }
 }

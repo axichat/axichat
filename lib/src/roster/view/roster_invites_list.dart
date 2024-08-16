@@ -20,58 +20,50 @@ class RosterInvitesList extends StatelessWidget {
           invites = state.invites;
         }
         if (invites.isEmpty) {
-          return SliverToBoxAdapter(
-            child: Center(
-              child: Text(
-                'No invites yet',
-                style: context.textTheme.muted,
-              ),
+          return Center(
+            child: Text(
+              'No invites yet',
+              style: context.textTheme.muted,
             ),
           );
         }
-        return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final invite = invites[index];
-              return ListItemPadding(
-                child: BlocSelector<RosterCubit, RosterState, bool>(
-                  selector: (state) =>
-                      state is RosterLoading && state.jid == invite.jid,
-                  builder: (context, disabled) {
-                    return AxiListTile(
-                      leading: AxiAvatar(jid: invite.jid),
-                      title: invite.title,
-                      subtitle: invite.jid,
-                      actions: [
-                        TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => context.read<RosterCubit>().addContact(
-                                  jid: invite.jid, title: invite.title),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.green,
-                          ),
-                          child: const Text('Connect'),
-                        ),
-                        TextButton(
-                          onPressed: disabled
-                              ? null
-                              : () => context
-                                  .read<RosterCubit>()
-                                  .rejectContact(jid: invite.jid),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          child: const Text('Reject'),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              );
-            },
-            childCount: invites.length,
-          ),
+        return ListView.separated(
+          separatorBuilder: (_, __) => const AxiListDivider(),
+          itemCount: invites.length,
+          itemBuilder: (context, index) {
+            final invite = invites[index];
+            return BlocSelector<RosterCubit, RosterState, bool>(
+              selector: (state) =>
+                  state is RosterLoading && state.jid == invite.jid,
+              builder: (context, disabled) {
+                return AxiListTile(
+                  key: Key(invite.jid),
+                  onDismissed: disabled
+                      ? null
+                      : (_) => context
+                          .read<RosterCubit>()
+                          .rejectContact(jid: invite.jid),
+                  dismissText: 'Reject invite from ${invite.jid}?',
+                  leading: AxiAvatar(jid: invite.jid),
+                  title: invite.title,
+                  subtitle: invite.jid,
+                  actions: [
+                    TextButton(
+                      onPressed: disabled
+                          ? null
+                          : () => context
+                              .read<RosterCubit>()
+                              .addContact(jid: invite.jid, title: invite.title),
+                      style: TextButton.styleFrom(
+                        foregroundColor: context.colorScheme.primary,
+                      ),
+                      child: const Text('Add contact'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         );
       },
     );

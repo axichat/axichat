@@ -19,6 +19,7 @@ mixin _$ProfileState {
   String get jid => throw _privateConstructorUsedError;
   String get resource => throw _privateConstructorUsedError;
   String get title => throw _privateConstructorUsedError;
+  String get fingerprint => throw _privateConstructorUsedError;
   Presence get presence => throw _privateConstructorUsedError;
   String? get status => throw _privateConstructorUsedError;
 
@@ -37,6 +38,7 @@ abstract class $ProfileStateCopyWith<$Res> {
       {String jid,
       String resource,
       String title,
+      String fingerprint,
       Presence presence,
       String? status});
 }
@@ -57,6 +59,7 @@ class _$ProfileStateCopyWithImpl<$Res, $Val extends ProfileState>
     Object? jid = null,
     Object? resource = null,
     Object? title = null,
+    Object? fingerprint = null,
     Object? presence = null,
     Object? status = freezed,
   }) {
@@ -72,6 +75,10 @@ class _$ProfileStateCopyWithImpl<$Res, $Val extends ProfileState>
       title: null == title
           ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
+              as String,
+      fingerprint: null == fingerprint
+          ? _value.fingerprint
+          : fingerprint // ignore: cast_nullable_to_non_nullable
               as String,
       presence: null == presence
           ? _value.presence
@@ -97,6 +104,7 @@ abstract class _$$ProfileStateImplCopyWith<$Res>
       {String jid,
       String resource,
       String title,
+      String fingerprint,
       Presence presence,
       String? status});
 }
@@ -115,6 +123,7 @@ class __$$ProfileStateImplCopyWithImpl<$Res>
     Object? jid = null,
     Object? resource = null,
     Object? title = null,
+    Object? fingerprint = null,
     Object? presence = null,
     Object? status = freezed,
   }) {
@@ -130,6 +139,10 @@ class __$$ProfileStateImplCopyWithImpl<$Res>
       title: null == title
           ? _value.title
           : title // ignore: cast_nullable_to_non_nullable
+              as String,
+      fingerprint: null == fingerprint
+          ? _value.fingerprint
+          : fingerprint // ignore: cast_nullable_to_non_nullable
               as String,
       presence: null == presence
           ? _value.presence
@@ -150,6 +163,7 @@ class _$ProfileStateImpl implements _ProfileState {
       {required this.jid,
       required this.resource,
       required this.title,
+      this.fingerprint = '',
       this.presence = Presence.chat,
       this.status});
 
@@ -161,13 +175,16 @@ class _$ProfileStateImpl implements _ProfileState {
   final String title;
   @override
   @JsonKey()
+  final String fingerprint;
+  @override
+  @JsonKey()
   final Presence presence;
   @override
   final String? status;
 
   @override
   String toString() {
-    return 'ProfileState(jid: $jid, resource: $resource, title: $title, presence: $presence, status: $status)';
+    return 'ProfileState(jid: $jid, resource: $resource, title: $title, fingerprint: $fingerprint, presence: $presence, status: $status)';
   }
 
   @override
@@ -179,14 +196,16 @@ class _$ProfileStateImpl implements _ProfileState {
             (identical(other.resource, resource) ||
                 other.resource == resource) &&
             (identical(other.title, title) || other.title == title) &&
+            (identical(other.fingerprint, fingerprint) ||
+                other.fingerprint == fingerprint) &&
             (identical(other.presence, presence) ||
                 other.presence == presence) &&
             (identical(other.status, status) || other.status == status));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, jid, resource, title, presence, status);
+  int get hashCode => Object.hash(
+      runtimeType, jid, resource, title, fingerprint, presence, status);
 
   @JsonKey(ignore: true)
   @override
@@ -200,6 +219,7 @@ abstract class _ProfileState implements ProfileState {
       {required final String jid,
       required final String resource,
       required final String title,
+      final String fingerprint,
       final Presence presence,
       final String? status}) = _$ProfileStateImpl;
 
@@ -209,6 +229,8 @@ abstract class _ProfileState implements ProfileState {
   String get resource;
   @override
   String get title;
+  @override
+  String get fingerprint;
   @override
   Presence get presence;
   @override

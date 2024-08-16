@@ -11,13 +11,16 @@ part 'profile_state.dart';
 class ProfileCubit extends Cubit<ProfileState> {
   ProfileCubit({required XmppService xmppService})
       : _xmppService = xmppService,
-        super(ProfileState(
-          jid: xmppService.user!.jid.toString(),
-          resource: xmppService.resource,
-          title: xmppService.user!.username,
-          presence: xmppService.presence,
-          status: xmppService.status,
-        )) {
+        super(
+          ProfileState(
+            jid: xmppService.myJid.toString(),
+            resource: xmppService.resource ?? '',
+            title: xmppService.username ?? '',
+            presence: xmppService.presence,
+            status: xmppService.status,
+          ),
+        ) {
+    _xmppService.fingerprint.then((e) => emit(state.copyWith(fingerprint: e)));
     _presenceSubscription = _xmppService.presenceStream.listen(
       (presence) => emit(state.copyWith(presence: presence)),
     );
@@ -32,9 +35,9 @@ class ProfileCubit extends Cubit<ProfileState> {
   late final StreamSubscription<String?>? _statusSubscription;
 
   @override
-  Future<void> close() {
-    _presenceSubscription?.cancel();
-    _statusSubscription?.cancel();
+  Future<void> close() async {
+    await _presenceSubscription?.cancel();
+    await _statusSubscription?.cancel();
     return super.close();
   }
 

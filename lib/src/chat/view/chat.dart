@@ -3,8 +3,11 @@ import 'package:chat/src/chat/bloc/chat_bloc.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/draft/bloc/draft_cubit.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
+import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
@@ -32,6 +35,7 @@ class Chat extends StatefulWidget {
 
 class _ChatState extends State<Chat> {
   final _emojiPopoverController = ShadPopoverController();
+  final _encryptionPopoverController = ShadPopoverController();
   late FocusNode _focusNode;
   late TextEditingController _textController;
 
@@ -55,6 +59,7 @@ class _ChatState extends State<Chat> {
     _textController.removeListener(_typingListener);
     _textController.dispose();
     _emojiPopoverController.dispose();
+    _encryptionPopoverController.dispose();
     super.dispose();
   }
 
@@ -73,34 +78,38 @@ class _ChatState extends State<Chat> {
           await showShadDialog(
             context: context,
             builder: (context) {
-              const iconSize = 24.0;
               var copied = false;
               return StatefulBuilder(
                 builder: (context, setState) {
                   return ShadDialog(
+                    gap: 16.0,
                     title: Text(message.stanzaID),
                     content: Column(
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SelectableText.rich(
-                              TextSpan(
-                                text: 'Body: ',
-                                style: context.textTheme.muted,
+                            Expanded(
+                              child: Row(
+                                textBaseline: TextBaseline.alphabetic,
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
                                 children: [
-                                  TextSpan(
-                                    text: message.body,
-                                    style: context.textTheme.small,
-                                  )
+                                  Text(
+                                    'Body: ',
+                                    style: context.textTheme.muted,
+                                  ),
+                                  Expanded(
+                                    child: SelectableText(
+                                      message.body ?? '',
+                                      style: context.textTheme.small,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                             ShadButton.ghost(
-                              width: iconSize + 8,
-                              height: iconSize + 8,
                               icon: const Icon(
                                 LucideIcons.copy,
-                                size: iconSize,
                               ),
                               onPressed: () {
                                 Clipboard.setData(
@@ -117,16 +126,19 @@ class _ChatState extends State<Chat> {
                               ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        Divider(
+                          thickness: 1,
+                          color: context.colorScheme.border,
+                        ),
                         Row(
                           children: [
-                            Text('Sent: ${message.acked || message.received}'),
+                            Text(
+                                'Sent: ${message.acked || message.received ? 'true' : 'unknown'}'),
                             AxiTooltip(
                               child: const Padding(
                                 padding: EdgeInsets.all(8.0),
                                 child: Icon(
                                   LucideIcons.info,
-                                  size: iconSize,
                                 ),
                               ),
                               builder: (context) {
@@ -145,7 +157,20 @@ class _ChatState extends State<Chat> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        Divider(
+                          thickness: 1,
+                          color: context.colorScheme.border,
+                        ),
+                        Row(
+                          children: [
+                            Text(
+                                'Encrypted: ${message.encryptionProtocol.isNotNone}'),
+                          ],
+                        ),
+                        Divider(
+                          thickness: 1,
+                          color: context.colorScheme.border,
+                        ),
                         Row(
                           children: [
                             Text('Error: ${message.error.name}'),
@@ -155,7 +180,6 @@ class _ChatState extends State<Chat> {
                                   padding: EdgeInsets.all(8.0),
                                   child: Icon(
                                     LucideIcons.info,
-                                    size: iconSize,
                                   ),
                                 ),
                                 builder: (context) {
@@ -188,6 +212,8 @@ class _ChatState extends State<Chat> {
             id: profile.jid,
             firstName: profile.title,
           );
+          final chatType = state.chat?.type;
+          final jid = state.chat?.jid;
           return Scaffold(
             appBar: AppBar(
               scrolledUnderElevation: 0.0,
@@ -202,14 +228,63 @@ class _ChatState extends State<Chat> {
                     LucideIcons.arrowLeft,
                     size: 20.0,
                   ),
-                  onPressed: () =>
-                      context.read<ChatsCubit>().toggleChat(state.chat!.jid),
+                  onPressed: () {
+                    if (_textController.text.isNotEmpty) {
+                      context.read<DraftCubit>().saveDraft(
+                          id: null,
+                          jid: state.chat!.jid,
+                          body: _textController.text);
+                    }
+                    context.read<ChatsCubit>().toggleChat(jid: state.chat!.jid);
+                  },
                 ),
               ),
-              title: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(state.chat?.title ?? ''),
-              ),
+              title: jid == null
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: BlocBuilder<RosterCubit, RosterState>(
+                        buildWhen: (_, current) => current is RosterAvailable,
+                        builder: (context, rosterState) {
+                          final item = (rosterState is! RosterAvailable
+                                  ? context.read<RosterCubit>()['items']
+                                      as List<RosterItem>
+                                  : rosterState.items)
+                              .where((e) => e.jid == jid)
+                              .singleOrNull;
+                          return Row(
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 40.0,
+                                  maxHeight: 40.0,
+                                ),
+                                child: (item == null)
+                                    ? AxiAvatar(jid: jid)
+                                    : AxiAvatar(
+                                        jid: item.jid,
+                                        subscription: item.subscription,
+                                        presence: item.presence,
+                                        status: item.status,
+                                      ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8.0),
+                                child: Text(state.chat?.title ?? ''),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  item?.status ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: context.textTheme.muted,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
             ),
             body: LayoutBuilder(
               builder: (context, constraints) => DashChat(
@@ -220,7 +295,7 @@ class _ChatState extends State<Chat> {
                       .add(ChatMessageSent(text: message.text));
                   _focusNode.requestFocus();
                 },
-                messages: state.items.reversed
+                messages: state.items
                     .map(
                       (e) => ChatMessage(
                         user: ChatUser(
@@ -239,42 +314,82 @@ class _ChatState extends State<Chat> {
                           'edited': e.edited,
                           'retracted': e.retracted,
                           'error': e.error,
+                          'encrypted': e.encryptionProtocol.isNotNone,
                         },
                       ),
                     )
                     .toList(),
                 messageOptions: MessageOptions(
+                  showOtherUsersAvatar: chatType == ChatType.groupChat,
                   borderRadius: 8,
-                  maxWidth: constraints.maxWidth,
+                  maxWidth: constraints.maxWidth * 0.7,
                   messagePadding: const EdgeInsets.all(7.0),
+                  currentUserContainerColor: context.colorScheme.primary,
+                  containerColor: context.colorScheme.muted,
                   messageTextBuilder: (message, _, __) {
                     final extraStyle = context.textTheme.muted.copyWith(
                       fontStyle: FontStyle.italic,
                     );
                     final self = message.user.id == profile.jid;
-                    final textColor = self
-                        ? context.colorScheme.primaryForeground
-                        : Colors.black;
-                    const iconSize = 9.0;
+                    final textColor =
+                        self ? context.colorScheme.primaryForeground : null;
+                    const iconSize = 12.0;
+                    final iconFamily = message.status!.icon.fontFamily;
+                    final iconPackage = message.status!.icon.fontPackage;
                     return ShadGestureDetector(
                       cursor: SystemMouseCursors.click,
-                      onTap: !self
-                          ? null
-                          : () => context.read<ChatBloc>().add(
-                              ChatMessageFocused(
-                                  message.customProperties!['id'])),
+                      onTap: () => context.read<ChatBloc>().add(
+                          ChatMessageFocused(message.customProperties!['id'])),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          self
-                              ? Text(
-                                  message.text,
-                                  style: TextStyle(color: textColor),
-                                )
-                              : SelectableText(
-                                  message.text,
-                                  style: TextStyle(color: textColor),
+                          DynamicInlineText(
+                            key: UniqueKey(),
+                            text: TextSpan(
+                              text: message.text,
+                              style: context.textTheme.small
+                                  .copyWith(color: textColor),
+                            ),
+                            details: [
+                              TextSpan(
+                                text:
+                                    '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                    '${message.createdAt.minute.toString().padLeft(2, '0')}'
+                                    '${message.createdAt.hour < 12 ? 'am' : 'pm'}',
+                                style: context.textTheme.muted.copyWith(
+                                  color: textColor,
+                                  fontSize: iconSize,
                                 ),
+                              ),
+                              if (self)
+                                TextSpan(
+                                  text: String.fromCharCode(
+                                      message.status!.icon.codePoint),
+                                  style: TextStyle(
+                                    color:
+                                        context.colorScheme.primaryForeground,
+                                    fontSize: iconSize,
+                                    fontFamily: iconFamily,
+                                    package: iconPackage,
+                                  ),
+                                ),
+                              TextSpan(
+                                text: String.fromCharCode(
+                                    (message.customProperties!['encrypted']
+                                            ? LucideIcons.lock
+                                            : LucideIcons.lockOpen)
+                                        .codePoint),
+                                style: TextStyle(
+                                  color: message.customProperties!['encrypted']
+                                      ? context.colorScheme.primaryForeground
+                                      : context.colorScheme.destructive,
+                                  fontSize: iconSize,
+                                  fontFamily: iconFamily,
+                                  package: iconPackage,
+                                ),
+                              )
+                            ],
+                          ),
                           if (message.customProperties?['retracted'] ?? false)
                             Text(
                               '(retracted)',
@@ -282,22 +397,26 @@ class _ChatState extends State<Chat> {
                             )
                           else if (message.customProperties?['edited'] ?? false)
                             Text('(edited)', style: extraStyle),
-                          if (self)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2.0),
-                              child: Icon(
-                                message.status!.icon,
-                                color: context.colorScheme.primaryForeground,
-                                size: iconSize,
-                              ),
-                            ),
                         ],
                       ),
                     );
                   },
                 ),
-                messageListOptions: const MessageListOptions(
-                  separatorFrequency: SeparatorFrequency.hours,
+                messageListOptions: MessageListOptions(
+                  separatorFrequency: SeparatorFrequency.days,
+                  onLoadEarlier:
+                      state.items.length % ChatBloc.messageBatchSize != 0
+                          ? null
+                          : () async => context
+                              .read<ChatBloc>()
+                              .add(const ChatLoadEarlier()),
+                  loadEarlierBuilder: Container(
+                    padding: const EdgeInsets.all(12.0),
+                    alignment: Alignment.center,
+                    child: CircularProgressIndicator(
+                      color: context.colorScheme.primary,
+                    ),
+                  ),
                 ),
                 inputOptions: InputOptions(
                   sendOnEnter: true,
@@ -318,6 +437,11 @@ class _ChatState extends State<Chat> {
                         width: 0.0,
                         style: BorderStyle.none,
                       ),
+                    ),
+                  ),
+                  inputToolbarStyle: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: context.colorScheme.border),
                     ),
                   ),
                   leading: [
@@ -344,6 +468,79 @@ class _ChatState extends State<Chat> {
                         ),
                       ),
                     )
+                  ],
+                  showTraillingBeforeSend: true,
+                  trailing: [
+                    if (state.chat case final chat?)
+                      ShadPopover(
+                        controller: _encryptionPopoverController,
+                        popover: (context) {
+                          return ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 200.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Material(
+                                  child: ListTile(
+                                    title: const Text('Unencrypted'),
+                                    selected: chat.encryptionProtocol.isNone,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    selectedColor:
+                                        context.colorScheme.accentForeground,
+                                    selectedTileColor:
+                                        context.colorScheme.accent,
+                                    onTap: () {
+                                      context
+                                          .read<ChatBloc>()
+                                          .add(const ChatEncryptionChanged(
+                                            protocol: EncryptionProtocol.none,
+                                          ));
+                                      _encryptionPopoverController.toggle();
+                                    },
+                                  ),
+                                ),
+                                const SizedBox.square(
+                                  dimension: 4.0,
+                                ),
+                                Material(
+                                  child: ListTile(
+                                    title: const Text('E2E (OMEMO)'),
+                                    selected: chat.encryptionProtocol.isOmemo,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    selectedColor:
+                                        context.colorScheme.accentForeground,
+                                    selectedTileColor:
+                                        context.colorScheme.accent,
+                                    onTap: () {
+                                      context
+                                          .read<ChatBloc>()
+                                          .add(const ChatEncryptionChanged(
+                                            protocol: EncryptionProtocol.omemo,
+                                          ));
+                                      _encryptionPopoverController.toggle();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        child: ShadButton.ghost(
+                          onPressed: _encryptionPopoverController.toggle,
+                          foregroundColor: chat.encryptionProtocol.isNotNone
+                              ? context.colorScheme.primary
+                              : context.colorScheme.destructive,
+                          icon: Icon(
+                            chat.encryptionProtocol.isNotNone
+                                ? LucideIcons.lockKeyhole
+                                : LucideIcons.lockKeyholeOpen,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 typingUsers: [

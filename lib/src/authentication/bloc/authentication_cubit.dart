@@ -18,7 +18,7 @@ enum LogoutSeverity {
   bool get isNormal => this == normal;
   bool get isBurn => this == burn;
 
-  String get asString => switch (this) {
+  String get displayText => switch (this) {
         auto => 'Auto',
         normal => 'Normal',
         burn => 'Burn',
@@ -31,7 +31,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required XmppService xmppService,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
-        super(AuthenticationInProgress()) {
+        super(AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
       onShow: login,
@@ -42,8 +42,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return AppExitResponse.exit;
       },
     );
-    login();
   }
+
+  static const defaultServer = 'xmpp.social';
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
@@ -63,7 +64,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> login({
     String? username,
     String? password,
-    String domain = 'draugr.de',
+    String domain = defaultServer,
     bool rememberMe = false,
   }) async {
     if (state is AuthenticationComplete) return;
@@ -84,8 +85,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
+    final prefix = storagePrefixFor(jid);
+
+    final resourceStorageKey = CredentialStore.registerKey(
+      '${prefix}_resource',
+    );
+    var resource = await _credentialStore.read(key: resourceStorageKey) ??
+        XmppService.generateResource();
+
     final databasePassphraseStorageKey = CredentialStore.registerKey(
-      '${storagePrefixFor(jid)}_database_passphrase',
+      '${prefix}_database_passphrase',
     );
     var databasePassphrase = await _credentialStore.read(
       key: databasePassphraseStorageKey,
@@ -96,6 +105,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       try {
         await _xmppService.connect(
           jid: jid,
+          resource: resource,
           password: password,
           databasePassphrase: databasePassphrase,
         );
@@ -104,6 +114,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       } on Exception catch (_) {
         emit(const AuthenticationFailure('Error. Please try again later.'));
+        return;
       }
 
       await _credentialStore.write(
@@ -111,18 +122,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         value: databasePassphrase,
       );
     } else {
+      if (await _credentialStore.read(key: passwordStorageKey)
+          case final savedPassword?) {
+        if (password != savedPassword) {
+          emit(const AuthenticationFailure('Incorrect username or password'));
+          return;
+        }
+      }
       try {
         await _xmppService.connect(
           jid: jid,
+          resource: resource,
           password: password,
           databasePassphrase: databasePassphrase,
           awaitAuthentication: false,
         );
-      } catch (_) {
+      } on Exception catch (_) {
         // If user has logged in before they should be able to enter the app
-        // and see their stored messages regardless of what the server says.
+        // and see their stored messages even if the server is unavailable.
       }
     }
+
+    await _credentialStore.write(
+      key: resourceStorageKey,
+      value: _xmppService.resource,
+    );
 
     if (rememberMe) {
       await _credentialStore.write(key: jidStorageKey, value: jid);
@@ -146,16 +170,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     switch (severity) {
       case LogoutSeverity.auto:
-        await _xmppService.disconnect();
+        break;
       case LogoutSeverity.normal:
         await _credentialStore.delete(key: jidStorageKey);
         await _credentialStore.delete(key: passwordStorageKey);
-        await _xmppService.disconnect();
       case LogoutSeverity.burn:
         await _credentialStore.deleteAll(burn: true);
         await _xmppService.burn();
-        await _xmppService.disconnect();
     }
+
+    await _xmppService.disconnect();
 
     emit(AuthenticationNone());
   }

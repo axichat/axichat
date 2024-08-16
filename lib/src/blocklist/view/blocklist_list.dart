@@ -22,35 +22,32 @@ class BlocklistList extends StatelessWidget {
           items = state.items;
         }
         if (items.isEmpty) {
-          return SliverToBoxAdapter(
-            child: Center(
-              child: Text(
-                'Nobody blocked',
-                style: context.textTheme.muted,
-              ),
+          return Center(
+            child: Text(
+              'Nobody blocked',
+              style: context.textTheme.muted,
             ),
           );
         }
-        return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              if (index == 0) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: BlocklistUnblockAllButton(),
-                  ),
-                );
-              }
-              final item = items[index - 1];
-              return ListItemPadding(
-                child: BlocklistTile(
-                  jid: item.jid,
+        return ListView.separated(
+          separatorBuilder: (_, __) => const AxiListDivider(),
+          itemCount: items.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: BlocklistUnblockAllButton(),
                 ),
               );
-            },
-            childCount: items.length + 1,
-          ),
+            }
+            final item = items[index - 1];
+            return ListItemPadding(
+              child: BlocklistTile(
+                jid: item.jid,
+              ),
+            );
+          },
         );
       },
     );

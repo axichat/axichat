@@ -58,3 +58,19 @@ final class ChatMessageSent extends ChatEvent {
   @override
   List<Object?> get props => [text];
 }
+
+final class ChatEncryptionChanged extends ChatEvent {
+  const ChatEncryptionChanged({required this.protocol});
+
+  final EncryptionProtocol protocol;
+
+  @override
+  List<Object?> get props => [protocol];
+}
+
+final class ChatLoadEarlier extends ChatEvent {
+  const ChatLoadEarlier();
+
+  @override
+  List<Object?> get props => [];
+}

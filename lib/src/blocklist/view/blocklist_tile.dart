@@ -1,7 +1,10 @@
+import 'package:chat/main.dart';
+import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlocklistTile extends StatelessWidget {
   const BlocklistTile({super.key, required this.jid});
@@ -18,11 +21,12 @@ class BlocklistTile extends StatelessWidget {
           leading: AxiAvatar(jid: jid),
           title: jid,
           actions: [
-            TextButton(
+            ShadButton.ghost(
               onPressed: disabled
                   ? null
                   : () => context.read<BlocklistCubit>().unblock(jid: jid),
-              child: const Text('Unblock'),
+              foregroundColor: context.colorScheme.destructive,
+              text: const Text('Unblock'),
             ),
           ],
         );

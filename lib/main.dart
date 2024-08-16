@@ -65,7 +65,7 @@ class BlocLogger extends BlocObserver {
 
   @override
   void onChange(BlocBase bloc, Change change) {
-    logger.info('${bloc.runtimeType} $change');
+    // logger.info('${bloc.runtimeType} $change');
     super.onChange(bloc, change);
   }
 }

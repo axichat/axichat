@@ -41,9 +41,9 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   }
 
   @override
-  Future<void> close() {
-    _rosterSubscription.cancel();
-    _invitesSubscription.cancel();
+  Future<void> close() async {
+    await _rosterSubscription.cancel();
+    await _invitesSubscription.cancel();
     return super.close();
   }
 
@@ -62,7 +62,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     emit(RosterSuccess('$jid added to contacts.'));
   }
 
-  void removeContact({required String jid}) async {
+  Future<void> removeContact({required String jid}) async {
     emit(RosterLoading(jid: jid));
     try {
       await _xmppService.removeFromRoster(jid: jid);
@@ -74,7 +74,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     emit(RosterSuccess('$jid removed from contacts.'));
   }
 
-  void rejectContact({required String jid}) async {
+  Future<void> rejectContact({required String jid}) async {
     emit(RosterLoading(jid: jid));
     try {
       await _xmppService.rejectSubscriptionRequest(jid);

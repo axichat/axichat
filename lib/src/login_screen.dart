@@ -17,9 +17,10 @@ class LoginScreen extends StatelessWidget {
           bottom: BorderSide(color: context.colorScheme.border),
         ),
         title: const Text('Axichat'),
-        actions: kDebugMode
-            ? [DeleteCredentialsButton(), const SizedBox(width: 50)]
-            : null,
+        actions: <Widget>[const AxiVersion()] +
+            (kDebugMode
+                ? [DeleteCredentialsButton(), const SizedBox(width: 50)]
+                : []),
       ),
       body: const SafeArea(
         child: AxiAdaptiveLayout(

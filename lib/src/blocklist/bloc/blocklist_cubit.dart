@@ -32,8 +32,8 @@ class BlocklistCubit extends Cubit<BlocklistState>
   }
 
   @override
-  Future<void> close() {
-    _blocklistSubscription.cancel();
+  Future<void> close() async {
+    await _blocklistSubscription.cancel();
     return super.close();
   }
 

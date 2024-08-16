@@ -1,4 +1,5 @@
 import 'package:chat/src/app.dart';
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -9,81 +10,114 @@ class AxiListTile extends StatelessWidget {
     this.title,
     this.subtitle,
     this.actions,
-    this.color,
+    this.selected = false,
+    this.onTap,
+    this.onDismissed,
+    this.dismissText = 'Are you sure you want to delete this item?',
   });
 
   final Widget? leading;
   final String? title;
   final String? subtitle;
   final List<Widget>? actions;
-  final Color? color;
+  final bool selected;
+  final void Function()? onTap;
+  final void Function(DismissDirection)? onDismissed;
+  final String dismissText;
 
   @override
   Widget build(BuildContext context) {
-    return ShadCard(
-      padding: const EdgeInsets.all(8.0),
-      rowCrossAxisAlignment: CrossAxisAlignment.center,
-      rowMainAxisSize: MainAxisSize.max,
-      backgroundColor: color,
-      height: 70.0,
+    final dismissible = onDismissed != null && super.key != null;
+    assert(onDismissed != null ? super.key != null : true);
+
+    Widget child = ListTile(
+      titleAlignment: ListTileTitleAlignment.center,
+      horizontalTitleGap: 16.0,
+      contentPadding: EdgeInsets.only(
+        left: 16.0,
+        right: dismissible ? 0.0 : 16.0,
+      ),
+      selected: selected,
+      selectedTileColor: context.colorScheme.accent,
+      onTap: onTap,
       leading: leading == null
           ? null
           : ConstrainedBox(
               constraints: const BoxConstraints(
-                maxHeight: 50.0,
-                maxWidth: 50.0,
+                maxHeight: 40.0,
+                maxWidth: 40.0,
               ),
               child: leading,
             ),
       title: title == null
           ? null
-          : Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10.0,
-                vertical: 4.0,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title!,
-                      style: context.textTheme.small,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+          : Text(
+              title!,
+              style: context.textTheme.small,
+              overflow: TextOverflow.ellipsis,
             ),
-      description: subtitle == null
+      subtitle: subtitle == null
           ? null
-          : ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 150.0),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        subtitle!,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          : Text(
+              subtitle!,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.muted,
             ),
-      trailing: actions == null
-          ? null
-          : Align(
-              alignment: Alignment.centerRight,
-              child: OverflowBar(
-                spacing: 4.0,
-                overflowSpacing: 4.0,
-                overflowAlignment: OverflowBarAlignment.center,
-                children: actions!,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ...?actions,
+          if (dismissible)
+            Container(
+              height: 60.0,
+              width: 4.0,
+              margin: const EdgeInsets.all(7.0),
+              decoration: BoxDecoration(
+                color: context.colorScheme.border,
+                borderRadius: BorderRadius.circular(20),
               ),
-            ),
+            )
+        ],
+      ),
     );
+
+    if (dismissible) {
+      assert(
+        super.key != null,
+        'A key must be provided for dismissible tiles.',
+      );
+      child = Dismissible(
+        key: super.key!,
+        background: Container(
+          padding: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: context.colorScheme.destructive,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(
+                LucideIcons.trash,
+                color: context.colorScheme.destructiveForeground,
+              ),
+              Icon(
+                LucideIcons.trash,
+                color: context.colorScheme.destructiveForeground,
+              ),
+            ],
+          ),
+        ),
+        confirmDismiss: (_) => confirm(
+          context,
+          text: dismissText,
+        ),
+        onDismissed: onDismissed,
+        child: child,
+      );
+    }
+
+    return child;
   }
 }

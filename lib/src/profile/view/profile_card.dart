@@ -30,7 +30,10 @@ class ProfileCard extends StatelessWidget {
                   active: true,
                 ),
                 title: Text(state.title),
-                subtitle: Text(state.jid),
+                subtitle: Text(
+                  state.jid,
+                  style: context.textTheme.muted,
+                ),
                 onTap: () => context.push(const ProfileRoute().location,
                     extra: context.read),
                 shape: Border(

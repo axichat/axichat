@@ -1,17 +1,23 @@
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 export 'axi_adaptive_layout.dart';
+export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'axi_confirm.dart';
 export 'axi_icon_button.dart';
 export 'axi_input_dialog.dart';
+export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';
 export 'axi_progress_indicator.dart';
 export 'axi_text_form_field.dart';
 export 'axi_tooltip.dart';
+export 'axi_version.dart';
 export 'display_time_since.dart';
+export 'dynamic_inline_text.dart';
+export 'jid_input.dart';
 export 'list_item_padding.dart';
+export 'password_input.dart';
 export 'presence_indicator.dart';
 
 const smallScreen = 700.0;

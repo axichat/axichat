@@ -26,28 +26,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
     );
+    on<ChatEncryptionChanged>(_onChatEncryptionChanged);
+    on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
       _chatSubscription = _xmppService
           .chatStream(jid!)
-          .listen((chat) => add(_ChatUpdated(chat)));
+          .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _messageSubscription = _xmppService
-          .messageStream(jid!)
+          .messageStream(jid!, end: messageBatchSize)
           .listen((items) => add(_ChatMessagesUpdated(items)));
     }
   }
 
+  static const messageBatchSize = 50;
+
   final String? jid;
   final XmppService _xmppService;
 
-  late final StreamSubscription<Chat> _chatSubscription;
-  late final StreamSubscription<List<Message>> _messageSubscription;
+  late final StreamSubscription<Chat?> _chatSubscription;
+  late StreamSubscription<List<Message>> _messageSubscription;
 
   RestartableTimer? _typingTimer;
 
   @override
-  Future<void> close() {
-    _chatSubscription.cancel();
-    _messageSubscription.cancel();
+  Future<void> close() async {
+    await _chatSubscription.cancel();
+    await _messageSubscription.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     return super.close();
@@ -117,6 +121,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on XmppMessageException catch (_) {
       // Don't panic. User will see a visual difference in the message bubble.
     }
+  }
+
+  Future<void> _onChatEncryptionChanged(
+    ChatEncryptionChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (jid == null) return;
+    await _xmppService.setChatEncryption(jid: jid!, protocol: event.protocol);
+  }
+
+  Future<void> _onChatLoadEarlier(
+    ChatLoadEarlier event,
+    Emitter<ChatState> emit,
+  ) async {
+    await _messageSubscription.cancel();
+    _messageSubscription = _xmppService
+        .messageStream(jid!, end: state.items.length + messageBatchSize)
+        .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
   Future<void> _stopTyping() async {
