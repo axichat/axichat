@@ -100,6 +100,7 @@ abstract class XmppBase {
   XmppBase get owner;
 
   String? get myJid;
+  mox.JID? get _myJid;
 
   Future<void> connect({
     required String jid,
@@ -169,6 +170,8 @@ class XmppService extends XmppBase
 
   @override
   String? get myJid => _myJid?.toBare().toString();
+
+  @override
   mox.JID? _myJid;
 
   String? get resource => _myJid?.resource;
@@ -299,10 +302,7 @@ class XmppService extends XmppBase
           await db.markMessageReceived(event.id);
         });
       case mox.StreamNegotiationsDoneEvent event:
-        // _connection.setResource(
-        //   _connection.getNegotiator<mox.StreamManagementNegotiator>()!.resource,
-        //   triggerEvent: false,
-        // );
+        _connection.setResource(resource!, triggerEvent: false);
         await _omemoManager.value?.commitDevice(await _device);
         if (await _ensureOmemoDevicePublished() case final result?) {
           _log.severe('Failed to publish OMEMO device. $result');
@@ -388,7 +388,7 @@ class XmppService extends XmppBase
       _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
 
       _connection.connectionSettings = XmppConnectionSettings(
-        jid: _myJid!,
+        jid: _myJid!.toBare(),
         password: password,
       );
       if (awaitAuthentication) {

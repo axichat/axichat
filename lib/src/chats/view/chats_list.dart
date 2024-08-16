@@ -22,7 +22,6 @@ class ChatsList extends StatelessWidget {
             ),
           );
         }
-        items += items;
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
           itemCount: items.length,

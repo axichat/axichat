@@ -29,6 +29,8 @@ class AxiVersion extends StatelessWidget {
                   text: const Text(versionTag),
                   backgroundColor:
                       Color.lerp(Colors.deepOrangeAccent, Colors.white, 0.77),
+                  hoverBackgroundColor:
+                      Color.lerp(Colors.deepOrangeAccent, Colors.white, 0.90),
                   foregroundColor: Colors.deepOrange,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(7.0),

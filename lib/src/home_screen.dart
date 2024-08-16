@@ -83,35 +83,34 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ],
-          child: LayoutBuilder(
-            builder: (context, constraints) {
+          child: Builder(
+            builder: (context) {
               final openJid = context.watch<ChatsCubit>().state.openJid;
-              return ConstrainedBox(
-                constraints: constraints,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const ConnectivityIndicator(),
-                    Expanded(
-                      child: SafeArea(
-                        child: AxiAdaptiveLayout(
-                          invertPriority: openJid != null,
-                          primaryChild: Nexus(tabs: tabs),
-                          secondaryChild: openJid == null
-                              ? const GuestChat()
-                              : BlocProvider(
-                                  key: Key(openJid),
-                                  create: (context) => ChatBloc(
-                                    jid: openJid,
-                                    xmppService: context.read<XmppService>(),
-                                  ),
-                                  child: const Chat(),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const ConnectivityIndicator(),
+                  Expanded(
+                    child: SafeArea(
+                      top: context.watch<ConnectivityCubit>().state
+                          is ConnectivityConnected,
+                      child: AxiAdaptiveLayout(
+                        invertPriority: openJid != null,
+                        primaryChild: Nexus(tabs: tabs),
+                        secondaryChild: openJid == null
+                            ? const GuestChat()
+                            : BlocProvider(
+                                key: Key(openJid),
+                                create: (context) => ChatBloc(
+                                  jid: openJid,
+                                  xmppService: context.read<XmppService>(),
                                 ),
-                        ),
+                                child: const Chat(),
+                              ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),
@@ -181,43 +180,43 @@ class Nexus extends StatelessWidget {
               ),
             ],
             child: Expanded(
-              child: TabBarView(
-                children: tabs.map((e) {
-                  final (_, sliver, fab) = e;
-                  return Scaffold(
-                    body: sliver,
-                    floatingActionButton: fab,
-                  );
-                }).toList(),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: context.colorScheme.border),
+                  ),
+                ),
+                child: TabBarView(
+                  children: tabs.map((e) {
+                    final (_, sliver, fab) = e;
+                    return Scaffold(
+                      body: sliver,
+                      floatingActionButton: fab,
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: context.colorScheme.border),
-              ),
-            ),
-            child: TabBar(
-              isScrollable: constraints.maxWidth < tabs.length * 77,
-              tabAlignment: constraints.maxWidth < tabs.length * 77
-                  ? TabAlignment.center
-                  : TabAlignment.fill,
-              dividerHeight: 0.0,
-              tabs: tabs.map((e) {
-                final (label, _, _) = e;
-                if (label == 'New') {
-                  final length = context.watch<RosterCubit>().inviteCount;
-                  return Tab(
-                    child: AxiBadge(
-                      count: length,
-                      child: Text(label),
-                    ),
-                  );
-                }
-                return Tab(text: label);
-              }).toList(),
-            ),
+          TabBar(
+            isScrollable: constraints.maxWidth < tabs.length * 90,
+            tabAlignment: constraints.maxWidth < tabs.length * 90
+                ? TabAlignment.center
+                : TabAlignment.fill,
+            dividerHeight: 0.0,
+            tabs: tabs.map((e) {
+              final (label, _, _) = e;
+              if (label == 'New') {
+                final length = context.watch<RosterCubit>().inviteCount;
+                return Tab(
+                  child: AxiBadge(
+                    count: length,
+                    child: Text(label),
+                  ),
+                );
+              }
+              return Tab(text: label);
+            }).toList(),
           ),
           const ProfileCard(
             active: true,

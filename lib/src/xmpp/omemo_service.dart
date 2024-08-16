@@ -8,10 +8,10 @@ mixin OmemoService on XmppBase {
   Future<OmemoDevice> get _device async =>
       OmemoDevice.fromMox(await (await _omemoManager.future).getDevice());
 
-  Future<mox.OmemoError?> _publishBundle() async {
-    final result = await _connection
-        .getManager<mox.OmemoManager>()!
-        .publishBundle(await (await _device).toBundle());
+  Future<mox.OmemoError?> _publishBundle(
+      {required omemo.OmemoBundle bundle}) async {
+    final result =
+        await _connection.getManager<mox.OmemoManager>()!.publishBundle(bundle);
     if (result.isType<mox.OmemoError>()) {
       return result.get<mox.OmemoError>();
     }
@@ -21,13 +21,13 @@ mixin OmemoService on XmppBase {
 
   Future<mox.OmemoError?> _ensureOmemoDevicePublished() async {
     final device = await _device;
-    final jid = mox.JID.fromString(myJid!).toBare();
+    final jid = _myJid!.toBare();
 
     final bundles = await _connection
         .getManager<mox.DiscoManager>()!
         .discoItemsQuery(jid, node: mox.omemoBundlesXmlns);
     if (bundles.isType<mox.DiscoError>()) {
-      return _publishBundle();
+      return _publishBundle(bundle: await device.toBundle());
     }
 
     final bundleIDs = bundles
@@ -35,15 +35,15 @@ mixin OmemoService on XmppBase {
         .where((e) => e.name != null)
         .map((e) => int.parse(e.name!));
     if (!bundleIDs.contains(device.id)) {
-      return _publishBundle();
+      return _publishBundle(bundle: await device.toBundle());
     }
 
-    final result =
-        await _connection.getManager<mox.OmemoManager>()!.getDeviceList(jid);
-    final devices =
-        result.isType<mox.OmemoError>() ? [] : result.get<List<int>>();
+    final result = await _connection
+        .getManager<mox.OmemoManager>()!
+        .fetchDeviceList(myJid!);
+    final devices = result ?? [];
     if (!devices.contains(device.id)) {
-      return _publishBundle();
+      return _publishBundle(bundle: await device.toBundle());
     }
 
     return null;
