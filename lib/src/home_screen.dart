@@ -91,23 +91,26 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   const ConnectivityIndicator(),
                   Expanded(
-                    child: SafeArea(
-                      top: context.watch<ConnectivityCubit>().state
-                          is ConnectivityConnected,
-                      child: AxiAdaptiveLayout(
-                        invertPriority: openJid != null,
-                        primaryChild: Nexus(tabs: tabs),
-                        secondaryChild: openJid == null
-                            ? const GuestChat()
-                            : BlocProvider(
-                                key: Key(openJid),
-                                create: (context) => ChatBloc(
-                                  jid: openJid,
-                                  xmppService: context.read<XmppService>(),
-                                ),
-                                child: const Chat(),
-                              ),
-                      ),
+                    child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+                      builder: (context, state) {
+                        return SafeArea(
+                          top: state is ConnectivityConnected,
+                          child: AxiAdaptiveLayout(
+                            invertPriority: openJid != null,
+                            primaryChild: Nexus(tabs: tabs),
+                            secondaryChild: openJid == null
+                                ? const GuestChat()
+                                : BlocProvider(
+                                    key: Key(openJid),
+                                    create: (context) => ChatBloc(
+                                      jid: openJid,
+                                      xmppService: context.read<XmppService>(),
+                                    ),
+                                    child: const Chat(),
+                                  ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -128,77 +131,78 @@ class Nexus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
-    return LayoutBuilder(
-      builder: (context, constraints) => Column(
-        children: [
-          const AxiAppBar(),
-          MultiBlocListener(
-            listeners: [
-              BlocListener<RosterCubit, RosterState>(
-                listener: (context, state) {
-                  if (showToast == null) return;
-                  if (state is RosterFailure) {
-                    showToast(
-                      ShadToast.destructive(
-                        title: const Text('Whoops!'),
-                        description: Text(state.message),
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  } else if (state is RosterSuccess) {
-                    showToast(
-                      ShadToast(
-                        title: const Text('Success!'),
-                        description: Text(state.message),
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  }
-                },
-              ),
-              BlocListener<BlocklistCubit, BlocklistState>(
-                listener: (context, state) {
-                  if (showToast == null) return;
-                  if (state is BlocklistFailure) {
-                    showToast(
-                      ShadToast.destructive(
-                        title: const Text('Whoops!'),
-                        description: Text(state.message),
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  } else if (state is BlocklistSuccess) {
-                    showToast(
-                      ShadToast(
-                        title: const Text('Success!'),
-                        description: Text(state.message),
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
-            child: Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: context.colorScheme.border),
-                  ),
+    return Column(
+      children: [
+        const AxiAppBar(),
+        MultiBlocListener(
+          listeners: [
+            BlocListener<RosterCubit, RosterState>(
+              listener: (context, state) {
+                if (showToast == null) return;
+                if (state is RosterFailure) {
+                  showToast(
+                    ShadToast.destructive(
+                      title: const Text('Whoops!'),
+                      description: Text(state.message),
+                      showCloseIconOnlyWhenHovered: false,
+                    ),
+                  );
+                } else if (state is RosterSuccess) {
+                  showToast(
+                    ShadToast(
+                      title: const Text('Success!'),
+                      description: Text(state.message),
+                      showCloseIconOnlyWhenHovered: false,
+                    ),
+                  );
+                }
+              },
+            ),
+            BlocListener<BlocklistCubit, BlocklistState>(
+              listener: (context, state) {
+                if (showToast == null) return;
+                if (state is BlocklistFailure) {
+                  showToast(
+                    ShadToast.destructive(
+                      title: const Text('Whoops!'),
+                      description: Text(state.message),
+                      showCloseIconOnlyWhenHovered: false,
+                    ),
+                  );
+                } else if (state is BlocklistSuccess) {
+                  showToast(
+                    ShadToast(
+                      title: const Text('Success!'),
+                      description: Text(state.message),
+                      showCloseIconOnlyWhenHovered: false,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+          child: Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: context.colorScheme.border),
                 ),
-                child: TabBarView(
-                  children: tabs.map((e) {
-                    final (_, sliver, fab) = e;
-                    return Scaffold(
-                      body: sliver,
-                      floatingActionButton: fab,
-                    );
-                  }).toList(),
-                ),
+              ),
+              child: TabBarView(
+                children: tabs.map((e) {
+                  final (_, sliver, fab) = e;
+                  return Scaffold(
+                    extendBodyBehindAppBar: true,
+                    body: sliver,
+                    floatingActionButton: fab,
+                  );
+                }).toList(),
               ),
             ),
           ),
-          TabBar(
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) => TabBar(
             isScrollable: constraints.maxWidth < tabs.length * 90,
             tabAlignment: constraints.maxWidth < tabs.length * 90
                 ? TabAlignment.center
@@ -218,11 +222,11 @@ class Nexus extends StatelessWidget {
               return Tab(text: label);
             }).toList(),
           ),
-          const ProfileCard(
-            active: true,
-          ),
-        ],
-      ),
+        ),
+        const ProfileCard(
+          active: true,
+        ),
+      ],
     );
   }
 }

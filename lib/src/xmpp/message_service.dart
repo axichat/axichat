@@ -11,14 +11,14 @@ extension on mox.MessageEvent {
 
 mixin MessageService on XmppBase {
   Stream<List<Message>> messageStream(
-      String jid, {
-        int start = 0,
-        int end = 50,
-      }) =>
+    String jid, {
+    int start = 0,
+    int end = 50,
+  }) =>
       StreamCompleter.fromFuture(
           _dbOpReturning<XmppDatabase, Stream<List<Message>>>((db) async {
-            return db.watchChatMessages(jid, start: start, end: end);
-          }));
+        return db.watchChatMessages(jid, start: start, end: end);
+      }));
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = basePageItemLimit,
@@ -80,9 +80,13 @@ mixin MessageService on XmppBase {
     }
   }
 
-  Future<void> saveDraft({int? id, required String jid, required String body,}) async {
+  Future<void> saveDraft({
+    int? id,
+    required List<String> jids,
+    required String body,
+  }) async {
     await _dbOp<XmppDatabase>((db) async {
-      await db.saveDraft(id: id, jid: jid, body: body);
+      await db.saveDraft(id: id, jids: jids, body: body);
     });
   }
 

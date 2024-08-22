@@ -30,12 +30,7 @@ class AxiInputDialog extends StatelessWidget {
         ),
         ...actions,
         ShadButton(
-          onPressed: callback == null
-              ? null
-              : () {
-                  callback!();
-                  context.pop();
-                },
+          onPressed: callback,
           text: Text(callbackText),
         ),
       ],

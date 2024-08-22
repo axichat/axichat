@@ -14,8 +14,8 @@ class LoginForm extends StatefulWidget {
 }
 
 class _LoginFormState extends State<LoginForm> {
-  TextEditingController? _jidTextController;
-  TextEditingController? _passwordTextController;
+  late TextEditingController _jidTextController;
+  late TextEditingController _passwordTextController;
 
   bool rememberMe = true;
   bool agreeToTerms = false;
@@ -35,16 +35,16 @@ class _LoginFormState extends State<LoginForm> {
 
   @override
   void dispose() {
-    _jidTextController?.dispose();
-    _passwordTextController?.dispose();
+    _jidTextController.dispose();
+    _passwordTextController.dispose();
     super.dispose();
   }
 
   void _onPressed(BuildContext context) {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     context.read<AuthenticationCubit>().login(
-          username: _jidTextController!.value.text,
-          password: _passwordTextController!.value.text,
+          username: _jidTextController.value.text,
+          password: _passwordTextController.value.text,
           rememberMe: rememberMe,
         );
   }
@@ -58,7 +58,7 @@ class _LoginFormState extends State<LoginForm> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Login',
+                'Log In',
                 style: context.textTheme.h3,
               ),
               state is AuthenticationFailure
@@ -90,7 +90,7 @@ class _LoginFormState extends State<LoginForm> {
               ),
               PasswordInput(
                 enabled: state is! AuthenticationInProgress,
-                controller: _passwordTextController!,
+                controller: _passwordTextController,
               ),
               Align(
                 alignment: Alignment.centerLeft,
@@ -116,11 +116,14 @@ class _LoginFormState extends State<LoginForm> {
                   return ShadButton(
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
-                    text: const Text('Log In'),
+                    text: const Text('Log in'),
                     icon: loading
-                        ? AxiProgressIndicator(
-                            color: context.colorScheme.primaryForeground,
-                            semanticsLabel: 'Waiting for login',
+                        ? Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: AxiProgressIndicator(
+                              color: context.colorScheme.primaryForeground,
+                              semanticsLabel: 'Waiting for login',
+                            ),
                           )
                         : null,
                   );

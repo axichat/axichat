@@ -1,5 +1,7 @@
+import 'package:chat/src/app.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 extension ValidJid on String {
   bool get isValidJid => RegExp(
@@ -10,34 +12,106 @@ extension ValidJid on String {
 class JidInput extends StatelessWidget {
   const JidInput({
     super.key,
-    this.enabled = true,
+    required this.onChanged,
+    required this.jidOptions,
     this.initialValue,
-    this.onChanged,
+    this.enabled = true,
+    this.describe = true,
   });
 
-  final bool enabled;
+  final void Function(String) onChanged;
+  final List<String> jidOptions;
   final String? initialValue;
-  final void Function(String)? onChanged;
+  final bool enabled;
+  final bool describe;
 
   @override
   Widget build(BuildContext context) {
-    return AxiTextFormField(
-      autocorrect: false,
-      enabled: enabled,
-      initialValue: initialValue,
-      placeholder: const Text('JID'),
-      description: const Text('Example: friend@axi.im'),
-      onChanged: onChanged,
-      validator: (text) {
-        if (text.isEmpty) {
-          return 'Enter a JID';
+    return Autocomplete<String>(
+      initialValue:
+          initialValue == null ? null : TextEditingValue(text: initialValue!),
+      onSelected: onChanged,
+      optionsBuilder: (value) {
+        if (value.text.isEmpty) return const [];
+        return jidOptions
+            .where((e) =>
+                e.toLowerCase().contains(value.text.toLowerCase()) &&
+                e.toLowerCase() != value.text.toLowerCase())
+            .toList();
+      },
+      optionsViewBuilder: (context, onSelected, options) => Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: context.colorScheme.border),
+            borderRadius: context.radius,
+          ),
+          child: IntrinsicWidth(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final option in options)
+                  ShadGestureDetector(
+                    cursor: SystemMouseCursors.click,
+                    hoverStrategies: mobileHoverStrategies,
+                    onTap: () => onSelected(option),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(option),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      fieldViewBuilder: (context, controller, focus, __) {
+        Widget child = ShadInput(
+          controller: controller,
+          focusNode: focus,
+          autocorrect: false,
+          enabled: enabled,
+          placeholder: const Text('john@xmpp.social'),
+          // description: describe
+          //     ? const Padding(
+          //         padding: EdgeInsets.only(left: 8.0),
+          //         child: Text('e.g: john@xmpp.social'),
+          //       )
+          //     : null,
+          onChanged: onChanged,
+          // validator: (text) {
+          //   if (text.isEmpty) {
+          //     return 'Enter a JID';
+          //   }
+          //
+          //   if (!text.isValidJid) {
+          //     return 'Enter a valid jid';
+          //   }
+          //
+          //   return null;
+          // },
+        );
+        if (!focus.hasFocus &&
+            controller.text.isNotEmpty &&
+            !controller.text.isValidJid) {
+          child = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              child,
+              Padding(
+                padding: inputSubtextInsets,
+                child: Text(
+                  'Enter a valid jid',
+                  style: TextStyle(
+                    color: context.colorScheme.destructive,
+                  ),
+                ),
+              ),
+            ],
+          );
         }
-
-        if (!text.isValidJid) {
-          return 'Enter a valid jid';
-        }
-
-        return null;
+        return child;
       },
     );
   }

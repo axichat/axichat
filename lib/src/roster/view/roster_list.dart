@@ -2,11 +2,12 @@ import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/draft/view/draft_form.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
+import 'package:chat/src/routes.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RosterList extends StatelessWidget {
@@ -58,10 +59,12 @@ class RosterList extends StatelessWidget {
               subtitle: item.jid,
               actions: [
                 ShadButton.ghost(
-                  onPressed: () => showDraft(
-                    context,
-                    id: null,
-                    jid: item.jid,
+                  onPressed: () => context.push(
+                    const ComposeRoute().location,
+                    extra: {
+                      'locate': context.read,
+                      'jids': [item.jid],
+                    },
                   ),
                   foregroundColor: context.colorScheme.primary,
                   text: const Text('Draft'),

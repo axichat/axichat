@@ -79,6 +79,7 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
       child: !show
           ? const SizedBox.shrink()
           : SafeArea(
+              bottom: false,
               child: Padding(
                 padding: const EdgeInsets.all(4.0),
                 child: Row(

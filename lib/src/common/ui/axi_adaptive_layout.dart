@@ -46,7 +46,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
                           end: Offset.zero,
                         ).animate(CurvedAnimation(
                           parent: primaryAnimation,
-                          curve: Curves.decelerate,
+                          curve: Curves.easeIn,
                         )),
                         child: child,
                       );

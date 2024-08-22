@@ -1,6 +1,8 @@
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/draft/view/draft_form.dart';
+import 'package:chat/src/routes.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class DraftButton extends StatelessWidget {
@@ -10,9 +12,13 @@ class DraftButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiTooltip(
       builder: (_) => const Text('Compose a message'),
-      child: FloatingActionButton(
-        child: const Icon(LucideIcons.pencilLine),
-        onPressed: () => showDraft(context, id: null),
+      child: AxiFab(
+        onPressed: () => context.push(
+          const ComposeRoute().location,
+          extra: {'locate': context.read},
+        ),
+        iconData: LucideIcons.pencilLine,
+        text: 'Compose',
       ),
     );
   }

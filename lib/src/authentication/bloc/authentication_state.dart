@@ -15,3 +15,9 @@ final class AuthenticationFailure extends AuthenticationState {
 
   final String errorText;
 }
+
+final class AuthenticationSignupFailure extends AuthenticationState {
+  const AuthenticationSignupFailure(this.errorText);
+
+  final String errorText;
+}

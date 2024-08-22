@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 export 'axi_adaptive_layout.dart';
@@ -5,6 +6,8 @@ export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'axi_confirm.dart';
+export 'axi_fab.dart';
+export 'axi_fingerprint.dart';
 export 'axi_icon_button.dart';
 export 'axi_input_dialog.dart';
 export 'axi_list_divider.dart';
@@ -19,6 +22,9 @@ export 'jid_input.dart';
 export 'list_item_padding.dart';
 export 'password_input.dart';
 export 'presence_indicator.dart';
+export 'string_to_color.dart';
+
+const appDisplayName = 'axichat';
 
 const smallScreen = 700.0;
 const mediumScreen = 900.0;
@@ -33,4 +39,9 @@ const mobileHoverStrategies = ShadHoverStrategies(
     ShadHoverStrategy.onLongPressUp,
     ShadHoverStrategy.onLongPressCancel,
   },
+);
+
+const inputSubtextInsets = EdgeInsets.only(
+  left: 8.0,
+  bottom: 4.0,
 );

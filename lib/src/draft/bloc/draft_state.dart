@@ -13,12 +13,17 @@ final class DraftsAvailable extends DraftState {
   List<Object?> get props => [items];
 }
 
+final class DraftSaveComplete extends DraftState {
+  @override
+  List<Object?> get props => [];
+}
+
 final class DraftSending extends DraftState {
   @override
   List<Object?> get props => [];
 }
 
-final class DraftSent extends DraftState {
+final class DraftSendComplete extends DraftState {
   @override
   List<Object?> get props => [];
 }

@@ -1,8 +1,10 @@
 import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlocklistAddButton extends StatelessWidget {
@@ -13,20 +15,30 @@ class BlocklistAddButton extends StatelessWidget {
     final locate = context.read;
     return AxiTooltip(
       builder: (_) => const Text('Add to blocklist'),
-      child: FloatingActionButton(
-        child: const Icon(LucideIcons.userX),
+      child: AxiFab(
+        iconData: LucideIcons.userX,
+        text: 'Block',
         onPressed: () => showShadDialog(
           context: context,
           builder: (context) {
             String jid = '';
-            return BlocProvider.value(
-              value: locate<BlocklistCubit>(),
+            return MultiBlocProvider(
+              providers: [
+                BlocProvider.value(
+                  value: locate<BlocklistCubit>(),
+                ),
+                BlocProvider.value(
+                  value: locate<RosterCubit>(),
+                ),
+              ],
               child: Form(
                 child: StatefulBuilder(
                   builder: (context, setState) {
                     return AxiInputDialog(
                       title: const Text('Block user'),
                       content: JidInput(
+                        jidOptions: List<String>.from(
+                            locate<RosterCubit>()['items'].map((e) => e.jid)),
                         onChanged: (value) {
                           setState(() => jid = value);
                         },
@@ -36,6 +48,7 @@ class BlocklistAddButton extends StatelessWidget {
                           : () {
                               if (!Form.of(context).validate()) return;
                               context.read<BlocklistCubit>().block(jid: jid);
+                              context.pop();
                             },
                     );
                   },

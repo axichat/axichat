@@ -20,7 +20,6 @@ class ProfileCubit extends Cubit<ProfileState> {
             status: xmppService.status,
           ),
         ) {
-    _xmppService.fingerprint.then((e) => emit(state.copyWith(fingerprint: e)));
     _presenceSubscription = _xmppService.presenceStream.listen(
       (presence) => emit(state.copyWith(presence: presence)),
     );
@@ -48,5 +47,10 @@ class ProfileCubit extends Cubit<ProfileState> {
         status: status ?? state.status,
       );
     } on XmppPresenceException catch (_) {}
+  }
+
+  void loadFingerprints() async {
+    // final fingerprint = await _xmppService.getCurrentFingerprint();
+    // emit(state.copyWith(fingerprint: fingerprint));
   }
 }

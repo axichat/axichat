@@ -22,6 +22,10 @@ RouteBase get $homeRoute => GoRouteData.$route(
           path: 'profile',
           factory: $ProfileRouteExtension._fromState,
         ),
+        GoRouteData.$route(
+          path: 'compose',
+          factory: $ComposeRouteExtension._fromState,
+        ),
       ],
     );
 
@@ -47,6 +51,23 @@ extension $ProfileRouteExtension on ProfileRoute {
 
   String get location => GoRouteData.$location(
         '/profile',
+      );
+
+  void go(BuildContext context) => context.go(location);
+
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  void replace(BuildContext context) => context.replace(location);
+}
+
+extension $ComposeRouteExtension on ComposeRoute {
+  static ComposeRoute _fromState(GoRouterState state) => const ComposeRoute();
+
+  String get location => GoRouteData.$location(
+        '/compose',
       );
 
   void go(BuildContext context) => context.go(location);

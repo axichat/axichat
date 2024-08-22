@@ -1987,6 +1987,213 @@ abstract class _MessageFromDb extends Message {
 }
 
 /// @nodoc
+mixin _$OmemoFingerprint {
+  String get fingerprint => throw _privateConstructorUsedError;
+  int get deviceID => throw _privateConstructorUsedError;
+  omemo.BTBVTrustState get trust => throw _privateConstructorUsedError;
+  bool get trusted => throw _privateConstructorUsedError;
+  bool get enabled => throw _privateConstructorUsedError;
+
+  @JsonKey(ignore: true)
+  $OmemoFingerprintCopyWith<OmemoFingerprint> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $OmemoFingerprintCopyWith<$Res> {
+  factory $OmemoFingerprintCopyWith(
+          OmemoFingerprint value, $Res Function(OmemoFingerprint) then) =
+      _$OmemoFingerprintCopyWithImpl<$Res, OmemoFingerprint>;
+  @useResult
+  $Res call(
+      {String fingerprint,
+      int deviceID,
+      omemo.BTBVTrustState trust,
+      bool trusted,
+      bool enabled});
+}
+
+/// @nodoc
+class _$OmemoFingerprintCopyWithImpl<$Res, $Val extends OmemoFingerprint>
+    implements $OmemoFingerprintCopyWith<$Res> {
+  _$OmemoFingerprintCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? fingerprint = null,
+    Object? deviceID = null,
+    Object? trust = null,
+    Object? trusted = null,
+    Object? enabled = null,
+  }) {
+    return _then(_value.copyWith(
+      fingerprint: null == fingerprint
+          ? _value.fingerprint
+          : fingerprint // ignore: cast_nullable_to_non_nullable
+              as String,
+      deviceID: null == deviceID
+          ? _value.deviceID
+          : deviceID // ignore: cast_nullable_to_non_nullable
+              as int,
+      trust: null == trust
+          ? _value.trust
+          : trust // ignore: cast_nullable_to_non_nullable
+              as omemo.BTBVTrustState,
+      trusted: null == trusted
+          ? _value.trusted
+          : trusted // ignore: cast_nullable_to_non_nullable
+              as bool,
+      enabled: null == enabled
+          ? _value.enabled
+          : enabled // ignore: cast_nullable_to_non_nullable
+              as bool,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$OmemoFingerprintImplCopyWith<$Res>
+    implements $OmemoFingerprintCopyWith<$Res> {
+  factory _$$OmemoFingerprintImplCopyWith(_$OmemoFingerprintImpl value,
+          $Res Function(_$OmemoFingerprintImpl) then) =
+      __$$OmemoFingerprintImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {String fingerprint,
+      int deviceID,
+      omemo.BTBVTrustState trust,
+      bool trusted,
+      bool enabled});
+}
+
+/// @nodoc
+class __$$OmemoFingerprintImplCopyWithImpl<$Res>
+    extends _$OmemoFingerprintCopyWithImpl<$Res, _$OmemoFingerprintImpl>
+    implements _$$OmemoFingerprintImplCopyWith<$Res> {
+  __$$OmemoFingerprintImplCopyWithImpl(_$OmemoFingerprintImpl _value,
+      $Res Function(_$OmemoFingerprintImpl) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? fingerprint = null,
+    Object? deviceID = null,
+    Object? trust = null,
+    Object? trusted = null,
+    Object? enabled = null,
+  }) {
+    return _then(_$OmemoFingerprintImpl(
+      fingerprint: null == fingerprint
+          ? _value.fingerprint
+          : fingerprint // ignore: cast_nullable_to_non_nullable
+              as String,
+      deviceID: null == deviceID
+          ? _value.deviceID
+          : deviceID // ignore: cast_nullable_to_non_nullable
+              as int,
+      trust: null == trust
+          ? _value.trust
+          : trust // ignore: cast_nullable_to_non_nullable
+              as omemo.BTBVTrustState,
+      trusted: null == trusted
+          ? _value.trusted
+          : trusted // ignore: cast_nullable_to_non_nullable
+              as bool,
+      enabled: null == enabled
+          ? _value.enabled
+          : enabled // ignore: cast_nullable_to_non_nullable
+              as bool,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$OmemoFingerprintImpl implements _OmemoFingerprint {
+  const _$OmemoFingerprintImpl(
+      {required this.fingerprint,
+      required this.deviceID,
+      required this.trust,
+      this.trusted = false,
+      this.enabled = false});
+
+  @override
+  final String fingerprint;
+  @override
+  final int deviceID;
+  @override
+  final omemo.BTBVTrustState trust;
+  @override
+  @JsonKey()
+  final bool trusted;
+  @override
+  @JsonKey()
+  final bool enabled;
+
+  @override
+  String toString() {
+    return 'OmemoFingerprint(fingerprint: $fingerprint, deviceID: $deviceID, trust: $trust, trusted: $trusted, enabled: $enabled)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$OmemoFingerprintImpl &&
+            (identical(other.fingerprint, fingerprint) ||
+                other.fingerprint == fingerprint) &&
+            (identical(other.deviceID, deviceID) ||
+                other.deviceID == deviceID) &&
+            (identical(other.trust, trust) || other.trust == trust) &&
+            (identical(other.trusted, trusted) || other.trusted == trusted) &&
+            (identical(other.enabled, enabled) || other.enabled == enabled));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, fingerprint, deviceID, trust, trusted, enabled);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$OmemoFingerprintImplCopyWith<_$OmemoFingerprintImpl> get copyWith =>
+      __$$OmemoFingerprintImplCopyWithImpl<_$OmemoFingerprintImpl>(
+          this, _$identity);
+}
+
+abstract class _OmemoFingerprint implements OmemoFingerprint {
+  const factory _OmemoFingerprint(
+      {required final String fingerprint,
+      required final int deviceID,
+      required final omemo.BTBVTrustState trust,
+      final bool trusted,
+      final bool enabled}) = _$OmemoFingerprintImpl;
+
+  @override
+  String get fingerprint;
+  @override
+  int get deviceID;
+  @override
+  omemo.BTBVTrustState get trust;
+  @override
+  bool get trusted;
+  @override
+  bool get enabled;
+  @override
+  @JsonKey(ignore: true)
+  _$$OmemoFingerprintImplCopyWith<_$OmemoFingerprintImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$Reaction {
   String get messageID => throw _privateConstructorUsedError;
   String get senderJid => throw _privateConstructorUsedError;

@@ -27,41 +27,36 @@ class ChatsList extends StatelessWidget {
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
-            return AxiBadge(
-              count: item.unreadCount,
-              offset: const Offset(-5, 10),
-              child: AxiListTile(
-                key: Key(item.jid),
-                onTap: () =>
-                    context.read<ChatsCubit>().toggleChat(jid: item.jid),
-                onDismissed: (_) =>
-                    context.read<ChatsCubit>().deleteChat(jid: item.jid),
-                dismissText: 'Delete chat: ${item.title}?',
-                selected: item.open,
-                leading: AxiAvatar(
-                  jid: item.jid,
-                ),
-                title: item.title,
-                subtitle: item.lastMessage,
-                actions: [
-                  DisplayTimeSince(timestamp: item.lastChangeTimestamp),
-                  ShadButton.ghost(
-                    width: 30.0,
-                    height: 30.0,
-                    icon: Icon(
-                      item.favourited
-                          ? Icons.star_rounded
-                          : Icons.star_border_rounded,
-                      size: 22.0,
-                    ),
-                    onPressed: () =>
-                        context.read<ChatsCubit>().toggleFavourited(
-                              jid: item.jid,
-                              favourited: !item.favourited,
-                            ),
-                  ),
-                ],
+            return AxiListTile(
+              key: Key(item.jid),
+              badgeCount: item.unreadCount,
+              onTap: () => context.read<ChatsCubit>().toggleChat(jid: item.jid),
+              onDismissed: (_) =>
+                  context.read<ChatsCubit>().deleteChat(jid: item.jid),
+              dismissText: 'Delete chat: ${item.title}?',
+              selected: item.open,
+              leading: AxiAvatar(
+                jid: item.jid,
               ),
+              title: item.title,
+              subtitle: item.lastMessage,
+              actions: [
+                DisplayTimeSince(timestamp: item.lastChangeTimestamp),
+                ShadButton.ghost(
+                  width: 30.0,
+                  height: 30.0,
+                  icon: Icon(
+                    item.favourited
+                        ? Icons.star_rounded
+                        : Icons.star_border_rounded,
+                    size: 22.0,
+                  ),
+                  onPressed: () => context.read<ChatsCubit>().toggleFavourited(
+                        jid: item.jid,
+                        favourited: !item.favourited,
+                      ),
+                ),
+              ],
             );
           },
         );

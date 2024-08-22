@@ -6,6 +6,7 @@ import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 part 'authentication_state.dart';
 
@@ -45,6 +46,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   static const defaultServer = 'xmpp.social';
+  static Uri registrationUrl = Uri.parse('https://hookipa.net/register/new');
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
@@ -159,10 +161,73 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> signup({
     required String username,
     required String password,
+    required String confirmPassword,
+    required String captchaID,
+    required String captcha,
     required bool rememberMe,
     required bool agreeToTerms,
   }) async {
-    // TODO: In-band registration.
+    emit(AuthenticationInProgress());
+    try {
+      // final client = HttpClient(
+      //     context: SecurityContext()..setTrustedCertificatesBytes(certBytes));
+      final response = await http.post(
+        Uri(
+          scheme: 'https',
+          host: 'hookipa.net',
+          path: '/register/new/',
+        ),
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;'
+              'q=0.9,image/avif,image/webp,image/apng,*/*;'
+              'q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Encoding': 'gzip, deflate, br, zstd',
+          'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+          'Cache-Control': 'max-age=0',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Cookie': 'pll_language=en',
+          'Dnt': '1',
+          'Origin': 'https://hookipa.net',
+          'Priority': 'u=0, i',
+          'Referer': 'https://hookipa.net/register/new/',
+          'Sec-Ch-Ua': '"Chromium";v="127", "Not)A;Brand";v="99"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Linux"',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'same-origin',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1',
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+        },
+        body: {
+          'username': username,
+          'host': defaultServer,
+          'password': password,
+          'password2': confirmPassword,
+          'id': captchaID,
+          'key': captcha,
+          'register': 'Register',
+        },
+      );
+      print(response.request?.headers);
+      print(response.request?.url);
+      print(response.request?.method);
+      print(response.request?.toString());
+      print(
+          '${response.statusCode}: ${response.body}: ${response.headers}: ${response.reasonPhrase}: ${response.isRedirect}');
+      if (!(response.statusCode == 200 || response.statusCode == 201)) {
+        emit(AuthenticationSignupFailure(response.body));
+        return;
+      }
+    } on Exception catch (e) {
+      print(e);
+      emit(const AuthenticationSignupFailure(
+          'Failed to register, try again later.'));
+      return;
+    }
+    await login(username: username, password: password, rememberMe: rememberMe);
   }
 
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {

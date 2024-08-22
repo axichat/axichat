@@ -38,12 +38,14 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   Future<void> sendDraft({
     required int? id,
-    required String jid,
+    required List<String> jids,
     required String body,
   }) async {
     emit(DraftSending());
     try {
-      await _xmppService.sendMessage(jid: jid, text: body);
+      for (final jid in jids) {
+        await _xmppService.sendMessage(jid: jid, text: body);
+      }
     } on XmppMessageException catch (_) {
       emit(const DraftFailure(
           'Failed to send message. Ensure recipient address exists.'));
@@ -52,15 +54,16 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (id != null) {
       await deleteDraft(id: id);
     }
-    emit(DraftSent());
+    emit(DraftSendComplete());
   }
 
   Future<void> saveDraft({
     required int? id,
-    required String jid,
+    required List<String> jids,
     required String body,
   }) async {
-    await _xmppService.saveDraft(id: id, jid: jid, body: body);
+    await _xmppService.saveDraft(id: id, jids: jids, body: body);
+    emit(DraftSaveComplete());
   }
 
   Future<void> deleteDraft({required int id}) async {

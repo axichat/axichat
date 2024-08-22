@@ -1,3 +1,5 @@
+import 'package:chat/src/common/ui/ui.dart';
+import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiTextFormField extends ShadInputFormField {
@@ -20,4 +22,12 @@ class AxiTextFormField extends ShadInputFormField {
     super.maxLines,
     super.autocorrect,
   });
+
+  @override
+  Widget? get error => super.error != null && super.error is Text
+      ? Padding(
+          padding: inputSubtextInsets,
+          child: super.error,
+        )
+      : null;
 }

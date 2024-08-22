@@ -53,10 +53,13 @@ abstract interface class XmppDatabase implements Database {
   Stream<List<Draft>> watchDrafts({required int start, required int end});
   Future<List<Draft>> getDrafts({required int start, required int end});
   Future<Draft?> getDraft(int id);
-  Future<void> saveDraft({int? id, required String jid, required String body});
+  Future<void> saveDraft(
+      {int? id, required List<String> jids, required String body});
   Future<void> removeDraft(int id);
   Future<OmemoDevice?> getOmemoDevice(String jid);
   Future<void> saveOmemoDevice(OmemoDevice device);
+  Future<OmemoDeviceList?> getOmemoDeviceList(String jid);
+  Future<void> saveOmemoDeviceList(OmemoDeviceList data);
   Future<void> setOmemoTrust(omemo.BTBVTrustData trust);
   Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid);
   Future<void> resetOmemoTrust(String jid);
@@ -202,6 +205,25 @@ class OmemoDevicesAccessor extends BaseAccessor<OmemoDevice, $OmemoDevicesTable>
 
   Future<List<OmemoDevice>> selectByJid(String jid) =>
       (select(table)..where((table) => table.jid.equals(jid))).get();
+
+  @override
+  Future<void> deleteOne(String value) =>
+      (delete(table)..where((table) => table.jid.equals(value))).go();
+}
+
+@DriftAccessor(tables: [OmemoDeviceLists])
+class OmemoDeviceListsAccessor
+    extends BaseAccessor<OmemoDeviceList, $OmemoDeviceListsTable>
+    with _$OmemoDeviceListsAccessorMixin {
+  OmemoDeviceListsAccessor(super.attachedDatabase);
+
+  @override
+  $OmemoDeviceListsTable get table => omemoDeviceLists;
+
+  @override
+  Future<OmemoDeviceList?> selectOne(String value) =>
+      (select(table)..where((table) => table.jid.equals(value)))
+          .getSingleOrNull();
 
   @override
   Future<void> deleteOne(String value) =>
@@ -361,6 +383,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   Messages,
   Drafts,
   OmemoDevices,
+  OmemoDeviceLists,
   OmemoRatchets,
   Reactions,
   Notifications,
@@ -376,6 +399,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   MessagesAccessor,
   DraftsAccessor,
   OmemoDevicesAccessor,
+  OmemoDeviceListsAccessor,
   OmemoRatchetsAccessor,
   FileMetadataAccessor,
   ChatsAccessor,
@@ -544,12 +568,12 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   @override
   Future<void> saveDraft({
     int? id,
-    required String jid,
+    required List<String> jids,
     required String body,
   }) =>
       draftsAccessor.insertOrUpdateOne(DraftsCompanion(
         id: Value.absentIfNull(id),
-        jid: Value(jid),
+        jids: Value(jids),
         body: Value(body),
       ));
 
@@ -565,6 +589,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     _log.info('Saving OMEMO device: $device from jid: $jid');
     await omemoDevicesAccessor.insertOrUpdateOne(await device.toDb());
   }
+
+  @override
+  Future<OmemoDeviceList?> getOmemoDeviceList(String jid) =>
+      omemoDeviceListsAccessor.selectOne(jid);
+
+  @override
+  Future<void> saveOmemoDeviceList(OmemoDeviceList data) =>
+      omemoDeviceListsAccessor.insertOrUpdateOne(data);
 
   @override
   Future<void> setOmemoTrust(omemo.BTBVTrustData trust) =>
@@ -891,7 +923,7 @@ QueryExecutor _openDatabase(String jid, String passphrase) {
     final token = RootIsolateToken.instance!;
     final file = await dbFilePathFor(jid);
     if (kDebugMode) {
-      // await file.delete();
+      await file.delete();
     }
     return NativeDatabase.createInBackground(
       file,

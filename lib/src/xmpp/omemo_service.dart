@@ -3,7 +3,15 @@ part of 'package:chat/src/xmpp/xmpp_service.dart';
 mixin OmemoService on XmppBase {
   var _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
-  Future<String> get fingerprint async => (await _device).getFingerprint();
+  Future<omemo.OmemoManager> _getOmemoManager() async => _omemoManager.value!;
+
+  Future<bool> _shouldEncrypt(mox.JID to, mox.Stanza stanza) =>
+      _dbOpReturning<XmppDatabase, bool>(
+        (db) async {
+          final chat = await db.getChat(to.toBare().toString());
+          return chat?.encryptionProtocol == EncryptionProtocol.omemo;
+        },
+      );
 
   Future<OmemoDevice> get _device async =>
       OmemoDevice.fromMox(await (await _omemoManager.future).getDevice());
@@ -48,6 +56,59 @@ mixin OmemoService on XmppBase {
 
     return null;
   }
+
+  Future<String> getCurrentFingerprint() async =>
+      (await _device).getFingerprint();
+
+  Future<List<OmemoFingerprint>> getFingerprints({required String jid}) async {
+    var trustMap = <int, omemo.BTBVTrustData>{};
+    await _omemoManager.value?.withTrustManager(
+      jid,
+      (e) async {
+        trustMap = await (e as omemo.BlindTrustBeforeVerificationTrustManager)
+            .getDevicesTrust(jid);
+      },
+    );
+
+    final fingerprints =
+        await _omemoManager.value?.getFingerprintsForJid(jid) ?? [];
+    return fingerprints.map((e) {
+      final trust = trustMap[e.deviceId] ??
+          omemo.BTBVTrustData(
+            jid,
+            e.deviceId,
+            BTBVTrustState.blindTrust,
+            false,
+            false,
+          );
+      return OmemoFingerprint(
+        fingerprint: e.fingerprint,
+        deviceID: e.deviceId,
+        trust: trust.state,
+        trusted: trust.trusted,
+        enabled: trust.enabled,
+      );
+    }).toList();
+  }
+
+  Future<void> setDeviceTrust({
+    required String jid,
+    required int device,
+    required BTBVTrustState trust,
+  }) async {
+    await _omemoManager.value?.withTrustManager(
+      jid,
+      (e) async {
+        await (e as omemo.BlindTrustBeforeVerificationTrustManager)
+            .setDeviceTrust(jid, device, trust);
+      },
+    );
+  }
+
+  Future<void> recreateSessions({required String jid}) async {
+    await _omemoManager.value?.removeAllRatchets(jid);
+    await _connection.getManager<mox.OmemoManager>()!.sendOmemoHeartbeat(jid);
+  }
 }
 
 const omemoXmlns = 'eu.siacs.conversations.axolotl';
@@ -70,7 +131,7 @@ const _doNotEncryptList = [
   mox.DoNotEncrypt('stanza-id', mox.stableIdXmlns),
 ];
 
-class OmemoManager extends mox.XmppManagerBase {
+/*class OmemoManager extends mox.XmppManagerBase {
   OmemoManager(
     this._getOmemoManager,
     this._shouldEncryptStanza, {
@@ -839,4 +900,4 @@ mox.XMLNode bundleToXML(omemo.OmemoBundle bundle) {
       ),
     ],
   );
-}
+}*/

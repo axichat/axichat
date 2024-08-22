@@ -7,18 +7,25 @@ class AxiAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      scrolledUnderElevation: 0.0,
-      title: Text(
-        'Axichat',
-        style: context.textTheme.h3,
+    return Container(
+      height: 56.0,
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
+        ),
       ),
-      shape: Border(
-        bottom: BorderSide(color: context.colorScheme.border),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            appDisplayName,
+            style: context.textTheme.h3,
+          ),
+          const AxiVersion(),
+        ],
       ),
-      actions: const [
-        AxiVersion(),
-      ],
     );
   }
 }

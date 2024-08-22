@@ -14,15 +14,12 @@ class AxiProgressIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: SizedBox.square(
-        dimension: dimension,
-        child: CircularProgressIndicator(
-          color: color,
-          semanticsLabel: semanticsLabel,
-          strokeWidth: 2.0,
-        ),
+    return SizedBox.square(
+      dimension: dimension,
+      child: CircularProgressIndicator(
+        color: color,
+        semanticsLabel: semanticsLabel,
+        strokeWidth: 2.0,
       ),
     );
   }

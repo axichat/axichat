@@ -14,6 +14,7 @@ class AxiListTile extends StatelessWidget {
     this.onTap,
     this.onDismissed,
     this.dismissText = 'Are you sure you want to delete this item?',
+    this.badgeCount = 0,
   });
 
   final Widget? leading;
@@ -24,6 +25,7 @@ class AxiListTile extends StatelessWidget {
   final void Function()? onTap;
   final void Function(DismissDirection)? onDismissed;
   final String dismissText;
+  final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +39,7 @@ class AxiListTile extends StatelessWidget {
         left: 16.0,
         right: dismissible ? 0.0 : 16.0,
       ),
+      minTileHeight: 70.0,
       selected: selected,
       selectedTileColor: context.colorScheme.accent,
       onTap: onTap,
@@ -81,6 +84,14 @@ class AxiListTile extends StatelessWidget {
         ],
       ),
     );
+
+    if (badgeCount > 0) {
+      child = AxiBadge(
+        count: badgeCount,
+        offset: const Offset(-5, 10),
+        child: child,
+      );
+    }
 
     if (dismissible) {
       assert(

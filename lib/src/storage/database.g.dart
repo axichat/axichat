@@ -17,6 +17,10 @@ mixin _$DraftsAccessorMixin on DatabaseAccessor<XmppDrift> {
 mixin _$OmemoDevicesAccessorMixin on DatabaseAccessor<XmppDrift> {
   $OmemoDevicesTable get omemoDevices => attachedDatabase.omemoDevices;
 }
+mixin _$OmemoDeviceListsAccessorMixin on DatabaseAccessor<XmppDrift> {
+  $OmemoDeviceListsTable get omemoDeviceLists =>
+      attachedDatabase.omemoDeviceLists;
+}
 mixin _$OmemoRatchetsAccessorMixin on DatabaseAccessor<XmppDrift> {
   $OmemoRatchetsTable get omemoRatchets => attachedDatabase.omemoRatchets;
 }
@@ -29,7 +33,6 @@ mixin _$ChatsAccessorMixin on DatabaseAccessor<XmppDrift> {
 }
 mixin _$RosterAccessorMixin on DatabaseAccessor<XmppDrift> {
   $ContactsTable get contacts => attachedDatabase.contacts;
-  $ChatsTable get chats => attachedDatabase.chats;
   $RosterTable get roster => attachedDatabase.roster;
 }
 mixin _$InvitesAccessorMixin on DatabaseAccessor<XmppDrift> {
@@ -1850,11 +1853,12 @@ class $DraftsTable extends Drafts with TableInfo<$DraftsTable, Draft> {
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
-  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  static const VerificationMeta _jidsMeta = const VerificationMeta('jids');
   @override
-  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
-      'jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+  late final GeneratedColumnWithTypeConverter<List<String>, String> jids =
+      GeneratedColumn<String>('jids', aliasedName, false,
+              type: DriftSqlType.string, requiredDuringInsert: true)
+          .withConverter<List<String>>($DraftsTable.$converterjids);
   static const VerificationMeta _bodyMeta = const VerificationMeta('body');
   @override
   late final GeneratedColumn<String> body = GeneratedColumn<String>(
@@ -1870,7 +1874,7 @@ class $DraftsTable extends Drafts with TableInfo<$DraftsTable, Draft> {
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('REFERENCES file_metadata (id)'));
   @override
-  List<GeneratedColumn> get $columns => [id, jid, body, fileMetadataID];
+  List<GeneratedColumn> get $columns => [id, jids, body, fileMetadataID];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1884,12 +1888,7 @@ class $DraftsTable extends Drafts with TableInfo<$DraftsTable, Draft> {
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
-    if (data.containsKey('jid')) {
-      context.handle(
-          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
-    } else if (isInserting) {
-      context.missing(_jidMeta);
-    }
+    context.handle(_jidsMeta, const VerificationResult.success());
     if (data.containsKey('body')) {
       context.handle(
           _bodyMeta, body.isAcceptableOrUnknown(data['body']!, _bodyMeta));
@@ -1911,8 +1910,8 @@ class $DraftsTable extends Drafts with TableInfo<$DraftsTable, Draft> {
     return Draft(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
-      jid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      jids: $DraftsTable.$converterjids.fromSql(attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jids'])!),
       body: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}body']),
       fileMetadataID: attachedDatabase.typeMapping.read(
@@ -1924,20 +1923,24 @@ class $DraftsTable extends Drafts with TableInfo<$DraftsTable, Draft> {
   $DraftsTable createAlias(String alias) {
     return $DraftsTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<List<String>, String> $converterjids = ListConverter();
 }
 
 class Draft extends DataClass implements Insertable<Draft> {
   final int id;
-  final String jid;
+  final List<String> jids;
   final String? body;
   final String? fileMetadataID;
   const Draft(
-      {required this.id, required this.jid, this.body, this.fileMetadataID});
+      {required this.id, required this.jids, this.body, this.fileMetadataID});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    map['jid'] = Variable<String>(jid);
+    {
+      map['jids'] = Variable<String>($DraftsTable.$converterjids.toSql(jids));
+    }
     if (!nullToAbsent || body != null) {
       map['body'] = Variable<String>(body);
     }
@@ -1950,7 +1953,7 @@ class Draft extends DataClass implements Insertable<Draft> {
   DraftsCompanion toCompanion(bool nullToAbsent) {
     return DraftsCompanion(
       id: Value(id),
-      jid: Value(jid),
+      jids: Value(jids),
       body: body == null && nullToAbsent ? const Value.absent() : Value(body),
       fileMetadataID: fileMetadataID == null && nullToAbsent
           ? const Value.absent()
@@ -1963,7 +1966,7 @@ class Draft extends DataClass implements Insertable<Draft> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Draft(
       id: serializer.fromJson<int>(json['id']),
-      jid: serializer.fromJson<String>(json['jid']),
+      jids: serializer.fromJson<List<String>>(json['jids']),
       body: serializer.fromJson<String?>(json['body']),
       fileMetadataID: serializer.fromJson<String?>(json['fileMetadataID']),
     );
@@ -1973,7 +1976,7 @@ class Draft extends DataClass implements Insertable<Draft> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'jid': serializer.toJson<String>(jid),
+      'jids': serializer.toJson<List<String>>(jids),
       'body': serializer.toJson<String?>(body),
       'fileMetadataID': serializer.toJson<String?>(fileMetadataID),
     };
@@ -1981,12 +1984,12 @@ class Draft extends DataClass implements Insertable<Draft> {
 
   Draft copyWith(
           {int? id,
-          String? jid,
+          List<String>? jids,
           Value<String?> body = const Value.absent(),
           Value<String?> fileMetadataID = const Value.absent()}) =>
       Draft(
         id: id ?? this.id,
-        jid: jid ?? this.jid,
+        jids: jids ?? this.jids,
         body: body.present ? body.value : this.body,
         fileMetadataID:
             fileMetadataID.present ? fileMetadataID.value : this.fileMetadataID,
@@ -1995,7 +1998,7 @@ class Draft extends DataClass implements Insertable<Draft> {
   String toString() {
     return (StringBuffer('Draft(')
           ..write('id: $id, ')
-          ..write('jid: $jid, ')
+          ..write('jids: $jids, ')
           ..write('body: $body, ')
           ..write('fileMetadataID: $fileMetadataID')
           ..write(')'))
@@ -2003,43 +2006,43 @@ class Draft extends DataClass implements Insertable<Draft> {
   }
 
   @override
-  int get hashCode => Object.hash(id, jid, body, fileMetadataID);
+  int get hashCode => Object.hash(id, jids, body, fileMetadataID);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Draft &&
           other.id == this.id &&
-          other.jid == this.jid &&
+          other.jids == this.jids &&
           other.body == this.body &&
           other.fileMetadataID == this.fileMetadataID);
 }
 
 class DraftsCompanion extends UpdateCompanion<Draft> {
   final Value<int> id;
-  final Value<String> jid;
+  final Value<List<String>> jids;
   final Value<String?> body;
   final Value<String?> fileMetadataID;
   const DraftsCompanion({
     this.id = const Value.absent(),
-    this.jid = const Value.absent(),
+    this.jids = const Value.absent(),
     this.body = const Value.absent(),
     this.fileMetadataID = const Value.absent(),
   });
   DraftsCompanion.insert({
     this.id = const Value.absent(),
-    required String jid,
+    required List<String> jids,
     this.body = const Value.absent(),
     this.fileMetadataID = const Value.absent(),
-  }) : jid = Value(jid);
+  }) : jids = Value(jids);
   static Insertable<Draft> custom({
     Expression<int>? id,
-    Expression<String>? jid,
+    Expression<String>? jids,
     Expression<String>? body,
     Expression<String>? fileMetadataID,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (jid != null) 'jid': jid,
+      if (jids != null) 'jids': jids,
       if (body != null) 'body': body,
       if (fileMetadataID != null) 'file_metadata_i_d': fileMetadataID,
     });
@@ -2047,12 +2050,12 @@ class DraftsCompanion extends UpdateCompanion<Draft> {
 
   DraftsCompanion copyWith(
       {Value<int>? id,
-      Value<String>? jid,
+      Value<List<String>>? jids,
       Value<String?>? body,
       Value<String?>? fileMetadataID}) {
     return DraftsCompanion(
       id: id ?? this.id,
-      jid: jid ?? this.jid,
+      jids: jids ?? this.jids,
       body: body ?? this.body,
       fileMetadataID: fileMetadataID ?? this.fileMetadataID,
     );
@@ -2064,8 +2067,9 @@ class DraftsCompanion extends UpdateCompanion<Draft> {
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
-    if (jid.present) {
-      map['jid'] = Variable<String>(jid.value);
+    if (jids.present) {
+      map['jids'] =
+          Variable<String>($DraftsTable.$converterjids.toSql(jids.value));
     }
     if (body.present) {
       map['body'] = Variable<String>(body.value);
@@ -2080,7 +2084,7 @@ class DraftsCompanion extends UpdateCompanion<Draft> {
   String toString() {
     return (StringBuffer('DraftsCompanion(')
           ..write('id: $id, ')
-          ..write('jid: $jid, ')
+          ..write('jids: $jids, ')
           ..write('body: $body, ')
           ..write('fileMetadataID: $fileMetadataID')
           ..write(')'))
@@ -2380,6 +2384,194 @@ class OmemoDevicesCompanion extends UpdateCompanion<OmemoDevice> {
           ..write('trust: $trust, ')
           ..write('enabled: $enabled, ')
           ..write('onetimePreKeys: $onetimePreKeys, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OmemoDeviceListsTable extends OmemoDeviceLists
+    with TableInfo<$OmemoDeviceListsTable, OmemoDeviceList> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OmemoDeviceListsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  @override
+  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
+      'jid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _devicesMeta =
+      const VerificationMeta('devices');
+  @override
+  late final GeneratedColumnWithTypeConverter<List<int>, String> devices =
+      GeneratedColumn<String>('devices', aliasedName, false,
+              type: DriftSqlType.string, requiredDuringInsert: true)
+          .withConverter<List<int>>($OmemoDeviceListsTable.$converterdevices);
+  @override
+  List<GeneratedColumn> get $columns => [jid, devices];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'omemo_device_lists';
+  @override
+  VerificationContext validateIntegrity(Insertable<OmemoDeviceList> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('jid')) {
+      context.handle(
+          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
+    } else if (isInserting) {
+      context.missing(_jidMeta);
+    }
+    context.handle(_devicesMeta, const VerificationResult.success());
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {jid};
+  @override
+  OmemoDeviceList map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OmemoDeviceList(
+      jid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      devices: $OmemoDeviceListsTable.$converterdevices.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}devices'])!),
+    );
+  }
+
+  @override
+  $OmemoDeviceListsTable createAlias(String alias) {
+    return $OmemoDeviceListsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<List<int>, String> $converterdevices = ListConverter();
+}
+
+class OmemoDeviceList extends DataClass implements Insertable<OmemoDeviceList> {
+  final String jid;
+  final List<int> devices;
+  const OmemoDeviceList({required this.jid, required this.devices});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['jid'] = Variable<String>(jid);
+    {
+      map['devices'] = Variable<String>(
+          $OmemoDeviceListsTable.$converterdevices.toSql(devices));
+    }
+    return map;
+  }
+
+  OmemoDeviceListsCompanion toCompanion(bool nullToAbsent) {
+    return OmemoDeviceListsCompanion(
+      jid: Value(jid),
+      devices: Value(devices),
+    );
+  }
+
+  factory OmemoDeviceList.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OmemoDeviceList(
+      jid: serializer.fromJson<String>(json['jid']),
+      devices: serializer.fromJson<List<int>>(json['devices']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'jid': serializer.toJson<String>(jid),
+      'devices': serializer.toJson<List<int>>(devices),
+    };
+  }
+
+  OmemoDeviceList copyWith({String? jid, List<int>? devices}) =>
+      OmemoDeviceList(
+        jid: jid ?? this.jid,
+        devices: devices ?? this.devices,
+      );
+  @override
+  String toString() {
+    return (StringBuffer('OmemoDeviceList(')
+          ..write('jid: $jid, ')
+          ..write('devices: $devices')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(jid, devices);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OmemoDeviceList &&
+          other.jid == this.jid &&
+          other.devices == this.devices);
+}
+
+class OmemoDeviceListsCompanion extends UpdateCompanion<OmemoDeviceList> {
+  final Value<String> jid;
+  final Value<List<int>> devices;
+  final Value<int> rowid;
+  const OmemoDeviceListsCompanion({
+    this.jid = const Value.absent(),
+    this.devices = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OmemoDeviceListsCompanion.insert({
+    required String jid,
+    required List<int> devices,
+    this.rowid = const Value.absent(),
+  })  : jid = Value(jid),
+        devices = Value(devices);
+  static Insertable<OmemoDeviceList> custom({
+    Expression<String>? jid,
+    Expression<String>? devices,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (jid != null) 'jid': jid,
+      if (devices != null) 'devices': devices,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OmemoDeviceListsCompanion copyWith(
+      {Value<String>? jid, Value<List<int>>? devices, Value<int>? rowid}) {
+    return OmemoDeviceListsCompanion(
+      jid: jid ?? this.jid,
+      devices: devices ?? this.devices,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (jid.present) {
+      map['jid'] = Variable<String>(jid.value);
+    }
+    if (devices.present) {
+      map['devices'] = Variable<String>(
+          $OmemoDeviceListsTable.$converterdevices.toSql(devices.value));
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OmemoDeviceListsCompanion(')
+          ..write('jid: $jid, ')
+          ..write('devices: $devices, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3497,6 +3689,496 @@ class ContactsCompanion extends UpdateCompanion<Contact> {
   }
 }
 
+class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RosterTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  @override
+  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
+      'jid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _presenceMeta =
+      const VerificationMeta('presence');
+  @override
+  late final GeneratedColumnWithTypeConverter<Presence, String> presence =
+      GeneratedColumn<String>('presence', aliasedName, false,
+              type: DriftSqlType.string, requiredDuringInsert: true)
+          .withConverter<Presence>($RosterTable.$converterpresence);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _avatarPathMeta =
+      const VerificationMeta('avatarPath');
+  @override
+  late final GeneratedColumn<String> avatarPath = GeneratedColumn<String>(
+      'avatar_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _avatarHashMeta =
+      const VerificationMeta('avatarHash');
+  @override
+  late final GeneratedColumn<String> avatarHash = GeneratedColumn<String>(
+      'avatar_hash', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _subscriptionMeta =
+      const VerificationMeta('subscription');
+  @override
+  late final GeneratedColumnWithTypeConverter<Subscription, String>
+      subscription = GeneratedColumn<String>('subscription', aliasedName, false,
+              type: DriftSqlType.string, requiredDuringInsert: true)
+          .withConverter<Subscription>($RosterTable.$convertersubscription);
+  static const VerificationMeta _askMeta = const VerificationMeta('ask');
+  @override
+  late final GeneratedColumnWithTypeConverter<Ask?, String> ask =
+      GeneratedColumn<String>('ask', aliasedName, true,
+              type: DriftSqlType.string, requiredDuringInsert: false)
+          .withConverter<Ask?>($RosterTable.$converteraskn);
+  static const VerificationMeta _contactIDMeta =
+      const VerificationMeta('contactID');
+  @override
+  late final GeneratedColumn<String> contactID = GeneratedColumn<String>(
+      'contact_i_d', aliasedName, true,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES contacts (native_i_d)'));
+  static const VerificationMeta _contactAvatarPathMeta =
+      const VerificationMeta('contactAvatarPath');
+  @override
+  late final GeneratedColumn<String> contactAvatarPath =
+      GeneratedColumn<String>('contact_avatar_path', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _contactDisplayNameMeta =
+      const VerificationMeta('contactDisplayName');
+  @override
+  late final GeneratedColumn<String> contactDisplayName =
+      GeneratedColumn<String>('contact_display_name', aliasedName, true,
+          type: DriftSqlType.string, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        jid,
+        title,
+        presence,
+        status,
+        avatarPath,
+        avatarHash,
+        subscription,
+        ask,
+        contactID,
+        contactAvatarPath,
+        contactDisplayName
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'roster';
+  @override
+  VerificationContext validateIntegrity(Insertable<RosterItem> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('jid')) {
+      context.handle(
+          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
+    } else if (isInserting) {
+      context.missing(_jidMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    context.handle(_presenceMeta, const VerificationResult.success());
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('avatar_path')) {
+      context.handle(
+          _avatarPathMeta,
+          avatarPath.isAcceptableOrUnknown(
+              data['avatar_path']!, _avatarPathMeta));
+    }
+    if (data.containsKey('avatar_hash')) {
+      context.handle(
+          _avatarHashMeta,
+          avatarHash.isAcceptableOrUnknown(
+              data['avatar_hash']!, _avatarHashMeta));
+    }
+    context.handle(_subscriptionMeta, const VerificationResult.success());
+    context.handle(_askMeta, const VerificationResult.success());
+    if (data.containsKey('contact_i_d')) {
+      context.handle(
+          _contactIDMeta,
+          contactID.isAcceptableOrUnknown(
+              data['contact_i_d']!, _contactIDMeta));
+    }
+    if (data.containsKey('contact_avatar_path')) {
+      context.handle(
+          _contactAvatarPathMeta,
+          contactAvatarPath.isAcceptableOrUnknown(
+              data['contact_avatar_path']!, _contactAvatarPathMeta));
+    }
+    if (data.containsKey('contact_display_name')) {
+      context.handle(
+          _contactDisplayNameMeta,
+          contactDisplayName.isAcceptableOrUnknown(
+              data['contact_display_name']!, _contactDisplayNameMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {jid};
+  @override
+  RosterItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RosterItem.fromDb(
+      jid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
+      presence: $RosterTable.$converterpresence.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}presence'])!),
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status']),
+      avatarPath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}avatar_path']),
+      avatarHash: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}avatar_hash']),
+      subscription: $RosterTable.$convertersubscription.fromSql(attachedDatabase
+          .typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}subscription'])!),
+      ask: $RosterTable.$converteraskn.fromSql(attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}ask'])),
+      contactID: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}contact_i_d']),
+      contactAvatarPath: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}contact_avatar_path']),
+      contactDisplayName: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}contact_display_name']),
+    );
+  }
+
+  @override
+  $RosterTable createAlias(String alias) {
+    return $RosterTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<Presence, String, String> $converterpresence =
+      const EnumNameConverter<Presence>(Presence.values);
+  static JsonTypeConverter2<Subscription, String, String>
+      $convertersubscription =
+      const EnumNameConverter<Subscription>(Subscription.values);
+  static JsonTypeConverter2<Ask, String, String> $converterask =
+      const EnumNameConverter<Ask>(Ask.values);
+  static JsonTypeConverter2<Ask?, String?, String?> $converteraskn =
+      JsonTypeConverter2.asNullable($converterask);
+}
+
+class RosterCompanion extends UpdateCompanion<RosterItem> {
+  final Value<String> jid;
+  final Value<String> title;
+  final Value<Presence> presence;
+  final Value<String?> status;
+  final Value<String?> avatarPath;
+  final Value<String?> avatarHash;
+  final Value<Subscription> subscription;
+  final Value<Ask?> ask;
+  final Value<String?> contactID;
+  final Value<String?> contactAvatarPath;
+  final Value<String?> contactDisplayName;
+  final Value<int> rowid;
+  const RosterCompanion({
+    this.jid = const Value.absent(),
+    this.title = const Value.absent(),
+    this.presence = const Value.absent(),
+    this.status = const Value.absent(),
+    this.avatarPath = const Value.absent(),
+    this.avatarHash = const Value.absent(),
+    this.subscription = const Value.absent(),
+    this.ask = const Value.absent(),
+    this.contactID = const Value.absent(),
+    this.contactAvatarPath = const Value.absent(),
+    this.contactDisplayName = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RosterCompanion.insert({
+    required String jid,
+    required String title,
+    required Presence presence,
+    this.status = const Value.absent(),
+    this.avatarPath = const Value.absent(),
+    this.avatarHash = const Value.absent(),
+    required Subscription subscription,
+    this.ask = const Value.absent(),
+    this.contactID = const Value.absent(),
+    this.contactAvatarPath = const Value.absent(),
+    this.contactDisplayName = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : jid = Value(jid),
+        title = Value(title),
+        presence = Value(presence),
+        subscription = Value(subscription);
+  static Insertable<RosterItem> custom({
+    Expression<String>? jid,
+    Expression<String>? title,
+    Expression<String>? presence,
+    Expression<String>? status,
+    Expression<String>? avatarPath,
+    Expression<String>? avatarHash,
+    Expression<String>? subscription,
+    Expression<String>? ask,
+    Expression<String>? contactID,
+    Expression<String>? contactAvatarPath,
+    Expression<String>? contactDisplayName,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (jid != null) 'jid': jid,
+      if (title != null) 'title': title,
+      if (presence != null) 'presence': presence,
+      if (status != null) 'status': status,
+      if (avatarPath != null) 'avatar_path': avatarPath,
+      if (avatarHash != null) 'avatar_hash': avatarHash,
+      if (subscription != null) 'subscription': subscription,
+      if (ask != null) 'ask': ask,
+      if (contactID != null) 'contact_i_d': contactID,
+      if (contactAvatarPath != null) 'contact_avatar_path': contactAvatarPath,
+      if (contactDisplayName != null)
+        'contact_display_name': contactDisplayName,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RosterCompanion copyWith(
+      {Value<String>? jid,
+      Value<String>? title,
+      Value<Presence>? presence,
+      Value<String?>? status,
+      Value<String?>? avatarPath,
+      Value<String?>? avatarHash,
+      Value<Subscription>? subscription,
+      Value<Ask?>? ask,
+      Value<String?>? contactID,
+      Value<String?>? contactAvatarPath,
+      Value<String?>? contactDisplayName,
+      Value<int>? rowid}) {
+    return RosterCompanion(
+      jid: jid ?? this.jid,
+      title: title ?? this.title,
+      presence: presence ?? this.presence,
+      status: status ?? this.status,
+      avatarPath: avatarPath ?? this.avatarPath,
+      avatarHash: avatarHash ?? this.avatarHash,
+      subscription: subscription ?? this.subscription,
+      ask: ask ?? this.ask,
+      contactID: contactID ?? this.contactID,
+      contactAvatarPath: contactAvatarPath ?? this.contactAvatarPath,
+      contactDisplayName: contactDisplayName ?? this.contactDisplayName,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (jid.present) {
+      map['jid'] = Variable<String>(jid.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (presence.present) {
+      map['presence'] = Variable<String>(
+          $RosterTable.$converterpresence.toSql(presence.value));
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (avatarPath.present) {
+      map['avatar_path'] = Variable<String>(avatarPath.value);
+    }
+    if (avatarHash.present) {
+      map['avatar_hash'] = Variable<String>(avatarHash.value);
+    }
+    if (subscription.present) {
+      map['subscription'] = Variable<String>(
+          $RosterTable.$convertersubscription.toSql(subscription.value));
+    }
+    if (ask.present) {
+      map['ask'] =
+          Variable<String>($RosterTable.$converteraskn.toSql(ask.value));
+    }
+    if (contactID.present) {
+      map['contact_i_d'] = Variable<String>(contactID.value);
+    }
+    if (contactAvatarPath.present) {
+      map['contact_avatar_path'] = Variable<String>(contactAvatarPath.value);
+    }
+    if (contactDisplayName.present) {
+      map['contact_display_name'] = Variable<String>(contactDisplayName.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RosterCompanion(')
+          ..write('jid: $jid, ')
+          ..write('title: $title, ')
+          ..write('presence: $presence, ')
+          ..write('status: $status, ')
+          ..write('avatarPath: $avatarPath, ')
+          ..write('avatarHash: $avatarHash, ')
+          ..write('subscription: $subscription, ')
+          ..write('ask: $ask, ')
+          ..write('contactID: $contactID, ')
+          ..write('contactAvatarPath: $contactAvatarPath, ')
+          ..write('contactDisplayName: $contactDisplayName, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $InvitesTable extends Invites with TableInfo<$InvitesTable, Invite> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $InvitesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
+  @override
+  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
+      'jid', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [jid, title];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'invites';
+  @override
+  VerificationContext validateIntegrity(Insertable<Invite> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('jid')) {
+      context.handle(
+          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
+    } else if (isInserting) {
+      context.missing(_jidMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {jid};
+  @override
+  Invite map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Invite(
+      jid: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
+    );
+  }
+
+  @override
+  $InvitesTable createAlias(String alias) {
+    return $InvitesTable(attachedDatabase, alias);
+  }
+}
+
+class InvitesCompanion extends UpdateCompanion<Invite> {
+  final Value<String> jid;
+  final Value<String> title;
+  final Value<int> rowid;
+  const InvitesCompanion({
+    this.jid = const Value.absent(),
+    this.title = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  InvitesCompanion.insert({
+    required String jid,
+    required String title,
+    this.rowid = const Value.absent(),
+  })  : jid = Value(jid),
+        title = Value(title);
+  static Insertable<Invite> custom({
+    Expression<String>? jid,
+    Expression<String>? title,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (jid != null) 'jid': jid,
+      if (title != null) 'title': title,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  InvitesCompanion copyWith(
+      {Value<String>? jid, Value<String>? title, Value<int>? rowid}) {
+    return InvitesCompanion(
+      jid: jid ?? this.jid,
+      title: title ?? this.title,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (jid.present) {
+      map['jid'] = Variable<String>(jid.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('InvitesCompanion(')
+          ..write('jid: $jid, ')
+          ..write('title: $title, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ChatsTable extends Chats with TableInfo<$ChatsTable, Chat> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -4066,499 +4748,6 @@ class ChatsCompanion extends UpdateCompanion<Chat> {
   }
 }
 
-class $RosterTable extends Roster with TableInfo<$RosterTable, RosterItem> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $RosterTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
-  @override
-  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
-      'jid', aliasedName, false,
-      type: DriftSqlType.string,
-      requiredDuringInsert: true,
-      defaultConstraints:
-          GeneratedColumn.constraintIsAlways('REFERENCES chats (jid)'));
-  static const VerificationMeta _titleMeta = const VerificationMeta('title');
-  @override
-  late final GeneratedColumn<String> title = GeneratedColumn<String>(
-      'title', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _presenceMeta =
-      const VerificationMeta('presence');
-  @override
-  late final GeneratedColumnWithTypeConverter<Presence, String> presence =
-      GeneratedColumn<String>('presence', aliasedName, false,
-              type: DriftSqlType.string, requiredDuringInsert: true)
-          .withConverter<Presence>($RosterTable.$converterpresence);
-  static const VerificationMeta _statusMeta = const VerificationMeta('status');
-  @override
-  late final GeneratedColumn<String> status = GeneratedColumn<String>(
-      'status', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _avatarPathMeta =
-      const VerificationMeta('avatarPath');
-  @override
-  late final GeneratedColumn<String> avatarPath = GeneratedColumn<String>(
-      'avatar_path', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _avatarHashMeta =
-      const VerificationMeta('avatarHash');
-  @override
-  late final GeneratedColumn<String> avatarHash = GeneratedColumn<String>(
-      'avatar_hash', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _subscriptionMeta =
-      const VerificationMeta('subscription');
-  @override
-  late final GeneratedColumnWithTypeConverter<Subscription, String>
-      subscription = GeneratedColumn<String>('subscription', aliasedName, false,
-              type: DriftSqlType.string, requiredDuringInsert: true)
-          .withConverter<Subscription>($RosterTable.$convertersubscription);
-  static const VerificationMeta _askMeta = const VerificationMeta('ask');
-  @override
-  late final GeneratedColumnWithTypeConverter<Ask?, String> ask =
-      GeneratedColumn<String>('ask', aliasedName, true,
-              type: DriftSqlType.string, requiredDuringInsert: false)
-          .withConverter<Ask?>($RosterTable.$converteraskn);
-  static const VerificationMeta _contactIDMeta =
-      const VerificationMeta('contactID');
-  @override
-  late final GeneratedColumn<String> contactID = GeneratedColumn<String>(
-      'contact_i_d', aliasedName, true,
-      type: DriftSqlType.string,
-      requiredDuringInsert: false,
-      defaultConstraints: GeneratedColumn.constraintIsAlways(
-          'REFERENCES contacts (native_i_d)'));
-  static const VerificationMeta _contactAvatarPathMeta =
-      const VerificationMeta('contactAvatarPath');
-  @override
-  late final GeneratedColumn<String> contactAvatarPath =
-      GeneratedColumn<String>('contact_avatar_path', aliasedName, true,
-          type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _contactDisplayNameMeta =
-      const VerificationMeta('contactDisplayName');
-  @override
-  late final GeneratedColumn<String> contactDisplayName =
-      GeneratedColumn<String>('contact_display_name', aliasedName, true,
-          type: DriftSqlType.string, requiredDuringInsert: false);
-  @override
-  List<GeneratedColumn> get $columns => [
-        jid,
-        title,
-        presence,
-        status,
-        avatarPath,
-        avatarHash,
-        subscription,
-        ask,
-        contactID,
-        contactAvatarPath,
-        contactDisplayName
-      ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'roster';
-  @override
-  VerificationContext validateIntegrity(Insertable<RosterItem> instance,
-      {bool isInserting = false}) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('jid')) {
-      context.handle(
-          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
-    } else if (isInserting) {
-      context.missing(_jidMeta);
-    }
-    if (data.containsKey('title')) {
-      context.handle(
-          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
-    } else if (isInserting) {
-      context.missing(_titleMeta);
-    }
-    context.handle(_presenceMeta, const VerificationResult.success());
-    if (data.containsKey('status')) {
-      context.handle(_statusMeta,
-          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
-    }
-    if (data.containsKey('avatar_path')) {
-      context.handle(
-          _avatarPathMeta,
-          avatarPath.isAcceptableOrUnknown(
-              data['avatar_path']!, _avatarPathMeta));
-    }
-    if (data.containsKey('avatar_hash')) {
-      context.handle(
-          _avatarHashMeta,
-          avatarHash.isAcceptableOrUnknown(
-              data['avatar_hash']!, _avatarHashMeta));
-    }
-    context.handle(_subscriptionMeta, const VerificationResult.success());
-    context.handle(_askMeta, const VerificationResult.success());
-    if (data.containsKey('contact_i_d')) {
-      context.handle(
-          _contactIDMeta,
-          contactID.isAcceptableOrUnknown(
-              data['contact_i_d']!, _contactIDMeta));
-    }
-    if (data.containsKey('contact_avatar_path')) {
-      context.handle(
-          _contactAvatarPathMeta,
-          contactAvatarPath.isAcceptableOrUnknown(
-              data['contact_avatar_path']!, _contactAvatarPathMeta));
-    }
-    if (data.containsKey('contact_display_name')) {
-      context.handle(
-          _contactDisplayNameMeta,
-          contactDisplayName.isAcceptableOrUnknown(
-              data['contact_display_name']!, _contactDisplayNameMeta));
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {jid};
-  @override
-  RosterItem map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return RosterItem.fromDb(
-      jid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
-      title: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
-      presence: $RosterTable.$converterpresence.fromSql(attachedDatabase
-          .typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}presence'])!),
-      status: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}status']),
-      avatarPath: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}avatar_path']),
-      avatarHash: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}avatar_hash']),
-      subscription: $RosterTable.$convertersubscription.fromSql(attachedDatabase
-          .typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}subscription'])!),
-      ask: $RosterTable.$converteraskn.fromSql(attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}ask'])),
-      contactID: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}contact_i_d']),
-      contactAvatarPath: attachedDatabase.typeMapping.read(
-          DriftSqlType.string, data['${effectivePrefix}contact_avatar_path']),
-      contactDisplayName: attachedDatabase.typeMapping.read(
-          DriftSqlType.string, data['${effectivePrefix}contact_display_name']),
-    );
-  }
-
-  @override
-  $RosterTable createAlias(String alias) {
-    return $RosterTable(attachedDatabase, alias);
-  }
-
-  static JsonTypeConverter2<Presence, String, String> $converterpresence =
-      const EnumNameConverter<Presence>(Presence.values);
-  static JsonTypeConverter2<Subscription, String, String>
-      $convertersubscription =
-      const EnumNameConverter<Subscription>(Subscription.values);
-  static JsonTypeConverter2<Ask, String, String> $converterask =
-      const EnumNameConverter<Ask>(Ask.values);
-  static JsonTypeConverter2<Ask?, String?, String?> $converteraskn =
-      JsonTypeConverter2.asNullable($converterask);
-}
-
-class RosterCompanion extends UpdateCompanion<RosterItem> {
-  final Value<String> jid;
-  final Value<String> title;
-  final Value<Presence> presence;
-  final Value<String?> status;
-  final Value<String?> avatarPath;
-  final Value<String?> avatarHash;
-  final Value<Subscription> subscription;
-  final Value<Ask?> ask;
-  final Value<String?> contactID;
-  final Value<String?> contactAvatarPath;
-  final Value<String?> contactDisplayName;
-  final Value<int> rowid;
-  const RosterCompanion({
-    this.jid = const Value.absent(),
-    this.title = const Value.absent(),
-    this.presence = const Value.absent(),
-    this.status = const Value.absent(),
-    this.avatarPath = const Value.absent(),
-    this.avatarHash = const Value.absent(),
-    this.subscription = const Value.absent(),
-    this.ask = const Value.absent(),
-    this.contactID = const Value.absent(),
-    this.contactAvatarPath = const Value.absent(),
-    this.contactDisplayName = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  RosterCompanion.insert({
-    required String jid,
-    required String title,
-    required Presence presence,
-    this.status = const Value.absent(),
-    this.avatarPath = const Value.absent(),
-    this.avatarHash = const Value.absent(),
-    required Subscription subscription,
-    this.ask = const Value.absent(),
-    this.contactID = const Value.absent(),
-    this.contactAvatarPath = const Value.absent(),
-    this.contactDisplayName = const Value.absent(),
-    this.rowid = const Value.absent(),
-  })  : jid = Value(jid),
-        title = Value(title),
-        presence = Value(presence),
-        subscription = Value(subscription);
-  static Insertable<RosterItem> custom({
-    Expression<String>? jid,
-    Expression<String>? title,
-    Expression<String>? presence,
-    Expression<String>? status,
-    Expression<String>? avatarPath,
-    Expression<String>? avatarHash,
-    Expression<String>? subscription,
-    Expression<String>? ask,
-    Expression<String>? contactID,
-    Expression<String>? contactAvatarPath,
-    Expression<String>? contactDisplayName,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (jid != null) 'jid': jid,
-      if (title != null) 'title': title,
-      if (presence != null) 'presence': presence,
-      if (status != null) 'status': status,
-      if (avatarPath != null) 'avatar_path': avatarPath,
-      if (avatarHash != null) 'avatar_hash': avatarHash,
-      if (subscription != null) 'subscription': subscription,
-      if (ask != null) 'ask': ask,
-      if (contactID != null) 'contact_i_d': contactID,
-      if (contactAvatarPath != null) 'contact_avatar_path': contactAvatarPath,
-      if (contactDisplayName != null)
-        'contact_display_name': contactDisplayName,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  RosterCompanion copyWith(
-      {Value<String>? jid,
-      Value<String>? title,
-      Value<Presence>? presence,
-      Value<String?>? status,
-      Value<String?>? avatarPath,
-      Value<String?>? avatarHash,
-      Value<Subscription>? subscription,
-      Value<Ask?>? ask,
-      Value<String?>? contactID,
-      Value<String?>? contactAvatarPath,
-      Value<String?>? contactDisplayName,
-      Value<int>? rowid}) {
-    return RosterCompanion(
-      jid: jid ?? this.jid,
-      title: title ?? this.title,
-      presence: presence ?? this.presence,
-      status: status ?? this.status,
-      avatarPath: avatarPath ?? this.avatarPath,
-      avatarHash: avatarHash ?? this.avatarHash,
-      subscription: subscription ?? this.subscription,
-      ask: ask ?? this.ask,
-      contactID: contactID ?? this.contactID,
-      contactAvatarPath: contactAvatarPath ?? this.contactAvatarPath,
-      contactDisplayName: contactDisplayName ?? this.contactDisplayName,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (jid.present) {
-      map['jid'] = Variable<String>(jid.value);
-    }
-    if (title.present) {
-      map['title'] = Variable<String>(title.value);
-    }
-    if (presence.present) {
-      map['presence'] = Variable<String>(
-          $RosterTable.$converterpresence.toSql(presence.value));
-    }
-    if (status.present) {
-      map['status'] = Variable<String>(status.value);
-    }
-    if (avatarPath.present) {
-      map['avatar_path'] = Variable<String>(avatarPath.value);
-    }
-    if (avatarHash.present) {
-      map['avatar_hash'] = Variable<String>(avatarHash.value);
-    }
-    if (subscription.present) {
-      map['subscription'] = Variable<String>(
-          $RosterTable.$convertersubscription.toSql(subscription.value));
-    }
-    if (ask.present) {
-      map['ask'] =
-          Variable<String>($RosterTable.$converteraskn.toSql(ask.value));
-    }
-    if (contactID.present) {
-      map['contact_i_d'] = Variable<String>(contactID.value);
-    }
-    if (contactAvatarPath.present) {
-      map['contact_avatar_path'] = Variable<String>(contactAvatarPath.value);
-    }
-    if (contactDisplayName.present) {
-      map['contact_display_name'] = Variable<String>(contactDisplayName.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('RosterCompanion(')
-          ..write('jid: $jid, ')
-          ..write('title: $title, ')
-          ..write('presence: $presence, ')
-          ..write('status: $status, ')
-          ..write('avatarPath: $avatarPath, ')
-          ..write('avatarHash: $avatarHash, ')
-          ..write('subscription: $subscription, ')
-          ..write('ask: $ask, ')
-          ..write('contactID: $contactID, ')
-          ..write('contactAvatarPath: $contactAvatarPath, ')
-          ..write('contactDisplayName: $contactDisplayName, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $InvitesTable extends Invites with TableInfo<$InvitesTable, Invite> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $InvitesTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _jidMeta = const VerificationMeta('jid');
-  @override
-  late final GeneratedColumn<String> jid = GeneratedColumn<String>(
-      'jid', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
-  static const VerificationMeta _titleMeta = const VerificationMeta('title');
-  @override
-  late final GeneratedColumn<String> title = GeneratedColumn<String>(
-      'title', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
-  @override
-  List<GeneratedColumn> get $columns => [jid, title];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'invites';
-  @override
-  VerificationContext validateIntegrity(Insertable<Invite> instance,
-      {bool isInserting = false}) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('jid')) {
-      context.handle(
-          _jidMeta, jid.isAcceptableOrUnknown(data['jid']!, _jidMeta));
-    } else if (isInserting) {
-      context.missing(_jidMeta);
-    }
-    if (data.containsKey('title')) {
-      context.handle(
-          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
-    } else if (isInserting) {
-      context.missing(_titleMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {jid};
-  @override
-  Invite map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Invite(
-      jid: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}jid'])!,
-      title: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}title'])!,
-    );
-  }
-
-  @override
-  $InvitesTable createAlias(String alias) {
-    return $InvitesTable(attachedDatabase, alias);
-  }
-}
-
-class InvitesCompanion extends UpdateCompanion<Invite> {
-  final Value<String> jid;
-  final Value<String> title;
-  final Value<int> rowid;
-  const InvitesCompanion({
-    this.jid = const Value.absent(),
-    this.title = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  InvitesCompanion.insert({
-    required String jid,
-    required String title,
-    this.rowid = const Value.absent(),
-  })  : jid = Value(jid),
-        title = Value(title);
-  static Insertable<Invite> custom({
-    Expression<String>? jid,
-    Expression<String>? title,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (jid != null) 'jid': jid,
-      if (title != null) 'title': title,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  InvitesCompanion copyWith(
-      {Value<String>? jid, Value<String>? title, Value<int>? rowid}) {
-    return InvitesCompanion(
-      jid: jid ?? this.jid,
-      title: title ?? this.title,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (jid.present) {
-      map['jid'] = Variable<String>(jid.value);
-    }
-    if (title.present) {
-      map['title'] = Variable<String>(title.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('InvitesCompanion(')
-          ..write('jid: $jid, ')
-          ..write('title: $title, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $BlocklistTable extends Blocklist
     with TableInfo<$BlocklistTable, BlocklistData> {
   @override
@@ -4934,13 +5123,15 @@ abstract class _$XmppDrift extends GeneratedDatabase {
   late final $MessagesTable messages = $MessagesTable(this);
   late final $DraftsTable drafts = $DraftsTable(this);
   late final $OmemoDevicesTable omemoDevices = $OmemoDevicesTable(this);
+  late final $OmemoDeviceListsTable omemoDeviceLists =
+      $OmemoDeviceListsTable(this);
   late final $OmemoRatchetsTable omemoRatchets = $OmemoRatchetsTable(this);
   late final $ReactionsTable reactions = $ReactionsTable(this);
   late final $NotificationsTable notifications = $NotificationsTable(this);
   late final $ContactsTable contacts = $ContactsTable(this);
-  late final $ChatsTable chats = $ChatsTable(this);
   late final $RosterTable roster = $RosterTable(this);
   late final $InvitesTable invites = $InvitesTable(this);
+  late final $ChatsTable chats = $ChatsTable(this);
   late final $BlocklistTable blocklist = $BlocklistTable(this);
   late final $StickersTable stickers = $StickersTable(this);
   late final MessagesAccessor messagesAccessor =
@@ -4948,6 +5139,8 @@ abstract class _$XmppDrift extends GeneratedDatabase {
   late final DraftsAccessor draftsAccessor = DraftsAccessor(this as XmppDrift);
   late final OmemoDevicesAccessor omemoDevicesAccessor =
       OmemoDevicesAccessor(this as XmppDrift);
+  late final OmemoDeviceListsAccessor omemoDeviceListsAccessor =
+      OmemoDeviceListsAccessor(this as XmppDrift);
   late final OmemoRatchetsAccessor omemoRatchetsAccessor =
       OmemoRatchetsAccessor(this as XmppDrift);
   late final FileMetadataAccessor fileMetadataAccessor =
@@ -4968,13 +5161,14 @@ abstract class _$XmppDrift extends GeneratedDatabase {
         messages,
         drafts,
         omemoDevices,
+        omemoDeviceLists,
         omemoRatchets,
         reactions,
         notifications,
         contacts,
-        chats,
         roster,
         invites,
+        chats,
         blocklist,
         stickers
       ];
@@ -5310,13 +5504,13 @@ class $$FileMetadataTableOrderingComposer
 
 typedef $$DraftsTableInsertCompanionBuilder = DraftsCompanion Function({
   Value<int> id,
-  required String jid,
+  required List<String> jids,
   Value<String?> body,
   Value<String?> fileMetadataID,
 });
 typedef $$DraftsTableUpdateCompanionBuilder = DraftsCompanion Function({
   Value<int> id,
-  Value<String> jid,
+  Value<List<String>> jids,
   Value<String?> body,
   Value<String?> fileMetadataID,
 });
@@ -5341,25 +5535,25 @@ class $$DraftsTableTableManager extends RootTableManager<
           getChildManagerBuilder: (p) => $$DraftsTableProcessedTableManager(p),
           getUpdateCompanionBuilder: ({
             Value<int> id = const Value.absent(),
-            Value<String> jid = const Value.absent(),
+            Value<List<String>> jids = const Value.absent(),
             Value<String?> body = const Value.absent(),
             Value<String?> fileMetadataID = const Value.absent(),
           }) =>
               DraftsCompanion(
             id: id,
-            jid: jid,
+            jids: jids,
             body: body,
             fileMetadataID: fileMetadataID,
           ),
           getInsertCompanionBuilder: ({
             Value<int> id = const Value.absent(),
-            required String jid,
+            required List<String> jids,
             Value<String?> body = const Value.absent(),
             Value<String?> fileMetadataID = const Value.absent(),
           }) =>
               DraftsCompanion.insert(
             id: id,
-            jid: jid,
+            jids: jids,
             body: body,
             fileMetadataID: fileMetadataID,
           ),
@@ -5386,10 +5580,12 @@ class $$DraftsTableFilterComposer
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
-  ColumnFilters<String> get jid => $state.composableBuilder(
-      column: $state.table.jid,
-      builder: (column, joinBuilders) =>
-          ColumnFilters(column, joinBuilders: joinBuilders));
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String> get jids =>
+      $state.composableBuilder(
+          column: $state.table.jids,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
 
   ColumnFilters<String> get body => $state.composableBuilder(
       column: $state.table.body,
@@ -5417,8 +5613,8 @@ class $$DraftsTableOrderingComposer
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 
-  ColumnOrderings<String> get jid => $state.composableBuilder(
-      column: $state.table.jid,
+  ColumnOrderings<String> get jids => $state.composableBuilder(
+      column: $state.table.jids,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 
@@ -5438,6 +5634,105 @@ class $$DraftsTableOrderingComposer
                 $state.db.fileMetadata, joinBuilder, parentComposers)));
     return composer;
   }
+}
+
+typedef $$OmemoDeviceListsTableInsertCompanionBuilder
+    = OmemoDeviceListsCompanion Function({
+  required String jid,
+  required List<int> devices,
+  Value<int> rowid,
+});
+typedef $$OmemoDeviceListsTableUpdateCompanionBuilder
+    = OmemoDeviceListsCompanion Function({
+  Value<String> jid,
+  Value<List<int>> devices,
+  Value<int> rowid,
+});
+
+class $$OmemoDeviceListsTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $OmemoDeviceListsTable,
+    OmemoDeviceList,
+    $$OmemoDeviceListsTableFilterComposer,
+    $$OmemoDeviceListsTableOrderingComposer,
+    $$OmemoDeviceListsTableProcessedTableManager,
+    $$OmemoDeviceListsTableInsertCompanionBuilder,
+    $$OmemoDeviceListsTableUpdateCompanionBuilder> {
+  $$OmemoDeviceListsTableTableManager(
+      _$XmppDrift db, $OmemoDeviceListsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$OmemoDeviceListsTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$OmemoDeviceListsTableOrderingComposer(ComposerState(db, table)),
+          getChildManagerBuilder: (p) =>
+              $$OmemoDeviceListsTableProcessedTableManager(p),
+          getUpdateCompanionBuilder: ({
+            Value<String> jid = const Value.absent(),
+            Value<List<int>> devices = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              OmemoDeviceListsCompanion(
+            jid: jid,
+            devices: devices,
+            rowid: rowid,
+          ),
+          getInsertCompanionBuilder: ({
+            required String jid,
+            required List<int> devices,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              OmemoDeviceListsCompanion.insert(
+            jid: jid,
+            devices: devices,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$OmemoDeviceListsTableProcessedTableManager
+    extends ProcessedTableManager<
+        _$XmppDrift,
+        $OmemoDeviceListsTable,
+        OmemoDeviceList,
+        $$OmemoDeviceListsTableFilterComposer,
+        $$OmemoDeviceListsTableOrderingComposer,
+        $$OmemoDeviceListsTableProcessedTableManager,
+        $$OmemoDeviceListsTableInsertCompanionBuilder,
+        $$OmemoDeviceListsTableUpdateCompanionBuilder> {
+  $$OmemoDeviceListsTableProcessedTableManager(super.$state);
+}
+
+class $$OmemoDeviceListsTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $OmemoDeviceListsTable> {
+  $$OmemoDeviceListsTableFilterComposer(super.$state);
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<List<int>, List<int>, String> get devices =>
+      $state.composableBuilder(
+          column: $state.table.devices,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+}
+
+class $$OmemoDeviceListsTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $OmemoDeviceListsTable> {
+  $$OmemoDeviceListsTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get devices => $state.composableBuilder(
+      column: $state.table.devices,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
 }
 
 typedef $$ContactsTableInsertCompanionBuilder = ContactsCompanion Function({
@@ -5617,6 +5912,8 @@ class _$XmppDriftManager {
       $$FileMetadataTableTableManager(_db, _db.fileMetadata);
   $$DraftsTableTableManager get drafts =>
       $$DraftsTableTableManager(_db, _db.drafts);
+  $$OmemoDeviceListsTableTableManager get omemoDeviceLists =>
+      $$OmemoDeviceListsTableTableManager(_db, _db.omemoDeviceLists);
   $$ContactsTableTableManager get contacts =>
       $$ContactsTableTableManager(_db, _db.contacts);
   $$BlocklistTableTableManager get blocklist =>

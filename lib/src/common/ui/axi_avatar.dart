@@ -4,7 +4,6 @@ import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:moxxmpp_color/moxxmpp_color.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiAvatar extends StatefulWidget {
@@ -42,7 +41,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
       fit: StackFit.expand,
       children: [
         CircleAvatar(
-          backgroundColor: consistentColorSync(widget.jid),
+          backgroundColor: stringToColor(widget.jid),
           child: Text(widget.jid.substring(0, 1).toUpperCase()),
         ),
         widget.presence == null ||

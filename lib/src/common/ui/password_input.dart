@@ -6,10 +6,12 @@ class PasswordInput extends StatefulWidget {
   const PasswordInput({
     super.key,
     this.enabled = false,
+    this.confirmValidator,
     required this.controller,
   });
 
   final bool enabled;
+  final String? Function(String)? confirmValidator;
   final TextEditingController controller;
 
   @override
@@ -21,7 +23,8 @@ class _PasswordInputState extends State<PasswordInput> {
   @override
   Widget build(BuildContext context) {
     return AxiTextFormField(
-      placeholder: const Text('Password'),
+      placeholder: Text(
+          widget.confirmValidator != null ? 'Confirm password' : 'Password'),
       enabled: widget.enabled,
       obscureText: obscure,
       controller: widget.controller,
@@ -41,15 +44,16 @@ class _PasswordInputState extends State<PasswordInput> {
           setState(() => obscure = !obscure);
         },
       ),
-      validator: (text) {
-        if (text.isEmpty) {
-          return 'Enter a password';
-        }
-        if (text.length < 8 || text.length > 64) {
-          return 'Must be between 8 and 64 characters';
-        }
-        return null;
-      },
+      validator: widget.confirmValidator ??
+          (text) {
+            if (text.isEmpty) {
+              return 'Enter a password';
+            }
+            if (text.length < 8 || text.length > 64) {
+              return 'Must be between 8 and 64 characters';
+            }
+            return null;
+          },
     );
   }
 }

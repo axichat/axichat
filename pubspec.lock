@@ -598,7 +598,7 @@ packages:
     source: hosted
     version: "2.0.1"
   hsluv:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: hsluv
       sha256: f33e63b0c24ceee0f6492874424aa8edc671ef9a20cc889e4b969284d8f02eb1
@@ -614,13 +614,13 @@ packages:
     source: hosted
     version: "0.15.4"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
-      sha256: "761a297c042deedc1ffbb156d6e2af13886bb305c2a343a4d972504cd67dd938"
+      sha256: b9c29a161230ee03d3ccf545097fccd9b87a5264228c5d348202e0f0c28f9010
       url: "https://pub.dev"
     source: hosted
-    version: "1.2.1"
+    version: "1.2.2"
   http_multi_server:
     dependency: transitive
     description:
@@ -821,14 +821,6 @@ packages:
       url: "https://git.polynom.me/api/packages/Moxxy/pub/"
     source: hosted
     version: "0.4.0"
-  moxxmpp_color:
-    dependency: "direct main"
-    description:
-      name: moxxmpp_color
-      sha256: "778600a8893c0fca365aedd1282aec888055fe702a8007a22a737ed3beb32c21"
-      url: "https://git.polynom.me/api/packages/Moxxy/pub/"
-    source: hosted
-    version: "0.1.0"
   moxxmpp_socket_tcp:
     dependency: "direct main"
     description:
@@ -1651,7 +1643,7 @@ packages:
     source: hosted
     version: "1.0.4"
   xml:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: xml
       sha256: b015a8ad1c488f66851d762d3090a21c600e479dc75e68328c52774040cf9226

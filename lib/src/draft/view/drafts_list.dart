@@ -1,10 +1,11 @@
 import 'package:chat/src/app.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/draft/bloc/draft_cubit.dart';
-import 'package:chat/src/draft/view/draft_form.dart';
+import 'package:chat/src/routes.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 class DraftsList extends StatelessWidget {
   const DraftsList({super.key});
@@ -33,21 +34,25 @@ class DraftsList extends StatelessWidget {
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
+            final recipients = item.jids.length;
             return AxiListTile(
               key: Key(item.id.toString()),
-              onTap: () => showDraft(
-                context,
-                id: item.id,
-                jid: item.jid,
-                body: item.body ?? '',
+              onTap: () => context.push(
+                const ComposeRoute().location,
+                extra: {
+                  'locate': context.read,
+                  'id': item.id,
+                  'jids': item.jids,
+                  'body': item.body,
+                },
               ),
               onDismissed: (_) =>
                   context.read<DraftCubit>().deleteDraft(id: item.id),
-              dismissText: 'Delete draft to ${item.jid}?',
+              dismissText: 'Delete draft?',
               leading: AxiAvatar(
-                jid: item.jid,
+                jid: recipients == 1 ? item.jids[0] : recipients.toString(),
               ),
-              title: item.jid,
+              title: item.jids.join(', '),
               subtitle: item.body,
             );
           },

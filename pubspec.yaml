@@ -32,9 +32,6 @@ dependencies:
   moxxmpp:
     hosted: https://git.polynom.me/api/packages/Moxxy/pub
     version: 0.4.0
-  moxxmpp_color:
-    hosted: https://git.polynom.me/api/packages/Moxxy/pub
-    version: 0.1.0
   moxxmpp_socket_tcp:
     hosted: https://git.polynom.me/api/packages/Moxxy/pub
     version: 0.4.0
@@ -53,6 +50,9 @@ dependencies:
   animations: ^2.0.11
   libsignal_protocol_dart: ^0.7.1
   package_info_plus: ^8.0.2
+  http: ^1.2.2
+  xml: ^6.5.0
+  hsluv: ^1.1.3
 
 dev_dependencies:
   flutter_test:

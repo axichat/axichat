@@ -2,6 +2,7 @@ import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RosterAddButton extends StatelessWidget {
@@ -12,8 +13,9 @@ class RosterAddButton extends StatelessWidget {
     final locate = context.read;
     return AxiTooltip(
       builder: (_) => const Text('Add to roster'),
-      child: FloatingActionButton(
-        child: const Icon(LucideIcons.userPlus),
+      child: AxiFab(
+        iconData: LucideIcons.userPlus,
+        text: 'Add contact',
         onPressed: () => showShadDialog(
           context: context,
           builder: (context) {
@@ -30,6 +32,9 @@ class RosterAddButton extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           JidInput(
+                            jidOptions: List<String>.from(
+                                locate<RosterCubit>()['items']
+                                    .map((e) => e.jid)),
                             onChanged: (value) {
                               setState(() => jid = value);
                             },
@@ -50,6 +55,7 @@ class RosterAddButton extends StatelessWidget {
                               context
                                   .read<RosterCubit>()
                                   .addContact(jid: jid, title: title);
+                              context.pop();
                             },
                     );
                   },

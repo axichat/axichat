@@ -39,10 +39,6 @@ class ProfileCard extends StatelessWidget {
                 shape: Border(
                   top: BorderSide(color: context.colorScheme.border),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 6.0,
-                  horizontal: 12.0,
-                ),
                 trailing: const LogoutButton(),
               ),
             )

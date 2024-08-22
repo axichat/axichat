@@ -1,9 +1,14 @@
+import 'dart:io';
+
 import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/http.dart' as http;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:xml/xml.dart';
 
 class SignupForm extends StatefulWidget {
   const SignupForm({super.key});
@@ -13,38 +18,69 @@ class SignupForm extends StatefulWidget {
 }
 
 class _SignupFormState extends State<SignupForm> {
-  TextEditingController? _jidTextController;
-  TextEditingController? _passwordTextController;
-  TextEditingController? _password2TextController;
+  late TextEditingController _jidTextController;
+  late TextEditingController _passwordTextController;
+  late TextEditingController _password2TextController;
+  late TextEditingController _captchaTextController;
 
-  bool rememberMe = false;
+  bool rememberMe = true;
   bool agreeToTerms = false;
+
+  late Future<String> _captchaSrc;
 
   @override
   void initState() {
     super.initState();
+    _captchaSrc = _loadCaptchaSrc();
     _jidTextController = TextEditingController();
     _passwordTextController = TextEditingController();
     _password2TextController = TextEditingController();
+    _captchaTextController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _jidTextController?.dispose();
-    _passwordTextController?.dispose();
-    _password2TextController?.dispose();
+    _jidTextController.dispose();
+    _passwordTextController.dispose();
+    _password2TextController.dispose();
+    _captchaTextController.dispose();
     super.dispose();
   }
 
-  void _onPressed() {
-    if (!Form.of(context).mounted || !Form.of(context).validate()) return;
-    context.read<AuthenticationCubit>().signup(
-          username: _jidTextController!.value.text,
-          password: _passwordTextController!.value.text,
+  void _onPressed(BuildContext context) async {
+    final splitSrc = (await _captchaSrc).split('/');
+    if (!context.mounted ||
+        !Form.of(context).mounted ||
+        !Form.of(context).validate()) return;
+    await context.read<AuthenticationCubit>().signup(
+          username: _jidTextController.value.text,
+          password: _passwordTextController.value.text,
+          confirmPassword: _password2TextController.value.text,
+          captchaID: splitSrc[splitSrc.indexOf('captcha') + 1],
+          captcha: _captchaTextController.value.text,
           rememberMe: rememberMe,
           agreeToTerms: agreeToTerms,
         );
   }
+
+  Future<String> _loadCaptchaSrc() async {
+    late final XmlDocument document;
+    try {
+      final response = await http.get(AuthenticationCubit.registrationUrl);
+      if (response.statusCode != 200) return '';
+      document = XmlDocument.parse(response.body);
+    } on HttpException catch (_) {
+      return '';
+    } on XmlParserException catch (_) {
+      return '';
+    } on XmlTagException catch (_) {
+      return '';
+    }
+    return document.findAllElements('img').firstOrNull?.getAttribute('src') ??
+        '';
+  }
+
+  static const captchaSize = Size(180, 70);
 
   @override
   Widget build(BuildContext context) {
@@ -55,86 +91,163 @@ class _SignupFormState extends State<SignupForm> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Login',
+                'Sign Up',
                 style: context.textTheme.h3,
               ),
-              const SizedBox(height: 40),
+              state is AuthenticationSignupFailure
+                  ? Padding(
+                      padding: const EdgeInsets.all(10.0),
+                      child: Text(
+                        state.errorText,
+                        style: TextStyle(
+                          color: context.colorScheme.destructive,
+                        ),
+                      ),
+                    )
+                  : const SizedBox(height: 40),
               AxiTextFormField(
+                autocorrect: false,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
+                ],
                 placeholder: const Text('Username'),
                 enabled: state is! AuthenticationInProgress,
                 controller: _jidTextController,
-                validator: (text) => text.isEmpty ? 'Enter a username' : null,
-              ),
-              const SizedBox(height: 20),
-              AxiTextFormField(
-                placeholder: const Text('Password'),
-                enabled: state is! AuthenticationInProgress,
-                obscureText: true,
-                controller: _passwordTextController,
+                suffix: const Text('@${AuthenticationCubit.defaultServer}'),
                 validator: (text) {
                   if (text.isEmpty) {
-                    return 'Enter a password';
-                  }
-                  if (text.length < 8 || text.length > 64) {
-                    return 'Must be between 8 and 64 characters';
+                    return 'Enter a username';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 20),
-              AxiTextFormField(
-                placeholder: const Text('Confirm Password'),
+              PasswordInput(
                 enabled: state is! AuthenticationInProgress,
-                obscureText: true,
+                controller: _passwordTextController,
+              ),
+              PasswordInput(
+                enabled: state is! AuthenticationInProgress,
                 controller: _password2TextController,
-                validator: (text) => text != _passwordTextController?.text
+                confirmValidator: (text) => text != _passwordTextController.text
                     ? 'Passwords don\'t match'
                     : null,
               ),
-              const SizedBox(height: 40),
-              CheckboxListTile(
-                title: const Text('Remember Me'),
-                subtitle: const Text('Save login for next time'),
-                checkboxSemanticLabel: 'Remember me',
-                enabled: state is! AuthenticationInProgress,
-                value: rememberMe,
-                onChanged: (checked) => setState(() {
-                  rememberMe = checked ?? rememberMe;
-                }),
-              ),
-              FormField<bool>(
-                enabled: state is! AuthenticationInProgress,
-                builder: (FormFieldState<bool> field) {
-                  return CheckboxListTile(
-                    title: const Text('I agree to the terms'),
-                    checkboxSemanticLabel: 'Agree to the terms',
-                    subtitle: field.errorText == null
-                        ? null
-                        : Text(
-                            field.errorText!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                    value: agreeToTerms,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 30.0,
+                  ),
+                  child: ShadCheckbox(
+                    label: const Text('Remember Me'),
+                    sublabel: const Text('Save login details'),
+                    enabled: state is! AuthenticationInProgress,
+                    value: rememberMe,
                     onChanged: (checked) => setState(() {
-                      field.didChange(checked);
-                      agreeToTerms = field.value ?? agreeToTerms;
+                      rememberMe = checked;
                     }),
-                    isError: field.hasError,
+                  ),
+                ),
+              ),
+              FutureBuilder(
+                future: _captchaSrc,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return SizedBox(
+                      height: captchaSize.height,
+                      width: captchaSize.width,
+                      child: const Center(child: AxiProgressIndicator()),
+                    );
+                  }
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.network(
+                        snapshot.requireData,
+                        height: captchaSize.height,
+                        loadingBuilder: (_, child, progress) => progress == null
+                            ? child
+                            : const Center(child: AxiProgressIndicator()),
+                        errorBuilder: (_, __, ___) => Text(
+                          'Failed to load captcha, try again later.',
+                          style:
+                              TextStyle(color: context.colorScheme.destructive),
+                        ),
+                      ),
+                      ShadButton.ghost(
+                        icon: const Icon(LucideIcons.refreshCw),
+                        onPressed: () => setState(() {
+                          _captchaSrc = _loadCaptchaSrc();
+                        }),
+                      ),
+                    ],
                   );
                 },
-                validator: (checked) {
-                  if (checked == null || checked == false) {
-                    return 'You must agree to the terms';
-                  }
-                  return null;
+              ),
+              SizedBox(
+                width: captchaSize.width,
+                child: AxiTextFormField(
+                  autocorrect: false,
+                  keyboardType: TextInputType.number,
+                  placeholder: const Text('Enter the above text'),
+                  enabled: state is! AuthenticationInProgress,
+                  controller: _captchaTextController,
+                  validator: (text) {
+                    if (text.isEmpty) {
+                      return 'Enter the text from the image';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox.square(dimension: 16.0),
+              Builder(
+                builder: (context) {
+                  final loading = state is AuthenticationInProgress;
+                  return ShadButton(
+                    enabled: !loading,
+                    onPressed: () => _onPressed(context),
+                    text: const Text('Sign up'),
+                    icon: loading
+                        ? Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: AxiProgressIndicator(
+                              color: context.colorScheme.primaryForeground,
+                              semanticsLabel: 'Waiting for signup',
+                            ),
+                          )
+                        : null,
+                  );
                 },
               ),
-              const SizedBox(height: 40),
-              ShadButton(
-                onPressed:
-                    state is! AuthenticationInProgress ? _onPressed : null,
-                text: const Text('Log In'),
-              ),
+              // FormField<bool>(
+              //   enabled: state is! AuthenticationInProgress,
+              //   builder: (FormFieldState<bool> field) {
+              //     return CheckboxListTile(
+              //       title: const Text('I agree to the terms'),
+              //       checkboxSemanticLabel: 'Agree to the terms',
+              //       subtitle: field.errorText == null
+              //           ? null
+              //           : Text(
+              //               field.errorText!,
+              //               style: const TextStyle(color: Colors.red),
+              //             ),
+              //       value: agreeToTerms,
+              //       onChanged: (checked) => setState(() {
+              //         field.didChange(checked);
+              //         agreeToTerms = field.value ?? agreeToTerms;
+              //       }),
+              //       isError: field.hasError,
+              //     );
+              //   },
+              //   validator: (checked) {
+              //     if (checked == null || checked == false) {
+              //       return 'You must agree to the terms';
+              //     }
+              //     return null;
+              //   },
+              // ),
             ],
           ),
         );
