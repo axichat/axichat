@@ -39,7 +39,16 @@ class ProfileCard extends StatelessWidget {
                 shape: Border(
                   top: BorderSide(color: context.colorScheme.border),
                 ),
-                trailing: const LogoutButton(),
+                trailing: AxiIconButton(
+                  iconData: LucideIcons.bug,
+                  onPressed: () => context.push(
+                    const ComposeRoute().location,
+                    extra: {
+                      'locate': context.read,
+                      'jids': ['feedback@axi.im'],
+                    },
+                  ),
+                ),
               ),
             )
           : ShadCard(

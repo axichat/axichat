@@ -408,20 +408,20 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   BlocklistAccessor,
 ])
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
-  XmppDrift._(this.jid, super.e) : super();
+  XmppDrift._(this._file, super.e) : super();
 
   static XmppDrift? _instance;
 
   factory XmppDrift({
-    required String jid,
+    required File file,
     required String passphrase,
     QueryExecutor? executor,
   }) =>
       _instance ??=
-          XmppDrift._(jid, executor ?? _openDatabase(jid, passphrase));
+          XmppDrift._(file, executor ?? _openDatabase(file, passphrase));
 
   final _log = Logger('XmppDrift');
-  final String jid;
+  final File _file;
 
   @override
   int get schemaVersion => 1;
@@ -586,7 +586,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   @override
   Future<void> saveOmemoDevice(OmemoDevice device) async {
-    _log.info('Saving OMEMO device: $device from jid: $jid');
+    _log.info('Saving OMEMO device: $device from jid: ${device.jid}');
     await omemoDevicesAccessor.insertOrUpdateOne(await device.toDb());
   }
 
@@ -913,17 +913,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  Future<void> deleteFile() async {
-    (await dbFilePathFor(jid)).delete();
-  }
+  Future<void> deleteFile() => _file.delete();
 }
 
-QueryExecutor _openDatabase(String jid, String passphrase) {
+QueryExecutor _openDatabase(File file, String passphrase) {
   return LazyDatabase(() async {
     final token = RootIsolateToken.instance!;
-    final file = await dbFilePathFor(jid);
     if (kDebugMode) {
-      await file.delete();
+      // await file.delete();
     }
     return NativeDatabase.createInBackground(
       file,
@@ -950,29 +947,15 @@ QueryExecutor _openDatabase(String jid, String passphrase) {
   });
 }
 
-Future<File> dbFilePathFor(String jid) async {
+Future<File> dbFileFor(String prefix) async {
   final path = (await getApplicationDocumentsDirectory()).path;
-  return File(p.join(path, '${storagePrefixFor(jid)}.axichat.drift'));
+  return File(p.join(path, '$prefix.axichat.drift'));
 }
 
-String generateRandomString({int length = 32, int? seed}) {
-  final random = seed != null ? Random(seed) : Random.secure();
-  const field =
-      'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
-  const fieldSize = field.length;
-  final buffer = StringBuffer();
-  while (length > 0) {
-    buffer.writeCharCode(field.codeUnitAt(random.nextInt(fieldSize)));
-    length--;
-  }
-  final result = buffer.toString();
-  buffer.clear();
-  return result;
+// Using SHA-1 as this is only to obfuscate the jid in file paths. STORE THE SALT.
+String storagePrefixFor(String jid, String salt) {
+  return sha1.convert(utf8.encode('$jid:$salt')).toString();
 }
-
-// Using SHA-1 as this is only to obfuscate the jid in file paths.
-String storagePrefixFor(String jid) =>
-    sha1.convert(utf8.encode(jid)).toString();
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
 typedef HashFunction = mox.HashFunction;

@@ -15,6 +15,7 @@ class JidInput extends StatelessWidget {
     required this.onChanged,
     required this.jidOptions,
     this.initialValue,
+    this.error,
     this.enabled = true,
     this.describe = true,
   });
@@ -22,6 +23,7 @@ class JidInput extends StatelessWidget {
   final void Function(String) onChanged;
   final List<String> jidOptions;
   final String? initialValue;
+  final String? error;
   final bool enabled;
   final bool describe;
 
@@ -49,6 +51,7 @@ class JidInput extends StatelessWidget {
           child: IntrinsicWidth(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final option in options)
                   ShadGestureDetector(
@@ -91,9 +94,10 @@ class JidInput extends StatelessWidget {
           //   return null;
           // },
         );
-        if (!focus.hasFocus &&
-            controller.text.isNotEmpty &&
-            !controller.text.isValidJid) {
+        if (error != null ||
+            (!focus.hasFocus &&
+                controller.text.isNotEmpty &&
+                !controller.text.isValidJid)) {
           child = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -102,7 +106,7 @@ class JidInput extends StatelessWidget {
               Padding(
                 padding: inputSubtextInsets,
                 child: Text(
-                  'Enter a valid jid',
+                  error ?? 'Enter a valid jid',
                   style: TextStyle(
                     color: context.colorScheme.destructive,
                   ),

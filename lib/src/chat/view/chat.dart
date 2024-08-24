@@ -443,7 +443,7 @@ class _ChatState extends State<Chat> {
                       messageListOptions: MessageListOptions(
                         separatorFrequency: SeparatorFrequency.days,
                         typingBuilder: (_) => const Padding(
-                          padding: EdgeInsets.only(left: 16, top: 24),
+                          padding: EdgeInsets.only(left: 16, top: 16),
                           child: TypingIndicator(),
                         ),
                         onLoadEarlier:

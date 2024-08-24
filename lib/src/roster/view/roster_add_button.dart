@@ -1,3 +1,4 @@
+import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
@@ -23,43 +24,50 @@ class RosterAddButton extends StatelessWidget {
             String? title;
             return BlocProvider.value(
               value: locate<RosterCubit>(),
-              child: Form(
-                child: StatefulBuilder(
-                  builder: (context, setState) {
-                    return AxiInputDialog(
-                      title: const Text('Add contact'),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          JidInput(
-                            jidOptions: List<String>.from(
-                                locate<RosterCubit>()['items']
-                                    .map((e) => e.jid)),
-                            onChanged: (value) {
-                              setState(() => jid = value);
-                            },
-                          ),
-                          // const SizedBox(height: 12),
-                          // AxiTextFormField(
-                          //   placeholder: const Text('Nickname (optional)'),
-                          //   onChanged: (value) {
-                          //     setState(() => title = value);
-                          //   },
-                          // ),
-                        ],
-                      ),
-                      callback: jid.isEmpty
-                          ? null
-                          : () {
-                              if (!Form.of(context).validate()) return;
-                              context
-                                  .read<RosterCubit>()
-                                  .addContact(jid: jid, title: title);
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return AxiInputDialog(
+                    title: const Text('Add contact'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        BlocConsumer<RosterCubit, RosterState>(
+                          listener: (context, state) {
+                            if (state is RosterSuccess) {
                               context.pop();
-                            },
-                    );
-                  },
-                ),
+                            }
+                          },
+                          builder: (context, state) {
+                            return JidInput(
+                              enabled: state is! RosterLoading,
+                              error: state is! RosterFailure
+                                  ? null
+                                  : state.message,
+                              jidOptions: [
+                                '${jid.split('@').first}@${AuthenticationCubit.defaultServer}'
+                              ],
+                              onChanged: (value) {
+                                setState(() => jid = value);
+                              },
+                            );
+                          },
+                        ),
+                        // const SizedBox(height: 12),
+                        // AxiTextFormField(
+                        //   placeholder: const Text('Nickname (optional)'),
+                        //   onChanged: (value) {
+                        //     setState(() => title = value);
+                        //   },
+                        // ),
+                      ],
+                    ),
+                    callback: jid.isEmpty
+                        ? null
+                        : () => context
+                            .read<RosterCubit>()
+                            .addContact(jid: jid, title: title),
+                  );
+                },
               ),
             );
           },

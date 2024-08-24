@@ -5,6 +5,8 @@ import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/common/defer.dart';
+import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/storage/database.dart';
@@ -63,7 +65,15 @@ final class XmppBlocklistException extends XmppException {}
 
 final class XmppBlockUnsupportedException extends XmppException {}
 
-final _devServerLookup = <String, IOEndpoint>{
+final serverLookup = <String, IOEndpoint>{
+  'nz.axichat.com': IOEndpoint(
+    InternetAddress('167.160.14.12', type: InternetAddressType.IPv4),
+    5222,
+  ),
+  'axi.im': IOEndpoint(
+    InternetAddress('167.160.14.12', type: InternetAddressType.IPv4),
+    5222,
+  ),
   'hookipa.net': IOEndpoint(
     InternetAddress('31.172.31.205', type: InternetAddressType.IPv4),
     5222,
@@ -107,6 +117,7 @@ abstract class XmppBase {
   Future<void> connect({
     required String jid,
     required String password,
+    required String databasePrefix,
     required String databasePassphrase,
   });
   Future<void> disconnect();
@@ -376,6 +387,7 @@ class XmppService extends XmppBase
   Future<void> connect({
     required String jid,
     required String password,
+    required String databasePrefix,
     required String databasePassphrase,
     String resource = '',
     bool awaitAuthentication = true,
@@ -386,13 +398,14 @@ class XmppService extends XmppBase
     if (needsReset) await _reset();
     _synchronousConnection.complete();
 
-    await _deferToError(
+    await deferToError(
       defer: _reset,
       operation: () async {
         _log.info('Attempting login...');
 
         if (!awaitAuthentication && !_stateStore.isCompleted) {
-          _stateStore.complete(await _buildStateStore(jid, databasePassphrase));
+          _stateStore.complete(
+              await _buildStateStore(databasePrefix, databasePassphrase));
         }
 
         _myJid = mox.JID.fromString('$jid/$resource');
@@ -417,9 +430,9 @@ class XmppService extends XmppBase
             throw XmppAuthenticationException();
           }
           _log.info('Login successful. Initializing databases...');
-          await _initDatabases(jid, databasePassphrase);
+          await _initDatabases(databasePrefix, databasePassphrase);
         } else {
-          await _initDatabases(jid, databasePassphrase);
+          await _initDatabases(databasePrefix, databasePassphrase);
           await _connection.connect();
         }
       },
@@ -566,17 +579,17 @@ class XmppService extends XmppBase
     });
   }
 
-  Future<void> _initDatabases(String jid, String passphrase) async {
-    await _deferToError(
+  Future<void> _initDatabases(String prefix, String passphrase) async {
+    await deferToError(
       defer: _reset,
       operation: () async {
         try {
           _log.info('Opening databases...');
           if (!_stateStore.isCompleted) {
-            _stateStore.complete(await _buildStateStore(jid, passphrase));
+            _stateStore.complete(await _buildStateStore(prefix, passphrase));
           }
           if (!_database.isCompleted) {
-            _database.complete(await _buildDatabase(jid, passphrase));
+            _database.complete(await _buildDatabase(prefix, passphrase));
           }
         } on Exception catch (e) {
           _log.severe('Failed to create databases:', e);
@@ -653,18 +666,6 @@ class XmppService extends XmppBase
   Future<void> close() async {
     await _reset();
     _instance = null;
-  }
-
-  Future<T> _deferToError<T>({
-    required FutureOr<T> Function() operation,
-    required FutureOr<void> Function() defer,
-  }) async {
-    try {
-      return await operation();
-    } catch (e) {
-      await defer();
-      rethrow;
-    }
   }
 
   @override
@@ -808,13 +809,13 @@ class XmppConnectionSettings extends mox.ConnectionSettings {
 
   @override
   String? get host {
-    final endpoint = _devServerLookup[jid.domain];
+    final endpoint = serverLookup[jid.domain];
     return endpoint?.host.address;
   }
 
   @override
   int? get port {
-    final endpoint = _devServerLookup[jid.domain];
+    final endpoint = serverLookup[jid.domain];
     return endpoint?.port;
   }
 }
@@ -922,9 +923,8 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
   @override
   Future<void> waitForConnection() async {
-    bool connected = await hasConnection();
-    while (!connected) {
-      await Future.delayed(timeoutDuration);
+    for (var connected = await hasConnection(); !connected;) {
+      // await Future.delayed(timeoutDuration);
       connected = await hasConnection();
     }
   }
@@ -1013,7 +1013,7 @@ class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   // TODO: onBadCertificate
   @override
   bool onBadCertificate(certificate, String domain) =>
-      _devServerLookup.keys.contains(domain);
+      serverLookup.keys.contains(domain);
 }
 
 class XmppStreamManagementManager extends mox.StreamManagementManager {

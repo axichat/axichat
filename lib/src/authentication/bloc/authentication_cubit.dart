@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:bloc/bloc.dart';
+import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
@@ -45,8 +46,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  static const defaultServer = 'xmpp.social';
-  static Uri registrationUrl = Uri.parse('https://hookipa.net/register/new');
+  static const defaultServer = 'axi.im';
+  static Uri registrationUrl = Uri.parse('http://nz.axichat.com/api/register');
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
@@ -87,13 +88,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
-    final prefix = storagePrefixFor(jid);
-
     final resourceStorageKey = CredentialStore.registerKey(
-      '${prefix}_resource',
+      '${jid}_resource',
     );
-    var resource = await _credentialStore.read(key: resourceStorageKey) ??
+    final resource = await _credentialStore.read(key: resourceStorageKey) ??
         XmppService.generateResource();
+
+    final prefixSaltStorageKey =
+        CredentialStore.registerKey('${jid}_prefix_salt');
+    final prefixSalt = await _credentialStore.read(key: prefixSaltStorageKey) ??
+        generateRandomString(length: 8);
+    final prefix = storagePrefixFor(jid, prefixSalt);
 
     final databasePassphraseStorageKey = CredentialStore.registerKey(
       '${prefix}_database_passphrase',
@@ -109,6 +114,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           jid: jid,
           resource: resource,
           password: password,
+          databasePrefix: prefix,
           databasePassphrase: databasePassphrase,
         );
       } on XmppAuthenticationException catch (_) {
@@ -136,6 +142,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           jid: jid,
           resource: resource,
           password: password,
+          databasePrefix: prefix,
           databasePassphrase: databasePassphrase,
           awaitAuthentication: false,
         );
@@ -148,6 +155,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.write(
       key: resourceStorageKey,
       value: _xmppService.resource,
+    );
+
+    await _credentialStore.write(
+      key: prefixSaltStorageKey,
+      value: prefixSalt,
     );
 
     if (rememberMe) {
@@ -169,60 +181,47 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     emit(AuthenticationInProgress());
     try {
-      // final client = HttpClient(
-      //     context: SecurityContext()..setTrustedCertificatesBytes(certBytes));
       final response = await http.post(
-        Uri(
-          scheme: 'https',
-          host: 'hookipa.net',
-          path: '/register/new/',
-        ),
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;'
-              'q=0.9,image/avif,image/webp,image/apng,*/*;'
-              'q=0.8,application/signed-exchange;v=b3;q=0.7',
-          'Accept-Encoding': 'gzip, deflate, br, zstd',
-          'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
-          'Cache-Control': 'max-age=0',
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': 'pll_language=en',
-          'Dnt': '1',
-          'Origin': 'https://hookipa.net',
-          'Priority': 'u=0, i',
-          'Referer': 'https://hookipa.net/register/new/',
-          'Sec-Ch-Ua': '"Chromium";v="127", "Not)A;Brand";v="99"',
-          'Sec-Ch-Ua-Mobile': '?0',
-          'Sec-Ch-Ua-Platform': '"Linux"',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'same-origin',
-          'Sec-Fetch-User': '?1',
-          'Upgrade-Insecure-Requests': '1',
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-              '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-        },
+        registrationUrl,
+        // headers: {
+        //   'Accept': 'text/html,application/xhtml+xml,application/xml;'
+        //       'q=0.9,image/avif,image/webp,image/apng,*/*;'
+        //       'q=0.8,application/signed-exchange;v=b3;q=0.7',
+        //   'Accept-Encoding': 'gzip, deflate, br, zstd',
+        //   'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+        //   'Cache-Control': 'max-age=0',
+        //   'Content-Type': 'application/x-www-form-urlencoded',
+        //   'Cookie': 'pll_language=en',
+        //   'Dnt': '1',
+        //   'Origin': 'https://hookipa.net',
+        //   'Priority': 'u=0, i',
+        //   'Referer': 'https://hookipa.net/register/new/',
+        //   'Sec-Ch-Ua': '"Chromium";v="127", "Not)A;Brand";v="99"',
+        //   'Sec-Ch-Ua-Mobile': '?0',
+        //   'Sec-Ch-Ua-Platform': '"Linux"',
+        //   'Sec-Fetch-Dest': 'document',
+        //   'Sec-Fetch-Mode': 'navigate',
+        //   'Sec-Fetch-Site': 'same-origin',
+        //   'Sec-Fetch-User': '?1',
+        //   'Upgrade-Insecure-Requests': '1',
+        //   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+        //       '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+        // },
         body: {
-          'username': username,
+          'user': username,
           'host': defaultServer,
           'password': password,
-          'password2': confirmPassword,
-          'id': captchaID,
-          'key': captcha,
-          'register': 'Register',
+          // 'password2': confirmPassword,
+          // 'id': captchaID,
+          // 'key': captcha,
+          // 'register': 'Register',
         },
       );
-      print(response.request?.headers);
-      print(response.request?.url);
-      print(response.request?.method);
-      print(response.request?.toString());
-      print(
-          '${response.statusCode}: ${response.body}: ${response.headers}: ${response.reasonPhrase}: ${response.isRedirect}');
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
         emit(AuthenticationSignupFailure(response.body));
         return;
       }
     } on Exception catch (e) {
-      print(e);
       emit(const AuthenticationSignupFailure(
           'Failed to register, try again later.'));
       return;

@@ -31,28 +31,34 @@ class BlocklistAddButton extends StatelessWidget {
                   value: locate<RosterCubit>(),
                 ),
               ],
-              child: Form(
-                child: StatefulBuilder(
-                  builder: (context, setState) {
-                    return AxiInputDialog(
-                      title: const Text('Block user'),
-                      content: JidInput(
-                        jidOptions: List<String>.from(
-                            locate<RosterCubit>()['items'].map((e) => e.jid)),
-                        onChanged: (value) {
-                          setState(() => jid = value);
-                        },
-                      ),
-                      callback: jid.isEmpty
-                          ? null
-                          : () {
-                              if (!Form.of(context).validate()) return;
-                              context.read<BlocklistCubit>().block(jid: jid);
-                              context.pop();
-                            },
-                    );
-                  },
-                ),
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return AxiInputDialog(
+                    title: const Text('Block user'),
+                    content: BlocConsumer<BlocklistCubit, BlocklistState>(
+                      listener: (context, state) {
+                        if (state is BlocklistSuccess) {
+                          context.pop();
+                        }
+                      },
+                      builder: (context, state) {
+                        return JidInput(
+                          enabled: state is! BlocklistLoading,
+                          error:
+                              state is! BlocklistFailure ? null : state.message,
+                          jidOptions: List<String>.from(
+                              locate<RosterCubit>()['items'].map((e) => e.jid)),
+                          onChanged: (value) {
+                            setState(() => jid = value);
+                          },
+                        );
+                      },
+                    ),
+                    callback: jid.isEmpty
+                        ? null
+                        : () => context.read<BlocklistCubit>().block(jid: jid),
+                  );
+                },
               ),
             );
           },

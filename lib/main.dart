@@ -36,8 +36,8 @@ void main() async {
 
   final xmppService = XmppService(
     buildConnection: () => XmppConnection(),
-    buildStateStore: (jid, passphrase) async {
-      await Hive.initFlutter(storagePrefixFor(jid));
+    buildStateStore: (prefix, passphrase) async {
+      await Hive.initFlutter(prefix);
       if (!Hive.isAdapterRegistered(1)) {
         Hive.registerAdapter(PresenceAdapter());
       }
@@ -47,9 +47,9 @@ void main() async {
       );
       return XmppStateStore();
     },
-    buildDatabase: (jid, passphrase) {
+    buildDatabase: (prefix, passphrase) async {
       return XmppDrift(
-        jid: jid,
+        file: await dbFileFor(prefix),
         passphrase: passphrase,
       );
     },

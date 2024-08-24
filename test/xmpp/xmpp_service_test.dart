@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
@@ -35,7 +36,7 @@ void main() {
 
   setUp(() {
     database = XmppDrift(
-      jid: '',
+      file: File(''),
       passphrase: '',
       executor: NativeDatabase.memory(),
     );
