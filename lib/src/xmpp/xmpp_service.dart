@@ -145,9 +145,7 @@ class XmppService extends XmppBase
     this._buildDatabase,
     this._capability,
     this._policy,
-  ) {
-    _connection = _buildConnection();
-  }
+  );
 
   static XmppService? _instance;
 
@@ -402,6 +400,7 @@ class XmppService extends XmppBase
       defer: _reset,
       operation: () async {
         _log.info('Attempting login...');
+        _connection = _buildConnection();
 
         if (!awaitAuthentication && !_stateStore.isCompleted) {
           _stateStore.complete(

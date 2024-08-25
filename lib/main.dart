@@ -11,6 +11,7 @@ import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
 import 'package:logging/logging.dart';
@@ -28,11 +29,12 @@ void main() async {
             '${record.stackTrace != null ? 'Exception: ${record.error} ' 'Stack Trace: ${record.stackTrace}' : ''}')
         : null,
   );
-  Bloc.observer = BlocLogger();
 
   HydratedBloc.storage = await HydratedStorage.build(
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
+
+  FlutterForegroundTask.initCommunicationPort();
 
   final xmppService = XmppService(
     buildConnection: () => XmppConnection(),
