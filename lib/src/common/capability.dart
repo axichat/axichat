@@ -8,4 +8,6 @@ class Capability {
     }
     return 'pc';
   }
+
+  bool get canForegroundService => Platform.isAndroid || Platform.isIOS;
 }

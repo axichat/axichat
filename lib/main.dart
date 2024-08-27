@@ -34,7 +34,9 @@ void main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
 
-  FlutterForegroundTask.initCommunicationPort();
+  if (Capability().canForegroundService) {
+    FlutterForegroundTask.initCommunicationPort();
+  }
 
   final xmppService = XmppService(
     buildConnection: () => XmppConnection(),
