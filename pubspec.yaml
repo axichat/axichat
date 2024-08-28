@@ -55,6 +55,7 @@ dependencies:
   hsluv: ^1.1.3
   flutter_foreground_task: ^8.4.0
   shorebird_code_push: ^1.1.4
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

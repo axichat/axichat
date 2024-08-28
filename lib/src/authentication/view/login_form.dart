@@ -18,7 +18,6 @@ class _LoginFormState extends State<LoginForm> {
   late TextEditingController _passwordTextController;
 
   bool rememberMe = true;
-  bool agreeToTerms = false;
 
   @override
   void initState() {
@@ -40,8 +39,11 @@ class _LoginFormState extends State<LoginForm> {
     super.dispose();
   }
 
-  void _onPressed(BuildContext context) {
-    if (!Form.of(context).mounted || !Form.of(context).validate()) return;
+  void _onPressed(BuildContext context) async {
+    if (!Form.of(context).mounted ||
+        !Form.of(context).validate() ||
+        !(await acceptTerms(context) ?? false)) return;
+    if (!context.mounted) return;
     context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,

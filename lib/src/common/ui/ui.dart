@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+export 'accept_terms.dart';
 export 'axi_adaptive_layout.dart';
 export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
@@ -10,6 +11,7 @@ export 'axi_fab.dart';
 export 'axi_fingerprint.dart';
 export 'axi_icon_button.dart';
 export 'axi_input_dialog.dart';
+export 'axi_link.dart';
 export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';
 export 'axi_progress_indicator.dart';

@@ -177,7 +177,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captchaID,
     required String captcha,
     required bool rememberMe,
-    required bool agreeToTerms,
   }) async {
     emit(AuthenticationInProgress());
     try {
@@ -221,7 +220,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         emit(AuthenticationSignupFailure(response.body));
         return;
       }
-    } on Exception catch (e) {
+    } on Exception catch (_) {
       emit(const AuthenticationSignupFailure(
           'Failed to register, try again later.'));
       return;

@@ -24,7 +24,6 @@ class _SignupFormState extends State<SignupForm> {
   late TextEditingController _captchaTextController;
 
   bool rememberMe = true;
-  bool agreeToTerms = false;
 
   late Future<String> _captchaSrc;
 
@@ -51,7 +50,9 @@ class _SignupFormState extends State<SignupForm> {
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted ||
         !Form.of(context).mounted ||
-        !Form.of(context).validate()) return;
+        !Form.of(context).validate() ||
+        !(await acceptTerms(context) ?? false)) return;
+    if (!context.mounted) return;
     await context.read<AuthenticationCubit>().signup(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,
@@ -59,7 +60,6 @@ class _SignupFormState extends State<SignupForm> {
           captchaID: splitSrc[splitSrc.indexOf('captcha') + 1],
           captcha: _captchaTextController.value.text,
           rememberMe: rememberMe,
-          agreeToTerms: agreeToTerms,
         );
   }
 
@@ -221,33 +221,6 @@ class _SignupFormState extends State<SignupForm> {
                   );
                 },
               ),
-              // FormField<bool>(
-              //   enabled: state is! AuthenticationInProgress,
-              //   builder: (FormFieldState<bool> field) {
-              //     return CheckboxListTile(
-              //       title: const Text('I agree to the terms'),
-              //       checkboxSemanticLabel: 'Agree to the terms',
-              //       subtitle: field.errorText == null
-              //           ? null
-              //           : Text(
-              //               field.errorText!,
-              //               style: const TextStyle(color: Colors.red),
-              //             ),
-              //       value: agreeToTerms,
-              //       onChanged: (checked) => setState(() {
-              //         field.didChange(checked);
-              //         agreeToTerms = field.value ?? agreeToTerms;
-              //       }),
-              //       isError: field.hasError,
-              //     );
-              //   },
-              //   validator: (checked) {
-              //     if (checked == null || checked == false) {
-              //       return 'You must agree to the terms';
-              //     }
-              //     return null;
-              //   },
-              // ),
             ],
           ),
         );
