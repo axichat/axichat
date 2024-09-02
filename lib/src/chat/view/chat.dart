@@ -1,4 +1,5 @@
 import 'package:chat/src/app.dart';
+import 'package:chat/src/blocklist/view/block_button_inline.dart';
 import 'package:chat/src/chat/bloc/chat_bloc.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/policy.dart';
@@ -6,6 +7,7 @@ import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/draft/bloc/draft_cubit.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
+import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
@@ -13,6 +15,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 extension on MessageStatus {
@@ -34,30 +37,31 @@ class Chat extends StatefulWidget {
 }
 
 class _ChatState extends State<Chat> {
-  final _emojiPopoverController = ShadPopoverController();
-  late FocusNode _focusNode;
-  late TextEditingController _textController;
+  late final ShadPopoverController emojiPopoverController;
+  late final FocusNode focusNode;
+  late final TextEditingController textController;
 
   void _typingListener() {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
-    if (_textController.text.isEmpty) return;
+    if (textController.text.isEmpty) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
   @override
   void initState() {
     super.initState();
-    _focusNode = FocusNode();
-    _textController = TextEditingController();
-    _textController.addListener(_typingListener);
+    emojiPopoverController = ShadPopoverController();
+    focusNode = FocusNode();
+    textController = TextEditingController();
+    textController.addListener(_typingListener);
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
-    _textController.removeListener(_typingListener);
-    _textController.dispose();
-    _emojiPopoverController.dispose();
+    focusNode.dispose();
+    textController.removeListener(_typingListener);
+    textController.dispose();
+    emojiPopoverController.dispose();
     super.dispose();
   }
 
@@ -236,11 +240,11 @@ class _ChatState extends State<Chat> {
                           size: 20.0,
                         ),
                         onPressed: () {
-                          if (_textController.text.isNotEmpty) {
+                          if (textController.text.isNotEmpty) {
                             context.read<DraftCubit>().saveDraft(
                                 id: null,
                                 jids: [state.chat!.jid],
-                                body: _textController.text);
+                                body: textController.text);
                           }
                           context
                               .read<ChatsCubit>()
@@ -303,15 +307,44 @@ class _ChatState extends State<Chat> {
                                 ),
                               ),
                             ),
-                      muted == null
+                      jid == null
                           ? const SizedBox.shrink()
-                          : ShadButton.ghost(
-                              icon: Icon(muted
-                                  ? LucideIcons.bellOff
-                                  : LucideIcons.bell),
-                              onPressed: () => context
-                                  .read<ChatBloc>()
-                                  .add(ChatMuted(!muted)),
+                          : AxiMore(
+                              options: [
+                                (toggle) => ShadButton.ghost(
+                                      width: double.infinity,
+                                      text: Text(muted!
+                                          ? 'Unmute'
+                                          : 'Mute notifications'),
+                                      foregroundColor:
+                                          context.colorScheme.foreground,
+                                      onPressed: () {
+                                        context
+                                            .read<ChatBloc>()
+                                            .add(ChatMuted(!muted));
+                                        toggle();
+                                      },
+                                    ),
+                                (toggle) => ShadButton.ghost(
+                                      width: double.infinity,
+                                      text: const Text('Report spam'),
+                                      foregroundColor:
+                                          context.colorScheme.destructive,
+                                      onPressed: () => context.push(
+                                        const ComposeRoute().location,
+                                        extra: {
+                                          'locate': context.read,
+                                          'jids': ['spam@axichat.com'],
+                                          'body':
+                                              'I want to report \'$jid\' for spam.',
+                                        },
+                                      ),
+                                    ),
+                                (toggle) => BlockButtonInline(
+                                      jid: jid,
+                                      callback: toggle,
+                                    ),
+                              ],
                             ),
                     ],
                   ),
@@ -324,7 +357,7 @@ class _ChatState extends State<Chat> {
                         context
                             .read<ChatBloc>()
                             .add(ChatMessageSent(text: message.text));
-                        _focusNode.requestFocus();
+                        focusNode.requestFocus();
                       },
                       messages: state.items
                           .map(
@@ -473,8 +506,8 @@ class _ChatState extends State<Chat> {
                       inputOptions: InputOptions(
                         sendOnEnter: true,
                         alwaysShowSend: true,
-                        focusNode: _focusNode,
-                        textController: _textController,
+                        focusNode: focusNode,
+                        textController: textController,
                         sendButtonBuilder: (send) => ShadButton.ghost(
                           icon: const Icon(
                             Icons.send,
@@ -498,13 +531,13 @@ class _ChatState extends State<Chat> {
                         ),
                         leading: [
                           ShadPopover(
-                            controller: _emojiPopoverController,
+                            controller: emojiPopoverController,
                             child: ShadButton.ghost(
-                              onPressed: _emojiPopoverController.toggle,
+                              onPressed: emojiPopoverController.toggle,
                               icon: const Icon(LucideIcons.smile),
                             ),
                             popover: (context) => EmojiPicker(
-                              textEditingController: _textController,
+                              textEditingController: textController,
                               config: Config(
                                 height: 256,
                                 checkPlatformCompatibility: true,

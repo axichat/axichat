@@ -19,6 +19,8 @@ class DynamicInlineText extends LeafRenderObjectWidget {
         text: text,
         details: details,
         textDirection: Directionality.of(context),
+        textScaler:
+            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
       );
 
   @override
@@ -29,7 +31,9 @@ class DynamicInlineText extends LeafRenderObjectWidget {
     renderObject
       ..text = text
       ..details = details
-      ..textDirection = Directionality.of(context);
+      ..textDirection = Directionality.of(context)
+      ..textScaler =
+          MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
   }
 }
 
@@ -38,34 +42,46 @@ class DynamicInlineTextRenderObject extends RenderBox {
     required TextSpan text,
     required List<TextSpan> details,
     required TextDirection textDirection,
+    required TextScaler textScaler,
   })  : _text = text,
         _details = details,
-        _textDirection = textDirection;
+        _textDirection = textDirection,
+        _textScaler = textScaler;
 
   TextSpan get text => _text;
   TextSpan _text;
-  set text(TextSpan val) {
-    if (val == _text) return;
-    _text = val;
+  set text(TextSpan value) {
+    if (value == _text) return;
+    _text = value;
     markNeedsLayout();
     markNeedsSemanticsUpdate();
   }
 
   List<TextSpan> _details;
-  set details(List<TextSpan> val) {
-    if (val == _details) return;
-    _details = val;
+  set details(List<TextSpan> value) {
+    if (value == _details) return;
+    _details = value;
     markNeedsLayout();
     markNeedsSemanticsUpdate();
   }
 
   TextDirection _textDirection;
-  set textDirection(TextDirection val) {
-    if (_textDirection == val) {
+  set textDirection(TextDirection value) {
+    if (_textDirection == value) {
       return;
     }
-    _textDirection = val;
+    _textDirection = value;
     markNeedsSemanticsUpdate();
+    markNeedsLayout();
+  }
+
+  TextScaler get textScaler => _textScaler;
+  TextScaler _textScaler;
+  set textScaler(TextScaler value) {
+    if (value == _textScaler) {
+      return;
+    }
+    _textScaler = value;
     markNeedsLayout();
   }
 
@@ -116,6 +132,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _textPainter = TextPainter(
       text: text,
       textDirection: _textDirection,
+      textScaler: _textScaler,
     );
 
     _textPainter.layout(maxWidth: maxWidth);
@@ -125,6 +142,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
       final painter = TextPainter(
         text: e,
         textDirection: _textDirection,
+        textScaler: _textScaler,
       );
       painter.layout(maxWidth: maxWidth);
       _detailsWidth += painter.computeLineMetrics().first.width + detailSpacing;

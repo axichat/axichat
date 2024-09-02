@@ -11,7 +11,7 @@ part 'chats_state.dart';
 class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({required XmppService xmppService})
       : _xmppService = xmppService,
-        super(const ChatsState(openJid: null, items: [])) {
+        super(ChatsState(openJid: null, items: [], filter: (chat) => true)) {
     _chatsSubscription =
         _xmppService.chatsStream().listen((items) => _updateChats(items));
   }
@@ -27,10 +27,14 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   void _updateChats(List<Chat> items) {
-    emit(ChatsState(
+    emit(state.copyWith(
       openJid: items.where((e) => e.open).firstOrNull?.jid,
       items: items,
     ));
+  }
+
+  void filterChats(bool Function(Chat) filter) {
+    emit(state.copyWith(filter: filter));
   }
 
   Future<void> toggleChat({required String jid}) async {

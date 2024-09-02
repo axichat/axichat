@@ -27,15 +27,23 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   late final StreamSubscription<List<Invite>> _invitesSubscription;
 
   int get inviteCount => cache['invites']?.length ?? 0;
+  var contacts = <String>{};
 
   @override
   void onChange(Change<RosterState> change) {
     super.onChange(change);
     final current = change.currentState;
+    final next = change.nextState;
     if (current is RosterAvailable) {
       cache['items'] = current.items;
+      contacts = current.items.map((e) => e.jid).toSet();
+    } else if (next is RosterAvailable) {
+      cache['items'] = next.items;
+      contacts = next.items.map((e) => e.jid).toSet();
     } else if (current is RosterInvitesAvailable) {
       cache['invites'] = current.invites;
+    } else if (next is RosterInvitesAvailable) {
+      cache['invites'] = next.invites;
     }
   }
 

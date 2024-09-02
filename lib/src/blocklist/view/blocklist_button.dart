@@ -46,8 +46,7 @@ class BlocklistAddButton extends StatelessWidget {
                           enabled: state is! BlocklistLoading,
                           error:
                               state is! BlocklistFailure ? null : state.message,
-                          jidOptions: List<String>.from(
-                              locate<RosterCubit>()['items'].map((e) => e.jid)),
+                          jidOptions: locate<RosterCubit>().contacts.toList(),
                           onChanged: (value) {
                             setState(() => jid = value);
                           },

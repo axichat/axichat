@@ -12,7 +12,7 @@ class ChatsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocSelector<ChatsCubit, ChatsState, List<Chat>>(
-      selector: (state) => state.items,
+      selector: (state) => state.items.where(state.filter).toList(),
       builder: (context, items) {
         if (items.isEmpty) {
           return Center(

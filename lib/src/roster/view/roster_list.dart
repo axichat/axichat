@@ -1,5 +1,5 @@
 import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:chat/src/blocklist/view/block_button_inline.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
@@ -58,32 +58,24 @@ class RosterList extends StatelessWidget {
               title: item.title,
               subtitle: item.jid,
               actions: [
-                ShadButton.ghost(
-                  onPressed: () => context.push(
-                    const ComposeRoute().location,
-                    extra: {
-                      'locate': context.read,
-                      'jids': [item.jid],
-                    },
-                  ),
-                  foregroundColor: context.colorScheme.primary,
-                  text: const Text('Draft'),
-                ),
-                BlocSelector<BlocklistCubit, BlocklistState, bool>(
-                  selector: (state) =>
-                      state is BlocklistLoading &&
-                      (state.jid == item.jid || state.jid == null),
-                  builder: (context, disabled) {
-                    return ShadButton.ghost(
-                      onPressed: disabled
-                          ? null
-                          : () => context
-                              .read<BlocklistCubit>()
-                              .block(jid: item.jid),
-                      foregroundColor: context.colorScheme.destructive,
-                      text: const Text('Block'),
-                    );
-                  },
+                AxiMore(
+                  options: [
+                    (toggle) => ShadButton.ghost(
+                          width: double.infinity,
+                          text: const Text('Draft'),
+                          onPressed: () => context.push(
+                            const ComposeRoute().location,
+                            extra: {
+                              'locate': context.read,
+                              'jids': [item.jid],
+                            },
+                          ),
+                        ),
+                    (toggle) => BlockButtonInline(
+                          jid: item.jid,
+                          callback: toggle,
+                        ),
+                  ],
                 ),
               ],
             );

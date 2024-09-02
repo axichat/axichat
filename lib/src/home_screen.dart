@@ -4,6 +4,7 @@ import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_list.dart';
 import 'package:chat/src/chat/view/chat.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
+import 'package:chat/src/chats/view/chats_filter_button.dart';
 import 'package:chat/src/chats/view/chats_list.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/connectivity/view/connectivity_indicator.dart';
@@ -29,7 +30,18 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   final tabs = const [
-    ('Chats', ChatsList(key: PageStorageKey('Chats')), DraftButton()),
+    (
+      'Chats',
+      ChatsList(key: PageStorageKey('Chats')),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          ChatsFilterButton(),
+          DraftButton(),
+        ],
+      )
+    ),
     (
       'Contacts',
       RosterList(key: PageStorageKey('Contacts')),

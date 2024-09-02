@@ -5,5 +5,6 @@ class ChatsState with _$ChatsState {
   const factory ChatsState({
     required String? openJid,
     required List<Chat> items,
+    required bool Function(Chat) filter,
   }) = _ChatsState;
 }

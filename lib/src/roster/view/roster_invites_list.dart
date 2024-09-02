@@ -1,9 +1,11 @@
 import 'package:chat/src/app.dart';
+import 'package:chat/src/blocklist/view/block_button_inline.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RosterInvitesList extends StatelessWidget {
   const RosterInvitesList({super.key});
@@ -48,16 +50,24 @@ class RosterInvitesList extends StatelessWidget {
                   title: invite.title,
                   subtitle: invite.jid,
                   actions: [
-                    TextButton(
-                      onPressed: disabled
-                          ? null
-                          : () => context
-                              .read<RosterCubit>()
-                              .addContact(jid: invite.jid, title: invite.title),
-                      style: TextButton.styleFrom(
-                        foregroundColor: context.colorScheme.primary,
-                      ),
-                      child: const Text('Add contact'),
+                    AxiMore(
+                      options: [
+                        (toggle) => ShadButton.ghost(
+                              width: double.infinity,
+                              onPressed: disabled
+                                  ? null
+                                  : () {
+                                      context.read<RosterCubit>().addContact(
+                                          jid: invite.jid, title: invite.title);
+                                      toggle();
+                                    },
+                              text: const Text('Add contact'),
+                            ),
+                        (toggle) => BlockButtonInline(
+                              jid: invite.jid,
+                              callback: toggle,
+                            ),
+                      ],
                     ),
                   ],
                 );

@@ -59,8 +59,7 @@ class _DraftFormState extends State<DraftForm> {
           },
           builder: (context, state) {
             final enabled = state is! DraftSending;
-            final contacts = List<String>.from(
-                context.watch<RosterCubit>()['items'].map((e) => e.jid));
+            final contacts = context.watch<RosterCubit>().contacts.toList();
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,

@@ -27,7 +27,13 @@ class AxiAvatar extends StatefulWidget {
 }
 
 class _AxiAvatarState extends State<AxiAvatar> {
-  final popoverController = ShadPopoverController();
+  late final ShadPopoverController popoverController;
+
+  @override
+  void initState() {
+    super.initState();
+    popoverController = ShadPopoverController();
+  }
 
   @override
   void dispose() {
@@ -64,39 +70,30 @@ class _AxiAvatarState extends State<AxiAvatar> {
         popover: (context) {
           return BlocProvider.value(
             value: locate<ProfileCubit>(),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 250.0,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: Presence.values.length,
-                    itemBuilder: (context, index) {
-                      final value = Presence.values[index];
-                      return Material(
-                        child: ListTile(
-                          title: Text(value.tooltip),
-                          leading: PresenceCircle(presence: value),
-                          selected: widget.presence?.name == value.name,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8.0),
-                          ),
-                          selectedColor: context.colorScheme.accentForeground,
-                          selectedTileColor: context.colorScheme.accent,
-                          onTap: () {
-                            context
-                                .read<ProfileCubit>()
-                                .updatePresence(presence: value);
-                            popoverController.toggle();
-                          },
+            child: IntrinsicWidth(
+              child: Material(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final value in Presence.values)
+                      ListTile(
+                        title: Text(value.tooltip),
+                        leading: PresenceCircle(presence: value),
+                        selected: widget.presence?.name == value.name,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                        selectedColor: context.colorScheme.accentForeground,
+                        selectedTileColor: context.colorScheme.accent,
+                        onTap: () {
+                          context
+                              .read<ProfileCubit>()
+                              .updatePresence(presence: value);
+                          popoverController.toggle();
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
           );

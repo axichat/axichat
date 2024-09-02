@@ -43,7 +43,9 @@ class _DisplayTimeSinceState extends State<DisplayTimeSince> {
       < const Duration(hours: 1) => '${difference.inMinutes}min ago',
       < const Duration(hours: 2) => '1hr ago',
       < const Duration(days: 1) => '${difference.inHours}hrs ago',
+      == const Duration(days: 1) => '1day ago',
       < const Duration(days: 7) => '${difference.inDays}days ago',
+      < const Duration(days: 14) => '1week ago',
       < const Duration(days: 31) => '${difference.inDays ~/ 7}weeks ago',
       _ => 'Months ago',
     };
