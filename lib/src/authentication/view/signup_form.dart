@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:chat/src/authentication/view/terms_checkbox.dart';
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/notification_permissions.dart';
-import 'package:chat/src/notifications/view/notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -52,12 +51,7 @@ class _SignupFormState extends State<SignupForm> {
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted ||
         !Form.of(context).mounted ||
-        !Form.of(context).validate() ||
-        !(await acceptTerms(context) ?? false)) return;
-    if (!await hasAllNotificationPermissions() && context.mounted) {
-      await showNotificationDialog(context);
-    }
-    if (!context.mounted) return;
+        !Form.of(context).validate()) return;
     await context.read<AuthenticationCubit>().signup(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,
@@ -137,22 +131,14 @@ class _SignupFormState extends State<SignupForm> {
                     ? 'Passwords don\'t match'
                     : null,
               ),
-              Align(
+              const Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
+                  padding: EdgeInsets.symmetric(
                     horizontal: 20.0,
                     vertical: 30.0,
                   ),
-                  child: ShadCheckbox(
-                    label: const Text('Remember Me'),
-                    sublabel: const Text('Save login details'),
-                    enabled: state is! AuthenticationInProgress,
-                    value: rememberMe,
-                    onChanged: (checked) => setState(() {
-                      rememberMe = checked;
-                    }),
-                  ),
+                  child: TermsCheckbox(),
                 ),
               ),
               FutureBuilder(

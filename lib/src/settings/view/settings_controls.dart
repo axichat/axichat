@@ -1,6 +1,5 @@
-import 'package:chat/src/app.dart';
 import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/notifications/bloc/notification_permissions.dart';
+import 'package:chat/src/notifications/view/notification_request.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -17,25 +16,7 @@ class SettingsControls extends StatelessWidget {
           shrinkWrap: true,
           children: [
             if (context.read<Capability>().canForegroundService)
-              FutureBuilder(
-                future: hasAllNotificationPermissions(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.requireData) {
-                    return const SizedBox.shrink();
-                  }
-                  return ListTile(
-                    title: const Text('Receive message notifications'),
-                    subtitle: Text(
-                      'Missing some permissions',
-                      style: TextStyle(color: context.colorScheme.destructive),
-                    ),
-                    trailing: const ShadButton.ghost(
-                      text: Text('Enable'),
-                      onPressed: requestAllNotificationPermissions,
-                    ),
-                  );
-                },
-              ),
+              const NotificationRequest(),
             ListTile(
               title: const Text('Theme Mode'),
               trailing: ShadSelect<ThemeMode>(

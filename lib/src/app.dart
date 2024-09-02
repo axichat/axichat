@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
+import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:chat/src/storage/credential_store.dart';
@@ -112,6 +113,9 @@ class MaterialAxichat extends StatelessWidget {
         final lightTheme = ShadThemeData(
           colorScheme: ShadColorScheme.fromName(state.shadColor.name),
           brightness: Brightness.light,
+          decoration: const ShadDecoration(
+            errorPadding: inputSubtextInsets,
+          ),
         );
         final darkTheme = ShadThemeData(
           colorScheme: ShadColorScheme.fromName(
@@ -119,6 +123,9 @@ class MaterialAxichat extends StatelessWidget {
             brightness: Brightness.dark,
           ),
           brightness: Brightness.dark,
+          decoration: const ShadDecoration(
+            errorPadding: inputSubtextInsets,
+          ),
         );
         return ShadApp.router(
           localizationsDelegates: const [

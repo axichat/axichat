@@ -1,8 +1,8 @@
 import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:chat/src/authentication/view/terms_checkbox.dart';
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/notification_permissions.dart';
-import 'package:chat/src/notifications/view/notification_dialog.dart';
+import 'package:chat/src/notifications/view/notification_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -42,13 +42,7 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   void _onPressed(BuildContext context) async {
-    if (!Form.of(context).mounted ||
-        !Form.of(context).validate() ||
-        !(await acceptTerms(context) ?? false)) return;
-    if (!await hasAllNotificationPermissions() && context.mounted) {
-      await showNotificationDialog(context);
-    }
-    if (!context.mounted) return;
+    if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,
@@ -99,24 +93,15 @@ class _LoginFormState extends State<LoginForm> {
                 enabled: state is! AuthenticationInProgress,
                 controller: _passwordTextController,
               ),
-              Align(
+              const NotificationRequest(),
+              const Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20.0,
-                    vertical: 30.0,
-                  ),
-                  child: ShadCheckbox(
-                    label: const Text('Remember Me'),
-                    sublabel: const Text('Save login details'),
-                    enabled: state is! AuthenticationInProgress,
-                    value: rememberMe,
-                    onChanged: (checked) => setState(() {
-                      rememberMe = checked;
-                    }),
-                  ),
+                  padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+                  child: TermsCheckbox(),
                 ),
               ),
+              const SizedBox.square(dimension: 16.0),
               Builder(
                 builder: (context) {
                   final loading = state is AuthenticationInProgress;

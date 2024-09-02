@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-export 'accept_terms.dart';
 export 'axi_adaptive_layout.dart';
 export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
@@ -45,5 +44,7 @@ const mobileHoverStrategies = ShadHoverStrategies(
 
 const inputSubtextInsets = EdgeInsets.only(
   left: 8.0,
+  top: 2.0,
+  right: 8.0,
   bottom: 4.0,
 );
