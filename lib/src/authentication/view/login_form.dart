@@ -1,6 +1,8 @@
 import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/notifications/bloc/notification_permissions.dart';
+import 'package:chat/src/notifications/view/notification_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -43,6 +45,9 @@ class _LoginFormState extends State<LoginForm> {
     if (!Form.of(context).mounted ||
         !Form.of(context).validate() ||
         !(await acceptTerms(context) ?? false)) return;
+    if (!await hasAllNotificationPermissions() && context.mounted) {
+      await showNotificationDialog(context);
+    }
     if (!context.mounted) return;
     context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,

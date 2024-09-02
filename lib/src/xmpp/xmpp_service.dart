@@ -9,11 +9,14 @@ import 'package:chat/src/common/defer.dart';
 import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/notifications/bloc/send_notification.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/impatient_completer.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
+import 'package:chat/src/xmpp/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -150,7 +153,7 @@ class XmppService extends XmppBase
   static XmppService? _instance;
 
   factory XmppService({
-    required XmppConnection Function() buildConnection,
+    required FutureOr<XmppConnection> Function() buildConnection,
     required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
     required Capability capability,
@@ -167,7 +170,7 @@ class XmppService extends XmppBase
   @override
   final _log = Logger('XmppService');
 
-  final XmppConnection Function() _buildConnection;
+  final FutureOr<XmppConnection> Function() _buildConnection;
   final FutureOr<XmppStateStore> Function(String, String) _buildStateStore;
   final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
   final Capability _capability;
@@ -189,8 +192,7 @@ class XmppService extends XmppBase
 
   String? get username => _myJid?.local;
 
-  Future<bool> get connected async =>
-      connectionState == mox.XmppConnectionState.connected;
+  bool get connected => connectionState == mox.XmppConnectionState.connected;
 
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
@@ -304,6 +306,18 @@ class XmppService extends XmppBase
         await _dbOp<XmppDatabase>((db) async {
           await db.saveMessage(message);
         });
+        await sendNotification(
+          title: from,
+          body: body,
+          groupKey: chatJid,
+          extraConditions: [
+            _capability.canForegroundService,
+            !isCarbon,
+            !await _dbOpReturning<XmppDatabase, bool>((db) async {
+              return (await db.getChat(chatJid))?.muted ?? false;
+            }),
+          ],
+        );
       case mox.ConnectionStateChangedEvent event:
         _connectionState = event.state;
         _connectivityStream.add(event.state);
@@ -400,7 +414,7 @@ class XmppService extends XmppBase
       defer: _reset,
       operation: () async {
         _log.info('Attempting login...');
-        _connection = _buildConnection();
+        _connection = await _buildConnection();
 
         if (!awaitAuthentication && !_stateStore.isCompleted) {
           _stateStore.complete(
@@ -627,7 +641,7 @@ class XmppService extends XmppBase
     await _eventSubscription?.cancel();
     _eventSubscription = null;
 
-    if (await connected) {
+    if (connected) {
       try {
         await _connection.disconnect();
         _log.info('Gracefully disconnected.');
@@ -635,7 +649,10 @@ class XmppService extends XmppBase
         _log.severe('Graceful disconnect failed. Closing forcefully...', e, s);
       }
     }
-    _connection = _buildConnection();
+    if (_capability.canForegroundService) {
+      await _connection.reset();
+    }
+    _connection = await _buildConnection();
     // _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
     if (!_stateStore.isCompleted) {
@@ -742,7 +759,7 @@ class XmppConnection extends mox.XmppConnection {
     XmppReconnectionPolicy? reconnectionPolicy,
     XmppConnectivityManager? connectivityManager,
     XmppClientNegotiator? negotiationsHandler,
-    XmppSocketWrapper? socketWrapper,
+    this.socketWrapper,
   }) : super(
           reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
           connectivityManager ?? XmppConnectivityManager.pingDns(),
@@ -750,6 +767,7 @@ class XmppConnection extends mox.XmppConnection {
           socketWrapper ?? XmppSocketWrapper(),
         );
 
+  final XmppSocketWrapper? socketWrapper;
   // Check if we have a connectionSettings as it is marked [late] in mox.
   bool get hasConnectionSettings => _hasConnectionSettings;
   bool _hasConnectionSettings = false;
@@ -799,6 +817,14 @@ class XmppConnection extends mox.XmppConnection {
         return getNegotiatorById(mox.sasl2Negotiator);
       default:
         return null;
+    }
+  }
+
+  Future<void> reset() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      if (socketWrapper case final ForegroundSocketWrapper socket) {
+        socket.reset();
+      }
     }
   }
 }

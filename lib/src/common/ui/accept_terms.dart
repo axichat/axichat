@@ -35,6 +35,9 @@ Future<bool?> acceptTerms(BuildContext context) => showShadDialog<bool>(
                   text: 'privacy policy',
                 ),
               ),
+              TextSpan(
+                text: '.',
+              ),
             ],
           ),
         ),

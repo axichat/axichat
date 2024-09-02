@@ -1,18 +1,11 @@
 // ignore_for_file: avoid_print
-import 'dart:convert';
-
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/common/policy.dart';
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/storage/state_store.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:hive_flutter/adapters.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
@@ -34,34 +27,36 @@ void main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
 
-  if (Capability().canForegroundService) {
+  const capability = Capability();
+
+  if (capability.canForegroundService) {
     FlutterForegroundTask.initCommunicationPort();
   }
 
-  final xmppService = XmppService(
-    buildConnection: () => XmppConnection(),
-    buildStateStore: (prefix, passphrase) async {
-      await Hive.initFlutter(prefix);
-      if (!Hive.isAdapterRegistered(1)) {
-        Hive.registerAdapter(PresenceAdapter());
-      }
-      await Hive.openBox(
-        XmppStateStore.boxName,
-        encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
-      );
-      return XmppStateStore();
-    },
-    buildDatabase: (prefix, passphrase) async {
-      return XmppDrift(
-        file: await dbFileFor(prefix),
-        passphrase: passphrase,
-      );
-    },
-    capability: Capability(),
-    policy: Policy(),
+  AwesomeNotifications().initialize(
+    null,
+    [
+      NotificationChannel(
+        channelGroupKey: 'basic_channel_group',
+        channelKey: 'basic_channel',
+        channelName: 'Basic notifications',
+        channelDescription: 'Message notifications',
+        defaultColor: const Color(0xFF9D50DD),
+        ledColor: Colors.white,
+      )
+    ],
+    channelGroups: [
+      NotificationChannelGroup(
+        channelGroupKey: 'basic_channel_group',
+        channelGroupName: 'Basic group',
+      )
+    ],
   );
 
-  runApp(Axichat(xmppService: xmppService));
+  runApp(capability.canForegroundService
+      ? const WithForegroundTask(
+          child: Material(child: Axichat(capability: capability)))
+      : const Axichat(capability: capability));
 }
 
 class BlocLogger extends BlocObserver {

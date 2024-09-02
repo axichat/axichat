@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
+import 'package:awesome_notifications/awesome_notifications.dart'
+    hide NotificationPermission;
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 
@@ -16,18 +18,28 @@ const dataPrefix = 'Data';
 const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
 
+@pragma("vm:entry-point")
+Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+  FlutterForegroundTask.launchApp('/');
+}
+
 @pragma('vm:entry-point')
 void startCallback() {
   FlutterForegroundTask.setTaskHandler(ForegroundSocket());
 }
 
 class ForegroundSocket extends TaskHandler {
-  final _socket = XmppSocketWrapper();
+  static final _log = Logger('ForegroundSocket');
+
+  XmppSocketWrapper? _socket;
   late final StreamSubscription<String> _dataSubscription;
   late final StreamSubscription<mox.XmppSocketEvent> _eventSubscription;
 
-  static void _sendToMain(List<Object> strings) =>
-      FlutterForegroundTask.sendDataToMain(strings.join(join));
+  static void _sendToMain(List<Object> strings) {
+    final data = strings.join(join);
+    _log.info('Sending to main: $data');
+    FlutterForegroundTask.sendDataToMain(data);
+  }
 
   static void _onData(String data) => _sendToMain([dataPrefix, data]);
 
@@ -42,15 +54,20 @@ class ForegroundSocket extends TaskHandler {
 
   @override
   void onStart(DateTime timestamp) {
-    _dataSubscription = _socket.getDataStream().listen(_onData);
-    _eventSubscription = _socket.getEventStream().listen(_onEvent);
+    _log.info('onStart called.');
+    _socket ??= XmppSocketWrapper();
+    _dataSubscription = _socket!.getDataStream().listen(_onData);
+    _eventSubscription = _socket!.getEventStream().listen(_onEvent);
   }
 
   @override
   void onReceiveData(covariant String data) async {
+    _log.info('Received task: $data');
+    _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
       final split = data.split(join);
-      final result = await _socket.connect(
+      _log.info(split);
+      final result = await _socket!.connect(
         split[1],
         host: split[2],
         port: int.parse(split[3]),
@@ -58,12 +75,12 @@ class ForegroundSocket extends TaskHandler {
       return _sendToMain([connectPrefix, result]);
     } else if (data.startsWith('$securePrefix$join')) {
       final domain = data.substring('$securePrefix$join'.length);
-      final result = await _socket.secure(domain);
+      final result = await _socket!.secure(domain);
       return _sendToMain([securePrefix, result]);
     } else if (data.startsWith('$writePrefix$join')) {
-      return _socket.write(data.substring('$writePrefix$join'.length));
+      return _socket?.write(data.substring('$writePrefix$join'.length));
     } else if (data.startsWith('$closePrefix$join')) {
-      return _socket.close();
+      return _socket?.close();
     }
   }
 
@@ -77,16 +94,15 @@ class ForegroundSocket extends TaskHandler {
 
   @override
   void onDestroy(DateTime timestamp) async {
-    _socket.close();
     await _dataSubscription.cancel();
     await _eventSubscription.cancel();
+    _socket?.close();
+    _socket = null;
   }
 }
 
 class ForegroundSocketWrapper implements XmppSocketWrapper {
-  ForegroundSocketWrapper() {
-    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
-  }
+  static final _log = Logger('ForegroundSocketWrapper');
 
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
@@ -95,27 +111,30 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   var _connect = Completer<bool>();
   var _secure = Completer<bool>();
 
-  void _onReceiveTaskData(Object data) {
+  Future<void> _onReceiveTaskData(Object data) async {
     if (data is! String) return;
+    _log.info('Received main: $data');
     if (data.startsWith('$dataPrefix$join')) {
       _dataStream.add(data.substring('$dataPrefix$join'.length));
     } else if (data == socketErrorPrefix) {
       _eventStream.add(mox.XmppSocketErrorEvent(''));
     } else if (data.startsWith('$socketClosurePrefix$join')) {
-      FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
-      FlutterForegroundTask.stopService();
-      _eventStream
-          .add(mox.XmppSocketClosureEvent(bool.parse(data.split(join)[1])));
+      _eventStream.add(
+        mox.XmppSocketClosureEvent(bool.parse(data.split(join)[1])),
+      );
     } else if (data.startsWith('$connectPrefix$join')) {
-      _connect.complete(bool.parse(data.split(join)[1]));
-      _connect = Completer<bool>();
+      final connected = bool.parse(data.split(join)[1]);
+      _connect.complete(connected);
     } else if (data.startsWith('$securePrefix$join')) {
       _secure.complete(bool.parse(data.split(join)[1]));
     }
   }
 
-  static void _sendToTask(List<Object> strings) =>
-      FlutterForegroundTask.sendDataToTask(strings.join(join));
+  static void _sendToTask(List<Object> strings) {
+    final data = strings.join(join);
+    _log.info('Sending to task: $data');
+    FlutterForegroundTask.sendDataToTask(data);
+  }
 
   @override
   bool isSecure() => _secure.isCompleted;
@@ -152,8 +171,20 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   bool whitespacePingAllowed() => true;
 
   @override
-  Future<bool> connect(String domain, {String? host, int? port}) {
-    _secure = Completer<bool>();
+  Future<bool> connect(String domain, {String? host, int? port}) async {
+    await reset();
+
+    _log.info('Starting foreground service...');
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+    initForegroundService();
+    await FlutterForegroundTask.startService(
+      serviceId: 256,
+      notificationTitle: 'Axichat Message Service',
+      notificationText: 'Return to the app',
+      notificationIcon: null,
+      callback: startCallback,
+    );
+
     _sendToTask([
       connectPrefix,
       domain,
@@ -180,30 +211,13 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   @override
   void prepareDisconnect() {}
-}
 
-Future<bool> hasAllNotificationPermissions() async {
-  return (await FlutterForegroundTask.checkNotificationPermission()) ==
-          NotificationPermission.granted &&
-      await FlutterForegroundTask.canDrawOverlays &&
-      await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-}
-
-Future<void> requestNotificationPermissions() async {
-  final NotificationPermission notificationPermissionStatus =
-      await FlutterForegroundTask.checkNotificationPermission();
-  if (notificationPermissionStatus != NotificationPermission.granted) {
-    await FlutterForegroundTask.requestNotificationPermission();
-  }
-
-  if (Platform.isAndroid) {
-    if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
-      await FlutterForegroundTask.requestIgnoreBatteryOptimization();
-    }
-
-    if (!await FlutterForegroundTask.canDrawOverlays) {
-      await FlutterForegroundTask.openSystemAlertWindowSettings();
-    }
+  Future<void> reset() async {
+    _connect = Completer<bool>();
+    _secure = Completer<bool>();
+    if (!await FlutterForegroundTask.isRunningService) return;
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+    await FlutterForegroundTask.stopService();
   }
 }
 
@@ -213,7 +227,7 @@ void initForegroundService() => FlutterForegroundTask.init(
         channelName: 'Foreground Service Notification',
         channelDescription:
             'This notification appears when the foreground service is running.',
-        channelImportance: NotificationChannelImportance.DEFAULT,
+        visibility: NotificationVisibility.VISIBILITY_PRIVATE,
         priority: NotificationPriority.LOW,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
@@ -229,17 +243,3 @@ void initForegroundService() => FlutterForegroundTask.init(
         allowWifiLock: true,
       ),
     );
-
-Future<ServiceRequestResult> startForegroundService() async {
-  if (await FlutterForegroundTask.isRunningService) {
-    return FlutterForegroundTask.restartService();
-  } else {
-    return FlutterForegroundTask.startService(
-      serviceId: 256,
-      notificationTitle: 'Axichat Message Service',
-      notificationText: 'Return to the app',
-      notificationIcon: null,
-      callback: startCallback,
-    );
-  }
-}

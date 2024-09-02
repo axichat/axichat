@@ -1,32 +1,73 @@
+import 'dart:convert';
+
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:chat/src/storage/credential_store.dart';
+import 'package:chat/src/storage/database.dart';
+import 'package:chat/src/storage/models.dart';
+import 'package:chat/src/storage/state_store.dart';
+import 'package:chat/src/xmpp/foreground_socket.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class Axichat extends StatelessWidget {
   const Axichat({
     super.key,
-    required XmppService xmppService,
-  }) : _xmppService = xmppService;
+    XmppService? xmppService,
+    Capability? capability,
+    Policy? policy,
+  })  : _xmppService = xmppService,
+        _capability = capability ?? const Capability(),
+        _policy = policy ?? const Policy();
 
-  final XmppService _xmppService;
+  final XmppService? _xmppService;
+  final Capability _capability;
+  final Policy _policy;
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        RepositoryProvider.value(value: _xmppService),
-        RepositoryProvider(create: (context) => Capability()),
-        RepositoryProvider(create: (context) => Policy()),
+        if (_xmppService == null)
+          RepositoryProvider(
+            create: (context) => XmppService(
+              buildConnection: () => !_capability.canForegroundService
+                  ? XmppConnection()
+                  : XmppConnection(socketWrapper: ForegroundSocketWrapper()),
+              buildStateStore: (prefix, passphrase) async {
+                await Hive.initFlutter(prefix);
+                if (!Hive.isAdapterRegistered(1)) {
+                  Hive.registerAdapter(PresenceAdapter());
+                }
+                await Hive.openBox(
+                  XmppStateStore.boxName,
+                  encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+                );
+                return XmppStateStore();
+              },
+              buildDatabase: (prefix, passphrase) async {
+                return XmppDrift(
+                  file: await dbFileFor(prefix),
+                  passphrase: passphrase,
+                );
+              },
+              capability: _capability,
+              policy: _policy,
+            ),
+          )
+        else
+          RepositoryProvider.value(value: _xmppService),
+        RepositoryProvider.value(value: _capability),
+        RepositoryProvider.value(value: _policy),
       ],
       child: MultiBlocProvider(
         providers: [

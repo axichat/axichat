@@ -1,6 +1,8 @@
 import 'dart:io';
 
 class Capability {
+  const Capability();
+
   bool get canFssBatchOperation => !Platform.isWindows;
   String get discoClient {
     if (Platform.isAndroid || Platform.isIOS) {

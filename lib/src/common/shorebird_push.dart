@@ -7,6 +7,7 @@ Future<bool> checkShorebird(
 ]) async {
   if (!capability.isShorebirdAvailable) return false;
   final shorebirdCodePush = shorebird ?? ShorebirdCodePush();
+  if (await shorebirdCodePush.isNewPatchReadyToInstall()) return true;
   if (await shorebirdCodePush.isNewPatchAvailableForDownload()) {
     await shorebirdCodePush.downloadUpdateIfAvailable();
     return true;

@@ -77,6 +77,10 @@ abstract interface class XmppDatabase implements Database {
     required String jid,
     required bool favourited,
   });
+  Future<void> markChatMuted({
+    required String jid,
+    required bool muted,
+  });
   Future<void> updateChatState({
     required String chatJid,
     required mox.ChatState state,
@@ -716,6 +720,16 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     _log.info('Marking chat: $jid as favourited: $favourited');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(favourited: Value(favourited)));
+  }
+
+  @override
+  Future<void> markChatMuted({
+    required String jid,
+    required bool muted,
+  }) async {
+    _log.info('Marking chat: $jid as muted: $muted');
+    await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(muted: Value(muted)));
   }
 
   @override

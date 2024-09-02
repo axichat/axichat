@@ -1,3 +1,6 @@
+import 'package:chat/src/app.dart';
+import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/notifications/bloc/notification_permissions.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,6 +16,26 @@ class SettingsControls extends StatelessWidget {
         return ListView(
           shrinkWrap: true,
           children: [
+            if (context.read<Capability>().canForegroundService)
+              FutureBuilder(
+                future: hasAllNotificationPermissions(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.requireData) {
+                    return const SizedBox.shrink();
+                  }
+                  return ListTile(
+                    title: const Text('Receive message notifications'),
+                    subtitle: Text(
+                      'Missing some permissions',
+                      style: TextStyle(color: context.colorScheme.destructive),
+                    ),
+                    trailing: const ShadButton.ghost(
+                      text: Text('Enable'),
+                      onPressed: requestAllNotificationPermissions,
+                    ),
+                  );
+                },
+              ),
             ListTile(
               title: const Text('Theme Mode'),
               trailing: ShadSelect<ThemeMode>(
@@ -50,7 +73,7 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Low Motion'),
+                label: const Text('Low motion'),
                 sublabel: const Text(
                     'Disables most animations. Better for slow devices.'),
                 value: state.lowMotion,
@@ -61,7 +84,7 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
-                label: const Text('Send Typing Indicators'),
+                label: const Text('Send typing indicators'),
                 sublabel: const Text(
                     'Let other people in a chat see when you are typing.'),
                 value: state.indicateTyping,

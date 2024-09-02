@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:async/async.dart';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/event_transform.dart';
+import 'package:chat/src/notifications/bloc/dismiss_notifications.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
@@ -26,9 +27,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
     );
+    on<ChatMuted>(_onChatMuted);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
+      dismissNotifications(groupKey: jid!);
       _chatSubscription = _xmppService
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
@@ -121,6 +124,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on XmppMessageException catch (_) {
       // Don't panic. User will see a visual difference in the message bubble.
     }
+  }
+
+  Future<void> _onChatMuted(
+    ChatMuted event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (jid == null) return;
+    await _xmppService.toggleChatMuted(jid: jid!, muted: event.muted);
   }
 
   Future<void> _onChatEncryptionChanged(

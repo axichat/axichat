@@ -56,6 +56,8 @@ dependencies:
   flutter_foreground_task: ^8.4.0
   shorebird_code_push: ^1.1.4
   url_launcher: ^6.3.0
+  awesome_notifications: any
+  awesome_notifications_core: ^0.9.3
 
 dev_dependencies:
   flutter_test:

@@ -59,6 +59,15 @@ final class ChatMessageSent extends ChatEvent {
   List<Object?> get props => [text];
 }
 
+final class ChatMuted extends ChatEvent {
+  const ChatMuted(this.muted);
+
+  final bool muted;
+
+  @override
+  List<Object?> get props => [muted];
+}
+
 final class ChatEncryptionChanged extends ChatEvent {
   const ChatEncryptionChanged({required this.protocol});
 

@@ -60,6 +60,15 @@ mixin ChatsService on XmppBase {
     });
   }
 
+  Future<void> toggleChatMuted({
+    required String jid,
+    required bool muted,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markChatMuted(jid: jid, muted: muted);
+    });
+  }
+
   Future<void> setChatEncryption({
     required String jid,
     required EncryptionProtocol protocol,

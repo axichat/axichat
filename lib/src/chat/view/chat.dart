@@ -214,6 +214,7 @@ class _ChatState extends State<Chat> {
             );
             final chatType = state.chat?.type;
             final jid = state.chat?.jid;
+            final muted = state.chat?.muted;
             return Column(
               children: [
                 Container(
@@ -301,6 +302,16 @@ class _ChatState extends State<Chat> {
                                   },
                                 ),
                               ),
+                            ),
+                      muted == null
+                          ? const SizedBox.shrink()
+                          : ShadButton.ghost(
+                              icon: Icon(muted
+                                  ? LucideIcons.bellOff
+                                  : LucideIcons.bell),
+                              onPressed: () => context
+                                  .read<ChatBloc>()
+                                  .add(ChatMuted(!muted)),
                             ),
                     ],
                   ),
