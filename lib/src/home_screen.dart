@@ -58,76 +58,80 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: DefaultTabController(
-        length: tabs.length,
-        animationDuration: context.watch<SettingsCubit>().animationDuration,
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider(
-              create: (context) => ChatsCubit(
-                xmppService: context.read<XmppService>(),
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        body: DefaultTabController(
+          length: tabs.length,
+          animationDuration: context.watch<SettingsCubit>().animationDuration,
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (context) => ChatsCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => DraftCubit(
-                xmppService: context.read<XmppService>(),
+              BlocProvider(
+                create: (context) => DraftCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => RosterCubit(
-                xmppService: context.read<XmppService>(),
+              BlocProvider(
+                create: (context) => RosterCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => ProfileCubit(
-                xmppService: context.read<XmppService>(),
+              BlocProvider(
+                create: (context) => ProfileCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => BlocklistCubit(
-                xmppService: context.read<XmppService>(),
+              BlocProvider(
+                create: (context) => BlocklistCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => ConnectivityCubit(
-                xmppService: context.read<XmppService>(),
+              BlocProvider(
+                create: (context) => ConnectivityCubit(
+                  xmppService: context.read<XmppService>(),
+                ),
               ),
-            ),
-          ],
-          child: Builder(
-            builder: (context) {
-              final openJid = context.watch<ChatsCubit>().state.openJid;
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const ConnectivityIndicator(),
-                  Expanded(
-                    child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
-                      builder: (context, state) {
-                        return SafeArea(
-                          top: state is ConnectivityConnected,
-                          child: AxiAdaptiveLayout(
-                            invertPriority: openJid != null,
-                            primaryChild: Nexus(tabs: tabs),
-                            secondaryChild: openJid == null
-                                ? const GuestChat()
-                                : BlocProvider(
-                                    key: Key(openJid),
-                                    create: (context) => ChatBloc(
-                                      jid: openJid,
-                                      xmppService: context.read<XmppService>(),
+            ],
+            child: Builder(
+              builder: (context) {
+                final openJid = context.watch<ChatsCubit>().state.openJid;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ConnectivityIndicator(),
+                    Expanded(
+                      child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+                        builder: (context, state) {
+                          return SafeArea(
+                            top: state is ConnectivityConnected,
+                            child: AxiAdaptiveLayout(
+                              invertPriority: openJid != null,
+                              primaryChild: Nexus(tabs: tabs),
+                              secondaryChild: openJid == null
+                                  ? const GuestChat()
+                                  : BlocProvider(
+                                      key: Key(openJid),
+                                      create: (context) => ChatBloc(
+                                        jid: openJid,
+                                        xmppService:
+                                            context.read<XmppService>(),
+                                      ),
+                                      child: const Chat(),
                                     ),
-                                    child: const Chat(),
-                                  ),
-                          ),
-                        );
-                      },
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),

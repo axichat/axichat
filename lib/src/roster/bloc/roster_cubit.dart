@@ -37,12 +37,15 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     if (current is RosterAvailable) {
       cache['items'] = current.items;
       contacts = current.items.map((e) => e.jid).toSet();
-    } else if (next is RosterAvailable) {
+    }
+    if (next is RosterAvailable) {
       cache['items'] = next.items;
       contacts = next.items.map((e) => e.jid).toSet();
-    } else if (current is RosterInvitesAvailable) {
+    }
+    if (current is RosterInvitesAvailable) {
       cache['invites'] = current.invites;
-    } else if (next is RosterInvitesAvailable) {
+    }
+    if (next is RosterInvitesAvailable) {
       cache['invites'] = next.invites;
     }
   }
