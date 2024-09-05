@@ -1,13 +1,9 @@
-import 'dart:io';
-
 import 'package:chat/src/compose_screen.dart';
 import 'package:chat/src/home_screen.dart';
 import 'package:chat/src/login_screen.dart';
 import 'package:chat/src/profile_screen.dart';
-import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:chat/src/settings_screen.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 part 'routes.g.dart';
@@ -17,31 +13,7 @@ class TransitionGoRouteData extends GoRouteData {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      CustomTransitionPage<void>(
-        key: state.pageKey,
-        transitionDuration: context.read<SettingsCubit>().animationDuration,
-        child: build(context, state),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          if (Platform.isIOS) {
-            return CupertinoPageTransition(
-              primaryRouteAnimation: animation,
-              secondaryRouteAnimation: secondaryAnimation,
-              linearTransition: true,
-              child: child,
-            );
-          }
-          return FadeTransition(
-            opacity: CurveTween(curve: Curves.easeIn).animate(animation),
-            child: SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 0.1),
-                end: Offset.zero,
-              ).animate(CurveTween(curve: Curves.easeIn).animate(animation)),
-              child: child,
-            ),
-          );
-        },
-      );
+      MaterialPage(child: build(context, state));
 }
 
 @TypedGoRoute<HomeRoute>(

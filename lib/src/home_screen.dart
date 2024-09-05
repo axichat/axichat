@@ -58,49 +58,54 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        body: DefaultTabController(
-          length: tabs.length,
-          animationDuration: context.watch<SettingsCubit>().animationDuration,
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (context) => ChatsCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+    return Scaffold(
+      body: DefaultTabController(
+        length: tabs.length,
+        animationDuration: context.watch<SettingsCubit>().animationDuration,
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (context) => ChatsCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => DraftCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => DraftCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => RosterCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => RosterCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => ProfileCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => ProfileCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => BlocklistCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => BlocklistCubit(
+                xmppService: context.read<XmppService>(),
               ),
-              BlocProvider(
-                create: (context) => ConnectivityCubit(
-                  xmppService: context.read<XmppService>(),
-                ),
+            ),
+            BlocProvider(
+              create: (context) => ConnectivityCubit(
+                xmppService: context.read<XmppService>(),
               ),
-            ],
-            child: Builder(
-              builder: (context) {
-                final openJid = context.watch<ChatsCubit>().state.openJid;
-                return Column(
+            ),
+          ],
+          child: Builder(
+            builder: (context) {
+              final openJid = context.watch<ChatsCubit>().state.openJid;
+              return PopScope(
+                canPop: false,
+                onPopInvoked: (_) {
+                  if (openJid case final jid?) {
+                    context.read<ChatsCubit>().toggleChat(jid: jid);
+                  }
+                },
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const ConnectivityIndicator(),
@@ -129,9 +134,9 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                   ],
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
