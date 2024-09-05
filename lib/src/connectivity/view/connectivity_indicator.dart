@@ -1,6 +1,4 @@
-import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/connectivity/bloc/connectivity_cubit.dart';
-import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,13 +10,7 @@ class ConnectivityIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var duration = context.watch<SettingsCubit>().animationDuration;
-    return BlocConsumer<ConnectivityCubit, ConnectivityState>(
-      listener: (context, state) async {
-        if (state is ConnectivityConnected &&
-            context.read<ProfileCubit>().state.resource.isEmpty) {
-          await context.read<AuthenticationCubit>().logout();
-        }
-      },
+    return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
         var color = const Color(0xff00ff00);
         var iconData = LucideIcons.cloud;

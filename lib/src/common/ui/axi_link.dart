@@ -17,9 +17,7 @@ class AxiLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return Link(
       uri: Uri.parse(link),
-      builder: (_, followLink) => ShadGestureDetector(
-        cursor: SystemMouseCursors.click,
-        hoverStrategies: mobileHoverStrategies,
+      builder: (_, followLink) => AxiLinkDetector(
         onTap: followLink,
         child: Text(
           text,
@@ -29,6 +27,34 @@ class AxiLink extends StatelessWidget {
             decorationColor: Colors.lightBlueAccent,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class AxiLinkDetector extends StatelessWidget {
+  const AxiLinkDetector({
+    super.key,
+    required this.onTap,
+    required this.child,
+  });
+
+  final void Function()? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadGestureDetector(
+      cursor: SystemMouseCursors.click,
+      hoverStrategies: mobileHoverStrategies,
+      onTap: onTap,
+      child: DefaultTextStyle(
+        style: const TextStyle(
+          color: Colors.lightBlueAccent,
+          decoration: TextDecoration.underline,
+          decorationColor: Colors.lightBlueAccent,
+        ),
+        child: child,
       ),
     );
   }

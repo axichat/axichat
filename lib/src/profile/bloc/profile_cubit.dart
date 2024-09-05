@@ -40,7 +40,7 @@ class ProfileCubit extends Cubit<ProfileState> {
     return super.close();
   }
 
-  void updatePresence({Presence? presence, String? status}) async {
+  Future<void> updatePresence({Presence? presence, String? status}) async {
     try {
       await _xmppService.sendPresence(
         presence: presence ?? state.presence,
@@ -48,6 +48,8 @@ class ProfileCubit extends Cubit<ProfileState> {
       );
     } on XmppPresenceException catch (_) {}
   }
+
+  Future<void> disconnect() => _xmppService.disconnect();
 
   void loadFingerprints() async {
     // final fingerprint = await _xmppService.getCurrentFingerprint();

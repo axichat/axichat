@@ -44,7 +44,8 @@ class RosterAddButton extends StatelessWidget {
                                   ? null
                                   : state.message,
                               jidOptions: [
-                                '${jid.split('@').first}@${AuthenticationCubit.defaultServer}'
+                                '${jid.split('@').first}'
+                                    '@${AuthenticationCubit.defaultServer}'
                               ],
                               onChanged: (value) {
                                 setState(() => jid = value);
