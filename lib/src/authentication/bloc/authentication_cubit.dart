@@ -70,7 +70,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String domain = defaultServer,
     bool rememberMe = false,
   }) async {
-    if (state is AuthenticationComplete) return;
+    if (state is AuthenticationComplete || state is AuthenticationInProgress) {
+      return;
+    }
     emit(AuthenticationInProgress());
 
     assert((username == null) == (password == null));
@@ -107,50 +109,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       key: databasePassphraseStorageKey,
     );
 
-    if (databasePassphrase == null) {
-      databasePassphrase = generateRandomString();
-      try {
-        await _xmppService.connect(
-          jid: jid,
-          resource: resource,
-          password: password,
-          databasePrefix: prefix,
-          databasePassphrase: databasePassphrase,
-        );
-      } on XmppAuthenticationException catch (_) {
-        emit(const AuthenticationFailure('Incorrect username or password'));
-        return;
-      } on Exception catch (_) {
-        emit(const AuthenticationFailure('Error. Please try again later.'));
-        return;
-      }
-
-      await _credentialStore.write(
-        key: databasePassphraseStorageKey,
-        value: databasePassphrase,
+    final savedPassword = await _credentialStore.read(key: passwordStorageKey);
+    final preHashed = savedPassword != null;
+    databasePassphrase ??= generateRandomString();
+    try {
+      password = await _xmppService.connect(
+        jid: jid,
+        resource: resource,
+        password: password,
+        databasePrefix: prefix,
+        databasePassphrase: databasePassphrase,
+        preHashed: preHashed,
       );
-    } else {
-      if (await _credentialStore.read(key: passwordStorageKey)
-          case final savedPassword?) {
-        if (password != savedPassword) {
-          emit(const AuthenticationFailure('Incorrect username or password'));
-          return;
-        }
-      }
-      try {
-        await _xmppService.connect(
-          jid: jid,
-          resource: resource,
-          password: password,
-          databasePrefix: prefix,
-          databasePassphrase: databasePassphrase,
-          awaitAuthentication: false,
-        );
-      } on Exception catch (_) {
-        // If user has logged in before they should be able to enter the app
-        // and see their stored messages even if the server is unavailable.
-      }
+    } on XmppAuthenticationException catch (_) {
+      emit(const AuthenticationFailure('Incorrect username or password'));
+      return;
+    } on Exception catch (_) {
+      emit(const AuthenticationFailure('Error. Please try again later.'));
+      return;
     }
+
+    await _credentialStore.write(
+      key: databasePassphraseStorageKey,
+      value: databasePassphrase,
+    );
 
     await _credentialStore.write(
       key: resourceStorageKey,

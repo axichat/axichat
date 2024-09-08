@@ -117,7 +117,7 @@ abstract class XmppBase {
   String? get myJid;
   mox.JID? get _myJid;
 
-  Future<void> connect({
+  Future<String> connect({
     required String jid,
     required String password,
     required String databasePrefix,
@@ -396,13 +396,14 @@ class XmppService extends XmppBase
   var _synchronousConnection = Completer<void>();
 
   @override
-  Future<void> connect({
+  Future<String> connect({
     required String jid,
     required String password,
     required String databasePrefix,
     required String databasePassphrase,
     String resource = '',
     bool awaitAuthentication = true,
+    bool preHashed = false,
   }) async {
     if (_synchronousConnection.isCompleted) {
       throw XmppAlreadyConnectedException();
@@ -410,7 +411,7 @@ class XmppService extends XmppBase
     if (needsReset) await _reset();
     _synchronousConnection.complete();
 
-    await deferToError(
+    return await deferToError(
       defer: _reset,
       operation: () async {
         _log.info('Attempting login...');
@@ -423,7 +424,7 @@ class XmppService extends XmppBase
 
         _myJid = mox.JID.fromString('$jid/$resource');
 
-        await _initConnection();
+        await _initConnection(preHashed: preHashed);
 
         _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
 
@@ -444,15 +445,19 @@ class XmppService extends XmppBase
           }
           _log.info('Login successful. Initializing databases...');
           await _initDatabases(databasePrefix, databasePassphrase);
+          return _connection
+              .getNegotiator<SaslScramNegotiator>()!
+              .saltedPassword;
         } else {
           await _initDatabases(databasePrefix, databasePassphrase);
           await _connection.connect();
+          return password;
         }
       },
     );
   }
 
-  Future<void> _initConnection() async {
+  Future<void> _initConnection({bool preHashed = false}) async {
     _log.info('Initializing connection object...');
     final resource = this.resource ?? '';
     await _connection.registerFeatureNegotiators([
@@ -462,8 +467,8 @@ class XmppService extends XmppBase
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
       mox.PresenceNegotiator(),
-      mox.SaslScramNegotiator(10, '', '', mox.ScramHashType.sha1),
-      mox.SaslPlainNegotiator(),
+      SaslScramNegotiator(preHashed: preHashed),
+      // mox.SaslPlainNegotiator(),
       mox.Sasl2Negotiator(),
       mox.Bind2Negotiator(),
       mox.FASTSaslNegotiator(),
@@ -815,6 +820,8 @@ class XmppConnection extends mox.XmppConnection {
         return getNegotiatorById(mox.saslFASTNegotiator);
       case == mox.Sasl2Negotiator:
         return getNegotiatorById(mox.sasl2Negotiator);
+      case == SaslScramNegotiator:
+        return getNegotiatorById(mox.saslScramSha512Negotiator);
       default:
         return null;
     }
@@ -1166,5 +1173,23 @@ class PubSubManager extends mox.PubSubManager {
     );
 
     return moxlib.Result(item);
+  }
+}
+
+class SaslScramNegotiator extends mox.SaslScramNegotiator {
+  SaslScramNegotiator({
+    this.preHashed = false,
+  }) : super(10, '', '', mox.ScramHashType.sha512);
+
+  final bool preHashed;
+
+  String get saltedPassword => base64Encode(_saltedPassword);
+  late List<int> _saltedPassword;
+
+  @override
+  Future<List<int>> calculateSaltedPassword(String salt, int iterations) async {
+    return _saltedPassword = preHashed
+        ? base64Decode(attributes.getConnectionSettings().password)
+        : await super.calculateSaltedPassword(salt, iterations);
   }
 }

@@ -40,7 +40,7 @@ class ProfileScreen extends StatelessWidget {
                 value: locate<SettingsCubit>(),
               ),
             ],
-            child: SingleChildScrollView(
+            child: const SingleChildScrollView(
               child: _ProfileBody(),
             ),
           ),
@@ -89,25 +89,25 @@ class _ProfileBodyState extends State<_ProfileBody> {
               FutureBuilder(
                 future: checkShorebird(context.read<Capability>()),
                 builder: (context, snapshot) {
-                  // if (!snapshot.hasData) {
-                  //   return const Padding(
-                  //     padding: EdgeInsets.all(4.0),
-                  //     child: Row(
-                  //       crossAxisAlignment: CrossAxisAlignment.center,
-                  //       mainAxisSize: MainAxisSize.min,
-                  //       children: [
-                  //         AxiProgressIndicator(),
-                  //         SizedBox.square(
-                  //           dimension: 8.0,
-                  //         ),
-                  //         Text('Checking for updates'),
-                  //       ],
-                  //     ),
-                  //   );
-                  // }
-                  // if (!snapshot.requireData) {
-                  //   return const SizedBox.shrink();
-                  // }
+                  if (!snapshot.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(4.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AxiProgressIndicator(),
+                          SizedBox.square(
+                            dimension: 8.0,
+                          ),
+                          Text('Checking for updates'),
+                        ],
+                      ),
+                    );
+                  }
+                  if (!snapshot.requireData) {
+                    return const SizedBox.shrink();
+                  }
                   return Padding(
                     padding: const EdgeInsets.all(4.0),
                     child: mustRestart
