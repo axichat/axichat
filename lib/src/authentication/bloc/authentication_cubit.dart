@@ -4,7 +4,6 @@ import 'dart:ui';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/storage/credential_store.dart';
-import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -96,14 +95,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final resource = await _credentialStore.read(key: resourceStorageKey) ??
         XmppService.generateResource();
 
-    final prefixSaltStorageKey =
-        CredentialStore.registerKey('${jid}_prefix_salt');
-    final prefixSalt = await _credentialStore.read(key: prefixSaltStorageKey) ??
-        generateRandomString(length: 8);
-    final prefix = storagePrefixFor(jid, prefixSalt);
+    final databasePrefixStorageKey =
+        CredentialStore.registerKey('${jid}_database_prefix');
+    final databasePrefix =
+        await _credentialStore.read(key: databasePrefixStorageKey) ??
+            generateRandomString(length: 8);
 
     final databasePassphraseStorageKey = CredentialStore.registerKey(
-      '${prefix}_database_passphrase',
+      '${databasePrefix}_database_passphrase',
     );
     var databasePassphrase = await _credentialStore.read(
       key: databasePassphraseStorageKey,
@@ -117,7 +116,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jid: jid,
         resource: resource,
         password: password,
-        databasePrefix: prefix,
+        databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
         preHashed: preHashed,
       );
@@ -140,8 +139,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
 
     await _credentialStore.write(
-      key: prefixSaltStorageKey,
-      value: prefixSalt,
+      key: databasePrefixStorageKey,
+      value: databasePrefix,
     );
 
     if (rememberMe) {

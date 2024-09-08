@@ -1,10 +1,8 @@
 // ignore_for_file: avoid_renaming_method_parameters
 
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
@@ -964,11 +962,6 @@ QueryExecutor _openDatabase(File file, String passphrase) {
 Future<File> dbFileFor(String prefix) async {
   final path = (await getApplicationDocumentsDirectory()).path;
   return File(p.join(path, '$prefix.axichat.drift'));
-}
-
-// Using SHA-1 as this is only to obfuscate the jid in file paths. STORE THE SALT.
-String storagePrefixFor(String jid, String salt) {
-  return sha1.convert(utf8.encode('$jid:$salt')).toString();
 }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
