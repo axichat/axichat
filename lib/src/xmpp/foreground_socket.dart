@@ -94,10 +94,10 @@ class ForegroundSocket extends TaskHandler {
 
   @override
   void onDestroy(DateTime timestamp) async {
-    await _dataSubscription.cancel();
-    await _eventSubscription.cancel();
     _socket?.close();
     _socket = null;
+    await _dataSubscription.cancel();
+    await _eventSubscription.cancel();
   }
 }
 
@@ -149,10 +149,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   Stream<mox.XmppSocketEvent> getEventStream() => _eventStream.stream;
 
   @override
-  bool onBadCertificate(certificate, String domain) {
-    // This will never be called.
-    throw UnimplementedError();
-  }
+  bool onBadCertificate(certificate, String domain) => false;
 
   @override
   Future<bool> secure(String domain) {

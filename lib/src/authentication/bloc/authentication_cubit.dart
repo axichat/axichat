@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:bloc/bloc.dart';
+import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
 
 part 'authentication_state.dart';
@@ -30,8 +32,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
     required XmppService xmppService,
+    required Capability capability,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
+        _capability = capability,
         super(AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
@@ -45,7 +49,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  static const defaultServer = 'axi.im';
   static Uri registrationUrl = Uri.parse('http://nz.axichat.com/api/register');
 
   final jidStorageKey = CredentialStore.registerKey('jid');
@@ -53,6 +56,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
+  final Capability _capability;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -66,9 +70,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> login({
     String? username,
     String? password,
-    String domain = defaultServer,
     bool rememberMe = false,
   }) async {
+    if (_capability.canForegroundService &&
+        !await FlutterForegroundTask.isRunningService &&
+        state is AuthenticationComplete) {
+      await logout();
+    }
     if (state is AuthenticationComplete || state is AuthenticationInProgress) {
       return;
     }
@@ -81,7 +89,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       jid = await _credentialStore.read(key: jidStorageKey);
       password = await _credentialStore.read(key: passwordStorageKey);
     } else {
-      jid = '$username@$domain';
+      jid = '$username@${state.server}';
     }
 
     if (jid == null || password == null) {
@@ -189,7 +197,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         // },
         body: {
           'user': username,
-          'host': defaultServer,
+          'host': state.server,
           'password': password,
           // 'password2': confirmPassword,
           // 'id': captchaID,

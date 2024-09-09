@@ -15,10 +15,10 @@ class NotificationRequest extends StatelessWidget {
           return const SizedBox.shrink();
         }
         return ListTile(
-          title: const Text('Message notifications'),
+          title: const Text('Missing some permissions'),
           titleAlignment: ListTileTitleAlignment.top,
           titleTextStyle: context.textTheme.small,
-          subtitle: const Text('Missing some permissions'),
+          subtitle: const Text('App may misbehave'),
           subtitleTextStyle: context.textTheme.muted,
           trailing: const ShadButton.ghost(
             text: Text('Enable'),

@@ -82,6 +82,7 @@ class Axichat extends StatelessWidget {
                 policy: context.read<Policy>(),
               ),
               xmppService: context.read<XmppService>(),
+              capability: context.read<Capability>(),
             ),
           ),
         ],

@@ -838,18 +838,6 @@ class XmppConnection extends mox.XmppConnection {
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
   XmppConnectionSettings({required super.jid, required super.password});
-
-  @override
-  String? get host {
-    final endpoint = serverLookup[jid.domain];
-    return endpoint?.host.address;
-  }
-
-  @override
-  int? get port {
-    final endpoint = serverLookup[jid.domain];
-    return endpoint?.port;
-  }
 }
 
 class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
@@ -1041,11 +1029,6 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
 
 class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   XmppSocketWrapper() : super(false);
-
-  // TODO: onBadCertificate
-  @override
-  bool onBadCertificate(certificate, String domain) =>
-      serverLookup.keys.contains(domain);
 }
 
 class XmppStreamManagementManager extends mox.StreamManagementManager {

@@ -22,8 +22,15 @@ class RosterAddButton extends StatelessWidget {
           builder: (context) {
             String jid = '';
             String? title;
-            return BlocProvider.value(
-              value: locate<RosterCubit>(),
+            return MultiBlocProvider(
+              providers: [
+                BlocProvider.value(
+                  value: locate<RosterCubit>(),
+                ),
+                BlocProvider.value(
+                  value: locate<AuthenticationCubit>(),
+                ),
+              ],
               child: StatefulBuilder(
                 builder: (context, setState) {
                   return AxiInputDialog(
@@ -45,7 +52,7 @@ class RosterAddButton extends StatelessWidget {
                                   : state.message,
                               jidOptions: [
                                 '${jid.split('@').first}'
-                                    '@${AuthenticationCubit.defaultServer}'
+                                    '@${context.read<AuthenticationCubit>().state.server}'
                               ],
                               onChanged: (value) {
                                 setState(() => jid = value);

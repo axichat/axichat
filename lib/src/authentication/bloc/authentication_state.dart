@@ -1,7 +1,9 @@
 part of 'authentication_cubit.dart';
 
 sealed class AuthenticationState {
-  const AuthenticationState();
+  const AuthenticationState({this.server = 'axi.im'});
+
+  final String server;
 }
 
 final class AuthenticationNone extends AuthenticationState {}

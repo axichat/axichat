@@ -696,8 +696,7 @@ class _GuestChatState extends State<GuestChat> {
                       TextSpan(
                         text:
                             '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                            '${message.createdAt.minute.toString().padLeft(2, '0')}'
-                            '${message.createdAt.hour < 12 ? 'am' : 'pm'}',
+                            '${message.createdAt.minute.toString().padLeft(2, '0')}',
                         style: context.textTheme.muted.copyWith(
                           color: textColor,
                           fontSize: iconSize,

@@ -81,7 +81,7 @@ class _LoginFormState extends State<LoginForm> {
                 placeholder: const Text('Username'),
                 enabled: state is! AuthenticationInProgress,
                 controller: _jidTextController,
-                suffix: const Text('@${AuthenticationCubit.defaultServer}'),
+                suffix: Text('@${state.server}'),
                 validator: (text) {
                   if (text.isEmpty) {
                     return 'Enter a username';
