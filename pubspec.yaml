@@ -58,6 +58,7 @@ dependencies:
   url_launcher: ^6.3.0
   awesome_notifications: any
   awesome_notifications_core: ^0.9.3
+  dnsolve: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -90,5 +91,6 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/ca/isrgrootx1.pem
     - shorebird.yaml
 #    - shorebird.yaml

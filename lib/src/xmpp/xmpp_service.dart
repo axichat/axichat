@@ -15,6 +15,7 @@ import 'package:chat/src/storage/impatient_completer.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
 import 'package:chat/src/xmpp/foreground_socket.dart';
+import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
@@ -402,7 +403,6 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
     String resource = '',
-    bool awaitAuthentication = true,
     bool preHashed = false,
   }) async {
     if (_synchronousConnection.isCompleted) {
@@ -417,7 +417,7 @@ class XmppService extends XmppBase
         _log.info('Attempting login...');
         _connection = await _buildConnection();
 
-        if (!awaitAuthentication && !_stateStore.isCompleted) {
+        if (!_stateStore.isCompleted) {
           _stateStore.complete(
               await _buildStateStore(databasePrefix, databasePassphrase));
         }
@@ -432,27 +432,20 @@ class XmppService extends XmppBase
           jid: _myJid!.toBare(),
           password: password,
         );
-        if (awaitAuthentication) {
-          final result = await _connection.connect(
-            shouldReconnect: false,
-            waitForConnection: true,
-            waitUntilLogin: true,
-          );
 
-          if (result.isType<mox.XmppError>()) {
-            _log.info('Login rejected by server.');
-            throw XmppAuthenticationException();
-          }
-          _log.info('Login successful. Initializing databases...');
-          await _initDatabases(databasePrefix, databasePassphrase);
-          return _connection
-              .getNegotiator<SaslScramNegotiator>()!
-              .saltedPassword;
-        } else {
-          await _initDatabases(databasePrefix, databasePassphrase);
-          await _connection.connect();
-          return password;
+        final result = await _connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        );
+
+        if (result.isType<mox.XmppError>()) {
+          _log.info('Login rejected by server.');
+          throw XmppAuthenticationException();
         }
+        _log.info('Login successful. Initializing databases...');
+        await _initDatabases(databasePrefix, databasePassphrase);
+        return _connection.getNegotiator<SaslScramNegotiator>()!.saltedPassword;
       },
     );
   }
@@ -1029,6 +1022,24 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
 
 class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   XmppSocketWrapper() : super(false);
+
+  @override
+  Future<List<mox_tcp.MoxSrvRecord>> srvQuery(
+    String domain,
+    bool dnssec,
+  ) async {
+    final response = await DNSolve().lookup(
+      domain,
+      dnsSec: true,
+      type: RecordType.srv,
+    );
+
+    return response.answer?.srvs
+            ?.map((e) =>
+                mox_tcp.MoxSrvRecord(e.priority, e.weight, e.target!, e.port))
+            .toList() ??
+        [];
+  }
 }
 
 class XmppStreamManagementManager extends mox.StreamManagementManager {

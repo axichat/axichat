@@ -12,8 +12,9 @@ class SettingsControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
-        return ListView(
-          shrinkWrap: true,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (context.read<Capability>().canForegroundService)
               const NotificationRequest(),

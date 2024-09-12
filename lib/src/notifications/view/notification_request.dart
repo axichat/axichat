@@ -3,9 +3,14 @@ import 'package:chat/src/notifications/bloc/notification_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class NotificationRequest extends StatelessWidget {
+class NotificationRequest extends StatefulWidget {
   const NotificationRequest({super.key});
 
+  @override
+  State<NotificationRequest> createState() => _NotificationRequestState();
+}
+
+class _NotificationRequestState extends State<NotificationRequest> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
@@ -20,9 +25,12 @@ class NotificationRequest extends StatelessWidget {
           titleTextStyle: context.textTheme.small,
           subtitle: const Text('App may misbehave'),
           subtitleTextStyle: context.textTheme.muted,
-          trailing: const ShadButton.ghost(
-            text: Text('Enable'),
-            onPressed: requestAllNotificationPermissions,
+          trailing: ShadButton.ghost(
+            text: const Text('Enable'),
+            onPressed: () async {
+              await requestAllNotificationPermissions();
+              setState(() {});
+            },
           ),
         );
       },

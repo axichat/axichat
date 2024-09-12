@@ -119,6 +119,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
     final preHashed = savedPassword != null;
     databasePassphrase ??= generateRandomString();
+
     try {
       password = await _xmppService.connect(
         jid: jid,

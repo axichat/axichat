@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart'
     hide NotificationPermission;
 import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -54,6 +56,16 @@ class ForegroundSocket extends TaskHandler {
 
   @override
   void onStart(DateTime timestamp) {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen(
+      (record) => kDebugMode
+          ? print('${record.level.name}: ${record.time}: ${record.message}'
+              '${record.stackTrace != null ? 'Exception: ${record.error} ' 'Stack Trace: ${record.stackTrace}' : ''}')
+          : null,
+    );
+
     _log.info('onStart called.');
     _socket ??= XmppSocketWrapper();
     _dataSubscription = _socket!.getDataStream().listen(_onData);
@@ -66,11 +78,8 @@ class ForegroundSocket extends TaskHandler {
     _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
       final split = data.split(join);
-      _log.info(split);
       final result = await _socket!.connect(
         split[1],
-        host: split[2],
-        port: int.parse(split[3]),
       );
       return _sendToMain([connectPrefix, result]);
     } else if (data.startsWith('$securePrefix$join')) {
@@ -102,6 +111,8 @@ class ForegroundSocket extends TaskHandler {
 }
 
 class ForegroundSocketWrapper implements XmppSocketWrapper {
+  ForegroundSocketWrapper();
+
   static final _log = Logger('ForegroundSocketWrapper');
 
   final StreamController<String> _dataStream = StreamController.broadcast();
