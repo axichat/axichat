@@ -96,6 +96,69 @@ mixin MessageService on XmppBase {
     });
   }
 
+  Future<void> _handleMessage(mox.MessageEvent event) async {
+    if (await _handleError(event)) throw EventHandlerAbortedException();
+
+    final get = event.extensions.get;
+    final isCarbon = get<mox.CarbonsData>()?.isCarbon ?? false;
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    final chatJid = isCarbon ? to : from;
+
+    await _handleChatState(event, chatJid);
+
+    if (await _handleCorrection(event, from)) {
+      throw EventHandlerAbortedException();
+    }
+    if (await _handleRetraction(event, from)) {
+      throw EventHandlerAbortedException();
+    }
+
+    // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
+    if (!event.displayable && event.encryptionError == null) {
+      throw EventHandlerAbortedException();
+    }
+    if (get<mox.FileUploadNotificationData>() case final data?) {
+      if (data.metadata.name == null) throw EventHandlerAbortedException();
+    }
+
+    await _handleFile(event, from);
+
+    final metadata = _extractFileMetadata(event);
+    if (metadata != null) {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveFileMetadata(metadata);
+      });
+    }
+
+    final body = get<mox.ReplyData>()?.withoutFallback ??
+        get<mox.MessageBodyData>()?.body ??
+        '';
+
+    final message = Message(
+      stanzaID: event.id ?? _connection.generateId(),
+      senderJid: from,
+      chatJid: chatJid,
+      body: body,
+      timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
+      fileMetadataID: metadata?.id,
+      noStore: get<mox.MessageProcessingHintData>()
+              ?.hints
+              .contains(mox.MessageProcessingHint.noStore) ??
+          false,
+      quoting: get<mox.ReplyData>()?.id,
+      originID: get<mox.StableIdData>()?.originId,
+      occupantID: get<mox.OccupantIdData>()?.id,
+      encryptionProtocol:
+          event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
+      acked: true,
+      received: true,
+    );
+    await _dbOp<XmppDatabase>((db) async {
+      await db.saveMessage(message);
+    });
+  }
+
   Future<bool> _handleError(mox.MessageEvent event) async {
     if (event.type != 'error') return false;
 

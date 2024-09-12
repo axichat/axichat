@@ -1,22 +1,40 @@
 import 'dart:async';
 
-import 'package:moxxmpp/moxxmpp.dart' as mox;
+final class EventHandlerAbortedException implements Exception {}
 
-class EventManager {
-  final _registry = <Type, List<FutureOr<void> Function()>>{};
+typedef EventMatcher<E> = bool Function(E);
+typedef EventHandler<E> = FutureOr<void> Function(E);
 
-  void registerHandlers<T extends mox.XmppEvent>(
-      List<FutureOr<void> Function()> handlers) {
-    if (_registry[T] == null) {
-      _registry[T] = handlers;
+class EventManager<E> {
+  final _registry = <EventMatcher<E>, List<EventHandler>>{};
+
+  bool _match<T>(E event) => event is T;
+
+  void registerHandlers<T>(
+    List<EventHandler<T>> handlers,
+  ) {
+    if (_registry[_match<T>] == null) {
+      _registry[_match<T>] = handlers as List<EventHandler>;
     } else {
-      _registry[T]!.addAll(handlers);
+      _registry[_match<T>]!.addAll(handlers as List<EventHandler>);
     }
   }
 
-  Future<void> executeHandlers<T extends mox.XmppEvent>() async {
-    for (final handler in _registry[T] ?? []) {
-      await handler();
+  void unregisterHandlers<T extends E>() {
+    _registry[_match<T>] = [];
+  }
+
+  Future<void> executeHandlers(E event) async {
+    for (final match in _registry.keys) {
+      if (!match(event)) continue;
+      try {
+        await Future.wait(
+          _registry[match]!.map((e) async => await e(event)),
+          eagerError: true,
+        );
+      } on EventHandlerAbortedException catch (_) {
+        continue;
+      }
     }
   }
 }

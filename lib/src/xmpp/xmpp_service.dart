@@ -14,6 +14,7 @@ import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/impatient_completer.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
+import 'package:chat/src/xmpp/event_manager.dart';
 import 'package:chat/src/xmpp/foreground_socket.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
@@ -157,8 +158,8 @@ class XmppService extends XmppBase
     required FutureOr<XmppConnection> Function() buildConnection,
     required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
-    required Capability capability,
-    required Policy policy,
+    Capability capability = const Capability(),
+    Policy policy = const Policy(),
   }) =>
       _instance ??= XmppService._(
         buildConnection,
@@ -319,6 +320,7 @@ class XmppService extends XmppBase
             }),
           ],
         );
+
       case mox.ConnectionStateChangedEvent event:
         _connectionState = event.state;
         _connectivityStream.add(event.state);
@@ -631,6 +633,20 @@ class XmppService extends XmppBase
     _log.info('Logged out.');
   }
 
+  Future<void> setClientState([bool active = true]) async {
+    if (!connected) return;
+
+    if (_connection.getManager<mox.CSIManager>() case final csi?) {
+      if (active) {
+        _log.info('Setting CSI to active...');
+        await csi.setActive();
+      } else {
+        _log.info('Setting CSI to inactive...');
+        await csi.setInactive();
+      }
+    }
+  }
+
   Future<void> _reset() async {
     if (!needsReset) return;
 
@@ -800,6 +816,8 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.carbonsManager);
       case == mox.BlockingManager:
         return getManagerById(mox.blockingManager);
+      case == mox.CSIManager:
+        return getManagerById(mox.csiManager);
       default:
         return null;
     }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/generate_random.dart';
@@ -45,6 +46,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       onExitRequested: () async {
         await logout();
         return AppExitResponse.exit;
+      },
+      onStateChange: (lifeCycleState) async {
+        if (_capability.canForegroundService) {
+          final notificationLifecycleState =
+              await AwesomeNotifications().getAppLifeCycle();
+          await _xmppService.setClientState(
+              notificationLifecycleState == NotificationLifeCycle.Foreground);
+        }
       },
     );
   }

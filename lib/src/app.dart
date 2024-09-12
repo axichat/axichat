@@ -41,11 +41,9 @@ class Axichat extends StatelessWidget {
         if (_xmppService == null)
           RepositoryProvider(
             create: (context) => XmppService(
-              buildConnection: () => !_capability.canForegroundService
-                  ? XmppConnection()
-                  : XmppConnection(
-                      socketWrapper: ForegroundSocketWrapper(),
-                    ),
+              buildConnection: () => _capability.canForegroundService
+                  ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
+                  : XmppConnection(),
               buildStateStore: (prefix, passphrase) async {
                 await Hive.initFlutter(prefix);
                 if (!Hive.isAdapterRegistered(1)) {
