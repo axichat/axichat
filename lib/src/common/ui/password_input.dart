@@ -2,6 +2,9 @@ import 'package:chat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const passwordMinLength = 12;
+const passwordMaxLength = 64;
+
 class PasswordInput extends StatefulWidget {
   const PasswordInput({
     super.key,
@@ -49,8 +52,10 @@ class _PasswordInputState extends State<PasswordInput> {
             if (text.isEmpty) {
               return 'Enter a password';
             }
-            if (text.length < 8 || text.length > 64) {
-              return 'Must be between 8 and 64 characters';
+            if (text.length < passwordMinLength ||
+                text.length > passwordMaxLength) {
+              return 'Must be between $passwordMinLength '
+                  'and $passwordMaxLength characters';
             }
             return null;
           },

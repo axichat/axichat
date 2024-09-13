@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:awesome_notifications/awesome_notifications.dart';
@@ -7,6 +8,7 @@ import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
@@ -58,7 +60,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  static Uri registrationUrl = Uri.parse('http://nz.axichat.com/api/register');
+  static Uri registrationUrl = Uri.parse('http://axi.im:5280/register/');
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
@@ -181,38 +183,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       final response = await http.post(
         registrationUrl,
-        // headers: {
-        //   'Accept': 'text/html,application/xhtml+xml,application/xml;'
-        //       'q=0.9,image/avif,image/webp,image/apng,*/*;'
-        //       'q=0.8,application/signed-exchange;v=b3;q=0.7',
-        //   'Accept-Encoding': 'gzip, deflate, br, zstd',
-        //   'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
-        //   'Cache-Control': 'max-age=0',
-        //   'Content-Type': 'application/x-www-form-urlencoded',
-        //   'Cookie': 'pll_language=en',
-        //   'Dnt': '1',
-        //   'Origin': 'https://hookipa.net',
-        //   'Priority': 'u=0, i',
-        //   'Referer': 'https://hookipa.net/register/new/',
-        //   'Sec-Ch-Ua': '"Chromium";v="127", "Not)A;Brand";v="99"',
-        //   'Sec-Ch-Ua-Mobile': '?0',
-        //   'Sec-Ch-Ua-Platform': '"Linux"',
-        //   'Sec-Fetch-Dest': 'document',
-        //   'Sec-Fetch-Mode': 'navigate',
-        //   'Sec-Fetch-Site': 'same-origin',
-        //   'Sec-Fetch-User': '?1',
-        //   'Upgrade-Insecure-Requests': '1',
-        //   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
-        //       '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-        // },
         body: {
           'user': username,
           'host': state.server,
           'password': password,
-          // 'password2': confirmPassword,
-          // 'id': captchaID,
-          // 'key': captcha,
-          // 'register': 'Register',
         },
       );
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
@@ -225,6 +199,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await login(username: username, password: password, rememberMe: rememberMe);
+  }
+
+  Future<bool> checkNotPwned({required String password}) async {
+    emit(AuthenticationInProgress());
+    final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
+    final subhash = hash.substring(0, 5);
+    try {
+      final response = await http
+          .get(Uri.parse('https://api.pwnedpasswords.com/range/$subhash'));
+      if (response.statusCode == 200) {
+        if (response.body.split('\r\n').any((e) {
+          final pwned = '$subhash${e.split(':')[0]}';
+          return pwned == hash;
+        })) {
+          emit(const AuthenticationSignupFailure(
+              'That password has been found in a breach.'));
+          return false;
+        }
+      }
+    } on Exception catch (_) {
+      emit(AuthenticationNone());
+      return true;
+    }
+    emit(AuthenticationNone());
+    return true;
   }
 
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {

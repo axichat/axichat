@@ -8,6 +8,7 @@ import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,7 +18,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _login = true;
+  var _login = true;
 
   @override
   Widget build(BuildContext context) {
@@ -52,13 +53,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     firstChild: const LoginForm(),
                     secondChild: const SignupForm(),
                   ),
-                  // const SizedBox.square(dimension: 2.0),
-                  // ShadButton.ghost(
-                  //   onPressed: () => setState(() {
-                  //     _login = !_login;
-                  //   }),
-                  //   text: Text(_login ? 'Sign up' : 'Log in'),
-                  // ),
+                  const SizedBox.square(dimension: 2.0),
+                  ShadButton.ghost(
+                    onPressed: () => setState(() {
+                      _login = !_login;
+                    }),
+                    text: Text(_login ? 'Sign up' : 'Log in'),
+                  ),
                 ],
               ),
             ),
