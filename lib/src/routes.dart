@@ -37,7 +37,7 @@ class ProfileRoute extends TransitionGoRouteData {
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      ProfileScreen(locate: state.extra as T Function<T>());
+      ProfileScreen(locate: state.extra! as T Function<T>());
 }
 
 class ComposeRoute extends TransitionGoRouteData {
@@ -47,7 +47,7 @@ class ComposeRoute extends TransitionGoRouteData {
 
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final extra = state.extra as Map<String, dynamic>;
+    final extra = state.extra! as Map<String, dynamic>;
     return ComposeScreen(
       locate: extra['locate'] as T Function<T>(),
       id: extra['id'],

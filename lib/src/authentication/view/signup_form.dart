@@ -129,8 +129,13 @@ class _SignupFormState extends State<SignupForm> {
                       autocorrect: false,
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
-                            RegExp('[a-zA-Z0-9]')),
+                          RegExp(r'[a-z0-9._-]'),
+                        ),
                       ],
+                      description: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 6.0),
+                        child: Text('Case insensitive'),
+                      ),
                       placeholder: const Text('Username'),
                       enabled: state is! AuthenticationInProgress,
                       controller: _jidTextController,
@@ -138,6 +143,10 @@ class _SignupFormState extends State<SignupForm> {
                       validator: (text) {
                         if (text.isEmpty) {
                           return 'Enter a username';
+                        }
+                        if (!RegExp(r'^[a-z][a-z0-9._-]{3,19}$')
+                            .hasMatch(text)) {
+                          return '4-20 alphanumeric, allowing ".", "_" and "-".';
                         }
                         return null;
                       },
@@ -169,9 +178,64 @@ class _SignupFormState extends State<SignupForm> {
                     child: Column(
                       key: UniqueKey(),
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        NotificationRequest(),
-                        Align(
+                      children: [
+                        FutureBuilder(
+                          future: _captchaSrc,
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return SizedBox(
+                                height: captchaSize.height,
+                                width: captchaSize.width,
+                                child:
+                                    const Center(child: AxiProgressIndicator()),
+                              );
+                            }
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.network(
+                                  snapshot.requireData,
+                                  height: captchaSize.height,
+                                  loadingBuilder: (_, child, progress) =>
+                                      progress == null
+                                          ? child
+                                          : const Center(
+                                              child: AxiProgressIndicator()),
+                                  errorBuilder: (_, __, ___) => Text(
+                                    'Failed to load captcha, try again later.',
+                                    style: TextStyle(
+                                        color: context.colorScheme.destructive),
+                                  ),
+                                ),
+                                ShadButton.ghost(
+                                  icon: const Icon(LucideIcons.refreshCw),
+                                  onPressed: () => setState(() {
+                                    _captchaSrc = _loadCaptchaSrc();
+                                  }),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        SizedBox(
+                          width: captchaSize.width,
+                          child: AxiTextFormField(
+                            autocorrect: false,
+                            keyboardType: TextInputType.number,
+                            placeholder: const Text('Enter the above text'),
+                            enabled: state is! AuthenticationInProgress,
+                            controller: _captchaTextController,
+                            validator: (text) {
+                              if (text.isEmpty) {
+                                return 'Enter the text from the image';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox.square(dimension: 16.0),
+                        const NotificationRequest(),
+                        const Align(
                           alignment: Alignment.centerLeft,
                           child: Padding(
                             padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
@@ -184,57 +248,6 @@ class _SignupFormState extends State<SignupForm> {
                 ][_currentIndex],
               ),
             ),
-            // FutureBuilder(
-            //   future: _captchaSrc,
-            //   builder: (context, snapshot) {
-            //     if (!snapshot.hasData) {
-            //       return SizedBox(
-            //         height: captchaSize.height,
-            //         width: captchaSize.width,
-            //         child: const Center(child: AxiProgressIndicator()),
-            //       );
-            //     }
-            //     return Row(
-            //       mainAxisSize: MainAxisSize.min,
-            //       children: [
-            //         Image.network(
-            //           snapshot.requireData,
-            //           height: captchaSize.height,
-            //           loadingBuilder: (_, child, progress) => progress == null
-            //               ? child
-            //               : const Center(child: AxiProgressIndicator()),
-            //           errorBuilder: (_, __, ___) => Text(
-            //             'Failed to load captcha, try again later.',
-            //             style:
-            //                 TextStyle(color: context.colorScheme.destructive),
-            //           ),
-            //         ),
-            //         ShadButton.ghost(
-            //           icon: const Icon(LucideIcons.refreshCw),
-            //           onPressed: () => setState(() {
-            //             _captchaSrc = _loadCaptchaSrc();
-            //           }),
-            //         ),
-            //       ],
-            //     );
-            //   },
-            // ),
-            // SizedBox(
-            //   width: captchaSize.width,
-            //   child: AxiTextFormField(
-            //     autocorrect: false,
-            //     keyboardType: TextInputType.number,
-            //     placeholder: const Text('Enter the above text'),
-            //     enabled: state is! AuthenticationInProgress,
-            //     controller: _captchaTextController,
-            //     validator: (text) {
-            //       if (text.isEmpty) {
-            //         return 'Enter the text from the image';
-            //       }
-            //       return null;
-            //     },
-            //   ),
-            // ),
             const SizedBox.square(dimension: 16.0),
             Builder(
               builder: (context) {

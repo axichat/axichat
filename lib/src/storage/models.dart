@@ -1,16 +1,15 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:chat/src/storage/database.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:drift/drift.dart' hide JsonKey;
-import 'package:flutter/material.dart' hide Table, Column;
+import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:uuid/uuid.dart';
-
-import 'database.dart';
 
 part 'models.freezed.dart';
 part 'models.g.dart';
@@ -550,7 +549,7 @@ class OmemoDevice extends omemo.OmemoDevice {
   Future<String> onetimePreKeysToJson() async => jsonEncode(
         <String, String>{
           for (final entry in onetimePreKeys.entries)
-            entry.key.toString(): await entry.value.toJson()
+            entry.key.toString(): await entry.value.toJson(),
         },
       );
 
@@ -558,7 +557,7 @@ class OmemoDevice extends omemo.OmemoDevice {
     final data = jsonDecode(json) as Map<String, String>;
     return <int, omemo.OmemoKeyPair>{
       for (final entry in data.entries)
-        int.parse(entry.key): OmemoKeyPair.fromJson(entry.value)
+        int.parse(entry.key): OmemoKeyPair.fromJson(entry.value),
     };
   }
 
@@ -762,7 +761,7 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
   Future<String> mkSkippedToJson() async => jsonEncode(
         <String, List<int>>{
           for (final entry in mkSkipped.entries)
-            await entry.key.toJson(): entry.value
+            await entry.key.toJson(): entry.value,
         },
       );
 
@@ -770,7 +769,7 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
     final data = jsonDecode(json) as Map<String, List<int>>;
     return <omemo.SkippedKey, List<int>>{
       for (final entry in data.entries)
-        SkippedKey.fromJson(entry.key): entry.value
+        SkippedKey.fromJson(entry.key): entry.value,
     };
   }
 

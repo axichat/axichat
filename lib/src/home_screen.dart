@@ -2,11 +2,13 @@ import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/blocklist/view/blocklist_button.dart';
 import 'package:chat/src/blocklist/view/blocklist_list.dart';
+import 'package:chat/src/chat/bloc/chat_bloc.dart';
 import 'package:chat/src/chat/view/chat.dart';
 import 'package:chat/src/chats/bloc/chats_cubit.dart';
 import 'package:chat/src/chats/view/chats_filter_button.dart';
 import 'package:chat/src/chats/view/chats_list.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:chat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:chat/src/draft/bloc/draft_cubit.dart';
 import 'package:chat/src/draft/view/draft_button.dart';
@@ -23,38 +25,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'chat/bloc/chat_bloc.dart';
-import 'connectivity/bloc/connectivity_cubit.dart';
-
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  final tabs = const [
-    (
-      'Chats',
-      ChatsList(key: PageStorageKey('Chats')),
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          ChatsFilterButton(),
-          DraftButton(),
-        ],
-      )
-    ),
-    (
-      'Contacts',
-      RosterList(key: PageStorageKey('Contacts')),
-      RosterAddButton()
-    ),
-    ('New', RosterInvitesList(key: PageStorageKey('New')), null),
-    (
-      'Blocked',
-      BlocklistList(key: PageStorageKey('Blocked')),
-      BlocklistAddButton(),
-    ),
-    ('Drafts', DraftsList(key: PageStorageKey('Drafts')), null),
-  ];
+  List<(String, Widget, Widget?)> get tabs => const [
+        (
+          'Chats',
+          ChatsList(key: PageStorageKey('Chats')),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ChatsFilterButton(),
+              DraftButton(),
+            ],
+          )
+        ),
+        (
+          'Contacts',
+          RosterList(key: PageStorageKey('Contacts')),
+          RosterAddButton()
+        ),
+        ('New', RosterInvitesList(key: PageStorageKey('New')), null),
+        (
+          'Blocked',
+          BlocklistList(key: PageStorageKey('Blocked')),
+          BlocklistAddButton(),
+        ),
+        ('Drafts', DraftsList(key: PageStorageKey('Drafts')), null),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -223,25 +221,27 @@ class Nexus extends StatelessWidget {
           ),
         ),
         LayoutBuilder(
-          builder: (context, constraints) => TabBar(
-            isScrollable: constraints.maxWidth < tabs.length * 90,
-            tabAlignment: constraints.maxWidth < tabs.length * 90
-                ? TabAlignment.center
-                : TabAlignment.fill,
-            dividerHeight: 0.0,
-            tabs: tabs.map((e) {
-              final (label, _, _) = e;
-              if (label == 'New') {
-                final length = context.watch<RosterCubit>().inviteCount;
-                return Tab(
-                  child: AxiBadge(
-                    count: length,
-                    child: Text(label),
-                  ),
-                );
-              }
-              return Tab(text: label);
-            }).toList(),
+          builder: (context, constraints) => Material(
+            child: TabBar(
+              isScrollable: constraints.maxWidth < tabs.length * 90,
+              tabAlignment: constraints.maxWidth < tabs.length * 90
+                  ? TabAlignment.center
+                  : TabAlignment.fill,
+              dividerHeight: 0.0,
+              tabs: tabs.map((e) {
+                final (label, _, _) = e;
+                if (label == 'New') {
+                  final length = context.watch<RosterCubit>().inviteCount;
+                  return Tab(
+                    child: AxiBadge(
+                      count: length,
+                      child: Text(label),
+                    ),
+                  );
+                }
+                return Tab(text: label);
+              }).toList(),
+            ),
           ),
         ),
         const ProfileCard(

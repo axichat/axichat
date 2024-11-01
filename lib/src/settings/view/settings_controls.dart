@@ -14,7 +14,8 @@ class SettingsControls extends StatelessWidget {
       builder: (context, state) {
         return Column(
           mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (context.read<Capability>().canForegroundService)
               const NotificationRequest(),

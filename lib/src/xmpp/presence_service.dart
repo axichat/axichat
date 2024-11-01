@@ -11,15 +11,14 @@ mixin PresenceService on XmppBase {
       _stateStore.value?.read(key: statusStorageKey) as String?;
 
   Stream<Presence> get presenceStream => StreamCompleter.fromFuture(
-          _dbOpReturning<XmppStateStore, Stream<Presence>>((ss) async {
-        return await Future.value(ss
-            .watch<Presence?>(key: presenceStorageKey)
-            ?.map<Presence>((e) => e ?? Presence.chat));
-      }));
+      _dbOpReturning<XmppStateStore, Stream<Presence>>((ss) =>
+          ss
+              .watch<Presence?>(key: presenceStorageKey)
+              ?.map<Presence>((e) => e ?? Presence.chat) ??
+          Stream.value(Presence.chat)));
   Stream<String?> get statusStream => StreamCompleter.fromFuture(
-          _dbOpReturning<XmppStateStore, Stream<String?>>((ss) async {
-        return Future.value(ss.watch<String?>(key: statusStorageKey));
-      }));
+      _dbOpReturning<XmppStateStore, Stream<String?>>((ss) =>
+          ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null)));
 
   Future<void> sendPresence({
     required Presence? presence,

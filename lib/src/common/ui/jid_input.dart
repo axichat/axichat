@@ -74,7 +74,7 @@ class JidInput extends StatelessWidget {
           focusNode: focus,
           autocorrect: false,
           enabled: enabled,
-          placeholder: const Text('john@xmpp.social'),
+          placeholder: const Text('john@axi.im'),
           // description: describe
           //     ? const Padding(
           //         padding: EdgeInsets.only(left: 8.0),

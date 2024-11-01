@@ -1,5 +1,7 @@
 part of 'package:chat/src/xmpp/xmpp_service.dart';
 
+mixin Myservice on XmppBase implements BlockingService {}
+
 mixin BlockingService on XmppBase {
   Stream<List<BlocklistData>> blocklistStream({
     int start = 0,

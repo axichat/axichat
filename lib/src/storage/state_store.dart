@@ -1,9 +1,8 @@
 import 'dart:async';
 
+import 'package:chat/src/storage/database.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
-
-import 'database.dart';
 
 abstract class KeyValueDatabase<K, V> implements Database {
   FutureOr<V?> read({required K key});
@@ -28,11 +27,11 @@ class RegisteredStateKey {
 }
 
 class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
+  factory XmppStateStore() => _instance ??= XmppStateStore._();
+
   XmppStateStore._();
 
   static XmppStateStore? _instance;
-
-  factory XmppStateStore() => _instance ??= XmppStateStore._();
 
   final _log = Logger('XmppStateStore');
 
@@ -45,7 +44,7 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
 
   Stream<S>? watch<S>({required RegisteredStateKey key}) {
     if (!initialized) return null;
-    return Hive.box(boxName).watch(key: key.value).map<S>((e) => e.value);
+    return Hive.box(boxName).watch(key: key.value).map<S>((e) => e.value as S);
   }
 
   @override
@@ -80,8 +79,9 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   }
 
   @override
-  Future<bool> writeAll(
-      {required Map<RegisteredStateKey, Object?> data}) async {
+  Future<bool> writeAll({
+    required Map<RegisteredStateKey, Object?> data,
+  }) async {
     if (!initialized) return false;
     await Hive.box(boxName).putAll(data.map((k, v) => MapEntry(k.value, v)));
     return true;

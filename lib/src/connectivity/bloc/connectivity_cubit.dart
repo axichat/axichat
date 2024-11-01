@@ -15,7 +15,8 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     );
   }
 
-  static stateMap(ConnectionState connectionState) => switch (connectionState) {
+  static ConnectivityState stateMap(ConnectionState connectionState) =>
+      switch (connectionState) {
         ConnectionState.connected => const ConnectivityConnected(),
         ConnectionState.connecting => const ConnectivityConnecting(),
         ConnectionState.notConnected => const ConnectivityNotConnected(),

@@ -60,7 +60,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  static Uri registrationUrl = Uri.parse('http://axi.im:5280/register/');
+  static Uri baseUrl = Uri.parse('https://axi.im:5443');
+  static Uri registrationUrl = Uri.parse('$baseUrl/register/new/');
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
@@ -88,7 +89,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         state is AuthenticationComplete) {
       await logout();
     }
-    if (state is AuthenticationComplete || state is AuthenticationInProgress) {
+    if (state is AuthenticationComplete) {
       return;
     }
     emit(AuthenticationInProgress());
@@ -123,13 +124,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final databasePassphraseStorageKey = CredentialStore.registerKey(
       '${databasePrefix}_database_passphrase',
     );
-    var databasePassphrase = await _credentialStore.read(
-      key: databasePassphraseStorageKey,
-    );
+    final databasePassphrase =
+        await _credentialStore.read(key: databasePassphraseStorageKey) ??
+            generateRandomString();
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
     final preHashed = savedPassword != null;
-    databasePassphrase ??= generateRandomString();
 
     try {
       password = await _xmppService.connect(
@@ -184,9 +184,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final response = await http.post(
         registrationUrl,
         body: {
-          'user': username,
+          'username': username,
           'host': state.server,
           'password': password,
+          'password2': confirmPassword,
+          'id': captchaID,
+          'key': captcha,
+          'register': 'Register',
         },
       );
       if (!(response.statusCode == 200 || response.statusCode == 201)) {

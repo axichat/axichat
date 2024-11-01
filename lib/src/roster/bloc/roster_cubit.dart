@@ -57,7 +57,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     return super.close();
   }
 
-  void addContact({
+  Future<void> addContact({
     required String jid,
     String? title,
   }) async {
@@ -69,8 +69,10 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     try {
       await _xmppService.addToRoster(jid: jid, title: title);
     } on XmppRosterException catch (_) {
-      emit(const RosterFailure('Failed to add contact: '
-          'make sure the address exists or try again later.'));
+      emit(
+        const RosterFailure('Failed to add contact: '
+            'make sure the address exists or try again later.'),
+      );
       return;
     }
     emit(RosterSuccess('$jid added to contacts.'));
@@ -81,8 +83,11 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     try {
       await _xmppService.removeFromRoster(jid: jid);
     } on XmppRosterException catch (_) {
-      emit(const RosterFailure(
-          'Failed to remove contact: check your network or try again later.'));
+      emit(
+        const RosterFailure(
+          'Failed to remove contact: check your network or try again later.',
+        ),
+      );
       return;
     }
     emit(RosterSuccess('$jid removed from contacts.'));
@@ -93,8 +98,11 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     try {
       await _xmppService.rejectSubscriptionRequest(jid);
     } on XmppRosterException catch (_) {
-      emit(const RosterFailure(
-          'Failed to reject contact: check your network or try again later.'));
+      emit(
+        const RosterFailure(
+          'Failed to reject contact: check your network or try again later.',
+        ),
+      );
       return;
     }
     emit(RosterSuccess('$jid rejected.'));

@@ -71,7 +71,7 @@ class _ChatState extends State<Chat> {
       child: Container(
         decoration: BoxDecoration(
           border: Border(
-            left: BorderSide(color: context.colorScheme.border, width: 1.0),
+            left: BorderSide(color: context.colorScheme.border),
           ),
         ),
         child: BlocConsumer<ChatBloc, ChatState>(
@@ -117,7 +117,8 @@ class _ChatState extends State<Chat> {
                                 ),
                                 onPressed: () {
                                   Clipboard.setData(
-                                      ClipboardData(text: message.body ?? ''));
+                                    ClipboardData(text: message.body ?? ''),
+                                  );
                                   setState(() {
                                     copied = true;
                                   });
@@ -137,7 +138,8 @@ class _ChatState extends State<Chat> {
                           Row(
                             children: [
                               Text(
-                                  'Sent: ${message.acked || message.received ? 'true' : 'unknown'}'),
+                                'Sent: ${message.acked || message.received ? 'true' : 'unknown'}',
+                              ),
                               AxiTooltip(
                                 child: const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -168,7 +170,8 @@ class _ChatState extends State<Chat> {
                           Row(
                             children: [
                               Text(
-                                  'Encrypted: ${message.encryptionProtocol.isNotNone}'),
+                                'Encrypted: ${message.encryptionProtocol.isNotNone}',
+                              ),
                             ],
                           ),
                           Divider(
@@ -242,110 +245,111 @@ class _ChatState extends State<Chat> {
                         onPressed: () {
                           if (textController.text.isNotEmpty) {
                             context.read<DraftCubit>().saveDraft(
-                                id: null,
-                                jids: [state.chat!.jid],
-                                body: textController.text);
+                                  id: null,
+                                  jids: [state.chat!.jid],
+                                  body: textController.text,
+                                );
                           }
                           context
                               .read<ChatsCubit>()
                               .toggleChat(jid: state.chat!.jid);
                         },
                       ),
-                      jid == null
-                          ? const SizedBox.shrink()
-                          : Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: BlocBuilder<RosterCubit, RosterState>(
-                                  buildWhen: (_, current) =>
-                                      current is RosterAvailable,
-                                  builder: (context, rosterState) {
-                                    final item =
-                                        (rosterState is! RosterAvailable
-                                                ? context.read<RosterCubit>()[
-                                                    'items'] as List<RosterItem>
-                                                : rosterState.items)
-                                            .where((e) => e.jid == jid)
-                                            .singleOrNull;
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 40.0,
-                                            maxHeight: 40.0,
-                                          ),
-                                          child: (item == null)
-                                              ? AxiAvatar(jid: jid)
-                                              : AxiAvatar(
-                                                  jid: item.jid,
-                                                  subscription:
-                                                      item.subscription,
-                                                  presence: item.presence,
-                                                  status: item.status,
-                                                ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8.0,
-                                          ),
-                                          child: Text(
-                                            state.chat?.title ?? '',
-                                            style: context.textTheme.h4,
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Text(
-                                            item?.status ?? '',
-                                            overflow: TextOverflow.ellipsis,
-                                            style: context.textTheme.muted,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                      jid == null
-                          ? const SizedBox.shrink()
-                          : AxiMore(
-                              options: [
-                                (toggle) => ShadButton.ghost(
-                                      width: double.infinity,
-                                      text: Text(muted!
-                                          ? 'Unmute'
-                                          : 'Mute notifications'),
-                                      foregroundColor:
-                                          context.colorScheme.foreground,
-                                      onPressed: () {
-                                        context
-                                            .read<ChatBloc>()
-                                            .add(ChatMuted(!muted));
-                                        toggle();
-                                      },
+                      if (jid == null)
+                        const SizedBox.shrink()
+                      else
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: BlocBuilder<RosterCubit, RosterState>(
+                              buildWhen: (_, current) =>
+                                  current is RosterAvailable,
+                              builder: (context, rosterState) {
+                                final item = (rosterState is! RosterAvailable
+                                        ? context.read<RosterCubit>()['items']
+                                            as List<RosterItem>
+                                        : rosterState.items)
+                                    .where((e) => e.jid == jid)
+                                    .singleOrNull;
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 40.0,
+                                        maxHeight: 40.0,
+                                      ),
+                                      child: (item == null)
+                                          ? AxiAvatar(jid: jid)
+                                          : AxiAvatar(
+                                              jid: item.jid,
+                                              subscription: item.subscription,
+                                              presence: item.presence,
+                                              status: item.status,
+                                            ),
                                     ),
-                                (toggle) => ShadButton.ghost(
-                                      width: double.infinity,
-                                      text: const Text('Report spam'),
-                                      foregroundColor:
-                                          context.colorScheme.destructive,
-                                      onPressed: () => context.push(
-                                        const ComposeRoute().location,
-                                        extra: {
-                                          'locate': context.read,
-                                          'jids': ['spam@axichat.com'],
-                                          'body':
-                                              'I want to report \'$jid\' for spam.',
-                                        },
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0,
+                                      ),
+                                      child: Text(
+                                        state.chat?.title ?? '',
+                                        style: context.textTheme.h4,
                                       ),
                                     ),
-                                (toggle) => BlockButtonInline(
-                                      jid: jid,
-                                      callback: toggle,
+                                    Expanded(
+                                      child: Text(
+                                        item?.status ?? '',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: context.textTheme.muted,
+                                      ),
                                     ),
-                              ],
+                                  ],
+                                );
+                              },
                             ),
+                          ),
+                        ),
+                      if (jid == null)
+                        const SizedBox.shrink()
+                      else
+                        AxiMore(
+                          options: [
+                            (toggle) => ShadButton.ghost(
+                                  width: double.infinity,
+                                  text: Text(
+                                    muted! ? 'Unmute' : 'Mute notifications',
+                                  ),
+                                  foregroundColor:
+                                      context.colorScheme.foreground,
+                                  onPressed: () {
+                                    context
+                                        .read<ChatBloc>()
+                                        .add(ChatMuted(!muted));
+                                    toggle();
+                                  },
+                                ),
+                            (toggle) => ShadButton.ghost(
+                                  width: double.infinity,
+                                  text: const Text('Report spam'),
+                                  foregroundColor:
+                                      context.colorScheme.destructive,
+                                  onPressed: () => context.push(
+                                    const ComposeRoute().location,
+                                    extra: {
+                                      'locate': context.read,
+                                      'jids': ['spam@axichat.com'],
+                                      'body':
+                                          'I want to report \'$jid\' for spam.',
+                                    },
+                                  ),
+                                ),
+                            (toggle) => BlockButtonInline(
+                                  jid: jid,
+                                  callback: toggle,
+                                ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -363,8 +367,9 @@ class _ChatState extends State<Chat> {
                           .map(
                             (e) => ChatMessage(
                               user: ChatUser(
-                                  id: e.senderJid,
-                                  firstName: state.chat?.title),
+                                id: e.senderJid,
+                                firstName: state.chat?.title,
+                              ),
                               createdAt: e.timestamp!,
                               text: e.body ?? '',
                               status: e.error.isNotNone
@@ -416,8 +421,10 @@ class _ChatState extends State<Chat> {
                           return ShadGestureDetector(
                             cursor: SystemMouseCursors.click,
                             onTap: () => context.read<ChatBloc>().add(
-                                ChatMessageFocused(
-                                    message.customProperties!['id'])),
+                                  ChatMessageFocused(
+                                    message.customProperties!['id'],
+                                  ),
+                                ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -441,7 +448,8 @@ class _ChatState extends State<Chat> {
                                     if (self)
                                       TextSpan(
                                         text: String.fromCharCode(
-                                            message.status!.icon.codePoint),
+                                          message.status!.icon.codePoint,
+                                        ),
                                         style: TextStyle(
                                           color: context
                                               .colorScheme.primaryForeground,
@@ -518,10 +526,7 @@ class _ChatState extends State<Chat> {
                           fillColor: context.colorScheme.input,
                           border: OutlineInputBorder(
                             borderRadius: context.radius,
-                            borderSide: const BorderSide(
-                              width: 0.0,
-                              style: BorderStyle.none,
-                            ),
+                            borderSide: BorderSide.none,
                           ),
                         ),
                         inputToolbarStyle: BoxDecoration(
@@ -539,21 +544,13 @@ class _ChatState extends State<Chat> {
                             popover: (context) => EmojiPicker(
                               textEditingController: textController,
                               config: Config(
-                                height: 256,
-                                checkPlatformCompatibility: true,
                                 emojiViewConfig: EmojiViewConfig(
                                   emojiSizeMax:
                                       context.read<Policy>().getMaxEmojiSize(),
                                 ),
-                                swapCategoryAndBottomBar: false,
-                                skinToneConfig: const SkinToneConfig(),
-                                categoryViewConfig: const CategoryViewConfig(),
-                                bottomActionBarConfig:
-                                    const BottomActionBarConfig(),
-                                searchViewConfig: const SearchViewConfig(),
                               ),
                             ),
-                          )
+                          ),
                         ],
                         showTraillingBeforeSend: true,
                         // trailing: [
@@ -581,7 +578,7 @@ class _ChatState extends State<Chat> {
                           ChatUser(
                             id: state.chat!.jid,
                             firstName: state.chat!.title,
-                          )
+                          ),
                       ].take(1).toList(),
                     ),
                   ),
@@ -631,7 +628,7 @@ class _GuestChatState extends State<GuestChat> {
       user: ChatUser(id: 'axichat', firstName: appDisplayName),
       createdAt: DateTime.now(),
       text: 'Open a chat! Unless you just want to talk to yourself.',
-    )
+    ),
   ];
 
   @override
@@ -640,7 +637,7 @@ class _GuestChatState extends State<GuestChat> {
     return Container(
       decoration: BoxDecoration(
         border: Border(
-          left: BorderSide(color: context.colorScheme.border, width: 1.0),
+          left: BorderSide(color: context.colorScheme.border),
         ),
       ),
       child: LayoutBuilder(
@@ -705,7 +702,8 @@ class _GuestChatState extends State<GuestChat> {
                       if (self)
                         TextSpan(
                           text: String.fromCharCode(
-                              message.status!.icon.codePoint),
+                            message.status!.icon.codePoint,
+                          ),
                           style: TextStyle(
                             color: context.colorScheme.primaryForeground,
                             fontSize: iconSize,
@@ -721,15 +719,12 @@ class _GuestChatState extends State<GuestChat> {
                           fontFamily: iconFamily,
                           package: iconPackage,
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ],
               );
             },
-          ),
-          messageListOptions: const MessageListOptions(
-            separatorFrequency: SeparatorFrequency.days,
           ),
           inputOptions: InputOptions(
             sendOnEnter: true,
@@ -746,10 +741,7 @@ class _GuestChatState extends State<GuestChat> {
               fillColor: context.colorScheme.input,
               border: OutlineInputBorder(
                 borderRadius: context.radius,
-                borderSide: const BorderSide(
-                  width: 0.0,
-                  style: BorderStyle.none,
-                ),
+                borderSide: BorderSide.none,
               ),
             ),
             inputToolbarStyle: BoxDecoration(
@@ -767,19 +759,12 @@ class _GuestChatState extends State<GuestChat> {
                 popover: (context) => EmojiPicker(
                   textEditingController: _textController,
                   config: Config(
-                    height: 256,
-                    checkPlatformCompatibility: true,
                     emojiViewConfig: EmojiViewConfig(
                       emojiSizeMax: context.read<Policy>().getMaxEmojiSize(),
                     ),
-                    swapCategoryAndBottomBar: false,
-                    skinToneConfig: const SkinToneConfig(),
-                    categoryViewConfig: const CategoryViewConfig(),
-                    bottomActionBarConfig: const BottomActionBarConfig(),
-                    searchViewConfig: const SearchViewConfig(),
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),

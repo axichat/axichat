@@ -58,7 +58,9 @@ class RosterInvitesList extends StatelessWidget {
                                   ? null
                                   : () {
                                       context.read<RosterCubit>().addContact(
-                                          jid: invite.jid, title: invite.title);
+                                            jid: invite.jid,
+                                            title: invite.title,
+                                          );
                                       toggle();
                                     },
                               text: const Text('Add contact'),
