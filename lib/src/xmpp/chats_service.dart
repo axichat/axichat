@@ -84,3 +84,22 @@ mixin ChatsService on XmppBase {
     });
   }
 }
+
+class MUCManager extends mox.MUCManager {
+  Future<void> createChat({required String jid, int? maxHistoryStanzas}) async {
+    await getAttributes().sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.presence(
+          to: jid,
+          children: [
+            mox.XMLNode.xmlns(
+              tag: 'x',
+              xmlns: mox.mucXmlns,
+            ),
+          ],
+        ),
+        awaitable: false,
+      ),
+    );
+  }
+}
