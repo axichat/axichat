@@ -16,7 +16,7 @@ class RosterAddButton extends StatelessWidget {
       builder: (_) => const Text('Add to roster'),
       child: AxiFab(
         iconData: LucideIcons.userPlus,
-        text: 'Add contact',
+        text: 'Contact',
         onPressed: () => showShadDialog(
           context: context,
           builder: (context) {

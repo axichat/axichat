@@ -60,6 +60,9 @@ dependencies:
   awesome_notifications_core: ^0.9.3
   dnsolve: ^1.0.0
 
+dependency_overrides:
+  pinenacl: ^0.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -91,6 +94,5 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/ca/isrgrootx1.pem
     - shorebird.yaml
 #    - shorebird.yaml
