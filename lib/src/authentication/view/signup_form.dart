@@ -4,6 +4,7 @@ import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/authentication/view/terms_checkbox.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/notifications/view/notification_request.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -234,7 +235,10 @@ class _SignupFormState extends State<SignupForm> {
                           ),
                         ),
                         const SizedBox.square(dimension: 16.0),
-                        const NotificationRequest(),
+                        NotificationRequest(
+                          notificationService:
+                              context.read<NotificationService>(),
+                        ),
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Padding(

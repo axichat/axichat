@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:async/async.dart';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/event_transform.dart';
-import 'package:chat/src/notifications/bloc/dismiss_notifications.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
@@ -14,8 +14,9 @@ part 'chat_event.dart';
 part 'chat_state.dart';
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  ChatBloc({required this.jid, required XmppService xmppService})
+  ChatBloc({required this.jid, required XmppService xmppService, required NotificationService notificationService,})
       : _xmppService = xmppService,
+  _notificationService = notificationService,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -31,7 +32,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
-      dismissNotifications(groupKey: jid!);
+      _notificationService.dismissNotifications(groupKey: jid!);
       _chatSubscription = _xmppService
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
@@ -45,6 +46,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   final String? jid;
   final XmppService _xmppService;
+  final NotificationService _notificationService;
 
   late final StreamSubscription<Chat?> _chatSubscription;
   late StreamSubscription<List<Message>> _messageSubscription;

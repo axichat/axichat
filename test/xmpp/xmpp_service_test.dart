@@ -12,104 +12,219 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:uuid/uuid.dart';
 
-class MockXmppConnection extends Mock implements XmppConnection {}
+import '../mocks.dart';
 
-class MockCredentialStore extends Mock implements CredentialStore {}
-
-class MockXmppStateStore extends Mock implements XmppStateStore {}
-
-class MockCapability extends Mock implements Capability {}
-
-class MockPolicy extends Mock implements Policy {}
-
-class FakeCredentialKey extends Fake implements RegisteredCredentialKey {}
-
-const domain = 'draugr.de';
+const jid = 'jid@axi.im/resource';
+const password = 'password';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());
+    registerFallbackValue(FakeStateKey());
+    registerFallbackValue(FakeUserAgent());
   });
 
+  late MockXmppConnection connection;
+  late MockCredentialStore credentialStore;
+  late MockXmppStateStore stateStore;
   late XmppDatabase database;
+  late MockNotificationService notificationService;
+  late StreamController<mox.XmppEvent> eventStreamController;
 
   setUp(() {
+    connection = MockXmppConnection();
+    credentialStore = MockCredentialStore();
+    stateStore = MockXmppStateStore();
     database = XmppDrift(
       file: File(''),
       passphrase: '',
       executor: NativeDatabase.memory(),
     );
+    notificationService = MockNotificationService();
+    eventStreamController = StreamController<mox.XmppEvent>();
+
+    when(() => connection.hasConnectionSettings).thenReturn(false);
+
+    when(() => connection.registerFeatureNegotiators(any()))
+        .thenAnswer((_) async {});
+
+    when(() => connection.registerManagers(any())).thenAnswer((_) async {});
+
+    when(() => connection.loadStreamState()).thenAnswer((_) async {});
+    when(() => connection.setUserAgent(any())).thenAnswer((_) {});
+    when(() => connection.setFastToken(any())).thenAnswer((_) {});
+
+    when(() => connection.saltedPassword).thenReturn('');
+
+    when(() => connection.asBroadcastStream())
+        .thenAnswer((_) => eventStreamController.stream);
   });
 
   tearDown(() async {
+    await eventStreamController.close();
     await database.close();
   });
 
-  group('XmppService authentication', () {
-    const jid = 'jid';
-    const password = 'password';
+  void mockSuccessfulConnection() {
+    when(() => stateStore.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        )).thenAnswer((_) async => true);
 
-    test(
-        'Login succeeds with new valid credentials '
-        'and writes user to storage.', () async {
-      final connection = MockXmppConnection();
-      final credentialStore = MockCredentialStore();
-      final stateStore = MockXmppStateStore();
+    when(() => connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        )).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
 
-      final xmppService = XmppService(
+    when(() => stateStore.close()).thenAnswer((_) async {});
+  }
+
+  void mockUnsuccessfulConnection() {
+    when(() => stateStore.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        )).thenAnswer((_) async => true);
+
+    when(() => connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        )).thenAnswer((_) async => const Result<bool, mox.XmppError>(false));
+
+    when(() => stateStore.close()).thenAnswer((_) async {});
+  }
+
+  group('XmppService event handler', () {
+    late XmppService xmppService;
+
+    setUp(() {
+      xmppService = XmppService(
         buildConnection: () => connection,
         buildStateStore: (_, __) => stateStore,
         buildDatabase: (_, __) => database,
-        capability: Capability(),
-        policy: Policy(),
+        notificationService: notificationService,
+      );
+    });
+
+    tearDown(() async {
+      await xmppService.close();
+    });
+
+    final stanzaID = const Uuid().v4();
+    const text =
+        ' !"#\$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
+    final standardMessage = mox.MessageEvent(
+      mox.JID.fromString('from'),
+      mox.JID.fromString(jid),
+      false,
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+        const mox.MessageBodyData(text),
+        const mox.MarkableData(true),
+        mox.MessageIdData(stanzaID),
+        mox.ChatState.active,
+      ]),
+      id: stanzaID,
+    );
+
+    test('Given a standard text message, the handler writes it to the database',
+        () async {
+      mockSuccessfulConnection();
+
+      await xmppService.connect(
+        jid: jid,
+        password: password,
+        databasePrefix: '',
+        databasePassphrase: '',
       );
 
-      when(() => connection.hasConnectionSettings).thenReturn(false);
+      when(() => notificationService.sendNotification(
+            title: any(named: 'title'),
+            body: any(named: 'body'),
+            groupKey: any(named: 'groupKey'),
+            extraConditions: any(named: 'extraConditions'),
+          )).thenAnswer((_) async {});
 
-      when(() => connection.registerFeatureNegotiators(any()))
-          .thenAnswer((_) async {});
+      final beforeMessage = await database.getMessageByStanzaID(stanzaID);
+      expect(beforeMessage, isNull);
 
-      when(() => connection.registerManagers(any())).thenAnswer((_) async {});
+      eventStreamController.sink.add(standardMessage);
 
-      when(() => connection.asBroadcastStream())
-          .thenAnswer((_) => StreamController<mox.XmppEvent>().stream);
+      await Future.delayed(const Duration(seconds: 1));
 
-      when(() => connection.connect(
-            shouldReconnect: false,
-            waitForConnection: true,
-            waitUntilLogin: true,
-          )).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
+      final afterMessage = await database.getMessageByStanzaID(stanzaID);
+      expect(afterMessage?.stanzaID, equals(stanzaID));
+      expect(afterMessage?.body, equals(text));
+    });
+  });
 
-      when(() => credentialStore.read(key: any(named: 'key')))
-          .thenAnswer((_) async => null);
+  group('XmppService authentication', () {
+    bool builtStateStore = false;
+    bool builtDatabase = false;
 
-      when(() => credentialStore.write(
-            key: any(named: 'key'),
-            value: any(named: 'value'),
-          )).thenAnswer((_) async => true);
+    XmppStateStore buildStateStore(String _, String __) {
+      builtStateStore = true;
+      return stateStore;
+    }
 
-      when(() => stateStore.close()).thenAnswer((_) async {});
+    XmppDatabase buildDatabase(String _, String __) {
+      builtDatabase = true;
+      return database;
+    }
 
-      // await xmppService.connect(jid: jid, password: password);
-      //
-      // verify(() => connection.connect(
-      //       shouldReconnect: false,
-      //       waitForConnection: true,
-      //       waitUntilLogin: true,
-      //     )).called(1);
-      //
-      // verify(() => credentialStore.write(
-      //       key: xmppService.jidStorageKey,
-      //       value: username,
-      //     )).called(1);
-      //
-      // verify(() => credentialStore.write(
-      //       key: xmppService.passwordStorageKey,
-      //       value: password,
-      //     )).called(1);
+    late XmppService xmppService;
 
+    setUp(() {
+      builtStateStore = false;
+      builtDatabase = false;
+      xmppService = XmppService(
+        buildConnection: () => connection,
+        buildStateStore: buildStateStore,
+        buildDatabase: buildDatabase,
+        notificationService: notificationService,
+      );
+    });
+
+    tearDown(() async {
       await xmppService.close();
+      resetMocktailState();
+    });
+
+    test('Given valid credentials, connect initialises the databases.',
+        () async {
+      mockSuccessfulConnection();
+
+      await xmppService.connect(
+        jid: jid,
+        password: password,
+        databasePrefix: '',
+        databasePassphrase: '',
+      );
+
+      expect(builtStateStore, true);
+      expect(builtDatabase, true);
+    });
+
+    test(
+        'Given invalid credentials, connect throws an XmppAuthenticationException.',
+        () async {
+      mockUnsuccessfulConnection();
+
+      await expectLater(
+        () => xmppService.connect(
+          jid: jid,
+          password: password,
+          databasePrefix: '',
+          databasePassphrase: '',
+        ),
+        throwsA(isA<XmppAuthenticationException>()),
+      );
+
+      expect(builtDatabase, false);
     });
   });
 }

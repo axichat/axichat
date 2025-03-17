@@ -13,6 +13,7 @@ import 'package:chat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:chat/src/draft/bloc/draft_cubit.dart';
 import 'package:chat/src/draft/view/draft_button.dart';
 import 'package:chat/src/draft/view/drafts_list.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/profile/bloc/profile_cubit.dart';
 import 'package:chat/src/profile/view/profile_card.dart';
 import 'package:chat/src/roster/bloc/roster_cubit.dart';
@@ -123,6 +124,8 @@ class HomeScreen extends StatelessWidget {
                                         jid: openJid,
                                         xmppService:
                                             context.read<XmppService>(),
+                                        notificationService:
+                                            context.read<NotificationService>(),
                                       ),
                                       child: const Chat(),
                                     ),

@@ -1,4 +1,5 @@
 import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/notifications/view/notification_request.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +19,9 @@ class SettingsControls extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (context.read<Capability>().canForegroundService)
-              const NotificationRequest(),
+              NotificationRequest(
+                notificationService: context.read<NotificationService>(),
+              ),
             ListTile(
               title: const Text('Theme Mode'),
               trailing: ShadSelect<ThemeMode>(

@@ -4,8 +4,12 @@ class ImpatientCompleter<T> {
   ImpatientCompleter(this.completer);
 
   final Completer<T> completer;
+  bool _hasListener = false;
 
-  Future<T> get future => completer.future;
+  Future<T> get future {
+    _hasListener = true;
+    return completer.future;
+  }
 
   bool get isCompleted => completer.isCompleted;
 
@@ -18,6 +22,7 @@ class ImpatientCompleter<T> {
   }
 
   void completeError(Object error, [StackTrace? stackTrace]) {
+    if (!_hasListener) return;
     completer.completeError(error, stackTrace);
   }
 }

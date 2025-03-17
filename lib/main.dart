@@ -2,6 +2,7 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -27,31 +28,12 @@ void main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
 
+  const notificationService = NotificationService();
+
   const capability = Capability();
-
   if (capability.canForegroundService) {
-    FlutterForegroundTask.initCommunicationPort();
+    notificationService.init();
   }
-
-  AwesomeNotifications().initialize(
-    null,
-    [
-      NotificationChannel(
-        channelGroupKey: 'basic_channel_group',
-        channelKey: 'basic_channel',
-        channelName: 'Basic notifications',
-        channelDescription: 'Message notifications',
-        defaultColor: const Color(0xFF9D50DD),
-        ledColor: Colors.white,
-      )
-    ],
-    channelGroups: [
-      NotificationChannelGroup(
-        channelGroupKey: 'basic_channel_group',
-        channelGroupName: 'Basic group',
-      )
-    ],
-  );
 
   runApp(capability.canForegroundService
       ? const WithForegroundTask(

@@ -9,7 +9,7 @@ import 'package:chat/src/common/defer.dart';
 import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/send_notification.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/impatient_completer.dart';
 import 'package:chat/src/storage/models.dart';
@@ -148,6 +148,7 @@ class XmppService extends XmppBase
     this._buildConnection,
     this._buildStateStore,
     this._buildDatabase,
+    this._notificationService,
     this._capability,
     this._policy,
   );
@@ -158,6 +159,7 @@ class XmppService extends XmppBase
     required FutureOr<XmppConnection> Function() buildConnection,
     required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
+    NotificationService notificationService = const NotificationService(),
     Capability capability = const Capability(),
     Policy policy = const Policy(),
   }) =>
@@ -165,6 +167,7 @@ class XmppService extends XmppBase
         buildConnection,
         buildStateStore,
         buildDatabase,
+        notificationService,
         capability,
         policy,
       );
@@ -175,6 +178,7 @@ class XmppService extends XmppBase
   final FutureOr<XmppConnection> Function() _buildConnection;
   final FutureOr<XmppStateStore> Function(String, String) _buildStateStore;
   final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
+  final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
 
@@ -308,7 +312,7 @@ class XmppService extends XmppBase
         await _dbOp<XmppDatabase>((db) async {
           await db.saveMessage(message);
         });
-        await sendNotification(
+        await _notificationService.sendNotification(
           title: from,
           body: body,
           groupKey: chatJid,
@@ -441,13 +445,13 @@ class XmppService extends XmppBase
           waitUntilLogin: true,
         );
 
-        if (result.isType<mox.XmppError>()) {
+        if (result.isType<mox.XmppError>() || !result.get<bool>()) {
           _log.info('Login rejected by server.');
           throw XmppAuthenticationException();
         }
         _log.info('Login successful. Initializing databases...');
         await _initDatabases(databasePrefix, databasePassphrase);
-        return _connection.getNegotiator<SaslScramNegotiator>()!.saltedPassword;
+        return _connection.saltedPassword;
       },
     );
   }
@@ -575,12 +579,11 @@ class XmppService extends XmppBase
     //   ),
     // );
 
-    await _connection.getManager<XmppStreamManagementManager>()!.loadState();
+    await _connection.loadStreamState();
     await _dbOp<XmppStateStore>((ss) {
       _connection
-        ..getNegotiator<mox.FASTSaslNegotiator>()!.fastToken =
-            ss.read(key: fastTokenStorageKey) as String?
-        ..getNegotiator<mox.Sasl2Negotiator>()!.userAgent = mox.UserAgent(
+        ..setFastToken(ss.read(key: fastTokenStorageKey) as String?)
+        ..setUserAgent(mox.UserAgent(
           software: appDisplayName,
           id: ss.read(key: userAgentStorageKey) as String? ??
               () {
@@ -588,7 +591,7 @@ class XmppService extends XmppBase
                 ss.write(key: userAgentStorageKey, value: id);
                 return id;
               }(),
-        );
+        ));
     });
   }
 
@@ -647,10 +650,10 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> _reset() async {
+  Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
-    _log.info('Resetting...');
+    _log.info('Resetting${e != null ? ' due to $e' : null}...');
 
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -736,12 +739,12 @@ class XmppService extends XmppBase
   }) async {
     _log.info('Retrieving completer for $T...');
 
-    late final Completer<T> completer;
+    late final Completer<T?> completer;
     switch (T) {
       case == XmppStateStore:
-        completer = _stateStore.completer as Completer<T>;
+        completer = _stateStore.completer as Completer<T?>;
       case == XmppDatabase:
-        completer = _database.completer as Completer<T>;
+        completer = _database.completer as Completer<T?>;
       default:
         throw UnimplementedError('No database of type: $T exists.');
     }
@@ -749,11 +752,16 @@ class XmppService extends XmppBase
     if (!awaitDatabase && !completer.isCompleted) return;
     try {
       _log.info('Awaiting completer for $T...');
-      final db = await completer.future;
+      final db = await completer.future.catchError(
+        (err) {
+          _log.warning('Owner called reset before $T initialized.', e);
+          return null;
+        },
+        test: (err) => err is XmppAbortedException,
+      );
+      if (db == null) return;
       _log.info('Completed completer for $T.');
       return await operation(db);
-    } on XmppAbortedException catch (e, s) {
-      _log.warning('Owner called reset before $T initialized.', e, s);
     } on XmppException {
       rethrow;
     } on Exception catch (e, s) {
@@ -837,6 +845,18 @@ class XmppConnection extends mox.XmppConnection {
         return null;
     }
   }
+
+  String get saltedPassword =>
+      getNegotiator<SaslScramNegotiator>()!.saltedPassword;
+
+  Future<void> loadStreamState() async =>
+      await getManager<XmppStreamManagementManager>()!.loadState();
+
+  void setFastToken(String? value) =>
+      getNegotiator<mox.FASTSaslNegotiator>()!.fastToken = value;
+
+  void setUserAgent(mox.UserAgent value) =>
+      getNegotiator<mox.Sasl2Negotiator>()!.userAgent = value;
 
   Future<void> reset() async {
     if (await FlutterForegroundTask.isRunningService) {

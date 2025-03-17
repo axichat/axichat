@@ -4,6 +4,7 @@ import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/routes.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:chat/src/storage/credential_store.dart';
@@ -24,13 +25,17 @@ class Axichat extends StatelessWidget {
   const Axichat({
     super.key,
     XmppService? xmppService,
+    NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
   })  : _xmppService = xmppService,
+        _notificationService =
+            notificationService ?? const NotificationService(),
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy();
 
   final XmppService? _xmppService;
+  final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
 
@@ -61,12 +66,14 @@ class Axichat extends StatelessWidget {
                   passphrase: passphrase,
                 );
               },
+              notificationService: _notificationService,
               capability: _capability,
               policy: _policy,
             ),
           )
         else
           RepositoryProvider.value(value: _xmppService),
+        RepositoryProvider.value(value: _notificationService),
         RepositoryProvider.value(value: _capability),
         RepositoryProvider.value(value: _policy),
       ],

@@ -2,6 +2,7 @@ import 'package:chat/src/app.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/authentication/view/terms_checkbox.dart';
 import 'package:chat/src/common/ui/ui.dart';
+import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/notifications/view/notification_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -93,7 +94,9 @@ class _LoginFormState extends State<LoginForm> {
                 enabled: state is! AuthenticationInProgress,
                 controller: _passwordTextController,
               ),
-              const NotificationRequest(),
+              NotificationRequest(
+                notificationService: context.read<NotificationService>(),
+              ),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(

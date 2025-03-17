@@ -1,4 +1,4 @@
-part of 'xmpp_service.dart';
+part of 'package:chat/src/xmpp/xmpp_service.dart';
 
 mixin ChatsService on XmppBase {
   Stream<List<Chat>> chatsStream({

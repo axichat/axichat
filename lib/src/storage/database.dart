@@ -35,6 +35,7 @@ abstract interface class XmppDatabase implements Database {
     required int start,
     required int end,
   });
+  Future<Message?> getMessageByStanzaID(String stanzaID);
   Future<Message?> getMessageByOriginID(String originID);
   Future<void> saveMessage(Message message);
   Future<void> saveMessageError({
@@ -454,6 +455,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }) {
     return messagesAccessor.selectChatMessages(jid);
   }
+
+  @override
+  Future<Message?> getMessageByStanzaID(String stanzaID) =>
+      messagesAccessor.selectOne(stanzaID);
 
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
