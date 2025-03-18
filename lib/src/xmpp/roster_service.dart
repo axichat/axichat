@@ -24,6 +24,21 @@ mixin RosterService on XmppBase {
 
   final _log = Logger('RosterService');
 
+  Future<void> requestRoster() async {
+    if (await _connection.requestRoster() case final result?) {
+      if (result.isType<mox.RosterRequestResult>()) {
+        await _dbOp<XmppDatabase>((db) async {
+          final items = result
+              .get<mox.RosterRequestResult>()
+              .items
+              .map((e) => RosterItem.fromMox(e))
+              .toList();
+          await db.saveRosterItems(items);
+        });
+      }
+    }
+  }
+
   Future<void> addToRoster({required String jid, String? title}) async {
     if (_connection.getRosterManager() case final rm?) {
       _log.info('Requesting to add $jid to roster...');
@@ -109,11 +124,11 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
       }
 
       for (final item in added) {
-        await db.saveRosterItem(RosterItem.fromMox(item: item));
+        await db.saveRosterItem(RosterItem.fromMox(item));
       }
 
       for (final item in modified) {
-        await db.updateRosterItem(RosterItem.fromMox(item: item));
+        await db.updateRosterItem(RosterItem.fromMox(item));
       }
     });
 

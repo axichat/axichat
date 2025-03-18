@@ -1,5 +1,4 @@
 // ignore_for_file: avoid_print
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:bloc/bloc.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/notifications/bloc/notification_service.dart';

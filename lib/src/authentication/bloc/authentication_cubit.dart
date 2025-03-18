@@ -9,6 +9,7 @@ import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/storage/credential_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:crypto/crypto.dart';
+import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
@@ -39,7 +40,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _capability = capability,
-        super(AuthenticationNone()) {
+        super(const AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
       onShow: login,
@@ -92,7 +93,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is AuthenticationComplete) {
       return;
     }
-    emit(AuthenticationInProgress());
+    emit(const AuthenticationInProgress());
 
     assert((username == null) == (password == null));
 
@@ -105,7 +106,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     if (jid == null || password == null) {
-      emit(AuthenticationNone());
+      emit(const AuthenticationNone());
       return;
     }
 
@@ -168,7 +169,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _credentialStore.write(key: passwordStorageKey, value: password);
     }
 
-    emit(AuthenticationComplete());
+    emit(const AuthenticationComplete());
   }
 
   Future<void> signup({
@@ -179,7 +180,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captcha,
     required bool rememberMe,
   }) async {
-    emit(AuthenticationInProgress());
+    emit(const AuthenticationInProgress());
     try {
       final response = await http.post(
         registrationUrl,
@@ -206,7 +207,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> checkNotPwned({required String password}) async {
-    emit(AuthenticationInProgress());
+    emit(const AuthenticationInProgress());
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {
@@ -223,10 +224,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       }
     } on Exception catch (_) {
-      emit(AuthenticationNone());
+      emit(const AuthenticationNone());
       return true;
     }
-    emit(AuthenticationNone());
+    emit(const AuthenticationNone());
     return true;
   }
 
@@ -246,6 +247,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     await _xmppService.disconnect();
 
-    emit(AuthenticationNone());
+    emit(const AuthenticationNone());
   }
 }

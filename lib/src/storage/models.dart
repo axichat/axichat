@@ -1003,8 +1003,8 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
         subscription: Subscription.both,
       );
 
-  static RosterItem fromMox({
-    required mox.XmppRosterItem item,
+  static RosterItem fromMox(
+    mox.XmppRosterItem item, {
     bool isGhost = false,
   }) {
     final subscription = Subscription.fromString(item.subscription);

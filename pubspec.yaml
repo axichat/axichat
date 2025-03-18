@@ -77,6 +77,7 @@ dev_dependencies:
   freezed: ^2.5.2
   flutter_launcher_icons: ^0.13.1
   msix: ^3.16.8
+  bloc_test: ^9.1.7
 
 flutter_launcher_icons:
   image_path_android: "assets/images/ic_launcher.png"

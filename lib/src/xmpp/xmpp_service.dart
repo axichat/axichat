@@ -309,9 +309,11 @@ class XmppService extends XmppBase
           acked: true,
           received: true,
         );
+
         await _dbOp<XmppDatabase>((db) async {
           await db.saveMessage(message);
         });
+
         await _notificationService.sendNotification(
           title: from,
           body: body,
@@ -324,7 +326,6 @@ class XmppService extends XmppBase
             }),
           ],
         );
-
       case mox.ConnectionStateChangedEvent event:
         _connectionState = event.state;
         _connectivityStream.add(event.state);
@@ -337,7 +338,7 @@ class XmppService extends XmppBase
         await _dbOp<XmppDatabase>((db) async {
           await db.markMessageReceived(event.id);
         });
-      case mox.StreamNegotiationsDoneEvent event:
+      case mox.StreamNegotiationsDoneEvent _:
         _connection.setResource(resource!, triggerEvent: false);
         // await _omemoManager.value?.commitDevice(await _device);
         // if (await _ensureOmemoDevicePublished() case final result?) {
@@ -353,7 +354,7 @@ class XmppService extends XmppBase
           }
         }
         _log.info('Fetching roster...');
-        await _connection.getRosterManager()?.requestRoster();
+        await requestRoster();
         _log.info('Fetching blocklist...');
         await requestBlocklist();
       case mox.ResourceBoundEvent event:
@@ -376,22 +377,18 @@ class XmppService extends XmppBase
             } on XmppRosterException catch (_) {}
             return;
           }
-          db.saveInvite(Invite(
+          await db.saveInvite(Invite(
             jid: requester,
             title: event.from.local,
           ));
         });
       case mox.BlocklistBlockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
-          for (final blocked in event.items) {
-            await db.blockOne(blocked);
-          }
+            await db.blockJids(event.items);
         });
       case mox.BlocklistUnblockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
-          for (final unblocked in event.items) {
-            await db.unblockOne(unblocked);
-          }
+            await db.unblockJids(event.items);
         });
       case mox.BlocklistUnblockAllPushEvent _:
         await _dbOp<XmppDatabase>((db) async {
@@ -851,6 +848,17 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<void> loadStreamState() async =>
       await getManager<XmppStreamManagementManager>()!.loadState();
+
+  Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?> requestRoster() async
+  => await getRosterManager()?.requestRoster();
+
+  Future<List<String>?> requestBlocklist() async {
+    if (getManager<mox.BlockingManager>() case final bm?) {
+      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      return await bm.getBlocklist();
+    }
+    return null;
+  }
 
   void setFastToken(String? value) =>
       getNegotiator<mox.FASTSaslNegotiator>()!.fastToken = value;

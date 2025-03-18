@@ -17,10 +17,8 @@ mixin BlockingService on XmppBase {
   final _log = Logger('BlockingService');
 
   Future<void> requestBlocklist() async {
-    if (_connection.getManager<mox.BlockingManager>() case final bm?) {
-      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
-      final blocked = await bm.getBlocklist();
-      await _dbOp<XmppDatabase>((db) async {
+    if (await _connection.requestBlocklist() case final blocked?) {
+      await owner._dbOp<XmppDatabase>((db) async {
         db.replaceBlocklist(blocked);
       });
     }

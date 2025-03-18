@@ -93,8 +93,11 @@ abstract interface class XmppDatabase implements Database {
   Future<List<RosterItem>> getRoster();
   Future<RosterItem?> getRosterItem(String jid);
   Future<void> saveRosterItem(RosterItem item);
+  Future<void> saveRosterItems(List<RosterItem> items);
   Future<void> updateRosterItem(RosterItem item);
+  Future<void> updateRosterItems(List<RosterItem> items);
   Future<void> removeRosterItem(String jid);
+  Future<void> removeRosterItems(List<String> jids);
   Future<void> updatePresence({
     required String jid,
     required Presence presence,
@@ -113,8 +116,10 @@ abstract interface class XmppDatabase implements Database {
     required int start,
     required int end,
   });
-  Future<void> blockOne(String jid);
-  Future<void> unblockOne(String jid);
+  Future<void> blockJid(String jid);
+  Future<void> blockJids(List<String> jids);
+  Future<void> unblockJid(String jid);
+  Future<void> unblockJids(List<String> jids);
   Future<void> replaceBlocklist(List<String> blocks);
   Future<void> deleteBlocklist();
   Future<void> deleteAll();
@@ -796,6 +801,23 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Future<void> saveRosterItems(List<RosterItem> items) async {
+    await transaction(() async {
+      for (final item in items) {
+        _log.info('Adding ${item.jid} to roster...');
+        await chatsAccessor.insertOne(Chat(
+          jid: item.jid,
+          title: item.title,
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+        ));
+        await rosterAccessor.insertOrUpdateOne(item);
+        await invitesAccessor.deleteOne(item.jid);
+      }
+    });
+  }
+
+  @override
   Future<void> updateRosterItem(RosterItem item) async {
     _log.info('Updating ${item.jid} in roster...');
     await transaction(() async {
@@ -805,11 +827,33 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Future<void> updateRosterItems(List<RosterItem> items) async {
+    await transaction(() async {
+      for (final item in items) {
+        _log.info('Updating ${item.jid} in roster...');
+        await rosterAccessor.updateOne(item);
+        await invitesAccessor.deleteOne(item.jid);
+      }
+    });
+  }
+
+  @override
   Future<void> removeRosterItem(String jid) async {
     _log.info('Removing $jid from roster...');
     await transaction(() async {
       await rosterAccessor.deleteOne(jid);
       await chatsAccessor.deleteOne(jid);
+    });
+  }
+
+  @override
+  Future<void> removeRosterItems(List<String> jids) async {
+    await transaction(() async {
+      for (final jid in jids) {
+        _log.info('Removing $jid from roster...');
+        await rosterAccessor.deleteOne(jid);
+        await chatsAccessor.deleteOne(jid);
+      }
     });
   }
 
@@ -881,15 +925,35 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  Future<void> blockOne(String jid) async {
+  Future<void> blockJid(String jid) async {
     _log.info('Adding $jid to blocklist...');
     await blocklistAccessor.insertOne(BlocklistCompanion(jid: Value(jid)));
   }
 
   @override
-  Future<void> unblockOne(String jid) async {
+  Future<void> blockJids(List<String> jids) async {
+    await transaction(() async {
+      for (final jid in jids) {
+        _log.info('Adding $jid to blocklist...');
+        await blocklistAccessor.insertOne(BlocklistCompanion(jid: Value(jid)));
+      }
+    });
+  }
+
+  @override
+  Future<void> unblockJid(String jid) async {
     _log.info('Removing $jid from blocklist...');
     await blocklistAccessor.deleteOne(jid);
+  }
+
+  @override
+  Future<void> unblockJids(List<String> jids) async {
+    await transaction(() async {
+      for (final jid in jids) {
+        _log.info('Removing $jid from blocklist...');
+        await blocklistAccessor.deleteOne(jid);
+      }
+    });
   }
 
   @override
