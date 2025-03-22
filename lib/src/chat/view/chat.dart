@@ -374,11 +374,13 @@ class _ChatState extends State<Chat> {
                               text: e.body ?? '',
                               status: e.error.isNotNone
                                   ? MessageStatus.failed
-                                  : e.received
-                                      ? MessageStatus.received
-                                      : e.acked
-                                          ? MessageStatus.sent
-                                          : MessageStatus.pending,
+                                  : e.displayed
+                                      ? MessageStatus.read
+                                      : e.received
+                                          ? MessageStatus.received
+                                          : e.acked
+                                              ? MessageStatus.sent
+                                              : MessageStatus.pending,
                               customProperties: {
                                 'id': e.stanzaID,
                                 'edited': e.edited,

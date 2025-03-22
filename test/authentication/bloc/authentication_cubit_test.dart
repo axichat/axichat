@@ -100,8 +100,10 @@ void main() {
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Given saved credentials, automatic login emits [AuthenticationComplete].',
       setUp: () {
-        when(() => mockCredentialStore.read(key: bloc.jidStorageKey)).thenAnswer((_) async => validJid);
-        when(() => mockCredentialStore.read(key: bloc.passwordStorageKey)).thenAnswer((_) async => validPassword);
+        when(() => mockCredentialStore.read(key: bloc.jidStorageKey))
+            .thenAnswer((_) async => validJid);
+        when(() => mockCredentialStore.read(key: bloc.passwordStorageKey))
+            .thenAnswer((_) async => validPassword);
       },
       build: () => bloc,
       act: (bloc) => bloc.login(),

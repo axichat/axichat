@@ -49,6 +49,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markMessageRetracted(String stanzaID);
   Future<void> markMessageAcked(String stanzaID);
   Future<void> markMessageReceived(String stanzaID);
+  Future<void> markMessageDisplayed(String stanzaID);
   Stream<List<Draft>> watchDrafts({required int start, required int end});
   Future<List<Draft>> getDrafts({required int start, required int end});
   Future<Draft?> getDraft(int id);
@@ -561,6 +562,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       received: const Value(true),
+    ));
+  }
+
+  @override
+  Future<void> markMessageDisplayed(String stanzaID) async {
+    _log.info('Marking message: $stanzaID displayed...');
+    await messagesAccessor.updateOne(MessagesCompanion(
+      stanzaID: Value(stanzaID),
+      displayed: const Value(true),
     ));
   }
 

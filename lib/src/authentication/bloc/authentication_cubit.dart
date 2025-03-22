@@ -37,10 +37,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required CredentialStore credentialStore,
     required XmppService xmppService,
     required Capability capability,
+    AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _capability = capability,
-        super(const AuthenticationNone()) {
+        super(initialState ?? const AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
       onShow: login,

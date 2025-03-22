@@ -334,6 +334,22 @@ class XmppService extends XmppBase
         await _dbOp<XmppDatabase>((db) async {
           await db.markMessageAcked(event.stanza.id!);
         });
+      case mox.ChatMarkerEvent event:
+        _log.info('Received chat marker from ${event.from}');
+
+        await _dbOp<XmppDatabase>((db) async {
+          switch (event.type) {
+            case mox.ChatMarker.displayed:
+              db.markMessageDisplayed(event.id);
+              db.markMessageReceived(event.id);
+              db.markMessageAcked(event.id);
+            case mox.ChatMarker.received:
+              db.markMessageReceived(event.id);
+              db.markMessageAcked(event.id);
+            case mox.ChatMarker.acknowledged:
+              db.markMessageAcked(event.id);
+          }
+        });
       case mox.DeliveryReceiptReceivedEvent event:
         await _dbOp<XmppDatabase>((db) async {
           await db.markMessageReceived(event.id);
