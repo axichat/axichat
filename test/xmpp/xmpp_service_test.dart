@@ -206,6 +206,30 @@ void main() {
     });
 
     test(
+        'Given a displayed chat marker, marks the correct message in the database displayed.',
+            () async {
+          final message = Message(
+            stanzaID: stanzaID,
+            senderJid: from,
+            chatJid: from,
+          );
+          await database.saveMessage(message);
+
+          final beforeDisplayed = await database.getMessageByStanzaID(stanzaID);
+          expect(beforeDisplayed?.acked, isFalse);
+
+          eventStreamController
+              .add(mox.ChatMarkerEvent(mox.JID.fromString(from), mox.ChatMarker.displayed, stanzaID));
+
+          await Future.delayed(const Duration(seconds: 1));
+
+          final afterDisplayed = await database.getMessageByStanzaID(stanzaID);
+          expect(afterDisplayed?.displayed, isTrue);
+          expect(afterDisplayed?.received, isTrue);
+          expect(afterDisplayed?.acked, isTrue);
+        });
+
+    test(
         'Given a delivery receipt, marks the correct message in the database received.',
         () async {
       final message = Message(
