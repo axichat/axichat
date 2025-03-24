@@ -844,6 +844,17 @@ class XmppConnection extends mox.XmppConnection {
   void setUserAgent(mox.UserAgent value) =>
       getNegotiator<mox.Sasl2Negotiator>()!.userAgent = value;
 
+  Future<void> sendMessage(mox.MessageEvent packet) async {
+    if (getManager<mox.MessageManager>() case final mm?) {
+      return await mm.sendMessage(
+        packet.to,
+        packet.extensions,
+      );
+    }
+
+    throw XmppMessageException();
+  }
+
   Future<void> reset() async {
     if (await FlutterForegroundTask.isRunningService) {
       if (socketWrapper case final ForegroundSocketWrapper socket) {

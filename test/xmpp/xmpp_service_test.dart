@@ -56,14 +56,7 @@ void main() {
         buildDatabase: (_, __) => database,
         notificationService: mockNotificationService,
       );
-      guaranteeSuccessfulConnection();
-
-      await xmppService.connect(
-        jid: jid,
-        password: password,
-        databasePrefix: '',
-        databasePassphrase: '',
-      );
+      await connectSuccessfully(xmppService);
 
       messageEvent = generateRandomMessageEvent();
       message = xmppService.generateMessageFromMox(messageEvent);
@@ -257,14 +250,7 @@ void main() {
     test(
       'Given valid credentials, connect initialises the databases.',
       () async {
-        guaranteeSuccessfulConnection();
-
-        await xmppService.connect(
-          jid: jid,
-          password: password,
-          databasePrefix: '',
-          databasePassphrase: '',
-        );
+        await connectSuccessfully(xmppService);
 
         expect(builtStateStore, true);
         expect(builtDatabase, true);
@@ -274,15 +260,8 @@ void main() {
     test(
       'Given invalid credentials, connect throws an XmppAuthenticationException.',
       () async {
-        guaranteeUnsuccessfulConnection();
-
         await expectLater(
-          () => xmppService.connect(
-            jid: jid,
-            password: password,
-            databasePrefix: '',
-            databasePassphrase: '',
-          ),
+          () => connectUnsuccessfully(xmppService),
           throwsA(isA<XmppAuthenticationException>()),
         );
 

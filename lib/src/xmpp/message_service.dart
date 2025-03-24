@@ -89,46 +89,34 @@ mixin MessageService on XmppBase {
     required String text,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
   }) async {
-    if (_connection.getManager<mox.MessageManager>() case final mm?) {
-      final stanzaID = _connection.generateId();
-      final originID = _connection.generateId();
-      _log.info('Sending message: $stanzaID '
-          'with body: ${text.substring(0, min(10, text.length))}...');
-      await _dbOp<XmppDatabase>((db) async {
-        await db.saveMessage(Message(
-          stanzaID: stanzaID,
-          originID: originID,
-          senderJid: myJid.toString(),
-          chatJid: jid,
-          body: text,
-          encryptionProtocol: encryptionProtocol,
-        ));
-      });
+    final message = Message(
+      stanzaID: _connection.generateId(),
+      originID: _connection.generateId(),
+      senderJid: myJid.toString(),
+      chatJid: jid,
+      body: text,
+      encryptionProtocol: encryptionProtocol,
+    );
+    _log.info('Sending message: ${message.stanzaID} '
+        'with body: ${text.substring(0, min(10, text.length))}...');
+    await _dbOp<XmppDatabase>((db) async {
+      await db.saveMessage(message);
+    });
 
-      try {
-        await mm.sendMessage(
-          mox.JID.fromString(jid),
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            mox.MessageBodyData(text),
-            mox.MarkableData(true),
-            mox.MessageIdData(stanzaID),
-            mox.StableIdData(originID, null),
-            mox.ChatState.active,
-          ]),
+    try {
+      await _connection.sendMessage(generateMoxFromMessage(message));
+    } on Exception catch (e) {
+      _log.info(
+          'Failed to send message: ${message.stanzaID}. '
+          'Storing with error to allow resend...',
+          e);
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveMessageError(
+          error: MessageError.unknown,
+          stanzaID: message.stanzaID,
         );
-      } on Exception catch (e) {
-        _log.info(
-            'Failed to send message: $stanzaID. '
-            'Storing with error to allow resend...',
-            e);
-        await _dbOp<XmppDatabase>((db) async {
-          await db.saveMessageError(
-            error: MessageError.unknown,
-            stanzaID: stanzaID,
-          );
-        });
-        throw XmppMessageException();
-      }
+      });
+      throw XmppMessageException();
     }
   }
 

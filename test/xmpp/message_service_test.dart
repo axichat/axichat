@@ -1,11 +1,12 @@
 import 'dart:io';
 
 import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
+import 'package:chat/src/storage/models.dart' hide uuid;
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 import '../mocks.dart';
 
@@ -30,6 +31,7 @@ main() {
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
+    registerFallbackValue(FakeMessageEvent());
     registerFallbackValue(FakeUserAgent());
   });
 
@@ -86,14 +88,7 @@ main() {
           )),
         );
 
-        guaranteeSuccessfulConnection();
-
-        xmppService.connect(
-          jid: jid,
-          password: password,
-          databasePrefix: '',
-          databasePassphrase: '',
-        );
+        await connectSuccessfully(xmppService);
 
         for (final message in messagesByTimestamp) {
           await database.saveMessage(message);
@@ -104,14 +99,7 @@ main() {
     test(
       'When messages are edited in the chat\'s database, emits the updated message history in order.',
       () async {
-        guaranteeSuccessfulConnection();
-
-        xmppService.connect(
-          jid: jid,
-          password: password,
-          databasePrefix: '',
-          databasePassphrase: '',
-        );
+        await connectSuccessfully(xmppService);
 
         for (final message in messagesByTimestamp) {
           await database.saveMessage(message);
@@ -157,6 +145,31 @@ main() {
         messagesByTimestamp[2] =
             messagesByTimestamp[2].copyWith(displayed: true);
         await database.markMessageDisplayed(messagesByTimestamp[2].stanzaID);
+      },
+    );
+  });
+
+  group('sendMessage', () {
+    test(
+      'Given a valid message, calls sends a message packet to the connection.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {});
+
+        const text = 'text';
+        await xmppService.sendMessage(jid: jid, text: text);
+
+        verify(
+          () => mockConnection.sendMessage(
+            any(
+              that: isA<mox.MessageEvent>()
+                  .having((e) => e.to, 'to', mox.JID.fromString(jid))
+                  .having((e) => e.text, 'text', text),
+            ),
+          ),
+        ).called(1);
       },
     );
   });

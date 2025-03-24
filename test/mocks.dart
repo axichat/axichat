@@ -28,6 +28,8 @@ class FakeCredentialKey extends Fake implements RegisteredCredentialKey {}
 
 class FakeStateKey extends Fake implements RegisteredStateKey {}
 
+class FakeMessageEvent extends Fake implements mox.MessageEvent {}
+
 class FakeUserAgent extends Fake implements mox.UserAgent {}
 
 const uuid = Uuid();
@@ -80,7 +82,7 @@ void prepareMockConnection() {
   when(() => mockConnection.saltedPassword).thenReturn('');
 }
 
-void guaranteeSuccessfulConnection() {
+Future<void> connectSuccessfully(XmppService xmppService) async {
   when(() => mockStateStore.write(
         key: any(named: 'key'),
         value: any(named: 'value'),
@@ -93,9 +95,16 @@ void guaranteeSuccessfulConnection() {
       )).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
+
+  await xmppService.connect(
+    jid: jid,
+    password: password,
+    databasePrefix: '',
+    databasePassphrase: '',
+  );
 }
 
-void guaranteeUnsuccessfulConnection() {
+Future<void> connectUnsuccessfully(XmppService xmppService) async {
   when(() => mockStateStore.write(
         key: any(named: 'key'),
         value: any(named: 'value'),
@@ -108,4 +117,11 @@ void guaranteeUnsuccessfulConnection() {
       )).thenAnswer((_) async => const Result<bool, mox.XmppError>(false));
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
+
+  await xmppService.connect(
+    jid: jid,
+    password: password,
+    databasePrefix: '',
+    databasePassphrase: '',
+  );
 }
