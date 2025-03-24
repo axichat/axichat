@@ -5,22 +5,22 @@ mixin RosterService on XmppBase {
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(
+      StreamCompleter.fromFuture(Future.value(
           _dbOpReturning<XmppDatabase, Stream<List<RosterItem>>>((db) async {
         return db
             .watchRoster(start: start, end: end)
             .startWith(await db.getRoster());
-      }));
+      })));
   Stream<List<Invite>> invitesStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(
+      StreamCompleter.fromFuture(Future.value(
           _dbOpReturning<XmppDatabase, Stream<List<Invite>>>((db) async {
         return db
             .watchInvites(start: start, end: end)
             .startWith(await db.getInvites(start: start, end: end));
-      }));
+      })));
 
   final _log = Logger('RosterService');
 

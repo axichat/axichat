@@ -1,18 +1,17 @@
 part of 'package:chat/src/xmpp/xmpp_service.dart';
 
-mixin Myservice on XmppBase implements BlockingService {}
-
 mixin BlockingService on XmppBase {
   Stream<List<BlocklistData>> blocklistStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(
-          _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>((db) async {
-        return db
-            .watchBlocklist(start: start, end: end)
-            .startWith(await db.getBlocklist(start: start, end: end));
-      }));
+      StreamCompleter.fromFuture(Future.value(
+        _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>((db) async {
+          return db
+              .watchBlocklist(start: start, end: end)
+              .startWith(await db.getBlocklist(start: start, end: end));
+        }),
+      ));
 
   final _log = Logger('BlockingService');
 

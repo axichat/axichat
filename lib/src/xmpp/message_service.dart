@@ -15,20 +15,23 @@ mixin MessageService on XmppBase {
     int start = 0,
     int end = 50,
   }) =>
-      StreamCompleter.fromFuture(
-          _dbOpReturning<XmppDatabase, Stream<List<Message>>>((db) async {
-        return db.watchChatMessages(jid, start: start, end: end);
-      }));
+      StreamCompleter.fromFuture(Future.value(
+        _dbOpReturning<XmppDatabase, Stream<List<Message>>>((db) async {
+          return db.watchChatMessages(jid, start: start, end: end);
+        }),
+      ));
+
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(
-          _dbOpReturning<XmppDatabase, Stream<List<Draft>>>((db) async {
-        return db
-            .watchDrafts(start: start, end: end)
-            .startWith(await db.getDrafts(start: start, end: end));
-      }));
+      StreamCompleter.fromFuture(Future.value(
+        _dbOpReturning<XmppDatabase, Stream<List<Draft>>>((db) async {
+          return db
+              .watchDrafts(start: start, end: end)
+              .startWith(await db.getDrafts(start: start, end: end));
+        }),
+      ));
 
   final _log = Logger('MessageService');
 
@@ -273,14 +276,14 @@ mixin MessageService on XmppBase {
     }
   }
 
-  // Future<bool> _downloadAllowed(String chatJid) async {
-  //   if (!(await Permission.storage.status).isGranted) return false;
-  //   if ((await _connection.getConnectionState()) !=
-  //       mox.XmppConnectionState.connected) return false;
-  //   var allowed = false;
-  //   await _dbOp<XmppDatabase>((db) async {
-  //     allowed = (await db.rosterAccessor.selectOne(chatJid) != null);
-  //   });
-  //   return allowed;
-  // }
+// Future<bool> _downloadAllowed(String chatJid) async {
+//   if (!(await Permission.storage.status).isGranted) return false;
+//   if ((await _connection.getConnectionState()) !=
+//       mox.XmppConnectionState.connected) return false;
+//   var allowed = false;
+//   await _dbOp<XmppDatabase>((db) async {
+//     allowed = (await db.rosterAccessor.selectOne(chatJid) != null);
+//   });
+//   return allowed;
+// }
 }

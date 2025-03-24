@@ -111,8 +111,6 @@ abstract class XmppBase {
   XmppBase();
 
   late XmppConnection _connection;
-  var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
-  var _database = ImpatientCompleter(Completer<XmppDatabase>());
 
   XmppBase get owner;
 
@@ -127,8 +125,9 @@ abstract class XmppBase {
   });
   Future<void> disconnect();
 
-  Future<V> _dbOpReturning<D extends Database, V>(
-      FutureOr<V> Function(D) operation);
+  FutureOr<V> _dbOpReturning<D extends Database, V>(
+    FutureOr<V> Function(D) operation,
+  );
 
   Future<void> _dbOp<T extends Database>(
     FutureOr<void> Function(T) operation, {
@@ -174,6 +173,9 @@ class XmppService extends XmppBase
 
   @override
   final _log = Logger('XmppService');
+
+  var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
+  var _database = ImpatientCompleter(Completer<XmppDatabase>());
 
   final FutureOr<XmppConnection> Function() _buildConnection;
   final FutureOr<XmppStateStore> Function(String, String) _buildStateStore;
@@ -400,11 +402,11 @@ class XmppService extends XmppBase
         });
       case mox.BlocklistBlockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
-            await db.blockJids(event.items);
+          await db.blockJids(event.items);
         });
       case mox.BlocklistUnblockPushEvent event:
         await _dbOp<XmppDatabase>((db) async {
-            await db.unblockJids(event.items);
+          await db.unblockJids(event.items);
         });
       case mox.BlocklistUnblockAllPushEvent _:
         await _dbOp<XmppDatabase>((db) async {
@@ -714,24 +716,20 @@ class XmppService extends XmppBase
     _instance = null;
   }
 
+  Completer<T> _getDatabaseCompleter<T>() => switch (T) {
+        == XmppStateStore => _stateStore.completer as Completer<T>,
+        == XmppDatabase => _database.completer as Completer<T>,
+        _ => throw UnimplementedError('No database of type: $T exists.'),
+      };
+
   @override
   Future<V> _dbOpReturning<D extends Database, V>(
       FutureOr<V> Function(D) operation) async {
     _log.info('Retrieving completer for $D...');
 
-    late final Completer<D> completer;
-    switch (D) {
-      case == XmppStateStore:
-        completer = _stateStore.completer as Completer<D>;
-      case == XmppDatabase:
-        completer = _database.completer as Completer<D>;
-      default:
-        throw UnimplementedError('No database of type: $D exists.');
-    }
-
     try {
       _log.info('Awaiting completer for $D...');
-      final db = await completer.future;
+      final db = await _getDatabaseCompleter<D>().future;
       _log.info('Completed completer for $D.');
       return await operation(db);
     } on XmppAbortedException catch (e, s) {
@@ -752,29 +750,17 @@ class XmppService extends XmppBase
   }) async {
     _log.info('Retrieving completer for $T...');
 
-    late final Completer<T?> completer;
-    switch (T) {
-      case == XmppStateStore:
-        completer = _stateStore.completer as Completer<T?>;
-      case == XmppDatabase:
-        completer = _database.completer as Completer<T?>;
-      default:
-        throw UnimplementedError('No database of type: $T exists.');
-    }
+    final completer = _getDatabaseCompleter<T>();
 
     if (!awaitDatabase && !completer.isCompleted) return;
+
     try {
       _log.info('Awaiting completer for $T...');
-      final db = await completer.future.catchError(
-        (err) {
-          _log.warning('Owner called reset before $T initialized.', e);
-          return null;
-        },
-        test: (err) => err is XmppAbortedException,
-      );
-      if (db == null) return;
+      final db = await completer.future;
       _log.info('Completed completer for $T.');
       return await operation(db);
+    } on XmppAbortedException catch (_) {
+      return;
     } on XmppException {
       rethrow;
     } on Exception catch (e, s) {
@@ -865,8 +851,8 @@ class XmppConnection extends mox.XmppConnection {
   Future<void> loadStreamState() async =>
       await getManager<XmppStreamManagementManager>()!.loadState();
 
-  Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?> requestRoster() async
-  => await getRosterManager()?.requestRoster();
+  Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>
+      requestRoster() async => await getRosterManager()?.requestRoster();
 
   Future<List<String>?> requestBlocklist() async {
     if (getManager<mox.BlockingManager>() case final bm?) {

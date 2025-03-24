@@ -4,21 +4,35 @@ mixin PresenceService on XmppBase {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');
   final statusStorageKey = XmppStateStore.registerKey('my_status');
 
-  Presence get presence =>
-      _stateStore.value?.read(key: presenceStorageKey) as Presence? ??
-      Presence.chat;
-  String? get status =>
-      _stateStore.value?.read(key: statusStorageKey) as String?;
+  Presence get presence {
+    if (_dbOpReturning<XmppStateStore, Presence?>((db) {
+      return db.read(key: presenceStorageKey) as Presence?;
+    }) case Presence presence) {
+      return presence;
+    }
+
+    return Presence.chat;
+  }
+
+  String? get status {
+    if (_dbOpReturning<XmppStateStore, String?>((db) {
+      return db.read(key: statusStorageKey) as String?;
+    }) case String status) {
+      return status;
+    }
+
+    return null;
+  }
 
   Stream<Presence> get presenceStream => StreamCompleter.fromFuture(
-      _dbOpReturning<XmppStateStore, Stream<Presence>>((ss) =>
+      Future.value(_dbOpReturning<XmppStateStore, Stream<Presence>>((ss) =>
           ss
               .watch<Presence?>(key: presenceStorageKey)
               ?.map<Presence>((e) => e ?? Presence.chat) ??
-          Stream.value(Presence.chat)));
-  Stream<String?> get statusStream => StreamCompleter.fromFuture(
+          Stream.value(Presence.chat))));
+  Stream<String?> get statusStream => StreamCompleter.fromFuture(Future.value(
       _dbOpReturning<XmppStateStore, Stream<String?>>((ss) =>
-          ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null)));
+          ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null))));
 
   Future<void> sendPresence({
     required Presence? presence,

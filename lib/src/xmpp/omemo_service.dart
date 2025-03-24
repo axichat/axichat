@@ -5,8 +5,8 @@ mixin OmemoService on XmppBase {
 
   Future<omemo.OmemoManager> _getOmemoManager() async => _omemoManager.value!;
 
-  Future<bool> _shouldEncrypt(mox.JID to, mox.Stanza stanza) =>
-      _dbOpReturning<XmppDatabase, bool>(
+  Future<bool> _shouldEncrypt(mox.JID to, mox.Stanza stanza) async =>
+      await _dbOpReturning<XmppDatabase, bool>(
         (db) async {
           final chat = await db.getChat(to.toBare().toString());
           return chat?.encryptionProtocol == EncryptionProtocol.omemo;
