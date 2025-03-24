@@ -16,9 +16,9 @@ mixin MessageService on XmppBase {
     int end = 50,
   }) =>
       StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<Message>>>((db) async {
-          return db.watchChatMessages(jid, start: start, end: end);
-        }),
+        _dbOpReturning<XmppDatabase, Stream<List<Message>>>(
+          (db) => db.watchChatMessages(jid, start: start, end: end),
+        ),
       ));
 
   Stream<List<Draft>> draftsStream({
@@ -26,11 +26,11 @@ mixin MessageService on XmppBase {
     int end = basePageItemLimit,
   }) =>
       StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<Draft>>>((db) async {
-          return db
+        _dbOpReturning<XmppDatabase, Stream<List<Draft>>>(
+          (db) async => db
               .watchDrafts(start: start, end: end)
-              .startWith(await db.getDrafts(start: start, end: end));
-        }),
+              .startWith(await db.getDrafts(start: start, end: end)),
+        ),
       ));
 
   final _log = Logger('MessageService');

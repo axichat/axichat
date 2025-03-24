@@ -107,7 +107,7 @@ final serverLookup = <String, IOEndpoint>{
 
 typedef ConnectionState = mox.XmppConnectionState;
 
-abstract class XmppBase {
+abstract interface class XmppBase {
   XmppBase();
 
   late XmppConnection _connection;
@@ -115,6 +115,7 @@ abstract class XmppBase {
   XmppBase get owner;
 
   String? get myJid;
+
   mox.JID? get _myJid;
 
   Future<String> connect({
@@ -123,6 +124,7 @@ abstract class XmppBase {
     required String databasePrefix,
     required String databasePassphrase,
   });
+
   Future<void> disconnect();
 
   FutureOr<V> _dbOpReturning<D extends Database, V>(
@@ -789,6 +791,7 @@ class XmppConnection extends mox.XmppConnection {
         );
 
   final XmppSocketWrapper? socketWrapper;
+
   // Check if we have a connectionSettings as it is marked [late] in mox.
   bool get hasConnectionSettings => _hasConnectionSettings;
   bool _hasConnectionSettings = false;
@@ -892,6 +895,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   bool _shouldReconnect = false;
 
   int _reconnectionAttempts = 0;
+
   bool get reachedMaxAttempts => _reconnectionAttempts >= strategy.maxAttempts;
 
   @override

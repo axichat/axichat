@@ -6,18 +6,16 @@ mixin ChatsService on XmppBase {
     int end = basePageItemLimit,
   }) =>
       StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<Chat>>>((db) async {
-          return db
+        _dbOpReturning<XmppDatabase, Stream<List<Chat>>>(
+          (db) async => db
               .watchChats(start: start, end: end)
-              .startWith(await db.getChats(start: start, end: end));
-        }),
+              .startWith(await db.getChats(start: start, end: end)),
+        ),
       ));
 
   Stream<Chat?> chatStream(String jid) =>
       StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<Chat?>>((db) async {
-          return db.watchChat(jid);
-        }),
+        _dbOpReturning<XmppDatabase, Stream<Chat?>>((db) => db.watchChat(jid)),
       ));
 
   Future<void> sendTyping({

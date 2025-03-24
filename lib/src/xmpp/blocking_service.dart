@@ -6,11 +6,11 @@ mixin BlockingService on XmppBase {
     int end = basePageItemLimit,
   }) =>
       StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>((db) async {
-          return db
+        _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>(
+          (db) async => db
               .watchBlocklist(start: start, end: end)
-              .startWith(await db.getBlocklist(start: start, end: end));
-        }),
+              .startWith(await db.getBlocklist(start: start, end: end)),
+        ),
       ));
 
   final _log = Logger('BlockingService');
