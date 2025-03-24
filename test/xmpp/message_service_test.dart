@@ -105,7 +105,7 @@ main() {
           await database.saveMessage(message);
         }
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await pumpEventQueue();
 
         expectLater(
           xmppService.messageStream(messagesByTimestamp[0].chatJid),
@@ -130,18 +130,18 @@ main() {
           body: '',
         );
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await pumpEventQueue();
         messagesByTimestamp[0] = messagesByTimestamp[0].copyWith(acked: true);
         await database.markMessageAcked(messagesByTimestamp[0].stanzaID);
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await pumpEventQueue();
         messagesByTimestamp[1] =
             messagesByTimestamp[1].copyWith(received: true);
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await pumpEventQueue();
         await database.markMessageReceived(messagesByTimestamp[1].stanzaID);
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await pumpEventQueue();
         messagesByTimestamp[2] =
             messagesByTimestamp[2].copyWith(displayed: true);
         await database.markMessageDisplayed(messagesByTimestamp[2].stanzaID);

@@ -83,7 +83,7 @@ void main() {
 
         eventStreamController.add(messageEvent);
 
-        await Future.delayed(const Duration(seconds: 1));
+        await pumpEventQueue();
 
         final afterMessage =
             await database.getMessageByStanzaID(messageEvent.id!);
@@ -163,7 +163,7 @@ void main() {
         eventStreamController.add(mox.StanzaAckedEvent(
             mox.Stanza(tag: 'message', id: message.stanzaID)));
 
-        await Future.delayed(const Duration(seconds: 1));
+        await pumpEventQueue();
 
         final afterAcked =
             await database.getMessageByStanzaID(message.stanzaID);
@@ -185,7 +185,7 @@ void main() {
             mox.ChatMarker.displayed,
             message.stanzaID));
 
-        await Future.delayed(const Duration(seconds: 1));
+        await pumpEventQueue();
 
         final afterDisplayed =
             await database.getMessageByStanzaID(message.stanzaID);
@@ -209,7 +209,7 @@ void main() {
           id: message.stanzaID,
         ));
 
-        await Future.delayed(const Duration(seconds: 1));
+        await pumpEventQueue();
 
         final afterReceived =
             await database.getMessageByStanzaID(message.stanzaID);
