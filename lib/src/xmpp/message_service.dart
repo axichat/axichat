@@ -1,11 +1,18 @@
 part of 'package:chat/src/xmpp/xmpp_service.dart';
 
-extension on mox.MessageEvent {
+extension MessageEvent on mox.MessageEvent {
+  String get text =>
+      get<mox.ReplyData>()?.withoutFallback ??
+      get<mox.MessageBodyData>()?.body ??
+      '';
+
+  bool get isCarbon => get<mox.CarbonsData>()?.isCarbon ?? false;
+
   bool get displayable {
-    return extensions.get<mox.MessageBodyData>()?.body?.isNotEmpty ??
+    return get<mox.MessageBodyData>()?.body?.isNotEmpty ??
         false ||
-            extensions.get<mox.StatelessFileSharingData>() != null ||
-            extensions.get<mox.FileUploadNotificationData>() != null;
+            get<mox.StatelessFileSharingData>() != null ||
+            get<mox.FileUploadNotificationData>() != null;
   }
 }
 
@@ -34,6 +41,50 @@ mixin MessageService on XmppBase {
       ));
 
   final _log = Logger('MessageService');
+
+  Message generateMessageFromMox(
+    mox.MessageEvent event,
+  ) {
+    final get = event.extensions.get;
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    final chatJid = event.isCarbon ? to : from;
+
+    final metadata = _extractFileMetadata(event);
+
+    return Message(
+      stanzaID: event.id ?? _connection.generateId(),
+      senderJid: from,
+      chatJid: chatJid,
+      body: event.text,
+      timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
+      fileMetadataID: metadata?.id,
+      noStore: get<mox.MessageProcessingHintData>()
+              ?.hints
+              .contains(mox.MessageProcessingHint.noStore) ??
+          false,
+      quoting: get<mox.ReplyData>()?.id,
+      originID: get<mox.StableIdData>()?.originId,
+      occupantID: get<mox.OccupantIdData>()?.id,
+      encryptionProtocol:
+          event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
+    );
+  }
+
+  mox.MessageEvent generateMoxFromMessage(Message message) {
+    return mox.MessageEvent(
+      mox.JID.fromString(message.senderJid),
+      mox.JID.fromString(message.chatJid),
+      false,
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+        mox.MessageBodyData(message.body),
+        const mox.MarkableData(true),
+        mox.MessageIdData(message.stanzaID),
+        mox.ChatState.active,
+      ]),
+      id: message.stanzaID,
+    );
+  }
 
   Future<void> sendMessage({
     required String jid,

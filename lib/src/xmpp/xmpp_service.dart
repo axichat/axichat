@@ -227,35 +227,29 @@ class XmppService extends XmppBase
       case mox.MessageEvent event:
         if (await _handleError(event)) return;
 
-        final get = event.extensions.get;
-        final isCarbon = get<mox.CarbonsData>()?.isCarbon ?? false;
-        final to = event.to.toBare().toString();
-        final from = event.from.toBare().toString();
-        final chatJid = isCarbon ? to : from;
+        final message = generateMessageFromMox(event);
 
-        await _handleChatState(event, chatJid);
+        await _handleChatState(event, message.chatJid);
 
-        if (await _handleCorrection(event, from)) return;
-        if (await _handleRetraction(event, from)) return;
+        if (await _handleCorrection(event, message.senderJid)) return;
+        if (await _handleRetraction(event, message.senderJid)) return;
 
         // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
         if (!event.displayable && event.encryptionError == null) return;
-        if (get<mox.FileUploadNotificationData>() case final data?) {
+        if (event.extensions.get<mox.FileUploadNotificationData>()
+            case final data?) {
           if (data.metadata.name == null) return;
         }
 
-        await _handleFile(event, from);
+        await _handleFile(event, message.senderJid);
 
         final metadata = _extractFileMetadata(event);
+
         if (metadata != null) {
           await _dbOp<XmppDatabase>((db) async {
             await db.saveFileMetadata(metadata);
           });
         }
-
-        final body = get<mox.ReplyData>()?.withoutFallback ??
-            get<mox.MessageBodyData>()?.body ??
-            '';
 
         if (event.get<mox.OmemoData>() case final data?) {
           final newRatchets = data.newRatchets.values.map((e) => e.length);
@@ -273,7 +267,7 @@ class XmppService extends XmppBase
               await db.saveMessage(Message(
                 stanzaID: _connection.generateId(),
                 senderJid: myJid!.toString(),
-                chatJid: chatJid,
+                chatJid: message.chatJid,
                 pseudoMessageType: PseudoMessageType.newDevice,
                 pseudoMessageData: pseudoMessageData,
               ));
@@ -285,7 +279,7 @@ class XmppService extends XmppBase
               await db.saveMessage(Message(
                 stanzaID: _connection.generateId(),
                 senderJid: myJid!.toString(),
-                chatJid: chatJid,
+                chatJid: message.chatJid,
                 pseudoMessageType: PseudoMessageType.changedDevice,
                 pseudoMessageData: pseudoMessageData,
               ));
@@ -293,40 +287,19 @@ class XmppService extends XmppBase
           }
         }
 
-        final message = Message(
-          stanzaID: event.id ?? _connection.generateId(),
-          senderJid: from,
-          chatJid: chatJid,
-          body: body,
-          timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-          fileMetadataID: metadata?.id,
-          noStore: get<mox.MessageProcessingHintData>()
-                  ?.hints
-                  .contains(mox.MessageProcessingHint.noStore) ??
-              false,
-          quoting: get<mox.ReplyData>()?.id,
-          originID: get<mox.StableIdData>()?.originId,
-          occupantID: get<mox.OccupantIdData>()?.id,
-          encryptionProtocol: event.encrypted
-              ? EncryptionProtocol.omemo
-              : EncryptionProtocol.none,
-          acked: true,
-          received: true,
-        );
-
         await _dbOp<XmppDatabase>((db) async {
           await db.saveMessage(message);
         });
 
         await _notificationService.sendNotification(
-          title: from,
-          body: body,
-          groupKey: chatJid,
+          title: message.senderJid,
+          body: message.body,
+          groupKey: message.chatJid,
           extraConditions: [
             _capability.canForegroundService,
-            !isCarbon,
+            message.senderJid != myJid,
             !await _dbOpReturning<XmppDatabase, bool>((db) async {
-              return (await db.getChat(chatJid))?.muted ?? false;
+              return (await db.getChat(message.chatJid))?.muted ?? false;
             }),
           ],
         );
