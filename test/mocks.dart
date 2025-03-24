@@ -42,12 +42,12 @@ const jid = 'jid@axi.im/resource';
 const password = 'password';
 const from = 'from@axi.im';
 
-mox.MessageEvent generateRandomMessageEvent() {
+mox.MessageEvent generateRandomMessageEvent({String senderJid = from}) {
   final messageStanzaID = uuid.v4();
   const characters =
       ' !"#\$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~';
   return mox.MessageEvent(
-    mox.JID.fromString(from),
+    mox.JID.fromString(senderJid),
     mox.JID.fromString(jid),
     false,
     mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
@@ -80,7 +80,7 @@ void prepareMockConnection() {
   when(() => mockConnection.saltedPassword).thenReturn('');
 }
 
-void connectSuccessfully() {
+void guaranteeSuccessfulConnection() {
   when(() => mockStateStore.write(
         key: any(named: 'key'),
         value: any(named: 'value'),
@@ -95,7 +95,7 @@ void connectSuccessfully() {
   when(() => mockStateStore.close()).thenAnswer((_) async {});
 }
 
-void connectUnsuccessfully() {
+void guaranteeUnsuccessfulConnection() {
   when(() => mockStateStore.write(
         key: any(named: 'key'),
         value: any(named: 'value'),

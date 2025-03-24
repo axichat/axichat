@@ -42,9 +42,7 @@ mixin MessageService on XmppBase {
 
   final _log = Logger('MessageService');
 
-  Message generateMessageFromMox(
-    mox.MessageEvent event,
-  ) {
+  Message generateMessageFromMox(mox.MessageEvent event) {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();

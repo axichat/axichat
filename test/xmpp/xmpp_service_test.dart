@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:chat/src/storage/database.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
@@ -46,6 +47,7 @@ void main() {
 
   group('XmppService event handler', () {
     late mox.MessageEvent messageEvent;
+    late Message message;
 
     setUp(() async {
       xmppService = XmppService(
@@ -54,7 +56,7 @@ void main() {
         buildDatabase: (_, __) => database,
         notificationService: mockNotificationService,
       );
-      connectSuccessfully();
+      guaranteeSuccessfulConnection();
 
       await xmppService.connect(
         jid: jid,
@@ -64,6 +66,7 @@ void main() {
       );
 
       messageEvent = generateRandomMessageEvent();
+      message = xmppService.generateMessageFromMox(messageEvent);
     });
 
     tearDown(() async {
@@ -158,7 +161,6 @@ void main() {
     test(
       'Given a stanza acknowledgement, marks the correct message in the database acked.',
       () async {
-        final message = xmppService.generateMessageFromMox(messageEvent);
         await database.saveMessage(message);
 
         final beforeAcked =
@@ -179,7 +181,6 @@ void main() {
     test(
       'Given a displayed chat marker, marks the correct message in the database displayed.',
       () async {
-        final message = xmppService.generateMessageFromMox(messageEvent);
         await database.saveMessage(message);
 
         final beforeDisplayed =
@@ -204,7 +205,6 @@ void main() {
     test(
       'Given a delivery receipt, marks the correct message in the database received.',
       () async {
-        final message = xmppService.generateMessageFromMox(messageEvent);
         await database.saveMessage(message);
 
         final beforeReceived =
@@ -257,7 +257,7 @@ void main() {
     test(
       'Given valid credentials, connect initialises the databases.',
       () async {
-        connectSuccessfully();
+        guaranteeSuccessfulConnection();
 
         await xmppService.connect(
           jid: jid,
@@ -274,7 +274,7 @@ void main() {
     test(
       'Given invalid credentials, connect throws an XmppAuthenticationException.',
       () async {
-        connectUnsuccessfully();
+        guaranteeUnsuccessfulConnection();
 
         await expectLater(
           () => xmppService.connect(
