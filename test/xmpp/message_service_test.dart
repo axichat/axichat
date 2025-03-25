@@ -151,7 +151,7 @@ main() {
 
   group('sendMessage', () {
     test(
-      'Given a valid message, calls sends a message packet to the connection.',
+      'Given a valid message, sends a message packet to the connection.',
       () async {
         await connectSuccessfully(xmppService);
 

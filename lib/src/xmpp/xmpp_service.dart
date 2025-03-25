@@ -121,7 +121,7 @@ abstract interface class XmppBase {
   EventManager<mox.XmppEvent> get _eventManager =>
       EventManager<mox.XmppEvent>();
 
-  List<mox.XmppManagerBase> get _featureManagers => [];
+  List<mox.XmppManagerBase> get featureManagers => [];
 
   Future<String> connect({
     required String jid,
@@ -243,7 +243,7 @@ class XmppService extends XmppBase
     });
 
   @override
-  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
       XmppStreamManagementManager(owner: this),
       mox.DiscoManager([
@@ -380,7 +380,7 @@ class XmppService extends XmppBase
       mox.Bind2Negotiator(),
       mox.FASTSaslNegotiator(),
     ]);
-    await _connection.registerManagers(_featureManagers);
+    await _connection.registerManagers(featureManagers);
 
     await _connection.loadStreamState();
     await _dbOp<XmppStateStore>((ss) {

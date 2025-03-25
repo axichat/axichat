@@ -38,7 +38,7 @@ mixin BlockingService on XmppBase {
     });
 
   @override
-  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
       mox.BlockingManager(),
     ]);

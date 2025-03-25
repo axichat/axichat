@@ -218,7 +218,7 @@ void main() {
     );
   });
 
-  group('XmppService authentication', () {
+  group('connect', () {
     bool builtStateStore = false;
     bool builtDatabase = false;
 
@@ -245,6 +245,7 @@ void main() {
 
     tearDown(() async {
       await xmppService.close();
+      resetMocktailState();
     });
 
     test(
@@ -254,6 +255,25 @@ void main() {
 
         expect(builtStateStore, true);
         expect(builtDatabase, true);
+      },
+    );
+
+    test(
+      'Given valid credentials, connect registers all feature managers.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        verify(
+          () => mockConnection.registerManagers(any(
+            that: predicate<List<mox.XmppManagerBase>>(
+              (items) => items.indexed.every((e) {
+                final (index, manager) = e;
+                return manager.runtimeType ==
+                    xmppService.featureManagers[index].runtimeType;
+              }),
+            ),
+          )),
+        ).called(greaterThan(0));
       },
     );
 
