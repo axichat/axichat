@@ -38,6 +38,12 @@ mixin PresenceService on XmppBase {
             ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null)),
       ));
 
+  @override
+  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+    ..addAll([
+      XmppPresenceManager(owner: this),
+    ]);
+
   Future<void> sendPresence({
     required Presence? presence,
     required String? status,
@@ -69,7 +75,7 @@ class XmppPresenceManager extends mox.PresenceManager {
 
   final _log = Logger('XmppPresenceManager');
 
-  final XmppService owner;
+  final PresenceService owner;
 
   final _attachments = <mox.PresencePreSendCallback>[];
 

@@ -52,6 +52,12 @@ mixin RosterService on XmppBase {
       });
     });
 
+  @override
+  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+    ..addAll([
+      mox.RosterManager(XmppRosterStateManager(owner: this)),
+    ]);
+
   Future<void> requestRoster() async {
     if (await _connection.requestRoster() case final result?) {
       if (result.isType<mox.RosterRequestResult>()) {
@@ -133,7 +139,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
 
   final _log = Logger('XmppRosterStateManager');
 
-  final XmppService owner;
+  final XmppBase owner;
 
   static const keyPrefix = 'roster_state';
   final rosterVersionKey =

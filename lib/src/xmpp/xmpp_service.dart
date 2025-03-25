@@ -121,6 +121,8 @@ abstract interface class XmppBase {
   EventManager<mox.XmppEvent> get _eventManager =>
       EventManager<mox.XmppEvent>();
 
+  List<mox.XmppManagerBase> get _featureManagers => [];
+
   Future<String> connect({
     required String jid,
     required String password,
@@ -240,6 +242,28 @@ class XmppService extends XmppBase
       });
     });
 
+  @override
+  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+    ..addAll([
+      XmppStreamManagementManager(owner: this),
+      mox.DiscoManager([
+        mox.Identity(
+          category: 'client',
+          type: _capability.discoClient,
+          name: appDisplayName,
+        ),
+      ]),
+      // mox.OmemoManager(_getOmemoManager, _shouldEncrypt),
+      mox.PingManager(const Duration(minutes: 3)),
+      // mox.EntityCapabilitiesManager(),
+      mox.PubSubManager(),
+      // mox.UserAvatarManager(),
+      mox.StableIdManager(),
+      mox.CryptographicHashManager(),
+      // mox.VCardManager(),
+      mox.OccupantIdManager(),
+    ]);
+
   String? get resource => _myJid?.resource;
 
   String? get username => _myJid?.local;
@@ -356,112 +380,7 @@ class XmppService extends XmppBase
       mox.Bind2Negotiator(),
       mox.FASTSaslNegotiator(),
     ]);
-    await _connection.registerManagers([
-      XmppStreamManagementManager(owner: this),
-      mox.DiscoManager([
-        mox.Identity(
-          category: 'client',
-          type: _capability.discoClient,
-          name: appDisplayName,
-        ),
-      ]),
-      // mox.OmemoManager(_getOmemoManager, _shouldEncrypt),
-      mox.RosterManager(XmppRosterStateManager(owner: this)),
-      mox.PingManager(const Duration(minutes: 3)),
-      mox.MessageManager(),
-      XmppPresenceManager(owner: this),
-      // mox.EntityCapabilitiesManager(),
-      mox.CSIManager(),
-      mox.CarbonsManager(),
-      mox.PubSubManager(),
-      // mox.UserAvatarManager(),
-      mox.StableIdManager(),
-      mox.MessageDeliveryReceiptManager(),
-      mox.ChatMarkerManager(),
-      // mox.OOBManager(),
-      // mox.SFSManager(),
-      mox.MessageRepliesManager(),
-      mox.BlockingManager(),
-      mox.ChatStateManager(),
-      // mox.HttpFileUploadManager(),
-      // mox.FileUploadNotificationManager(),
-      // mox.EmeManager(),
-      mox.CryptographicHashManager(),
-      mox.DelayedDeliveryManager(),
-      mox.MessageRetractionManager(),
-      mox.LastMessageCorrectionManager(),
-      mox.MessageReactionsManager(),
-      // mox.StickersManager(),
-      mox.MessageProcessingHintManager(),
-      // mox.MUCManager(),
-      // mox.VCardManager(),
-      mox.OccupantIdManager(),
-    ]);
-
-    // OmemoDevice? device;
-    // await _dbOp<XmppDatabase>((db) async {
-    //   _log.info('Loading omemo device for $myJid...');
-    //   device = await db.getOmemoDevice(myJid!);
-    // });
-    //
-    // final om = _connection.getManager<mox.OmemoManager>()!;
-    //
-    // _omemoManager.complete(
-    //   omemo.OmemoManager(
-    //     device ??= OmemoDevice.fromMox(
-    //         await compute(omemo.OmemoDevice.generateNewDevice, myJid!)),
-    //     omemo.BlindTrustBeforeVerificationTrustManager(
-    //       commit: (trust) => _dbOp<XmppDatabase>(
-    //         (db) => db.setOmemoTrust(trust),
-    //       ),
-    //       loadData: (jid) =>
-    //           _dbOpReturning<XmppDatabase, List<omemo.BTBVTrustData>>(
-    //         (db) => db.getOmemoTrust(jid),
-    //       ),
-    //       removeTrust: (jid) => _dbOp<XmppDatabase>(
-    //         (db) => db.resetOmemoTrust(jid),
-    //       ),
-    //     ),
-    //     om.sendEmptyMessageImpl,
-    //     om.fetchDeviceList,
-    //     om.fetchDeviceBundle,
-    //     om.subscribeToDeviceListImpl,
-    //     om.publishDeviceImpl,
-    //     commitDevice: (device) => _dbOp<XmppDatabase>(
-    //       (db) => db.saveOmemoDevice(OmemoDevice.fromMox(device)),
-    //     ),
-    //     commitDeviceList: (jid, devices) => _dbOp<XmppDatabase>(
-    //       (db) => db.saveOmemoDeviceList(OmemoDeviceList(
-    //         jid: jid,
-    //         devices: devices,
-    //       )),
-    //     ),
-    //     commitRatchets: (ratchets) => _dbOp<XmppDatabase>(
-    //       (db) => db.saveOmemoRatchets(
-    //         ratchets.map((e) => OmemoRatchet.fromMox(e)).toList(),
-    //       ),
-    //     ),
-    //     loadRatchets: (jid) =>
-    //         _dbOpReturning<XmppDatabase, omemo.OmemoDataPackage?>((db) async {
-    //       final devices = await db.getOmemoDeviceList(jid);
-    //       if (devices == null || devices.devices.isEmpty) return null;
-    //       final ratchets = await db.getOmemoRatchets(jid);
-    //       if (ratchets.isEmpty) return null;
-    //       return omemo.OmemoDataPackage(
-    //         devices.devices,
-    //         <omemo.RatchetMapKey, OmemoRatchet>{
-    //           for (final ratchet in ratchets)
-    //             omemo.RatchetMapKey(ratchet.jid, ratchet.device): ratchet,
-    //         },
-    //       );
-    //     }),
-    //     removeRatchets: (keys) => _dbOp<XmppDatabase>(
-    //       (db) => db.removeOmemoRatchets(
-    //         keys.map((e) => (e.jid, e.deviceId)).toList(),
-    //       ),
-    //     ),
-    //   ),
-    // );
+    await _connection.registerManagers(_featureManagers);
 
     await _connection.loadStreamState();
     await _dbOp<XmppStateStore>((ss) {
@@ -1119,3 +1038,67 @@ class SaslScramNegotiator extends mox.SaslScramNegotiator {
         : await super.calculateSaltedPassword(salt, iterations);
   }
 }
+// OmemoDevice? device;
+// await _dbOp<XmppDatabase>((db) async {
+//   _log.info('Loading omemo device for $myJid...');
+//   device = await db.getOmemoDevice(myJid!);
+// });
+//
+// final om = _connection.getManager<mox.OmemoManager>()!;
+//
+// _omemoManager.complete(
+//   omemo.OmemoManager(
+//     device ??= OmemoDevice.fromMox(
+//         await compute(omemo.OmemoDevice.generateNewDevice, myJid!)),
+//     omemo.BlindTrustBeforeVerificationTrustManager(
+//       commit: (trust) => _dbOp<XmppDatabase>(
+//         (db) => db.setOmemoTrust(trust),
+//       ),
+//       loadData: (jid) =>
+//           _dbOpReturning<XmppDatabase, List<omemo.BTBVTrustData>>(
+//         (db) => db.getOmemoTrust(jid),
+//       ),
+//       removeTrust: (jid) => _dbOp<XmppDatabase>(
+//         (db) => db.resetOmemoTrust(jid),
+//       ),
+//     ),
+//     om.sendEmptyMessageImpl,
+//     om.fetchDeviceList,
+//     om.fetchDeviceBundle,
+//     om.subscribeToDeviceListImpl,
+//     om.publishDeviceImpl,
+//     commitDevice: (device) => _dbOp<XmppDatabase>(
+//       (db) => db.saveOmemoDevice(OmemoDevice.fromMox(device)),
+//     ),
+//     commitDeviceList: (jid, devices) => _dbOp<XmppDatabase>(
+//       (db) => db.saveOmemoDeviceList(OmemoDeviceList(
+//         jid: jid,
+//         devices: devices,
+//       )),
+//     ),
+//     commitRatchets: (ratchets) => _dbOp<XmppDatabase>(
+//       (db) => db.saveOmemoRatchets(
+//         ratchets.map((e) => OmemoRatchet.fromMox(e)).toList(),
+//       ),
+//     ),
+//     loadRatchets: (jid) =>
+//         _dbOpReturning<XmppDatabase, omemo.OmemoDataPackage?>((db) async {
+//       final devices = await db.getOmemoDeviceList(jid);
+//       if (devices == null || devices.devices.isEmpty) return null;
+//       final ratchets = await db.getOmemoRatchets(jid);
+//       if (ratchets.isEmpty) return null;
+//       return omemo.OmemoDataPackage(
+//         devices.devices,
+//         <omemo.RatchetMapKey, OmemoRatchet>{
+//           for (final ratchet in ratchets)
+//             omemo.RatchetMapKey(ratchet.jid, ratchet.device): ratchet,
+//         },
+//       );
+//     }),
+//     removeRatchets: (keys) => _dbOp<XmppDatabase>(
+//       (db) => db.removeOmemoRatchets(
+//         keys.map((e) => (e.jid, e.deviceId)).toList(),
+//       ),
+//     ),
+//   ),
+// );

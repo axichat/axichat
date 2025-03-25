@@ -18,6 +18,12 @@ mixin ChatsService on XmppBase {
         _dbOpReturning<XmppDatabase, Stream<Chat?>>((db) => db.watchChat(jid)),
       ));
 
+  @override
+  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+    ..addAll([
+      mox.CSIManager(),
+    ]);
+
   Future<void> sendTyping({
     required String jid,
     required bool typing,

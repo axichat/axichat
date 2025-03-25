@@ -138,6 +138,29 @@ mixin MessageService on XmppBase {
       });
     });
 
+  @override
+  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+    ..addAll([
+      mox.MessageManager(),
+      mox.CarbonsManager(),
+      mox.MessageDeliveryReceiptManager(),
+      mox.ChatMarkerManager(),
+      mox.MessageRepliesManager(),
+      mox.ChatStateManager(),
+      mox.DelayedDeliveryManager(),
+      mox.MessageRetractionManager(),
+      mox.LastMessageCorrectionManager(),
+      mox.MessageReactionsManager(),
+      mox.MessageProcessingHintManager(),
+      // mox.StickersManager(),
+      // mox.MUCManager(),
+      // mox.OOBManager(),
+      // mox.SFSManager(),
+      // mox.HttpFileUploadManager(),
+      // mox.FileUploadNotificationManager(),
+      // mox.EmeManager(),
+    ]);
+
   Message generateMessageFromMox(mox.MessageEvent event) {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();

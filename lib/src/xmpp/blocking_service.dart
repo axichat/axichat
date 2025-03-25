@@ -37,6 +37,12 @@ mixin BlockingService on XmppBase {
       });
     });
 
+  @override
+  List<mox.XmppManagerBase> get _featureManagers => super._featureManagers
+    ..addAll([
+      mox.BlockingManager(),
+    ]);
+
   Future<void> requestBlocklist() async {
     if (await _connection.requestBlocklist() case final blocked?) {
       await owner._dbOp<XmppDatabase>((db) async {
