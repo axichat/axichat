@@ -17,7 +17,7 @@ extension MessageEvent on mox.MessageEvent {
 }
 
 mixin MessageService on XmppBase {
-  Stream<List<Message>> messageStream(
+  Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
     int end = 50,
@@ -41,6 +41,102 @@ mixin MessageService on XmppBase {
       ));
 
   final _log = Logger('MessageService');
+
+  final _messageStream = StreamController<Message>();
+
+  @override
+  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.MessageEvent>((event) async {
+      if (await _handleError(event)) return;
+
+      final message = generateMessageFromMox(event);
+
+      await _handleChatState(event, message.chatJid);
+
+      if (await _handleCorrection(event, message.senderJid)) return;
+      if (await _handleRetraction(event, message.senderJid)) return;
+
+      // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
+      if (!event.displayable && event.encryptionError == null) return;
+      if (event.extensions.get<mox.FileUploadNotificationData>()
+          case final data?) {
+        if (data.metadata.name == null) return;
+      }
+
+      await _handleFile(event, message.senderJid);
+
+      final metadata = _extractFileMetadata(event);
+
+      if (metadata != null) {
+        await _dbOp<XmppDatabase>((db) async {
+          await db.saveFileMetadata(metadata);
+        });
+      }
+
+      if (event.get<mox.OmemoData>() case final data?) {
+        final newRatchets = data.newRatchets.values.map((e) => e.length);
+        final newCount = newRatchets.fold(0, (v, e) => v + e);
+        final replacedRatchets =
+            data.replacedRatchets.values.map((e) => e.length);
+        final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
+        final pseudoMessageData = {
+          'ratchetsAdded': newRatchets,
+          'ratchetsReplaced': replacedRatchets,
+        };
+
+        if (newCount > 0) {
+          await _dbOp<XmppDatabase>((db) async {
+            await db.saveMessage(Message(
+              stanzaID: _connection.generateId(),
+              senderJid: myJid!.toString(),
+              chatJid: message.chatJid,
+              pseudoMessageType: PseudoMessageType.newDevice,
+              pseudoMessageData: pseudoMessageData,
+            ));
+          });
+        }
+
+        if (replacedCount > 0) {
+          await _dbOp<XmppDatabase>((db) async {
+            await db.saveMessage(Message(
+              stanzaID: _connection.generateId(),
+              senderJid: myJid!.toString(),
+              chatJid: message.chatJid,
+              pseudoMessageType: PseudoMessageType.changedDevice,
+              pseudoMessageData: pseudoMessageData,
+            ));
+          });
+        }
+      }
+
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveMessage(message);
+      });
+
+      _messageStream.add(message);
+    })
+    ..registerHandler<mox.ChatMarkerEvent>((event) async {
+      _log.info('Received chat marker from ${event.from}');
+
+      await _dbOp<XmppDatabase>((db) async {
+        switch (event.type) {
+          case mox.ChatMarker.displayed:
+            db.markMessageDisplayed(event.id);
+            db.markMessageReceived(event.id);
+            db.markMessageAcked(event.id);
+          case mox.ChatMarker.received:
+            db.markMessageReceived(event.id);
+            db.markMessageAcked(event.id);
+          case mox.ChatMarker.acknowledged:
+            db.markMessageAcked(event.id);
+        }
+      });
+    })
+    ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.markMessageReceived(event.id);
+      });
+    });
 
   Message generateMessageFromMox(mox.MessageEvent event) {
     final get = event.extensions.get;
@@ -136,68 +232,68 @@ mixin MessageService on XmppBase {
     });
   }
 
-  Future<void> _handleMessage(mox.MessageEvent event) async {
-    if (await _handleError(event)) throw EventHandlerAbortedException();
-
-    final get = event.extensions.get;
-    final isCarbon = get<mox.CarbonsData>()?.isCarbon ?? false;
-    final to = event.to.toBare().toString();
-    final from = event.from.toBare().toString();
-    final chatJid = isCarbon ? to : from;
-
-    await _handleChatState(event, chatJid);
-
-    if (await _handleCorrection(event, from)) {
-      throw EventHandlerAbortedException();
-    }
-    if (await _handleRetraction(event, from)) {
-      throw EventHandlerAbortedException();
-    }
-
-    // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
-    if (!event.displayable && event.encryptionError == null) {
-      throw EventHandlerAbortedException();
-    }
-    if (get<mox.FileUploadNotificationData>() case final data?) {
-      if (data.metadata.name == null) throw EventHandlerAbortedException();
-    }
-
-    await _handleFile(event, from);
-
-    final metadata = _extractFileMetadata(event);
-    if (metadata != null) {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.saveFileMetadata(metadata);
-      });
-    }
-
-    final body = get<mox.ReplyData>()?.withoutFallback ??
-        get<mox.MessageBodyData>()?.body ??
-        '';
-
-    final message = Message(
-      stanzaID: event.id ?? _connection.generateId(),
-      senderJid: from,
-      chatJid: chatJid,
-      body: body,
-      timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-      fileMetadataID: metadata?.id,
-      noStore: get<mox.MessageProcessingHintData>()
-              ?.hints
-              .contains(mox.MessageProcessingHint.noStore) ??
-          false,
-      quoting: get<mox.ReplyData>()?.id,
-      originID: get<mox.StableIdData>()?.originId,
-      occupantID: get<mox.OccupantIdData>()?.id,
-      encryptionProtocol:
-          event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
-      acked: true,
-      received: true,
-    );
-    await _dbOp<XmppDatabase>((db) async {
-      await db.saveMessage(message);
-    });
-  }
+  // Future<void> _handleMessage(mox.MessageEvent event) async {
+  //   if (await _handleError(event)) throw EventHandlerAbortedException();
+  //
+  //   final get = event.extensions.get;
+  //   final isCarbon = get<mox.CarbonsData>()?.isCarbon ?? false;
+  //   final to = event.to.toBare().toString();
+  //   final from = event.from.toBare().toString();
+  //   final chatJid = isCarbon ? to : from;
+  //
+  //   await _handleChatState(event, chatJid);
+  //
+  //   if (await _handleCorrection(event, from)) {
+  //     throw EventHandlerAbortedException();
+  //   }
+  //   if (await _handleRetraction(event, from)) {
+  //     throw EventHandlerAbortedException();
+  //   }
+  //
+  //   // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
+  //   if (!event.displayable && event.encryptionError == null) {
+  //     throw EventHandlerAbortedException();
+  //   }
+  //   if (get<mox.FileUploadNotificationData>() case final data?) {
+  //     if (data.metadata.name == null) throw EventHandlerAbortedException();
+  //   }
+  //
+  //   await _handleFile(event, from);
+  //
+  //   final metadata = _extractFileMetadata(event);
+  //   if (metadata != null) {
+  //     await _dbOp<XmppDatabase>((db) async {
+  //       await db.saveFileMetadata(metadata);
+  //     });
+  //   }
+  //
+  //   final body = get<mox.ReplyData>()?.withoutFallback ??
+  //       get<mox.MessageBodyData>()?.body ??
+  //       '';
+  //
+  //   final message = Message(
+  //     stanzaID: event.id ?? _connection.generateId(),
+  //     senderJid: from,
+  //     chatJid: chatJid,
+  //     body: body,
+  //     timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
+  //     fileMetadataID: metadata?.id,
+  //     noStore: get<mox.MessageProcessingHintData>()
+  //             ?.hints
+  //             .contains(mox.MessageProcessingHint.noStore) ??
+  //         false,
+  //     quoting: get<mox.ReplyData>()?.id,
+  //     originID: get<mox.StableIdData>()?.originId,
+  //     occupantID: get<mox.OccupantIdData>()?.id,
+  //     encryptionProtocol:
+  //         event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
+  //     acked: true,
+  //     received: true,
+  //   );
+  //   await _dbOp<XmppDatabase>((db) async {
+  //     await db.saveMessage(message);
+  //   });
+  // }
 
   Future<bool> _handleError(mox.MessageEvent event) async {
     if (event.type != 'error') return false;

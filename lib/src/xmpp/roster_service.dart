@@ -27,6 +27,31 @@ mixin RosterService on XmppBase {
 
   final _log = Logger('RosterService');
 
+  @override
+  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+      _log.info('Fetching roster...');
+      await requestRoster();
+    })
+    ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
+      final requester = event.from.toBare().toString().toLowerCase();
+      _log.info('Subscription request received from $requester');
+      await _dbOp<XmppDatabase>((db) async {
+        final item = await db.getRosterItem(requester);
+        if (item != null) {
+          _log.info('Accepting subscription request from $requester...');
+          try {
+            await _acceptSubscriptionRequest(item);
+          } on XmppRosterException catch (_) {}
+          return;
+        }
+        await db.saveInvite(Invite(
+          jid: requester,
+          title: event.from.local,
+        ));
+      });
+    });
+
   Future<void> requestRoster() async {
     if (await _connection.requestRoster() case final result?) {
       if (result.isType<mox.RosterRequestResult>()) {

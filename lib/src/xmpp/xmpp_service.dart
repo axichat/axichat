@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:async/async.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/defer.dart';
+import 'package:chat/src/common/event_manager.dart';
 import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/common/ui/ui.dart';
@@ -14,7 +15,6 @@ import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/impatient_completer.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
-import 'package:chat/src/xmpp/event_manager.dart';
 import 'package:chat/src/xmpp/foreground_socket.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
@@ -118,6 +118,9 @@ abstract interface class XmppBase {
 
   mox.JID? get _myJid;
 
+  EventManager<mox.XmppEvent> get _eventManager =>
+      EventManager<mox.XmppEvent>();
+
   Future<String> connect({
     required String jid,
     required String password,
@@ -198,6 +201,45 @@ class XmppService extends XmppBase
   @override
   mox.JID? _myJid;
 
+  @override
+  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
+      _connectionState = event.state;
+      _connectivityStream.add(event.state);
+    })
+    ..registerHandler<mox.StanzaAckedEvent>((event) async {
+      if (event.stanza.id == null) return;
+      await _dbOp<XmppDatabase>((db) async {
+        await db.markMessageAcked(event.stanza.id!);
+      });
+    })
+    ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+      _connection.setResource(resource!, triggerEvent: false);
+      // await _omemoManager.value?.commitDevice(await _device);
+      // if (await _ensureOmemoDevicePublished() case final result?) {
+      //   _log.severe('Failed to publish OMEMO device. $result');
+      // }
+      // if (event.resumed) return;
+      // await _omemoManager.value?.onNewConnection();
+      final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
+      if (!carbonsManager.isEnabled) {
+        _log.info('Enabling carbons...');
+        if (!await carbonsManager.enableCarbons()) {
+          _log.warning('Failed to enable carbons.');
+        }
+      }
+    })
+    ..registerHandler<mox.ResourceBoundEvent>((event) {
+      _log.info('Bound resource: ${event.resource}...');
+    })
+    ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
+      _log.info('Saving FAST token...');
+      await _dbOp<XmppStateStore>((ss) async {
+        await ss.write(key: fastTokenStorageKey, value: event.token.token);
+        _log.info('Saved FAST token: ${event.token.token}.');
+      });
+    });
+
   String? get resource => _myJid?.resource;
 
   String? get username => _myJid?.local;
@@ -210,185 +252,19 @@ class XmppService extends XmppBase
   bool get needsReset =>
       _myJid != null ||
       _eventSubscription != null ||
+      _messageSubscription != null ||
       _stateStore.isCompleted ||
       _database.isCompleted ||
       _synchronousConnection.isCompleted;
 
   StreamSubscription<mox.XmppEvent>? _eventSubscription;
+  StreamSubscription<Message>? _messageSubscription;
 
   ConnectionState get connectionState => _connectionState;
   var _connectionState = ConnectionState.notConnected;
 
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
   final _connectivityStream = StreamController<ConnectionState>.broadcast();
-
-  void _onEvent(mox.XmppEvent event) async {
-    switch (event) {
-      case mox.MessageEvent event:
-        if (await _handleError(event)) return;
-
-        final message = generateMessageFromMox(event);
-
-        await _handleChatState(event, message.chatJid);
-
-        if (await _handleCorrection(event, message.senderJid)) return;
-        if (await _handleRetraction(event, message.senderJid)) return;
-
-        // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
-        if (!event.displayable && event.encryptionError == null) return;
-        if (event.extensions.get<mox.FileUploadNotificationData>()
-            case final data?) {
-          if (data.metadata.name == null) return;
-        }
-
-        await _handleFile(event, message.senderJid);
-
-        final metadata = _extractFileMetadata(event);
-
-        if (metadata != null) {
-          await _dbOp<XmppDatabase>((db) async {
-            await db.saveFileMetadata(metadata);
-          });
-        }
-
-        if (event.get<mox.OmemoData>() case final data?) {
-          final newRatchets = data.newRatchets.values.map((e) => e.length);
-          final newCount = newRatchets.fold(0, (v, e) => v + e);
-          final replacedRatchets =
-              data.replacedRatchets.values.map((e) => e.length);
-          final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
-          final pseudoMessageData = {
-            'ratchetsAdded': newRatchets,
-            'ratchetsReplaced': replacedRatchets,
-          };
-
-          if (newCount > 0) {
-            await _dbOp<XmppDatabase>((db) async {
-              await db.saveMessage(Message(
-                stanzaID: _connection.generateId(),
-                senderJid: myJid!.toString(),
-                chatJid: message.chatJid,
-                pseudoMessageType: PseudoMessageType.newDevice,
-                pseudoMessageData: pseudoMessageData,
-              ));
-            });
-          }
-
-          if (replacedCount > 0) {
-            await _dbOp<XmppDatabase>((db) async {
-              await db.saveMessage(Message(
-                stanzaID: _connection.generateId(),
-                senderJid: myJid!.toString(),
-                chatJid: message.chatJid,
-                pseudoMessageType: PseudoMessageType.changedDevice,
-                pseudoMessageData: pseudoMessageData,
-              ));
-            });
-          }
-        }
-
-        await _dbOp<XmppDatabase>((db) async {
-          await db.saveMessage(message);
-        });
-
-        await _notificationService.sendNotification(
-          title: message.senderJid,
-          body: message.body,
-          groupKey: message.chatJid,
-          extraConditions: [
-            _capability.canForegroundService,
-            message.senderJid != myJid,
-            !await _dbOpReturning<XmppDatabase, bool>((db) async {
-              return (await db.getChat(message.chatJid))?.muted ?? false;
-            }),
-          ],
-        );
-      case mox.ConnectionStateChangedEvent event:
-        _connectionState = event.state;
-        _connectivityStream.add(event.state);
-      case mox.StanzaAckedEvent event:
-        if (event.stanza.id == null) return;
-        await _dbOp<XmppDatabase>((db) async {
-          await db.markMessageAcked(event.stanza.id!);
-        });
-      case mox.ChatMarkerEvent event:
-        _log.info('Received chat marker from ${event.from}');
-
-        await _dbOp<XmppDatabase>((db) async {
-          switch (event.type) {
-            case mox.ChatMarker.displayed:
-              db.markMessageDisplayed(event.id);
-              db.markMessageReceived(event.id);
-              db.markMessageAcked(event.id);
-            case mox.ChatMarker.received:
-              db.markMessageReceived(event.id);
-              db.markMessageAcked(event.id);
-            case mox.ChatMarker.acknowledged:
-              db.markMessageAcked(event.id);
-          }
-        });
-      case mox.DeliveryReceiptReceivedEvent event:
-        await _dbOp<XmppDatabase>((db) async {
-          await db.markMessageReceived(event.id);
-        });
-      case mox.StreamNegotiationsDoneEvent _:
-        _connection.setResource(resource!, triggerEvent: false);
-        // await _omemoManager.value?.commitDevice(await _device);
-        // if (await _ensureOmemoDevicePublished() case final result?) {
-        //   _log.severe('Failed to publish OMEMO device. $result');
-        // }
-        // if (event.resumed) return;
-        // await _omemoManager.value?.onNewConnection();
-        final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
-        if (!carbonsManager.isEnabled) {
-          _log.info('Enabling carbons...');
-          if (!await carbonsManager.enableCarbons()) {
-            _log.warning('Failed to enable carbons.');
-          }
-        }
-        _log.info('Fetching roster...');
-        await requestRoster();
-        _log.info('Fetching blocklist...');
-        await requestBlocklist();
-      case mox.ResourceBoundEvent event:
-        _log.info('Bound resource: ${event.resource}...');
-      case mox.NewFASTTokenReceivedEvent event:
-        _log.info('Saving FAST token...');
-        await _dbOp<XmppStateStore>((ss) async {
-          await ss.write(key: fastTokenStorageKey, value: event.token.token);
-          _log.info('Saved FAST token: ${event.token.token}.');
-        });
-      case mox.SubscriptionRequestReceivedEvent event:
-        final requester = event.from.toBare().toString().toLowerCase();
-        _log.info('Subscription request received from $requester');
-        await _dbOp<XmppDatabase>((db) async {
-          final item = await db.getRosterItem(requester);
-          if (item != null) {
-            _log.info('Accepting subscription request from $requester...');
-            try {
-              await _acceptSubscriptionRequest(item);
-            } on XmppRosterException catch (_) {}
-            return;
-          }
-          await db.saveInvite(Invite(
-            jid: requester,
-            title: event.from.local,
-          ));
-        });
-      case mox.BlocklistBlockPushEvent event:
-        await _dbOp<XmppDatabase>((db) async {
-          await db.blockJids(event.items);
-        });
-      case mox.BlocklistUnblockPushEvent event:
-        await _dbOp<XmppDatabase>((db) async {
-          await db.unblockJids(event.items);
-        });
-      case mox.BlocklistUnblockAllPushEvent _:
-        await _dbOp<XmppDatabase>((db) async {
-          await db.deleteBlocklist();
-        });
-    }
-  }
 
   var _synchronousConnection = Completer<void>();
 
@@ -422,7 +298,25 @@ class XmppService extends XmppBase
 
         await _initConnection(preHashed: preHashed);
 
-        _eventSubscription = _connection.asBroadcastStream().listen(_onEvent);
+        _eventSubscription = _connection
+            .asBroadcastStream()
+            .listen(_eventManager.executeHandlers);
+        _messageSubscription = _messageStream.stream.listen(
+          (message) async {
+            await _notificationService.sendNotification(
+              title: message.senderJid,
+              body: message.body,
+              groupKey: message.chatJid,
+              extraConditions: [
+                _capability.canForegroundService,
+                message.senderJid != myJid,
+                !await _dbOpReturning<XmppDatabase, bool>((db) async {
+                  return (await db.getChat(message.chatJid))?.muted ?? false;
+                }),
+              ],
+            );
+          },
+        );
 
         _connection.connectionSettings = XmppConnectionSettings(
           jid: _myJid!.toBare(),
@@ -647,6 +541,8 @@ class XmppService extends XmppBase
 
     await _eventSubscription?.cancel();
     _eventSubscription = null;
+    await _messageSubscription?.cancel();
+    _messageSubscription = null;
 
     if (connected) {
       try {

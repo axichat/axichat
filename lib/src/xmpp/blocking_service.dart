@@ -15,6 +15,28 @@ mixin BlockingService on XmppBase {
 
   final _log = Logger('BlockingService');
 
+  @override
+  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+      _log.info('Fetching blocklist...');
+      await requestBlocklist();
+    })
+    ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.blockJids(event.items);
+      });
+    })
+    ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.unblockJids(event.items);
+      });
+    })
+    ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.deleteBlocklist();
+      });
+    });
+
   Future<void> requestBlocklist() async {
     if (await _connection.requestBlocklist() case final blocked?) {
       await owner._dbOp<XmppDatabase>((db) async {

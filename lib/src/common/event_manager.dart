@@ -6,17 +6,27 @@ typedef EventMatcher<E> = bool Function(E);
 typedef EventHandler<E> = FutureOr<void> Function(E);
 
 class EventManager<E> {
-  final _registry = <EventMatcher<E>, List<EventHandler>>{};
+  final _registry = <EventMatcher<E>, List>{};
 
-  bool _match<T>(E event) => event is T;
+  bool _match<T extends E>(E event) => event is T;
 
-  void registerHandlers<T>(
+  void registerHandler<T extends E>(
+    EventHandler<T> handler,
+  ) {
+    if (_registry[_match<T>] == null) {
+      _registry[_match<T>] = [handler];
+    } else {
+      _registry[_match<T>]!.add(handler);
+    }
+  }
+
+  void registerHandlers<T extends E>(
     List<EventHandler<T>> handlers,
   ) {
     if (_registry[_match<T>] == null) {
-      _registry[_match<T>] = handlers as List<EventHandler>;
+      _registry[_match<T>] = handlers;
     } else {
-      _registry[_match<T>]!.addAll(handlers as List<EventHandler>);
+      _registry[_match<T>]!.addAll(handlers);
     }
   }
 

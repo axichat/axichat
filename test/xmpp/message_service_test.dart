@@ -73,7 +73,7 @@ main() {
       'When messages are added to the chat\'s database, emits the new message history in order.',
       () async {
         expectLater(
-          xmppService.messageStream(messagesByTimestamp[0].chatJid),
+          xmppService.messageStreamForChat(messagesByTimestamp[0].chatJid),
           emitsInOrder(List.filled(
             messagesByTimestamp.length,
             predicate<List<Message>>(
@@ -108,7 +108,7 @@ main() {
         await pumpEventQueue();
 
         expectLater(
-          xmppService.messageStream(messagesByTimestamp[0].chatJid),
+          xmppService.messageStreamForChat(messagesByTimestamp[0].chatJid),
           emitsInOrder(List.filled(
             messagesByTimestamp.length,
             predicate<List<Message>>(

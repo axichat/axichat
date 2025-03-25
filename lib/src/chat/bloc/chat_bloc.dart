@@ -14,9 +14,12 @@ part 'chat_event.dart';
 part 'chat_state.dart';
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
-  ChatBloc({required this.jid, required XmppService xmppService, required NotificationService notificationService,})
-      : _xmppService = xmppService,
-  _notificationService = notificationService,
+  ChatBloc({
+    required this.jid,
+    required XmppService xmppService,
+    required NotificationService notificationService,
+  })  : _xmppService = xmppService,
+        _notificationService = notificationService,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -37,7 +40,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _messageSubscription = _xmppService
-          .messageStream(jid!, end: messageBatchSize)
+          .messageStreamForChat(jid!, end: messageBatchSize)
           .listen((items) => add(_ChatMessagesUpdated(items)));
     }
   }
@@ -150,7 +153,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     await _messageSubscription.cancel();
     _messageSubscription = _xmppService
-        .messageStream(jid!, end: state.items.length + messageBatchSize)
+        .messageStreamForChat(jid!, end: state.items.length + messageBatchSize)
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
