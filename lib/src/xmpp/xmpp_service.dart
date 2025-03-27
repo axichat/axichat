@@ -223,10 +223,9 @@ class XmppService extends XmppBase
       // }
       // if (event.resumed) return;
       // await _omemoManager.value?.onNewConnection();
-      final carbonsManager = _connection.getManager<mox.CarbonsManager>()!;
-      if (!carbonsManager.isEnabled) {
+      if (!(_connection.carbonsEnabled ?? false)) {
         _log.info('Enabling carbons...');
-        if (!await carbonsManager.enableCarbons()) {
+        if (!await _connection.enableCarbons()) {
           _log.warning('Failed to enable carbons.');
         }
       }
@@ -264,9 +263,13 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
+  String? get username => _myJid?.local;
+
   String? get resource => _myJid?.resource;
 
-  String? get username => _myJid?.local;
+  String? get boundResource => _connection.hasConnectionSettings
+      ? _connection.connectionSettings.jid.resource
+      : null;
 
   bool get connected => connectionState == mox.XmppConnectionState.connected;
 
@@ -641,6 +644,11 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<void> loadStreamState() async =>
       await getManager<XmppStreamManagementManager>()!.loadState();
+
+  bool? get carbonsEnabled => getManager<mox.CarbonsManager>()?.isEnabled;
+
+  Future<bool> enableCarbons() async =>
+      await (getManager<mox.CarbonsManager>()?.enableCarbons()) ?? false;
 
   Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>
       requestRoster() async => await getRosterManager()?.requestRoster();

@@ -19,6 +19,7 @@ void main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
+    registerFallbackValue(FakeStanzaDetails());
   });
 
   late XmppService xmppService;
@@ -65,8 +66,75 @@ void main() {
     tearDown(() async {
       await database.deleteAll();
       await xmppService.close();
+      resetMocktailState();
     });
+    //
+    // test(
+    //   'When stream negotiations complete, sends initial presence.',
+    //   () async {
+    //     sendInitialPresence() => mockConnection.sendStanza(any(
+    //           that: isA<mox.StanzaDetails>().having(
+    //             (sd) => sd.stanza,
+    //             'stanza',
+    //             predicate<mox.Stanza>((s) => s.tag == 'presence'),
+    //           ),
+    //         ));
+    //     when(sendInitialPresence).thenAnswer((_) async => null);
+    //
+    //     when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+    //     when(() => mockConnection.requestRoster())
+    //         .thenAnswer((_) async => null);
+    //     when(() => mockConnection.requestBlocklist())
+    //         .thenAnswer((_) async => null);
+    //
+    //     verifyNever(sendInitialPresence);
+    //
+    //     eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+    //
+    //     await pumpEventQueue();
+    //
+    //     verify(sendInitialPresence).called(1);
+    //   },
+    // );
 
+    test(
+      'When stream negotiations complete, requests the roster.',
+      () async {
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(() => mockConnection.requestRoster())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.requestBlocklist())
+            .thenAnswer((_) async => null);
+
+        verifyNever(() => mockConnection.requestRoster());
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.requestRoster()).called(1);
+      },
+    );
+
+    // test(
+    //   'When stream negotiations complete, requests the blocklist.',
+    //   () async {
+    //     when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+    //     when(() => mockConnection.requestRoster())
+    //         .thenAnswer((_) async => null);
+    //     when(() => mockConnection.requestBlocklist())
+    //         .thenAnswer((_) async => null);
+    //
+    //     verifyNever(() => mockConnection.requestBlocklist());
+    //
+    //     eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+    //
+    //     await pumpEventQueue();
+    //
+    //     verify(() => mockConnection.requestBlocklist()).called(1);
+    //   },
+    // );
+    //
     test(
       'Given a standard text message, writes it to the database and notifies the user.',
       () async {

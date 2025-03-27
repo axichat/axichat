@@ -182,18 +182,20 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     });
     _log.info('Loaded roster version: $version.');
 
-    final rosterItems = <mox.XmppRosterItem>[];
-    await owner._dbOp<XmppDatabase>((db) async {
-      for (final item in (await db.getRoster())) {
-        rosterItems.add(mox.XmppRosterItem(
-          jid: item.jid,
-          name: item.title,
-          subscription: item.subscription.name,
-          ask: item.ask?.name,
-          groups: item.groups,
-        ));
-      }
-    });
+    final rosterItems =
+        await owner._dbOpReturning<XmppDatabase, List<mox.XmppRosterItem>>(
+      (db) async => (await db.getRoster())
+          .map(
+            (item) => mox.XmppRosterItem(
+              jid: item.jid,
+              name: item.title,
+              subscription: item.subscription.name,
+              ask: item.ask?.name,
+              groups: item.groups,
+            ),
+          )
+          .toList(),
+    );
     return mox.RosterCacheLoadResult(version, rosterItems);
   }
 }

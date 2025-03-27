@@ -32,6 +32,8 @@ class FakeMessageEvent extends Fake implements mox.MessageEvent {}
 
 class FakeUserAgent extends Fake implements mox.UserAgent {}
 
+class FakeStanzaDetails extends Fake implements mox.StanzaDetails {}
+
 const uuid = Uuid();
 
 var mockXmppService = MockXmppService();
