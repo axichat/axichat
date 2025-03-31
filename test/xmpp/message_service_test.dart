@@ -40,6 +40,11 @@ main() {
   late List<Message> messagesByTimestamp;
 
   setUp(() {
+    mockXmppService = MockXmppService();
+    mockConnection = MockXmppConnection();
+    mockCredentialStore = MockCredentialStore();
+    mockStateStore = MockXmppStateStore();
+    mockNotificationService = MockNotificationService();
     database = XmppDrift(
       file: File(''),
       passphrase: '',
@@ -65,6 +70,9 @@ main() {
   tearDown(() async {
     await database.deleteAll();
     await xmppService.close();
+  });
+
+  tearDown(() {
     resetMocktailState();
   });
 

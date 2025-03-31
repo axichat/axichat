@@ -34,6 +34,10 @@ class EventManager<E> {
     _registry[_match<T>] = [];
   }
 
+  void unregisterAllHandlers() {
+    _registry.clear();
+  }
+
   Future<void> executeHandlers(E event) async {
     for (final match in _registry.keys) {
       if (!match(event)) continue;

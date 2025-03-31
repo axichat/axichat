@@ -36,11 +36,11 @@ class FakeStanzaDetails extends Fake implements mox.StanzaDetails {}
 
 const uuid = Uuid();
 
-var mockXmppService = MockXmppService();
-var mockConnection = MockXmppConnection();
-var mockCredentialStore = MockCredentialStore();
-var mockStateStore = MockXmppStateStore();
-var mockNotificationService = MockNotificationService();
+late MockXmppService mockXmppService;
+late MockXmppConnection mockConnection;
+late MockCredentialStore mockCredentialStore;
+late MockXmppStateStore mockStateStore;
+late MockNotificationService mockNotificationService;
 
 const jid = 'jid@axi.im/resource';
 const password = 'password';

@@ -360,8 +360,10 @@ class XmppService extends XmppBase
           _log.info('Login rejected by server.');
           throw XmppAuthenticationException();
         }
+
         _log.info('Login successful. Initializing databases...');
         await _initDatabases(databasePrefix, databasePassphrase);
+
         return _connection.saltedPassword;
       },
     );
@@ -460,6 +462,8 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _log.info('Resetting${e != null ? ' due to $e' : null}...');
+
+    _eventManager.unregisterAllHandlers();
 
     await _eventSubscription?.cancel();
     _eventSubscription = null;

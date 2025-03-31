@@ -22,6 +22,12 @@ void main() {
   });
 
   setUp(() {
+    mockXmppService = MockXmppService();
+    mockConnection = MockXmppConnection();
+    mockCredentialStore = MockCredentialStore();
+    mockStateStore = MockXmppStateStore();
+    mockNotificationService = MockNotificationService();
+
     when(() => mockCredentialStore.read(key: any(named: 'key')))
         .thenAnswer((_) async => null);
 
