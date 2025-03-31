@@ -27,7 +27,6 @@ void main() {
   late StreamController<mox.XmppEvent> eventStreamController;
 
   setUp(() {
-    mockXmppService = MockXmppService();
     mockConnection = MockXmppConnection();
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();

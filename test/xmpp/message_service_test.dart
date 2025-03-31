@@ -40,7 +40,6 @@ main() {
   late List<Message> messagesByTimestamp;
 
   setUp(() {
-    mockXmppService = MockXmppService();
     mockConnection = MockXmppConnection();
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
