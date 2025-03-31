@@ -159,21 +159,6 @@ class Message with _$Message implements Insertable<Message> {
     );
   }
 
-  mox.MessageEvent toMox() {
-    return mox.MessageEvent(
-      mox.JID.fromString(senderJid),
-      mox.JID.fromString(chatJid),
-      false,
-      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(body),
-        const mox.MarkableData(true),
-        mox.MessageIdData(stanzaID),
-        mox.ChatState.active,
-      ]),
-      id: stanzaID,
-    );
-  }
-
   const Message._();
 
   bool authorized(mox.JID jid) =>
@@ -188,6 +173,21 @@ class Message with _$Message implements Insertable<Message> {
 
   bool get isPseudoMessage =>
       pseudoMessageType != null && pseudoMessageData != null;
+
+  mox.MessageEvent toMox() {
+    return mox.MessageEvent(
+      mox.JID.fromString(senderJid),
+      mox.JID.fromString(chatJid),
+      false,
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+        mox.MessageBodyData(body),
+        const mox.MarkableData(true),
+        mox.MessageIdData(stanzaID),
+        mox.ChatState.active,
+      ]),
+      id: stanzaID,
+    );
+  }
 
   @override
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
@@ -1129,7 +1129,7 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
         subscription: Subscription.both,
       );
 
-  static RosterItem fromMox(
+  factory RosterItem.fromMox(
     mox.XmppRosterItem item, {
     bool isGhost = false,
   }) {
@@ -1153,6 +1153,13 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   }
 
   const RosterItem._();
+
+  mox.XmppRosterItem toMox() => mox.XmppRosterItem(
+        jid: jid,
+        subscription: subscription.name,
+        ask: ask?.name,
+        name: title,
+      );
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) => RosterCompanion(

@@ -10,9 +10,7 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 import '../mocks.dart';
 
-final messageEvents = [
-  for (var i = 0; i < 3; i++) generateRandomMessageEvent()
-];
+final messageEvents = List.generate(3, (_) => generateRandomMessageEvent());
 
 bool compareMessages(Message a, Message b) =>
     a.stanzaID == b.stanzaID &&

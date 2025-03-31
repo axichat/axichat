@@ -1,8 +1,10 @@
 import 'dart:isolate';
 
+import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/storage/credential_store.dart';
+import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:mocktail/mocktail.dart';
@@ -63,6 +65,19 @@ mox.MessageEvent generateRandomMessageEvent({String senderJid = from}) {
       mox.ChatState.active,
     ]),
     id: messageStanzaID,
+  );
+}
+
+RosterItem generateRandomRosterItem({
+  Presence presence = Presence.unavailable,
+  Subscription subscription = Subscription.none,
+}) {
+  final name = generateRandomString(length: 6);
+  return RosterItem(
+    jid: '$name@axi.im',
+    title: name,
+    presence: presence,
+    subscription: subscription,
   );
 }
 
