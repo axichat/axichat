@@ -49,7 +49,7 @@ mixin MessageService on XmppBase {
     ..registerHandler<mox.MessageEvent>((event) async {
       if (await _handleError(event)) return;
 
-      final message = generateMessageFromMox(event);
+      final message = Message.fromMox(event);
 
       await _handleChatState(event, message.chatJid);
 
@@ -161,48 +161,6 @@ mixin MessageService on XmppBase {
       // mox.EmeManager(),
     ]);
 
-  Message generateMessageFromMox(mox.MessageEvent event) {
-    final get = event.extensions.get;
-    final to = event.to.toBare().toString();
-    final from = event.from.toBare().toString();
-    final chatJid = event.isCarbon ? to : from;
-
-    final metadata = _extractFileMetadata(event);
-
-    return Message(
-      stanzaID: event.id ?? _connection.generateId(),
-      senderJid: from,
-      chatJid: chatJid,
-      body: event.text,
-      timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-      fileMetadataID: metadata?.id,
-      noStore: get<mox.MessageProcessingHintData>()
-              ?.hints
-              .contains(mox.MessageProcessingHint.noStore) ??
-          false,
-      quoting: get<mox.ReplyData>()?.id,
-      originID: get<mox.StableIdData>()?.originId,
-      occupantID: get<mox.OccupantIdData>()?.id,
-      encryptionProtocol:
-          event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
-    );
-  }
-
-  mox.MessageEvent generateMoxFromMessage(Message message) {
-    return mox.MessageEvent(
-      mox.JID.fromString(message.senderJid),
-      mox.JID.fromString(message.chatJid),
-      false,
-      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(message.body),
-        const mox.MarkableData(true),
-        mox.MessageIdData(message.stanzaID),
-        mox.ChatState.active,
-      ]),
-      id: message.stanzaID,
-    );
-  }
-
   Future<void> sendMessage({
     required String jid,
     required String text,
@@ -223,7 +181,7 @@ mixin MessageService on XmppBase {
     });
 
     try {
-      await _connection.sendMessage(generateMoxFromMessage(message));
+      await _connection.sendMessage(message.toMox());
     } on Exception catch (e) {
       _log.info(
           'Failed to send message: ${message.stanzaID}. '

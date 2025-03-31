@@ -58,10 +58,9 @@ main() {
     );
     messagesByTimestamp = messageEvents.indexed.map((e) {
       final (index, message) = e;
-      return xmppService.generateMessageFromMox(message).copyWith(
-            timestamp:
-                DateTime.timestamp().toLocal().add(Duration(seconds: index)),
-          );
+      return Message.fromMox(message).copyWith(
+        timestamp: DateTime.timestamp().toLocal().add(Duration(seconds: index)),
+      );
     }).toList();
 
     prepareMockConnection();

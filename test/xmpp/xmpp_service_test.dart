@@ -64,8 +64,15 @@ void main() {
       );
       await connectSuccessfully(xmppService);
 
+      when(() => mockNotificationService.sendNotification(
+            title: any(named: 'title'),
+            body: any(named: 'body'),
+            groupKey: any(named: 'groupKey'),
+            extraConditions: any(named: 'extraConditions'),
+          )).thenAnswer((_) async {});
+
       messageEvent = generateRandomMessageEvent();
-      message = xmppService.generateMessageFromMox(messageEvent);
+      message = Message.fromMox(messageEvent);
     });
 
     tearDown(() async {
@@ -117,15 +124,8 @@ void main() {
     );
 
     test(
-      'Given a standard text message, writes it to the database and notifies the user.',
+      'Given a standard text message, writes it to the database.',
       () async {
-        when(() => mockNotificationService.sendNotification(
-              title: any(named: 'title'),
-              body: any(named: 'body'),
-              groupKey: any(named: 'groupKey'),
-              extraConditions: any(named: 'extraConditions'),
-            )).thenAnswer((_) async {});
-
         final beforeMessage =
             await database.getMessageByStanzaID(messageEvent.id!);
         expect(beforeMessage, isNull);
@@ -138,6 +138,15 @@ void main() {
             await database.getMessageByStanzaID(messageEvent.id!);
         expect(afterMessage?.stanzaID, equals(messageEvent.id!));
         expect(afterMessage?.body, equals(messageEvent.text));
+      },
+    );
+
+    test(
+      'Given a standard text message, notifies the user.',
+      () async {
+        eventStreamController.add(messageEvent);
+
+        await pumpEventQueue();
 
         verify(() => mockNotificationService.sendNotification(
               title: messageEvent.from.toBare().toString(),
@@ -294,11 +303,14 @@ void main() {
 
     tearDown(() async {
       await xmppService.close();
+    });
+
+    tearDown(() {
       resetMocktailState();
     });
 
     test(
-      'Given valid credentials, connect initialises the databases.',
+      'Given valid credentials, initialises the databases.',
       () async {
         await connectSuccessfully(xmppService);
 
@@ -308,7 +320,7 @@ void main() {
     );
 
     test(
-      'Given valid credentials, connect registers all feature managers.',
+      'Given valid credentials, registers all feature managers.',
       () async {
         await connectSuccessfully(xmppService);
 
@@ -322,20 +334,41 @@ void main() {
               }),
             ),
           )),
-        ).called(greaterThan(0));
+        ).called(1);
       },
     );
 
     test(
-      'Given invalid credentials, connect throws an XmppAuthenticationException.',
+      'Given invalid credentials, throws an XmppAuthenticationException.',
       () async {
         await expectLater(
           () => connectUnsuccessfully(xmppService),
           throwsA(isA<XmppAuthenticationException>()),
         );
 
+        await pumpEventQueue();
+
         expect(builtDatabase, false);
       },
     );
+
+    test(
+      'Attempting to connect when already connected throws an XmppAlreadyConnectedException.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        await expectLater(
+          () => xmppService.connect(
+            jid: jid,
+            password: password,
+            databasePrefix: '',
+            databasePassphrase: '',
+          ),
+          throwsA(isA<XmppAlreadyConnectedException>()),
+        );
+      },
+    );
   });
+
+  group('XmppConnection', () {});
 }

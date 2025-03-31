@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:chat/src/storage/database.dart';
+import 'package:chat/src/xmpp/xmpp_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:flutter/material.dart' hide Column, Table;
@@ -61,8 +62,11 @@ enum EncryptionProtocol {
   mls;
 
   bool get isNone => this == none;
+
   bool get isNotNone => this != none;
+
   bool get isOmemo => this == omemo;
+
   bool get isMls => this == mls;
 }
 
@@ -131,6 +135,45 @@ class Message with _$Message implements Insertable<Message> {
     @Default(<String>[]) List<String> reactionsPreview,
   }) = _MessageFromDb;
 
+  factory Message.fromMox(mox.MessageEvent event) {
+    final get = event.extensions.get;
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    final chatJid = event.isCarbon ? to : from;
+
+    return Message(
+      stanzaID: event.id ?? uuid.v4(),
+      senderJid: from,
+      chatJid: chatJid,
+      body: event.text,
+      timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
+      noStore: get<mox.MessageProcessingHintData>()
+              ?.hints
+              .contains(mox.MessageProcessingHint.noStore) ??
+          false,
+      quoting: get<mox.ReplyData>()?.id,
+      originID: get<mox.StableIdData>()?.originId,
+      occupantID: get<mox.OccupantIdData>()?.id,
+      encryptionProtocol:
+          event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
+    );
+  }
+
+  mox.MessageEvent toMox() {
+    return mox.MessageEvent(
+      mox.JID.fromString(senderJid),
+      mox.JID.fromString(chatJid),
+      false,
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+        mox.MessageBodyData(body),
+        const mox.MarkableData(true),
+        mox.MessageIdData(stanzaID),
+        mox.ChatState.active,
+      ]),
+      id: stanzaID,
+    );
+  }
+
   const Message._();
 
   bool authorized(mox.JID jid) =>
@@ -180,38 +223,62 @@ class Message with _$Message implements Insertable<Message> {
 @UseRowClass(Message)
 class Messages extends Table {
   TextColumn get id => text().clientDefault(() => uuid.v4())();
+
   TextColumn get stanzaID => text()();
+
   TextColumn get originID => text().nullable()();
+
   TextColumn get occupantID => text().nullable()();
+
   TextColumn get senderJid => text()();
+
   TextColumn get chatJid => text()();
+
   TextColumn get body => text().nullable()();
+
   DateTimeColumn get timestamp =>
       dateTime().clientDefault(() => DateTime.timestamp())();
+
   IntColumn get error =>
       intEnum<MessageError>().withDefault(const Constant(0))();
+
   IntColumn get warning =>
       intEnum<MessageWarning>().withDefault(const Constant(0))();
+
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(0))();
+
   BoolColumn get noStore => boolean().withDefault(const Constant(false))();
+
   BoolColumn get acked => boolean().withDefault(const Constant(false))();
+
   BoolColumn get received => boolean().withDefault(const Constant(false))();
+
   BoolColumn get displayed => boolean().withDefault(const Constant(false))();
+
   BoolColumn get edited => boolean().withDefault(const Constant(false))();
+
   BoolColumn get retracted => boolean().withDefault(const Constant(false))();
+
   BoolColumn get isFileUploadNotification =>
       boolean().withDefault(const Constant(false))();
+
   BoolColumn get fileDownloading =>
       boolean().withDefault(const Constant(false))();
+
   BoolColumn get fileUploading =>
       boolean().withDefault(const Constant(false))();
+
   TextColumn get fileMetadataID =>
       text().nullable().references(FileMetadata, #id)();
+
   TextColumn get quoting => text().nullable()();
+
   TextColumn get stickerPackID =>
       text().nullable().references(StickerPacks, #id)();
+
   IntColumn get pseudoMessageType => intEnum<PseudoMessageType>().nullable()();
+
   TextColumn get pseudoMessageData => text().map(JsonConverter()).nullable()();
 
   @override
@@ -220,8 +287,11 @@ class Messages extends Table {
 
 class Drafts extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   TextColumn get jids => text().map(ListConverter<String>())();
+
   TextColumn get body => text().nullable()();
+
   TextColumn get fileMetadataID =>
       text().nullable().references(FileMetadata, #id)();
 }
@@ -324,6 +394,7 @@ class SignedPreKey extends omemo.OmemoKeyPair {
 
 extension SkippedKey on omemo.SkippedKey {
   omemo.OmemoPublicKey get key => dh;
+
   int get skipped => n;
 
   static omemo.SkippedKey fromJson(String json) {
@@ -352,6 +423,7 @@ extension SkippedKey on omemo.SkippedKey {
 
 extension KeyExchangeData on omemo.KeyExchangeData {
   omemo.OmemoPublicKey get identityKey => ik;
+
   omemo.OmemoPublicKey get ephemeralKey => ek;
 
   static omemo.KeyExchangeData fromJson(String json) {
@@ -572,37 +644,44 @@ class OmemoDevice extends omemo.OmemoDevice {
         onetimePreKeys: await onetimePreKeysToJson(),
       );
 
-  // @override
-  // Future<OmemoBundle> toBundle() async {
-  //   final encodedOpks = <int, String>{};
-  //
-  //   for (final opkKey in opks.keys) {
-  //     encodedOpks[opkKey] =
-  //         base64.encode(injectDjbType(await opks[opkKey]!.pk.getBytes()));
-  //   }
-  //
-  //   return OmemoBundle(
-  //     jid,
-  //     id,
-  //     base64.encode(injectDjbType(await spk.pk.getBytes())),
-  //     spkId,
-  //     base64.encode(spkSignature),
-  //     base64.encode(injectDjbType(await ik.pk.getBytes())),
-  //     encodedOpks,
-  //   );
-  // }
+// @override
+// Future<OmemoBundle> toBundle() async {
+//   final encodedOpks = <int, String>{};
+//
+//   for (final opkKey in opks.keys) {
+//     encodedOpks[opkKey] =
+//         base64.encode(injectDjbType(await opks[opkKey]!.pk.getBytes()));
+//   }
+//
+//   return OmemoBundle(
+//     jid,
+//     id,
+//     base64.encode(injectDjbType(await spk.pk.getBytes())),
+//     spkId,
+//     base64.encode(spkSignature),
+//     base64.encode(injectDjbType(await ik.pk.getBytes())),
+//     encodedOpks,
+//   );
+// }
 }
 
 @UseRowClass(OmemoDevice, constructor: 'fromDb')
 class OmemoDevices extends Table {
   TextColumn get jid => text()();
+
   IntColumn get id => integer()();
+
   TextColumn get identityKey => text()();
+
   TextColumn get signedPreKey => text()();
+
   TextColumn get oldSignedPreKey => text().nullable()();
+
   IntColumn get trust =>
       intEnum<BTBVTrustState>().withDefault(const Constant(2))();
+
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+
   TextColumn get onetimePreKeys => text()();
 
   @override
@@ -611,6 +690,7 @@ class OmemoDevices extends Table {
 
 class OmemoDeviceLists extends Table {
   TextColumn get jid => text()();
+
   TextColumn get devices => text().map(ListConverter<int>())();
 
   @override
@@ -796,19 +876,33 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
 @UseRowClass(OmemoRatchet, constructor: 'fromDb')
 class OmemoRatchets extends Table {
   TextColumn get jid => text()();
+
   IntColumn get device => integer()();
+
   TextColumn get dhs => text()();
+
   TextColumn get dhr => text().nullable()();
+
   TextColumn get rk => text().map(ListConverter<int>())();
+
   TextColumn get cks => text().map(ListConverter<int>()).nullable()();
+
   TextColumn get ckr => text().map(ListConverter<int>()).nullable()();
+
   IntColumn get ns => integer()();
+
   IntColumn get nr => integer()();
+
   IntColumn get pn => integer()();
+
   TextColumn get identityKey => text()();
+
   TextColumn get associatedData => text().map(ListConverter<int>())();
+
   TextColumn get mkSkipped => text()();
+
   TextColumn get keyExchangeData => text()();
+
   BoolColumn get acked => boolean().withDefault(const Constant(false))();
 
   @override
@@ -827,7 +921,9 @@ class Reaction with _$Reaction {
 @UseRowClass(Reaction)
 class Reactions extends Table {
   TextColumn get messageID => text().references(Messages, #id)();
+
   TextColumn get senderJid => text()();
+
   TextColumn get emoji => text()();
 
   @override
@@ -852,31 +948,53 @@ class Notification with _$Notification {
 @UseRowClass(Notification)
 class Notifications extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   TextColumn get senderJid => text().nullable()();
+
   TextColumn get chatJid => text()();
+
   TextColumn get senderName => text().nullable()();
+
   TextColumn get body => text()();
+
   DateTimeColumn get timestamp => dateTime()();
+
   TextColumn get avatarPath => text().nullable()();
+
   TextColumn get mediaMimeType => text().nullable()();
+
   TextColumn get mediaPath => text().nullable()();
 }
 
 class FileMetadata extends Table {
   TextColumn get id => text().clientDefault(() => uuid.v4())();
+
   TextColumn get filename => text()();
+
   TextColumn get path => text().nullable()();
+
   TextColumn get sourceUrls => text().map(ListConverter<String>()).nullable()();
+
   TextColumn get mimeType => text().nullable()();
+
   IntColumn get sizeBytes => integer().nullable()();
+
   IntColumn get width => integer().nullable()();
+
   IntColumn get height => integer().nullable()();
+
   TextColumn get encryptionKey => text().nullable()();
+
   TextColumn get encryptionIV => text().nullable()();
+
   TextColumn get encryptionScheme => text().nullable()();
+
   TextColumn get cipherTextHashes => text().map(HashesConverter()).nullable()();
+
   TextColumn get plainTextHashes => text().map(HashesConverter()).nullable()();
+
   TextColumn get thumbnailType => text().nullable()();
+
   TextColumn get thumbnailData => text().nullable()();
 
   @override
@@ -897,8 +1015,11 @@ enum Subscription {
       };
 
   bool get isNone => this == none;
+
   bool get isTo => this == to;
+
   bool get isFrom => this == from;
+
   bool get isBoth => this == both;
 }
 
@@ -913,6 +1034,7 @@ enum Ask {
       };
 
   bool get isSubscribe => this == subscribe;
+
   bool get isSubscribed => this == subscribed;
 }
 
@@ -930,9 +1052,13 @@ enum Presence {
   chat;
 
   bool get isUnavailable => this == unavailable;
+
   bool get isXa => this == xa;
+
   bool get isAway => this == away;
+
   bool get isDnd => this == dnd;
+
   bool get isChat => this == chat;
 
   static Presence fromString(String? value) => switch (value) {
@@ -1047,16 +1173,26 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
 @UseRowClass(RosterItem, constructor: 'fromDb')
 class Roster extends Table {
   TextColumn get jid => text()();
+
   TextColumn get title => text()();
+
   TextColumn get presence => textEnum<Presence>()();
+
   TextColumn get status => text().nullable()();
+
   TextColumn get avatarPath => text().nullable()();
+
   TextColumn get avatarHash => text().nullable()();
+
   TextColumn get subscription => textEnum<Subscription>()();
+
   TextColumn get ask => textEnum<Ask>().nullable()();
+
   TextColumn get contactID =>
       text().nullable().references(Contacts, #nativeID)();
+
   TextColumn get contactAvatarPath => text().nullable()();
+
   TextColumn get contactDisplayName => text().nullable()();
 
   @override
@@ -1083,6 +1219,7 @@ class Invite with _$Invite implements Insertable<Invite> {
 @UseRowClass(Invite)
 class Invites extends Table {
   TextColumn get jid => text()();
+
   TextColumn get title => text()();
 
   @override
@@ -1168,24 +1305,41 @@ class Chat with _$Chat implements Insertable<Chat> {
 @UseRowClass(Chat, constructor: 'fromDb')
 class Chats extends Table {
   TextColumn get jid => text()();
+
   TextColumn get title => text()();
+
   IntColumn get type => intEnum<ChatType>()();
+
   TextColumn get myNickname => text().nullable()();
+
   TextColumn get avatarPath => text().nullable()();
+
   TextColumn get avatarHash => text().nullable()();
+
   TextColumn get lastMessage => text().nullable()();
+
   DateTimeColumn get lastChangeTimestamp => dateTime()();
+
   IntColumn get unreadCount => integer().withDefault(const Constant(0))();
+
   BoolColumn get open => boolean().withDefault(const Constant(false))();
+
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
+
   BoolColumn get favourited => boolean().withDefault(const Constant(false))();
+
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(0))();
+
   TextColumn get contactID =>
       text().nullable().references(Contacts, #nativeID)();
+
   TextColumn get contactDisplayName => text().nullable()();
+
   TextColumn get contactAvatarPath => text().nullable()();
+
   TextColumn get contactAvatarHash => text().nullable()();
+
   TextColumn get chatState => textEnum<mox.ChatState>().nullable()();
 
   @override
@@ -1194,6 +1348,7 @@ class Chats extends Table {
 
 class Contacts extends Table {
   TextColumn get nativeID => text()();
+
   TextColumn get jid => text()();
 
   @override
@@ -1221,9 +1376,13 @@ class Sticker with _$Sticker {
 @UseRowClass(Sticker)
 class Stickers extends Table {
   TextColumn get id => text()();
+
   TextColumn get stickerPackID => text().references(StickerPacks, #id)();
+
   TextColumn get fileMetadataID => text().references(FileMetadata, #id)();
+
   TextColumn get description => text()();
+
   TextColumn get suggestions => text().map(JsonConverter<String>())();
 
   @override
@@ -1249,11 +1408,17 @@ class StickerPack with _$StickerPack {
 @UseRowClass(StickerPack)
 class StickerPacks extends Table {
   TextColumn get id => text()();
+
   TextColumn get name => text()();
+
   TextColumn get description => text()();
+
   TextColumn get hashAlgorithm => text()();
+
   TextColumn get hashValue => text()();
+
   BoolColumn get restricted => boolean()();
+
   DateTimeColumn get addedTimestamp => dateTime()();
 
   @override
