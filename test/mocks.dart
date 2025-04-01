@@ -1,3 +1,4 @@
+import 'dart:core';
 import 'dart:isolate';
 
 import 'package:chat/src/common/generate_random.dart';
@@ -36,6 +37,10 @@ class FakeUserAgent extends Fake implements mox.UserAgent {}
 
 class FakeStanzaDetails extends Fake implements mox.StanzaDetails {}
 
+extension RoundableDateTime on DateTime {
+  DateTime get floorSeconds => copyWith(millisecond: 0, microsecond: 0);
+}
+
 const uuid = Uuid();
 
 late MockXmppService mockXmppService;
@@ -47,6 +52,11 @@ late MockNotificationService mockNotificationService;
 const jid = 'jid@axi.im/resource';
 const password = 'password';
 const from = 'from@axi.im';
+
+String generateRandomJid() {
+  final name = generateRandomString(length: 6);
+  return '$name@axi.im';
+}
 
 mox.MessageEvent generateRandomMessageEvent({String senderJid = from}) {
   final messageStanzaID = uuid.v4();
@@ -72,10 +82,10 @@ RosterItem generateRandomRosterItem({
   Presence presence = Presence.unavailable,
   Subscription subscription = Subscription.none,
 }) {
-  final name = generateRandomString(length: 6);
+  final jid = generateRandomJid();
   return RosterItem(
-    jid: '$name@axi.im',
-    title: name,
+    jid: jid,
+    title: mox.JID.fromString(jid).local,
     presence: presence,
     subscription: subscription,
   );

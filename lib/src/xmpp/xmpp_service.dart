@@ -694,6 +694,18 @@ class XmppConnection extends mox.XmppConnection {
     throw XmppPresenceException();
   }
 
+  Future<void> sendChatState({
+    required String jid,
+    required mox.ChatState state,
+  }) async {
+    if (getManager<mox.ChatStateManager>() case final cm?) {
+      return await cm.sendChatState(
+        state,
+        jid,
+      );
+    }
+  }
+
   Future<void> reset() async {
     if (await FlutterForegroundTask.isRunningService) {
       if (socketWrapper case final ForegroundSocketWrapper socket) {

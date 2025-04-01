@@ -17,7 +17,7 @@ bool compareMessages(Message a, Message b) =>
     a.senderJid == b.senderJid &&
     a.chatJid == b.chatJid &&
     //Drift only has second precision in test environment
-    a.timestamp!.second == b.timestamp!.second &&
+    a.timestamp?.floorSeconds == b.timestamp?.floorSeconds &&
     a.body == b.body &&
     a.acked == b.acked &&
     a.received == b.received &&

@@ -1,5 +1,15 @@
 part of 'package:chat/src/xmpp/xmpp_service.dart';
 
+List<Chat> sortChats(List<Chat> chats) => chats.toList()
+  ..sort((a, b) {
+    if (a.favourited == b.favourited) return 0;
+    if (a.favourited) return 1;
+    return -1;
+  })
+  ..sort(
+    (a, b) => b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp),
+  );
+
 mixin ChatsService on XmppBase {
   Stream<List<Chat>> chatsStream({
     int start = 0,
@@ -9,7 +19,7 @@ mixin ChatsService on XmppBase {
         _dbOpReturning<XmppDatabase, Stream<List<Chat>>>(
           (db) async => db
               .watchChats(start: start, end: end)
-              .startWith(await db.getChats(start: start, end: end)),
+              .startWith(sortChats(await db.getChats(start: start, end: end))),
         ),
       ));
 
@@ -18,21 +28,27 @@ mixin ChatsService on XmppBase {
         _dbOpReturning<XmppDatabase, Stream<Chat?>>((db) => db.watchChat(jid)),
       ));
 
-  Future<void> sendTyping({
-    required String jid,
-    required bool typing,
-  }) async {
-    await _connection.getManager<mox.ChatStateManager>()?.sendChatState(
-        typing ? mox.ChatState.composing : mox.ChatState.paused, jid);
-  }
+  @override
+  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
+    ..addAll([
+      mox.ChatStateManager(),
+    ]);
 
   Future<void> sendChatState({
     required String jid,
     required mox.ChatState state,
   }) async {
-    await _connection
-        .getManager<mox.ChatStateManager>()
-        ?.sendChatState(state, jid);
+    await _connection.sendChatState(state: state, jid: jid);
+  }
+
+  Future<void> sendTyping({
+    required String jid,
+    required bool typing,
+  }) async {
+    await sendChatState(
+      state: typing ? mox.ChatState.composing : mox.ChatState.paused,
+      jid: jid,
+    );
   }
 
   Future<void> openChat(String jid) async {
@@ -88,7 +104,10 @@ mixin ChatsService on XmppBase {
 }
 
 class MUCManager extends mox.MUCManager {
-  Future<void> createChat({required String jid, int? maxHistoryStanzas}) async {
+  Future<void> createGroupChat({
+    required String jid,
+    int? maxHistoryStanzas,
+  }) async {
     await getAttributes().sendStanza(
       mox.StanzaDetails(
         mox.Stanza.presence(

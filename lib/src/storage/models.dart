@@ -1283,6 +1283,13 @@ class Chat with _$Chat implements Insertable<Chat> {
     required mox.ChatState? chatState,
   }) = _ChatFromDb;
 
+  factory Chat.fromJid(String jid) => Chat(
+        jid: jid,
+        title: mox.JID.fromString(jid).local,
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+      );
+
   const Chat._();
 
   @override

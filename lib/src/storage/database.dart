@@ -30,100 +30,166 @@ abstract interface class XmppDatabase implements Database {
     required int start,
     required int end,
   });
+
   Future<List<Message>> getChatMessages(
     String jid, {
     required int start,
     required int end,
   });
+
   Future<Message?> getMessageByStanzaID(String stanzaID);
+
   Future<Message?> getMessageByOriginID(String originID);
+
   Future<void> saveMessage(Message message);
+
   Future<void> saveMessageError({
     required String stanzaID,
     required MessageError error,
   });
+
   Future<void> saveMessageEdit({
     required String stanzaID,
     required String? body,
   });
+
   Future<void> markMessageRetracted(String stanzaID);
+
   Future<void> markMessageAcked(String stanzaID);
+
   Future<void> markMessageReceived(String stanzaID);
+
   Future<void> markMessageDisplayed(String stanzaID);
+
   Stream<List<Draft>> watchDrafts({required int start, required int end});
+
   Future<List<Draft>> getDrafts({required int start, required int end});
+
   Future<Draft?> getDraft(int id);
+
   Future<void> saveDraft(
       {int? id, required List<String> jids, required String body});
+
   Future<void> removeDraft(int id);
+
   Future<OmemoDevice?> getOmemoDevice(String jid);
+
   Future<void> saveOmemoDevice(OmemoDevice device);
+
   Future<OmemoDeviceList?> getOmemoDeviceList(String jid);
+
   Future<void> saveOmemoDeviceList(OmemoDeviceList data);
+
   Future<void> setOmemoTrust(omemo.BTBVTrustData trust);
+
   Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid);
+
   Future<void> resetOmemoTrust(String jid);
+
   Future<List<OmemoRatchet>> getOmemoRatchets(String jid);
+
   Future<void> saveOmemoRatchets(List<OmemoRatchet> ratchets);
+
   Future<void> removeOmemoRatchets(List<(String, int)> ratchets);
+
   Future<void> saveFileMetadata(FileMetadataData metadata);
+
   Stream<List<Chat>> watchChats({required int start, required int end});
+
   Future<List<Chat>> getChats({required int start, required int end});
+
   Future<Chat?> getChat(String jid);
+
+  Future<void> createChat(String jid);
+
+  Future<void> updateChat(Chat chat);
+
   Stream<Chat?> watchChat(String jid);
+
   Future<Chat?> openChat(String jid);
+
   Future<Chat?> closeChat();
+
   Future<void> markChatFavourited({
     required String jid,
     required bool favourited,
   });
+
   Future<void> markChatMuted({
     required String jid,
     required bool muted,
   });
+
   Future<void> updateChatState({
     required String chatJid,
     required mox.ChatState state,
   });
+
   Future<void> updateChatEncryption({
     required String chatJid,
     required EncryptionProtocol protocol,
   });
+
   Future<void> removeChat(String jid);
+
   Stream<List<RosterItem>> watchRoster({required int start, required int end});
+
   Future<List<RosterItem>> getRoster();
+
   Future<RosterItem?> getRosterItem(String jid);
+
   Future<void> saveRosterItem(RosterItem item);
+
   Future<void> saveRosterItems(List<RosterItem> items);
+
   Future<void> updateRosterItem(RosterItem item);
+
   Future<void> updateRosterItems(List<RosterItem> items);
+
   Future<void> removeRosterItem(String jid);
+
   Future<void> removeRosterItems(List<String> jids);
+
   Future<void> updatePresence({
     required String jid,
     required Presence presence,
     String? status,
   });
+
   Future<void> markSubscriptionBoth(String jid);
+
   Stream<List<Invite>> watchInvites({required int start, required int end});
+
   Future<List<Invite>> getInvites({required int start, required int end});
+
   Future<void> saveInvite(Invite invite);
+
   Future<void> deleteInvite(String jid);
+
   Stream<List<BlocklistData>> watchBlocklist({
     required int start,
     required int end,
   });
+
   Future<List<BlocklistData>> getBlocklist({
     required int start,
     required int end,
   });
+
   Future<void> blockJid(String jid);
+
   Future<void> blockJids(List<String> jids);
+
   Future<void> unblockJid(String jid);
+
   Future<void> unblockJids(List<String> jids);
+
   Future<void> replaceBlocklist(List<String> blocks);
+
   Future<void> deleteBlocklist();
+
   Future<void> deleteAll();
+
   Future<void> deleteFile();
 }
 
@@ -134,14 +200,20 @@ abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
   T get table;
 
   Stream<List<D>> watchAll() => select(table).watch();
+
   Future<List<D>> selectAll() => select(table).get();
+
   Future<D?> selectOne(covariant Object value);
+
   Future<void> insertOne(Insertable<D> data) =>
       into(table).insert(data, mode: InsertMode.insertOrIgnore);
+
   Future<void> insertOrUpdateOne(Insertable<D> data) =>
       into(table).insertOnConflictUpdate(data);
+
   Future<void> updateOne(Insertable<D> data) =>
       (update(table)..whereSamePrimaryKey(data)).write(data);
+
   Future<void> deleteOne(covariant Object value);
 }
 
@@ -696,6 +768,13 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
 
   @override
+  Future<void> createChat(String jid) =>
+      chatsAccessor.insertOne(Chat.fromJid(jid));
+
+  @override
+  Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
+
+  @override
   Stream<Chat?> watchChat(String jid) {
     return chatsAccessor.watchOne(jid);
   }
@@ -799,12 +878,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> saveRosterItem(RosterItem item) async {
     _log.info('Adding ${item.jid} to roster...');
     await transaction(() async {
-      await chatsAccessor.insertOne(Chat(
-        jid: item.jid,
-        title: item.title,
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-      ));
+      await chatsAccessor.insertOne(Chat.fromJid(item.jid));
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
@@ -815,12 +889,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     await transaction(() async {
       for (final item in items) {
         _log.info('Adding ${item.jid} to roster...');
-        await chatsAccessor.insertOne(Chat(
-          jid: item.jid,
-          title: item.title,
-          type: ChatType.chat,
-          lastChangeTimestamp: DateTime.now(),
-        ));
+        await chatsAccessor.insertOne(Chat.fromJid(item.jid));
         await rosterAccessor.insertOrUpdateOne(item);
         await invitesAccessor.deleteOne(item.jid);
       }

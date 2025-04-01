@@ -84,8 +84,6 @@ main() {
     test(
       'When roster items are added to the database, emits the new roster.',
       () async {
-        final contacts = List.generate(3, (_) => generateRandomRosterItem());
-
         expectLater(
           xmppService.rosterStream(),
           emitsInOrder(List.filled(
