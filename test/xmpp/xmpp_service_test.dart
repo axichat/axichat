@@ -104,6 +104,25 @@ void main() {
     );
 
     test(
+      'When stream negotiations resume, requests the roster.',
+      () async {
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(() => mockConnection.requestRoster())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.requestBlocklist())
+            .thenAnswer((_) async => null);
+
+        verifyNever(() => mockConnection.requestRoster());
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.requestRoster()).called(1);
+      },
+    );
+
+    test(
       'When stream negotiations complete, requests the blocklist.',
       () async {
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
@@ -115,6 +134,25 @@ void main() {
         verifyNever(() => mockConnection.requestBlocklist());
 
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.requestBlocklist()).called(1);
+      },
+    );
+
+    test(
+      'When stream negotiations resume, requests the blocklist.',
+      () async {
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(() => mockConnection.requestRoster())
+            .thenAnswer((_) async => null);
+        when(() => mockConnection.requestBlocklist())
+            .thenAnswer((_) async => null);
+
+        verifyNever(() => mockConnection.requestBlocklist());
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
 
         await pumpEventQueue();
 

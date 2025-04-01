@@ -256,6 +256,7 @@ class XmppService extends XmppBase
       mox.PingManager(const Duration(minutes: 3)),
       // mox.EntityCapabilitiesManager(),
       mox.PubSubManager(),
+      mox.CSIManager(),
       // mox.UserAvatarManager(),
       mox.StableIdManager(),
       mox.CryptographicHashManager(),
@@ -680,6 +681,17 @@ class XmppConnection extends mox.XmppConnection {
     }
 
     throw XmppMessageException();
+  }
+
+  Future<void> sendPresence({Presence? presence, String? status}) async {
+    if (getManager<XmppPresenceManager>() case final pm?) {
+      return await pm.sendPresence(
+        presence: presence,
+        status: status,
+      );
+    }
+
+    throw XmppPresenceException();
   }
 
   Future<void> reset() async {

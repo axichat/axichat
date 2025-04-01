@@ -48,9 +48,7 @@ mixin PresenceService on XmppBase {
     required Presence? presence,
     required String? status,
   }) async {
-    await _connection
-        .getManager<XmppPresenceManager>()
-        ?.sendPresence(presence: presence, status: status);
+    await _connection.sendPresence(presence: presence, status: status);
   }
 
   Future<void> receivePresence(

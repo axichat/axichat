@@ -42,12 +42,12 @@ main() {
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
-    registerFallbackValue(FakeMessageEvent());
     registerFallbackValue(FakeUserAgent());
   });
 
   late XmppService xmppService;
   late XmppDatabase database;
+  late List<RosterItem> contacts;
 
   setUp(() {
     mockConnection = MockXmppConnection();
@@ -65,6 +65,8 @@ main() {
       buildDatabase: (_, __) => database,
       notificationService: mockNotificationService,
     );
+
+    contacts = List.generate(3, (_) => generateRandomRosterItem());
 
     prepareMockConnection();
   });
@@ -103,8 +105,6 @@ main() {
     test(
       'When contacts are edited in the chat\'s database, emits the updated contact history in order.',
       () async {
-        final contacts = List.generate(3, (_) => generateRandomRosterItem());
-
         await connectSuccessfully(xmppService);
 
         for (final contact in contacts) {
@@ -154,8 +154,6 @@ main() {
     test(
       'Given a valid roster result, adds the roster to the database.',
       () async {
-        final contacts = List.generate(3, (_) => generateRandomRosterItem());
-
         await connectSuccessfully(xmppService);
 
         when(() => mockConnection.requestRoster()).thenAnswer(

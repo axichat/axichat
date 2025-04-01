@@ -4,6 +4,7 @@ class Capability {
   const Capability();
 
   bool get canFssBatchOperation => !Platform.isWindows;
+
   String get discoClient {
     if (Platform.isAndroid || Platform.isIOS) {
       return 'phone';
@@ -12,5 +13,6 @@ class Capability {
   }
 
   bool get canForegroundService => Platform.isAndroid || Platform.isIOS;
+
   bool get isShorebirdAvailable => Platform.isAndroid || Platform.isIOS;
 }
