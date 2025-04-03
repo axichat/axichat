@@ -154,6 +154,34 @@ main() {
   });
 
   group('sendMessage', () {
+    final messageID = uuid.v4();
+    final jid = generateRandomJid();
+    const text = 'text';
+
+    test(
+      'Given a valid message, saves it to the database.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final beforeMessage = await database.getMessageByStanzaID(messageID);
+        expect(beforeMessage, isNull);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
+        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {});
+
+        await xmppService.sendMessage(jid: jid, text: text);
+
+        final afterMessage = await database.getMessageByStanzaID(messageID);
+        expect(
+          afterMessage,
+          isA<Message>()
+              .having((m) => m.stanzaID, 'stanzaID', messageID)
+              .having((m) => m.chatJid, 'chatJid', jid)
+              .having((m) => m.body, 'body', text),
+        );
+      },
+    );
+
     test(
       'Given a valid message, sends a message packet to the connection.',
       () async {
@@ -174,6 +202,53 @@ main() {
             ),
           ),
         ).called(1);
+      },
+    );
+
+    test(
+      'Given an invalid message, throws an XmppMessageException.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final beforeMessage = await database.getMessageByStanzaID(messageID);
+        expect(beforeMessage, isNull);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
+        when(() => mockConnection.sendMessage(any())).thenThrow(Exception());
+
+        expectLater(
+          () => xmppService.sendMessage(jid: jid, text: text),
+          throwsA(isA<XmppMessageException>()),
+        );
+      },
+    );
+
+    test(
+      'Given an invalid message, saves the message with an error to the database.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final beforeMessage = await database.getMessageByStanzaID(messageID);
+        expect(beforeMessage, isNull);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
+        when(() => mockConnection.sendMessage(any())).thenThrow(Exception());
+
+        try {
+          await xmppService.sendMessage(jid: jid, text: text);
+        } on XmppMessageException catch (_) {}
+
+        await pumpEventQueue();
+
+        final afterMessage = await database.getMessageByStanzaID(messageID);
+        expect(
+          afterMessage,
+          isA<Message>()
+              .having((m) => m.stanzaID, 'stanzaID', messageID)
+              .having((m) => m.chatJid, 'chatJid', jid)
+              .having((m) => m.body, 'body', text)
+              .having((m) => m.error, 'error', MessageError.unknown),
+        );
       },
     );
   });
