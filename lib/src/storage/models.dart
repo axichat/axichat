@@ -1122,9 +1122,9 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   factory RosterItem.fromJson(Map<String, Object?> json) =>
       _$RosterItemFromJson(json);
 
-  factory RosterItem.fromJid(mox.JID jid) => RosterItem(
+  factory RosterItem.fromJid(String jid) => RosterItem(
         jid: jid.toString(),
-        title: jid.local,
+        title: mox.JID.fromString(jid).local,
         presence: Presence.chat,
         subscription: Subscription.both,
       );

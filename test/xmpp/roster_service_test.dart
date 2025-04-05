@@ -148,30 +148,102 @@ main() {
     );
   });
 
-  group('requestRoster', () {
+  test(
+    'Given a valid roster result, requestRoster adds it to the database.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      when(() => mockConnection.requestRoster()).thenAnswer(
+        (_) async => moxlib.Result(
+          mox.RosterRequestResult(
+            contacts.map((e) => e.toMox()).toList(),
+            '',
+          ),
+        ),
+      );
+
+      final beforeRequest = await database.getRoster();
+      expect(beforeRequest, isEmpty);
+
+      await pumpEventQueue();
+
+      await xmppService.requestRoster();
+
+      final afterRequest = await database.getRoster();
+      expect(afterRequest, RosterMatcher(contacts));
+    },
+  );
+
+  group('addToRoster', () {
+    final jid = generateRandomJid();
+
     test(
-      'Given a valid roster result, adds the roster to the database.',
+      'Given successful network calls, adds contact to the roster.',
       () async {
         await connectSuccessfully(xmppService);
 
-        when(() => mockConnection.requestRoster()).thenAnswer(
-          (_) async => moxlib.Result(
-            mox.RosterRequestResult(
-              contacts.map((e) => e.toMox()).toList(),
-              '',
-            ),
-          ),
-        );
+        when(() => mockConnection.addToRoster(
+              any(),
+              title: any(named: 'title'),
+            )).thenAnswer((_) async => true);
+
+        when(() => mockConnection.preApproveSubscription(any()))
+            .thenAnswer((_) async => true);
 
         final beforeRequest = await database.getRoster();
         expect(beforeRequest, isEmpty);
 
         await pumpEventQueue();
 
-        await xmppService.requestRoster();
+        await xmppService.addToRoster(jid: jid);
 
         final afterRequest = await database.getRoster();
-        expect(afterRequest, RosterMatcher(contacts));
+        expect(afterRequest, RosterMatcher([RosterItem.fromJid(jid)]));
+      },
+    );
+
+    test(
+      'Given successful network calls, pre-approves request from the contact.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.addToRoster(
+              any(),
+              title: any(named: 'title'),
+            )).thenAnswer((_) async => true);
+
+        when(() => mockConnection.preApproveSubscription(any()))
+            .thenAnswer((_) async => true);
+
+        await xmppService.addToRoster(jid: jid);
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.preApproveSubscription(jid)).called(1);
+      },
+    );
+
+    test(
+      'Given pre-approval failure, request normal subscription to the contact.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.addToRoster(
+              any(),
+              title: any(named: 'title'),
+            )).thenAnswer((_) async => true);
+
+        when(() => mockConnection.preApproveSubscription(any()))
+            .thenAnswer((_) async => false);
+
+        when(() => mockConnection.requestSubscription(any()))
+            .thenAnswer((_) async => true);
+
+        await xmppService.addToRoster(jid: jid);
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.requestSubscription(jid)).called(1);
       },
     );
   });
