@@ -1049,7 +1049,9 @@ enum Presence {
   @HiveField(3)
   dnd,
   @HiveField(4)
-  chat;
+  chat,
+  @HiveField(5)
+  unknown;
 
   bool get isUnavailable => this == unavailable;
 
@@ -1061,13 +1063,15 @@ enum Presence {
 
   bool get isChat => this == chat;
 
+  bool get isUnknown => this == unknown;
+
   static Presence fromString(String? value) => switch (value) {
         'unavailable' => unavailable,
         'xa' => xa,
         'away' => away,
         'dnd' => dnd,
         'chat' => chat,
-        _ => chat,
+        _ => unknown,
       };
 
   Color get toColor => switch (this) {
@@ -1076,6 +1080,7 @@ enum Presence {
         away => Colors.orange,
         dnd => Colors.red,
         chat => const Color(0xff80ee80),
+        unknown => Colors.grey,
       };
 
   String get tooltip => switch (this) {
@@ -1084,6 +1089,7 @@ enum Presence {
         away => 'Idle',
         dnd => 'Busy',
         chat => 'Online',
+        unknown => 'Unknown',
       };
 }
 

@@ -25,6 +25,8 @@ class PresenceAdapter extends TypeAdapter<Presence> {
         return Presence.dnd;
       case 4:
         return Presence.chat;
+      case 5:
+        return Presence.unknown;
       default:
         return Presence.unavailable;
     }
@@ -47,6 +49,9 @@ class PresenceAdapter extends TypeAdapter<Presence> {
         break;
       case Presence.chat:
         writer.writeByte(4);
+        break;
+      case Presence.unknown:
+        writer.writeByte(5);
         break;
     }
   }
@@ -130,6 +135,7 @@ const _$PresenceEnumMap = {
   Presence.away: 'away',
   Presence.dnd: 'dnd',
   Presence.chat: 'chat',
+  Presence.unknown: 'unknown',
 };
 
 const _$SubscriptionEnumMap = {

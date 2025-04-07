@@ -164,7 +164,7 @@ class _$ProfileStateImpl implements _ProfileState {
       required this.resource,
       required this.title,
       this.fingerprint = '',
-      this.presence = Presence.chat,
+      this.presence = Presence.unknown,
       this.status});
 
   @override

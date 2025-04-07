@@ -5172,6 +5172,9 @@ abstract class _$XmppDrift extends GeneratedDatabase {
         blocklist,
         stickers
       ];
+  @override
+  DriftDatabaseOptions get options =>
+      const DriftDatabaseOptions(storeDateTimeAsText: true);
 }
 
 typedef $$FileMetadataTableInsertCompanionBuilder = FileMetadataCompanion

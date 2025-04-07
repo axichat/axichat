@@ -24,13 +24,11 @@ mixin PresenceService on XmppBase {
     return null;
   }
 
-  Stream<Presence> get presenceStream =>
+  Stream<Presence?> get presenceStream =>
       StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppStateStore, Stream<Presence>>((ss) =>
-            ss
-                .watch<Presence?>(key: presenceStorageKey)
-                ?.map<Presence>((e) => e ?? Presence.chat) ??
-            Stream.value(Presence.chat)),
+        _dbOpReturning<XmppStateStore, Stream<Presence?>>((ss) =>
+            ss.watch<Presence?>(key: presenceStorageKey) ??
+            Stream.value(Presence.unknown)),
       ));
 
   Stream<String?> get statusStream => StreamCompleter.fromFuture(Future.value(

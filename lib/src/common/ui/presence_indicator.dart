@@ -43,7 +43,13 @@ class PresenceCircle extends StatelessWidget {
               color: Colors.white,
               size: 10.0,
             )
-          : null,
+          : presence.isUnknown
+              ? const Icon(
+                  Icons.question_mark,
+                  color: Colors.black,
+                  size: 10.0,
+                )
+              : null,
     );
   }
 }

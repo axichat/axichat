@@ -21,7 +21,8 @@ class ProfileCubit extends Cubit<ProfileState> {
           ),
         ) {
     _presenceSubscription = _xmppService.presenceStream.listen(
-      (presence) => emit(state.copyWith(presence: presence)),
+      (presence) =>
+          emit(state.copyWith(presence: presence ?? Presence.unknown)),
     );
     _statusSubscription = _xmppService.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
@@ -30,7 +31,7 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   final XmppService _xmppService;
 
-  late final StreamSubscription<Presence>? _presenceSubscription;
+  late final StreamSubscription<Presence?>? _presenceSubscription;
   late final StreamSubscription<String?>? _statusSubscription;
 
   @override
