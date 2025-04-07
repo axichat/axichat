@@ -75,7 +75,8 @@ class _AxiAvatarState extends State<AxiAvatar> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    for (final value in Presence.values)
+                    for (final value
+                        in Presence.values..remove(Presence.unknown))
                       ListTile(
                         title: Text(value.tooltip),
                         leading: PresenceCircle(presence: value),

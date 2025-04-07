@@ -31,13 +31,13 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   final XmppService _xmppService;
 
-  late final StreamSubscription<Presence?>? _presenceSubscription;
-  late final StreamSubscription<String?>? _statusSubscription;
+  late final StreamSubscription<Presence?> _presenceSubscription;
+  late final StreamSubscription<String?> _statusSubscription;
 
   @override
   Future<void> close() async {
-    await _presenceSubscription?.cancel();
-    await _statusSubscription?.cancel();
+    await _presenceSubscription.cancel();
+    await _statusSubscription.cancel();
     return super.close();
   }
 
