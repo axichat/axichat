@@ -5,6 +5,7 @@ import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/common/policy.dart';
 import 'package:chat/src/notifications/bloc/notification_service.dart';
 import 'package:chat/src/storage/credential_store.dart';
+import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
@@ -20,6 +21,8 @@ class MockXmppConnection extends Mock implements XmppConnection {}
 class MockCredentialStore extends Mock implements CredentialStore {}
 
 class MockXmppStateStore extends Mock implements XmppStateStore {}
+
+class MockXmppDatabase extends Mock implements XmppDatabase {}
 
 class MockNotificationService extends Mock implements NotificationService {}
 
@@ -46,7 +49,8 @@ const uuid = Uuid();
 late MockXmppService mockXmppService;
 late MockXmppConnection mockConnection;
 late MockCredentialStore mockCredentialStore;
-late MockXmppStateStore mockStateStore;
+var mockStateStore = MockXmppStateStore();
+var mockDatabase = MockXmppDatabase();
 late MockNotificationService mockNotificationService;
 
 const jid = 'jid@axi.im/resource';
@@ -122,6 +126,7 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
       )).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
+  when(() => mockDatabase.close()).thenAnswer((_) async {});
 
   await xmppService.connect(
     jid: jid,
@@ -144,6 +149,7 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
       )).thenAnswer((_) async => const Result<bool, mox.XmppError>(false));
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
+  when(() => mockDatabase.close()).thenAnswer((_) async {});
 
   await xmppService.connect(
     jid: jid,

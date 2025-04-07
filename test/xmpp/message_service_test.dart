@@ -235,7 +235,8 @@ main() {
         expect(beforeMessage, isNull);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
-        when(() => mockConnection.sendMessage(any())).thenThrow(Exception());
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => false);
 
         try {
           await xmppService.sendMessage(jid: jid, text: text);

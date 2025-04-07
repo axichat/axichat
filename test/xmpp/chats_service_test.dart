@@ -86,6 +86,8 @@ main() {
     test(
       'When chats are added to the database, emits the new chat list in order.',
       () async {
+        final chats = chatJids.map((e) => Chat.fromJid(e)).toList();
+
         expectLater(
           xmppService.chatsStream(),
           emitsInOrder([
@@ -93,17 +95,17 @@ main() {
             ...List.generate(
               chatJids.length,
               (index) => sortChats(
-                chatJids.sublist(0, index).map((e) => Chat.fromJid(e)).toList(),
-              ).reversed.map((e) => ChatMatcher(e)).toList(),
+                chats.sublist(0, index),
+              ).map((e) => ChatMatcher(e)).toList(),
             )
           ]),
         );
 
         await connectSuccessfully(xmppService);
 
-        for (final jid in chatJids) {
+        for (final chat in chats) {
           await pumpEventQueue();
-          await database.createChat(jid);
+          await database.createChat(chat);
         }
       },
     );
@@ -114,7 +116,7 @@ main() {
         await connectSuccessfully(xmppService);
 
         for (final jid in chatJids) {
-          await database.createChat(jid);
+          await database.createChat(Chat.fromJid(jid));
         }
 
         await pumpEventQueue();
@@ -239,7 +241,7 @@ main() {
 
         final existingChatJid = generateRandomJid();
 
-        await database.createChat(existingChatJid);
+        await database.createChat(Chat.fromJid(existingChatJid));
         await database.openChat(existingChatJid);
 
         final beforeOpen = await database.getChat(jid);
@@ -276,7 +278,7 @@ main() {
             state: any(named: 'state'),
           )).thenAnswer((_) async {});
 
-      await database.createChat(jid);
+      await database.createChat(Chat.fromJid(jid));
       await database.openChat(jid);
 
       final beforeClose = await database.getChat(jid);

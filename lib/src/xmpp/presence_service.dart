@@ -51,12 +51,12 @@ mixin PresenceService on XmppBase {
 
   Future<void> receivePresence(
     String jid,
-    Presence presence,
+    Presence presence, {
     String? status,
-  ) async {
+  }) async {
     if (jid == myJid?.toString()) return;
 
-    await owner._dbOp<XmppDatabase>((db) async {
+    await _dbOp<XmppDatabase>((db) async {
       await db.updatePresence(
         jid: jid,
         presence: presence,
@@ -126,7 +126,7 @@ class XmppPresenceManager extends mox.PresenceManager {
             await owner.receivePresence(
               jid.toString(),
               Presence.fromString(presence),
-              status.text,
+              status: status.text,
             );
 
             state.done = true;

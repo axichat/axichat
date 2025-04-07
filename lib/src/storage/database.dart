@@ -100,7 +100,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Chat?> getChat(String jid);
 
-  Future<void> createChat(String jid);
+  Future<void> createChat(Chat chat);
 
   Future<void> updateChat(Chat chat);
 
@@ -768,8 +768,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
 
   @override
-  Future<void> createChat(String jid) =>
-      chatsAccessor.insertOne(Chat.fromJid(jid));
+  Future<void> createChat(Chat chat) => chatsAccessor.insertOne(chat);
 
   @override
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
