@@ -61,12 +61,12 @@ mixin RosterService on XmppBase {
   Future<void> requestRoster() async {
     if (await _connection.requestRoster() case final result?) {
       if (result.isType<mox.RosterRequestResult>()) {
+        final items = result
+            .get<mox.RosterRequestResult>()
+            .items
+            .map((e) => RosterItem.fromMox(e))
+            .toList();
         await _dbOp<XmppDatabase>((db) async {
-          final items = result
-              .get<mox.RosterRequestResult>()
-              .items
-              .map((e) => RosterItem.fromMox(e))
-              .toList();
           await db.saveRosterItems(items);
         });
       }
@@ -81,50 +81,51 @@ mixin RosterService on XmppBase {
 
     _log.info('Requesting subscription to $jid...');
     if (!await _connection.preApproveSubscription(jid)) {
-      try {
-        await _connection.requestSubscription(jid);
-      } on Exception catch (e, s) {
-        _log.severe('Failed to request subscription to $jid.', e, s);
-        throw XmppRosterException();
-      }
+      if (await _connection.requestSubscription(jid)) return;
+      _log.severe('Failed to request subscription to $jid.');
+      throw XmppRosterException();
     }
   }
 
   Future<void> removeFromRoster({required String jid}) async {
     _log.info('Requesting to remove $jid from roster...');
-    if (await _connection.removeFromRoster(jid) !=
-        mox.RosterRemovalResult.okay) {
-      throw XmppRosterException();
+    switch (await _connection.removeFromRoster(jid)) {
+      case mox.RosterRemovalResult.okay:
+        return;
+      case mox.RosterRemovalResult.itemNotFound:
+        await _dbOp<XmppDatabase>((db) async {
+          await db.removeRosterItem(jid);
+        });
+      case mox.RosterRemovalResult.error:
+        throw XmppRosterException();
     }
   }
 
+  //To simplify the end user experience, allow either bidirectional presence
+  // subscription or none at all.
   Future<void> _acceptSubscriptionRequest(RosterItem item) async {
-    try {
-      _connection
-        ..acceptSubscriptionRequest(item.jid)
-        ..requestSubscription(item.jid);
-    } on Exception catch (e) {
-      _log.severe('Failed to accept subscription from ${item.jid}.', e);
-      throw XmppRosterException();
-    }
+    final accepted = await _connection.acceptSubscriptionRequest(item.jid);
+    final requested = await _connection.requestSubscription(item.jid);
 
-    await _dbOp<XmppDatabase>((db) async {
-      await db.markSubscriptionBoth(item.jid);
-    });
+    if (accepted && requested) return;
+
+    _log.severe('Failed to accept subscription to ${item.jid}.', e);
+    throw XmppRosterException();
   }
 
   Future<void> rejectSubscriptionRequest(String jid) async {
-    try {
-      _log.info('Requesting to reject subscription from $jid...');
-      await _connection.rejectSubscriptionRequest(jid);
-    } on Exception catch (e) {
-      _log.severe('Failed to reject subscription from $jid.', e);
-      throw XmppRosterException();
+    _log.info('Requesting to reject subscription from $jid...');
+    final rejected = await _connection.rejectSubscriptionRequest(jid);
+
+    if (rejected) {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.deleteInvite(jid);
+      });
+      return;
     }
 
-    await _dbOp<XmppDatabase>((db) async {
-      await db.deleteInvite(jid);
-    });
+    _log.severe('Failed to reject subscription from $jid.', e);
+    throw XmppRosterException();
   }
 }
 

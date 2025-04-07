@@ -24,10 +24,11 @@ class RosterMatcher extends Matcher {
 
   @override
   Description describe(Description description) =>
-      description.add('a roster with identical contacts');
+      description.add('matches ${contacts.toString()}');
 
   @override
   bool matches(covariant List<RosterItem> items, Map matchState) =>
+      items.length == contacts.length &&
       items.indexed.every(
         (e) {
           final (index, contact) = e;
@@ -86,9 +87,9 @@ main() {
       () async {
         expectLater(
           xmppService.rosterStream(),
-          emitsInOrder(List.filled(
+          emitsInOrder(List.generate(
             contacts.length,
-            RosterMatcher(contacts),
+            (index) => RosterMatcher(contacts.sublist(0, index + 1)),
           )),
         );
 
@@ -177,15 +178,17 @@ main() {
   group('addToRoster', () {
     final jid = generateRandomJid();
 
+    setUp(() {
+      when(() => mockConnection.addToRoster(
+            any(),
+            title: any(named: 'title'),
+          )).thenAnswer((_) async => true);
+    });
+
     test(
-      'Given successful network calls, adds contact to the roster.',
+      'Requests connection to add contact.',
       () async {
         await connectSuccessfully(xmppService);
-
-        when(() => mockConnection.addToRoster(
-              any(),
-              title: any(named: 'title'),
-            )).thenAnswer((_) async => true);
 
         when(() => mockConnection.preApproveSubscription(any()))
             .thenAnswer((_) async => true);
@@ -193,12 +196,14 @@ main() {
         final beforeRequest = await database.getRoster();
         expect(beforeRequest, isEmpty);
 
-        await pumpEventQueue();
-
         await xmppService.addToRoster(jid: jid);
 
-        final afterRequest = await database.getRoster();
-        expect(afterRequest, RosterMatcher([RosterItem.fromJid(jid)]));
+        await pumpEventQueue();
+
+        verify(() => mockConnection.addToRoster(
+              jid,
+              title: any(named: 'title'),
+            )).called(1);
       },
     );
 
@@ -206,11 +211,6 @@ main() {
       'Given successful network calls, pre-approves request from the contact.',
       () async {
         await connectSuccessfully(xmppService);
-
-        when(() => mockConnection.addToRoster(
-              any(),
-              title: any(named: 'title'),
-            )).thenAnswer((_) async => true);
 
         when(() => mockConnection.preApproveSubscription(any()))
             .thenAnswer((_) async => true);
@@ -228,11 +228,6 @@ main() {
       () async {
         await connectSuccessfully(xmppService);
 
-        when(() => mockConnection.addToRoster(
-              any(),
-              title: any(named: 'title'),
-            )).thenAnswer((_) async => true);
-
         when(() => mockConnection.preApproveSubscription(any()))
             .thenAnswer((_) async => false);
 
@@ -244,6 +239,133 @@ main() {
         await pumpEventQueue();
 
         verify(() => mockConnection.requestSubscription(jid)).called(1);
+      },
+    );
+
+    test(
+      'Given unsuccessful network calls, throws XmppRosterException.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.preApproveSubscription(any()))
+            .thenAnswer((_) async => false);
+
+        when(() => mockConnection.requestSubscription(any()))
+            .thenAnswer((_) async => false);
+
+        expectLater(
+          () => xmppService.addToRoster(jid: jid),
+          throwsA(isA<XmppRosterException>()),
+        );
+      },
+    );
+  });
+
+  group('removeFromRoster', () {
+    final jid = generateRandomJid();
+
+    test(
+      'Given success result, returns normally.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.removeFromRoster(
+              any(),
+            )).thenAnswer((_) async => mox.RosterRemovalResult.okay);
+
+        await xmppService.removeFromRoster(jid: jid);
+
+        await pumpEventQueue();
+
+        verify(() => mockConnection.removeFromRoster(jid)).called(1);
+      },
+    );
+
+    test(
+      'Given not found result, removes contact from the database.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.removeFromRoster(
+              any(),
+            )).thenAnswer((_) async => mox.RosterRemovalResult.itemNotFound);
+
+        await database.saveRosterItem(RosterItem.fromJid(jid));
+
+        await xmppService.removeFromRoster(jid: jid);
+
+        await pumpEventQueue();
+
+        expect(await database.getRosterItem(jid), isNull);
+      },
+    );
+
+    test(
+      'Given error result, throws XmppRosterException.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.removeFromRoster(
+              any(),
+            )).thenAnswer((_) async => mox.RosterRemovalResult.error);
+
+        expectLater(
+          () => xmppService.removeFromRoster(jid: jid),
+          throwsA(isA<XmppRosterException>()),
+        );
+      },
+    );
+  });
+
+  group('rejectSubscriptionRequest', () {
+    final jid = generateRandomJid();
+    final invite = Invite(
+      jid: jid,
+      title: mox.JID.fromString(jid).local,
+    );
+
+    setUp(() async {
+      await database.saveInvite(invite);
+    });
+
+    test(
+      'Given successful network calls, deletes invite from database.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.rejectSubscriptionRequest(any()))
+            .thenAnswer((_) async => true);
+
+        await xmppService.rejectSubscriptionRequest(jid);
+
+        await pumpEventQueue();
+
+        expect(
+          await database.getInvites(start: 0, end: double.maxFinite.toInt()),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'Given unsuccessful network calls, throws XmppRosterException.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.rejectSubscriptionRequest(any()))
+            .thenAnswer((_) async => false);
+
+        expectLater(
+          () => xmppService.rejectSubscriptionRequest(jid),
+          throwsA(isA<XmppRosterException>()),
+        );
+
+        await pumpEventQueue();
+
+        expect(
+          await database.getInvites(start: 0, end: double.maxFinite.toInt()),
+          containsAllInOrder([invite]),
+        );
       },
     );
   });

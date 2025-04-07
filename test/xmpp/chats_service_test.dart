@@ -82,6 +82,7 @@ main() {
   });
 
   group('chatsStream', () {
+    //TODO(eliot): Fix test flakiness due to unstable sort.
     test(
       'When chats are added to the database, emits the new chat list in order.',
       () async {
