@@ -154,15 +154,16 @@ class XmppConnection extends mox.XmppConnection {
   void setUserAgent(mox.UserAgent value) =>
       getNegotiator<mox.Sasl2Negotiator>()!.userAgent = value;
 
-  Future<void> sendMessage(mox.MessageEvent packet) async {
+  Future<bool> sendMessage(mox.MessageEvent packet) async {
     if (getManager<mox.MessageManager>() case final mm?) {
-      return await mm.sendMessage(
+      await mm.sendMessage(
         packet.to,
         packet.extensions,
       );
+      return true;
     }
 
-    throw XmppMessageException();
+    return false;
   }
 
   Future<void> sendPresence({Presence? presence, String? status}) async {

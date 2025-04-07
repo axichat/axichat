@@ -180,19 +180,20 @@ mixin MessageService on XmppBase {
       await db.saveMessage(message);
     });
 
-    try {
-      await _connection.sendMessage(message.toMox());
-    } on Exception catch (e) {
+    if (!await _connection.sendMessage(message.toMox())) {
       _log.info(
-          'Failed to send message: ${message.stanzaID}. '
-          'Storing with error to allow resend...',
-          e);
+        'Failed to send message: ${message.stanzaID}. '
+        'Storing with error to allow resend...',
+        e,
+      );
+
       await _dbOp<XmppDatabase>((db) async {
         await db.saveMessageError(
           error: MessageError.unknown,
           stanzaID: message.stanzaID,
         );
       });
+
       throw XmppMessageException();
     }
   }

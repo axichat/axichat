@@ -167,7 +167,8 @@ main() {
         expect(beforeMessage, isNull);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
-        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {});
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => true);
 
         await xmppService.sendMessage(jid: jid, text: text);
 
@@ -188,7 +189,8 @@ main() {
         await connectSuccessfully(xmppService);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
-        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {});
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => true);
 
         const text = 'text';
         await xmppService.sendMessage(jid: jid, text: text);
@@ -214,7 +216,8 @@ main() {
         expect(beforeMessage, isNull);
 
         when(() => mockConnection.generateId()).thenAnswer((_) => messageID);
-        when(() => mockConnection.sendMessage(any())).thenThrow(Exception());
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => false);
 
         expectLater(
           () => xmppService.sendMessage(jid: jid, text: text),
