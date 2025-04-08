@@ -12,6 +12,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'src/app.dart';
 
+late final bool withForeground;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -27,17 +29,27 @@ void main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
 
+  const capability = Capability();
   const notificationService = NotificationService();
 
-  const capability = Capability();
-  if (capability.canForegroundService) {
+  withForeground = capability.canForegroundService &&
+      await notificationService.hasAllNotificationPermissions();
+  if (withForeground) {
     notificationService.init();
   }
 
-  runApp(capability.canForegroundService
-      ? const WithForegroundTask(
-          child: Material(child: Axichat(capability: capability)))
-      : const Axichat(capability: capability));
+  runApp(
+    withForeground
+        ? const WithForegroundTask(
+            child: Material(
+              child: Axichat(
+                notificationService: notificationService,
+                capability: capability,
+              ),
+            ),
+          )
+        : const Axichat(capability: capability),
+  );
 }
 
 class BlocLogger extends BlocObserver {

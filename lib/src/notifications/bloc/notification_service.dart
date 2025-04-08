@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui';
 
-import 'package:awesome_notifications/awesome_notifications.dart' hide NotificationPermission;
+import 'package:awesome_notifications/awesome_notifications.dart'
+    hide NotificationPermission;
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
@@ -35,14 +35,16 @@ class NotificationService {
         )
       ],
     );
-
   }
 
   Future<bool> hasNotificationPermission() =>
       AwesomeNotifications().isNotificationAllowed();
 
   Future<bool> hasAllNotificationPermissions() async {
-    if (!(await FlutterForegroundTask.checkNotificationPermission()).isGranted) {
+    if (!await hasNotificationPermission()) return false;
+
+    if (!(await FlutterForegroundTask.checkNotificationPermission())
+        .isGranted) {
       return false;
     }
 
@@ -60,7 +62,15 @@ class NotificationService {
   }
 
   Future<bool> requestAllNotificationPermissions() async {
-    if (!(await FlutterForegroundTask.checkNotificationPermission()).isGranted) {
+    if (!await hasNotificationPermission()) {
+      if (!await AwesomeNotifications()
+          .requestPermissionToSendNotifications()) {
+        return false;
+      }
+    }
+
+    if (!(await FlutterForegroundTask.checkNotificationPermission())
+        .isGranted) {
       if (!(await FlutterForegroundTask.requestNotificationPermission())
           .isGranted) {
         return false;
@@ -83,10 +93,12 @@ class NotificationService {
 
     return true;
   }
-  Future<void> sendNotification({String? title,
-    String? body,
-    String? groupKey,
-    List<FutureOr<bool>> extraConditions = const []}) async {
+
+  Future<void> sendNotification(
+      {String? title,
+      String? body,
+      String? groupKey,
+      List<FutureOr<bool>> extraConditions = const []}) async {
     if (!await FlutterForegroundTask.isAppOnForeground &&
         await hasNotificationPermission()) {
       for (final condition in extraConditions) {
@@ -94,9 +106,7 @@ class NotificationService {
       }
       AwesomeNotifications().createNotification(
         content: NotificationContent(
-          id: Random(DateTime
-              .now()
-              .millisecondsSinceEpoch).nextInt(10000),
+          id: Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
           channelKey: 'basic_channel',
           groupKey: groupKey,
           actionType: ActionType.Default,
