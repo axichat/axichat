@@ -14,7 +14,6 @@ main() {
     registerFallbackValue(Presence.unknown);
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
-    registerFallbackValue(FakeMessageEvent());
     registerFallbackValue(FakeUserAgent());
   });
 

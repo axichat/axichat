@@ -82,6 +82,41 @@ class XmppConnection extends mox.XmppConnection {
   Future<bool> enableCarbons() async =>
       await (getManager<mox.CarbonsManager>()?.enableCarbons()) ?? false;
 
+  Future<bool> sendMessage(mox.MessageEvent packet) async {
+    if (getManager<mox.MessageManager>() case final mm?) {
+      await mm.sendMessage(
+        packet.to,
+        packet.extensions,
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<void> sendPresence({Presence? presence, String? status}) async {
+    if (getManager<XmppPresenceManager>() case final pm?) {
+      return await pm.sendPresence(
+        presence: presence,
+        status: status,
+      );
+    }
+
+    throw XmppPresenceException();
+  }
+
+  Future<void> sendChatState({
+    required String jid,
+    required mox.ChatState state,
+  }) async {
+    if (getManager<mox.ChatStateManager>() case final cm?) {
+      return await cm.sendChatState(
+        state,
+        jid,
+      );
+    }
+  }
+
   Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>
       requestRoster() async => await getRosterManager()?.requestRoster();
 
@@ -148,46 +183,32 @@ class XmppConnection extends mox.XmppConnection {
     return null;
   }
 
+  Future<void> block(String jid) async {
+    if (getManager<mox.BlockingManager>() case final bm?) {
+      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      if (!await bm.block([jid])) throw XmppBlocklistException();
+    }
+  }
+
+  Future<void> unblock(String jid) async {
+    if (getManager<mox.BlockingManager>() case final bm?) {
+      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      if (!await bm.unblock([jid])) throw XmppBlocklistException();
+    }
+  }
+
+  Future<void> unblockAll() async {
+    if (getManager<mox.BlockingManager>() case final bm?) {
+      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
+      if (!await bm.unblockAll()) throw XmppBlocklistException();
+    }
+  }
+
   void setFastToken(String? value) =>
       getNegotiator<mox.FASTSaslNegotiator>()!.fastToken = value;
 
   void setUserAgent(mox.UserAgent value) =>
       getNegotiator<mox.Sasl2Negotiator>()!.userAgent = value;
-
-  Future<bool> sendMessage(mox.MessageEvent packet) async {
-    if (getManager<mox.MessageManager>() case final mm?) {
-      await mm.sendMessage(
-        packet.to,
-        packet.extensions,
-      );
-      return true;
-    }
-
-    return false;
-  }
-
-  Future<void> sendPresence({Presence? presence, String? status}) async {
-    if (getManager<XmppPresenceManager>() case final pm?) {
-      return await pm.sendPresence(
-        presence: presence,
-        status: status,
-      );
-    }
-
-    throw XmppPresenceException();
-  }
-
-  Future<void> sendChatState({
-    required String jid,
-    required mox.ChatState state,
-  }) async {
-    if (getManager<mox.ChatStateManager>() case final cm?) {
-      return await cm.sendChatState(
-        state,
-        jid,
-      );
-    }
-  }
 
   Future<void> reset() async {
     if (await FlutterForegroundTask.isRunningService) {
