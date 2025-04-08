@@ -22,7 +22,9 @@ enum LogoutSeverity {
   burn;
 
   bool get isAuto => this == auto;
+
   bool get isNormal => this == normal;
+
   bool get isBurn => this == burn;
 
   String get displayText => switch (this) {
@@ -97,7 +99,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     emit(const AuthenticationInProgress());
 
-    assert((username == null) == (password == null));
+    if ((username == null) != (password == null)) {
+      emit(const AuthenticationFailure(
+          'Username and password have different nullness.'));
+      return;
+    }
 
     late final String? jid;
     if (username == null || password == null) {
@@ -158,7 +164,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     await _credentialStore.write(
       key: resourceStorageKey,
-      value: _xmppService.resource,
+      value: _xmppService.boundResource,
     );
 
     await _credentialStore.write(

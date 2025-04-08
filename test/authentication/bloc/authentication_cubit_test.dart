@@ -48,6 +48,15 @@ void main() {
         xmppService: mockXmppService,
         capability: const Capability(),
       );
+
+      when(() => mockXmppService.connect(
+            jid: any(named: 'jid'),
+            resource: any(named: 'resource'),
+            password: any(named: 'password'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+          )).thenThrow(XmppAuthenticationException());
       when(() => mockXmppService.connect(
             jid: validJid,
             resource: any(named: 'resource'),
@@ -56,18 +65,10 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
           )).thenAnswer((_) async => saltedPassword);
-      when(() => mockXmppService.connect(
-            jid: any(named: 'jid', that: isNot(validJid)),
-            resource: any(named: 'resource'),
-            password: any(named: 'password', that: isNot(validPassword)),
-            databasePrefix: any(named: 'databasePrefix'),
-            databasePassphrase: any(named: 'databasePassphrase'),
-            preHashed: any(named: 'preHashed'),
-          )).thenThrow(XmppAuthenticationException());
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given valid credentials, saves them and emits [AuthenticationComplete].',
+      'Given valid credentials with "remember me", saves them and emits [AuthenticationComplete].',
       build: () => bloc,
       act: (bloc) => bloc.login(
         username: validUsername,
@@ -91,7 +92,30 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given invalid credentials, emits [AuthenticationFailure].',
+      'Given valid credentials without "remember me", doesn\'t save them and emits [AuthenticationComplete].',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        username: validUsername,
+        password: validPassword,
+      ),
+      expect: () => [
+        const AuthenticationInProgress(),
+        const AuthenticationComplete(),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given invalid username and password, emits [AuthenticationFailure].',
       build: () => bloc,
       act: (bloc) => bloc.login(
         username: invalidUsername,
@@ -101,10 +125,112 @@ void main() {
         const AuthenticationInProgress(),
         const AuthenticationFailure('Incorrect username or password'),
       ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given saved credentials, automatic login emits [AuthenticationComplete].',
+      'Given invalid username and valid password, emits [AuthenticationFailure].',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        username: invalidUsername,
+        password: validPassword,
+      ),
+      expect: () => [
+        const AuthenticationInProgress(),
+        const AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given valid username and invalid password, emits [AuthenticationFailure].',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        username: validUsername,
+        password: invalidPassword,
+      ),
+      expect: () => [
+        const AuthenticationInProgress(),
+        const AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given valid username and missing password, emits [AuthenticationFailure].',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        username: validUsername,
+      ),
+      expect: () => [
+        const AuthenticationInProgress(),
+        const AuthenticationFailure(
+            'Username and password have different nullness.'),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given missing username and valid password, emits [AuthenticationFailure].',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        password: validPassword,
+      ),
+      expect: () => [
+        const AuthenticationInProgress(),
+        const AuthenticationFailure(
+            'Username and password have different nullness.'),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given saved valid credentials, automatic login emits [AuthenticationComplete].',
       setUp: () {
         when(() => mockCredentialStore.read(key: bloc.jidStorageKey))
             .thenAnswer((_) async => validJid);
@@ -117,6 +243,32 @@ void main() {
         const AuthenticationInProgress(),
         const AuthenticationComplete(),
       ],
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given saved invalid credentials, automatic login emits [AuthenticationFailure].',
+      setUp: () {
+        when(() => mockCredentialStore.read(key: bloc.jidStorageKey))
+            .thenAnswer((_) async => validJid);
+        when(() => mockCredentialStore.read(key: bloc.passwordStorageKey))
+            .thenAnswer((_) async => invalidPassword);
+      },
+      build: () => bloc,
+      act: (bloc) => bloc.login(),
+      expect: () => [
+        const AuthenticationInProgress(),
+        const AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.jidStorageKey,
+              value: validJid,
+            ));
+        verifyNever(() => mockCredentialStore.write(
+              key: bloc.passwordStorageKey,
+              value: saltedPassword,
+            ));
+      },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
