@@ -39,10 +39,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required CredentialStore credentialStore,
     required XmppService xmppService,
     required Capability capability,
+    http.Client? httpClient,
     AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _capability = capability,
+        _httpClient = httpClient ?? http.Client(),
         super(initialState ?? const AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
@@ -74,6 +76,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   final Capability _capability;
+  final http.Client _httpClient;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -190,7 +193,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     emit(const AuthenticationInProgress());
     try {
-      final response = await http.post(
+      final response = await _httpClient.post(
         registrationUrl,
         body: {
           'username': username,
@@ -219,7 +222,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {
-      final response = await http
+      final response = await _httpClient
           .get(Uri.parse('https://api.pwnedpasswords.com/range/$subhash'));
       if (response.statusCode == 200) {
         if (response.body.split('\r\n').any((e) {

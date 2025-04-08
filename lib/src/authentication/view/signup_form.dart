@@ -274,7 +274,9 @@ class _SignupFormState extends State<SignupForm> {
                           if (_formKeys[_currentIndex]
                                   .currentState
                                   ?.validate() ==
-                              false) return;
+                              false) {
+                            return;
+                          }
                           if (_currentIndex == 1 &&
                               !await context
                                   .read<AuthenticationCubit>()

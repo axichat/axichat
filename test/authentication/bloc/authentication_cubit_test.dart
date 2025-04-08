@@ -1,8 +1,11 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
+import 'package:chat/src/common/generate_random.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../mocks.dart';
@@ -15,11 +18,14 @@ const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    registerFallbackValue(Uri());
     registerFallbackValue(FakeCredentialKey());
   });
+
+  late Client mockHttpClient;
 
   setUp(() {
     mockXmppService = MockXmppService();
@@ -27,6 +33,7 @@ void main() {
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
+    mockHttpClient = MockHttpClient();
 
     when(() => mockCredentialStore.read(key: any(named: 'key')))
         .thenAnswer((_) async => null);
@@ -47,6 +54,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         capability: const Capability(),
+        httpClient: mockHttpClient,
       );
 
       when(() => mockXmppService.connect(
@@ -279,6 +287,120 @@ void main() {
         const AuthenticationInProgress(),
         const AuthenticationNone(),
       ],
+    );
+  });
+
+  //Make real network calls and just accept the flakiness to know if we
+  // still gel with the 3rd party api.
+  group('checkNotPwned', () {
+    late AuthenticationCubit bloc;
+
+    const breachedPassword = 'password';
+    //Theoretically flaky but not at all likely.
+    final securePassword = generateRandomString();
+
+    setUp(() {
+      bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        capability: const Capability(),
+      );
+    });
+
+    test('Given breached password, returns false', () async {
+      expect(await bloc.checkNotPwned(password: breachedPassword), isFalse);
+    });
+
+    test('Given secure password, returns true', () async {
+      expect(await bloc.checkNotPwned(password: securePassword), isTrue);
+    });
+  });
+
+  group('logout', () {
+    setUp(() {
+      when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
+      when(() => mockCredentialStore.delete(key: any(named: 'key')))
+          .thenAnswer((_) async => true);
+      when(() => mockCredentialStore.delete(key: any(named: 'key')))
+          .thenAnswer((_) async => true);
+      when(() => mockCredentialStore.deleteAll(burn: any(named: 'burn')))
+          .thenAnswer((_) async => true);
+      when(() => mockXmppService.burn()).thenAnswer((_) async {});
+    });
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'If authentication is not complete, does nothing.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        capability: const Capability(),
+        httpClient: mockHttpClient,
+      ),
+      act: (bloc) => bloc.logout(),
+      expect: () => [],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.delete(key: bloc.jidStorageKey));
+        verifyNever(
+            () => mockCredentialStore.delete(key: bloc.passwordStorageKey));
+        verifyNever(() => mockXmppService.disconnect());
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Automatic logout disconnects the xmpp service without forgetting credentials and emits [AuthenticationNone].',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        capability: const Capability(),
+        httpClient: mockHttpClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.logout(),
+      expect: () => [const AuthenticationNone()],
+      verify: (bloc) {
+        verifyNever(() => mockCredentialStore.delete(key: bloc.jidStorageKey));
+        verifyNever(
+            () => mockCredentialStore.delete(key: bloc.passwordStorageKey));
+        verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'User initiated logout disconnects the xmpp service, forgets credentials and emits [AuthenticationNone].',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        capability: const Capability(),
+        httpClient: mockHttpClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.logout(severity: LogoutSeverity.normal),
+      expect: () => [const AuthenticationNone()],
+      verify: (bloc) {
+        verify(() => mockCredentialStore.delete(key: bloc.jidStorageKey))
+            .called(1);
+        verify(() => mockCredentialStore.delete(key: bloc.passwordStorageKey))
+            .called(1);
+        verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        capability: const Capability(),
+        httpClient: mockHttpClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
+      expect: () => [const AuthenticationNone()],
+      verify: (bloc) {
+        verify(() => mockCredentialStore.deleteAll(burn: true)).called(1);
+        verify(() => mockXmppService.burn()).called(1);
+        verify(() => mockXmppService.disconnect()).called(1);
+      },
     );
   });
 }

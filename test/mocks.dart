@@ -9,6 +9,7 @@ import 'package:chat/src/storage/database.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/storage/state_store.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -29,6 +30,8 @@ class MockNotificationService extends Mock implements NotificationService {}
 class MockCapability extends Mock implements Capability {}
 
 class MockPolicy extends Mock implements Policy {}
+
+class MockHttpClient extends Mock implements Client {}
 
 class FakeCredentialKey extends Fake implements RegisteredCredentialKey {}
 
