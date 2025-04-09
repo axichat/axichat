@@ -518,6 +518,41 @@ class FileMetadataData extends DataClass
         thumbnailData:
             thumbnailData.present ? thumbnailData.value : this.thumbnailData,
       );
+  FileMetadataData copyWithCompanion(FileMetadataCompanion data) {
+    return FileMetadataData(
+      id: data.id.present ? data.id.value : this.id,
+      filename: data.filename.present ? data.filename.value : this.filename,
+      path: data.path.present ? data.path.value : this.path,
+      sourceUrls:
+          data.sourceUrls.present ? data.sourceUrls.value : this.sourceUrls,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      width: data.width.present ? data.width.value : this.width,
+      height: data.height.present ? data.height.value : this.height,
+      encryptionKey: data.encryptionKey.present
+          ? data.encryptionKey.value
+          : this.encryptionKey,
+      encryptionIV: data.encryptionIV.present
+          ? data.encryptionIV.value
+          : this.encryptionIV,
+      encryptionScheme: data.encryptionScheme.present
+          ? data.encryptionScheme.value
+          : this.encryptionScheme,
+      cipherTextHashes: data.cipherTextHashes.present
+          ? data.cipherTextHashes.value
+          : this.cipherTextHashes,
+      plainTextHashes: data.plainTextHashes.present
+          ? data.plainTextHashes.value
+          : this.plainTextHashes,
+      thumbnailType: data.thumbnailType.present
+          ? data.thumbnailType.value
+          : this.thumbnailType,
+      thumbnailData: data.thumbnailData.present
+          ? data.thumbnailData.value
+          : this.thumbnailData,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('FileMetadataData(')
@@ -1994,6 +2029,17 @@ class Draft extends DataClass implements Insertable<Draft> {
         fileMetadataID:
             fileMetadataID.present ? fileMetadataID.value : this.fileMetadataID,
       );
+  Draft copyWithCompanion(DraftsCompanion data) {
+    return Draft(
+      id: data.id.present ? data.id.value : this.id,
+      jids: data.jids.present ? data.jids.value : this.jids,
+      body: data.body.present ? data.body.value : this.body,
+      fileMetadataID: data.fileMetadataID.present
+          ? data.fileMetadataID.value
+          : this.fileMetadataID,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('Draft(')
@@ -2496,6 +2542,13 @@ class OmemoDeviceList extends DataClass implements Insertable<OmemoDeviceList> {
         jid: jid ?? this.jid,
         devices: devices ?? this.devices,
       );
+  OmemoDeviceList copyWithCompanion(OmemoDeviceListsCompanion data) {
+    return OmemoDeviceList(
+      jid: data.jid.present ? data.jid.value : this.jid,
+      devices: data.devices.present ? data.devices.value : this.devices,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('OmemoDeviceList(')
@@ -3608,6 +3661,13 @@ class Contact extends DataClass implements Insertable<Contact> {
         nativeID: nativeID ?? this.nativeID,
         jid: jid ?? this.jid,
       );
+  Contact copyWithCompanion(ContactsCompanion data) {
+    return Contact(
+      nativeID: data.nativeID.present ? data.nativeID.value : this.nativeID,
+      jid: data.jid.present ? data.jid.value : this.jid,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('Contact(')
@@ -4831,6 +4891,12 @@ class BlocklistData extends DataClass implements Insertable<BlocklistData> {
   BlocklistData copyWith({String? jid}) => BlocklistData(
         jid: jid ?? this.jid,
       );
+  BlocklistData copyWithCompanion(BlocklistCompanion data) {
+    return BlocklistData(
+      jid: data.jid.present ? data.jid.value : this.jid,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('BlocklistData(')
@@ -5117,7 +5183,7 @@ class StickersCompanion extends UpdateCompanion<Sticker> {
 
 abstract class _$XmppDrift extends GeneratedDatabase {
   _$XmppDrift(QueryExecutor e) : super(e);
-  _$XmppDriftManager get managers => _$XmppDriftManager(this);
+  $XmppDriftManager get managers => $XmppDriftManager(this);
   late final $FileMetadataTable fileMetadata = $FileMetadataTable(this);
   late final $StickerPacksTable stickerPacks = $StickerPacksTable(this);
   late final $MessagesTable messages = $MessagesTable(this);
@@ -5177,7 +5243,7 @@ abstract class _$XmppDrift extends GeneratedDatabase {
       const DriftDatabaseOptions(storeDateTimeAsText: true);
 }
 
-typedef $$FileMetadataTableInsertCompanionBuilder = FileMetadataCompanion
+typedef $$FileMetadataTableCreateCompanionBuilder = FileMetadataCompanion
     Function({
   Value<String> id,
   required String filename,
@@ -5222,8 +5288,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
     FileMetadataData,
     $$FileMetadataTableFilterComposer,
     $$FileMetadataTableOrderingComposer,
-    $$FileMetadataTableProcessedTableManager,
-    $$FileMetadataTableInsertCompanionBuilder,
+    $$FileMetadataTableCreateCompanionBuilder,
     $$FileMetadataTableUpdateCompanionBuilder> {
   $$FileMetadataTableTableManager(_$XmppDrift db, $FileMetadataTable table)
       : super(TableManagerState(
@@ -5233,9 +5298,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
               $$FileMetadataTableFilterComposer(ComposerState(db, table)),
           orderingComposer:
               $$FileMetadataTableOrderingComposer(ComposerState(db, table)),
-          getChildManagerBuilder: (p) =>
-              $$FileMetadataTableProcessedTableManager(p),
-          getUpdateCompanionBuilder: ({
+          updateCompanionCallback: ({
             Value<String> id = const Value.absent(),
             Value<String> filename = const Value.absent(),
             Value<String?> path = const Value.absent(),
@@ -5273,7 +5336,7 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             thumbnailData: thumbnailData,
             rowid: rowid,
           ),
-          getInsertCompanionBuilder: ({
+          createCompanionCallback: ({
             Value<String> id = const Value.absent(),
             required String filename,
             Value<String?> path = const Value.absent(),
@@ -5312,18 +5375,6 @@ class $$FileMetadataTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
         ));
-}
-
-class $$FileMetadataTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDrift,
-    $FileMetadataTable,
-    FileMetadataData,
-    $$FileMetadataTableFilterComposer,
-    $$FileMetadataTableOrderingComposer,
-    $$FileMetadataTableProcessedTableManager,
-    $$FileMetadataTableInsertCompanionBuilder,
-    $$FileMetadataTableUpdateCompanionBuilder> {
-  $$FileMetadataTableProcessedTableManager(super.$state);
 }
 
 class $$FileMetadataTableFilterComposer
@@ -5412,6 +5463,19 @@ class $$FileMetadataTableFilterComposer
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
+  ComposableFilter messagesRefs(
+      ComposableFilter Function($$MessagesTableFilterComposer f) f) {
+    final $$MessagesTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $state.db.messages,
+        getReferencedColumn: (t) => t.fileMetadataID,
+        builder: (joinBuilder, parentComposers) =>
+            $$MessagesTableFilterComposer(ComposerState(
+                $state.db, $state.db.messages, joinBuilder, parentComposers)));
+    return f(composer);
+  }
+
   ComposableFilter draftsRefs(
       ComposableFilter Function($$DraftsTableFilterComposer f) f) {
     final $$DraftsTableFilterComposer composer = $state.composerBuilder(
@@ -5422,6 +5486,19 @@ class $$FileMetadataTableFilterComposer
         builder: (joinBuilder, parentComposers) => $$DraftsTableFilterComposer(
             ComposerState(
                 $state.db, $state.db.drafts, joinBuilder, parentComposers)));
+    return f(composer);
+  }
+
+  ComposableFilter stickersRefs(
+      ComposableFilter Function($$StickersTableFilterComposer f) f) {
+    final $$StickersTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $state.db.stickers,
+        getReferencedColumn: (t) => t.fileMetadataID,
+        builder: (joinBuilder, parentComposers) =>
+            $$StickersTableFilterComposer(ComposerState(
+                $state.db, $state.db.stickers, joinBuilder, parentComposers)));
     return f(composer);
   }
 }
@@ -5505,7 +5582,694 @@ class $$FileMetadataTableOrderingComposer
           ColumnOrderings(column, joinBuilders: joinBuilders));
 }
 
-typedef $$DraftsTableInsertCompanionBuilder = DraftsCompanion Function({
+typedef $$StickerPacksTableCreateCompanionBuilder = StickerPacksCompanion
+    Function({
+  required String id,
+  required String name,
+  required String description,
+  required String hashAlgorithm,
+  required String hashValue,
+  required bool restricted,
+  required DateTime addedTimestamp,
+  Value<int> rowid,
+});
+typedef $$StickerPacksTableUpdateCompanionBuilder = StickerPacksCompanion
+    Function({
+  Value<String> id,
+  Value<String> name,
+  Value<String> description,
+  Value<String> hashAlgorithm,
+  Value<String> hashValue,
+  Value<bool> restricted,
+  Value<DateTime> addedTimestamp,
+  Value<int> rowid,
+});
+
+class $$StickerPacksTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $StickerPacksTable,
+    StickerPack,
+    $$StickerPacksTableFilterComposer,
+    $$StickerPacksTableOrderingComposer,
+    $$StickerPacksTableCreateCompanionBuilder,
+    $$StickerPacksTableUpdateCompanionBuilder> {
+  $$StickerPacksTableTableManager(_$XmppDrift db, $StickerPacksTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$StickerPacksTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$StickerPacksTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<String> description = const Value.absent(),
+            Value<String> hashAlgorithm = const Value.absent(),
+            Value<String> hashValue = const Value.absent(),
+            Value<bool> restricted = const Value.absent(),
+            Value<DateTime> addedTimestamp = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              StickerPacksCompanion(
+            id: id,
+            name: name,
+            description: description,
+            hashAlgorithm: hashAlgorithm,
+            hashValue: hashValue,
+            restricted: restricted,
+            addedTimestamp: addedTimestamp,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String name,
+            required String description,
+            required String hashAlgorithm,
+            required String hashValue,
+            required bool restricted,
+            required DateTime addedTimestamp,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              StickerPacksCompanion.insert(
+            id: id,
+            name: name,
+            description: description,
+            hashAlgorithm: hashAlgorithm,
+            hashValue: hashValue,
+            restricted: restricted,
+            addedTimestamp: addedTimestamp,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$StickerPacksTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $StickerPacksTable> {
+  $$StickerPacksTableFilterComposer(super.$state);
+  ColumnFilters<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get name => $state.composableBuilder(
+      column: $state.table.name,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get description => $state.composableBuilder(
+      column: $state.table.description,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get hashAlgorithm => $state.composableBuilder(
+      column: $state.table.hashAlgorithm,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get hashValue => $state.composableBuilder(
+      column: $state.table.hashValue,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get restricted => $state.composableBuilder(
+      column: $state.table.restricted,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get addedTimestamp => $state.composableBuilder(
+      column: $state.table.addedTimestamp,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ComposableFilter messagesRefs(
+      ComposableFilter Function($$MessagesTableFilterComposer f) f) {
+    final $$MessagesTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $state.db.messages,
+        getReferencedColumn: (t) => t.stickerPackID,
+        builder: (joinBuilder, parentComposers) =>
+            $$MessagesTableFilterComposer(ComposerState(
+                $state.db, $state.db.messages, joinBuilder, parentComposers)));
+    return f(composer);
+  }
+
+  ComposableFilter stickersRefs(
+      ComposableFilter Function($$StickersTableFilterComposer f) f) {
+    final $$StickersTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $state.db.stickers,
+        getReferencedColumn: (t) => t.stickerPackID,
+        builder: (joinBuilder, parentComposers) =>
+            $$StickersTableFilterComposer(ComposerState(
+                $state.db, $state.db.stickers, joinBuilder, parentComposers)));
+    return f(composer);
+  }
+}
+
+class $$StickerPacksTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $StickerPacksTable> {
+  $$StickerPacksTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get name => $state.composableBuilder(
+      column: $state.table.name,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get description => $state.composableBuilder(
+      column: $state.table.description,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get hashAlgorithm => $state.composableBuilder(
+      column: $state.table.hashAlgorithm,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get hashValue => $state.composableBuilder(
+      column: $state.table.hashValue,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get restricted => $state.composableBuilder(
+      column: $state.table.restricted,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get addedTimestamp => $state.composableBuilder(
+      column: $state.table.addedTimestamp,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+}
+
+typedef $$MessagesTableCreateCompanionBuilder = MessagesCompanion Function({
+  Value<String> id,
+  required String stanzaID,
+  Value<String?> originID,
+  Value<String?> occupantID,
+  required String senderJid,
+  required String chatJid,
+  Value<String?> body,
+  Value<DateTime> timestamp,
+  Value<MessageError> error,
+  Value<MessageWarning> warning,
+  Value<EncryptionProtocol> encryptionProtocol,
+  Value<bool> noStore,
+  Value<bool> acked,
+  Value<bool> received,
+  Value<bool> displayed,
+  Value<bool> edited,
+  Value<bool> retracted,
+  Value<bool> isFileUploadNotification,
+  Value<bool> fileDownloading,
+  Value<bool> fileUploading,
+  Value<String?> fileMetadataID,
+  Value<String?> quoting,
+  Value<String?> stickerPackID,
+  Value<PseudoMessageType?> pseudoMessageType,
+  Value<Map<String, dynamic>?> pseudoMessageData,
+  Value<int> rowid,
+});
+typedef $$MessagesTableUpdateCompanionBuilder = MessagesCompanion Function({
+  Value<String> id,
+  Value<String> stanzaID,
+  Value<String?> originID,
+  Value<String?> occupantID,
+  Value<String> senderJid,
+  Value<String> chatJid,
+  Value<String?> body,
+  Value<DateTime> timestamp,
+  Value<MessageError> error,
+  Value<MessageWarning> warning,
+  Value<EncryptionProtocol> encryptionProtocol,
+  Value<bool> noStore,
+  Value<bool> acked,
+  Value<bool> received,
+  Value<bool> displayed,
+  Value<bool> edited,
+  Value<bool> retracted,
+  Value<bool> isFileUploadNotification,
+  Value<bool> fileDownloading,
+  Value<bool> fileUploading,
+  Value<String?> fileMetadataID,
+  Value<String?> quoting,
+  Value<String?> stickerPackID,
+  Value<PseudoMessageType?> pseudoMessageType,
+  Value<Map<String, dynamic>?> pseudoMessageData,
+  Value<int> rowid,
+});
+
+class $$MessagesTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $MessagesTable,
+    Message,
+    $$MessagesTableFilterComposer,
+    $$MessagesTableOrderingComposer,
+    $$MessagesTableCreateCompanionBuilder,
+    $$MessagesTableUpdateCompanionBuilder> {
+  $$MessagesTableTableManager(_$XmppDrift db, $MessagesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$MessagesTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$MessagesTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> stanzaID = const Value.absent(),
+            Value<String?> originID = const Value.absent(),
+            Value<String?> occupantID = const Value.absent(),
+            Value<String> senderJid = const Value.absent(),
+            Value<String> chatJid = const Value.absent(),
+            Value<String?> body = const Value.absent(),
+            Value<DateTime> timestamp = const Value.absent(),
+            Value<MessageError> error = const Value.absent(),
+            Value<MessageWarning> warning = const Value.absent(),
+            Value<EncryptionProtocol> encryptionProtocol = const Value.absent(),
+            Value<bool> noStore = const Value.absent(),
+            Value<bool> acked = const Value.absent(),
+            Value<bool> received = const Value.absent(),
+            Value<bool> displayed = const Value.absent(),
+            Value<bool> edited = const Value.absent(),
+            Value<bool> retracted = const Value.absent(),
+            Value<bool> isFileUploadNotification = const Value.absent(),
+            Value<bool> fileDownloading = const Value.absent(),
+            Value<bool> fileUploading = const Value.absent(),
+            Value<String?> fileMetadataID = const Value.absent(),
+            Value<String?> quoting = const Value.absent(),
+            Value<String?> stickerPackID = const Value.absent(),
+            Value<PseudoMessageType?> pseudoMessageType = const Value.absent(),
+            Value<Map<String, dynamic>?> pseudoMessageData =
+                const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              MessagesCompanion(
+            id: id,
+            stanzaID: stanzaID,
+            originID: originID,
+            occupantID: occupantID,
+            senderJid: senderJid,
+            chatJid: chatJid,
+            body: body,
+            timestamp: timestamp,
+            error: error,
+            warning: warning,
+            encryptionProtocol: encryptionProtocol,
+            noStore: noStore,
+            acked: acked,
+            received: received,
+            displayed: displayed,
+            edited: edited,
+            retracted: retracted,
+            isFileUploadNotification: isFileUploadNotification,
+            fileDownloading: fileDownloading,
+            fileUploading: fileUploading,
+            fileMetadataID: fileMetadataID,
+            quoting: quoting,
+            stickerPackID: stickerPackID,
+            pseudoMessageType: pseudoMessageType,
+            pseudoMessageData: pseudoMessageData,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            required String stanzaID,
+            Value<String?> originID = const Value.absent(),
+            Value<String?> occupantID = const Value.absent(),
+            required String senderJid,
+            required String chatJid,
+            Value<String?> body = const Value.absent(),
+            Value<DateTime> timestamp = const Value.absent(),
+            Value<MessageError> error = const Value.absent(),
+            Value<MessageWarning> warning = const Value.absent(),
+            Value<EncryptionProtocol> encryptionProtocol = const Value.absent(),
+            Value<bool> noStore = const Value.absent(),
+            Value<bool> acked = const Value.absent(),
+            Value<bool> received = const Value.absent(),
+            Value<bool> displayed = const Value.absent(),
+            Value<bool> edited = const Value.absent(),
+            Value<bool> retracted = const Value.absent(),
+            Value<bool> isFileUploadNotification = const Value.absent(),
+            Value<bool> fileDownloading = const Value.absent(),
+            Value<bool> fileUploading = const Value.absent(),
+            Value<String?> fileMetadataID = const Value.absent(),
+            Value<String?> quoting = const Value.absent(),
+            Value<String?> stickerPackID = const Value.absent(),
+            Value<PseudoMessageType?> pseudoMessageType = const Value.absent(),
+            Value<Map<String, dynamic>?> pseudoMessageData =
+                const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              MessagesCompanion.insert(
+            id: id,
+            stanzaID: stanzaID,
+            originID: originID,
+            occupantID: occupantID,
+            senderJid: senderJid,
+            chatJid: chatJid,
+            body: body,
+            timestamp: timestamp,
+            error: error,
+            warning: warning,
+            encryptionProtocol: encryptionProtocol,
+            noStore: noStore,
+            acked: acked,
+            received: received,
+            displayed: displayed,
+            edited: edited,
+            retracted: retracted,
+            isFileUploadNotification: isFileUploadNotification,
+            fileDownloading: fileDownloading,
+            fileUploading: fileUploading,
+            fileMetadataID: fileMetadataID,
+            quoting: quoting,
+            stickerPackID: stickerPackID,
+            pseudoMessageType: pseudoMessageType,
+            pseudoMessageData: pseudoMessageData,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$MessagesTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $MessagesTable> {
+  $$MessagesTableFilterComposer(super.$state);
+  ColumnFilters<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get stanzaID => $state.composableBuilder(
+      column: $state.table.stanzaID,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get originID => $state.composableBuilder(
+      column: $state.table.originID,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get occupantID => $state.composableBuilder(
+      column: $state.table.occupantID,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get senderJid => $state.composableBuilder(
+      column: $state.table.senderJid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get chatJid => $state.composableBuilder(
+      column: $state.table.chatJid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get body => $state.composableBuilder(
+      column: $state.table.body,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get timestamp => $state.composableBuilder(
+      column: $state.table.timestamp,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<MessageError, MessageError, int> get error =>
+      $state.composableBuilder(
+          column: $state.table.error,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<MessageWarning, MessageWarning, int>
+      get warning => $state.composableBuilder(
+          column: $state.table.warning,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<EncryptionProtocol, EncryptionProtocol, int>
+      get encryptionProtocol => $state.composableBuilder(
+          column: $state.table.encryptionProtocol,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get noStore => $state.composableBuilder(
+      column: $state.table.noStore,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get acked => $state.composableBuilder(
+      column: $state.table.acked,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get received => $state.composableBuilder(
+      column: $state.table.received,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get displayed => $state.composableBuilder(
+      column: $state.table.displayed,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get edited => $state.composableBuilder(
+      column: $state.table.edited,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get retracted => $state.composableBuilder(
+      column: $state.table.retracted,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get isFileUploadNotification => $state.composableBuilder(
+      column: $state.table.isFileUploadNotification,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get fileDownloading => $state.composableBuilder(
+      column: $state.table.fileDownloading,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get fileUploading => $state.composableBuilder(
+      column: $state.table.fileUploading,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get quoting => $state.composableBuilder(
+      column: $state.table.quoting,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<PseudoMessageType?, PseudoMessageType, int>
+      get pseudoMessageType => $state.composableBuilder(
+          column: $state.table.pseudoMessageType,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<Map<String, dynamic>?, Map<String, dynamic>,
+          String>
+      get pseudoMessageData => $state.composableBuilder(
+          column: $state.table.pseudoMessageData,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  $$FileMetadataTableFilterComposer get fileMetadataID {
+    final $$FileMetadataTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.fileMetadataID,
+        referencedTable: $state.db.fileMetadata,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$FileMetadataTableFilterComposer(ComposerState($state.db,
+                $state.db.fileMetadata, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$StickerPacksTableFilterComposer get stickerPackID {
+    final $$StickerPacksTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.stickerPackID,
+        referencedTable: $state.db.stickerPacks,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$StickerPacksTableFilterComposer(ComposerState($state.db,
+                $state.db.stickerPacks, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  ComposableFilter reactionsRefs(
+      ComposableFilter Function($$ReactionsTableFilterComposer f) f) {
+    final $$ReactionsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $state.db.reactions,
+        getReferencedColumn: (t) => t.messageID,
+        builder: (joinBuilder, parentComposers) =>
+            $$ReactionsTableFilterComposer(ComposerState(
+                $state.db, $state.db.reactions, joinBuilder, parentComposers)));
+    return f(composer);
+  }
+}
+
+class $$MessagesTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $MessagesTable> {
+  $$MessagesTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get stanzaID => $state.composableBuilder(
+      column: $state.table.stanzaID,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get originID => $state.composableBuilder(
+      column: $state.table.originID,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get occupantID => $state.composableBuilder(
+      column: $state.table.occupantID,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get senderJid => $state.composableBuilder(
+      column: $state.table.senderJid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get chatJid => $state.composableBuilder(
+      column: $state.table.chatJid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get body => $state.composableBuilder(
+      column: $state.table.body,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get timestamp => $state.composableBuilder(
+      column: $state.table.timestamp,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get error => $state.composableBuilder(
+      column: $state.table.error,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get warning => $state.composableBuilder(
+      column: $state.table.warning,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get encryptionProtocol => $state.composableBuilder(
+      column: $state.table.encryptionProtocol,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get noStore => $state.composableBuilder(
+      column: $state.table.noStore,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get acked => $state.composableBuilder(
+      column: $state.table.acked,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get received => $state.composableBuilder(
+      column: $state.table.received,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get displayed => $state.composableBuilder(
+      column: $state.table.displayed,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get edited => $state.composableBuilder(
+      column: $state.table.edited,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get retracted => $state.composableBuilder(
+      column: $state.table.retracted,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get isFileUploadNotification =>
+      $state.composableBuilder(
+          column: $state.table.isFileUploadNotification,
+          builder: (column, joinBuilders) =>
+              ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get fileDownloading => $state.composableBuilder(
+      column: $state.table.fileDownloading,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get fileUploading => $state.composableBuilder(
+      column: $state.table.fileUploading,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get quoting => $state.composableBuilder(
+      column: $state.table.quoting,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get pseudoMessageType => $state.composableBuilder(
+      column: $state.table.pseudoMessageType,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get pseudoMessageData => $state.composableBuilder(
+      column: $state.table.pseudoMessageData,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$FileMetadataTableOrderingComposer get fileMetadataID {
+    final $$FileMetadataTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.fileMetadataID,
+        referencedTable: $state.db.fileMetadata,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$FileMetadataTableOrderingComposer(ComposerState($state.db,
+                $state.db.fileMetadata, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$StickerPacksTableOrderingComposer get stickerPackID {
+    final $$StickerPacksTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.stickerPackID,
+        referencedTable: $state.db.stickerPacks,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$StickerPacksTableOrderingComposer(ComposerState($state.db,
+                $state.db.stickerPacks, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+typedef $$DraftsTableCreateCompanionBuilder = DraftsCompanion Function({
   Value<int> id,
   required List<String> jids,
   Value<String?> body,
@@ -5524,8 +6288,7 @@ class $$DraftsTableTableManager extends RootTableManager<
     Draft,
     $$DraftsTableFilterComposer,
     $$DraftsTableOrderingComposer,
-    $$DraftsTableProcessedTableManager,
-    $$DraftsTableInsertCompanionBuilder,
+    $$DraftsTableCreateCompanionBuilder,
     $$DraftsTableUpdateCompanionBuilder> {
   $$DraftsTableTableManager(_$XmppDrift db, $DraftsTable table)
       : super(TableManagerState(
@@ -5535,8 +6298,7 @@ class $$DraftsTableTableManager extends RootTableManager<
               $$DraftsTableFilterComposer(ComposerState(db, table)),
           orderingComposer:
               $$DraftsTableOrderingComposer(ComposerState(db, table)),
-          getChildManagerBuilder: (p) => $$DraftsTableProcessedTableManager(p),
-          getUpdateCompanionBuilder: ({
+          updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
             Value<List<String>> jids = const Value.absent(),
             Value<String?> body = const Value.absent(),
@@ -5548,7 +6310,7 @@ class $$DraftsTableTableManager extends RootTableManager<
             body: body,
             fileMetadataID: fileMetadataID,
           ),
-          getInsertCompanionBuilder: ({
+          createCompanionCallback: ({
             Value<int> id = const Value.absent(),
             required List<String> jids,
             Value<String?> body = const Value.absent(),
@@ -5561,18 +6323,6 @@ class $$DraftsTableTableManager extends RootTableManager<
             fileMetadataID: fileMetadataID,
           ),
         ));
-}
-
-class $$DraftsTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDrift,
-    $DraftsTable,
-    Draft,
-    $$DraftsTableFilterComposer,
-    $$DraftsTableOrderingComposer,
-    $$DraftsTableProcessedTableManager,
-    $$DraftsTableInsertCompanionBuilder,
-    $$DraftsTableUpdateCompanionBuilder> {
-  $$DraftsTableProcessedTableManager(super.$state);
 }
 
 class $$DraftsTableFilterComposer
@@ -5639,7 +6389,185 @@ class $$DraftsTableOrderingComposer
   }
 }
 
-typedef $$OmemoDeviceListsTableInsertCompanionBuilder
+typedef $$OmemoDevicesTableCreateCompanionBuilder = OmemoDevicesCompanion
+    Function({
+  required String jid,
+  required int id,
+  required String identityKey,
+  required String signedPreKey,
+  Value<String?> oldSignedPreKey,
+  Value<BTBVTrustState> trust,
+  Value<bool> enabled,
+  required String onetimePreKeys,
+  Value<int> rowid,
+});
+typedef $$OmemoDevicesTableUpdateCompanionBuilder = OmemoDevicesCompanion
+    Function({
+  Value<String> jid,
+  Value<int> id,
+  Value<String> identityKey,
+  Value<String> signedPreKey,
+  Value<String?> oldSignedPreKey,
+  Value<BTBVTrustState> trust,
+  Value<bool> enabled,
+  Value<String> onetimePreKeys,
+  Value<int> rowid,
+});
+
+class $$OmemoDevicesTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $OmemoDevicesTable,
+    OmemoDevice,
+    $$OmemoDevicesTableFilterComposer,
+    $$OmemoDevicesTableOrderingComposer,
+    $$OmemoDevicesTableCreateCompanionBuilder,
+    $$OmemoDevicesTableUpdateCompanionBuilder> {
+  $$OmemoDevicesTableTableManager(_$XmppDrift db, $OmemoDevicesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$OmemoDevicesTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$OmemoDevicesTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> jid = const Value.absent(),
+            Value<int> id = const Value.absent(),
+            Value<String> identityKey = const Value.absent(),
+            Value<String> signedPreKey = const Value.absent(),
+            Value<String?> oldSignedPreKey = const Value.absent(),
+            Value<BTBVTrustState> trust = const Value.absent(),
+            Value<bool> enabled = const Value.absent(),
+            Value<String> onetimePreKeys = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              OmemoDevicesCompanion(
+            jid: jid,
+            id: id,
+            identityKey: identityKey,
+            signedPreKey: signedPreKey,
+            oldSignedPreKey: oldSignedPreKey,
+            trust: trust,
+            enabled: enabled,
+            onetimePreKeys: onetimePreKeys,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String jid,
+            required int id,
+            required String identityKey,
+            required String signedPreKey,
+            Value<String?> oldSignedPreKey = const Value.absent(),
+            Value<BTBVTrustState> trust = const Value.absent(),
+            Value<bool> enabled = const Value.absent(),
+            required String onetimePreKeys,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              OmemoDevicesCompanion.insert(
+            jid: jid,
+            id: id,
+            identityKey: identityKey,
+            signedPreKey: signedPreKey,
+            oldSignedPreKey: oldSignedPreKey,
+            trust: trust,
+            enabled: enabled,
+            onetimePreKeys: onetimePreKeys,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$OmemoDevicesTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $OmemoDevicesTable> {
+  $$OmemoDevicesTableFilterComposer(super.$state);
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get identityKey => $state.composableBuilder(
+      column: $state.table.identityKey,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get signedPreKey => $state.composableBuilder(
+      column: $state.table.signedPreKey,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get oldSignedPreKey => $state.composableBuilder(
+      column: $state.table.oldSignedPreKey,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<BTBVTrustState, BTBVTrustState, int>
+      get trust => $state.composableBuilder(
+          column: $state.table.trust,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get enabled => $state.composableBuilder(
+      column: $state.table.enabled,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get onetimePreKeys => $state.composableBuilder(
+      column: $state.table.onetimePreKeys,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+}
+
+class $$OmemoDevicesTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $OmemoDevicesTable> {
+  $$OmemoDevicesTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get identityKey => $state.composableBuilder(
+      column: $state.table.identityKey,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get signedPreKey => $state.composableBuilder(
+      column: $state.table.signedPreKey,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get oldSignedPreKey => $state.composableBuilder(
+      column: $state.table.oldSignedPreKey,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get trust => $state.composableBuilder(
+      column: $state.table.trust,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get enabled => $state.composableBuilder(
+      column: $state.table.enabled,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get onetimePreKeys => $state.composableBuilder(
+      column: $state.table.onetimePreKeys,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+}
+
+typedef $$OmemoDeviceListsTableCreateCompanionBuilder
     = OmemoDeviceListsCompanion Function({
   required String jid,
   required List<int> devices,
@@ -5658,8 +6586,7 @@ class $$OmemoDeviceListsTableTableManager extends RootTableManager<
     OmemoDeviceList,
     $$OmemoDeviceListsTableFilterComposer,
     $$OmemoDeviceListsTableOrderingComposer,
-    $$OmemoDeviceListsTableProcessedTableManager,
-    $$OmemoDeviceListsTableInsertCompanionBuilder,
+    $$OmemoDeviceListsTableCreateCompanionBuilder,
     $$OmemoDeviceListsTableUpdateCompanionBuilder> {
   $$OmemoDeviceListsTableTableManager(
       _$XmppDrift db, $OmemoDeviceListsTable table)
@@ -5670,9 +6597,7 @@ class $$OmemoDeviceListsTableTableManager extends RootTableManager<
               $$OmemoDeviceListsTableFilterComposer(ComposerState(db, table)),
           orderingComposer:
               $$OmemoDeviceListsTableOrderingComposer(ComposerState(db, table)),
-          getChildManagerBuilder: (p) =>
-              $$OmemoDeviceListsTableProcessedTableManager(p),
-          getUpdateCompanionBuilder: ({
+          updateCompanionCallback: ({
             Value<String> jid = const Value.absent(),
             Value<List<int>> devices = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -5682,7 +6607,7 @@ class $$OmemoDeviceListsTableTableManager extends RootTableManager<
             devices: devices,
             rowid: rowid,
           ),
-          getInsertCompanionBuilder: ({
+          createCompanionCallback: ({
             required String jid,
             required List<int> devices,
             Value<int> rowid = const Value.absent(),
@@ -5693,19 +6618,6 @@ class $$OmemoDeviceListsTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
         ));
-}
-
-class $$OmemoDeviceListsTableProcessedTableManager
-    extends ProcessedTableManager<
-        _$XmppDrift,
-        $OmemoDeviceListsTable,
-        OmemoDeviceList,
-        $$OmemoDeviceListsTableFilterComposer,
-        $$OmemoDeviceListsTableOrderingComposer,
-        $$OmemoDeviceListsTableProcessedTableManager,
-        $$OmemoDeviceListsTableInsertCompanionBuilder,
-        $$OmemoDeviceListsTableUpdateCompanionBuilder> {
-  $$OmemoDeviceListsTableProcessedTableManager(super.$state);
 }
 
 class $$OmemoDeviceListsTableFilterComposer
@@ -5738,7 +6650,597 @@ class $$OmemoDeviceListsTableOrderingComposer
           ColumnOrderings(column, joinBuilders: joinBuilders));
 }
 
-typedef $$ContactsTableInsertCompanionBuilder = ContactsCompanion Function({
+typedef $$OmemoRatchetsTableCreateCompanionBuilder = OmemoRatchetsCompanion
+    Function({
+  required String jid,
+  required int device,
+  required String dhs,
+  Value<String?> dhr,
+  required List<int> rk,
+  Value<List<int>?> cks,
+  Value<List<int>?> ckr,
+  required int ns,
+  required int nr,
+  required int pn,
+  required String identityKey,
+  required List<int> associatedData,
+  required String mkSkipped,
+  required String keyExchangeData,
+  Value<bool> acked,
+  Value<int> rowid,
+});
+typedef $$OmemoRatchetsTableUpdateCompanionBuilder = OmemoRatchetsCompanion
+    Function({
+  Value<String> jid,
+  Value<int> device,
+  Value<String> dhs,
+  Value<String?> dhr,
+  Value<List<int>> rk,
+  Value<List<int>?> cks,
+  Value<List<int>?> ckr,
+  Value<int> ns,
+  Value<int> nr,
+  Value<int> pn,
+  Value<String> identityKey,
+  Value<List<int>> associatedData,
+  Value<String> mkSkipped,
+  Value<String> keyExchangeData,
+  Value<bool> acked,
+  Value<int> rowid,
+});
+
+class $$OmemoRatchetsTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $OmemoRatchetsTable,
+    OmemoRatchet,
+    $$OmemoRatchetsTableFilterComposer,
+    $$OmemoRatchetsTableOrderingComposer,
+    $$OmemoRatchetsTableCreateCompanionBuilder,
+    $$OmemoRatchetsTableUpdateCompanionBuilder> {
+  $$OmemoRatchetsTableTableManager(_$XmppDrift db, $OmemoRatchetsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$OmemoRatchetsTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$OmemoRatchetsTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> jid = const Value.absent(),
+            Value<int> device = const Value.absent(),
+            Value<String> dhs = const Value.absent(),
+            Value<String?> dhr = const Value.absent(),
+            Value<List<int>> rk = const Value.absent(),
+            Value<List<int>?> cks = const Value.absent(),
+            Value<List<int>?> ckr = const Value.absent(),
+            Value<int> ns = const Value.absent(),
+            Value<int> nr = const Value.absent(),
+            Value<int> pn = const Value.absent(),
+            Value<String> identityKey = const Value.absent(),
+            Value<List<int>> associatedData = const Value.absent(),
+            Value<String> mkSkipped = const Value.absent(),
+            Value<String> keyExchangeData = const Value.absent(),
+            Value<bool> acked = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              OmemoRatchetsCompanion(
+            jid: jid,
+            device: device,
+            dhs: dhs,
+            dhr: dhr,
+            rk: rk,
+            cks: cks,
+            ckr: ckr,
+            ns: ns,
+            nr: nr,
+            pn: pn,
+            identityKey: identityKey,
+            associatedData: associatedData,
+            mkSkipped: mkSkipped,
+            keyExchangeData: keyExchangeData,
+            acked: acked,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String jid,
+            required int device,
+            required String dhs,
+            Value<String?> dhr = const Value.absent(),
+            required List<int> rk,
+            Value<List<int>?> cks = const Value.absent(),
+            Value<List<int>?> ckr = const Value.absent(),
+            required int ns,
+            required int nr,
+            required int pn,
+            required String identityKey,
+            required List<int> associatedData,
+            required String mkSkipped,
+            required String keyExchangeData,
+            Value<bool> acked = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              OmemoRatchetsCompanion.insert(
+            jid: jid,
+            device: device,
+            dhs: dhs,
+            dhr: dhr,
+            rk: rk,
+            cks: cks,
+            ckr: ckr,
+            ns: ns,
+            nr: nr,
+            pn: pn,
+            identityKey: identityKey,
+            associatedData: associatedData,
+            mkSkipped: mkSkipped,
+            keyExchangeData: keyExchangeData,
+            acked: acked,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$OmemoRatchetsTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $OmemoRatchetsTable> {
+  $$OmemoRatchetsTableFilterComposer(super.$state);
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get device => $state.composableBuilder(
+      column: $state.table.device,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get dhs => $state.composableBuilder(
+      column: $state.table.dhs,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get dhr => $state.composableBuilder(
+      column: $state.table.dhr,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<List<int>, List<int>, String> get rk =>
+      $state.composableBuilder(
+          column: $state.table.rk,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<List<int>?, List<int>, String> get cks =>
+      $state.composableBuilder(
+          column: $state.table.cks,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<List<int>?, List<int>, String> get ckr =>
+      $state.composableBuilder(
+          column: $state.table.ckr,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get ns => $state.composableBuilder(
+      column: $state.table.ns,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get nr => $state.composableBuilder(
+      column: $state.table.nr,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get pn => $state.composableBuilder(
+      column: $state.table.pn,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get identityKey => $state.composableBuilder(
+      column: $state.table.identityKey,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<List<int>, List<int>, String>
+      get associatedData => $state.composableBuilder(
+          column: $state.table.associatedData,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get mkSkipped => $state.composableBuilder(
+      column: $state.table.mkSkipped,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get keyExchangeData => $state.composableBuilder(
+      column: $state.table.keyExchangeData,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get acked => $state.composableBuilder(
+      column: $state.table.acked,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+}
+
+class $$OmemoRatchetsTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $OmemoRatchetsTable> {
+  $$OmemoRatchetsTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get device => $state.composableBuilder(
+      column: $state.table.device,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get dhs => $state.composableBuilder(
+      column: $state.table.dhs,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get dhr => $state.composableBuilder(
+      column: $state.table.dhr,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get rk => $state.composableBuilder(
+      column: $state.table.rk,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get cks => $state.composableBuilder(
+      column: $state.table.cks,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get ckr => $state.composableBuilder(
+      column: $state.table.ckr,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get ns => $state.composableBuilder(
+      column: $state.table.ns,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get nr => $state.composableBuilder(
+      column: $state.table.nr,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get pn => $state.composableBuilder(
+      column: $state.table.pn,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get identityKey => $state.composableBuilder(
+      column: $state.table.identityKey,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get associatedData => $state.composableBuilder(
+      column: $state.table.associatedData,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get mkSkipped => $state.composableBuilder(
+      column: $state.table.mkSkipped,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get keyExchangeData => $state.composableBuilder(
+      column: $state.table.keyExchangeData,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get acked => $state.composableBuilder(
+      column: $state.table.acked,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+}
+
+typedef $$ReactionsTableCreateCompanionBuilder = ReactionsCompanion Function({
+  required String messageID,
+  required String senderJid,
+  required String emoji,
+  Value<int> rowid,
+});
+typedef $$ReactionsTableUpdateCompanionBuilder = ReactionsCompanion Function({
+  Value<String> messageID,
+  Value<String> senderJid,
+  Value<String> emoji,
+  Value<int> rowid,
+});
+
+class $$ReactionsTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $ReactionsTable,
+    Reaction,
+    $$ReactionsTableFilterComposer,
+    $$ReactionsTableOrderingComposer,
+    $$ReactionsTableCreateCompanionBuilder,
+    $$ReactionsTableUpdateCompanionBuilder> {
+  $$ReactionsTableTableManager(_$XmppDrift db, $ReactionsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$ReactionsTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$ReactionsTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> messageID = const Value.absent(),
+            Value<String> senderJid = const Value.absent(),
+            Value<String> emoji = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ReactionsCompanion(
+            messageID: messageID,
+            senderJid: senderJid,
+            emoji: emoji,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String messageID,
+            required String senderJid,
+            required String emoji,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ReactionsCompanion.insert(
+            messageID: messageID,
+            senderJid: senderJid,
+            emoji: emoji,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$ReactionsTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $ReactionsTable> {
+  $$ReactionsTableFilterComposer(super.$state);
+  ColumnFilters<String> get senderJid => $state.composableBuilder(
+      column: $state.table.senderJid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get emoji => $state.composableBuilder(
+      column: $state.table.emoji,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  $$MessagesTableFilterComposer get messageID {
+    final $$MessagesTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.messageID,
+        referencedTable: $state.db.messages,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$MessagesTableFilterComposer(ComposerState(
+                $state.db, $state.db.messages, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $$ReactionsTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $ReactionsTable> {
+  $$ReactionsTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get senderJid => $state.composableBuilder(
+      column: $state.table.senderJid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get emoji => $state.composableBuilder(
+      column: $state.table.emoji,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$MessagesTableOrderingComposer get messageID {
+    final $$MessagesTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.messageID,
+        referencedTable: $state.db.messages,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$MessagesTableOrderingComposer(ComposerState(
+                $state.db, $state.db.messages, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+typedef $$NotificationsTableCreateCompanionBuilder = NotificationsCompanion
+    Function({
+  Value<int> id,
+  Value<String?> senderJid,
+  required String chatJid,
+  Value<String?> senderName,
+  required String body,
+  required DateTime timestamp,
+  Value<String?> avatarPath,
+  Value<String?> mediaMimeType,
+  Value<String?> mediaPath,
+});
+typedef $$NotificationsTableUpdateCompanionBuilder = NotificationsCompanion
+    Function({
+  Value<int> id,
+  Value<String?> senderJid,
+  Value<String> chatJid,
+  Value<String?> senderName,
+  Value<String> body,
+  Value<DateTime> timestamp,
+  Value<String?> avatarPath,
+  Value<String?> mediaMimeType,
+  Value<String?> mediaPath,
+});
+
+class $$NotificationsTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $NotificationsTable,
+    Notification,
+    $$NotificationsTableFilterComposer,
+    $$NotificationsTableOrderingComposer,
+    $$NotificationsTableCreateCompanionBuilder,
+    $$NotificationsTableUpdateCompanionBuilder> {
+  $$NotificationsTableTableManager(_$XmppDrift db, $NotificationsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$NotificationsTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$NotificationsTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String?> senderJid = const Value.absent(),
+            Value<String> chatJid = const Value.absent(),
+            Value<String?> senderName = const Value.absent(),
+            Value<String> body = const Value.absent(),
+            Value<DateTime> timestamp = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<String?> mediaMimeType = const Value.absent(),
+            Value<String?> mediaPath = const Value.absent(),
+          }) =>
+              NotificationsCompanion(
+            id: id,
+            senderJid: senderJid,
+            chatJid: chatJid,
+            senderName: senderName,
+            body: body,
+            timestamp: timestamp,
+            avatarPath: avatarPath,
+            mediaMimeType: mediaMimeType,
+            mediaPath: mediaPath,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String?> senderJid = const Value.absent(),
+            required String chatJid,
+            Value<String?> senderName = const Value.absent(),
+            required String body,
+            required DateTime timestamp,
+            Value<String?> avatarPath = const Value.absent(),
+            Value<String?> mediaMimeType = const Value.absent(),
+            Value<String?> mediaPath = const Value.absent(),
+          }) =>
+              NotificationsCompanion.insert(
+            id: id,
+            senderJid: senderJid,
+            chatJid: chatJid,
+            senderName: senderName,
+            body: body,
+            timestamp: timestamp,
+            avatarPath: avatarPath,
+            mediaMimeType: mediaMimeType,
+            mediaPath: mediaPath,
+          ),
+        ));
+}
+
+class $$NotificationsTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $NotificationsTable> {
+  $$NotificationsTableFilterComposer(super.$state);
+  ColumnFilters<int> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get senderJid => $state.composableBuilder(
+      column: $state.table.senderJid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get chatJid => $state.composableBuilder(
+      column: $state.table.chatJid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get senderName => $state.composableBuilder(
+      column: $state.table.senderName,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get body => $state.composableBuilder(
+      column: $state.table.body,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get timestamp => $state.composableBuilder(
+      column: $state.table.timestamp,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get avatarPath => $state.composableBuilder(
+      column: $state.table.avatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get mediaMimeType => $state.composableBuilder(
+      column: $state.table.mediaMimeType,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get mediaPath => $state.composableBuilder(
+      column: $state.table.mediaPath,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+}
+
+class $$NotificationsTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $NotificationsTable> {
+  $$NotificationsTableOrderingComposer(super.$state);
+  ColumnOrderings<int> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get senderJid => $state.composableBuilder(
+      column: $state.table.senderJid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get chatJid => $state.composableBuilder(
+      column: $state.table.chatJid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get senderName => $state.composableBuilder(
+      column: $state.table.senderName,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get body => $state.composableBuilder(
+      column: $state.table.body,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get timestamp => $state.composableBuilder(
+      column: $state.table.timestamp,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get avatarPath => $state.composableBuilder(
+      column: $state.table.avatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get mediaMimeType => $state.composableBuilder(
+      column: $state.table.mediaMimeType,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get mediaPath => $state.composableBuilder(
+      column: $state.table.mediaPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+}
+
+typedef $$ContactsTableCreateCompanionBuilder = ContactsCompanion Function({
   required String nativeID,
   required String jid,
   Value<int> rowid,
@@ -5755,8 +7257,7 @@ class $$ContactsTableTableManager extends RootTableManager<
     Contact,
     $$ContactsTableFilterComposer,
     $$ContactsTableOrderingComposer,
-    $$ContactsTableProcessedTableManager,
-    $$ContactsTableInsertCompanionBuilder,
+    $$ContactsTableCreateCompanionBuilder,
     $$ContactsTableUpdateCompanionBuilder> {
   $$ContactsTableTableManager(_$XmppDrift db, $ContactsTable table)
       : super(TableManagerState(
@@ -5766,9 +7267,7 @@ class $$ContactsTableTableManager extends RootTableManager<
               $$ContactsTableFilterComposer(ComposerState(db, table)),
           orderingComposer:
               $$ContactsTableOrderingComposer(ComposerState(db, table)),
-          getChildManagerBuilder: (p) =>
-              $$ContactsTableProcessedTableManager(p),
-          getUpdateCompanionBuilder: ({
+          updateCompanionCallback: ({
             Value<String> nativeID = const Value.absent(),
             Value<String> jid = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -5778,7 +7277,7 @@ class $$ContactsTableTableManager extends RootTableManager<
             jid: jid,
             rowid: rowid,
           ),
-          getInsertCompanionBuilder: ({
+          createCompanionCallback: ({
             required String nativeID,
             required String jid,
             Value<int> rowid = const Value.absent(),
@@ -5789,18 +7288,6 @@ class $$ContactsTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
         ));
-}
-
-class $$ContactsTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDrift,
-    $ContactsTable,
-    Contact,
-    $$ContactsTableFilterComposer,
-    $$ContactsTableOrderingComposer,
-    $$ContactsTableProcessedTableManager,
-    $$ContactsTableInsertCompanionBuilder,
-    $$ContactsTableUpdateCompanionBuilder> {
-  $$ContactsTableProcessedTableManager(super.$state);
 }
 
 class $$ContactsTableFilterComposer
@@ -5815,6 +7302,32 @@ class $$ContactsTableFilterComposer
       column: $state.table.jid,
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ComposableFilter rosterRefs(
+      ComposableFilter Function($$RosterTableFilterComposer f) f) {
+    final $$RosterTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.nativeID,
+        referencedTable: $state.db.roster,
+        getReferencedColumn: (t) => t.contactID,
+        builder: (joinBuilder, parentComposers) => $$RosterTableFilterComposer(
+            ComposerState(
+                $state.db, $state.db.roster, joinBuilder, parentComposers)));
+    return f(composer);
+  }
+
+  ComposableFilter chatsRefs(
+      ComposableFilter Function($$ChatsTableFilterComposer f) f) {
+    final $$ChatsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.nativeID,
+        referencedTable: $state.db.chats,
+        getReferencedColumn: (t) => t.contactID,
+        builder: (joinBuilder, parentComposers) => $$ChatsTableFilterComposer(
+            ComposerState(
+                $state.db, $state.db.chats, joinBuilder, parentComposers)));
+    return f(composer);
+  }
 }
 
 class $$ContactsTableOrderingComposer
@@ -5831,7 +7344,681 @@ class $$ContactsTableOrderingComposer
           ColumnOrderings(column, joinBuilders: joinBuilders));
 }
 
-typedef $$BlocklistTableInsertCompanionBuilder = BlocklistCompanion Function({
+typedef $$RosterTableCreateCompanionBuilder = RosterCompanion Function({
+  required String jid,
+  required String title,
+  required Presence presence,
+  Value<String?> status,
+  Value<String?> avatarPath,
+  Value<String?> avatarHash,
+  required Subscription subscription,
+  Value<Ask?> ask,
+  Value<String?> contactID,
+  Value<String?> contactAvatarPath,
+  Value<String?> contactDisplayName,
+  Value<int> rowid,
+});
+typedef $$RosterTableUpdateCompanionBuilder = RosterCompanion Function({
+  Value<String> jid,
+  Value<String> title,
+  Value<Presence> presence,
+  Value<String?> status,
+  Value<String?> avatarPath,
+  Value<String?> avatarHash,
+  Value<Subscription> subscription,
+  Value<Ask?> ask,
+  Value<String?> contactID,
+  Value<String?> contactAvatarPath,
+  Value<String?> contactDisplayName,
+  Value<int> rowid,
+});
+
+class $$RosterTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $RosterTable,
+    RosterItem,
+    $$RosterTableFilterComposer,
+    $$RosterTableOrderingComposer,
+    $$RosterTableCreateCompanionBuilder,
+    $$RosterTableUpdateCompanionBuilder> {
+  $$RosterTableTableManager(_$XmppDrift db, $RosterTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$RosterTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$RosterTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> jid = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<Presence> presence = const Value.absent(),
+            Value<String?> status = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<String?> avatarHash = const Value.absent(),
+            Value<Subscription> subscription = const Value.absent(),
+            Value<Ask?> ask = const Value.absent(),
+            Value<String?> contactID = const Value.absent(),
+            Value<String?> contactAvatarPath = const Value.absent(),
+            Value<String?> contactDisplayName = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              RosterCompanion(
+            jid: jid,
+            title: title,
+            presence: presence,
+            status: status,
+            avatarPath: avatarPath,
+            avatarHash: avatarHash,
+            subscription: subscription,
+            ask: ask,
+            contactID: contactID,
+            contactAvatarPath: contactAvatarPath,
+            contactDisplayName: contactDisplayName,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String jid,
+            required String title,
+            required Presence presence,
+            Value<String?> status = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<String?> avatarHash = const Value.absent(),
+            required Subscription subscription,
+            Value<Ask?> ask = const Value.absent(),
+            Value<String?> contactID = const Value.absent(),
+            Value<String?> contactAvatarPath = const Value.absent(),
+            Value<String?> contactDisplayName = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              RosterCompanion.insert(
+            jid: jid,
+            title: title,
+            presence: presence,
+            status: status,
+            avatarPath: avatarPath,
+            avatarHash: avatarHash,
+            subscription: subscription,
+            ask: ask,
+            contactID: contactID,
+            contactAvatarPath: contactAvatarPath,
+            contactDisplayName: contactDisplayName,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$RosterTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $RosterTable> {
+  $$RosterTableFilterComposer(super.$state);
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get title => $state.composableBuilder(
+      column: $state.table.title,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<Presence, Presence, String> get presence =>
+      $state.composableBuilder(
+          column: $state.table.presence,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get status => $state.composableBuilder(
+      column: $state.table.status,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get avatarPath => $state.composableBuilder(
+      column: $state.table.avatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get avatarHash => $state.composableBuilder(
+      column: $state.table.avatarHash,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<Subscription, Subscription, String>
+      get subscription => $state.composableBuilder(
+          column: $state.table.subscription,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<Ask?, Ask, String> get ask =>
+      $state.composableBuilder(
+          column: $state.table.ask,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get contactAvatarPath => $state.composableBuilder(
+      column: $state.table.contactAvatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get contactDisplayName => $state.composableBuilder(
+      column: $state.table.contactDisplayName,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  $$ContactsTableFilterComposer get contactID {
+    final $$ContactsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactID,
+        referencedTable: $state.db.contacts,
+        getReferencedColumn: (t) => t.nativeID,
+        builder: (joinBuilder, parentComposers) =>
+            $$ContactsTableFilterComposer(ComposerState(
+                $state.db, $state.db.contacts, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $$RosterTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $RosterTable> {
+  $$RosterTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get title => $state.composableBuilder(
+      column: $state.table.title,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get presence => $state.composableBuilder(
+      column: $state.table.presence,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get status => $state.composableBuilder(
+      column: $state.table.status,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get avatarPath => $state.composableBuilder(
+      column: $state.table.avatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get avatarHash => $state.composableBuilder(
+      column: $state.table.avatarHash,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get subscription => $state.composableBuilder(
+      column: $state.table.subscription,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get ask => $state.composableBuilder(
+      column: $state.table.ask,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get contactAvatarPath => $state.composableBuilder(
+      column: $state.table.contactAvatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get contactDisplayName => $state.composableBuilder(
+      column: $state.table.contactDisplayName,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$ContactsTableOrderingComposer get contactID {
+    final $$ContactsTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactID,
+        referencedTable: $state.db.contacts,
+        getReferencedColumn: (t) => t.nativeID,
+        builder: (joinBuilder, parentComposers) =>
+            $$ContactsTableOrderingComposer(ComposerState(
+                $state.db, $state.db.contacts, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+typedef $$InvitesTableCreateCompanionBuilder = InvitesCompanion Function({
+  required String jid,
+  required String title,
+  Value<int> rowid,
+});
+typedef $$InvitesTableUpdateCompanionBuilder = InvitesCompanion Function({
+  Value<String> jid,
+  Value<String> title,
+  Value<int> rowid,
+});
+
+class $$InvitesTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $InvitesTable,
+    Invite,
+    $$InvitesTableFilterComposer,
+    $$InvitesTableOrderingComposer,
+    $$InvitesTableCreateCompanionBuilder,
+    $$InvitesTableUpdateCompanionBuilder> {
+  $$InvitesTableTableManager(_$XmppDrift db, $InvitesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$InvitesTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$InvitesTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> jid = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              InvitesCompanion(
+            jid: jid,
+            title: title,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String jid,
+            required String title,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              InvitesCompanion.insert(
+            jid: jid,
+            title: title,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$InvitesTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $InvitesTable> {
+  $$InvitesTableFilterComposer(super.$state);
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get title => $state.composableBuilder(
+      column: $state.table.title,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+}
+
+class $$InvitesTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $InvitesTable> {
+  $$InvitesTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get title => $state.composableBuilder(
+      column: $state.table.title,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+}
+
+typedef $$ChatsTableCreateCompanionBuilder = ChatsCompanion Function({
+  required String jid,
+  required String title,
+  required ChatType type,
+  Value<String?> myNickname,
+  Value<String?> avatarPath,
+  Value<String?> avatarHash,
+  Value<String?> lastMessage,
+  required DateTime lastChangeTimestamp,
+  Value<int> unreadCount,
+  Value<bool> open,
+  Value<bool> muted,
+  Value<bool> favourited,
+  Value<EncryptionProtocol> encryptionProtocol,
+  Value<String?> contactID,
+  Value<String?> contactDisplayName,
+  Value<String?> contactAvatarPath,
+  Value<String?> contactAvatarHash,
+  Value<mox.ChatState?> chatState,
+  Value<int> rowid,
+});
+typedef $$ChatsTableUpdateCompanionBuilder = ChatsCompanion Function({
+  Value<String> jid,
+  Value<String> title,
+  Value<ChatType> type,
+  Value<String?> myNickname,
+  Value<String?> avatarPath,
+  Value<String?> avatarHash,
+  Value<String?> lastMessage,
+  Value<DateTime> lastChangeTimestamp,
+  Value<int> unreadCount,
+  Value<bool> open,
+  Value<bool> muted,
+  Value<bool> favourited,
+  Value<EncryptionProtocol> encryptionProtocol,
+  Value<String?> contactID,
+  Value<String?> contactDisplayName,
+  Value<String?> contactAvatarPath,
+  Value<String?> contactAvatarHash,
+  Value<mox.ChatState?> chatState,
+  Value<int> rowid,
+});
+
+class $$ChatsTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $ChatsTable,
+    Chat,
+    $$ChatsTableFilterComposer,
+    $$ChatsTableOrderingComposer,
+    $$ChatsTableCreateCompanionBuilder,
+    $$ChatsTableUpdateCompanionBuilder> {
+  $$ChatsTableTableManager(_$XmppDrift db, $ChatsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$ChatsTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$ChatsTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> jid = const Value.absent(),
+            Value<String> title = const Value.absent(),
+            Value<ChatType> type = const Value.absent(),
+            Value<String?> myNickname = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<String?> avatarHash = const Value.absent(),
+            Value<String?> lastMessage = const Value.absent(),
+            Value<DateTime> lastChangeTimestamp = const Value.absent(),
+            Value<int> unreadCount = const Value.absent(),
+            Value<bool> open = const Value.absent(),
+            Value<bool> muted = const Value.absent(),
+            Value<bool> favourited = const Value.absent(),
+            Value<EncryptionProtocol> encryptionProtocol = const Value.absent(),
+            Value<String?> contactID = const Value.absent(),
+            Value<String?> contactDisplayName = const Value.absent(),
+            Value<String?> contactAvatarPath = const Value.absent(),
+            Value<String?> contactAvatarHash = const Value.absent(),
+            Value<mox.ChatState?> chatState = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ChatsCompanion(
+            jid: jid,
+            title: title,
+            type: type,
+            myNickname: myNickname,
+            avatarPath: avatarPath,
+            avatarHash: avatarHash,
+            lastMessage: lastMessage,
+            lastChangeTimestamp: lastChangeTimestamp,
+            unreadCount: unreadCount,
+            open: open,
+            muted: muted,
+            favourited: favourited,
+            encryptionProtocol: encryptionProtocol,
+            contactID: contactID,
+            contactDisplayName: contactDisplayName,
+            contactAvatarPath: contactAvatarPath,
+            contactAvatarHash: contactAvatarHash,
+            chatState: chatState,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String jid,
+            required String title,
+            required ChatType type,
+            Value<String?> myNickname = const Value.absent(),
+            Value<String?> avatarPath = const Value.absent(),
+            Value<String?> avatarHash = const Value.absent(),
+            Value<String?> lastMessage = const Value.absent(),
+            required DateTime lastChangeTimestamp,
+            Value<int> unreadCount = const Value.absent(),
+            Value<bool> open = const Value.absent(),
+            Value<bool> muted = const Value.absent(),
+            Value<bool> favourited = const Value.absent(),
+            Value<EncryptionProtocol> encryptionProtocol = const Value.absent(),
+            Value<String?> contactID = const Value.absent(),
+            Value<String?> contactDisplayName = const Value.absent(),
+            Value<String?> contactAvatarPath = const Value.absent(),
+            Value<String?> contactAvatarHash = const Value.absent(),
+            Value<mox.ChatState?> chatState = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ChatsCompanion.insert(
+            jid: jid,
+            title: title,
+            type: type,
+            myNickname: myNickname,
+            avatarPath: avatarPath,
+            avatarHash: avatarHash,
+            lastMessage: lastMessage,
+            lastChangeTimestamp: lastChangeTimestamp,
+            unreadCount: unreadCount,
+            open: open,
+            muted: muted,
+            favourited: favourited,
+            encryptionProtocol: encryptionProtocol,
+            contactID: contactID,
+            contactDisplayName: contactDisplayName,
+            contactAvatarPath: contactAvatarPath,
+            contactAvatarHash: contactAvatarHash,
+            chatState: chatState,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$ChatsTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $ChatsTable> {
+  $$ChatsTableFilterComposer(super.$state);
+  ColumnFilters<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get title => $state.composableBuilder(
+      column: $state.table.title,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<ChatType, ChatType, int> get type =>
+      $state.composableBuilder(
+          column: $state.table.type,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get myNickname => $state.composableBuilder(
+      column: $state.table.myNickname,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get avatarPath => $state.composableBuilder(
+      column: $state.table.avatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get avatarHash => $state.composableBuilder(
+      column: $state.table.avatarHash,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get lastMessage => $state.composableBuilder(
+      column: $state.table.lastMessage,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<DateTime> get lastChangeTimestamp => $state.composableBuilder(
+      column: $state.table.lastChangeTimestamp,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<int> get unreadCount => $state.composableBuilder(
+      column: $state.table.unreadCount,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get open => $state.composableBuilder(
+      column: $state.table.open,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get muted => $state.composableBuilder(
+      column: $state.table.muted,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<bool> get favourited => $state.composableBuilder(
+      column: $state.table.favourited,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<EncryptionProtocol, EncryptionProtocol, int>
+      get encryptionProtocol => $state.composableBuilder(
+          column: $state.table.encryptionProtocol,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get contactDisplayName => $state.composableBuilder(
+      column: $state.table.contactDisplayName,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get contactAvatarPath => $state.composableBuilder(
+      column: $state.table.contactAvatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get contactAvatarHash => $state.composableBuilder(
+      column: $state.table.contactAvatarHash,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<mox.ChatState?, mox.ChatState, String>
+      get chatState => $state.composableBuilder(
+          column: $state.table.chatState,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  $$ContactsTableFilterComposer get contactID {
+    final $$ContactsTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactID,
+        referencedTable: $state.db.contacts,
+        getReferencedColumn: (t) => t.nativeID,
+        builder: (joinBuilder, parentComposers) =>
+            $$ContactsTableFilterComposer(ComposerState(
+                $state.db, $state.db.contacts, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $$ChatsTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $ChatsTable> {
+  $$ChatsTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get jid => $state.composableBuilder(
+      column: $state.table.jid,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get title => $state.composableBuilder(
+      column: $state.table.title,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get type => $state.composableBuilder(
+      column: $state.table.type,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get myNickname => $state.composableBuilder(
+      column: $state.table.myNickname,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get avatarPath => $state.composableBuilder(
+      column: $state.table.avatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get avatarHash => $state.composableBuilder(
+      column: $state.table.avatarHash,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get lastMessage => $state.composableBuilder(
+      column: $state.table.lastMessage,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<DateTime> get lastChangeTimestamp => $state.composableBuilder(
+      column: $state.table.lastChangeTimestamp,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get unreadCount => $state.composableBuilder(
+      column: $state.table.unreadCount,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get open => $state.composableBuilder(
+      column: $state.table.open,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get muted => $state.composableBuilder(
+      column: $state.table.muted,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<bool> get favourited => $state.composableBuilder(
+      column: $state.table.favourited,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get encryptionProtocol => $state.composableBuilder(
+      column: $state.table.encryptionProtocol,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get contactDisplayName => $state.composableBuilder(
+      column: $state.table.contactDisplayName,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get contactAvatarPath => $state.composableBuilder(
+      column: $state.table.contactAvatarPath,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get contactAvatarHash => $state.composableBuilder(
+      column: $state.table.contactAvatarHash,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get chatState => $state.composableBuilder(
+      column: $state.table.chatState,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$ContactsTableOrderingComposer get contactID {
+    final $$ContactsTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.contactID,
+        referencedTable: $state.db.contacts,
+        getReferencedColumn: (t) => t.nativeID,
+        builder: (joinBuilder, parentComposers) =>
+            $$ContactsTableOrderingComposer(ComposerState(
+                $state.db, $state.db.contacts, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+typedef $$BlocklistTableCreateCompanionBuilder = BlocklistCompanion Function({
   required String jid,
   Value<int> rowid,
 });
@@ -5846,8 +8033,7 @@ class $$BlocklistTableTableManager extends RootTableManager<
     BlocklistData,
     $$BlocklistTableFilterComposer,
     $$BlocklistTableOrderingComposer,
-    $$BlocklistTableProcessedTableManager,
-    $$BlocklistTableInsertCompanionBuilder,
+    $$BlocklistTableCreateCompanionBuilder,
     $$BlocklistTableUpdateCompanionBuilder> {
   $$BlocklistTableTableManager(_$XmppDrift db, $BlocklistTable table)
       : super(TableManagerState(
@@ -5857,9 +8043,7 @@ class $$BlocklistTableTableManager extends RootTableManager<
               $$BlocklistTableFilterComposer(ComposerState(db, table)),
           orderingComposer:
               $$BlocklistTableOrderingComposer(ComposerState(db, table)),
-          getChildManagerBuilder: (p) =>
-              $$BlocklistTableProcessedTableManager(p),
-          getUpdateCompanionBuilder: ({
+          updateCompanionCallback: ({
             Value<String> jid = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -5867,7 +8051,7 @@ class $$BlocklistTableTableManager extends RootTableManager<
             jid: jid,
             rowid: rowid,
           ),
-          getInsertCompanionBuilder: ({
+          createCompanionCallback: ({
             required String jid,
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -5876,18 +8060,6 @@ class $$BlocklistTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
         ));
-}
-
-class $$BlocklistTableProcessedTableManager extends ProcessedTableManager<
-    _$XmppDrift,
-    $BlocklistTable,
-    BlocklistData,
-    $$BlocklistTableFilterComposer,
-    $$BlocklistTableOrderingComposer,
-    $$BlocklistTableProcessedTableManager,
-    $$BlocklistTableInsertCompanionBuilder,
-    $$BlocklistTableUpdateCompanionBuilder> {
-  $$BlocklistTableProcessedTableManager(super.$state);
 }
 
 class $$BlocklistTableFilterComposer
@@ -5908,17 +8080,194 @@ class $$BlocklistTableOrderingComposer
           ColumnOrderings(column, joinBuilders: joinBuilders));
 }
 
-class _$XmppDriftManager {
+typedef $$StickersTableCreateCompanionBuilder = StickersCompanion Function({
+  required String id,
+  required String stickerPackID,
+  required String fileMetadataID,
+  required String description,
+  required Map<String, String> suggestions,
+  Value<int> rowid,
+});
+typedef $$StickersTableUpdateCompanionBuilder = StickersCompanion Function({
+  Value<String> id,
+  Value<String> stickerPackID,
+  Value<String> fileMetadataID,
+  Value<String> description,
+  Value<Map<String, String>> suggestions,
+  Value<int> rowid,
+});
+
+class $$StickersTableTableManager extends RootTableManager<
+    _$XmppDrift,
+    $StickersTable,
+    Sticker,
+    $$StickersTableFilterComposer,
+    $$StickersTableOrderingComposer,
+    $$StickersTableCreateCompanionBuilder,
+    $$StickersTableUpdateCompanionBuilder> {
+  $$StickersTableTableManager(_$XmppDrift db, $StickersTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          filteringComposer:
+              $$StickersTableFilterComposer(ComposerState(db, table)),
+          orderingComposer:
+              $$StickersTableOrderingComposer(ComposerState(db, table)),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> stickerPackID = const Value.absent(),
+            Value<String> fileMetadataID = const Value.absent(),
+            Value<String> description = const Value.absent(),
+            Value<Map<String, String>> suggestions = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              StickersCompanion(
+            id: id,
+            stickerPackID: stickerPackID,
+            fileMetadataID: fileMetadataID,
+            description: description,
+            suggestions: suggestions,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String stickerPackID,
+            required String fileMetadataID,
+            required String description,
+            required Map<String, String> suggestions,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              StickersCompanion.insert(
+            id: id,
+            stickerPackID: stickerPackID,
+            fileMetadataID: fileMetadataID,
+            description: description,
+            suggestions: suggestions,
+            rowid: rowid,
+          ),
+        ));
+}
+
+class $$StickersTableFilterComposer
+    extends FilterComposer<_$XmppDrift, $StickersTable> {
+  $$StickersTableFilterComposer(super.$state);
+  ColumnFilters<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnFilters<String> get description => $state.composableBuilder(
+      column: $state.table.description,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
+  ColumnWithTypeConverterFilters<Map<String, String>, Map<String, String>,
+          String>
+      get suggestions => $state.composableBuilder(
+          column: $state.table.suggestions,
+          builder: (column, joinBuilders) => ColumnWithTypeConverterFilters(
+              column,
+              joinBuilders: joinBuilders));
+
+  $$StickerPacksTableFilterComposer get stickerPackID {
+    final $$StickerPacksTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.stickerPackID,
+        referencedTable: $state.db.stickerPacks,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$StickerPacksTableFilterComposer(ComposerState($state.db,
+                $state.db.stickerPacks, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$FileMetadataTableFilterComposer get fileMetadataID {
+    final $$FileMetadataTableFilterComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.fileMetadataID,
+        referencedTable: $state.db.fileMetadata,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$FileMetadataTableFilterComposer(ComposerState($state.db,
+                $state.db.fileMetadata, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $$StickersTableOrderingComposer
+    extends OrderingComposer<_$XmppDrift, $StickersTable> {
+  $$StickersTableOrderingComposer(super.$state);
+  ColumnOrderings<String> get id => $state.composableBuilder(
+      column: $state.table.id,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get description => $state.composableBuilder(
+      column: $state.table.description,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<String> get suggestions => $state.composableBuilder(
+      column: $state.table.suggestions,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  $$StickerPacksTableOrderingComposer get stickerPackID {
+    final $$StickerPacksTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.stickerPackID,
+        referencedTable: $state.db.stickerPacks,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$StickerPacksTableOrderingComposer(ComposerState($state.db,
+                $state.db.stickerPacks, joinBuilder, parentComposers)));
+    return composer;
+  }
+
+  $$FileMetadataTableOrderingComposer get fileMetadataID {
+    final $$FileMetadataTableOrderingComposer composer = $state.composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.fileMetadataID,
+        referencedTable: $state.db.fileMetadata,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder, parentComposers) =>
+            $$FileMetadataTableOrderingComposer(ComposerState($state.db,
+                $state.db.fileMetadata, joinBuilder, parentComposers)));
+    return composer;
+  }
+}
+
+class $XmppDriftManager {
   final _$XmppDrift _db;
-  _$XmppDriftManager(this._db);
+  $XmppDriftManager(this._db);
   $$FileMetadataTableTableManager get fileMetadata =>
       $$FileMetadataTableTableManager(_db, _db.fileMetadata);
+  $$StickerPacksTableTableManager get stickerPacks =>
+      $$StickerPacksTableTableManager(_db, _db.stickerPacks);
+  $$MessagesTableTableManager get messages =>
+      $$MessagesTableTableManager(_db, _db.messages);
   $$DraftsTableTableManager get drafts =>
       $$DraftsTableTableManager(_db, _db.drafts);
+  $$OmemoDevicesTableTableManager get omemoDevices =>
+      $$OmemoDevicesTableTableManager(_db, _db.omemoDevices);
   $$OmemoDeviceListsTableTableManager get omemoDeviceLists =>
       $$OmemoDeviceListsTableTableManager(_db, _db.omemoDeviceLists);
+  $$OmemoRatchetsTableTableManager get omemoRatchets =>
+      $$OmemoRatchetsTableTableManager(_db, _db.omemoRatchets);
+  $$ReactionsTableTableManager get reactions =>
+      $$ReactionsTableTableManager(_db, _db.reactions);
+  $$NotificationsTableTableManager get notifications =>
+      $$NotificationsTableTableManager(_db, _db.notifications);
   $$ContactsTableTableManager get contacts =>
       $$ContactsTableTableManager(_db, _db.contacts);
+  $$RosterTableTableManager get roster =>
+      $$RosterTableTableManager(_db, _db.roster);
+  $$InvitesTableTableManager get invites =>
+      $$InvitesTableTableManager(_db, _db.invites);
+  $$ChatsTableTableManager get chats =>
+      $$ChatsTableTableManager(_db, _db.chats);
   $$BlocklistTableTableManager get blocklist =>
       $$BlocklistTableTableManager(_db, _db.blocklist);
+  $$StickersTableTableManager get stickers =>
+      $$StickersTableTableManager(_db, _db.stickers);
 }

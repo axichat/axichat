@@ -1,4 +1,3 @@
-import 'package:chat/main.dart';
 import 'package:chat/src/app.dart';
 import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:chat/src/common/ui/ui.dart';

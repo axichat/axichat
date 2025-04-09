@@ -55,7 +55,7 @@ class ForegroundSocket extends TaskHandler {
   }
 
   @override
-  void onStart(DateTime timestamp) {
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     WidgetsFlutterBinding.ensureInitialized();
 
     Logger.root.level = Level.ALL;
@@ -102,7 +102,7 @@ class ForegroundSocket extends TaskHandler {
   void onRepeatEvent(DateTime timestamp) {}
 
   @override
-  void onDestroy(DateTime timestamp) async {
+  Future<void> onDestroy(DateTime timestamp) async {
     _socket?.close();
     _socket = null;
     await _dataSubscription.cancel();
@@ -242,9 +242,8 @@ void initForegroundService() => FlutterForegroundTask.init(
         showNotification: true,
         playSound: false,
       ),
-      foregroundTaskOptions: const ForegroundTaskOptions(
-        interval: 5000,
-        isOnceEvent: false,
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(5000),
         autoRunOnBoot: true,
         autoRunOnMyPackageReplaced: true,
         allowWakeLock: true,

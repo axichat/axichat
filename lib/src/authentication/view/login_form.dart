@@ -98,7 +98,7 @@ class _LoginFormState extends State<LoginForm> {
                 notificationService: context.read<NotificationService>(),
               ),
               const Align(
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.center,
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
                   child: TermsCheckbox(),

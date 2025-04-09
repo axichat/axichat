@@ -22,11 +22,11 @@ class _NotificationRequestState extends State<NotificationRequest> {
       initialData: withForeground,
       future: widget.notificationService.hasAllNotificationPermissions(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.requireData) {
+        if (!snapshot.hasData || withForeground) {
           return const SizedBox.shrink();
         }
 
-        if (!withForeground && snapshot.requireData) {
+        if (snapshot.requireData) {
           return const ShadSwitch(
             enabled: false,
             value: true,
