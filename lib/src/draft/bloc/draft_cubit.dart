@@ -9,15 +9,15 @@ import 'package:equatable/equatable.dart';
 part 'draft_state.dart';
 
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
-  DraftCubit({required XmppService xmppService})
-      : _xmppService = xmppService,
+  DraftCubit({required MessageService messageService})
+      : _messageService = messageService,
         super(const DraftsAvailable(items: [])) {
-    _draftsSubscription = _xmppService
+    _draftsSubscription = _messageService
         .draftsStream()
         .listen((items) => emit(DraftsAvailable(items: items)));
   }
 
-  final XmppService _xmppService;
+  final MessageService _messageService;
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
 
@@ -44,7 +44,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     emit(DraftSending());
     try {
       for (final jid in jids) {
-        await _xmppService.sendMessage(jid: jid, text: body);
+        await _messageService.sendMessage(jid: jid, text: body);
       }
     } on XmppMessageException catch (_) {
       emit(const DraftFailure(
@@ -62,11 +62,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<String> jids,
     required String body,
   }) async {
-    await _xmppService.saveDraft(id: id, jids: jids, body: body);
+    await _messageService.saveDraft(id: id, jids: jids, body: body);
     emit(DraftSaveComplete());
   }
 
   Future<void> deleteDraft({required int id}) async {
-    await _xmppService.deleteDraft(id: id);
+    await _messageService.deleteDraft(id: id);
   }
 }

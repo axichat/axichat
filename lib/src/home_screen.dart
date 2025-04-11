@@ -29,79 +29,94 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  List<(String, Widget, Widget?)> get tabs => const [
-        (
-          'Chats',
-          ChatsList(key: PageStorageKey('Chats')),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ChatsFilterButton(),
-              DraftButton(),
-            ],
-          )
-        ),
-        (
-          'Contacts',
-          RosterList(key: PageStorageKey('Contacts')),
-          RosterAddButton()
-        ),
-        ('New', RosterInvitesList(key: PageStorageKey('New')), null),
-        (
-          'Blocked',
-          BlocklistList(key: PageStorageKey('Blocked')),
-          BlocklistAddButton(),
-        ),
-        ('Drafts', DraftsList(key: PageStorageKey('Drafts')), null),
-      ];
-
   @override
   Widget build(BuildContext context) {
+    final getService = context.read<XmppBase>;
+
+    final isChat = getService() is ChatsService;
+    final isMessage = getService() is MessageService;
+    final isRoster = getService() is RosterService;
+    final isPresence = getService() is PresenceService;
+    final isBlocking = getService() is BlockingService;
+
+    final tabs = [
+      if (isChat)
+        (
+          'Chats',
+          const ChatsList(key: PageStorageKey('Chats')),
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [ChatsFilterButton(), DraftButton()],
+          )
+        ),
+      if (isRoster)
+        (
+          'Contacts',
+          const RosterList(key: PageStorageKey('Contacts')),
+          const RosterAddButton()
+        ),
+      if (isRoster)
+        ('New', const RosterInvitesList(key: PageStorageKey('New')), null),
+      if (isBlocking)
+        (
+          'Blocked',
+          const BlocklistList(key: PageStorageKey('Blocked')),
+          const BlocklistAddButton(),
+        ),
+      if (isMessage)
+        ('Drafts', const DraftsList(key: PageStorageKey('Drafts')), null),
+    ];
+
     return Scaffold(
       body: DefaultTabController(
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,
         child: MultiBlocProvider(
           providers: [
-            BlocProvider(
-              create: (context) => ChatsCubit(
-                xmppService: context.read<XmppService>(),
+            if (isChat)
+              BlocProvider(
+                create: (context) => ChatsCubit(
+                  chatsService: context.read<ChatsService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => DraftCubit(
-                xmppService: context.read<XmppService>(),
+            if (isMessage)
+              BlocProvider(
+                create: (context) => DraftCubit(
+                  messageService: context.read<MessageService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => RosterCubit(
-                xmppService: context.read<XmppService>(),
+            if (isRoster)
+              BlocProvider(
+                create: (context) => RosterCubit(
+                  rosterService: context.read<RosterService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => ProfileCubit(
-                xmppService: context.read<XmppService>(),
+            if (isPresence)
+              BlocProvider(
+                create: (context) => ProfileCubit(
+                  presenceService: context.read<PresenceService>(),
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) => BlocklistCubit(
-                xmppService: context.read<XmppService>(),
+            if (isBlocking)
+              BlocProvider(
+                create: (context) => BlocklistCubit(
+                  blockingService: context.read<BlockingService>(),
+                ),
               ),
-            ),
             BlocProvider(
               create: (context) => ConnectivityCubit(
-                xmppService: context.read<XmppService>(),
+                xmppBase: context.read<XmppBase>(),
               ),
             ),
           ],
           child: Builder(
             builder: (context) {
-              final openJid = context.watch<ChatsCubit>().state.openJid;
+              final openJid = context.watch<ChatsCubit?>()?.state.openJid;
               return PopScope(
                 canPop: false,
                 onPopInvoked: (_) {
                   if (openJid case final jid?) {
-                    context.read<ChatsCubit>().toggleChat(jid: jid);
+                    context.read<ChatsCubit?>()?.toggleChat(jid: jid);
                   }
                 },
                 child: Column(
@@ -116,14 +131,17 @@ class HomeScreen extends StatelessWidget {
                             child: AxiAdaptiveLayout(
                               invertPriority: openJid != null,
                               primaryChild: Nexus(tabs: tabs),
-                              secondaryChild: openJid == null
+                              secondaryChild: openJid == null ||
+                                      context.read<MessageService?>() == null
                                   ? const GuestChat()
                                   : BlocProvider(
                                       key: Key(openJid),
                                       create: (context) => ChatBloc(
                                         jid: openJid,
-                                        xmppService:
-                                            context.read<XmppService>(),
+                                        messageService:
+                                            context.read<MessageService>(),
+                                        chatsService:
+                                            context.read<ChatsService>(),
                                         notificationService:
                                             context.read<NotificationService>(),
                                       ),
@@ -158,50 +176,52 @@ class Nexus extends StatelessWidget {
         const AxiAppBar(),
         MultiBlocListener(
           listeners: [
-            BlocListener<RosterCubit, RosterState>(
-              listener: (context, state) {
-                if (showToast == null) return;
-                if (state is RosterFailure) {
-                  showToast(
-                    ShadToast.destructive(
-                      title: const Text('Whoops!'),
-                      description: Text(state.message),
-                      showCloseIconOnlyWhenHovered: false,
-                    ),
-                  );
-                } else if (state is RosterSuccess) {
-                  showToast(
-                    ShadToast(
-                      title: const Text('Success!'),
-                      description: Text(state.message),
-                      showCloseIconOnlyWhenHovered: false,
-                    ),
-                  );
-                }
-              },
-            ),
-            BlocListener<BlocklistCubit, BlocklistState>(
-              listener: (context, state) {
-                if (showToast == null) return;
-                if (state is BlocklistFailure) {
-                  showToast(
-                    ShadToast.destructive(
-                      title: const Text('Whoops!'),
-                      description: Text(state.message),
-                      showCloseIconOnlyWhenHovered: false,
-                    ),
-                  );
-                } else if (state is BlocklistSuccess) {
-                  showToast(
-                    ShadToast(
-                      title: const Text('Success!'),
-                      description: Text(state.message),
-                      showCloseIconOnlyWhenHovered: false,
-                    ),
-                  );
-                }
-              },
-            ),
+            if (context.read<RosterCubit?>() != null)
+              BlocListener<RosterCubit, RosterState>(
+                listener: (context, state) {
+                  if (showToast == null) return;
+                  if (state is RosterFailure) {
+                    showToast(
+                      ShadToast.destructive(
+                        title: const Text('Whoops!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  } else if (state is RosterSuccess) {
+                    showToast(
+                      ShadToast(
+                        title: const Text('Success!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  }
+                },
+              ),
+            if (context.read<BlocklistCubit?>() != null)
+              BlocListener<BlocklistCubit, BlocklistState>(
+                listener: (context, state) {
+                  if (showToast == null) return;
+                  if (state is BlocklistFailure) {
+                    showToast(
+                      ShadToast.destructive(
+                        title: const Text('Whoops!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  } else if (state is BlocklistSuccess) {
+                    showToast(
+                      ShadToast(
+                        title: const Text('Success!'),
+                        description: Text(state.message),
+                        showCloseIconOnlyWhenHovered: false,
+                      ),
+                    );
+                  }
+                },
+              ),
           ],
           child: Expanded(
             child: Container(
@@ -234,10 +254,10 @@ class Nexus extends StatelessWidget {
               tabs: tabs.map((e) {
                 final (label, _, _) = e;
                 if (label == 'New') {
-                  final length = context.watch<RosterCubit>().inviteCount;
+                  final length = context.watch<RosterCubit?>()?.inviteCount;
                   return Tab(
                     child: AxiBadge(
-                      count: length,
+                      count: length ?? 0,
                       child: Text(label),
                     ),
                   );

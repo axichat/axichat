@@ -16,9 +16,11 @@ part 'chat_state.dart';
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required this.jid,
-    required XmppService xmppService,
+    required MessageService messageService,
+    required ChatsService chatsService,
     required NotificationService notificationService,
-  })  : _xmppService = xmppService,
+  })  : _messageService = messageService,
+        _chatsService = chatsService,
         _notificationService = notificationService,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
@@ -36,10 +38,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
       _notificationService.dismissNotifications(groupKey: jid!);
-      _chatSubscription = _xmppService
+      _chatSubscription = _chatsService
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
-      _messageSubscription = _xmppService
+      _messageSubscription = _messageService
           .messageStreamForChat(jid!, end: messageBatchSize)
           .listen((items) => add(_ChatMessagesUpdated(items)));
     }
@@ -48,7 +50,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static const messageBatchSize = 50;
 
   final String? jid;
-  final XmppService _xmppService;
+  final MessageService _messageService;
+  final ChatsService _chatsService;
   final NotificationService _notificationService;
 
   late final StreamSubscription<Chat?> _chatSubscription;
@@ -109,7 +112,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         () => add(const _ChatTypingStopped()),
       );
     }
-    await _xmppService.sendTyping(jid: state.chat!.jid, typing: true);
+    await _chatsService.sendTyping(jid: state.chat!.jid, typing: true);
     emit(state.copyWith(typing: true));
   }
 
@@ -125,7 +128,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _stopTyping();
     emit(state.copyWith(typing: false));
     try {
-      await _xmppService.sendMessage(jid: jid!, text: event.text);
+      await _messageService.sendMessage(jid: jid!, text: event.text);
     } on XmppMessageException catch (_) {
       // Don't panic. User will see a visual difference in the message bubble.
     }
@@ -136,7 +139,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     if (jid == null) return;
-    await _xmppService.toggleChatMuted(jid: jid!, muted: event.muted);
+    await _chatsService.toggleChatMuted(jid: jid!, muted: event.muted);
   }
 
   Future<void> _onChatEncryptionChanged(
@@ -144,7 +147,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     if (jid == null) return;
-    await _xmppService.setChatEncryption(jid: jid!, protocol: event.protocol);
+    await _chatsService.setChatEncryption(jid: jid!, protocol: event.protocol);
   }
 
   Future<void> _onChatLoadEarlier(
@@ -152,7 +155,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     await _messageSubscription.cancel();
-    _messageSubscription = _xmppService
+    _messageSubscription = _messageService
         .messageStreamForChat(jid!, end: state.items.length + messageBatchSize)
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
@@ -160,6 +163,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _stopTyping() async {
     _typingTimer?.cancel();
     _typingTimer = null;
-    await _xmppService.sendTyping(jid: state.chat!.jid, typing: false);
+    await _chatsService.sendTyping(jid: state.chat!.jid, typing: false);
   }
 }

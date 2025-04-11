@@ -57,7 +57,7 @@ class RosterInvitesList extends StatelessWidget {
                               onPressed: disabled
                                   ? null
                                   : () {
-                                      context.read<RosterCubit>().addContact(
+                                      context.read<RosterCubit?>()?.addContact(
                                             jid: invite.jid,
                                             title: invite.title,
                                           );

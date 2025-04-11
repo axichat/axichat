@@ -9,27 +9,27 @@ part 'profile_cubit.freezed.dart';
 part 'profile_state.dart';
 
 class ProfileCubit extends Cubit<ProfileState> {
-  ProfileCubit({required XmppService xmppService})
-      : _xmppService = xmppService,
+  ProfileCubit({required PresenceService presenceService})
+      : _presenceService = presenceService,
         super(
           ProfileState(
-            jid: xmppService.myJid.toString(),
-            resource: xmppService.resource ?? '',
-            title: xmppService.username ?? '',
-            presence: xmppService.presence,
-            status: xmppService.status,
+            jid: presenceService.myJid ?? '',
+            resource: presenceService.resource ?? '',
+            title: presenceService.username ?? '',
+            presence: presenceService.presence,
+            status: presenceService.status,
           ),
         ) {
-    _presenceSubscription = _xmppService.presenceStream.listen(
+    _presenceSubscription = _presenceService.presenceStream.listen(
       (presence) =>
           emit(state.copyWith(presence: presence ?? Presence.unknown)),
     );
-    _statusSubscription = _xmppService.statusStream.listen(
+    _statusSubscription = _presenceService.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
   }
 
-  final XmppService _xmppService;
+  final PresenceService _presenceService;
 
   late final StreamSubscription<Presence?> _presenceSubscription;
   late final StreamSubscription<String?> _statusSubscription;
@@ -43,14 +43,14 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   Future<void> updatePresence({Presence? presence, String? status}) async {
     try {
-      await _xmppService.sendPresence(
+      await _presenceService.sendPresence(
         presence: presence ?? state.presence,
         status: status ?? state.status,
       );
     } on XmppPresenceException catch (_) {}
   }
 
-  Future<void> disconnect() => _xmppService.disconnect();
+  // Future<void> disconnect() => _xmppService.disconnect();
 
   void loadFingerprints() async {
     // final fingerprint = await _xmppService.getCurrentFingerprint();

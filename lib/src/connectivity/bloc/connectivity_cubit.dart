@@ -7,10 +7,10 @@ part 'connectivity_state.dart';
 
 class ConnectivityCubit extends Cubit<ConnectivityState> {
   ConnectivityCubit({
-    required XmppService xmppService,
-  })  : _xmppService = xmppService,
-        super(stateMap(xmppService.connectionState)) {
-    _connectivitySubscription = _xmppService.connectivityStream.listen(
+    required XmppBase xmppBase,
+  })  : _xmppBase = xmppBase,
+        super(stateMap(xmppBase.connectionState)) {
+    _connectivitySubscription = _xmppBase.connectivityStream.listen(
       (e) => emit(stateMap(e)),
     );
   }
@@ -23,7 +23,7 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
         ConnectionState.error => const ConnectivityError(),
       };
 
-  final XmppService _xmppService;
+  final XmppBase _xmppBase;
 
   late final StreamSubscription<ConnectionState> _connectivitySubscription;
 

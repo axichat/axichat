@@ -214,10 +214,10 @@ class _ChatState extends State<Chat> {
             }
           },
           builder: (context, state) {
-            final profile = context.watch<ProfileCubit>().state;
+            final profile = context.watch<ProfileCubit?>()?.state;
             final user = ChatUser(
-              id: profile.jid,
-              firstName: profile.title,
+              id: profile?.jid ?? '',
+              firstName: profile?.title ?? '',
             );
             final chatType = state.chat?.type;
             final jid = state.chat?.jid;
@@ -244,7 +244,7 @@ class _ChatState extends State<Chat> {
                         ),
                         onPressed: () {
                           if (textController.text.isNotEmpty) {
-                            context.read<DraftCubit>().saveDraft(
+                            context.read<DraftCubit?>()?.saveDraft(
                                   id: null,
                                   jids: [state.chat!.jid],
                                   body: textController.text,
@@ -413,7 +413,7 @@ class _ChatState extends State<Chat> {
                           final extraStyle = context.textTheme.muted.copyWith(
                             fontStyle: FontStyle.italic,
                           );
-                          final self = message.user.id == profile.jid;
+                          final self = message.user.id == profile?.jid;
                           final textColor = self
                               ? context.colorScheme.primaryForeground
                               : null;

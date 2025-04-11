@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/request_status.dart';
 import 'package:chat/src/storage/models.dart';
 import 'package:chat/src/xmpp/xmpp_service.dart';
@@ -11,14 +10,19 @@ part 'chats_cubit.freezed.dart';
 part 'chats_state.dart';
 
 class ChatsCubit extends Cubit<ChatsState> {
-  ChatsCubit({required XmppService xmppService})
-      : _xmppService = xmppService,
-        super(ChatsState(openJid: null, items: [], filter: (chat) => true, creationStatus: RequestStatus.none,)) {
+  ChatsCubit({required ChatsService chatsService})
+      : _chatsService = chatsService,
+        super(ChatsState(
+          openJid: null,
+          items: [],
+          filter: (chat) => true,
+          creationStatus: RequestStatus.none,
+        )) {
     _chatsSubscription =
-        _xmppService.chatsStream().listen((items) => _updateChats(items));
+        _chatsService.chatsStream().listen((items) => _updateChats(items));
   }
 
-  final XmppService _xmppService;
+  final ChatsService _chatsService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
 
@@ -41,30 +45,33 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   Future<void> toggleChat({required String jid}) async {
     if (jid == state.openJid) {
-      await _xmppService.closeChat();
+      await _chatsService.closeChat();
       return;
     }
-    await _xmppService.openChat(jid);
+    await _chatsService.openChat(jid);
   }
 
   Future<void> toggleFavourited({
     required String jid,
     required bool favourited,
   }) async {
-    await _xmppService.toggleChatFavourited(jid: jid, favourited: favourited);
+    await _chatsService.toggleChatFavourited(jid: jid, favourited: favourited);
   }
 
-  Future<void> createChatRoom({required String title, String? nickname,}) async {
+  Future<void> createChatRoom({
+    required String title,
+    String? nickname,
+  }) async {
     if (title.contains('+')) {
       emit(state.copyWith(creationStatus: RequestStatus.failure));
       return;
     }
     emit(state.copyWith(creationStatus: RequestStatus.loading));
-    final uniqueTitle = '${_xmppService.username}+$title';
-    final jid = '$uniqueTitle@conference.${AuthenticationCubit.baseUrl}/${nickname??_xmppService.username}';
+    // final uniqueTitle = '${_chatsService.username}+$title';
+    // final jid = '$uniqueTitle@conference.${AuthenticationCubit.baseUrl}/${nickname??_chatsService.username}';
   }
 
   Future<void> deleteChat({required String jid}) async {
-    await _xmppService.deleteChat(jid: jid);
+    await _chatsService.deleteChat(jid: jid);
   }
 }

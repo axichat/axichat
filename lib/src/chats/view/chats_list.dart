@@ -30,9 +30,10 @@ class ChatsList extends StatelessWidget {
             return AxiListTile(
               key: Key(item.jid),
               badgeCount: item.unreadCount,
-              onTap: () => context.read<ChatsCubit>().toggleChat(jid: item.jid),
+              onTap: () =>
+                  context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
               onDismissed: (_) =>
-                  context.read<ChatsCubit>().deleteChat(jid: item.jid),
+                  context.read<ChatsCubit?>()?.deleteChat(jid: item.jid),
               dismissText: 'Delete chat: ${item.title}?',
               selected: item.open,
               leading: AxiAvatar(
@@ -51,10 +52,11 @@ class ChatsList extends StatelessWidget {
                         : Icons.star_border_rounded,
                     size: 22.0,
                   ),
-                  onPressed: () => context.read<ChatsCubit>().toggleFavourited(
-                        jid: item.jid,
-                        favourited: !item.favourited,
-                      ),
+                  onPressed: () =>
+                      context.read<ChatsCubit?>()?.toggleFavourited(
+                            jid: item.jid,
+                            favourited: !item.favourited,
+                          ),
                 ),
               ],
             );

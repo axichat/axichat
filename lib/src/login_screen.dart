@@ -3,6 +3,7 @@ import 'package:chat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:chat/src/authentication/view/login_form.dart';
 import 'package:chat/src/authentication/view/signup_form.dart';
 import 'package:chat/src/chat/view/chat.dart';
+import 'package:chat/src/common/shorebird_push.dart';
 import 'package:chat/src/common/ui/ui.dart';
 import 'package:chat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
@@ -45,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  const ShorebirdChecker(),
                   AnimatedCrossFade(
                     crossFadeState: _login
                         ? CrossFadeState.showFirst

@@ -23,7 +23,7 @@ class BlocklistTile extends StatelessWidget {
             ShadButton.ghost(
               onPressed: disabled
                   ? null
-                  : () => context.read<BlocklistCubit>().unblock(jid: jid),
+                  : () => context.read<BlocklistCubit?>()?.unblock(jid: jid),
               foregroundColor: context.colorScheme.destructive,
               text: const Text('Unblock'),
             ),

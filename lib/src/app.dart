@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:chat/main.dart';
 import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/policy.dart';
@@ -24,7 +25,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class Axichat extends StatelessWidget {
   const Axichat({
     super.key,
-    XmppService? xmppService,
+    XmppBase? xmppService,
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
@@ -34,7 +35,7 @@ class Axichat extends StatelessWidget {
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy();
 
-  final XmppService? _xmppService;
+  final XmppBase? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
@@ -46,7 +47,7 @@ class Axichat extends StatelessWidget {
         if (_xmppService == null)
           RepositoryProvider(
             create: (context) => XmppService(
-              buildConnection: () => _capability.canForegroundService
+              buildConnection: () => withForeground
                   ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
                   : XmppConnection(),
               buildStateStore: (prefix, passphrase) async {
@@ -190,7 +191,10 @@ class MaterialAxichat extends StatelessWidget {
 
 extension ThemeExtension on BuildContext {
   ShadColorScheme get colorScheme => ShadTheme.of(this).colorScheme;
+
   ShadTextTheme get textTheme => ShadTheme.of(this).textTheme;
+
   ShadDecoration get decoration => ShadTheme.of(this).decoration;
+
   BorderRadius get radius => ShadTheme.of(this).radius;
 }

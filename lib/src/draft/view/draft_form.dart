@@ -59,7 +59,7 @@ class _DraftFormState extends State<DraftForm> {
           },
           builder: (context, state) {
             final enabled = state is! DraftSending;
-            final contacts = context.watch<RosterCubit>().contacts.toList();
+            final contacts = context.watch<RosterCubit?>()?.contacts.toList();
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -75,7 +75,7 @@ class _DraftFormState extends State<DraftForm> {
                           enabled: enabled,
                           describe: i == 0,
                           initialValue: _jids[i],
-                          jidOptions: contacts,
+                          jidOptions: contacts ?? [],
                           onChanged: (value) => _jids[i] = value,
                         ),
                       ),
@@ -119,7 +119,7 @@ class _DraftFormState extends State<DraftForm> {
                           (_jids.any((e) => e.isNotEmpty) ||
                               _bodyTextController.text.isNotEmpty),
                       text: const Text('Save draft'),
-                      onPressed: () => context.read<DraftCubit>().saveDraft(
+                      onPressed: () => context.read<DraftCubit?>()?.saveDraft(
                           id: widget.id,
                           jids: _jids,
                           body: _bodyTextController.text),
@@ -131,7 +131,7 @@ class _DraftFormState extends State<DraftForm> {
                       text: const Text('Send'),
                       onPressed: () async {
                         if (!Form.of(context).validate()) return;
-                        await context.read<DraftCubit>().sendDraft(
+                        await context.read<DraftCubit?>()?.sendDraft(
                             id: widget.id,
                             jids: _jids,
                             body: _bodyTextController.text);

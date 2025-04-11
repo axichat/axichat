@@ -46,7 +46,8 @@ class BlocklistAddButton extends StatelessWidget {
                           enabled: state is! BlocklistLoading,
                           error:
                               state is! BlocklistFailure ? null : state.message,
-                          jidOptions: locate<RosterCubit>().contacts.toList(),
+                          jidOptions:
+                              locate<RosterCubit?>()?.contacts.toList() ?? [],
                           onChanged: (value) {
                             setState(() => jid = value);
                           },
@@ -55,7 +56,8 @@ class BlocklistAddButton extends StatelessWidget {
                     ),
                     callback: jid.isEmpty
                         ? null
-                        : () => context.read<BlocklistCubit>().block(jid: jid),
+                        : () =>
+                            context.read<BlocklistCubit?>()?.block(jid: jid),
                   );
                 },
               ),
@@ -79,7 +81,7 @@ class BlocklistUnblockAllButton extends StatelessWidget {
           enabled: !disabled,
           onPressed: () async {
             if ((await confirm(context) ?? false) && context.mounted) {
-              context.read<BlocklistCubit>().unblockAll();
+              context.read<BlocklistCubit?>()?.unblockAll();
             }
           },
           text: const Text('Unblock all'),

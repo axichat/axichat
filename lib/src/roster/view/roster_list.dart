@@ -37,14 +37,17 @@ class RosterList extends StatelessWidget {
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
-            final open = context.watch<ChatsCubit>().state.openJid == item.jid;
+            final open =
+                context.watch<ChatsCubit?>()?.state.openJid == item.jid;
             return AxiListTile(
               key: Key(item.jid),
-              onTap: () => context.read<ChatsCubit>().toggleChat(jid: item.jid),
+              onTap: () =>
+                  context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
               onDismissed: state is RosterLoading && state.jid == item.jid
                   ? null
-                  : (_) =>
-                      context.read<RosterCubit>().removeContact(jid: item.jid),
+                  : (_) => context
+                      .read<RosterCubit?>()
+                      ?.removeContact(jid: item.jid),
               dismissText: 'Remove ${item.jid} from contacts?',
               selected: open,
               leading: AxiAvatar(

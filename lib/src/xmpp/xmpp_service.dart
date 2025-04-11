@@ -117,12 +117,20 @@ abstract interface class XmppBase {
 
   String? get myJid;
 
+  String? get resource;
+
+  String? get username;
+
   mox.JID? get _myJid;
 
   EventManager<mox.XmppEvent> get _eventManager =>
       EventManager<mox.XmppEvent>();
 
   List<mox.XmppManagerBase> get featureManagers => [];
+
+  ConnectionState get connectionState;
+
+  Stream<ConnectionState> get connectivityStream;
 
   Future<String> connect({
     required String jid,
@@ -265,8 +273,10 @@ class XmppService extends XmppBase
       mox.OccupantIdManager(),
     ]);
 
+  @override
   String? get username => _myJid?.local;
 
+  @override
   String? get resource => _myJid?.resource;
 
   String? get boundResource => _connection.hasConnectionSettings
@@ -289,9 +299,11 @@ class XmppService extends XmppBase
   StreamSubscription<mox.XmppEvent>? _eventSubscription;
   StreamSubscription<Message>? _messageSubscription;
 
+  @override
   ConnectionState get connectionState => _connectionState;
   var _connectionState = ConnectionState.notConnected;
 
+  @override
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
   final _connectivityStream = StreamController<ConnectionState>.broadcast();
 
@@ -330,22 +342,25 @@ class XmppService extends XmppBase
         _eventSubscription = _connection
             .asBroadcastStream()
             .listen(_eventManager.executeHandlers);
-        _messageSubscription = _messageStream.stream.listen(
-          (message) async {
-            await _notificationService.sendNotification(
-              title: message.senderJid,
-              body: message.body,
-              groupKey: message.chatJid,
-              extraConditions: [
-                _capability.canForegroundService,
-                message.senderJid != myJid,
-                !await _dbOpReturning<XmppDatabase, bool>((db) async {
-                  return (await db.getChat(message.chatJid))?.muted ?? false;
-                }),
-              ],
-            );
-          },
-        );
+
+        if (this case MessageService messageService) {
+          _messageSubscription = messageService._messageStream.stream.listen(
+            (message) async {
+              await _notificationService.sendNotification(
+                title: message.senderJid,
+                body: message.body,
+                groupKey: message.chatJid,
+                extraConditions: [
+                  _capability.canForegroundService,
+                  message.senderJid != myJid,
+                  !await _dbOpReturning<XmppDatabase, bool>((db) async {
+                    return (await db.getChat(message.chatJid))?.muted ?? false;
+                  }),
+                ],
+              );
+            },
+          );
+        }
 
         _connection.connectionSettings = XmppConnectionSettings(
           jid: _myJid!.toBare(),

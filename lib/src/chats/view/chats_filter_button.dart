@@ -55,7 +55,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                     text: const Text('All'),
                     foregroundColor: context.colorScheme.foreground,
                     onPressed: () {
-                      context.read<ChatsCubit>().filterChats((chat) => true);
+                      context.read<ChatsCubit?>()?.filterChats((chat) => true);
                       popoverController.toggle();
                     },
                   ),
@@ -64,7 +64,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                     text: const Text('Contacts'),
                     foregroundColor: context.colorScheme.foreground,
                     onPressed: () {
-                      context.read<ChatsCubit>().filterChats((chat) => context
+                      context.read<ChatsCubit?>()?.filterChats((chat) => context
                           .read<RosterCubit>()
                           .contacts
                           .contains(chat.jid));
@@ -76,10 +76,11 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                     text: const Text('Non-contacts'),
                     foregroundColor: context.colorScheme.foreground,
                     onPressed: () {
-                      context.read<ChatsCubit>().filterChats((chat) => !context
-                          .read<RosterCubit>()
-                          .contacts
-                          .contains(chat.jid));
+                      context.read<ChatsCubit?>()?.filterChats((chat) =>
+                          !context
+                              .read<RosterCubit>()
+                              .contacts
+                              .contains(chat.jid));
                       popoverController.toggle();
                     },
                   ),

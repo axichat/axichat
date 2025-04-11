@@ -18,7 +18,7 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    context.read<ProfileCubit>().loadFingerprints();
+    context.read<ProfileCubit?>()?.loadFingerprints();
   }
 
   @override

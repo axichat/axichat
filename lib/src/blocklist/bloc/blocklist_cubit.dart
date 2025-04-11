@@ -11,15 +11,15 @@ part 'blocklist_state.dart';
 
 class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {
-  BlocklistCubit({required XmppService xmppService})
-      : _xmppService = xmppService,
+  BlocklistCubit({required BlockingService blockingService})
+      : _blockingService = blockingService,
         super(const BlocklistAvailable(items: [])) {
-    _blocklistSubscription = _xmppService
+    _blocklistSubscription = _blockingService
         .blocklistStream()
         .listen((items) => emit(BlocklistAvailable(items: items)));
   }
 
-  final XmppService _xmppService;
+  final BlockingService _blockingService;
 
   late final StreamSubscription<List<BlocklistData>> _blocklistSubscription;
 
@@ -45,25 +45,22 @@ class BlocklistCubit extends Cubit<BlocklistState>
     }
     emit(BlocklistLoading(jid: jid));
     try {
-      await _xmppService.block(jid: jid);
-      await _xmppService.removeFromRoster(jid: jid);
+      await _blockingService.block(jid: jid);
     } on XmppBlockUnsupportedException catch (_) {
       emit(const BlocklistFailure('Server does not support blocking.'));
       return;
     } on XmppBlocklistException catch (_) {
       emit(BlocklistFailure('Failed to block $jid. ' 'Try again later.'));
       return;
-    } on XmppRosterException catch (_) {
-      emit(BlocklistFailure('Blocked $jid. Remove them from your roster.'));
-      return;
     }
+
     emit(BlocklistSuccess('Blocked $jid'));
   }
 
   void unblock({required String jid}) async {
     emit(BlocklistLoading(jid: jid));
     try {
-      await _xmppService.unblock(jid: jid);
+      await _blockingService.unblock(jid: jid);
     } on XmppBlockUnsupportedException catch (_) {
       emit(const BlocklistFailure('Server does not support unblocking.'));
       return;
@@ -77,7 +74,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
   void unblockAll() async {
     emit(const BlocklistLoading(jid: null));
     try {
-      await _xmppService.unblockAll();
+      await _blockingService.unblockAll();
     } on XmppBlockUnsupportedException catch (_) {
       emit(const BlocklistFailure('Server does not support unblocking.'));
       return;

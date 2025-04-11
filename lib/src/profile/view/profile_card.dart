@@ -16,6 +16,9 @@ class ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (context.read<ProfileCubit?>() == null) {
+      return const SizedBox();
+    }
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) => active
           ? ConstrainedBox(

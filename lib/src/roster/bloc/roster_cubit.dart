@@ -10,18 +10,18 @@ import 'package:equatable/equatable.dart';
 part 'roster_state.dart';
 
 class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
-  RosterCubit({required XmppService xmppService})
-      : _xmppService = xmppService,
+  RosterCubit({required RosterService rosterService})
+      : _rosterService = rosterService,
         super(const RosterInitial()) {
-    _rosterSubscription = _xmppService
+    _rosterSubscription = _rosterService
         .rosterStream()
         .listen((items) => emit(RosterAvailable(items: items)));
-    _invitesSubscription = _xmppService
+    _invitesSubscription = _rosterService
         .invitesStream()
         .listen((invites) => emit(RosterInvitesAvailable(invites: invites)));
   }
 
-  final XmppService _xmppService;
+  final RosterService _rosterService;
 
   late final StreamSubscription<List<RosterItem>> _rosterSubscription;
   late final StreamSubscription<List<Invite>> _invitesSubscription;
@@ -67,7 +67,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     }
     emit(RosterLoading(jid: jid));
     try {
-      await _xmppService.addToRoster(jid: jid, title: title);
+      await _rosterService.addToRoster(jid: jid, title: title);
     } on XmppRosterException catch (_) {
       emit(
         const RosterFailure('Failed to add contact: '
@@ -81,7 +81,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   Future<void> removeContact({required String jid}) async {
     emit(RosterLoading(jid: jid));
     try {
-      await _xmppService.removeFromRoster(jid: jid);
+      await _rosterService.removeFromRoster(jid: jid);
     } on XmppRosterException catch (_) {
       emit(
         const RosterFailure(
@@ -96,7 +96,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   Future<void> rejectContact({required String jid}) async {
     emit(RosterLoading(jid: jid));
     try {
-      await _xmppService.rejectSubscriptionRequest(jid);
+      await _rosterService.rejectSubscriptionRequest(jid);
     } on XmppRosterException catch (_) {
       emit(
         const RosterFailure(
