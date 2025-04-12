@@ -13,6 +13,4 @@ class Capability {
   }
 
   bool get canForegroundService => Platform.isAndroid || Platform.isIOS;
-
-  bool get isShorebirdAvailable => Platform.isAndroid || Platform.isIOS;
 }

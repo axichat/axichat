@@ -1,20 +1,21 @@
-import 'package:chat/src/common/capability.dart';
 import 'package:chat/src/common/ui/axi_progress_indicator.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 
-Future<bool> checkShorebird(
-  Capability capability, [
-  ShorebirdCodePush? shorebird,
-]) async {
-  if (!capability.isShorebirdAvailable) return false;
-  final shorebirdCodePush = shorebird ?? ShorebirdCodePush();
-  if (await shorebirdCodePush.isNewPatchReadyToInstall()) return true;
-  if (await shorebirdCodePush.isNewPatchAvailableForDownload()) {
-    await shorebirdCodePush.downloadUpdateIfAvailable();
+Future<bool> checkShorebird([ShorebirdUpdater? shorebird]) async {
+  final updater = shorebird ?? ShorebirdUpdater();
+
+  if (!updater.isAvailable) return false;
+
+  final status = await updater.checkForUpdate();
+
+  if (status == UpdateStatus.restartRequired) return true;
+
+  if (status == UpdateStatus.outdated) {
+    await updater.update();
     return true;
   }
+
   return false;
 }
 
@@ -24,8 +25,14 @@ class ShorebirdChecker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: checkShorebird(context.read<Capability>()),
+      future: checkShorebird(),
       builder: (context, snapshot) {
+        if (snapshot.error is UpdateException) {
+          return const Padding(
+            padding: EdgeInsets.all(4.0),
+            child: Text('Error occurred while fetching update.'),
+          );
+        }
         if (!snapshot.hasData) {
           return const Padding(
             padding: EdgeInsets.all(4.0),
