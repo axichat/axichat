@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 part 'connectivity_state.dart';
 

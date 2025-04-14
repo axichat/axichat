@@ -1,9 +1,9 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:chat/src/blocklist/view/blocklist_button.dart';
-import 'package:chat/src/blocklist/view/blocklist_tile.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/storage/database.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/blocklist/view/blocklist_button.dart';
+import 'package:axichat/src/blocklist/view/blocklist_tile.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

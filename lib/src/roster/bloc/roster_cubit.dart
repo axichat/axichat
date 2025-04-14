@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/common/bloc_cache.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
 
 part 'roster_state.dart';

@@ -1,4 +1,4 @@
-import 'package:chat/src/storage/models.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 

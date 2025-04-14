@@ -1,8 +1,8 @@
-import 'package:chat/src/chat/bloc/chat_bloc.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/verification/bloc/verification_cubit.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/verification/bloc/verification_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';

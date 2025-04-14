@@ -1,7 +1,7 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/verification/bloc/verification_cubit.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';

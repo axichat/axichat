@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:chat/src/app.dart';
-import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:chat/src/authentication/view/terms_checkbox.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/notifications/view/notification_request.dart';
-import 'package:chat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/view/terms_checkbox.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/notification_request.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';

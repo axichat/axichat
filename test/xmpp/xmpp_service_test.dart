@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/storage/state_store.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -66,7 +66,6 @@ void main() {
       when(() => mockNotificationService.sendNotification(
             title: any(named: 'title'),
             body: any(named: 'body'),
-            groupKey: any(named: 'groupKey'),
             extraConditions: any(named: 'extraConditions'),
           )).thenAnswer((_) async {});
 
@@ -188,7 +187,6 @@ void main() {
         verify(() => mockNotificationService.sendNotification(
               title: messageEvent.from.toBare().toString(),
               body: messageEvent.text,
-              groupKey: any(named: 'groupKey'),
               extraConditions: any(named: 'extraConditions'),
             )).called(1);
       },

@@ -1,7 +1,7 @@
 // ignore_for_file: avoid_print
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'src/app.dart';
 
-late final bool withForeground;
+bool withForeground = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,17 +30,17 @@ void main() async {
   );
 
   const capability = Capability();
-  const notificationService = NotificationService();
+  final notificationService = NotificationService();
 
   withForeground = capability.canForegroundService &&
       await notificationService.hasAllNotificationPermissions();
   if (withForeground) {
-    notificationService.init();
+    await notificationService.init();
   }
 
   runApp(
     withForeground
-        ? const WithForegroundTask(
+        ? WithForegroundTask(
             child: Material(
               child: Axichat(
                 notificationService: notificationService,
@@ -48,7 +48,7 @@ void main() async {
               ),
             ),
           )
-        : const Axichat(capability: capability),
+        : Axichat(capability: capability),
   );
 }
 

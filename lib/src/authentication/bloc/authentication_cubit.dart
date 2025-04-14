@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/common/generate_random.dart';
-import 'package:chat/src/storage/credential_store.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/main.dart';
+import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -56,12 +56,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return AppExitResponse.exit;
       },
       onStateChange: (lifeCycleState) async {
-        if (_capability.canForegroundService) {
-          final notificationLifecycleState =
-              await AwesomeNotifications().getAppLifeCycle();
-          await _xmppService.setClientState(
-              notificationLifecycleState == NotificationLifeCycle.Foreground);
-        }
+        if (!withForeground) return;
+        await _xmppService.setClientState(
+            lifeCycleState == AppLifecycleState.resumed ||
+                lifeCycleState == AppLifecycleState.inactive);
       },
     );
   }
@@ -167,7 +165,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     await _credentialStore.write(
       key: resourceStorageKey,
-      value: _xmppService.boundResource,
+      value: _xmppService.resource,
     );
 
     await _credentialStore.write(

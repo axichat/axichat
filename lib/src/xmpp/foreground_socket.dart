@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:awesome_notifications/awesome_notifications.dart'
-    hide NotificationPermission;
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    hide NotificationVisibility;
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
@@ -21,7 +21,7 @@ const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
 
 @pragma("vm:entry-point")
-Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+void notificationTapBackground(NotificationResponse notificationResponse) {
   FlutterForegroundTask.launchApp('/');
 }
 
@@ -102,7 +102,7 @@ class ForegroundSocket extends TaskHandler {
   void onRepeatEvent(DateTime timestamp) {}
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {
+  Future<void> onDestroy(DateTime timestamp, _) async {
     _socket?.close();
     _socket = null;
     await _dataSubscription.cancel();

@@ -1,4 +1,4 @@
-import 'package:chat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -23,6 +23,7 @@ class PasswordInput extends StatefulWidget {
 
 class _PasswordInputState extends State<PasswordInput> {
   bool obscure = true;
+
   @override
   Widget build(BuildContext context) {
     return AxiTextFormField(

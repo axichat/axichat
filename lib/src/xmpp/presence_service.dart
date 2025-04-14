@@ -1,4 +1,4 @@
-part of 'package:chat/src/xmpp/xmpp_service.dart';
+part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin PresenceService on XmppBase {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');

@@ -24,6 +24,7 @@ _$SettingsStateImpl _$$SettingsStateImplFromJson(Map<String, dynamic> json) =>
               (v) =>
                   $enumDecodeNullable(_$ShadColorEnumMap, v) ??
                   ShadColor.neutral),
+          mute: $checkedConvert('mute', (v) => v as bool? ?? false),
           indicateTyping:
               $checkedConvert('indicate_typing', (v) => v as bool? ?? true),
           lowMotion: $checkedConvert('low_motion', (v) => v as bool? ?? false),
@@ -42,6 +43,7 @@ Map<String, dynamic> _$$SettingsStateImplToJson(_$SettingsStateImpl instance) =>
     <String, dynamic>{
       'theme_mode': _$ThemeModeEnumMap[instance.themeMode]!,
       'shad_color': _$ShadColorEnumMap[instance.shadColor]!,
+      'mute': instance.mute,
       'indicate_typing': instance.indicateTyping,
       'low_motion': instance.lowMotion,
     };

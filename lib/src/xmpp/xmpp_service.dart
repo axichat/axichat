@@ -4,18 +4,19 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:async/async.dart';
-import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/common/defer.dart';
-import 'package:chat/src/common/event_manager.dart';
-import 'package:chat/src/common/generate_random.dart';
-import 'package:chat/src/common/policy.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/impatient_completer.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/storage/state_store.dart';
-import 'package:chat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/main.dart';
+import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/defer.dart';
+import 'package:axichat/src/common/event_manager.dart';
+import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/impatient_completer.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -174,7 +175,7 @@ class XmppService extends XmppBase
     required FutureOr<XmppConnection> Function() buildConnection,
     required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
-    NotificationService notificationService = const NotificationService(),
+    NotificationService? notificationService,
     Capability capability = const Capability(),
     Policy policy = const Policy(),
   }) =>
@@ -182,7 +183,7 @@ class XmppService extends XmppBase
         buildConnection,
         buildStateStore,
         buildDatabase,
-        notificationService,
+        notificationService ?? NotificationService(),
         capability,
         policy,
       );
@@ -315,7 +316,7 @@ class XmppService extends XmppBase
     required String password,
     required String databasePrefix,
     required String databasePassphrase,
-    String resource = '',
+    String? resource,
     bool preHashed = false,
   }) async {
     if (_synchronousConnection.isCompleted) {
@@ -335,7 +336,7 @@ class XmppService extends XmppBase
               await _buildStateStore(databasePrefix, databasePassphrase));
         }
 
-        _myJid = mox.JID.fromString('$jid/$resource');
+        _myJid = mox.JID.fromString('$jid/${resource ?? generateResource()}');
 
         await _initConnection(preHashed: preHashed);
 
@@ -349,9 +350,7 @@ class XmppService extends XmppBase
               await _notificationService.sendNotification(
                 title: message.senderJid,
                 body: message.body,
-                groupKey: message.chatJid,
                 extraConditions: [
-                  _capability.canForegroundService,
                   message.senderJid != myJid,
                   !await _dbOpReturning<XmppDatabase, bool>((db) async {
                     return (await db.getChat(message.chatJid))?.muted ?? false;
@@ -486,6 +485,7 @@ class XmppService extends XmppBase
     _eventSubscription = null;
     await _messageSubscription?.cancel();
     _messageSubscription = null;
+    _messageStream.close();
 
     if (connected) {
       try {
@@ -495,7 +495,7 @@ class XmppService extends XmppBase
         _log.severe('Graceful disconnect failed. Closing forcefully...', e, s);
       }
     }
-    if (_capability.canForegroundService) {
+    if (withForeground) {
       await _connection.reset();
     }
     _connection = await _buildConnection();

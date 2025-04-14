@@ -1,6 +1,6 @@
 import 'package:animations/animations.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

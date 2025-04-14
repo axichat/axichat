@@ -1,5 +1,5 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/common/ui/ui.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 

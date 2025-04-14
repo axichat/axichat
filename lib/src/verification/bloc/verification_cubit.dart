@@ -1,10 +1,11 @@
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'verification_cubit.freezed.dart';
+
 part 'verification_state.dart';
 
 class VerificationCubit extends Cubit<VerificationState> {

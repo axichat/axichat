@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:flutter/material.dart' hide Column, Table;
@@ -13,6 +13,7 @@ import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:uuid/uuid.dart';
 
 part 'models.freezed.dart';
+
 part 'models.g.dart';
 
 const uuid = Uuid();

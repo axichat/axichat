@@ -1,6 +1,6 @@
-import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/common/policy.dart';
-import 'package:chat/src/storage/state_store.dart';
+import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/storage/state_store.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 

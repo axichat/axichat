@@ -1,8 +1,8 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/draft/bloc/draft_cubit.dart';
-import 'package:chat/src/routes.dart';
-import 'package:chat/src/storage/database.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';

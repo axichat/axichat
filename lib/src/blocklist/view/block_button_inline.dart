@@ -1,5 +1,5 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';

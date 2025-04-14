@@ -1,9 +1,9 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:chat/src/authentication/view/terms_checkbox.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/notifications/view/notification_request.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/view/terms_checkbox.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -94,15 +94,15 @@ class _LoginFormState extends State<LoginForm> {
                 enabled: state is! AuthenticationInProgress,
                 controller: _passwordTextController,
               ),
-              NotificationRequest(
-                notificationService: context.read<NotificationService>(),
-              ),
               const Align(
                 alignment: Alignment.center,
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
                   child: TermsCheckbox(),
                 ),
+              ),
+              NotificationRequest(
+                notificationService: context.read<NotificationService>(),
               ),
               const SizedBox.square(dimension: 16.0),
               Builder(

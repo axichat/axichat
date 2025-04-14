@@ -1,19 +1,19 @@
 import 'dart:convert';
 
-import 'package:chat/main.dart';
-import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/common/policy.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/routes.dart';
-import 'package:chat/src/settings/bloc/settings_cubit.dart';
-import 'package:chat/src/storage/credential_store.dart';
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/storage/state_store.dart';
-import 'package:chat/src/xmpp/foreground_socket.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/main.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -23,15 +23,14 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class Axichat extends StatelessWidget {
-  const Axichat({
+  Axichat({
     super.key,
     XmppBase? xmppService,
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
   })  : _xmppService = xmppService,
-        _notificationService =
-            notificationService ?? const NotificationService(),
+        _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy();
 
@@ -119,6 +118,7 @@ class MaterialAxichat extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
+        context.read<NotificationService>().mute = state.mute;
         final lightTheme = ShadThemeData(
           colorScheme: ShadColorScheme.fromName(state.shadColor.name),
           brightness: Brightness.light,
@@ -167,6 +167,13 @@ class MaterialAxichat extends StatelessWidget {
                 labelLarge: shadTheme.textTheme.muted,
                 labelMedium: shadTheme.textTheme.muted,
                 labelSmall: shadTheme.textTheme.muted,
+              ),
+              pageTransitionsTheme: const PageTransitionsTheme(
+                builders: {
+                  // Use PredictiveBackPageTransitionsBuilder to get the predictive back route transition!
+                  TargetPlatform.android:
+                      PredictiveBackPageTransitionsBuilder(),
+                },
               ),
             );
           },

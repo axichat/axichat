@@ -2,15 +2,17 @@ import 'dart:async';
 
 import 'package:async/async.dart';
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/common/event_transform.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/common/event_transform.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:equatable/equatable.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chat_bloc.freezed.dart';
+
 part 'chat_event.dart';
+
 part 'chat_state.dart';
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
@@ -37,7 +39,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
-      _notificationService.dismissNotifications(groupKey: jid!);
+      _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));

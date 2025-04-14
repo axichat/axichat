@@ -1,5 +1,5 @@
-import 'package:chat/main.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/main.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 

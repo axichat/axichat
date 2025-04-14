@@ -3,8 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  awesome_notifications
-  awesome_notifications_core
   emoji_picker_flutter
   flutter_secure_storage_linux
   sqlcipher_flutter_libs

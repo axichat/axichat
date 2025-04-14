@@ -1,7 +1,7 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/profile/bloc/profile_cubit.dart';
-import 'package:chat/src/storage/models.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -76,7 +76,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (final value
-                        in Presence.values..remove(Presence.unknown))
+                        in Presence.values.toList()..remove(Presence.unknown))
                       ListTile(
                         title: Text(value.tooltip),
                         leading: PresenceCircle(presence: value),

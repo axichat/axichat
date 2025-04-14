@@ -1,5 +1,5 @@
-import 'package:chat/src/profile/view/profile_card.dart';
-import 'package:chat/src/settings/view/settings_controls.dart';
+import 'package:axichat/src/profile/view/profile_card.dart';
+import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:flutter/material.dart';
 
 class SettingsScreen extends StatelessWidget {

@@ -1,14 +1,14 @@
 import 'dart:core';
 import 'dart:isolate';
 
-import 'package:chat/src/common/generate_random.dart';
-import 'package:chat/src/common/policy.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/storage/credential_store.dart';
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/storage/state_store.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';

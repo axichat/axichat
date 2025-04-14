@@ -1,12 +1,13 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:chat/src/common/request_status.dart';
-import 'package:chat/src/storage/models.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chats_cubit.freezed.dart';
+
 part 'chats_state.dart';
 
 class ChatsCubit extends Cubit<ChatsState> {

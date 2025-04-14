@@ -1,10 +1,10 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/view/block_button_inline.dart';
-import 'package:chat/src/chats/bloc/chats_cubit.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/roster/bloc/roster_cubit.dart';
-import 'package:chat/src/routes.dart';
-import 'package:chat/src/storage/models.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/blocklist/view/block_button_inline.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';

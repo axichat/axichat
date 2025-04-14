@@ -1,9 +1,11 @@
-import 'package:chat/src/compose_screen.dart';
-import 'package:chat/src/home_screen.dart';
-import 'package:chat/src/login_screen.dart';
-import 'package:chat/src/profile_screen.dart';
-import 'package:chat/src/settings_screen.dart';
+import 'package:axichat/src/compose_screen.dart';
+import 'package:axichat/src/home_screen.dart';
+import 'package:axichat/src/login_screen.dart';
+import 'package:axichat/src/profile_screen.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/settings_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 part 'routes.g.dart';
@@ -12,8 +14,12 @@ class TransitionGoRouteData extends GoRouteData {
   const TransitionGoRouteData();
 
   @override
-  Page<void> buildPage(BuildContext context, GoRouterState state) =>
-      MaterialPage(child: build(context, state));
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    if (context.read<SettingsCubit>().state.lowMotion) {
+      return NoTransitionPage(child: build(context, state));
+    }
+    return MaterialPage(child: build(context, state));
+  }
 }
 
 @TypedGoRoute<HomeRoute>(

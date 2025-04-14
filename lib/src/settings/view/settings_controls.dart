@@ -1,7 +1,7 @@
-import 'package:chat/src/common/capability.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/notifications/view/notification_request.dart';
-import 'package:chat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/notification_request.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -19,8 +19,11 @@ class SettingsControls extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (context.read<Capability>().canForegroundService)
-              NotificationRequest(
-                notificationService: context.read<NotificationService>(),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: NotificationRequest(
+                  notificationService: context.read<NotificationService>(),
+                ),
               ),
             ListTile(
               title: const Text('Theme Mode'),
@@ -54,6 +57,16 @@ class SettingsControls extends StatelessWidget {
                     .toList(),
                 selectedOptionBuilder:
                     (BuildContext context, ShadColor value) => Text(value.name),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Mute notifications'),
+                sublabel: const Text('Stop receiving message notifications.'),
+                value: state.mute,
+                onChanged: (mute) =>
+                    context.read<SettingsCubit>().toggleMute(mute),
               ),
             ),
             Padding(

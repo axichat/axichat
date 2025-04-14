@@ -1,6 +1,6 @@
-import 'package:chat/src/draft/bloc/draft_cubit.dart';
-import 'package:chat/src/draft/view/draft_form.dart';
-import 'package:chat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/draft_form.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

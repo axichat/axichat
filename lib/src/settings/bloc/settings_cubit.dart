@@ -1,10 +1,12 @@
-import 'package:chat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 part 'settings_cubit.freezed.dart';
+
 part 'settings_cubit.g.dart';
+
 part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
@@ -21,6 +23,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   void updateColorScheme(ShadColor? shadColor) {
     if (shadColor == null) return;
     emit(state.copyWith(shadColor: shadColor));
+  }
+
+  void toggleMute(bool mute) {
+    emit(state.copyWith(mute: mute));
   }
 
   void toggleLowMotion(bool lowMotion) {

@@ -1,15 +1,20 @@
 import 'dart:async';
 
-import 'package:chat/src/storage/database.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 
 abstract class KeyValueDatabase<K, V> implements Database {
   FutureOr<V?> read({required K key});
+
   Future<bool> write({required K key, required V? value});
+
   Future<bool> delete({required K key});
+
   FutureOr<Map<String, V?>> readAll();
+
   Future<bool> writeAll({required Map<K, V?> data});
+
   Future<bool> deleteAll({bool burn = false});
 }
 

@@ -1,4 +1,4 @@
-import 'package:chat/src/common/ui/axi_progress_indicator.dart';
+import 'package:axichat/src/common/ui/axi_progress_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 

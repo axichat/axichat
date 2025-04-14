@@ -1,7 +1,7 @@
-import 'package:chat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:chat/src/common/request_status.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -56,7 +56,8 @@ class ChatsAddButton extends StatelessWidget {
                             ),
                             AxiTextFormField(
                               placeholder: const Text('Nickname'),
-                              enabled: state.creationStatus == RequestStatus.loading,
+                              enabled:
+                                  state.creationStatus == RequestStatus.loading,
                               onChanged: (value) {
                                 setState(() => nickname = value);
                               },

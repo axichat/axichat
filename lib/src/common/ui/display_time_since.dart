@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:chat/src/app.dart';
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 class DisplayTimeSince extends StatefulWidget {

@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:chat/src/storage/database.dart';
-import 'package:chat/src/storage/models.dart' hide uuid;
-import 'package:chat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart' hide uuid;
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';

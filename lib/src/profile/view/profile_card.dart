@@ -1,9 +1,9 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/authentication/view/logout_button.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/profile/bloc/profile_cubit.dart';
-import 'package:chat/src/routes.dart';
-import 'package:chat/src/storage/models.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/view/logout_button.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';

@@ -1,27 +1,28 @@
-import 'package:chat/src/app.dart';
-import 'package:chat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:chat/src/blocklist/view/blocklist_button.dart';
-import 'package:chat/src/blocklist/view/blocklist_list.dart';
-import 'package:chat/src/chat/bloc/chat_bloc.dart';
-import 'package:chat/src/chat/view/chat.dart';
-import 'package:chat/src/chats/bloc/chats_cubit.dart';
-import 'package:chat/src/chats/view/chats_filter_button.dart';
-import 'package:chat/src/chats/view/chats_list.dart';
-import 'package:chat/src/common/ui/ui.dart';
-import 'package:chat/src/connectivity/bloc/connectivity_cubit.dart';
-import 'package:chat/src/connectivity/view/connectivity_indicator.dart';
-import 'package:chat/src/draft/bloc/draft_cubit.dart';
-import 'package:chat/src/draft/view/draft_button.dart';
-import 'package:chat/src/draft/view/drafts_list.dart';
-import 'package:chat/src/notifications/bloc/notification_service.dart';
-import 'package:chat/src/profile/bloc/profile_cubit.dart';
-import 'package:chat/src/profile/view/profile_card.dart';
-import 'package:chat/src/roster/bloc/roster_cubit.dart';
-import 'package:chat/src/roster/view/roster_add_button.dart';
-import 'package:chat/src/roster/view/roster_invites_list.dart';
-import 'package:chat/src/roster/view/roster_list.dart';
-import 'package:chat/src/settings/bloc/settings_cubit.dart';
-import 'package:chat/src/xmpp/xmpp_service.dart';
+// ignore_for_file: unnecessary_type_check
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/blocklist/view/blocklist_button.dart';
+import 'package:axichat/src/blocklist/view/blocklist_list.dart';
+import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/view/chat.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/chats_filter_button.dart';
+import 'package:axichat/src/chats/view/chats_list.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
+import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/draft_button.dart';
+import 'package:axichat/src/draft/view/drafts_list.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/profile/view/profile_card.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/roster/view/roster_add_button.dart';
+import 'package:axichat/src/roster/view/roster_invites_list.dart';
+import 'package:axichat/src/roster/view/roster_list.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -31,7 +32,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final getService = context.read<XmppBase>;
+    final getService = context.read<XmppService>;
 
     final isChat = getService() is ChatsService;
     final isMessage = getService() is MessageService;
@@ -76,36 +77,36 @@ class HomeScreen extends StatelessWidget {
             if (isChat)
               BlocProvider(
                 create: (context) => ChatsCubit(
-                  chatsService: context.read<ChatsService>(),
+                  chatsService: context.read<XmppService>(),
                 ),
               ),
             if (isMessage)
               BlocProvider(
                 create: (context) => DraftCubit(
-                  messageService: context.read<MessageService>(),
+                  messageService: context.read<XmppService>(),
                 ),
               ),
             if (isRoster)
               BlocProvider(
                 create: (context) => RosterCubit(
-                  rosterService: context.read<RosterService>(),
+                  rosterService: context.read<XmppService>(),
                 ),
               ),
             if (isPresence)
               BlocProvider(
                 create: (context) => ProfileCubit(
-                  presenceService: context.read<PresenceService>(),
+                  presenceService: context.read<XmppService>(),
                 ),
               ),
             if (isBlocking)
               BlocProvider(
                 create: (context) => BlocklistCubit(
-                  blockingService: context.read<BlockingService>(),
+                  blockingService: context.read<XmppService>(),
                 ),
               ),
             BlocProvider(
               create: (context) => ConnectivityCubit(
-                xmppBase: context.read<XmppBase>(),
+                xmppBase: context.read<XmppService>(),
               ),
             ),
           ],
@@ -132,16 +133,16 @@ class HomeScreen extends StatelessWidget {
                               invertPriority: openJid != null,
                               primaryChild: Nexus(tabs: tabs),
                               secondaryChild: openJid == null ||
-                                      context.read<MessageService?>() == null
+                                      context.read<XmppService?>() == null
                                   ? const GuestChat()
                                   : BlocProvider(
                                       key: Key(openJid),
                                       create: (context) => ChatBloc(
                                         jid: openJid,
                                         messageService:
-                                            context.read<MessageService>(),
+                                            context.read<XmppService>(),
                                         chatsService:
-                                            context.read<ChatsService>(),
+                                            context.read<XmppService>(),
                                         notificationService:
                                             context.read<NotificationService>(),
                                       ),
