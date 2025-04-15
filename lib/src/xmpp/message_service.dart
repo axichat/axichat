@@ -42,7 +42,7 @@ mixin MessageService on XmppBase {
 
   final _log = Logger('MessageService');
 
-  final _messageStream = StreamController<Message>();
+  final _messageStream = StreamController<Message>.broadcast();
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager

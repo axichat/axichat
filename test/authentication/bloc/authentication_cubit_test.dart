@@ -1,8 +1,7 @@
-import 'package:bloc_test/bloc_test.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
@@ -53,7 +52,6 @@ void main() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        capability: const Capability(),
         httpClient: mockHttpClient,
       );
 
@@ -303,7 +301,6 @@ void main() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        capability: const Capability(),
       );
     });
 
@@ -333,7 +330,6 @@ void main() {
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        capability: const Capability(),
         httpClient: mockHttpClient,
       ),
       act: (bloc) => bloc.logout(),
@@ -351,7 +347,6 @@ void main() {
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        capability: const Capability(),
         httpClient: mockHttpClient,
         initialState: const AuthenticationComplete(),
       ),
@@ -370,7 +365,6 @@ void main() {
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        capability: const Capability(),
         httpClient: mockHttpClient,
         initialState: const AuthenticationComplete(),
       ),
@@ -390,7 +384,6 @@ void main() {
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        capability: const Capability(),
         httpClient: mockHttpClient,
         initialState: const AuthenticationComplete(),
       ),

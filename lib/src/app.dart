@@ -89,7 +89,6 @@ class Axichat extends StatelessWidget {
                 policy: context.read<Policy>(),
               ),
               xmppService: context.read<XmppService>(),
-              capability: context.read<Capability>(),
             ),
           ),
         ],
@@ -167,13 +166,6 @@ class MaterialAxichat extends StatelessWidget {
                 labelLarge: shadTheme.textTheme.muted,
                 labelMedium: shadTheme.textTheme.muted,
                 labelSmall: shadTheme.textTheme.muted,
-              ),
-              pageTransitionsTheme: const PageTransitionsTheme(
-                builders: {
-                  // Use PredictiveBackPageTransitionsBuilder to get the predictive back route transition!
-                  TargetPlatform.android:
-                      PredictiveBackPageTransitionsBuilder(),
-                },
               ),
             );
           },

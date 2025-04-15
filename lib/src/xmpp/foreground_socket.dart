@@ -94,11 +94,6 @@ class ForegroundSocket extends TaskHandler {
   }
 
   @override
-  void onNotificationPressed() {
-    FlutterForegroundTask.launchApp('/');
-  }
-
-  @override
   void onRepeatEvent(DateTime timestamp) {}
 
   @override
@@ -191,6 +186,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       notificationText: 'Return to the app',
       notificationIcon: null,
       callback: startCallback,
+      notificationInitialRoute: '/',
     );
 
     _sendToTask([

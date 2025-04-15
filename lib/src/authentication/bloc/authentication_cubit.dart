@@ -2,16 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
-import 'package:bloc/bloc.dart';
 import 'package:axichat/main.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
 
 part 'authentication_state.dart';
@@ -38,12 +36,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
     required XmppService xmppService,
-    required Capability capability,
     http.Client? httpClient,
     AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
-        _capability = capability,
         _httpClient = httpClient ?? http.Client(),
         super(initialState ?? const AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
@@ -73,7 +69,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
-  final Capability _capability;
   final http.Client _httpClient;
 
   late final AppLifecycleListener _lifecycleListener;
@@ -90,11 +85,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? password,
     bool rememberMe = false,
   }) async {
-    if (_capability.canForegroundService &&
-        !await FlutterForegroundTask.isRunningService &&
-        state is AuthenticationComplete) {
-      await logout();
-    }
     if (state is AuthenticationComplete) {
       return;
     }

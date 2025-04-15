@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 extension on NotificationPermission {
   bool get isGranted => this == NotificationPermission.granted;
@@ -55,17 +57,19 @@ class NotificationService {
   Future<bool> hasAllNotificationPermissions() async {
     if (!needsPermissions) return true;
 
-    if (!(await FlutterForegroundTask.checkNotificationPermission())
-        .isGranted) {
+    if (!await Permission.notification.isGranted) {
+      print('bruh1');
       return false;
     }
 
     if (Platform.isAndroid) {
-      if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
+      if (!await Permission.ignoreBatteryOptimizations.isGranted) {
+        print('bruh2');
         return false;
       }
 
-      if (!await FlutterForegroundTask.canDrawOverlays) {
+      if (!await Permission.systemAlertWindow.isGranted) {
+        print('bruh3');
         return false;
       }
     }
@@ -76,23 +80,34 @@ class NotificationService {
   Future<bool> requestAllNotificationPermissions() async {
     if (!needsPermissions) return true;
 
-    if (!(await FlutterForegroundTask.checkNotificationPermission())
-        .isGranted) {
-      if (!(await FlutterForegroundTask.requestNotificationPermission())
-          .isGranted) {
-        return false;
-      }
+    print('wtf1');
+    if (!await Permission.notification.request().isGranted) {
+      await AppSettings.openAppSettings(
+        type: AppSettingsType.notification,
+        asAnotherTask: true,
+      );
+      print('bruh4');
+      if (!await Permission.notification.isGranted) return false;
     }
 
     if (Platform.isAndroid) {
-      if (!await FlutterForegroundTask.isIgnoringBatteryOptimizations) {
-        if (!await FlutterForegroundTask.requestIgnoreBatteryOptimization()) {
+      print('wtf2');
+      if (!await Permission.ignoreBatteryOptimizations.request().isGranted) {
+        await AppSettings.openAppSettings(
+          type: AppSettingsType.batteryOptimization,
+          asAnotherTask: true,
+        );
+        print('bruh5');
+        if (!await Permission.ignoreBatteryOptimizations.isGranted) {
           return false;
         }
       }
 
-      if (!await FlutterForegroundTask.canDrawOverlays) {
-        if (!await FlutterForegroundTask.openSystemAlertWindowSettings()) {
+      print('wtf3');
+      if (!await Permission.systemAlertWindow.request().isGranted) {
+        await FlutterForegroundTask.openSystemAlertWindowSettings();
+        print('bruh6');
+        if (!await Permission.systemAlertWindow.isGranted) {
           return false;
         }
       }

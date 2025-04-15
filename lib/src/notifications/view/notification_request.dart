@@ -16,11 +16,13 @@ class NotificationRequest extends StatefulWidget {
 }
 
 class _NotificationRequestState extends State<NotificationRequest> {
+  late var _future = widget.notificationService.hasAllNotificationPermissions();
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
       initialData: withForeground,
-      future: widget.notificationService.hasAllNotificationPermissions(),
+      future: _future,
       builder: (context, snapshot) {
         if (!snapshot.hasData || withForeground) {
           return const SizedBox.shrink();
@@ -39,8 +41,14 @@ class _NotificationRequestState extends State<NotificationRequest> {
           label: const Text('Message notifications'),
           sublabel: const Text('Requires restart'),
           value: snapshot.requireData,
-          onChanged: (enabled) =>
-              widget.notificationService.requestAllNotificationPermissions(),
+          onChanged: (enabled) async {
+            await widget.notificationService
+                .requestAllNotificationPermissions();
+            setState(() {
+              _future =
+                  widget.notificationService.hasAllNotificationPermissions();
+            });
+          },
         );
       },
     );
