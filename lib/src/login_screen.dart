@@ -25,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         shape: Border(
           bottom: BorderSide(color: context.colorScheme.border),
         ),
@@ -46,7 +47,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const ShorebirdChecker(),
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: ShorebirdChecker(),
+                  ),
                   AnimatedCrossFade(
                     crossFadeState: _login
                         ? CrossFadeState.showFirst

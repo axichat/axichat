@@ -9,6 +9,7 @@ class AxiListTile extends StatelessWidget {
     this.leading,
     this.title,
     this.subtitle,
+    this.subtitlePlaceholder,
     this.actions,
     this.selected = false,
     this.onTap,
@@ -20,6 +21,7 @@ class AxiListTile extends StatelessWidget {
   final Widget? leading;
   final String? title;
   final String? subtitle;
+  final String? subtitlePlaceholder;
   final List<Widget>? actions;
   final bool selected;
   final void Function()? onTap;
@@ -60,7 +62,13 @@ class AxiListTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
       subtitle: subtitle == null
-          ? null
+          ? subtitlePlaceholder == null
+              ? null
+              : Text(
+                  subtitlePlaceholder!,
+                  style: context.textTheme.muted
+                      .copyWith(fontStyle: FontStyle.italic),
+                )
           : Text(
               subtitle!,
               overflow: TextOverflow.ellipsis,

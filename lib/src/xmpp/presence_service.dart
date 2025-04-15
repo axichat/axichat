@@ -54,7 +54,17 @@ mixin PresenceService on XmppBase {
     Presence presence, {
     String? status,
   }) async {
-    if (jid == myJid?.toString()) return;
+    if (jid == myJid) {
+      await _dbOp<XmppStateStore>((ss) async {
+        await ss.writeAll(
+          data: {
+            presenceStorageKey: presence,
+            statusStorageKey: status,
+          },
+        );
+      });
+      return;
+    }
 
     await _dbOp<XmppDatabase>((db) async {
       await db.updatePresence(

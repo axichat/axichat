@@ -512,6 +512,14 @@ class _ChatState extends State<Chat> {
                             color: context.colorScheme.primary,
                           ),
                         ),
+                        chatFooterBuilder: state.items.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No messages',
+                                  style: context.textTheme.muted,
+                                ),
+                              )
+                            : null,
                       ),
                       inputOptions: InputOptions(
                         sendOnEnter: true,
