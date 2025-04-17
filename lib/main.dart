@@ -1,7 +1,7 @@
 // ignore_for_file: avoid_print
-import 'package:bloc/bloc.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'src/app.dart';
 
-bool withForeground = false;
+late final bool withForeground;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

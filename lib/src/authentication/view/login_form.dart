@@ -12,6 +12,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
 
+  static const title = 'Log In';
+
   @override
   State<LoginForm> createState() => _LoginFormState();
 }
@@ -60,7 +62,7 @@ class _LoginFormState extends State<LoginForm> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Log In',
+                LoginForm.title,
                 style: context.textTheme.h3,
               ),
               state is AuthenticationFailure
@@ -75,6 +77,7 @@ class _LoginFormState extends State<LoginForm> {
                     )
                   : const SizedBox(height: 40),
               AxiTextFormField(
+                key: loginUsernameKey,
                 autocorrect: false,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
@@ -91,6 +94,7 @@ class _LoginFormState extends State<LoginForm> {
                 },
               ),
               PasswordInput(
+                key: loginPasswordKey,
                 enabled: state is! AuthenticationInProgress,
                 controller: _passwordTextController,
               ),
@@ -109,6 +113,7 @@ class _LoginFormState extends State<LoginForm> {
                 builder: (context) {
                   final loading = state is AuthenticationInProgress;
                   return ShadButton(
+                    key: loginSubmitKey,
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
                     text: const Text('Log in'),

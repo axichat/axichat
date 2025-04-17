@@ -18,6 +18,8 @@ import 'package:xml/xml.dart';
 class SignupForm extends StatefulWidget {
   const SignupForm({super.key});
 
+  static const title = 'Sign Up';
+
   @override
   State<SignupForm> createState() => _SignupFormState();
 }
@@ -100,7 +102,7 @@ class _SignupFormState extends State<SignupForm> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Sign Up',
+              SignupForm.title,
               style: context.textTheme.h3,
             ),
             state is AuthenticationSignupFailure

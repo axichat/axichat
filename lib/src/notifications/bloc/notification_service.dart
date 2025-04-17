@@ -58,18 +58,15 @@ class NotificationService {
     if (!needsPermissions) return true;
 
     if (!await Permission.notification.isGranted) {
-      print('bruh1');
       return false;
     }
 
     if (Platform.isAndroid) {
       if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-        print('bruh2');
         return false;
       }
 
       if (!await Permission.systemAlertWindow.isGranted) {
-        print('bruh3');
         return false;
       }
     }
@@ -80,33 +77,27 @@ class NotificationService {
   Future<bool> requestAllNotificationPermissions() async {
     if (!needsPermissions) return true;
 
-    print('wtf1');
     if (!await Permission.notification.request().isGranted) {
       await AppSettings.openAppSettings(
         type: AppSettingsType.notification,
         asAnotherTask: true,
       );
-      print('bruh4');
       if (!await Permission.notification.isGranted) return false;
     }
 
     if (Platform.isAndroid) {
-      print('wtf2');
       if (!await Permission.ignoreBatteryOptimizations.request().isGranted) {
         await AppSettings.openAppSettings(
           type: AppSettingsType.batteryOptimization,
           asAnotherTask: true,
         );
-        print('bruh5');
         if (!await Permission.ignoreBatteryOptimizations.isGranted) {
           return false;
         }
       }
 
-      print('wtf3');
       if (!await Permission.systemAlertWindow.request().isGranted) {
         await FlutterForegroundTask.openSystemAlertWindowSettings();
-        print('bruh6');
         if (!await Permission.systemAlertWindow.isGranted) {
           return false;
         }

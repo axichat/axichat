@@ -49,3 +49,7 @@ const inputSubtextInsets = EdgeInsets.only(
   right: 8.0,
   bottom: 4.0,
 );
+
+const loginSubmitKey = ValueKey('loginSubmit');
+const loginUsernameKey = ValueKey('loginUsername');
+const loginPasswordKey = ValueKey('loginPassword');
