@@ -8,6 +8,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class LogoutButton extends StatelessWidget {
   const LogoutButton({super.key});
 
+  static const title = 'Log Out';
+
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
@@ -22,7 +24,7 @@ class LogoutButton extends StatelessWidget {
             child: StatefulBuilder(
               builder: (context, setState) {
                 return AxiInputDialog(
-                  title: const Text('Log Out'),
+                  title: const Text(title),
                   content: Material(
                     child: ListTileTheme.merge(
                       shape: RoundedRectangleBorder(

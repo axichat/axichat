@@ -40,7 +40,7 @@ class RosterAddButton extends StatelessWidget {
                       children: [
                         BlocConsumer<RosterCubit, RosterState>(
                           listener: (context, state) {
-                            if (state is RosterSuccess) {
+                            if (state is RosterSuccess && context.canPop()) {
                               context.pop();
                             }
                           },
