@@ -100,7 +100,6 @@ RosterItem generateRandomRosterItem({
 }
 
 void prepareMockConnection() {
-  withForeground = false;
   when(() => mockConnection.hasConnectionSettings).thenReturn(false);
 
   when(() => mockConnection.registerFeatureNegotiators(any()))

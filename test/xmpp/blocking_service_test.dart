@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:axichat/main.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
@@ -10,6 +11,8 @@ import '../mocks.dart';
 
 main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  withForeground = false;
 
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());

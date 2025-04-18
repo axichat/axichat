@@ -1,3 +1,4 @@
+import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -18,6 +19,8 @@ const invalidPassword = 'invalidPassword';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  withForeground = false;
 
   setUpAll(() {
     registerFallbackValue(Uri());

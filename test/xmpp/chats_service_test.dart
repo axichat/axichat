@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:axichat/main.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -39,6 +40,8 @@ class ChatMatcher extends Matcher {
 
 main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  withForeground = false;
 
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());
