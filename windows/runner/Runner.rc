@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "chat" "\0"
+            VALUE "CompanyName", "im.axi" "\0"
+            VALUE "FileDescription", "Axichat" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "com.axichat.axichat" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2024 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "chat.exe" "\0"
-            VALUE "ProductName", "chat" "\0"
+            VALUE "InternalName", "im.axi.axichat" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2024 im.axi. All rights reserved." "\0"
+            VALUE "OriginalFilename", "axichat.exe" "\0"
+            VALUE "ProductName", "Axichat" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
