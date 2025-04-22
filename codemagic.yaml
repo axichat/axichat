@@ -8,10 +8,6 @@ definitions:
 
         # Add Shorebird to PATH
         echo PATH="$HOME/.shorebird/bin:$PATH" >> $CM_ENV
-    - &shorebird_init
-      name: Shorebird Init
-      script: |
-        shorebird init
     - &fetch_dependencies
       name: Fetch Dependencies
       script: |
@@ -26,7 +22,7 @@ workflows:
     name: Test Only Workflow
     triggering:
       events:
-        - push
+        - pull_request
       branch_patterns:
         - pattern: 'dev'
           include: true
@@ -54,7 +50,9 @@ workflows:
         test_report: test-results/flutter.json
       - name: Integration Tests
         script: |
-          mkdir -p test-results 
+          mkdir -p test-results
+          flutter emulators --launch emulator &
+          adb wait-for-device 
           flutter -d emulator-5554 test --machine > test-results/flutter.json integration_test \
           --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
         test_report: test-results/flutter.json
@@ -82,11 +80,45 @@ workflows:
     scripts:
       - *build_runner
       - *shorebird_install
-      - *shorebird_init
       - *fetch_dependencies
       - name: Shorebird Release
         script: |
           shorebird release android --artifact=apk
+    artifacts:
+      - build/**/outputs/**/*.apk
+      - build/**/outputs/**/*.sha1
+  patch-android-workflow:
+    name: Android Patch Workflow
+    triggering:
+      events:
+        - tag
+      branch_patterns:
+        - pattern: 'dev'
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: 'v+([0-9]).+([0-9]).+([0-9])-dev'
+          include: true
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      ubuntu: 24.04
+      flutter: stable
+      groups:
+        - shorebird
+      android_signing:
+        - AXICHAT_UPLOAD_KEY
+    inputs:
+      release_version:
+        description: The release version to patch
+    scripts:
+      - *build_runner
+      - *shorebird_install
+      - *fetch_dependencies
+      - name: Shorebird Patch
+        script: |
+          shorebird patch android --artifact=apk \
+          --release-version=${{ inputs.release_version }}
     artifacts:
       - build/**/outputs/**/*.apk
       - build/**/outputs/**/*.sha1
