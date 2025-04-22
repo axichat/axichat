@@ -41,6 +41,8 @@ workflows:
       flutter: stable
       groups:
         - integration_test
+      android_signing:
+        - AXICHAT_UPLOAD_KEY
     scripts:
       - *build_runner
       - name: Unit Tests
