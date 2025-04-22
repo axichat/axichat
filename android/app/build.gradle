@@ -55,6 +55,22 @@ android {
         versionName = flutterVersionName
     }
 
+    flavorDimensions "default"
+
+    productFlavors {
+        development {
+            dimension "default"
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+            manifestPlaceholders = [applicationLabel: "[DEV] Axichat"]
+        }
+        production {
+            dimension "default"
+            applicationIdSuffix ""
+            manifestPlaceholders = [applicationLabel: "Axichat"]
+        }
+    }
+
     signingConfigs {
         release {
             keyAlias keystoreProperties["keyAlias"]

@@ -49,7 +49,7 @@ dependencies:
   emoji_picker_flutter: ^2.2.0
   animations: ^2.0.11
   libsignal_protocol_dart: ^0.7.1
-  package_info_plus: ^8.0.2
+  package_info_plus: ^8.3.0
   http: ^1.2.2
   xml: ^6.5.0
   hsluv: ^1.1.3
@@ -83,6 +83,7 @@ dev_dependencies:
     sdk: flutter
 
 flutter:
+  default-flavor: production
   uses-material-design: true
 
   # Enable generation of localized Strings from arb files.

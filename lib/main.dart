@@ -4,6 +4,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
@@ -17,6 +18,7 @@ late final bool withForeground;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  print(appFlavor);
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen(
     (record) => kDebugMode
