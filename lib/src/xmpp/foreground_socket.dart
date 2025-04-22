@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -182,7 +183,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     initForegroundService();
     await FlutterForegroundTask.startService(
       serviceId: 256,
-      notificationTitle: 'Axichat Message Service',
+      notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
       notificationText: 'Return to the app',
       notificationIcon: null,
       callback: startCallback,

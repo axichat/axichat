@@ -6,6 +6,7 @@ import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 extension on NotificationPermission {
@@ -24,6 +25,8 @@ class NotificationService {
   bool get needsPermissions =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
 
+  String get channel => 'Messages';
+
   Future<void> init() async {
     FlutterForegroundTask.initCommunicationPort();
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -35,7 +38,7 @@ class NotificationService {
     const WindowsInitializationSettings initializationSettingsWindows =
         WindowsInitializationSettings(
       appName: 'Axichat',
-      appUserModelId: 'Com.Axichat.Axichat',
+      appUserModelId: 'Im.Axi.Axichat',
       guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
     );
 
@@ -119,17 +122,19 @@ class NotificationService {
       if (!await condition) return;
     }
 
-    const androidDetails = AndroidNotificationDetails(
-      'Messages',
-      'Messages',
-      groupKey: 'com.axichat.axichat.MESSAGES',
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    var androidDetails = AndroidNotificationDetails(
+      channel,
+      channel,
+      groupKey: '${packageInfo.packageName}.MESSAGES',
       importance: Importance.max,
       priority: Priority.high,
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();
 
-    const notificationDetails = NotificationDetails(
+    var notificationDetails = NotificationDetails(
       android: androidDetails,
       windows: windowsDetails,
       linux: linuxDetails,
