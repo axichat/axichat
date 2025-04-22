@@ -83,12 +83,33 @@ workflows:
       - *fetch_dependencies
       - name: Shorebird Release
         script: |
-          shorebird release android --artifact=apk
+          shorebird release android --flavor production --artifact=apk
     artifacts:
       - build/**/outputs/**/*.apk
       - build/**/outputs/**/*.sha1
   patch-android-workflow:
     name: Android Patch Workflow
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      ubuntu: 24.04
+      flutter: stable
+      groups:
+        - shorebird
+    inputs:
+      release_version:
+        description: The release version to patch
+    scripts:
+      - *build_runner
+      - *shorebird_install
+      - *fetch_dependencies
+      - name: Shorebird Patch
+        script: |
+          shorebird patch android --flavor production \
+          --artifact=apk \
+          --release-version=${{ inputs.release_version }}
+  dev-release-android-workflow:
+    name: Android Development Release Workflow
     triggering:
       events:
         - tag
@@ -108,6 +129,25 @@ workflows:
         - shorebird
       android_signing:
         - AXICHAT_UPLOAD_KEY
+    scripts:
+      - *build_runner
+      - *shorebird_install
+      - *fetch_dependencies
+      - name: Shorebird Release Development
+        script: |
+          shorebird release android --flavor development --artifact=apk
+    artifacts:
+      - build/**/outputs/**/*.apk
+      - build/**/outputs/**/*.sha1
+  dev-patch-android-workflow:
+    name: Android Development Patch Workflow
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      ubuntu: 24.04
+      flutter: stable
+      groups:
+        - shorebird
     inputs:
       release_version:
         description: The release version to patch
@@ -115,10 +155,9 @@ workflows:
       - *build_runner
       - *shorebird_install
       - *fetch_dependencies
-      - name: Shorebird Patch
+      - name: Shorebird Patch Development
         script: |
-          shorebird patch android --artifact=apk \
+          shorebird patch android --flavor development \
+          --artifact=apk \
           --release-version=${{ inputs.release_version }}
-    artifacts:
-      - build/**/outputs/**/*.apk
-      - build/**/outputs/**/*.sha1
+          
