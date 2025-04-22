@@ -44,7 +44,7 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - integration
+        - integration_test
     scripts:
       - *build_runner
       - name: Unit Tests
