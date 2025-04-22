@@ -9,5 +9,5 @@ Take control of your communication with the only XMPP-based instant messenger th
 
 - Has 1st party custom push notifications. NO FIREBASE, NO GOOGLE seeing your message data/metadata
 - Works on android, windows and linux (iOS, macOS coming)
-- Doesn't required expertise in XMPP
+- Doesn't require expertise in XMPP
 - Looks good
