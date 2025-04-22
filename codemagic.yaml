@@ -1,0 +1,92 @@
+definitions:
+  scripts:
+    - &shorebird_install
+      name: Install Shorebird
+      script: |
+        # Install Shorebird
+        curl --proto '=https' --tlsv1.2 https://raw.githubusercontent.com/shorebirdtech/install/main/install.sh -sSf | bash
+
+        # Add Shorebird to PATH
+        echo PATH="$HOME/.shorebird/bin:$PATH" >> $CM_ENV
+    - &shorebird_init
+      name: Shorebird Init
+      script: |
+        shorebird init
+    - &fetch_dependencies
+      name: Fetch Dependencies
+      script: |
+        flutter pub get
+    - &build_runner
+      name: Build Runner
+      script: |
+        dart run build_runner build
+
+workflows:
+  test-workflow:
+    name: Test Only Workflow
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'dev'
+          include: true
+          source: true
+    when:
+      changeset:
+        includes:
+          - '.'
+        excludes:
+          - '**/*.md'
+          - 'metadata/*'
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      ubuntu: 24.04
+      flutter: stable
+      groups:
+        - integration
+    scripts:
+      - *build_runner
+      - name: Unit Tests
+        script: |
+          mkdir -p test-results
+          flutter test --machine > test-results/flutter.json
+        test_report: test-results/flutter.json
+      - name: Integration Tests
+        script: |
+          mkdir -p test-results 
+          flutter -d emulator-5554 test --machine > test-results/flutter.json integration_test \
+          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
+        test_report: test-results/flutter.json
+  release-android-workflow:
+    name: Android Release Workflow
+    triggering:
+      events:
+        - tag
+      branch_patterns:
+        - pattern: 'master'
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: 'v+([0-9]).+([0-9]).+([0-9])'
+          include: true
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      ubuntu: 24.04
+      flutter: stable
+      groups:
+        - shorebird
+      android_signing:
+        - AXICHAT_UPLOAD_KEY
+    scripts:
+      - *build_runner
+      - *shorebird_install
+      - *shorebird_init
+      - *fetch_dependencies
+      - name: Shorebird Release
+        script: |
+          shorebird release android --artifact=apk
+    artifacts:
+      - build/**/outputs/**/*.apk
+      - build/**/outputs/**/*.sha1
