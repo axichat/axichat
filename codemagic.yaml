@@ -16,10 +16,10 @@ definitions:
       name: Build Runner
       script: |
         dart run build_runner build
-    - &build_dev_apk
-      name: Build Development apk
+    - &build_apk
+      name: Build apk
       script: |
-        flutter build apk --flavor development
+        flutter build apk
 
 workflows:
   test-workflow:
@@ -49,12 +49,11 @@ workflows:
         - AXICHAT_UPLOAD_KEY
     scripts:
       - *build_runner
-      - *build_dev_apk
+      - *build_apk
       - name: Unit Tests
         script: |
           mkdir -p test-results
-          flutter test --machine > test-results/flutter.json \
-          --flavor development
+          flutter test --machine > test-results/flutter.json
         test_report: test-results/flutter.json
       - name: Integration Tests
         script: |
@@ -62,8 +61,7 @@ workflows:
           flutter emulators --launch emulator &
           adb wait-for-device 
           flutter -d emulator-5554 test --machine > test-results/flutter.json integration_test \
-          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID \
-          --flavor development
+          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
         test_report: test-results/flutter.json
   release-android-workflow:
     name: Android Release Workflow
