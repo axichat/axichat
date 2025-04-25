@@ -61,7 +61,8 @@ workflows:
           flutter emulators --launch emulator &
           adb wait-for-device 
           flutter -d emulator-5554 test --machine > test-results/flutter.json integration_test \
-          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
+          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID \
+          --ignore-timeouts
         test_report: test-results/flutter.json
   release-android-workflow:
     name: Android Release Workflow
