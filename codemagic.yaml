@@ -45,6 +45,8 @@ workflows:
       flutter: stable
       groups:
         - integration_test
+      android_signing:
+        - AXICHAT_UPLOAD_KEY
     scripts:
       - *build_runner
       - *build_dev_apk
