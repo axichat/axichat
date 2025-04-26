@@ -26,6 +26,19 @@ extension on WidgetTester {
 
     timer.cancel();
   }
+
+  Future<void> pumpUntilGone(Finder finder) async {
+    final timer = Timer(
+      const Duration(seconds: 15),
+      () => throw TimeoutException('Timed out waiting for $finder'),
+    );
+
+    while (finder.evaluate().isNotEmpty) {
+      await pumpAndSettle();
+    }
+
+    timer.cancel();
+  }
 }
 
 void main() {
@@ -113,7 +126,7 @@ void main() {
 
         final findChatsTab = find.widgetWithText(Tab, 'Chats');
         await tester.pumpUntil(findChatsTab);
-        await Future.delayed(kDefaultToastDuration + 1.milliseconds);
+        await tester.pumpUntilGone(find.byType(ShadToast));
         await tester.tap(findChatsTab);
 
         await tester.pumpAndSettle();
@@ -151,7 +164,7 @@ void main() {
         expect(findRosterTile, findsNothing);
 
         await tester.pumpUntil(findProfileCard);
-        await Future.delayed(kDefaultToastDuration + 1.milliseconds);
+        await tester.pumpUntilGone(find.byType(ShadToast));
         await tester.tap(findProfileCard);
 
         final findLogoutButton = find.byType(LogoutButton);
