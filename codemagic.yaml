@@ -47,6 +47,7 @@ workflows:
       - *build_runner
       - name: Unit Tests
         script: |
+          flutter config --explicit-package-dependencies 
           mkdir -p test-results
           flutter test --machine > test-results/flutter.json
         test_report: test-results/flutter.json
