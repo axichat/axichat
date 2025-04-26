@@ -113,6 +113,7 @@ void main() {
 
         final findChatsTab = find.widgetWithText(Tab, 'Chats');
         await tester.pumpUntil(findChatsTab);
+        await Future.delayed(kDefaultToastDuration + 1.milliseconds);
         await tester.tap(findChatsTab);
 
         await tester.pumpAndSettle();
@@ -150,6 +151,7 @@ void main() {
         expect(findRosterTile, findsNothing);
 
         await tester.pumpUntil(findProfileCard);
+        await Future.delayed(kDefaultToastDuration + 1.milliseconds);
         await tester.tap(findProfileCard);
 
         final findLogoutButton = find.byType(LogoutButton);
