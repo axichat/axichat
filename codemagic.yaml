@@ -16,10 +16,6 @@ definitions:
       name: Build Runner
       script: |
         dart run build_runner build
-    - &build_apk
-      name: Build apk
-      script: |
-        flutter build apk
 
 workflows:
   test-workflow:
@@ -49,7 +45,6 @@ workflows:
         - AXICHAT_UPLOAD_KEY
     scripts:
       - *build_runner
-      - *build_apk
       - name: Unit Tests
         script: |
           mkdir -p test-results
@@ -57,6 +52,7 @@ workflows:
         test_report: test-results/flutter.json
       - name: Integration Tests
         script: |
+          flutter config --explicit-package-dependencies 
           mkdir -p test-results
           flutter emulators --launch emulator &
           adb wait-for-device 
