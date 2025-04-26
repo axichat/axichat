@@ -47,13 +47,11 @@ workflows:
       - *build_runner
       - name: Unit Tests
         script: |
-          flutter config --explicit-package-dependencies 
           mkdir -p test-results
           flutter test --machine > test-results/flutter.json
         test_report: test-results/flutter.json
       - name: Integration Tests
         script: |
-          flutter config --explicit-package-dependencies 
           mkdir -p test-results
           flutter emulators --launch emulator &
           adb wait-for-device 
@@ -80,6 +78,7 @@ workflows:
       flutter: stable
       groups:
         - shorebird
+        - github
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
@@ -89,6 +88,19 @@ workflows:
       - name: Shorebird Release
         script: |
           shorebird release android --flavor production --artifact=apk
+      - name: Publish to GitHub
+        script: |
+          #!/usr/bin/env zsh
+          
+          # Publish only for tag builds
+          if [ -z ${CM_TAG} ]; then
+            echo "Not a tag build, will not publish GitHub release"
+            exit 0
+          fi
+          
+          gh release create "${CM_TAG}" \
+            --title "axichat ${CM_TAG}" \
+            build/app/outputs/flutter-apk/app-production-release.apk
     artifacts:
       - build/**/outputs/**/*.apk
       - build/**/outputs/**/*.sha1
@@ -132,6 +144,7 @@ workflows:
       flutter: stable
       groups:
         - shorebird
+        - github
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
@@ -141,6 +154,19 @@ workflows:
       - name: Shorebird Release Development
         script: |
           shorebird release android --flavor development --artifact=apk
+      - name: Publish to GitHub
+        script: |
+          #!/usr/bin/env zsh
+          
+          # Publish only for tag builds
+          if [ -z ${CM_TAG} ]; then
+            echo "Not a tag build, will not publish GitHub release"
+            exit 0
+          fi
+          
+          gh release create "${CM_TAG}" \
+            --title "axichat ${CM_TAG}" \
+            build/app/outputs/flutter-apk/app-development-release.apk
     artifacts:
       - build/**/outputs/**/*.apk
       - build/**/outputs/**/*.sha1

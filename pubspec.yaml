@@ -59,6 +59,7 @@ dependencies:
   flutter_local_notifications: ^19.1.0
   dnsolve: ^1.0.0
   app_settings: ^6.1.1
+  intl: any
 
 dependency_overrides:
   pinenacl: ^0.6.0

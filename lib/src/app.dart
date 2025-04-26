@@ -16,11 +16,12 @@ import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+import 'localization/app_localizations.dart';
 
 class Axichat extends StatelessWidget {
   Axichat({
