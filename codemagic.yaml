@@ -42,7 +42,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: beta
       groups:
         - integration_test
       android_signing:
