@@ -11,6 +11,7 @@ definitions:
     - &fetch_dependencies
       name: Fetch Dependencies
       script: |
+        flutter clean
         flutter pub get
     - &build_runner
       name: Build Runner
