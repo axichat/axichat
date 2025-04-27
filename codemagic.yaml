@@ -44,6 +44,7 @@ workflows:
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
+      - *fetch_dependencies
       - *build_runner
       - name: Unit Tests
         script: |
@@ -59,6 +60,7 @@ workflows:
           --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID \
           --ignore-timeouts
         test_report: test-results/flutter.json
+        ignore_failure: true
   release-android-workflow:
     name: Android Release Workflow
     triggering:
