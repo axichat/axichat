@@ -20,7 +20,6 @@ definitions:
       name: Build Runner
       script: |
         dart run build_runner build
-        flutter build apk --flavor production --debug
 
 workflows:
   test-workflow:
@@ -59,7 +58,7 @@ workflows:
       - name: Integration Tests
         script: |
           mkdir -p test-results
-          flutter emulators --launch emulator 
+          flutter emulators --launch emulator-35 
           sleep 1m
           flutter -d emulator-5554 test --verbose --machine > test-results/flutter.json integration_test \
           --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
