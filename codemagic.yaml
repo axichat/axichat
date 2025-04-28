@@ -20,6 +20,7 @@ definitions:
       name: Build Runner
       script: |
         dart run build_runner build
+        flutter build apk --debug
 
 workflows:
   test-workflow:
@@ -57,13 +58,14 @@ workflows:
         test_report: test-results/flutter.json
       - name: Integration Tests
         script: |
-          flutter clean
-          flutter pub get
           mkdir -p test-results
           flutter emulators --launch emulator-35 
           sleep 1m
           flutter devices
-          flutter -d emulator-5554 test --verbose --machine > test-results/flutter.json integration_test \
+          flutter drive --driver=test_driver/integration_test.dart \
+          --target=integration_test/app_test.dart \
+          -d emulator-5554 \
+          --use-application-binary=./build/app/outputs/flutter-apk/app-production-debug.apk \
           --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
         test_report: test-results/flutter.json
         ignore_failure: true
