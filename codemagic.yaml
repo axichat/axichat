@@ -13,6 +13,9 @@ definitions:
       script: |
         flutter clean
         flutter pub get
+        flutter doctor
+        flutter devices
+        flutter emulators
     - &build_runner
       name: Build Runner
       script: |
