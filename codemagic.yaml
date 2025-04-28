@@ -20,6 +20,7 @@ definitions:
       name: Build Runner
       script: |
         dart run build_runner build
+        flutter build apk --flavor production --debug
 
 workflows:
   test-workflow:
@@ -42,7 +43,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: beta
+      flutter: stable
       groups:
         - integration_test
       android_signing:
@@ -61,8 +62,7 @@ workflows:
           flutter emulators --launch emulator 
           sleep 1m
           flutter -d emulator-5554 test --verbose --machine > test-results/flutter.json integration_test \
-          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID \
-          --ignore-timeouts
+          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
         test_report: test-results/flutter.json
         ignore_failure: true
   release-android-workflow:
