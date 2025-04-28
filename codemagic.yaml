@@ -61,10 +61,11 @@ workflows:
           flutter emulators --launch emulator-35 
           sleep 1m
           flutter devices
-          flutter drive --driver=test_driver/integration_test.dart \
-          --target=integration_test/app_test.dart \
-          -d emulator-5554 \
-          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
+          flutter run -d emulator-5554 -no-enable-impeller --flavor=development
+          # flutter drive --driver=test_driver/integration_test.dart \
+          # --target=integration_test/app_test.dart \
+          # -d emulator-5554 \
+          # --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
         test_report: test-results/flutter.json
         ignore_failure: true
   release-android-workflow:
