@@ -60,7 +60,7 @@ workflows:
           mkdir -p test-results
           flutter emulators --launch emulator 
           sleep 1m
-          flutter -d emulator-5554 test --machine > test-results/flutter.json integration_test \
+          flutter -d emulator-5554 test --verbose --machine > test-results/flutter.json integration_test \
           --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID \
           --ignore-timeouts
         test_report: test-results/flutter.json
