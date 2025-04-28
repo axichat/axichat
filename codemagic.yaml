@@ -57,9 +57,12 @@ workflows:
         test_report: test-results/flutter.json
       - name: Integration Tests
         script: |
+          flutter clean
+          flutter pub get
           mkdir -p test-results
           flutter emulators --launch emulator-35 
           sleep 1m
+          flutter devices
           flutter -d emulator-5554 test --verbose --machine > test-results/flutter.json integration_test \
           --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
         test_report: test-results/flutter.json
