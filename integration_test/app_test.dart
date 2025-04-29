@@ -49,7 +49,6 @@ void main() {
   late final String contactJid;
 
   setUpAll(() async {
-    print('setUpAll started');
     await const FlutterSecureStorage().deleteAll();
 
     username = const String.fromEnvironment('USERNAME');
