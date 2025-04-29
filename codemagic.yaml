@@ -60,8 +60,9 @@ workflows:
           mkdir -p test-results
           flutter emulators --launch emulator-35 
           sleep 1m
-          flutter test -d emulator-5554 integration_test --flavor=development
-          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID
+          flutter test -d emulator-5554 integration_test --flavor=development \
+          --dart-define=USERNAME=$USERNAME,PASSWORD=$PASSWORD,CONTACT_JID=$CONTACT_JID \
+          --machine > test-results/flutter.json 
           # flutter drive --driver=test_driver/integration_test.dart \
           # --target=integration_test/app_test.dart \
           # -d emulator-5554 \
