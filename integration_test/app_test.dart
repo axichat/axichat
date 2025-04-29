@@ -49,6 +49,7 @@ void main() {
   late final String contactJid;
 
   setUpAll(() async {
+    print('setUpAll started');
     await const FlutterSecureStorage().deleteAll();
 
     username = const String.fromEnvironment('USERNAME');
@@ -80,7 +81,9 @@ void main() {
       'Critical path: log in, add contact, send message, '
       'remove contact, log out.',
       (tester) async {
-        app.main();
+        await app.main();
+
+        await tester.pumpAndSettle(const Duration(seconds: 3));
 
         await tester.pumpUntil(find.text(LoginForm.title));
 
