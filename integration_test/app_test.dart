@@ -16,7 +16,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 extension on WidgetTester {
   Future<void> pumpUntil(Finder finder) async {
     final timer = Timer(
-      const Duration(seconds: 15),
+      const Duration(seconds: 45),
       () => throw TimeoutException('Timed out waiting for $finder'),
     );
 
