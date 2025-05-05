@@ -4,7 +4,9 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -36,6 +38,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
     required XmppService xmppService,
+    NotificationService? notificationService,
     http.Client? httpClient,
     AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
@@ -53,6 +56,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       },
       onStateChange: (lifeCycleState) async {
         if (!withForeground) return;
+
+        if (launchedFromNotification) {
+          launchedFromNotification = false;
+          final appLaunchDetails =
+              await notificationService?.getAppNotificationAppLaunchDetails();
+          if (appLaunchDetails?.notificationResponse?.payload
+              case final chatJid?) {
+            xmppService.openChat(chatJid);
+          }
+        }
+
         await _xmppService.setClientState(
             lifeCycleState == AppLifecycleState.resumed ||
                 lifeCycleState == AppLifecycleState.inactive);

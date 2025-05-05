@@ -21,9 +21,12 @@ const dataPrefix = 'Data';
 const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
 
+bool launchedFromNotification = false;
+
 @pragma("vm:entry-point")
 void notificationTapBackground(NotificationResponse notificationResponse) {
   FlutterForegroundTask.launchApp('/');
+  launchedFromNotification = true;
 }
 
 @pragma('vm:entry-point')
