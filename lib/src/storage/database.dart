@@ -1054,7 +1054,6 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   @override
   Future<void> deleteAll() async {
     await customStatement('PRAGMA foreign_keys = OFF');
-    print('foreign keys off');
     try {
       await transaction(() async {
         for (final table in allTables) {
@@ -1062,17 +1061,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
         }
       });
     } finally {
-      print('foreign keys on');
       await customStatement('PRAGMA foreign_keys = ON');
     }
   }
 
   @override
   Future<void> close() async {
-    print('super.close called');
     await super.close();
     _instance = null;
-    print('super.close done');
   }
 
   @override

@@ -9,10 +9,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-extension on NotificationPermission {
-  bool get isGranted => this == NotificationPermission.granted;
-}
-
 ///Call [init].
 class NotificationService {
   NotificationService([FlutterLocalNotificationsPlugin? plugin])
@@ -56,6 +52,9 @@ class NotificationService {
       onDidReceiveNotificationResponse: notificationTapBackground,
     );
   }
+
+  Future<NotificationAppLaunchDetails?> getAppNotificationAppLaunchDetails() =>
+      _plugin.getNotificationAppLaunchDetails();
 
   Future<bool> hasAllNotificationPermissions() async {
     if (!needsPermissions) return true;
@@ -130,6 +129,7 @@ class NotificationService {
       groupKey: '${packageInfo.packageName}.MESSAGES',
       importance: Importance.max,
       priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();
@@ -145,6 +145,7 @@ class NotificationService {
       title,
       body,
       notificationDetails,
+      payload: title,
     );
   }
 
