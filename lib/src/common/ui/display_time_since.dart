@@ -40,13 +40,13 @@ class _DisplayTimeSinceState extends State<DisplayTimeSince> {
     final difference = _now.difference(widget.timestamp);
     final text = switch (difference) {
       < const Duration(minutes: 1) => 'Just now',
-      < const Duration(hours: 1) => '${difference.inMinutes}min ago',
-      < const Duration(hours: 2) => '1hr ago',
-      < const Duration(days: 1) => '${difference.inHours}hrs ago',
-      == const Duration(days: 1) => '1day ago',
-      < const Duration(days: 7) => '${difference.inDays}days ago',
-      < const Duration(days: 14) => '1week ago',
-      < const Duration(days: 31) => '${difference.inDays ~/ 7}weeks ago',
+      < const Duration(hours: 1) => '${difference.inMinutes} min ago',
+      < const Duration(hours: 2) => '1 hr ago',
+      < const Duration(days: 1) => '${difference.inHours} hrs ago',
+      < const Duration(days: 2) => '1 day ago',
+      < const Duration(days: 7) => '${difference.inDays} days ago',
+      < const Duration(days: 14) => '1 week ago',
+      < const Duration(days: 31) => '${difference.inDays ~/ 7} weeks ago',
       _ => 'Months ago',
     };
     return Text(
