@@ -63,8 +63,8 @@ workflows:
           flutter test -d emulator-5554 integration_test \
           --dart-define=USERNAME=$USERNAME \
           --dart-define=PASSWORD=$PASSWORD \
-          --dart-define=CONTACT_JID=$CONTACT_JID
-          # --machine > test-results/flutter.json
+          --dart-define=CONTACT_JID=$CONTACT_JID \
+          --machine > test-results/flutter.json
         test_report: test-results/flutter.json
   release-android-workflow:
     name: Android Release Workflow
