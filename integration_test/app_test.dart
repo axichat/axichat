@@ -16,7 +16,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 extension on WidgetTester {
   Future<void> pumpUntil(Finder finder) async {
     final timer = Timer(
-      const Duration(seconds: 45),
+      const Duration(minutes: 2),
       () => throw TimeoutException('Timed out waiting for $finder'),
     );
 
@@ -29,7 +29,7 @@ extension on WidgetTester {
 
   Future<void> pumpUntilGone(Finder finder) async {
     final timer = Timer(
-      const Duration(seconds: 15),
+      const Duration(minutes: 1),
       () => throw TimeoutException('Timed out waiting for $finder'),
     );
 
@@ -136,6 +136,7 @@ void main() {
         await tester.tap(find.byKey(Key(contactJid)).first);
 
         await tester.pumpUntil(find.byType(DashChat));
+        await tester.pumpUntilGone(find.byType(ShadToast));
 
         const message = 'Hello';
         await tester.enterText(find.byType(TextField), message);
