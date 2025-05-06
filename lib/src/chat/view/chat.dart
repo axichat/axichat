@@ -20,10 +20,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 extension on MessageStatus {
   IconData get icon => switch (this) {
-        MessageStatus.read ||
-        MessageStatus.received ||
-        MessageStatus.sent =>
-          LucideIcons.check,
+        MessageStatus.read => LucideIcons.checkCheck,
+        MessageStatus.received || MessageStatus.sent => LucideIcons.check,
         MessageStatus.failed => LucideIcons.x,
         _ => LucideIcons.dot,
       };
