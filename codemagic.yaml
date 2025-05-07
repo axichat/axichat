@@ -168,7 +168,7 @@ workflows:
           gh release create $CM_TAG \
           --verify-tag \
           --notes-from-tag \
-          --repo github.com/axichat/axichat \
+          --title "axichat ${CM_TAG}" \
           build/app/outputs/flutter-apk/app-development-release.apk
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
