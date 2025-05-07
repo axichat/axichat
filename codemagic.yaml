@@ -109,8 +109,8 @@ workflows:
             --title "axichat ${CM_TAG}" \
             build/app/outputs/flutter-apk/app-production-release.apk
     artifacts:
-      - build/**/outputs/**/*.apk
-      - build/**/outputs/**/*.sha1
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/flutter-apk/*.sha1
   patch-android-workflow:
     name: Android Patch Workflow
     max_build_duration: 60
@@ -163,20 +163,16 @@ workflows:
           shorebird release android --flavor development --artifact=apk
       - name: Publish to GitHub
         script: |
-          #!/usr/bin/env zsh
+          echo $GITHUB_TOKEN | gh auth login --with-token
           
-          # Publish only for tag builds
-          if [ -z ${CM_TAG} ]; then
-            echo "Not a tag build, will not publish GitHub release"
-            exit 0
-          fi
-          
-          gh release create "${CM_TAG}" \
-            --title "axichat ${CM_TAG}" \
-            build/app/outputs/flutter-apk/app-development-release.apk
+          gh release create $CM_TAG \
+          --verify-tag \
+          --notes-from-tag \
+          --repo github.com/axichat/axichat \
+          build/app/outputs/flutter-apk/app-development-release.apk
     artifacts:
-      - build/**/outputs/**/*.apk
-      - build/**/outputs/**/*.sha1
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/flutter-apk/*.sha1
   dev-patch-android-workflow:
     name: Android Development Patch Workflow
     max_build_duration: 60
