@@ -170,6 +170,9 @@ workflows:
           shorebird release android --flavor development --artifact=apk
       - name: Publish to GitHub
         script: |
+          git remote set-url origin https://github.com/axichat/axichat.git
+          git remote -v
+          
           echo $GITHUB_TOKEN | gh auth login --with-token
           
           gh release create $CM_TAG \
