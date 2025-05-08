@@ -20,6 +20,12 @@ definitions:
       name: Build Runner
       script: |
         dart run build_runner build
+    - &diagnose_git_remotes
+      name: Diagnose Git Remotes
+      script: |
+        cat ~/.ssh/config 
+        cat .git/config 
+        git remote -v
 
 workflows:
   test-workflow:
@@ -155,6 +161,7 @@ workflows:
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
+      - *diagnose_git_remotes
       - *build_runner
       - *shorebird_install
       - *fetch_dependencies
