@@ -565,7 +565,7 @@ class XmppService extends XmppBase
       await _connection.reset();
     }
     _connection = await _buildConnection();
-    // _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
+    _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
     if (!_stateStore.isCompleted) {
       _log.warning('Cancelling state store initialization...');

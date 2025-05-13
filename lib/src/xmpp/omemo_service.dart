@@ -1,7 +1,7 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin OmemoService on XmppBase {
-  final _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
+  var _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
   Future<omemo.OmemoManager> _getOmemoManager() async => _omemoManager.value!;
 
