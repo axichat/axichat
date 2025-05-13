@@ -70,7 +70,10 @@ enum EncryptionProtocol {
   bool get isMls => this == mls;
 }
 
-enum PseudoMessageType { newDevice, changedDevice }
+enum PseudoMessageType {
+  newDevice,
+  changedDevice,
+}
 
 @Freezed(toJson: false, fromJson: false)
 class Message with _$Message implements Insertable<Message> {
@@ -144,16 +147,15 @@ class Message with _$Message implements Insertable<Message> {
       chatJid: chatJid,
       body: event.text,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-      noStore: get<mox.MessageProcessingHintData>()?.hints.contains(
-                mox.MessageProcessingHint.noStore,
-              ) ??
+      noStore: get<mox.MessageProcessingHintData>()
+              ?.hints
+              .contains(mox.MessageProcessingHint.noStore) ??
           false,
       quoting: get<mox.ReplyData>()?.id,
       originID: get<mox.StableIdData>()?.originId,
       occupantID: get<mox.OccupantIdData>()?.id,
       encryptionProtocol:
           event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
-      acked: event.isCarbon,
     );
   }
 
@@ -180,7 +182,6 @@ class Message with _$Message implements Insertable<Message> {
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
         mox.MessageBodyData(body),
         const mox.MarkableData(true),
-        const mox.MessageDeliveryReceiptData(true),
         mox.MessageIdData(stanzaID),
         mox.ChatState.active,
       ]),
@@ -341,7 +342,11 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
   }
 
   static omemo.OmemoKeyPair fromMox(omemo.OmemoKeyPair keyPair) =>
-      omemo.OmemoKeyPair(keyPair.pk, keyPair.sk, keyPair.type);
+      omemo.OmemoKeyPair(
+        keyPair.pk,
+        keyPair.sk,
+        keyPair.type,
+      );
 
   Future<Map<String, dynamic>> toMap() async => <String, String>{
         'publicKey': base64Encode(await pk.getBytes()),
@@ -353,7 +358,13 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
 }
 
 class SignedPreKey extends omemo.OmemoKeyPair {
-  SignedPreKey(super.pk, super.sk, super.type, {this.id, this.signature});
+  SignedPreKey(
+    super.pk,
+    super.sk,
+    super.type, {
+    this.id,
+    this.signature,
+  });
 
   final int? id;
   final List<int>? signature;
@@ -607,10 +618,12 @@ class OmemoDevice extends omemo.OmemoDevice {
   //       spkId, spkSignature, oldSpk, oldSpkId, opks));
   // }
   //
-  Future<String> onetimePreKeysToJson() async => jsonEncode(<String, String>{
-        for (final entry in onetimePreKeys.entries)
-          entry.key.toString(): await entry.value.toJson(),
-      });
+  Future<String> onetimePreKeysToJson() async => jsonEncode(
+        <String, String>{
+          for (final entry in onetimePreKeys.entries)
+            entry.key.toString(): await entry.value.toJson(),
+        },
+      );
 
   static Map<int, omemo.OmemoKeyPair> onetimePreKeysFromJson(String json) {
     final data = jsonDecode(json) as Map<String, String>;
@@ -825,10 +838,12 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
     );
   }
 
-  Future<String> mkSkippedToJson() async => jsonEncode(<String, List<int>>{
-        for (final entry in mkSkipped.entries)
-          await entry.key.toJson(): entry.value,
-      });
+  Future<String> mkSkippedToJson() async => jsonEncode(
+        <String, List<int>>{
+          for (final entry in mkSkipped.entries)
+            await entry.key.toJson(): entry.value,
+        },
+      );
 
   static Map<omemo.SkippedKey, List<int>> mkSkippedFromJson(String json) {
     final data = jsonDecode(json) as Map<String, List<int>>;
@@ -905,14 +920,14 @@ class Reaction with _$Reaction {
 
 @UseRowClass(Reaction)
 class Reactions extends Table {
-  TextColumn get messageID => text()();
+  TextColumn get messageID => text().references(Messages, #id)();
 
   TextColumn get senderJid => text()();
 
   TextColumn get emoji => text()();
 
   @override
-  Set<Column> get primaryKey => {senderJid, emoji};
+  Set<Column> get primaryKey => {messageID, senderJid, emoji};
 }
 
 @Freezed(toJson: false, fromJson: false)
@@ -1120,7 +1135,10 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
         subscription: Subscription.both,
       );
 
-  factory RosterItem.fromMox(mox.XmppRosterItem item, {bool isGhost = false}) {
+  factory RosterItem.fromMox(
+    mox.XmppRosterItem item, {
+    bool isGhost = false,
+  }) {
     final subscription = Subscription.fromString(item.subscription);
     return RosterItem(
       jid: item.jid,
@@ -1196,7 +1214,10 @@ class Roster extends Table {
 
 @Freezed(toJson: false, fromJson: false)
 class Invite with _$Invite implements Insertable<Invite> {
-  const factory Invite({required String jid, required String title}) = _Invite;
+  const factory Invite({
+    required String jid,
+    required String title,
+  }) = _Invite;
 
   const Invite._();
 
@@ -1218,7 +1239,11 @@ class Invites extends Table {
   Set<Column<Object>>? get primaryKey => {jid};
 }
 
-enum ChatType { chat, groupChat, note }
+enum ChatType {
+  chat,
+  groupChat,
+  note,
+}
 
 @Freezed(toJson: false, fromJson: false)
 class Chat with _$Chat implements Insertable<Chat> {
@@ -1234,8 +1259,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(0) int unreadCount,
     @Default(false) bool open,
     @Default(false) bool muted,
-    @Default(false) bool favorited,
-    @Default(true) bool markerResponsive,
+    @Default(false) bool favourited,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
@@ -1256,8 +1280,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required int unreadCount,
     required bool open,
     required bool muted,
-    required bool favorited,
-    required bool markerResponsive,
+    required bool favourited,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
     required String? contactDisplayName,
@@ -1289,8 +1312,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         unreadCount: Value(unreadCount),
         open: Value(open),
         muted: Value(muted),
-        favorited: Value(favorited),
-        markerResponsive: Value(markerResponsive),
+        favourited: Value(favourited),
         encryptionProtocol: Value(encryptionProtocol),
         contactID: Value.absentIfNull(contactID),
         contactDisplayName: Value.absentIfNull(contactDisplayName),
@@ -1324,10 +1346,7 @@ class Chats extends Table {
 
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
 
-  BoolColumn get favorited => boolean().withDefault(const Constant(false))();
-
-  BoolColumn get markerResponsive =>
-      boolean().withDefault(const Constant(true))();
+  BoolColumn get favourited => boolean().withDefault(const Constant(false))();
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(1))();
@@ -1437,9 +1456,8 @@ class JsonConverter<V> extends TypeConverter<Map<String, V>, String> {
 class HashesConverter extends TypeConverter<Map<HashFunction, String>, String> {
   @override
   Map<HashFunction, String> fromSql(String fromDb) =>
-      (jsonDecode(fromDb) as Map<String, dynamic>).map(
-        (k, v) => MapEntry(HashFunction.fromName(k), v as String),
-      );
+      (jsonDecode(fromDb) as Map<String, dynamic>)
+          .map((k, v) => MapEntry(HashFunction.fromName(k), v as String));
 
   @override
   String toSql(Map<HashFunction, String> value) =>
