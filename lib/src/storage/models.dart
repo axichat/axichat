@@ -13,7 +13,6 @@ import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:uuid/uuid.dart';
 
 part 'models.freezed.dart';
-
 part 'models.g.dart';
 
 const uuid = Uuid();
@@ -1350,7 +1349,7 @@ class Chats extends Table {
   BoolColumn get favourited => boolean().withDefault(const Constant(false))();
 
   IntColumn get encryptionProtocol =>
-      intEnum<EncryptionProtocol>().withDefault(const Constant(0))();
+      intEnum<EncryptionProtocol>().withDefault(const Constant(1))();
 
   TextColumn get contactID =>
       text().nullable().references(Contacts, #nativeID)();
