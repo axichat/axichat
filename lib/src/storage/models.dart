@@ -1330,7 +1330,7 @@ class Chats extends Table {
       boolean().withDefault(const Constant(true))();
 
   IntColumn get encryptionProtocol =>
-      intEnum<EncryptionProtocol>().withDefault(const Constant(0))();
+      intEnum<EncryptionProtocol>().withDefault(const Constant(1))();
 
   TextColumn get contactID =>
       text().nullable().references(Contacts, #nativeID)();
