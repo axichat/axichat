@@ -33,7 +33,7 @@ mixin OmemoService on XmppBase {
 
     final bundles = await _connection
         .getManager<mox.DiscoManager>()!
-        .discoItemsQuery(jid, node: omemoBundlesXmlns);
+        .discoItemsQuery(jid, node: mox.omemoBundlesXmlns);
     if (bundles.isType<mox.DiscoError>()) {
       return _publishBundle(bundle: await device.toBundle());
     }
