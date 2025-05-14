@@ -1,15 +1,5 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-List<Chat> sortChats(List<Chat> chats) => chats.toList()
-  ..sort((a, b) {
-    if (a.favourited == b.favourited) return 0;
-    if (a.favourited) return 1;
-    return -1;
-  })
-  ..sort(
-    (a, b) => b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp),
-  );
-
 mixin ChatsService on XmppBase {
   Stream<List<Chat>> chatsStream({
     int start = 0,
@@ -19,7 +9,8 @@ mixin ChatsService on XmppBase {
         _dbOpReturning<XmppDatabase, Stream<List<Chat>>>(
           (db) async => db
               .watchChats(start: start, end: end)
-              .startWith(sortChats(await db.getChats(start: start, end: end))),
+              .startWith(await db.getChats(start: start, end: end))
+              .map(sortChats),
         ),
       ));
 
@@ -27,6 +18,16 @@ mixin ChatsService on XmppBase {
       StreamCompleter.fromFuture(Future.value(
         _dbOpReturning<XmppDatabase, Stream<Chat?>>((db) => db.watchChat(jid)),
       ));
+
+  static List<Chat> sortChats(List<Chat> chats) => chats.toList()
+    ..sort((a, b) {
+      if (a.favourited == b.favourited) return 0;
+      if (a.favourited) return 1;
+      return -1;
+    })
+    ..sort(
+      (a, b) => b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp),
+    );
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
