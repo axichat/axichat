@@ -97,7 +97,7 @@ main() {
             [],
             ...List.generate(
               chatJids.length,
-              (index) => sortChats(
+              (index) => ChatsService.sortChats(
                 chats.sublist(0, index),
               ).map((e) => ChatMatcher(e)).toList(),
             )
@@ -124,7 +124,7 @@ main() {
 
         await pumpEventQueue();
 
-        final chats = sortChats(await database.getChats(
+        final chats = ChatsService.sortChats(await database.getChats(
           start: 0,
           end: double.maxFinite.toInt(),
         ));
@@ -152,22 +152,22 @@ main() {
           emitsInOrder([
             chats.map((e) => ChatMatcher(e)).toList(),
             chats.map((e) => ChatMatcher(e)).toList(),
-            sortChats([
+            ChatsService.sortChats([
               chats0,
               ...chats.sublist(1),
             ]).map((e) => ChatMatcher(e)).toList(),
-            sortChats([
+            ChatsService.sortChats([
               chats0,
               chats1,
               ...chats.sublist(2),
             ]).map((e) => ChatMatcher(e)).toList(),
-            sortChats([
+            ChatsService.sortChats([
               chats0,
               chats1,
               chats2,
               ...chats.sublist(3),
             ]).map((e) => ChatMatcher(e)).toList(),
-            sortChats([
+            ChatsService.sortChats([
               chats0,
               chats1,
               chats2,
