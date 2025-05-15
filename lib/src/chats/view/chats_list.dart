@@ -4,6 +4,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatsList extends StatelessWidget {
@@ -27,14 +28,59 @@ class ChatsList extends StatelessWidget {
           itemCount: items.length,
           itemBuilder: (context, index) {
             final item = items[index];
+            final locate = context.read;
             return AxiListTile(
               key: Key(item.jid),
               badgeCount: item.unreadCount,
-              onTap: () =>
-                  context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
+              onTap: () => locate<ChatsCubit?>()?.toggleChat(jid: item.jid),
               onDismissed: (_) =>
-                  context.read<ChatsCubit?>()?.deleteChat(jid: item.jid),
-              dismissText: 'Delete chat: ${item.title}?',
+                  locate<ChatsCubit?>()?.deleteChat(jid: item.jid),
+              confirmDismiss: (_) => showShadDialog<bool>(
+                context: context,
+                builder: (context) {
+                  var deleteMessages = false;
+                  return StatefulBuilder(builder: (context, setState) {
+                    return ShadDialog(
+                      title: const Text('Confirm'),
+                      content: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Delete chat: ${item.title}',
+                            style: context.textTheme.small,
+                          ),
+                          const SizedBox.square(dimension: 10.0),
+                          ShadCheckbox(
+                            value: deleteMessages,
+                            onChanged: (value) =>
+                                setState(() => deleteMessages = value),
+                            label: Text(
+                              'Permanently delete messages',
+                              style: context.textTheme.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        ShadButton.outline(
+                          onPressed: () => context.pop(false),
+                          text: const Text('Cancel'),
+                        ),
+                        ShadButton.destructive(
+                          onPressed: () {
+                            if (deleteMessages) {
+                              locate<ChatsCubit?>()
+                                  ?.deleteChatMessages(jid: item.jid);
+                            }
+                            return context.pop(true);
+                          },
+                          text: const Text('Continue'),
+                        )
+                      ],
+                    );
+                  });
+                },
+              ),
               selected: item.open,
               leading: AxiAvatar(
                 jid: item.jid,

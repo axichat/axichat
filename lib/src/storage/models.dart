@@ -13,7 +13,6 @@ import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:uuid/uuid.dart';
 
 part 'models.freezed.dart';
-
 part 'models.g.dart';
 
 const uuid = Uuid();
@@ -71,10 +70,7 @@ enum EncryptionProtocol {
   bool get isMls => this == mls;
 }
 
-enum PseudoMessageType {
-  newDevice,
-  changedDevice,
-}
+enum PseudoMessageType { newDevice, changedDevice }
 
 @Freezed(toJson: false, fromJson: false)
 class Message with _$Message implements Insertable<Message> {
@@ -148,9 +144,10 @@ class Message with _$Message implements Insertable<Message> {
       chatJid: chatJid,
       body: event.text,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-      noStore: get<mox.MessageProcessingHintData>()
-              ?.hints
-              .contains(mox.MessageProcessingHint.noStore) ??
+      noStore:
+          get<mox.MessageProcessingHintData>()?.hints.contains(
+            mox.MessageProcessingHint.noStore,
+          ) ??
           false,
       quoting: get<mox.ReplyData>()?.id,
       originID: get<mox.StableIdData>()?.originId,
@@ -323,9 +320,9 @@ extension OmemoPublicKey on omemo.OmemoPublicKey {
   // Future<List<int>> serialize() async => injectDjbType(await getBytes());
 
   Future<Map<String, String>> toMap() async => <String, String>{
-        'publicKey': await asBase64(),
-        'type': type.name,
-      };
+    'publicKey': await asBase64(),
+    'type': type.name,
+  };
 
   Future<String> toJson() async => jsonEncode(await toMap());
 }
@@ -343,29 +340,19 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
   }
 
   static omemo.OmemoKeyPair fromMox(omemo.OmemoKeyPair keyPair) =>
-      omemo.OmemoKeyPair(
-        keyPair.pk,
-        keyPair.sk,
-        keyPair.type,
-      );
+      omemo.OmemoKeyPair(keyPair.pk, keyPair.sk, keyPair.type);
 
   Future<Map<String, dynamic>> toMap() async => <String, String>{
-        'publicKey': base64Encode(await pk.getBytes()),
-        'secretKey': base64Encode(await sk.getBytes()),
-        'type': type.name,
-      };
+    'publicKey': base64Encode(await pk.getBytes()),
+    'secretKey': base64Encode(await sk.getBytes()),
+    'type': type.name,
+  };
 
   Future<String> toJson() async => jsonEncode(await toMap());
 }
 
 class SignedPreKey extends omemo.OmemoKeyPair {
-  SignedPreKey(
-    super.pk,
-    super.sk,
-    super.type, {
-    this.id,
-    this.signature,
-  });
+  SignedPreKey(super.pk, super.sk, super.type, {this.id, this.signature});
 
   final int? id;
   final List<int>? signature;
@@ -383,12 +370,12 @@ class SignedPreKey extends omemo.OmemoKeyPair {
   }
 
   Future<Map<String, dynamic>> toMap() async => <String, dynamic>{
-        'publicKey': base64Encode(await pk.getBytes()),
-        'secretKey': base64Encode(await sk.getBytes()),
-        'type': type.name,
-        'id': id,
-        'signature': signature,
-      };
+    'publicKey': base64Encode(await pk.getBytes()),
+    'secretKey': base64Encode(await sk.getBytes()),
+    'type': type.name,
+    'id': id,
+    'signature': signature,
+  };
 
   Future<String> toJson() async => jsonEncode(await toMap());
 }
@@ -407,9 +394,9 @@ extension SkippedKey on omemo.SkippedKey {
   }
 
   Future<Map<String, dynamic>> toMap() async => <String, dynamic>{
-        'key': await key.toJson(),
-        'skipped': skipped,
-      };
+    'key': await key.toJson(),
+    'skipped': skipped,
+  };
 
   Future<String> toJson() async => jsonEncode(await toMap());
 }
@@ -438,11 +425,11 @@ extension KeyExchangeData on omemo.KeyExchangeData {
   }
 
   Future<Map<String, dynamic>> toMap() async => <String, dynamic>{
-        'pkId': pkId,
-        'spkId': spkId,
-        'identityKey': await identityKey.toJson(),
-        'ephemeralKey': await ephemeralKey.toJson(),
-      };
+    'pkId': pkId,
+    'spkId': spkId,
+    'identityKey': await identityKey.toJson(),
+    'ephemeralKey': await ephemeralKey.toJson(),
+  };
 
   Future<String> toJson() async => jsonEncode(await toMap());
 }
@@ -479,16 +466,16 @@ class OmemoDevice extends omemo.OmemoDevice {
     this.enabled = true,
     this.onetimePreKeys = const {},
   }) : super(
-          jid,
-          id,
-          identityKey,
-          signedPreKey,
-          signedPreKey.id!,
-          signedPreKey.signature!,
-          oldSignedPreKey,
-          oldSignedPreKey?.id,
-          onetimePreKeys,
-        );
+         jid,
+         id,
+         identityKey,
+         signedPreKey,
+         signedPreKey.id!,
+         signedPreKey.signature!,
+         oldSignedPreKey,
+         oldSignedPreKey?.id,
+         onetimePreKeys,
+       );
 
   final omemo.OmemoKeyPair identityKey;
   final SignedPreKey signedPreKey;
@@ -506,45 +493,43 @@ class OmemoDevice extends omemo.OmemoDevice {
     required BTBVTrustState trust,
     required bool enabled,
     required String onetimePreKeys,
-  }) =>
-      OmemoDevice(
-        jid: jid,
-        id: id,
-        identityKey: OmemoKeyPair.fromJson(identityKey),
-        signedPreKey: SignedPreKey.fromJson(signedPreKey),
-        oldSignedPreKey: oldSignedPreKey != null
-            ? SignedPreKey.fromJson(oldSignedPreKey)
-            : null,
-        trust: trust,
-        enabled: enabled,
-        onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
-      );
+  }) => OmemoDevice(
+    jid: jid,
+    id: id,
+    identityKey: OmemoKeyPair.fromJson(identityKey),
+    signedPreKey: SignedPreKey.fromJson(signedPreKey),
+    oldSignedPreKey:
+        oldSignedPreKey != null ? SignedPreKey.fromJson(oldSignedPreKey) : null,
+    trust: trust,
+    enabled: enabled,
+    onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
+  );
 
   factory OmemoDevice.fromMox(omemo.OmemoDevice device) => OmemoDevice(
-        id: device.id,
-        jid: device.jid,
-        identityKey:
-            omemo.OmemoKeyPair(device.ik.pk, device.ik.sk, device.ik.type),
-        signedPreKey: SignedPreKey(
-          device.spk.pk,
-          device.spk.sk,
-          device.spk.type,
-          id: device.spkId,
-          signature: device.spkSignature,
-        ),
-        oldSignedPreKey: device.oldSpk != null
+    id: device.id,
+    jid: device.jid,
+    identityKey: omemo.OmemoKeyPair(device.ik.pk, device.ik.sk, device.ik.type),
+    signedPreKey: SignedPreKey(
+      device.spk.pk,
+      device.spk.sk,
+      device.spk.type,
+      id: device.spkId,
+      signature: device.spkSignature,
+    ),
+    oldSignedPreKey:
+        device.oldSpk != null
             ? SignedPreKey(
-                device.oldSpk!.pk,
-                device.oldSpk!.sk,
-                device.oldSpk!.type,
-                id: device.oldSpkId,
-              )
+              device.oldSpk!.pk,
+              device.oldSpk!.sk,
+              device.oldSpk!.type,
+              id: device.oldSpkId,
+            )
             : null,
-        onetimePreKeys: <int, omemo.OmemoKeyPair>{
-          for (final opk in device.opks.entries)
-            opk.key: OmemoKeyPair.fromMox(opk.value),
-        },
-      );
+    onetimePreKeys: <int, omemo.OmemoKeyPair>{
+      for (final opk in device.opks.entries)
+        opk.key: OmemoKeyPair.fromMox(opk.value),
+    },
+  );
 
   static int generateID() => Random.secure().nextInt(2147483647);
 
@@ -619,12 +604,10 @@ class OmemoDevice extends omemo.OmemoDevice {
   //       spkId, spkSignature, oldSpk, oldSpkId, opks));
   // }
   //
-  Future<String> onetimePreKeysToJson() async => jsonEncode(
-        <String, String>{
-          for (final entry in onetimePreKeys.entries)
-            entry.key.toString(): await entry.value.toJson(),
-        },
-      );
+  Future<String> onetimePreKeysToJson() async => jsonEncode(<String, String>{
+    for (final entry in onetimePreKeys.entries)
+      entry.key.toString(): await entry.value.toJson(),
+  });
 
   static Map<int, omemo.OmemoKeyPair> onetimePreKeysFromJson(String json) {
     final data = jsonDecode(json) as Map<String, String>;
@@ -635,35 +618,35 @@ class OmemoDevice extends omemo.OmemoDevice {
   }
 
   Future<Insertable<OmemoDevice>> toDb() async => OmemoDevicesCompanion.insert(
-        jid: jid,
-        id: id,
-        identityKey: await identityKey.toJson(),
-        signedPreKey: await signedPreKey.toJson(),
-        oldSignedPreKey: Value.absentIfNull(await oldSignedPreKey?.toJson()),
-        trust: Value(trust),
-        enabled: Value(enabled),
-        onetimePreKeys: await onetimePreKeysToJson(),
-      );
+    jid: jid,
+    id: id,
+    identityKey: await identityKey.toJson(),
+    signedPreKey: await signedPreKey.toJson(),
+    oldSignedPreKey: Value.absentIfNull(await oldSignedPreKey?.toJson()),
+    trust: Value(trust),
+    enabled: Value(enabled),
+    onetimePreKeys: await onetimePreKeysToJson(),
+  );
 
-// @override
-// Future<OmemoBundle> toBundle() async {
-//   final encodedOpks = <int, String>{};
-//
-//   for (final opkKey in opks.keys) {
-//     encodedOpks[opkKey] =
-//         base64.encode(injectDjbType(await opks[opkKey]!.pk.getBytes()));
-//   }
-//
-//   return OmemoBundle(
-//     jid,
-//     id,
-//     base64.encode(injectDjbType(await spk.pk.getBytes())),
-//     spkId,
-//     base64.encode(spkSignature),
-//     base64.encode(injectDjbType(await ik.pk.getBytes())),
-//     encodedOpks,
-//   );
-// }
+  // @override
+  // Future<OmemoBundle> toBundle() async {
+  //   final encodedOpks = <int, String>{};
+  //
+  //   for (final opkKey in opks.keys) {
+  //     encodedOpks[opkKey] =
+  //         base64.encode(injectDjbType(await opks[opkKey]!.pk.getBytes()));
+  //   }
+  //
+  //   return OmemoBundle(
+  //     jid,
+  //     id,
+  //     base64.encode(injectDjbType(await spk.pk.getBytes())),
+  //     spkId,
+  //     base64.encode(spkSignature),
+  //     base64.encode(injectDjbType(await ik.pk.getBytes())),
+  //     encodedOpks,
+  //   );
+  // }
 }
 
 @UseRowClass(OmemoDevice, constructor: 'fromDb')
@@ -728,23 +711,23 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
     Map<omemo.SkippedKey, List<int>> mkSkipped = const {},
     this.acked = false,
     required this.keyExchangeData,
-  })  : _dhr = dhr,
-        _mkSkipped = mkSkipped,
-        super(
-          dhs,
-          dhr,
-          rk,
-          cks,
-          ckr,
-          ns,
-          nr,
-          pn,
-          identityKey,
-          associatedData,
-          mkSkipped,
-          acked,
-          keyExchangeData,
-        );
+  }) : _dhr = dhr,
+       _mkSkipped = mkSkipped,
+       super(
+         dhs,
+         dhr,
+         rk,
+         cks,
+         ckr,
+         ns,
+         nr,
+         pn,
+         identityKey,
+         associatedData,
+         mkSkipped,
+         acked,
+         keyExchangeData,
+       );
 
   @override
   final String jid;
@@ -786,24 +769,23 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
     required String mkSkipped,
     required String keyExchangeData,
     required bool acked,
-  }) =>
-      OmemoRatchet(
-        jid: jid,
-        device: device,
-        dhs: OmemoKeyPair.fromJson(dhs),
-        dhr: dhr != null ? OmemoPublicKey.fromJson(dhr) : null,
-        rk: rk,
-        cks: cks,
-        ckr: ckr,
-        ns: ns,
-        nr: nr,
-        pn: pn,
-        identityKey: OmemoPublicKey.fromJson(identityKey),
-        associatedData: associatedData,
-        mkSkipped: mkSkippedFromJson(mkSkipped),
-        keyExchangeData: KeyExchangeData.fromJson(keyExchangeData),
-        acked: acked,
-      );
+  }) => OmemoRatchet(
+    jid: jid,
+    device: device,
+    dhs: OmemoKeyPair.fromJson(dhs),
+    dhr: dhr != null ? OmemoPublicKey.fromJson(dhr) : null,
+    rk: rk,
+    cks: cks,
+    ckr: ckr,
+    ns: ns,
+    nr: nr,
+    pn: pn,
+    identityKey: OmemoPublicKey.fromJson(identityKey),
+    associatedData: associatedData,
+    mkSkipped: mkSkippedFromJson(mkSkipped),
+    keyExchangeData: KeyExchangeData.fromJson(keyExchangeData),
+    acked: acked,
+  );
 
   factory OmemoRatchet.fromMox(omemo.OmemoRatchetData data) {
     final ratchet = data.ratchet;
@@ -811,9 +793,10 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
       jid: data.jid,
       device: data.id,
       dhs: OmemoKeyPair.fromMox(ratchet.dhs),
-      dhr: ratchet.dhr != null
-          ? omemo.OmemoPublicKey(ratchet.dhr!.asPublicKey())
-          : null,
+      dhr:
+          ratchet.dhr != null
+              ? omemo.OmemoPublicKey(ratchet.dhr!.asPublicKey())
+              : null,
       rk: ratchet.rk,
       cks: ratchet.cks,
       ckr: ratchet.ckr,
@@ -825,9 +808,10 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
       mkSkipped: <omemo.SkippedKey, List<int>>{
         for (final skipped in ratchet.mkSkipped.entries)
           omemo.SkippedKey(
-            omemo.OmemoPublicKey(skipped.key.dh.asPublicKey()),
-            skipped.key.n,
-          ): skipped.value,
+                omemo.OmemoPublicKey(skipped.key.dh.asPublicKey()),
+                skipped.key.n,
+              ):
+              skipped.value,
       },
       keyExchangeData: omemo.KeyExchangeData(
         ratchet.kex.pkId,
@@ -839,12 +823,10 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
     );
   }
 
-  Future<String> mkSkippedToJson() async => jsonEncode(
-        <String, List<int>>{
-          for (final entry in mkSkipped.entries)
-            await entry.key.toJson(): entry.value,
-        },
-      );
+  Future<String> mkSkippedToJson() async => jsonEncode(<String, List<int>>{
+    for (final entry in mkSkipped.entries)
+      await entry.key.toJson(): entry.value,
+  });
 
   static Map<omemo.SkippedKey, List<int>> mkSkippedFromJson(String json) {
     final data = jsonDecode(json) as Map<String, List<int>>;
@@ -921,14 +903,14 @@ class Reaction with _$Reaction {
 
 @UseRowClass(Reaction)
 class Reactions extends Table {
-  TextColumn get messageID => text().references(Messages, #id)();
+  TextColumn get messageID => text()();
 
   TextColumn get senderJid => text()();
 
   TextColumn get emoji => text()();
 
   @override
-  Set<Column> get primaryKey => {messageID, senderJid, emoji};
+  Set<Column> get primaryKey => {senderJid, emoji};
 }
 
 @Freezed(toJson: false, fromJson: false)
@@ -1009,11 +991,11 @@ enum Subscription {
   both;
 
   static Subscription fromString(String value) => switch (value) {
-        'to' => to,
-        'from' => from,
-        'both' => both,
-        _ => none,
-      };
+    'to' => to,
+    'from' => from,
+    'both' => both,
+    _ => none,
+  };
 
   bool get isNone => this == none;
 
@@ -1029,10 +1011,10 @@ enum Ask {
   subscribed;
 
   static Ask? fromString(String? value) => switch (value) {
-        'subscribe' => subscribe,
-        'subscribed' => subscribed,
-        _ => null,
-      };
+    'subscribe' => subscribe,
+    'subscribed' => subscribed,
+    _ => null,
+  };
 
   bool get isSubscribe => this == subscribe;
 
@@ -1067,31 +1049,31 @@ enum Presence {
   bool get isUnknown => this == unknown;
 
   static Presence fromString(String? value) => switch (value) {
-        'unavailable' => unavailable,
-        'xa' => xa,
-        'away' => away,
-        'dnd' => dnd,
-        'chat' => chat,
-        _ => unknown,
-      };
+    'unavailable' => unavailable,
+    'xa' => xa,
+    'away' => away,
+    'dnd' => dnd,
+    'chat' => chat,
+    _ => unknown,
+  };
 
   Color get toColor => switch (this) {
-        unavailable => Colors.grey,
-        xa => Colors.red,
-        away => Colors.orange,
-        dnd => Colors.red,
-        chat => const Color(0xff80ee80),
-        unknown => Colors.grey,
-      };
+    unavailable => Colors.grey,
+    xa => Colors.red,
+    away => Colors.orange,
+    dnd => Colors.red,
+    chat => const Color(0xff80ee80),
+    unknown => Colors.grey,
+  };
 
   String get tooltip => switch (this) {
-        unavailable => 'Offline',
-        xa => 'Away',
-        away => 'Idle',
-        dnd => 'Busy',
-        chat => 'Online',
-        unknown => 'Unknown',
-      };
+    unavailable => 'Offline',
+    xa => 'Away',
+    away => 'Idle',
+    dnd => 'Busy',
+    chat => 'Online',
+    unknown => 'Unknown',
+  };
 }
 
 @freezed
@@ -1130,23 +1112,21 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
       _$RosterItemFromJson(json);
 
   factory RosterItem.fromJid(String jid) => RosterItem(
-        jid: jid.toString(),
-        title: mox.JID.fromString(jid).local,
-        presence: Presence.chat,
-        subscription: Subscription.both,
-      );
+    jid: jid.toString(),
+    title: mox.JID.fromString(jid).local,
+    presence: Presence.chat,
+    subscription: Subscription.both,
+  );
 
-  factory RosterItem.fromMox(
-    mox.XmppRosterItem item, {
-    bool isGhost = false,
-  }) {
+  factory RosterItem.fromMox(mox.XmppRosterItem item, {bool isGhost = false}) {
     final subscription = Subscription.fromString(item.subscription);
     return RosterItem(
       jid: item.jid,
       title: item.name ?? mox.JID.fromString(item.jid).local,
-      presence: subscription.isNone || subscription.isFrom
-          ? Presence.unavailable
-          : Presence.chat,
+      presence:
+          subscription.isNone || subscription.isFrom
+              ? Presence.unavailable
+              : Presence.chat,
       status: null,
       avatarPath: null,
       avatarHash: null,
@@ -1162,26 +1142,26 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   const RosterItem._();
 
   mox.XmppRosterItem toMox() => mox.XmppRosterItem(
-        jid: jid,
-        subscription: subscription.name,
-        ask: ask?.name,
-        name: title,
-      );
+    jid: jid,
+    subscription: subscription.name,
+    ask: ask?.name,
+    name: title,
+  );
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) => RosterCompanion(
-        jid: Value(jid),
-        title: Value(title),
-        presence: Value(presence),
-        status: Value.absentIfNull(status),
-        avatarPath: Value.absentIfNull(avatarPath),
-        avatarHash: Value.absentIfNull(avatarHash),
-        subscription: Value(subscription),
-        ask: Value(ask),
-        contactID: Value.absentIfNull(contactID),
-        contactAvatarPath: Value.absentIfNull(contactAvatarPath),
-        contactDisplayName: Value.absentIfNull(contactDisplayName),
-      ).toColumns(nullToAbsent);
+    jid: Value(jid),
+    title: Value(title),
+    presence: Value(presence),
+    status: Value.absentIfNull(status),
+    avatarPath: Value.absentIfNull(avatarPath),
+    avatarHash: Value.absentIfNull(avatarHash),
+    subscription: Value(subscription),
+    ask: Value(ask),
+    contactID: Value.absentIfNull(contactID),
+    contactAvatarPath: Value.absentIfNull(contactAvatarPath),
+    contactDisplayName: Value.absentIfNull(contactDisplayName),
+  ).toColumns(nullToAbsent);
 }
 
 @UseRowClass(RosterItem, constructor: 'fromDb')
@@ -1215,10 +1195,7 @@ class Roster extends Table {
 
 @Freezed(toJson: false, fromJson: false)
 class Invite with _$Invite implements Insertable<Invite> {
-  const factory Invite({
-    required String jid,
-    required String title,
-  }) = _Invite;
+  const factory Invite({required String jid, required String title}) = _Invite;
 
   const Invite._();
 
@@ -1240,11 +1217,7 @@ class Invites extends Table {
   Set<Column<Object>>? get primaryKey => {jid};
 }
 
-enum ChatType {
-  chat,
-  groupChat,
-  note,
-}
+enum ChatType { chat, groupChat, note }
 
 @Freezed(toJson: false, fromJson: false)
 class Chat with _$Chat implements Insertable<Chat> {
@@ -1291,11 +1264,11 @@ class Chat with _$Chat implements Insertable<Chat> {
   }) = _ChatFromDb;
 
   factory Chat.fromJid(String jid) => Chat(
-        jid: jid,
-        title: mox.JID.fromString(jid).local,
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-      );
+    jid: jid,
+    title: mox.JID.fromString(jid).local,
+    type: ChatType.chat,
+    lastChangeTimestamp: DateTime.now(),
+  );
 
   const Chat._();
 
@@ -1457,8 +1430,9 @@ class JsonConverter<V> extends TypeConverter<Map<String, V>, String> {
 class HashesConverter extends TypeConverter<Map<HashFunction, String>, String> {
   @override
   Map<HashFunction, String> fromSql(String fromDb) =>
-      (jsonDecode(fromDb) as Map<String, dynamic>)
-          .map((k, v) => MapEntry(HashFunction.fromName(k), v as String));
+      (jsonDecode(fromDb) as Map<String, dynamic>).map(
+        (k, v) => MapEntry(HashFunction.fromName(k), v as String),
+      );
 
   @override
   String toSql(Map<HashFunction, String> value) =>

@@ -102,6 +102,12 @@ mixin ChatsService on XmppBase {
       await db.removeChat(jid);
     });
   }
+
+  Future<void> deleteChatMessages({required String jid}) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.removeChatMessages(jid);
+    });
+  }
 }
 
 class MUCManager extends mox.MUCManager {

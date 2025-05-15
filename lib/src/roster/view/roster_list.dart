@@ -48,7 +48,10 @@ class RosterList extends StatelessWidget {
                   : (_) => context
                       .read<RosterCubit?>()
                       ?.removeContact(jid: item.jid),
-              dismissText: 'Remove ${item.jid} from contacts?',
+              confirmDismiss: (_) => confirm(
+                context,
+                text: 'Remove ${item.jid} from contacts?',
+              ),
               selected: open,
               leading: AxiAvatar(
                 jid: item.jid,
