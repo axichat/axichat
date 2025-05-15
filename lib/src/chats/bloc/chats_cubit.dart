@@ -1,13 +1,12 @@
 import 'dart:async';
 
-import 'package:bloc/bloc.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chats_cubit.freezed.dart';
-
 part 'chats_state.dart';
 
 class ChatsCubit extends Cubit<ChatsState> {
@@ -74,5 +73,9 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   Future<void> deleteChat({required String jid}) async {
     await _chatsService.deleteChat(jid: jid);
+  }
+
+  Future<void> deleteChatMessages({required String jid}) async {
+    await _chatsService.deleteChatMessages(jid: jid);
   }
 }

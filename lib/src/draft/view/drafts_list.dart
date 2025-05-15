@@ -48,7 +48,10 @@ class DraftsList extends StatelessWidget {
               ),
               onDismissed: (_) =>
                   context.read<DraftCubit?>()?.deleteDraft(id: item.id),
-              dismissText: 'Delete draft?',
+              confirmDismiss: (_) => confirm(
+                context,
+                text: 'Delete draft?',
+              ),
               leading: AxiAvatar(
                 jid: recipients == 1 ? item.jids[0] : recipients.toString(),
               ),

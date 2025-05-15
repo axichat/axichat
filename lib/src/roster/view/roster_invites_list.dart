@@ -45,7 +45,10 @@ class RosterInvitesList extends StatelessWidget {
                       : (_) => context
                           .read<RosterCubit>()
                           .rejectContact(jid: invite.jid),
-                  dismissText: 'Reject invite from ${invite.jid}?',
+                  confirmDismiss: (_) => confirm(
+                    context,
+                    text: 'Reject invite from ${invite.jid}?',
+                  ),
                   leading: AxiAvatar(jid: invite.jid),
                   title: invite.title,
                   subtitle: invite.jid,

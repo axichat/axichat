@@ -14,7 +14,7 @@ class AxiListTile extends StatelessWidget {
     this.selected = false,
     this.onTap,
     this.onDismissed,
-    this.dismissText = 'Are you sure you want to delete this item?',
+    this.confirmDismiss,
     this.badgeCount = 0,
   });
 
@@ -26,7 +26,7 @@ class AxiListTile extends StatelessWidget {
   final bool selected;
   final void Function()? onTap;
   final void Function(DismissDirection)? onDismissed;
-  final String dismissText;
+  final ConfirmDismissCallback? confirmDismiss;
   final int badgeCount;
 
   @override
@@ -128,10 +128,7 @@ class AxiListTile extends StatelessWidget {
             ],
           ),
         ),
-        confirmDismiss: (_) => confirm(
-          context,
-          text: dismissText,
-        ),
+        confirmDismiss: confirmDismiss,
         onDismissed: onDismissed,
         child: child,
       );

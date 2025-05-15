@@ -61,6 +61,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageDisplayed(String stanzaID);
 
+  Future<void> removeChatMessages(String jid);
+
   Stream<List<Draft>> watchDrafts({required int start, required int end});
 
   Future<List<Draft>> getDrafts({required int start, required int end});
@@ -252,6 +254,9 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
   @override
   Future<void> deleteOne(String stanzaID) =>
       (delete(table)..where((item) => item.stanzaID.equals(stanzaID))).go();
+
+  Future<void> deleteChatMessages(String jid) =>
+      (delete(table)..where((item) => item.chatJid.equals(jid))).go();
 }
 
 @DriftAccessor(tables: [Drafts])
@@ -534,6 +539,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     return messagesAccessor.selectChatMessages(jid);
   }
 
+  Future<Message?> getLastMessageForChat(String jid) async {
+    final messages = await getChatMessages(jid, start: 0, end: 1);
+
+    if (messages.isEmpty) {
+      return null;
+    }
+    return messages.last;
+  }
+
   @override
   Future<Message?> getMessageByStanzaID(String stanzaID) =>
       messagesAccessor.selectOne(stanzaID);
@@ -645,6 +659,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       displayed: const Value(true),
     ));
   }
+
+  @override
+  Future<void> removeChatMessages(String jid) =>
+      messagesAccessor.deleteChatMessages(jid);
 
   @override
   Stream<List<Draft>> watchDrafts({required int start, required int end}) {
@@ -768,7 +786,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
 
   @override
-  Future<void> createChat(Chat chat) => chatsAccessor.insertOne(chat);
+  Future<void> createChat(Chat chat) async {
+    final lastMessage = await getLastMessageForChat(chat.jid);
+
+    return await chatsAccessor.insertOne(chat.copyWith(
+      lastMessage: lastMessage?.body,
+      lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
+    ));
+  }
 
   @override
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
@@ -780,6 +805,8 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   @override
   Future<Chat?> openChat(String jid) async {
+    final lastMessage = await getLastMessageForChat(jid);
+
     return await transaction(() async {
       final closed = await closeChat();
       await into(chats).insert(
@@ -790,7 +817,8 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           open: const Value(true),
           unreadCount: const Value(0),
           chatState: const Value(mox.ChatState.active),
-          lastChangeTimestamp: DateTime.timestamp(),
+          lastMessage: Value(lastMessage?.body),
+          lastChangeTimestamp: lastMessage?.timestamp ?? DateTime.timestamp(),
         ),
         onConflict: DoUpdate(
           (old) => const ChatsCompanion(
@@ -877,7 +905,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> saveRosterItem(RosterItem item) async {
     _log.info('Adding ${item.jid} to roster...');
     await transaction(() async {
-      await chatsAccessor.insertOne(Chat.fromJid(item.jid));
+      await createChat(Chat.fromJid(item.jid));
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
@@ -888,7 +916,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     await transaction(() async {
       for (final item in items) {
         _log.info('Adding ${item.jid} to roster...');
-        await chatsAccessor.insertOne(Chat.fromJid(item.jid));
+        await createChat(Chat.fromJid(item.jid));
         await rosterAccessor.insertOrUpdateOne(item);
         await invitesAccessor.deleteOne(item.jid);
       }
