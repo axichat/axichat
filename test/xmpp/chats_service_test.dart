@@ -20,7 +20,7 @@ bool compareChats(Chat a, Chat b) =>
     a.unreadCount == b.unreadCount &&
     a.open == b.open &&
     a.muted == b.muted &&
-    a.favourited == b.favourited &&
+    a.favorited == b.favorited &&
     a.encryptionProtocol == b.encryptionProtocol &&
     a.chatState == b.chatState;
 
@@ -143,7 +143,7 @@ main() {
           lastChangeTimestamp: DateTime.now().add(const Duration(seconds: 2)),
         );
         final chats3 = chats[3].copyWith(
-          favourited: true,
+          favorited: true,
           lastChangeTimestamp: DateTime.now().add(const Duration(seconds: 3)),
         );
 

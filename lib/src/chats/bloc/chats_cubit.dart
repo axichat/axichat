@@ -51,11 +51,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsService.openChat(jid);
   }
 
-  Future<void> toggleFavourited({
+  Future<void> toggleFavorited({
     required String jid,
-    required bool favourited,
+    required bool favorited,
   }) async {
-    await _chatsService.toggleChatFavourited(jid: jid, favourited: favourited);
+    await _chatsService.toggleChatFavorited(jid: jid, favorited: favorited);
   }
 
   Future<void> createChatRoom({

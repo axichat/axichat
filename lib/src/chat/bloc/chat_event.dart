@@ -40,12 +40,14 @@ final class ChatMessageUnfocused extends ChatEvent {
 
 final class _ChatTypingStopped extends ChatEvent {
   const _ChatTypingStopped();
+
   @override
   List<Object?> get props => [];
 }
 
 final class ChatTypingStarted extends ChatEvent {
   const ChatTypingStarted();
+
   @override
   List<Object?> get props => [];
 }
@@ -66,6 +68,15 @@ final class ChatMuted extends ChatEvent {
 
   @override
   List<Object?> get props => [muted];
+}
+
+final class ChatResponsivityChanged extends ChatEvent {
+  const ChatResponsivityChanged(this.responsive);
+
+  final bool responsive;
+
+  @override
+  List<Object?> get props => [responsive];
 }
 
 final class ChatEncryptionChanged extends ChatEvent {
