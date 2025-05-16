@@ -212,6 +212,11 @@ mixin MessageService on XmppBase {
   Future<void> sendReadMarker(String to, String stanzaID) async {
     if (!await _canSendChatMarkers(to: to)) return;
 
+    _connection.sendChatMarker(
+      to: to,
+      stanzaID: stanzaID,
+      marker: mox.ChatMarker.received,
+    );
     await _connection.sendChatMarker(
       to: to,
       stanzaID: stanzaID,

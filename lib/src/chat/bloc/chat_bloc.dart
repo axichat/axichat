@@ -78,6 +78,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) {
     emit(state.copyWith(items: event.items));
+    for (final item in event.items) {
+      if (!item.displayed) _messageService.sendReadMarker(jid!, item.stanzaID);
+    }
   }
 
   void _onChatMessageFocused(
