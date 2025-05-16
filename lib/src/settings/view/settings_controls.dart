@@ -72,6 +72,16 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
+                label: const Text('Send read receipts'),
+                value: state.readReceipts,
+                onChanged: (readReceipts) => context
+                    .read<SettingsCubit>()
+                    .toggleReadReceipts(readReceipts),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
                 label: const Text('Low motion'),
                 sublabel: const Text(
                     'Disables most animations. Better for slow devices.'),

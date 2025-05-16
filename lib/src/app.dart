@@ -120,6 +120,11 @@ class MaterialAxichat extends StatelessWidget {
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
         context.read<NotificationService>().mute = state.mute;
+        if (context.read<XmppService>() case final ChatsService service) {
+          service.toggleAllChatsMarkerResponsive(
+            responsive: state.readReceipts,
+          );
+        }
         final lightTheme = ShadThemeData(
           colorScheme: ShadColorScheme.fromName(state.shadColor.name),
           brightness: Brightness.light,

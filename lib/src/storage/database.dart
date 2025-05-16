@@ -127,6 +127,8 @@ abstract interface class XmppDatabase implements Database {
     required bool responsive,
   });
 
+  Future<void> markChatsMarkerResponsive({required bool responsive});
+
   Future<void> updateChatState({
     required String chatJid,
     required mox.ChatState state,
@@ -868,6 +870,13 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }) async {
     _log.info('Marking chat: $jid as marker responsive: $responsive');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(markerResponsive: Value(responsive)));
+  }
+
+  @override
+  Future<void> markChatsMarkerResponsive({required bool responsive}) async {
+    _log.info('Marking all chats as marker responsive: $responsive');
+    await (update(chats))
         .write(ChatsCompanion(markerResponsive: Value(responsive)));
   }
 

@@ -4,9 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 part 'settings_cubit.freezed.dart';
-
 part 'settings_cubit.g.dart';
-
 part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
@@ -27,6 +25,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void toggleMute(bool mute) {
     emit(state.copyWith(mute: mute));
+  }
+
+  void toggleReadReceipts(bool readReceipts) {
+    emit(state.copyWith(readReceipts: readReceipts));
   }
 
   void toggleLowMotion(bool lowMotion) {
