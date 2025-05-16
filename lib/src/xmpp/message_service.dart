@@ -63,6 +63,10 @@ mixin MessageService on XmppBase {
         if (data.metadata.name == null) return;
       }
 
+      if (await _canSendChatMarkers(to: message.chatJid)) {
+        _acknowledgeMessage(event);
+      }
+
       await _handleFile(event, message.senderJid);
 
       final metadata = _extractFileMetadata(event);
@@ -198,6 +202,23 @@ mixin MessageService on XmppBase {
     }
   }
 
+  Future<bool> _canSendChatMarkers({required String to}) async {
+    return await _dbOpReturning<XmppDatabase, bool>((db) async {
+      final chat = await db.getChat(to);
+      return chat?.markerResponsive ?? false;
+    });
+  }
+
+  Future<void> sendReadMarker(String to, String stanzaID) async {
+    if (!await _canSendChatMarkers(to: to)) return;
+
+    await _connection.sendChatMarker(
+      to: to,
+      stanzaID: stanzaID,
+      marker: mox.ChatMarker.displayed,
+    );
+  }
+
   Future<void> saveDraft({
     int? id,
     required List<String> jids,
@@ -212,6 +233,44 @@ mixin MessageService on XmppBase {
     await _dbOp<XmppDatabase>((db) async {
       await db.removeDraft(id);
     });
+  }
+
+  Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
+    final to = event.from.toBare().toString();
+    final result = await _connection.discoInfoQuery(to);
+    if (result == null || result.isType<mox.DiscoError>()) return;
+
+    final info = result.get<mox.DiscoInfo>();
+    final markable =
+        event.extensions.get<mox.MarkableData>()?.isMarkable ?? false;
+    final deliveryReceiptRequested = event.extensions
+            .get<mox.MessageDeliveryReceiptData>()
+            ?.receiptRequested ??
+        false;
+    final id = event.extensions.get<mox.StableIdData>()?.originId ?? event.id;
+
+    if (markable &&
+        info.features.contains(mox.chatMarkersXmlns) &&
+        id != null) {
+      await _connection.sendChatMarker(
+        to: to,
+        stanzaID: id,
+        marker: mox.ChatMarker.received,
+      );
+    } else if (deliveryReceiptRequested &&
+        info.features.contains(mox.deliveryXmlns) &&
+        id != null) {
+      await _connection.sendMessage(
+        mox.MessageEvent(
+          _myJid!,
+          event.from.toBare(),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageDeliveryReceivedData(id),
+          ]),
+        ),
+      );
+    }
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {

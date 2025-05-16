@@ -1234,7 +1234,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(0) int unreadCount,
     @Default(false) bool open,
     @Default(false) bool muted,
-    @Default(false) bool favourited,
+    @Default(false) bool favorited,
+    @Default(true) bool markerResponsive,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
@@ -1255,7 +1256,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     required int unreadCount,
     required bool open,
     required bool muted,
-    required bool favourited,
+    required bool favorited,
+    required bool markerResponsive,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
     required String? contactDisplayName,
@@ -1287,7 +1289,8 @@ class Chat with _$Chat implements Insertable<Chat> {
         unreadCount: Value(unreadCount),
         open: Value(open),
         muted: Value(muted),
-        favourited: Value(favourited),
+        favorited: Value(favorited),
+        markerResponsive: Value(markerResponsive),
         encryptionProtocol: Value(encryptionProtocol),
         contactID: Value.absentIfNull(contactID),
         contactDisplayName: Value.absentIfNull(contactDisplayName),
@@ -1321,7 +1324,10 @@ class Chats extends Table {
 
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
 
-  BoolColumn get favourited => boolean().withDefault(const Constant(false))();
+  BoolColumn get favorited => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get markerResponsive =>
+      boolean().withDefault(const Constant(true))();
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(0))();

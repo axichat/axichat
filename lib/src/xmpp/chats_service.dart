@@ -21,8 +21,8 @@ mixin ChatsService on XmppBase {
 
   static List<Chat> sortChats(List<Chat> chats) => chats.toList()
     ..sort((a, b) {
-      if (a.favourited == b.favourited) return 0;
-      if (a.favourited) return 1;
+      if (a.favorited == b.favorited) return 0;
+      if (a.favorited) return 1;
       return -1;
     })
     ..sort(
@@ -70,21 +70,30 @@ mixin ChatsService on XmppBase {
     });
   }
 
-  Future<void> toggleChatFavourited({
-    required String jid,
-    required bool favourited,
-  }) async {
-    await _dbOp<XmppDatabase>((db) async {
-      await db.markChatFavourited(jid: jid, favourited: favourited);
-    });
-  }
-
   Future<void> toggleChatMuted({
     required String jid,
     required bool muted,
   }) async {
     await _dbOp<XmppDatabase>((db) async {
       await db.markChatMuted(jid: jid, muted: muted);
+    });
+  }
+
+  Future<void> toggleChatFavorited({
+    required String jid,
+    required bool favorited,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markChatFavorited(jid: jid, favorited: favorited);
+    });
+  }
+
+  Future<void> toggleChatMarkerResponsive({
+    required String jid,
+    required bool responsive,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markChatMarkerResponsive(jid: jid, responsive: responsive);
     });
   }
 

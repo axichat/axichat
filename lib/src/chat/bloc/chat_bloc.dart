@@ -1,18 +1,16 @@
 import 'dart:async';
 
 import 'package:async/async.dart';
-import 'package:bloc/bloc.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chat_bloc.freezed.dart';
-
 part 'chat_event.dart';
-
 part 'chat_state.dart';
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
@@ -36,6 +34,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       transformer: blocThrottle(downTime),
     );
     on<ChatMuted>(_onChatMuted);
+    on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
@@ -142,6 +141,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (jid == null) return;
     await _chatsService.toggleChatMuted(jid: jid!, muted: event.muted);
+  }
+
+  Future<void> _onChatResponsivityChanged(
+    ChatResponsivityChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (jid == null) return;
+    await _chatsService.toggleChatMarkerResponsive(
+        jid: jid!, responsive: event.responsive);
   }
 
   Future<void> _onChatEncryptionChanged(

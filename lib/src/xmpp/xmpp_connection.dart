@@ -77,6 +77,10 @@ class XmppConnection extends mox.XmppConnection {
   Future<void> loadStreamState() async =>
       await getManager<XmppStreamManagementManager>()!.loadState();
 
+  Future<moxlib.Result<mox.StanzaError, mox.DiscoInfo>>? discoInfoQuery(
+          String jid) =>
+      getManager<mox.DiscoManager>()?.discoInfoQuery(mox.JID.fromString(jid));
+
   bool? get carbonsEnabled => getManager<mox.CarbonsManager>()?.isEnabled;
 
   Future<bool> enableCarbons() async =>
@@ -87,6 +91,24 @@ class XmppConnection extends mox.XmppConnection {
       await mm.sendMessage(
         packet.to,
         packet.extensions,
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<bool> sendChatMarker({
+    required String to,
+    required String stanzaID,
+    required mox.ChatMarker marker,
+  }) async {
+    if (getManager<mox.MessageManager>() case final mm?) {
+      await mm.sendMessage(
+        mox.JID.fromString(to),
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          mox.ChatMarkerData(marker, stanzaID),
+        ]),
       );
       return true;
     }

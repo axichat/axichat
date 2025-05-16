@@ -94,16 +94,15 @@ class ChatsList extends StatelessWidget {
                   width: 30.0,
                   height: 30.0,
                   icon: Icon(
-                    item.favourited
+                    item.favorited
                         ? Icons.star_rounded
                         : Icons.star_border_rounded,
                     size: 22.0,
                   ),
-                  onPressed: () =>
-                      context.read<ChatsCubit?>()?.toggleFavourited(
-                            jid: item.jid,
-                            favourited: !item.favourited,
-                          ),
+                  onPressed: () => context.read<ChatsCubit?>()?.toggleFavorited(
+                        jid: item.jid,
+                        favorited: !item.favorited,
+                      ),
                 ),
               ],
             );

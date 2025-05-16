@@ -112,14 +112,19 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Chat?> closeChat();
 
-  Future<void> markChatFavourited({
-    required String jid,
-    required bool favourited,
-  });
-
   Future<void> markChatMuted({
     required String jid,
     required bool muted,
+  });
+
+  Future<void> markChatFavorited({
+    required String jid,
+    required bool favorited,
+  });
+
+  Future<void> markChatMarkerResponsive({
+    required String jid,
+    required bool responsive,
   });
 
   Future<void> updateChatState({
@@ -376,7 +381,7 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   Stream<List<Chat>> watchAll() => (select(table)
         ..orderBy([
           (t) => OrderingTerm(
-                expression: t.favourited,
+                expression: t.favorited,
                 mode: OrderingMode.desc,
               ),
           (t) => OrderingTerm(
@@ -837,16 +842,6 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       (await chatsAccessor.closeOpen()).firstOrNull;
 
   @override
-  Future<void> markChatFavourited({
-    required String jid,
-    required bool favourited,
-  }) async {
-    _log.info('Marking chat: $jid as favourited: $favourited');
-    await (update(chats)..where((chats) => chats.jid.equals(jid)))
-        .write(ChatsCompanion(favourited: Value(favourited)));
-  }
-
-  @override
   Future<void> markChatMuted({
     required String jid,
     required bool muted,
@@ -854,6 +849,26 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     _log.info('Marking chat: $jid as muted: $muted');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(muted: Value(muted)));
+  }
+
+  @override
+  Future<void> markChatFavorited({
+    required String jid,
+    required bool favorited,
+  }) async {
+    _log.info('Marking chat: $jid as favorited: $favorited');
+    await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(favorited: Value(favorited)));
+  }
+
+  @override
+  Future<void> markChatMarkerResponsive({
+    required String jid,
+    required bool responsive,
+  }) async {
+    _log.info('Marking chat: $jid as marker responsive: $responsive');
+    await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(markerResponsive: Value(responsive)));
   }
 
   @override
