@@ -97,6 +97,13 @@ mixin ChatsService on XmppBase {
     });
   }
 
+  Future<void> toggleAllChatsMarkerResponsive(
+      {required bool responsive}) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markChatsMarkerResponsive(responsive: responsive);
+    });
+  }
+
   Future<void> setChatEncryption({
     required String jid,
     required EncryptionProtocol protocol,
