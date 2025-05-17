@@ -4,6 +4,7 @@ import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -117,15 +118,20 @@ class _LoginFormState extends State<LoginForm> {
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
                     text: const Text('Log in'),
-                    icon: loading
-                        ? Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: AxiProgressIndicator(
-                              color: context.colorScheme.primaryForeground,
-                              semanticsLabel: 'Waiting for login',
-                            ),
-                          )
-                        : null,
+                    icon: AnimatedCrossFade(
+                      crossFadeState: loading
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      duration: context.read<SettingsCubit>().animationDuration,
+                      firstChild: const SizedBox(),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: AxiProgressIndicator(
+                          color: context.colorScheme.primaryForeground,
+                          semanticsLabel: 'Waiting for login',
+                        ),
+                      ),
+                    ),
                   );
                 },
               ),

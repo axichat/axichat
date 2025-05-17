@@ -1,5 +1,7 @@
 import 'package:axichat/src/common/ui/axi_progress_indicator.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 
 Future<bool> checkShorebird([ShorebirdUpdater? shorebird]) async {
@@ -24,39 +26,42 @@ class ShorebirdChecker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: checkShorebird(),
-      builder: (context, snapshot) {
-        if (snapshot.error is UpdateException) {
+    return AnimatedContainer(
+      duration: context.read<SettingsCubit>().animationDuration,
+      child: FutureBuilder(
+        future: checkShorebird(),
+        builder: (context, snapshot) {
+          if (snapshot.error is UpdateException) {
+            return const Padding(
+              padding: EdgeInsets.all(4.0),
+              child: Text('Error occurred while fetching update.'),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.all(4.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AxiProgressIndicator(),
+                  SizedBox.square(
+                    dimension: 8.0,
+                  ),
+                  Text('Checking for updates'),
+                ],
+              ),
+            );
+          }
+          if (!snapshot.requireData) {
+            return const SizedBox.shrink();
+          }
           return const Padding(
             padding: EdgeInsets.all(4.0),
-            child: Text('Error occurred while fetching update.'),
+            child: Text('Update available: log out and restart the app'),
           );
-        }
-        if (!snapshot.hasData) {
-          return const Padding(
-            padding: EdgeInsets.all(4.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AxiProgressIndicator(),
-                SizedBox.square(
-                  dimension: 8.0,
-                ),
-                Text('Checking for updates'),
-              ],
-            ),
-          );
-        }
-        if (!snapshot.requireData) {
-          return const SizedBox.shrink();
-        }
-        return const Padding(
-          padding: EdgeInsets.all(4.0),
-          child: Text('Update available: log out and restart the app'),
-        );
-      },
+        },
+      ),
     );
   }
 }
