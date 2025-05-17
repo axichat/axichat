@@ -7,6 +7,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chat_bloc.freezed.dart';
@@ -78,8 +79,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) {
     emit(state.copyWith(items: event.items));
-    for (final item in event.items) {
-      if (!item.displayed) _messageService.sendReadMarker(jid!, item.stanzaID);
+
+    if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      for (final item in event.items) {
+        if (!item.displayed) {
+          _messageService.sendReadMarker(jid!, item.stanzaID);
+        }
+      }
     }
   }
 
