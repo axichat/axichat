@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';

@@ -21,13 +21,11 @@ mixin ChatsService on XmppBase {
 
   static List<Chat> sortChats(List<Chat> chats) => chats.toList()
     ..sort((a, b) {
-      if (a.favorited == b.favorited) return 0;
-      if (a.favorited) return 1;
-      return -1;
-    })
-    ..sort(
-      (a, b) => b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp),
-    );
+      if (a.favorited == b.favorited) {
+        return b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp);
+      }
+      return a.favorited.toSign();
+    });
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
