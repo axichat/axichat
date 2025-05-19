@@ -54,11 +54,15 @@ class _AxiAvatarState extends State<AxiAvatar> {
                 widget.subscription.isNone ||
                 widget.subscription.isFrom
             ? const SizedBox()
-            : Align(
-                alignment: Alignment.bottomRight,
-                child: PresenceIndicator(
-                  presence: widget.presence!,
-                  status: widget.status,
+            : Positioned.fill(
+                child: FractionallySizedBox(
+                  widthFactor: 0.35,
+                  heightFactor: 0.35,
+                  alignment: Alignment.bottomRight,
+                  child: PresenceIndicator(
+                    presence: widget.presence!,
+                    status: widget.status,
+                  ),
                 ),
               ),
       ],
