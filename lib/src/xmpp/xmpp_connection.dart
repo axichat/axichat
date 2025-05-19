@@ -29,6 +29,12 @@ class XmppConnection extends mox.XmppConnection {
     super.connectionSettings = connectionSettings;
   }
 
+  Future<void> updateConnectivityNotification(ConnectionState state) async {
+    if (socketWrapper case final ForegroundSocketWrapper wrapper) {
+      wrapper.updateConnectionState(state);
+    }
+  }
+
   T? getManager<T extends mox.XmppManagerBase>() {
     switch (T) {
       case == mox.MessageManager:
