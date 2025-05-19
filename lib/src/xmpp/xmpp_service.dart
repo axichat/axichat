@@ -448,19 +448,21 @@ class XmppService extends XmppBase
           ),
         ),
         loadRatchets: (jid) =>
-            _dbOpReturning<XmppDatabase, omemo.OmemoDataPackage?>((db) async {
-          final devices = await db.getOmemoDeviceList(jid);
-          if (devices == null || devices.devices.isEmpty) return null;
-          final ratchets = await db.getOmemoRatchets(jid);
-          if (ratchets.isEmpty) return null;
-          return omemo.OmemoDataPackage(
-            devices.devices,
-            <omemo.RatchetMapKey, OmemoRatchet>{
-              for (final ratchet in ratchets)
-                omemo.RatchetMapKey(ratchet.jid, ratchet.device): ratchet,
-            },
-          );
-        }),
+            _dbOpReturning<XmppDatabase, omemo.OmemoDataPackage?>(
+          (db) async {
+            final devices = await db.getOmemoDeviceList(jid);
+            if (devices == null || devices.devices.isEmpty) return null;
+            final ratchets = await db.getOmemoRatchets(jid);
+            if (ratchets.isEmpty) return null;
+            return omemo.OmemoDataPackage(
+              devices.devices,
+              <omemo.RatchetMapKey, OmemoRatchet>{
+                for (final ratchet in ratchets)
+                  omemo.RatchetMapKey(ratchet.jid, ratchet.device): ratchet,
+              },
+            );
+          },
+        ),
         removeRatchets: (keys) => _dbOp<XmppDatabase>(
           (db) => db.removeOmemoRatchets(
             keys.map((e) => (e.jid, e.deviceId)).toList(),
