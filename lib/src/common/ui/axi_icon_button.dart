@@ -9,21 +9,25 @@ class AxiIconButton extends StatelessWidget {
     required this.iconData,
     this.onPressed,
     this.tooltip,
+    this.color,
   });
 
   final IconData iconData;
   final void Function()? onPressed;
   final String? tooltip;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final child = ShadButton.outline(
+      decoration: ShadDecoration(border: ShadBorder(color: color)),
       height: 36.0,
       width: 36.0,
       icon: Icon(
         iconData,
         size: 20.0,
       ),
+      foregroundColor: color,
       onPressed: onPressed,
     );
 

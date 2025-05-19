@@ -67,6 +67,7 @@ class RosterInvitesList extends StatelessWidget {
                     AxiIconButton(
                       tooltip: 'Add contact',
                       iconData: LucideIcons.userPlus,
+                      color: const Color(0xff80ee80),
                       onPressed: disabled
                           ? null
                           : () {
