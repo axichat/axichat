@@ -58,6 +58,8 @@ class _LoginFormState extends State<LoginForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
+        final loading = state is AuthenticationInProgress ||
+            state is AuthenticationComplete;
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -84,7 +86,7 @@ class _LoginFormState extends State<LoginForm> {
                   FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
                 ],
                 placeholder: const Text('Username'),
-                enabled: state is! AuthenticationInProgress,
+                enabled: !loading,
                 controller: _jidTextController,
                 suffix: Text('@${state.server}'),
                 validator: (text) {
@@ -96,7 +98,7 @@ class _LoginFormState extends State<LoginForm> {
               ),
               PasswordInput(
                 key: loginPasswordKey,
-                enabled: state is! AuthenticationInProgress,
+                enabled: !loading,
                 controller: _passwordTextController,
               ),
               const Align(
@@ -112,7 +114,6 @@ class _LoginFormState extends State<LoginForm> {
               const SizedBox.square(dimension: 16.0),
               Builder(
                 builder: (context) {
-                  final loading = state is AuthenticationInProgress;
                   return ShadButton(
                     key: loginSubmitKey,
                     enabled: !loading,

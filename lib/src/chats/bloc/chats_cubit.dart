@@ -12,12 +12,14 @@ part 'chats_state.dart';
 class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({required ChatsService chatsService})
       : _chatsService = chatsService,
-        super(ChatsState(
-          openJid: null,
-          items: [],
-          filter: (chat) => true,
-          creationStatus: RequestStatus.none,
-        )) {
+        super(
+          ChatsState(
+            openJid: null,
+            items: null,
+            filter: (chat) => true,
+            creationStatus: RequestStatus.none,
+          ),
+        ) {
     _chatsSubscription =
         _chatsService.chatsStream().listen((items) => _updateChats(items));
   }

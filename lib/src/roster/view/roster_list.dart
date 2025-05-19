@@ -18,12 +18,22 @@ class RosterList extends StatelessWidget {
     return BlocBuilder<RosterCubit, RosterState>(
       buildWhen: (_, current) => current is RosterAvailable,
       builder: (context, state) {
-        late List<RosterItem> items;
+        late final List<RosterItem>? items;
+
         if (state is! RosterAvailable) {
           items = context.read<RosterCubit>()['items'];
         } else {
           items = state.items;
         }
+
+        if (items == null) {
+          return Center(
+            child: AxiProgressIndicator(
+              color: context.colorScheme.foreground,
+            ),
+          );
+        }
+
         if (items.isEmpty) {
           return Center(
             child: Text(
@@ -32,11 +42,12 @@ class RosterList extends StatelessWidget {
             ),
           );
         }
+
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
           itemCount: items.length,
           itemBuilder: (context, index) {
-            final item = items[index];
+            final item = items![index];
             final open =
                 context.watch<ChatsCubit?>()?.state.openJid == item.jid;
             return AxiListTile(

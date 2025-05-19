@@ -15,12 +15,22 @@ class BlocklistList extends StatelessWidget {
     return BlocBuilder<BlocklistCubit, BlocklistState>(
       buildWhen: (_, current) => current is BlocklistAvailable,
       builder: (context, state) {
-        late List<BlocklistData> items;
+        late final List<BlocklistData>? items;
+
         if (state is! BlocklistAvailable) {
           items = context.read<BlocklistCubit>()['items'];
         } else {
           items = state.items;
         }
+
+        if (items == null) {
+          return Center(
+            child: AxiProgressIndicator(
+              color: context.colorScheme.foreground,
+            ),
+          );
+        }
+
         if (items.isEmpty) {
           return Center(
             child: Text(
@@ -29,6 +39,7 @@ class BlocklistList extends StatelessWidget {
             ),
           );
         }
+
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
           itemCount: items.length + 1,
@@ -41,7 +52,7 @@ class BlocklistList extends StatelessWidget {
                 ),
               );
             }
-            final item = items[index - 1];
+            final item = items![index - 1];
             return ListItemPadding(
               child: BlocklistTile(
                 jid: item.jid,

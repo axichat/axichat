@@ -15,12 +15,22 @@ class DraftsList extends StatelessWidget {
     return BlocBuilder<DraftCubit, DraftState>(
       buildWhen: (_, current) => current is DraftsAvailable,
       builder: (context, state) {
-        late List<Draft> items;
+        late final List<Draft>? items;
+
         if (state is! DraftsAvailable) {
           items = context.read<DraftCubit>()['items'];
         } else {
           items = state.items;
         }
+
+        if (items == null) {
+          return Center(
+            child: AxiProgressIndicator(
+              color: context.colorScheme.foreground,
+            ),
+          );
+        }
+
         if (items.isEmpty) {
           return Center(
             child: Text(
@@ -29,11 +39,12 @@ class DraftsList extends StatelessWidget {
             ),
           );
         }
+
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
           itemCount: items.length,
           itemBuilder: (context, index) {
-            final item = items[index];
+            final item = items![index];
             final recipients = item.jids.length;
             return AxiListTile(
               key: Key(item.id.toString()),
