@@ -7,12 +7,12 @@ class AxiIconButton extends StatelessWidget {
   const AxiIconButton({
     super.key,
     required this.iconData,
-    required this.onPressed,
+    this.onPressed,
     this.tooltip,
   });
 
   final IconData iconData;
-  final void Function() onPressed;
+  final void Function()? onPressed;
   final String? tooltip;
 
   @override
