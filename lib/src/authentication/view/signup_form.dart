@@ -98,6 +98,8 @@ class _SignupFormState extends State<SignupForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
+        final loading = state is AuthenticationInProgress ||
+            state is AuthenticationComplete;
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -140,7 +142,7 @@ class _SignupFormState extends State<SignupForm> {
                         child: Text('Case insensitive'),
                       ),
                       placeholder: const Text('Username'),
-                      enabled: state is! AuthenticationInProgress,
+                      enabled: !loading,
                       controller: _jidTextController,
                       suffix: Text('@${state.server}'),
                       validator: (text) {
@@ -162,11 +164,11 @@ class _SignupFormState extends State<SignupForm> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         PasswordInput(
-                          enabled: state is! AuthenticationInProgress,
+                          enabled: !loading,
                           controller: _passwordTextController,
                         ),
                         PasswordInput(
-                          enabled: state is! AuthenticationInProgress,
+                          enabled: !loading,
                           controller: _password2TextController,
                           confirmValidator: (text) =>
                               text != _passwordTextController.text
@@ -226,7 +228,7 @@ class _SignupFormState extends State<SignupForm> {
                             autocorrect: false,
                             keyboardType: TextInputType.number,
                             placeholder: const Text('Enter the above text'),
-                            enabled: state is! AuthenticationInProgress,
+                            enabled: !loading,
                             controller: _captchaTextController,
                             validator: (text) {
                               if (text.isEmpty) {
@@ -257,7 +259,6 @@ class _SignupFormState extends State<SignupForm> {
             const SizedBox.square(dimension: 16.0),
             Builder(
               builder: (context) {
-                final loading = state is AuthenticationInProgress;
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

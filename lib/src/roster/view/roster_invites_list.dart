@@ -15,12 +15,22 @@ class RosterInvitesList extends StatelessWidget {
     return BlocBuilder<RosterCubit, RosterState>(
       buildWhen: (_, current) => current is RosterInvitesAvailable,
       builder: (context, state) {
-        late List<Invite> invites;
+        late final List<Invite>? invites;
+
         if (state is! RosterInvitesAvailable) {
           invites = context.read<RosterCubit>()['invites'];
         } else {
           invites = state.invites;
         }
+
+        if (invites == null) {
+          return Center(
+            child: AxiProgressIndicator(
+              color: context.colorScheme.foreground,
+            ),
+          );
+        }
+
         if (invites.isEmpty) {
           return Center(
             child: Text(
@@ -29,11 +39,12 @@ class RosterInvitesList extends StatelessWidget {
             ),
           );
         }
+
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
           itemCount: invites.length,
           itemBuilder: (context, index) {
-            final invite = invites[index];
+            final invite = invites![index];
             return BlocSelector<RosterCubit, RosterState, bool>(
               selector: (state) =>
                   state is RosterLoading && state.jid == invite.jid,

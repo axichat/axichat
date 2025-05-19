@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:bloc/bloc.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 
 part 'blocklist_state.dart';
@@ -13,7 +13,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {
   BlocklistCubit({required BlockingService blockingService})
       : _blockingService = blockingService,
-        super(const BlocklistAvailable(items: [])) {
+        super(const BlocklistAvailable(items: null)) {
     _blocklistSubscription = _blockingService
         .blocklistStream()
         .listen((items) => emit(BlocklistAvailable(items: items)));

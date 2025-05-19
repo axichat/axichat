@@ -267,7 +267,7 @@ class _ChatState extends State<Chat> {
                                         ? context.read<RosterCubit>()['items']
                                             as List<RosterItem>
                                         : rosterState.items)
-                                    .where((e) => e.jid == jid)
+                                    ?.where((e) => e.jid == jid)
                                     .singleOrNull;
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,

@@ -9,10 +9,10 @@ final class RosterInitial extends RosterState
   const RosterInitial();
 
   @override
-  final items = const [];
+  List<Invite>? get invites => null;
 
   @override
-  final invites = const [];
+  List<RosterItem>? get items => null;
 
   @override
   List<Object?> get props => [items, invites];
@@ -21,7 +21,7 @@ final class RosterInitial extends RosterState
 final class RosterAvailable extends RosterState {
   const RosterAvailable({required this.items});
 
-  final List<RosterItem> items;
+  final List<RosterItem>? items;
 
   @override
   List<Object?> get props => [items];
@@ -30,7 +30,7 @@ final class RosterAvailable extends RosterState {
 final class RosterInvitesAvailable extends RosterState {
   const RosterInvitesAvailable({required this.invites});
 
-  final List<Invite> invites;
+  final List<Invite>? invites;
 
   @override
   List<Object?> get props => [invites];

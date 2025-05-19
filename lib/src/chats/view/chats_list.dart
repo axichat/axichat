@@ -12,9 +12,17 @@ class ChatsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<ChatsCubit, ChatsState, List<Chat>>(
-      selector: (state) => state.items.where(state.filter).toList(),
+    return BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
+      selector: (state) => state.items?.where(state.filter).toList(),
       builder: (context, items) {
+        if (items == null) {
+          return Center(
+            child: AxiProgressIndicator(
+              color: context.colorScheme.foreground,
+            ),
+          );
+        }
+
         if (items.isEmpty) {
           return Center(
             child: Text(
@@ -23,6 +31,7 @@ class ChatsList extends StatelessWidget {
             ),
           );
         }
+
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
           itemCount: items.length,

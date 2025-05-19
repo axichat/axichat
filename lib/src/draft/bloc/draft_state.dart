@@ -7,7 +7,7 @@ sealed class DraftState extends Equatable {
 final class DraftsAvailable extends DraftState {
   const DraftsAvailable({required this.items});
 
-  final List<Draft> items;
+  final List<Draft>? items;
 
   @override
   List<Object?> get props => [items];

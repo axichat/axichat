@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:bloc/bloc.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 
 part 'roster_state.dart';
@@ -36,11 +36,11 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
     final next = change.nextState;
     if (current is RosterAvailable) {
       cache['items'] = current.items;
-      contacts = current.items.map((e) => e.jid).toSet();
+      contacts = current.items?.map((e) => e.jid).toSet() ?? contacts;
     }
     if (next is RosterAvailable) {
       cache['items'] = next.items;
-      contacts = next.items.map((e) => e.jid).toSet();
+      contacts = next.items?.map((e) => e.jid).toSet() ?? contacts;
     }
     if (current is RosterInvitesAvailable) {
       cache['invites'] = current.invites;

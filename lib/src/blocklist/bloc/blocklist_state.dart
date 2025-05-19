@@ -7,7 +7,7 @@ sealed class BlocklistState extends Equatable {
 final class BlocklistAvailable extends BlocklistState {
   const BlocklistAvailable({required this.items});
 
-  final List<BlocklistData> items;
+  final List<BlocklistData>? items;
 
   @override
   List<Object?> get props => [items];
