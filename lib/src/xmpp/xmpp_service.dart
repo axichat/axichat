@@ -219,6 +219,9 @@ class XmppService extends XmppBase
     ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
       _connectionState = event.state;
       _connectivityStream.add(event.state);
+      if (withForeground) {
+        _connection.updateConnectivityNotification(event.state);
+      }
     })
     ..registerHandler<mox.StanzaAckedEvent>((event) async {
       if (event.stanza.id == null) return;

@@ -40,6 +40,9 @@
             android:foregroundServiceType="dataSync|remoteMessaging"
             android:exported="false"
             android:stopWithTask="false" />
+        <meta-data
+            android:name="im.axi.axichat.APP_ICON"
+            android:resource="@mipmap/ic_launcher" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

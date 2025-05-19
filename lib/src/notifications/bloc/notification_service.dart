@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -26,7 +27,7 @@ class NotificationService {
   Future<void> init() async {
     FlutterForegroundTask.initCommunicationPort();
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings(androidIconPath);
     const DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings();
     const LinuxInitializationSettings initializationSettingsLinux =
@@ -129,7 +130,7 @@ class NotificationService {
       groupKey: '${packageInfo.packageName}.MESSAGES',
       importance: Importance.max,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
+      icon: androidIconPath,
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();

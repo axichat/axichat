@@ -27,6 +27,7 @@ export 'presence_indicator.dart';
 export 'string_to_color.dart';
 
 const appDisplayName = 'axichat';
+const androidIconPath = '@mipmap/ic_launcher';
 
 const smallScreen = 700.0;
 const mediumScreen = 900.0;

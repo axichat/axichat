@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     hide NotificationVisibility;
@@ -187,8 +187,9 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     await FlutterForegroundTask.startService(
       serviceId: 256,
       notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
-      notificationText: 'Return to the app',
-      notificationIcon: null,
+      notificationText: ConnectionState.connecting.name,
+      notificationIcon:
+          const NotificationIcon(metaDataName: 'im.axi.axichat.APP_ICON'),
       callback: startCallback,
       notificationInitialRoute: '/',
     );
@@ -205,6 +206,12 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   @override
   void write(String data) {
     _sendToTask([writePrefix, data]);
+  }
+
+  Future<void> updateConnectionState(ConnectionState state) async {
+    await FlutterForegroundTask.updateService(
+      notificationText: state.name,
+    );
   }
 
   @override
