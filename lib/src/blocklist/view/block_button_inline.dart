@@ -9,10 +9,14 @@ class BlockButtonInline extends StatelessWidget {
     super.key,
     required this.jid,
     this.callback,
+    this.showIcon = false,
+    this.mainAxisAlignment,
   });
 
   final String jid;
   final void Function()? callback;
+  final bool showIcon;
+  final MainAxisAlignment? mainAxisAlignment;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +26,7 @@ class BlockButtonInline extends StatelessWidget {
       builder: (context, disabled) {
         return ShadButton.ghost(
           width: double.infinity,
+          mainAxisAlignment: mainAxisAlignment,
           onPressed: disabled
               ? null
               : () {
@@ -31,6 +36,12 @@ class BlockButtonInline extends StatelessWidget {
                   }
                 },
           foregroundColor: context.colorScheme.destructive,
+          icon: showIcon
+              ? const Padding(
+                  padding: EdgeInsets.only(right: 8.0),
+                  child: Icon(LucideIcons.userX),
+                )
+              : null,
           text: const Text('Block'),
         );
       },
