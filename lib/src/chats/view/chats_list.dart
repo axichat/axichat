@@ -98,7 +98,9 @@ class ChatsList extends StatelessWidget {
               subtitle: item.lastMessage,
               subtitlePlaceholder: 'No messages',
               actions: [
-                DisplayTimeSince(timestamp: item.lastChangeTimestamp),
+                item.lastMessage == null
+                    ? const SizedBox()
+                    : DisplayTimeSince(timestamp: item.lastChangeTimestamp),
                 ShadButton.ghost(
                   width: 30.0,
                   height: 30.0,

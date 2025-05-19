@@ -64,21 +64,20 @@ class RosterInvitesList extends StatelessWidget {
                   title: invite.title,
                   subtitle: invite.jid,
                   actions: [
+                    AxiIconButton(
+                      tooltip: 'Add contact',
+                      iconData: LucideIcons.userPlus,
+                      onPressed: disabled
+                          ? null
+                          : () {
+                              context.read<RosterCubit?>()?.addContact(
+                                    jid: invite.jid,
+                                    title: invite.title,
+                                  );
+                            },
+                    ),
                     AxiMore(
                       options: [
-                        (toggle) => ShadButton.ghost(
-                              width: double.infinity,
-                              onPressed: disabled
-                                  ? null
-                                  : () {
-                                      context.read<RosterCubit?>()?.addContact(
-                                            jid: invite.jid,
-                                            title: invite.title,
-                                          );
-                                      toggle();
-                                    },
-                              text: const Text('Add contact'),
-                            ),
                         (toggle) => BlockButtonInline(
                               jid: invite.jid,
                               callback: toggle,
