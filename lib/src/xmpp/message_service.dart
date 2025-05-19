@@ -203,10 +203,11 @@ mixin MessageService on XmppBase {
   }
 
   Future<bool> _canSendChatMarkers({required String to}) async {
-    return await _dbOpReturning<XmppDatabase, bool>((db) async {
-      final chat = await db.getChat(to);
-      return chat?.markerResponsive ?? false;
-    });
+    return to != myJid &&
+        await _dbOpReturning<XmppDatabase, bool>((db) async {
+          final chat = await db.getChat(to);
+          return chat?.markerResponsive ?? false;
+        });
   }
 
   Future<void> sendReadMarker(String to, String stanzaID) async {

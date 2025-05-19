@@ -82,7 +82,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
       for (final item in event.items) {
-        if (!item.displayed) {
+        if (!item.displayed && item.senderJid != _chatsService.myJid) {
           _messageService.sendReadMarker(jid!, item.stanzaID);
         }
       }
