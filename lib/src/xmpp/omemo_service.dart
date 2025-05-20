@@ -105,6 +105,12 @@ mixin OmemoService on XmppBase {
     );
   }
 
+  Future<void> regenerateDevice() async {
+    final old = await _device;
+    await _omemoManager.value?.regenerateDevice();
+    await _connection.getManager<mox.OmemoManager>()?.deleteDevice(old.id);
+  }
+
   Future<void> recreateSessions({required String jid}) async {
     await _omemoManager.value?.removeAllRatchets(jid);
     await _connection.getManager<mox.OmemoManager>()!.sendOmemoHeartbeat(jid);
