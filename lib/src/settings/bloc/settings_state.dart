@@ -24,6 +24,7 @@ class SettingsState with _$SettingsState {
     @Default(true) bool readReceipts,
     @Default(true) bool indicateTyping,
     @Default(false) bool lowMotion,
+    @Default(true) bool colorfulAvatars,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>
