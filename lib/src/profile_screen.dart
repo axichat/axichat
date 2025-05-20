@@ -5,6 +5,7 @@ import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_card.dart';
+import 'package:axichat/src/profile/view/profile_fingerprint.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:flutter/material.dart';
@@ -84,10 +85,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
               padding: EdgeInsets.all(12.0),
               child: ProfileCard(),
             ),
-            // const Padding(
-            //   padding: EdgeInsets.all(12.0),
-            //   child: ProfileFingerprint(),
-            // ),
+            const Padding(
+              padding: EdgeInsets.all(12.0),
+              child: ProfileFingerprint(),
+            ),
             const ShorebirdChecker(),
             const SizedBox(height: 8),
             const SettingsControls(),

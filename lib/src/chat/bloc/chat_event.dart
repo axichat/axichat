@@ -88,6 +88,13 @@ final class ChatEncryptionChanged extends ChatEvent {
   List<Object?> get props => [protocol];
 }
 
+final class ChatEncryptionRepaired extends ChatEvent {
+  const ChatEncryptionRepaired();
+
+  @override
+  List<Object?> get props => [];
+}
+
 final class ChatLoadEarlier extends ChatEvent {
   const ChatLoadEarlier();
 

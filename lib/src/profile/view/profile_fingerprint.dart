@@ -1,8 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/storage/database.dart';
-import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -21,33 +20,73 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
     context.read<ProfileCubit?>()?.loadFingerprints();
   }
 
+  var _showFingerprint = false;
+  var _loading = false;
+
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ProfileCubit, ProfileState>(
+    return BlocConsumer<ProfileCubit, ProfileState>(
+      listener: (context, state) => _loading = false,
       builder: (context, state) {
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 300.0),
-          child: ShadCard(
-            title: Center(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  'OMEMO:2 Fingerprints',
-                  style: context.textTheme.table,
-                ),
+        return ShadCard(
+          rowCrossAxisAlignment: CrossAxisAlignment.center,
+          columnCrossAxisAlignment: CrossAxisAlignment.center,
+          rowMainAxisAlignment: MainAxisAlignment.center,
+          columnMainAxisAlignment: MainAxisAlignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10.0),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Device Fingerprint',
+                style: context.textTheme.small,
               ),
-            ),
-            description: Column(
-              children: [
-                AxiFingerprint(
-                  fingerprint: OmemoFingerprint(
-                    fingerprint: state.fingerprint,
-                    deviceID: 0,
-                    trust: BTBVTrustState.verified,
-                  ),
-                )
-              ],
-            ),
+              ExpandIcon(
+                isExpanded: _showFingerprint,
+                onPressed: (_) => setState(() {
+                  _showFingerprint = !_showFingerprint;
+                }),
+              )
+            ],
+          ),
+          content: AnimatedSize(
+            duration: context.read<SettingsCubit>().animationDuration,
+            child: _showFingerprint
+                ? Column(
+                    children: [
+                      DisplayFingerprint(fingerprint: state.fingerprint),
+                      const SizedBox.square(dimension: 16.0),
+                      ShadButton.secondary(
+                        enabled: !_loading,
+                        text: Text(
+                          'Regenerate device',
+                          style: TextStyle(
+                            color: context.colorScheme.destructive,
+                          ),
+                        ),
+                        onPressed: () async {
+                          if (await confirm(
+                                context,
+                                text: 'Only do this if you are an expert.',
+                              ) !=
+                              true) {
+                            return;
+                          }
+                          if (context.mounted) {
+                            setState(() {
+                              _loading = true;
+                            });
+                            await context
+                                .read<ProfileCubit>()
+                                .regenerateDevice();
+                          }
+                        },
+                      ),
+                      const SizedBox.square(dimension: 8.0),
+                    ],
+                  )
+                : const SizedBox.shrink(),
           ),
         );
       },

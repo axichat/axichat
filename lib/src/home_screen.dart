@@ -38,6 +38,7 @@ class HomeScreen extends StatelessWidget {
     final isMessage = getService() is MessageService;
     final isRoster = getService() is RosterService;
     final isPresence = getService() is PresenceService;
+    final isOmemo = getService() is OmemoService;
     final isBlocking = getService() is BlockingService;
 
     final tabs = [
@@ -96,6 +97,7 @@ class HomeScreen extends StatelessWidget {
               BlocProvider(
                 create: (context) => ProfileCubit(
                   presenceService: context.read<XmppService>(),
+                  omemoService: isOmemo ? context.read<XmppService>() : null,
                 ),
               ),
             if (isBlocking)
@@ -145,6 +147,9 @@ class HomeScreen extends StatelessWidget {
                                             context.read<XmppService>(),
                                         notificationService:
                                             context.read<NotificationService>(),
+                                        omemoService: isOmemo
+                                            ? context.read<XmppService>()
+                                            : null,
                                       ),
                                       child: const Chat(),
                                     ),

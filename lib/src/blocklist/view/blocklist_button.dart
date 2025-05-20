@@ -80,7 +80,8 @@ class BlocklistUnblockAllButton extends StatelessWidget {
         return ShadButton.destructive(
           enabled: !disabled,
           onPressed: () async {
-            if ((await confirm(context) ?? false) && context.mounted) {
+            if (await confirm(context) != true) return;
+            if (context.mounted) {
               context.read<BlocklistCubit?>()?.unblockAll();
             }
           },

@@ -1,7 +1,7 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin OmemoService on XmppBase {
-  final _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
+  var _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
   Future<omemo.OmemoManager> _getOmemoManager() async => _omemoManager.value!;
 
@@ -33,7 +33,7 @@ mixin OmemoService on XmppBase {
 
     final bundles = await _connection
         .getManager<mox.DiscoManager>()!
-        .discoItemsQuery(jid, node: omemoBundlesXmlns);
+        .discoItemsQuery(jid, node: mox.omemoBundlesXmlns);
     if (bundles.isType<mox.DiscoError>()) {
       return _publishBundle(bundle: await device.toBundle());
     }
@@ -103,6 +103,12 @@ mixin OmemoService on XmppBase {
             .setDeviceTrust(jid, device, trust);
       },
     );
+  }
+
+  Future<void> regenerateDevice() async {
+    final old = await _device;
+    await _omemoManager.value?.regenerateDevice();
+    await _connection.getManager<mox.OmemoManager>()?.deleteDevice(old.id);
   }
 
   Future<void> recreateSessions({required String jid}) async {
