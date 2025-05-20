@@ -226,32 +226,72 @@ class _ChatState extends State<Chat> {
                   ? null
                   : Drawer(
                       shape: const ContinuousRectangleBorder(),
-                      child: ListView(
-                        padding: EdgeInsets.zero,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          DrawerHeader(
-                            padding: const EdgeInsets.fromLTRB(
-                                14.0, 14.0, 14.0, 8.0),
-                            child: Text(
-                              '${state.chat?.title}',
-                              style: context.textTheme.h4,
+                          SizedBox(
+                            width: double.maxFinite,
+                            child: DrawerHeader(
+                              padding: const EdgeInsets.fromLTRB(
+                                  14.0, 14.0, 14.0, 8.0),
+                              child: Text(
+                                '${state.chat?.title}',
+                                style: context.textTheme.h4,
+                              ),
                             ),
                           ),
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: ShadSwitch(
+                              label: const Text('Encryption'),
+                              sublabel: const Text(
+                                  'Send messages end-to-end encrypted'),
+                              value: state.chat!.encryptionProtocol.isNotNone,
+                              onChanged: (encrypted) =>
+                                  context.read<ChatBloc>().add(
+                                        ChatEncryptionChanged(
+                                          protocol: encrypted
+                                              ? EncryptionProtocol.omemo
+                                              : EncryptionProtocol.none,
+                                        ),
+                                      ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: ShadSwitch(
+                              label: const Text('Notifications'),
+                              sublabel: const Text(
+                                  'Receive background message notifications'),
+                              value: !muted!,
+                              onChanged: (muted) => context
+                                  .read<ChatBloc>()
+                                  .add(ChatMuted(!muted)),
+                            ),
+                          ),
+                          const Spacer(),
                           ShadButton.ghost(
                             width: double.infinity,
                             mainAxisAlignment: MainAxisAlignment.start,
-                            icon: Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: Icon(muted!
-                                  ? LucideIcons.bellOff
-                                  : LucideIcons.bell),
+                            icon: const Padding(
+                              padding: EdgeInsets.only(right: 8.0),
+                              child: Icon(LucideIcons.userCog),
                             ),
-                            text: Text(
-                              muted ? 'Unmute' : 'Mute notifications',
-                            ),
-                            foregroundColor: context.colorScheme.foreground,
-                            onPressed: () {
-                              context.read<ChatBloc>().add(ChatMuted(!muted));
+                            text: const Text('Repair encryption'),
+                            foregroundColor: context.colorScheme.destructive,
+                            onPressed: () async {
+                              if (await confirm(
+                                    context,
+                                    text: 'Only do this is you are an expert.',
+                                  ) !=
+                                  true) {
+                                return;
+                              }
+                              if (context.mounted) {
+                                context
+                                    .read<ChatBloc>()
+                                    .add(const ChatEncryptionRepaired());
+                              }
                             },
                           ),
                           ShadButton.ghost(
@@ -489,23 +529,23 @@ class _ChatState extends State<Chat> {
                                             package: iconPackage,
                                           ),
                                         ),
-                                      // TextSpan(
-                                      //   text: String.fromCharCode(
-                                      //       (message.customProperties![
-                                      //                   'encrypted']
-                                      //               ? LucideIcons.lock
-                                      //               : LucideIcons.lockOpen)
-                                      //           .codePoint),
-                                      //   style: context.textTheme.muted.copyWith(
-                                      //     color: message
-                                      //             .customProperties!['encrypted']
-                                      //         ? textColor
-                                      //         : context.colorScheme.destructive,
-                                      //     fontSize: iconSize,
-                                      //     fontFamily: iconFamily,
-                                      //     package: iconPackage,
-                                      //   ),
-                                      // )
+                                      TextSpan(
+                                        text: String.fromCharCode(
+                                            (message.customProperties![
+                                                        'encrypted']
+                                                    ? LucideIcons.lock
+                                                    : LucideIcons.lockOpen)
+                                                .codePoint),
+                                        style: context.textTheme.muted.copyWith(
+                                          color: message.customProperties![
+                                                  'encrypted']
+                                              ? textColor
+                                              : context.colorScheme.destructive,
+                                          fontSize: iconSize,
+                                          fontFamily: iconFamily,
+                                          package: iconPackage,
+                                        ),
+                                      )
                                     ],
                                   ),
                                   if (message.customProperties?['retracted'] ??
@@ -565,6 +605,8 @@ class _ChatState extends State<Chat> {
                           ),
                           inputDecoration: defaultInputDecoration().copyWith(
                             fillColor: context.colorScheme.input,
+                            hintText:
+                                'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message',
                             border: OutlineInputBorder(
                               borderRadius: context.radius,
                               borderSide: BorderSide.none,

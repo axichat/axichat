@@ -128,8 +128,8 @@ class ProfileCard extends StatelessWidget {
                   placeholder: const Text('Status message'),
                   initialValue: state.status,
                   onSubmitted: (value) => context
-                      .read<ProfileCubit>()
-                      .updatePresence(status: value),
+                      .read<ProfileCubit?>()
+                      ?.updatePresence(status: value),
                 ),
               ),
               trailing: const LogoutButton(),

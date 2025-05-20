@@ -58,6 +58,9 @@ mixin MessageService on XmppBase {
 
       // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
       if (!event.displayable && event.encryptionError == null) return;
+      if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
+        return;
+      }
       if (event.extensions.get<mox.FileUploadNotificationData>()
           case final data?) {
         if (data.metadata.name == null) return;
