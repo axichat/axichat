@@ -31,6 +31,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(readReceipts: readReceipts));
   }
 
+  void toggleColorfulAvatars(bool colorfulAvatars) {
+    emit(state.copyWith(colorfulAvatars: colorfulAvatars));
+  }
+
   void toggleLowMotion(bool lowMotion) {
     emit(state.copyWith(lowMotion: lowMotion));
   }

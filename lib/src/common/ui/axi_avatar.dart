@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -46,9 +47,20 @@ class _AxiAvatarState extends State<AxiAvatar> {
     Widget child = Stack(
       fit: StackFit.expand,
       children: [
-        CircleAvatar(
-          backgroundColor: stringToColor(widget.jid),
-          child: Text(widget.jid.substring(0, 1).toUpperCase()),
+        BlocBuilder<SettingsCubit, SettingsState>(
+          builder: (context, state) {
+            return CircleAvatar(
+              backgroundColor: state.colorfulAvatars
+                  ? stringToColor(widget.jid)
+                  : context.colorScheme.secondary,
+              child: Text(
+                widget.jid.substring(0, 1).toUpperCase(),
+                style: state.colorfulAvatars
+                    ? null
+                    : TextStyle(color: context.colorScheme.secondaryForeground),
+              ),
+            );
+          },
         ),
         widget.presence == null ||
                 widget.subscription.isNone ||

@@ -1,4 +1,6 @@
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -18,13 +20,29 @@ class SettingsControls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (context.read<Capability>().canForegroundService)
+            if (context.read<Capability>().canForegroundService) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 6.0,
+                ),
+                child: Text('Important', style: context.textTheme.muted),
+              ),
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: NotificationRequest(
                   notificationService: context.read<NotificationService>(),
                 ),
               ),
+            ],
+            const AxiListDivider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 6.0,
+              ),
+              child: Text('Appearance', style: context.textTheme.muted),
+            ),
             ListTile(
               title: const Text('Theme Mode'),
               trailing: ShadSelect<ThemeMode>(
@@ -62,6 +80,37 @@ class SettingsControls extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: ShadSwitch(
+                label: const Text('Colorful avatars'),
+                sublabel: const Text(
+                    'Generate different background colors for each avatar.'),
+                value: state.colorfulAvatars,
+                onChanged: (colorfulAvatars) => context
+                    .read<SettingsCubit>()
+                    .toggleColorfulAvatars(colorfulAvatars),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Low motion'),
+                sublabel: const Text(
+                    'Disables most animations. Better for slow devices.'),
+                value: state.lowMotion,
+                onChanged: (lowMotion) =>
+                    context.read<SettingsCubit>().toggleLowMotion(lowMotion),
+              ),
+            ),
+            const AxiListDivider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 6.0,
+              ),
+              child: Text('Chats', style: context.textTheme.muted),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
                 label: const Text('Mute notifications'),
                 sublabel: const Text('Stop receiving message notifications.'),
                 value: state.mute,
@@ -77,17 +126,6 @@ class SettingsControls extends StatelessWidget {
                 onChanged: (readReceipts) => context
                     .read<SettingsCubit>()
                     .toggleReadReceipts(readReceipts),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
-                label: const Text('Low motion'),
-                sublabel: const Text(
-                    'Disables most animations. Better for slow devices.'),
-                value: state.lowMotion,
-                onChanged: (lowMotion) =>
-                    context.read<SettingsCubit>().toggleLowMotion(lowMotion),
               ),
             ),
             Padding(
