@@ -36,8 +36,11 @@ class _SignupFormState extends State<SignupForm> {
     GlobalKey<FormState>(),
   ];
 
-  bool rememberMe = true;
+  var allowInsecurePassword = false;
+  var rememberMe = true;
+
   var _currentIndex = 0;
+  String? _errorText;
 
   late Future<String> _captchaSrc;
 
@@ -96,7 +99,18 @@ class _SignupFormState extends State<SignupForm> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthenticationCubit, AuthenticationState>(
+    return BlocConsumer<AuthenticationCubit, AuthenticationState>(
+      // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
+      listener: (context, state) {
+        if (state is AuthenticationSignupFailure) {
+          if (state.errorText.contains('captcha')) {
+            setState(() {
+              _captchaSrc = _loadCaptchaSrc();
+            });
+          }
+          _errorText = state.errorText;
+        }
+      },
       builder: (context, state) {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
@@ -107,17 +121,20 @@ class _SignupFormState extends State<SignupForm> {
               SignupForm.title,
               style: context.textTheme.h3,
             ),
-            state is AuthenticationSignupFailure
-                ? Padding(
-                    padding: const EdgeInsets.all(10.0),
-                    child: Text(
-                      state.errorText,
-                      style: TextStyle(
-                        color: context.colorScheme.destructive,
-                      ),
-                    ),
-                  )
-                : const SizedBox(height: 40),
+            Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: Text(
+                _errorText ?? '',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: context.colorScheme.destructive,
+                ),
+              ),
+            ),
+            NotificationRequest(
+              notificationService: context.read<NotificationService>(),
+            ),
+            const SizedBox.square(dimension: 16.0),
             AnimatedSize(
               duration: context.read<SettingsCubit>().animationDuration,
               curve: Curves.easeIn,
@@ -174,6 +191,28 @@ class _SignupFormState extends State<SignupForm> {
                               text != _passwordTextController.text
                                   ? 'Passwords don\'t match'
                                   : null,
+                        ),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            //fromLTRB(16.0, 8.0, 16.0, 16.0),
+                            child: TermsCheckbox(),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: ShadCheckbox(
+                              value: allowInsecurePassword,
+                              label: const Text('Allow insecure password'),
+                              sublabel: const Text('Not recommended'),
+                              onChanged: (value) => setState(() {
+                                allowInsecurePassword = value;
+                              }),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -238,18 +277,6 @@ class _SignupFormState extends State<SignupForm> {
                             },
                           ),
                         ),
-                        const SizedBox.square(dimension: 16.0),
-                        NotificationRequest(
-                          notificationService:
-                              context.read<NotificationService>(),
-                        ),
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-                            child: TermsCheckbox(),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -270,7 +297,7 @@ class _SignupFormState extends State<SignupForm> {
                         }),
                         text: const Text('Back'),
                       ),
-                    if (_currentIndex < 2)
+                    if (_currentIndex < _formKeys.length - 1)
                       ShadButton(
                         enabled: !loading,
                         onPressed: () async {
@@ -281,6 +308,7 @@ class _SignupFormState extends State<SignupForm> {
                             return;
                           }
                           if (_currentIndex == 1 &&
+                              !allowInsecurePassword &&
                               !await context
                                   .read<AuthenticationCubit>()
                                   .checkNotPwned(
@@ -289,6 +317,7 @@ class _SignupFormState extends State<SignupForm> {
                           }
                           setState(() {
                             _currentIndex++;
+                            _errorText = null;
                           });
                         },
                         text: const Text('Continue'),
