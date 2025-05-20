@@ -20,9 +20,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required MessageService messageService,
     required ChatsService chatsService,
     required NotificationService notificationService,
+    OmemoService? omemoService,
   })  : _messageService = messageService,
         _chatsService = chatsService,
         _notificationService = notificationService,
+        _omemoService = omemoService,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -37,6 +39,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMuted>(_onChatMuted);
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
+    on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     if (jid != null) {
       _notificationService.dismissNotifications();
@@ -55,6 +58,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final MessageService _messageService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
+  final OmemoService? _omemoService;
 
   late final StreamSubscription<Chat?> _chatSubscription;
   late StreamSubscription<List<Message>> _messageSubscription;
@@ -167,6 +171,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (jid == null) return;
     await _chatsService.setChatEncryption(jid: jid!, protocol: event.protocol);
+  }
+
+  Future<void> _onChatEncryptionRepaired(
+    ChatEncryptionRepaired event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (jid == null) return;
+    await _omemoService?.recreateSessions(jid: jid!);
   }
 
   Future<void> _onChatLoadEarlier(
