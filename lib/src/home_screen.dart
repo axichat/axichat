@@ -147,6 +147,9 @@ class HomeScreen extends StatelessWidget {
                                             context.read<XmppService>(),
                                         notificationService:
                                             context.read<NotificationService>(),
+                                        omemoService: isOmemo
+                                            ? context.read<XmppService>()
+                                            : null,
                                       ),
                                       child: const Chat(),
                                     ),

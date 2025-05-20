@@ -275,6 +275,30 @@ class _ChatState extends State<Chat> {
                             mainAxisAlignment: MainAxisAlignment.start,
                             icon: const Padding(
                               padding: EdgeInsets.only(right: 8.0),
+                              child: Icon(LucideIcons.userCog),
+                            ),
+                            text: const Text('Repair encryption'),
+                            foregroundColor: context.colorScheme.destructive,
+                            onPressed: () async {
+                              if (await confirm(
+                                    context,
+                                    text: 'Only do this is you are an expert.',
+                                  ) !=
+                                  true) {
+                                return;
+                              }
+                              if (context.mounted) {
+                                context
+                                    .read<ChatBloc>()
+                                    .add(const ChatEncryptionRepaired());
+                              }
+                            },
+                          ),
+                          ShadButton.ghost(
+                            width: double.infinity,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            icon: const Padding(
+                              padding: EdgeInsets.only(right: 8.0),
                               child: Icon(LucideIcons.flag),
                             ),
                             text: const Text('Report spam'),
