@@ -1,17 +1,19 @@
 import 'dart:async';
 
-import 'package:bloc/bloc.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'profile_cubit.freezed.dart';
-
 part 'profile_state.dart';
 
 class ProfileCubit extends Cubit<ProfileState> {
-  ProfileCubit({required PresenceService presenceService})
-      : _presenceService = presenceService,
+  ProfileCubit({
+    required PresenceService presenceService,
+    OmemoService? omemoService,
+  })  : _presenceService = presenceService,
+        _omemoService = omemoService,
         super(
           ProfileState(
             jid: presenceService.myJid ?? '',
@@ -31,6 +33,7 @@ class ProfileCubit extends Cubit<ProfileState> {
   }
 
   final PresenceService _presenceService;
+  final OmemoService? _omemoService;
 
   late final StreamSubscription<Presence?> _presenceSubscription;
   late final StreamSubscription<String?> _statusSubscription;
@@ -53,8 +56,15 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   // Future<void> disconnect() => _xmppService.disconnect();
 
-  void loadFingerprints() async {
-    // final fingerprint = await _xmppService.getCurrentFingerprint();
-    // emit(state.copyWith(fingerprint: fingerprint));
+  Future<void> loadFingerprints() async {
+    if (_omemoService == null) return;
+    final fingerprint = await _omemoService.getCurrentFingerprint();
+    emit(state.copyWith(fingerprint: fingerprint));
+  }
+
+  Future<void> regenerateDevice() async {
+    if (_omemoService == null) return;
+    await _omemoService.regenerateDevice();
+    await loadFingerprints();
   }
 }

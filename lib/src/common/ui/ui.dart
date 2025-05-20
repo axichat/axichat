@@ -18,6 +18,7 @@ export 'axi_progress_indicator.dart';
 export 'axi_text_form_field.dart';
 export 'axi_tooltip.dart';
 export 'axi_version.dart';
+export 'display_fingerprint.dart';
 export 'display_time_since.dart';
 export 'dynamic_inline_text.dart';
 export 'jid_input.dart';
