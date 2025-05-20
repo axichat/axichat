@@ -140,6 +140,7 @@ class SettingsControls extends StatelessWidget {
                     .toggleIndicateTyping(indicateTyping),
               ),
             ),
+            const AxiListDivider(),
           ],
         );
       },
