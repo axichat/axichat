@@ -1,6 +1,5 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
@@ -73,12 +72,17 @@ class _LoginFormState extends State<LoginForm> {
                       padding: const EdgeInsets.all(10.0),
                       child: Text(
                         state.errorText,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: context.colorScheme.destructive,
                         ),
                       ),
                     )
                   : const SizedBox(height: 40),
+              NotificationRequest(
+                notificationService: context.read<NotificationService>(),
+              ),
+              const SizedBox.square(dimension: 16.0),
               AxiTextFormField(
                 key: loginUsernameKey,
                 autocorrect: false,
@@ -100,16 +104,6 @@ class _LoginFormState extends State<LoginForm> {
                 key: loginPasswordKey,
                 enabled: !loading,
                 controller: _passwordTextController,
-              ),
-              const Align(
-                alignment: Alignment.center,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-                  child: TermsCheckbox(),
-                ),
-              ),
-              NotificationRequest(
-                notificationService: context.read<NotificationService>(),
               ),
               const SizedBox.square(dimension: 16.0),
               Builder(

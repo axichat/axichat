@@ -232,7 +232,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           return pwned == hash;
         })) {
           emit(const AuthenticationSignupFailure(
-              'That password has been found in a breach.'));
+              'Hackers have already found this password, so it is insecure. '
+              'Use a different one or allow insecure passwords.'));
           return false;
         }
       }
