@@ -21,13 +21,13 @@ class SettingsControls extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (context.read<Capability>().canForegroundService) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 6.0,
-                ),
-                child: Text('Important', style: context.textTheme.muted),
-              ),
+              // Padding(
+              //   padding: const EdgeInsets.symmetric(
+              //     horizontal: 16.0,
+              //     vertical: 6.0,
+              //   ),
+              //   child: Text('Important', style: context.textTheme.muted),
+              // ),
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: NotificationRequest(
