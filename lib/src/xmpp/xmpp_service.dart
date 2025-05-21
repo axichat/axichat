@@ -407,18 +407,27 @@ class XmppService extends XmppBase
     ]);
     await _connection.registerManagers(featureManagers);
 
-    OmemoDevice? device;
-    await _dbOp<XmppDatabase>((db) async {
-      _log.info('Loading omemo device for $myJid...');
-      device = await db.getOmemoDevice(myJid!);
-    });
+    OmemoDevice? device = await _dbOpReturning<XmppDatabase, OmemoDevice?>(
+      (db) async {
+        _log.info('Loading omemo device for $myJid...');
+        return await db.getOmemoDevice(myJid!);
+      },
+    );
+
+    if (device == null) {
+      device = OmemoDevice.fromMox(
+        await compute(omemo.OmemoDevice.generateNewDevice, myJid!),
+      );
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveOmemoDevice(device!);
+      });
+    }
 
     final om = _connection.getManager<mox.OmemoManager>()!;
 
     _omemoManager.complete(
       omemo.OmemoManager(
-        device ??= OmemoDevice.fromMox(
-            await compute(omemo.OmemoDevice.generateNewDevice, myJid!)),
+        device,
         omemo.BlindTrustBeforeVerificationTrustManager(
           commit: (trust) => _dbOp<XmppDatabase>(
             (db) => db.setOmemoTrust(trust),
