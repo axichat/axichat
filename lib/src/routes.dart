@@ -56,7 +56,7 @@ class VerificationRoute extends TransitionGoRouteData {
   Widget build(BuildContext context, GoRouterState state) {
     final extra = state.extra! as Map<String, dynamic>;
     return VerificationScreen(
-      locate: state.extra! as T Function<T>(),
+      locate: extra['locate'] as T Function<T>(),
       jid: extra['jid'],
     );
   }

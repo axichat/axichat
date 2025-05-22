@@ -284,7 +284,10 @@ class _ChatState extends State<Chat> {
                                   text: const Text('Verification'),
                                   onPressed: () => context.push(
                                     const VerificationRoute().location,
-                                    extra: {'jid': jid},
+                                    extra: {
+                                      'locate': context.read,
+                                      'jid': jid,
+                                    },
                                   ),
                                 )
                               : const SizedBox.shrink(),
