@@ -3,7 +3,87 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 mixin OmemoService on XmppBase {
   var _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
-  Future<omemo.OmemoManager> _getOmemoManager() async => _omemoManager.value!;
+  Future<void> _completeOmemoManager() async {
+    OmemoDevice? device = await _dbOpReturning<XmppDatabase, OmemoDevice?>(
+      (db) async {
+        return await db.getOmemoDevice(myJid!);
+      },
+    );
+
+    if (device == null) {
+      device = OmemoDevice.fromMox(
+        await compute(omemo.OmemoDevice.generateNewDevice, myJid!),
+      );
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveOmemoDevice(device!);
+      });
+    }
+
+    final om = _connection.getManager<mox.OmemoManager>()!;
+
+    _omemoManager.complete(
+      omemo.OmemoManager(
+        device,
+        omemo.BlindTrustBeforeVerificationTrustManager(
+          commit: (trust) => _dbOp<XmppDatabase>(
+            (db) => db.setOmemoTrust(trust),
+          ),
+          loadData: (jid) async =>
+              await _dbOpReturning<XmppDatabase, List<omemo.BTBVTrustData>>(
+            (db) => db.getOmemoTrust(jid),
+          ),
+          removeTrust: (jid) => _dbOp<XmppDatabase>(
+            (db) => db.resetOmemoTrust(jid),
+          ),
+        ),
+        om.sendEmptyMessageImpl,
+        om.fetchDeviceList,
+        om.fetchDeviceBundle,
+        om.subscribeToDeviceListImpl,
+        om.publishDeviceImpl,
+        commitDevice: (device) => _dbOp<XmppDatabase>(
+          (db) => db.saveOmemoDevice(OmemoDevice.fromMox(device)),
+        ),
+        commitDeviceList: (jid, devices) => _dbOp<XmppDatabase>(
+          (db) => db.saveOmemoDeviceList(OmemoDeviceList(
+            jid: jid,
+            devices: devices,
+          )),
+        ),
+        commitRatchets: (ratchets) => _dbOp<XmppDatabase>(
+          (db) => db.saveOmemoRatchets(
+            ratchets.map((e) => OmemoRatchet.fromMox(e)).toList(),
+          ),
+        ),
+        loadRatchets: (jid) async =>
+            await _dbOpReturning<XmppDatabase, omemo.OmemoDataPackage?>(
+          (db) async {
+            final devices = await db.getOmemoDeviceList(jid);
+            if (devices == null || devices.devices.isEmpty) return null;
+            final ratchets = await db.getOmemoRatchets(jid);
+            if (ratchets.isEmpty) return null;
+            return omemo.OmemoDataPackage(
+              devices.devices,
+              <omemo.RatchetMapKey, OmemoRatchet>{
+                for (final ratchet in ratchets)
+                  omemo.RatchetMapKey(ratchet.jid, ratchet.device): ratchet,
+              },
+            );
+          },
+        ),
+        removeRatchets: (keys) => _dbOp<XmppDatabase>(
+          (db) => db.removeOmemoRatchets(
+            keys.map((e) => (e.jid, e.deviceId)).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<omemo.OmemoManager> _getOmemoManager() async {
+    if (!_omemoManager.isCompleted) await _completeOmemoManager();
+    return _omemoManager.value!;
+  }
 
   Future<bool> _shouldEncrypt(mox.JID to, mox.Stanza stanza) async =>
       await _dbOpReturning<XmppDatabase, bool>(

@@ -1,4 +1,3 @@
-import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/verification/bloc/verification_cubit.dart';
@@ -21,35 +20,36 @@ class VerificationSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: context.colorScheme.border),
-        ),
-      ),
-      child: Column(
+    return ShadCard(
+      content: Column(
+        spacing: 8.0,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           DisplayFingerprint(fingerprint: fingerprint.fingerprint),
-          ListTile(
-            leading: Icon(fingerprint.trust.toIcon),
-            trailing: ShadSelect<BTBVTrustState>(
-              anchor: const ShadAnchorAuto(preferBelow: false),
-              initialValue: fingerprint.trust,
-              onChanged: (trust) => context
-                  .read<VerificationCubit>()
-                  .setDeviceTrust(device: fingerprint.deviceID, trust: trust),
-              options: BTBVTrustState.values
-                  .map((trust) => ShadOption<BTBVTrustState>(
-                        value: trust,
-                        child: Text(trust.name),
-                      ))
-                  .toList(),
-              selectedOptionBuilder:
-                  (BuildContext context, BTBVTrustState value) =>
-                      Text(value.name),
-            ),
+          const SizedBox.square(dimension: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            spacing: 8.0,
+            children: [
+              Icon(fingerprint.trust.toIcon),
+              ShadSelect<BTBVTrustState>(
+                anchor: const ShadAnchorAuto(preferBelow: false),
+                initialValue: fingerprint.trust,
+                onChanged: (trust) => context
+                    .read<VerificationCubit>()
+                    .setDeviceTrust(device: fingerprint.deviceID, trust: trust),
+                options: BTBVTrustState.values
+                    .map((trust) => ShadOption<BTBVTrustState>(
+                          value: trust,
+                          child: Text(trust.name),
+                        ))
+                    .toList(),
+                selectedOptionBuilder:
+                    (BuildContext context, BTBVTrustState value) =>
+                        Text(value.name),
+              ),
+            ],
           ),
         ],
       ),
