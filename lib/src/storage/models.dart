@@ -467,6 +467,9 @@ extension KeyExchangeData on omemo.KeyExchangeData {
 // }
 
 // @Freezed(toJson: false, fromJson: false)
+
+typedef BTBVTrustState = omemo.BTBVTrustState;
+
 class OmemoDevice extends omemo.OmemoDevice {
   OmemoDevice({
     required String jid,

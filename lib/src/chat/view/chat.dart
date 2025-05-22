@@ -240,23 +240,26 @@ class _ChatState extends State<Chat> {
                               ),
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: ShadSwitch(
-                              label: const Text('Encryption'),
-                              sublabel: const Text(
-                                  'Send messages end-to-end encrypted'),
-                              value: state.chat!.encryptionProtocol.isNotNone,
-                              onChanged: (encrypted) =>
-                                  context.read<ChatBloc>().add(
-                                        ChatEncryptionChanged(
-                                          protocol: encrypted
-                                              ? EncryptionProtocol.omemo
-                                              : EncryptionProtocol.none,
-                                        ),
-                                      ),
-                            ),
-                          ),
+                          context.read<ChatBloc>().encryptionAvailable
+                              ? Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: ShadSwitch(
+                                    label: const Text('Encryption'),
+                                    sublabel: const Text(
+                                        'Send messages end-to-end encrypted'),
+                                    value: state
+                                        .chat!.encryptionProtocol.isNotNone,
+                                    onChanged: (encrypted) =>
+                                        context.read<ChatBloc>().add(
+                                              ChatEncryptionChanged(
+                                                protocol: encrypted
+                                                    ? EncryptionProtocol.omemo
+                                                    : EncryptionProtocol.none,
+                                              ),
+                                            ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
                           Padding(
                             padding: const EdgeInsets.all(12.0),
                             child: ShadSwitch(
@@ -270,6 +273,21 @@ class _ChatState extends State<Chat> {
                             ),
                           ),
                           const Spacer(),
+                          context.read<ChatBloc>().encryptionAvailable
+                              ? ShadButton.ghost(
+                                  width: double.infinity,
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  icon: const Padding(
+                                    padding: EdgeInsets.only(right: 8.0),
+                                    child: Icon(LucideIcons.shieldUser),
+                                  ),
+                                  text: const Text('Verification'),
+                                  onPressed: () => context.push(
+                                    const VerificationRoute().location,
+                                    extra: {'jid': jid},
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
                           ShadButton.ghost(
                             width: double.infinity,
                             mainAxisAlignment: MainAxisAlignment.start,
@@ -545,7 +563,7 @@ class _ChatState extends State<Chat> {
                                           fontFamily: iconFamily,
                                           package: iconPackage,
                                         ),
-                                      )
+                                      ),
                                     ],
                                   ),
                                   if (message.customProperties?['retracted'] ??
