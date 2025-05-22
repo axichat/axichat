@@ -3,7 +3,7 @@ import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
 import 'package:axichat/src/profile_screen.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/settings_screen.dart';
+import 'package:axichat/src/verification_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +26,7 @@ class TransitionGoRouteData extends GoRouteData {
   path: '/',
   routes: [
     TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
+    TypedGoRoute<VerificationRoute>(path: VerificationRoute.path),
     TypedGoRoute<ComposeRoute>(path: ComposeRoute.path),
   ],
 )
@@ -44,6 +45,21 @@ class ProfileRoute extends TransitionGoRouteData {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       ProfileScreen(locate: state.extra! as T Function<T>());
+}
+
+class VerificationRoute extends TransitionGoRouteData {
+  const VerificationRoute();
+
+  static const path = 'verification';
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) {
+    final extra = state.extra! as Map<String, dynamic>;
+    return VerificationScreen(
+      locate: state.extra! as T Function<T>(),
+      jid: extra['jid'],
+    );
+  }
 }
 
 class ComposeRoute extends TransitionGoRouteData {
@@ -70,13 +86,4 @@ class LoginRoute extends GoRouteData {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       const LoginScreen();
-}
-
-@TypedGoRoute<SettingsRoute>(path: '/settings')
-class SettingsRoute extends TransitionGoRouteData {
-  const SettingsRoute();
-
-  @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      const SettingsScreen();
 }

@@ -65,6 +65,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   RestartableTimer? _typingTimer;
 
+  bool get encryptionAvailable => _omemoService != null;
+
   @override
   Future<void> close() async {
     await _chatSubscription.cancel();

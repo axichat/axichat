@@ -1163,5 +1163,4 @@ Future<File> dbFileFor(String prefix) async {
   return File(p.join(path, '$prefix.axichat.drift'));
 }
 
-typedef BTBVTrustState = omemo.BTBVTrustState;
 typedef HashFunction = mox.HashFunction;
