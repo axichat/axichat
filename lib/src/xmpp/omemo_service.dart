@@ -10,20 +10,13 @@ mixin OmemoService on XmppBase {
       },
     );
 
-    if (device == null) {
-      device = OmemoDevice.fromMox(
-        await compute(omemo.OmemoDevice.generateNewDevice, myJid!),
-      );
-      await _dbOp<XmppDatabase>((db) async {
-        await db.saveOmemoDevice(device!);
-      });
-    }
-
     final om = _connection.getManager<mox.OmemoManager>()!;
 
     _omemoManager.complete(
       omemo.OmemoManager(
-        device,
+        device ??
+            OmemoDevice.fromMox(
+                await compute(omemo.OmemoDevice.generateNewDevice, myJid!)),
         omemo.BlindTrustBeforeVerificationTrustManager(
           commit: (trust) => _dbOp<XmppDatabase>(
             (db) => db.setOmemoTrust(trust),
@@ -78,6 +71,10 @@ mixin OmemoService on XmppBase {
         ),
       ),
     );
+
+    await _dbOp<XmppDatabase>((db) async {
+      await db.saveOmemoDevice(await _device);
+    });
   }
 
   Future<omemo.OmemoManager> _getOmemoManager() async {
