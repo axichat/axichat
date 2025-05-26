@@ -1,7 +1,34 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin OmemoService on XmppBase {
+mixin OmemoService on MessageService {
   var _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
+
+  @override
+  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.StanzaSendingCancelledEvent>((event) async {
+      if (event.data.encryptionError == null || event.data.stanza.id == null) {
+        return;
+      }
+      late final Object? error;
+      if (event.data.cancelReason
+          case final mox.OmemoNotSupportedForContactException
+              notSupportedForContactException) {
+        error = notSupportedForContactException;
+      } else if (event.data.cancelReason is mox.UnknownOmemoError) {
+        error = (event.data.encryptionError as mox.OmemoEncryptionError)
+            .deviceEncryptionErrors
+            .values
+            .first
+            .singleOrNull
+            ?.error;
+      }
+      await _dbOp<XmppDatabase>((db) async {
+        await db.saveMessageError(
+          error: MessageError.fromOmemo(error),
+          stanzaID: event.data.stanza.id!,
+        );
+      });
+    });
 
   Future<void> _completeOmemoManager() async {
     OmemoDevice? device = await _dbOpReturning<XmppDatabase, OmemoDevice?>(

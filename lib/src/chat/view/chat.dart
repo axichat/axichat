@@ -452,6 +452,7 @@ class _ChatState extends State<Chat> {
                           focusNode.requestFocus();
                         },
                         messages: state.items
+                            .where((e) => e.body != null || e.error.isNotNone)
                             .map(
                               (e) => ChatMessage(
                                 user: ChatUser(
@@ -459,7 +460,10 @@ class _ChatState extends State<Chat> {
                                   firstName: state.chat?.title,
                                 ),
                                 createdAt: e.timestamp!,
-                                text: e.body ?? '',
+                                text:
+                                    '${e.error.isNotNone ? e.error.asString : ''}'
+                                    '${e.error.isNotNone && e.body != null ? ': ' : ''}'
+                                    '${e.body}',
                                 status: e.error.isNotNone
                                     ? MessageStatus.failed
                                     : e.displayed
@@ -471,10 +475,12 @@ class _ChatState extends State<Chat> {
                                                 : MessageStatus.pending,
                                 customProperties: {
                                   'id': e.stanzaID,
+                                  'body': e.body,
                                   'edited': e.edited,
                                   'retracted': e.retracted,
                                   'error': e.error,
                                   'encrypted': e.encryptionProtocol.isNotNone,
+                                  'trust': e.trust,
                                 },
                               ),
                             )
@@ -503,13 +509,71 @@ class _ChatState extends State<Chat> {
                               fontStyle: FontStyle.italic,
                             );
                             final self = message.user.id == profile?.jid;
-                            final textColor = self
-                                ? context.colorScheme.primaryForeground
-                                : null;
+                            final error = message.customProperties!['error']
+                                as MessageError;
+                            final textColor = error.isNotNone
+                                ? context.colorScheme.destructiveForeground
+                                : self
+                                    ? context.colorScheme.primaryForeground
+                                    : null;
                             const iconSize = 12.0;
                             final iconFamily = message.status!.icon.fontFamily;
                             final iconPackage =
                                 message.status!.icon.fontPackage;
+                            final text = TextSpan(
+                              text: message.text,
+                              style: context.textTheme.small
+                                  .copyWith(color: textColor),
+                            );
+                            final time = TextSpan(
+                              text:
+                                  '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                  '${message.createdAt.minute.toString().padLeft(2, '0')}',
+                              style: context.textTheme.muted.copyWith(
+                                color: textColor,
+                                fontSize: iconSize,
+                              ),
+                            );
+                            final status = TextSpan(
+                              text: String.fromCharCode(
+                                message.status!.icon.codePoint,
+                              ),
+                              style: TextStyle(
+                                color: context.colorScheme.primaryForeground,
+                                fontSize: iconSize,
+                                fontFamily: iconFamily,
+                                package: iconPackage,
+                              ),
+                            );
+                            final encryption = TextSpan(
+                              text: String.fromCharCode(
+                                  (message.customProperties!['encrypted']
+                                          ? LucideIcons.lock
+                                          : LucideIcons.lockOpen)
+                                      .codePoint),
+                              style: context.textTheme.muted.copyWith(
+                                color: message.customProperties!['encrypted']
+                                    ? textColor
+                                    : context.colorScheme.destructive,
+                                fontSize: iconSize,
+                                fontFamily: iconFamily,
+                                package: iconPackage,
+                              ),
+                            );
+                            final trust = message.customProperties!['trust']
+                                as BTBVTrustState?;
+                            final verification = trust != null
+                                ? TextSpan(
+                                    text: String.fromCharCode(
+                                        trust.toIcon.codePoint),
+                                    style: context.textTheme.muted.copyWith(
+                                      color: trust.toColor,
+                                      fontSize: iconSize,
+                                      fontFamily: iconFamily,
+                                      package: iconPackage,
+                                    ),
+                                  )
+                                : null;
                             return ShadGestureDetector(
                               cursor: SystemMouseCursors.click,
                               onTap: () => context.read<ChatBloc>().add(
@@ -517,70 +581,58 @@ class _ChatState extends State<Chat> {
                                       message.customProperties!['id'],
                                     ),
                                   ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  DynamicInlineText(
-                                    key: UniqueKey(),
-                                    text: TextSpan(
-                                      text: message.text,
-                                      style: context.textTheme.small
-                                          .copyWith(color: textColor),
-                                    ),
-                                    details: [
-                                      TextSpan(
-                                        text:
-                                            '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                                            '${message.createdAt.minute.toString().padLeft(2, '0')}',
-                                        style: context.textTheme.muted.copyWith(
-                                          color: textColor,
-                                          fontSize: iconSize,
-                                        ),
+                              child: error.isNotNone
+                                  ? Container(
+                                      padding: const EdgeInsets.all(8.0),
+                                      decoration: BoxDecoration(
+                                        color: context.colorScheme.destructive,
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      if (self)
-                                        TextSpan(
-                                          text: String.fromCharCode(
-                                            message.status!.icon.codePoint,
+                                      child: Column(
+                                        spacing: 4.0,
+                                        children: [
+                                          Text(
+                                            'Error!',
+                                            style: context.textTheme.small
+                                                .copyWith(
+                                              color: textColor,
+                                            ),
                                           ),
-                                          style: TextStyle(
-                                            color: context
-                                                .colorScheme.primaryForeground,
-                                            fontSize: iconSize,
-                                            fontFamily: iconFamily,
-                                            package: iconPackage,
+                                          DynamicInlineText(
+                                            text: text,
+                                            details: [time],
                                           ),
-                                        ),
-                                      TextSpan(
-                                        text: String.fromCharCode(
-                                            (message.customProperties![
-                                                        'encrypted']
-                                                    ? LucideIcons.lock
-                                                    : LucideIcons.lockOpen)
-                                                .codePoint),
-                                        style: context.textTheme.muted.copyWith(
-                                          color: message.customProperties![
-                                                  'encrypted']
-                                              ? textColor
-                                              : context.colorScheme.destructive,
-                                          fontSize: iconSize,
-                                          fontFamily: iconFamily,
-                                          package: iconPackage,
-                                        ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                  if (message.customProperties?['retracted'] ??
-                                      false)
-                                    Text(
-                                      '(retracted)',
-                                      style: extraStyle,
                                     )
-                                  else if (message
-                                          .customProperties?['edited'] ??
-                                      false)
-                                    Text('(edited)', style: extraStyle),
-                                ],
-                              ),
+                                  : Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        DynamicInlineText(
+                                          key: UniqueKey(),
+                                          text: text,
+                                          details: [
+                                            time,
+                                            if (self) status,
+                                            encryption,
+                                            if (!self && trust != null)
+                                              verification!,
+                                          ],
+                                        ),
+                                        if (message.customProperties?[
+                                                'retracted'] ??
+                                            false)
+                                          Text(
+                                            '(retracted)',
+                                            style: extraStyle,
+                                          )
+                                        else if (message
+                                                .customProperties?['edited'] ??
+                                            false)
+                                          Text('(edited)', style: extraStyle),
+                                      ],
+                                    ),
                             );
                           },
                         ),

@@ -5,14 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-extension on BTBVTrustState {
-  IconData get toIcon => switch (this) {
-        BTBVTrustState.notTrusted => LucideIcons.shieldAlert,
-        BTBVTrustState.blindTrust => LucideIcons.shieldQuestion,
-        BTBVTrustState.verified => LucideIcons.shieldCheck,
-      };
-}
-
 class VerificationSelector extends StatelessWidget {
   const VerificationSelector({super.key, required this.fingerprint});
 
