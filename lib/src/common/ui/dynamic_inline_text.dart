@@ -50,6 +50,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   TextSpan get text => _text;
   TextSpan _text;
+
   set text(TextSpan value) {
     if (value == _text) return;
     _text = value;
@@ -58,6 +59,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   }
 
   List<TextSpan> _details;
+
   set details(List<TextSpan> value) {
     if (value == _details) return;
     _details = value;
@@ -66,6 +68,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   }
 
   TextDirection _textDirection;
+
   set textDirection(TextDirection value) {
     if (_textDirection == value) {
       return;
@@ -77,6 +80,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   TextScaler get textScaler => _textScaler;
   TextScaler _textScaler;
+
   set textScaler(TextScaler value) {
     if (value == _textScaler) {
       return;
@@ -128,6 +132,14 @@ class DynamicInlineTextRenderObject extends RenderBox {
   Size _layout(double maxWidth) {
     if (text.text == null || text.text!.isEmpty) return Size.zero;
     assert(maxWidth > 0);
+
+    _lineHeight = 0;
+    _lineCount = 0;
+    _maxLineWidth = 0;
+    _finalLineWidth = 0;
+    _detailsWidth = 0;
+    _detailsHeight = 0;
+    _canInlineDetails = false;
 
     _textPainter = TextPainter(
       text: text,
