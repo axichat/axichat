@@ -35,6 +35,9 @@ class XmppConnection extends mox.XmppConnection {
     }
   }
 
+  Future<void> setShouldReconnect(bool value) =>
+      reconnectionPolicy.setShouldReconnect(value);
+
   T? getManager<T extends mox.XmppManagerBase>() {
     switch (T) {
       case == mox.MessageManager:
@@ -77,7 +80,7 @@ class XmppConnection extends mox.XmppConnection {
     }
   }
 
-  String get saltedPassword =>
+  String? get saltedPassword =>
       getNegotiator<SaslScramNegotiator>()!.saltedPassword;
 
   Future<void> loadStreamState() async =>

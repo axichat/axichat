@@ -13,6 +13,7 @@ import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 
 part 'authentication_state.dart';
 
@@ -74,6 +75,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
+  final _log = Logger('AuthenticationCubit');
+
   static const String domain = 'axi.im';
   static Uri baseUrl = Uri.parse('https://$domain:5443');
   static Uri registrationUrl = Uri.parse('$baseUrl/register/new/');
@@ -123,12 +126,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
-    final resourceStorageKey = CredentialStore.registerKey(
-      '${jid}_resource',
-    );
-    final resource = await _credentialStore.read(key: resourceStorageKey) ??
-        XmppService.generateResource();
-
     final databasePrefixStorageKey =
         CredentialStore.registerKey('${jid}_database_prefix');
     final databasePrefix =
@@ -148,7 +145,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       password = await _xmppService.connect(
         jid: jid,
-        resource: resource,
         password: password,
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
@@ -157,7 +153,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on XmppAuthenticationException catch (_) {
       emit(const AuthenticationFailure('Incorrect username or password'));
       return;
-    } on Exception catch (_) {
+    } on XmppAlreadyConnectedException catch (_) {
+      await _xmppService.disconnect();
+      emit(const AuthenticationNone());
+      return;
+    } on Exception catch (e) {
+      _log.severe(e);
       emit(const AuthenticationFailure('Error. Please try again later.'));
       return;
     }
@@ -168,18 +169,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
 
     await _credentialStore.write(
-      key: resourceStorageKey,
-      value: _xmppService.resource,
-    );
-
-    await _credentialStore.write(
       key: databasePrefixStorageKey,
       value: databasePrefix,
     );
 
     if (rememberMe) {
       await _credentialStore.write(key: jidStorageKey, value: jid);
-      await _credentialStore.write(key: passwordStorageKey, value: password);
+      if (password != null) {
+        await _credentialStore.write(key: passwordStorageKey, value: password);
+      }
     }
 
     emit(const AuthenticationComplete());

@@ -36,6 +36,8 @@ const largeScreen = 1200.0;
 const baseAnimationDuration = Duration(milliseconds: 300);
 const basePageItemLimit = 15;
 
+const axiGreen = Color(0xff80ffa0);
+
 const mobileHoverStrategies = ShadHoverStrategies(
   hover: {ShadHoverStrategy.onLongPressDown},
   unhover: {

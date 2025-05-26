@@ -134,7 +134,7 @@ abstract interface class XmppBase {
 
   Stream<ConnectionState> get connectivityStream;
 
-  Future<String> connect({
+  Future<String?> connect({
     required String jid,
     required String password,
     required String databasePrefix,
@@ -230,7 +230,7 @@ class XmppService extends XmppBase
       });
     })
     ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-      _connection.setResource(resource!, triggerEvent: false);
+      // _connection.setResource(resource!, triggerEvent: false);
       await _omemoManager.value?.commitDevice(await _device);
       if (await _ensureOmemoDevicePublished() case final result?) {
         _log.severe('Failed to publish OMEMO device. $result');
@@ -315,12 +315,11 @@ class XmppService extends XmppBase
   var _synchronousConnection = Completer<void>();
 
   @override
-  Future<String> connect({
+  Future<String?> connect({
     required String jid,
     required String password,
     required String databasePrefix,
     required String databasePassphrase,
-    String? resource,
     bool preHashed = false,
   }) async {
     if (_synchronousConnection.isCompleted) {
@@ -340,7 +339,7 @@ class XmppService extends XmppBase
               await _buildStateStore(databasePrefix, databasePassphrase));
         }
 
-        _myJid = mox.JID.fromString('$jid/${resource ?? generateResource()}');
+        _myJid = mox.JID.fromString(jid);
 
         await _initConnection(preHashed: preHashed);
 
@@ -348,22 +347,20 @@ class XmppService extends XmppBase
             .asBroadcastStream()
             .listen(_eventManager.executeHandlers);
 
-        if (this case MessageService messageService) {
-          _messageSubscription = messageService._messageStream.stream.listen(
-            (message) async {
-              await _notificationService.sendNotification(
-                title: message.senderJid,
-                body: message.body,
-                extraConditions: [
-                  message.senderJid != myJid,
-                  !await _dbOpReturning<XmppDatabase, bool>((db) async {
-                    return (await db.getChat(message.chatJid))?.muted ?? false;
-                  }),
-                ],
-              );
-            },
-          );
-        }
+        _messageSubscription = _messageStream.stream.listen(
+          (message) async {
+            await _notificationService.sendNotification(
+              title: message.senderJid,
+              body: message.body,
+              extraConditions: [
+                message.senderJid != myJid,
+                !await _dbOpReturning<XmppDatabase, bool>((db) async {
+                  return (await db.getChat(message.chatJid))?.muted ?? false;
+                }),
+              ],
+            );
+          },
+        );
 
         _connection.connectionSettings = XmppConnectionSettings(
           jid: _myJid!.toBare(),
@@ -391,11 +388,11 @@ class XmppService extends XmppBase
 
   Future<void> _initConnection({bool preHashed = false}) async {
     _log.info('Initializing connection object...');
-    final resource = this.resource ?? '';
+    // final resource = this.resource ?? '';
     await _connection.registerFeatureNegotiators([
-      XmppResourceNegotiator(resource: resource),
+      mox.ResourceBindingNegotiator(),
       mox.StartTlsNegotiator(),
-      mox.StreamManagementNegotiator()..resource = resource,
+      mox.StreamManagementNegotiator(),
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
       mox.PresenceNegotiator(),
@@ -406,6 +403,8 @@ class XmppService extends XmppBase
       mox.FASTSaslNegotiator(),
     ]);
     await _connection.registerManagers(featureManagers);
+
+    _completeOmemoManager();
 
     await _connection.loadStreamState();
     await _dbOp<XmppStateStore>((ss) {
@@ -487,12 +486,15 @@ class XmppService extends XmppBase
 
     await _eventSubscription?.cancel();
     _eventSubscription = null;
+
     await _messageSubscription?.cancel();
     _messageSubscription = null;
     _messageStream.close();
+    _messageStream = StreamController<Message>.broadcast();
 
     if (connected) {
       try {
+        await _connection.setShouldReconnect(false);
         await _connection.disconnect();
         _log.info('Gracefully disconnected.');
       } catch (e, s) {
@@ -809,8 +811,9 @@ class SaslScramNegotiator extends mox.SaslScramNegotiator {
 
   final bool preHashed;
 
-  String get saltedPassword => base64Encode(_saltedPassword);
-  late List<int> _saltedPassword;
+  String? get saltedPassword =>
+      _saltedPassword != null ? base64Encode(_saltedPassword!) : null;
+  List<int>? _saltedPassword;
 
   @override
   Future<List<int>> calculateSaltedPassword(String salt, int iterations) async {

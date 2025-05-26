@@ -42,7 +42,7 @@ mixin MessageService on XmppBase {
 
   final _log = Logger('MessageService');
 
-  final _messageStream = StreamController<Message>.broadcast();
+  var _messageStream = StreamController<Message>.broadcast();
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
@@ -56,7 +56,6 @@ mixin MessageService on XmppBase {
       if (await _handleCorrection(event, message.senderJid)) return;
       if (await _handleRetraction(event, message.senderJid)) return;
 
-      // TODO: Include InvalidKeyExchangeSignatureError for OMEMO.
       if (!event.displayable && event.encryptionError == null) return;
       if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
         return;
@@ -116,9 +115,11 @@ mixin MessageService on XmppBase {
         }
       }
 
-      await _dbOp<XmppDatabase>((db) async {
-        await db.saveMessage(message);
-      });
+      if (!message.noStore) {
+        await _dbOp<XmppDatabase>((db) async {
+          await db.saveMessage(message);
+        });
+      }
 
       _messageStream.add(message);
     })
@@ -148,7 +149,7 @@ mixin MessageService on XmppBase {
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
-      mox.MessageManager(),
+      MessageManager(),
       mox.CarbonsManager(),
       mox.MessageDeliveryReceiptManager(),
       mox.ChatMarkerManager(),
@@ -165,7 +166,7 @@ mixin MessageService on XmppBase {
       // mox.SFSManager(),
       // mox.HttpFileUploadManager(),
       // mox.FileUploadNotificationManager(),
-      // mox.EmeManager(),
+      mox.EmeManager(),
     ]);
 
   Future<void> sendMessage({
@@ -469,4 +470,41 @@ mixin MessageService on XmppBase {
 //   });
 //   return allowed;
 // }
+}
+
+class OmemoDeviceData extends mox.StanzaHandlerExtension {
+  OmemoDeviceData({required this.id});
+
+  final int id;
+}
+
+class MessageManager extends mox.MessageManager {
+  @override
+  List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
+        mox.StanzaHandler(
+          stanzaTag: 'message',
+          callback: _attachDevice,
+          priority: mox.MessageManager.messageHandlerPriority + 1,
+        ),
+        ...super.getIncomingStanzaHandlers(),
+      ];
+
+  Future<mox.StanzaHandlerData> _attachDevice(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    if (state.stanza
+            .firstTag('encrypted', xmlns: mox.omemoXmlns)
+            ?.firstTag('header')
+            ?.attributes['sid']
+        case final String sid) {
+      final deviceID = int.parse(sid);
+      return state
+        ..extensions.set<OmemoDeviceData>(
+          OmemoDeviceData(id: deviceID),
+        );
+    }
+
+    return state;
+  }
 }

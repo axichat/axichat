@@ -17,6 +17,7 @@ class ImpatientCompleter<T> {
   late final T _value;
 
   void complete(T value) {
+    if (isCompleted) return;
     completer.complete(value);
     _value = value;
   }

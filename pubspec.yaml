@@ -30,11 +30,13 @@ dependencies:
   retry: ^3.1.2
   sqlcipher_flutter_libs: ^0.6.3
   moxxmpp:
-    hosted: https://git.polynom.me/api/packages/Moxxy/pub
-    version: 0.4.0
+    git:
+      url: https://gitlab.com/axichat/moxxmpp.git
+      path: packages/moxxmpp
   moxxmpp_socket_tcp:
-    hosted: https://git.polynom.me/api/packages/Moxxy/pub
-    version: 0.4.0
+    git:
+      url: https://gitlab.com/axichat/moxxmpp.git
+      path: packages/moxxmpp_socket_tcp
   crypto: ^3.0.3
   hive: ^2.2.3
   hive_flutter: ^1.1.0
