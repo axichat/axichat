@@ -7,13 +7,16 @@ const termsUrl = 'https://axichat.com/terms.pdf';
 const privacyUrl = 'https://axichat.com/privacy.pdf';
 
 class TermsCheckbox extends StatelessWidget {
-  const TermsCheckbox({super.key});
+  const TermsCheckbox({super.key, this.enabled = true});
+
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
       child: ShadCheckboxFormField(
+        enabled: enabled,
         initialValue: false,
         inputLabel: const Text('I accept the terms and conditions'),
         onChanged: (v) {},

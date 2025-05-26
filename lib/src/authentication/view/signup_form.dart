@@ -192,12 +192,14 @@ class _SignupFormState extends State<SignupForm> {
                                   ? 'Passwords don\'t match'
                                   : null,
                         ),
-                        const Align(
+                        Align(
                           alignment: Alignment.centerLeft,
                           child: Padding(
-                            padding: EdgeInsets.all(8.0),
+                            padding: const EdgeInsets.all(8.0),
                             //fromLTRB(16.0, 8.0, 16.0, 16.0),
-                            child: TermsCheckbox(),
+                            child: TermsCheckbox(
+                              enabled: !loading,
+                            ),
                           ),
                         ),
                         Align(
@@ -205,6 +207,7 @@ class _SignupFormState extends State<SignupForm> {
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: ShadCheckbox(
+                              enabled: !loading,
                               value: allowInsecurePassword,
                               label: const Text('Allow insecure password'),
                               sublabel: const Text('Not recommended'),
