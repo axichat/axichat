@@ -845,10 +845,10 @@ packages:
     dependency: "direct main"
     description:
       name: libsignal_protocol_dart
-      sha256: "2a8d54cddb89eab0301d333c4346d7edc920da0a0c0daa5e324878de2841dce6"
+      sha256: "1b691092b24decbd5602a656e42b5a8e61043d2d102ba856a20f96fc04013647"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.1"
+    version: "0.7.2"
   lint:
     dependency: "direct dev"
     description:
@@ -948,19 +948,21 @@ packages:
   moxxmpp:
     dependency: "direct main"
     description:
-      name: moxxmpp
-      sha256: "38f49522782e54c6e1899a715cd1ab1f9a4c3aa5cf521ff4db8ee0a9429c0328"
-      url: "https://git.polynom.me/api/packages/Moxxy/pub/"
-    source: hosted
-    version: "0.4.0"
+      path: "packages/moxxmpp"
+      ref: HEAD
+      resolved-ref: "2ff876fd448d48919e5dc032682aceb072561c37"
+      url: "https://gitlab.com/axichat/moxxmpp.git"
+    source: git
+    version: "0.4.1"
   moxxmpp_socket_tcp:
     dependency: "direct main"
     description:
-      name: moxxmpp_socket_tcp
-      sha256: "37ddbe153cde10e348a116978f6c1232b6b63df8083e7c350d4995e3c3b7c68f"
-      url: "https://git.polynom.me/api/packages/Moxxy/pub/"
-    source: hosted
-    version: "0.4.0"
+      path: "packages/moxxmpp_socket_tcp"
+      ref: HEAD
+      resolved-ref: "2ff876fd448d48919e5dc032682aceb072561c37"
+      url: "https://gitlab.com/axichat/moxxmpp.git"
+    source: git
+    version: "0.4.1"
   msix:
     dependency: "direct dev"
     description:
@@ -997,10 +999,10 @@ packages:
     dependency: transitive
     description:
       name: omemo_dart
-      sha256: "61f4695f105bc72663bd804350fc9cdb14c81e95fc190137a8344280e70fbc00"
+      sha256: "4b178d9661f5892d0bef342aa312ee6f45b07c79b0f7b5ee5332e3b72c2d817b"
       url: "https://git.polynom.me/api/packages/PapaTutuWawa/pub/"
     source: hosted
-    version: "0.5.1"
+    version: "0.6.0"
   optional:
     dependency: transitive
     description:
@@ -1213,18 +1215,18 @@ packages:
     dependency: transitive
     description:
       name: protobuf
-      sha256: "01dd9bd0fa02548bf2ceee13545d4a0ec6046459d847b6b061d8a27237108a08"
+      sha256: "68645b24e0716782e58948f8467fd42a880f255096a821f9e7d0ec625b00c84d"
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "3.1.0"
   protoc_plugin:
     dependency: transitive
     description:
       name: protoc_plugin
-      sha256: e2be5014ba145dc0f8de20ac425afa2a513aff64fe350d338e481d40de0573df
+      sha256: fb0554851c9eca30bd18405fbbfe81e39166d4a2f0e5b770606fd69da3da0b2f
       url: "https://pub.dev"
     source: hosted
-    version: "20.0.1"
+    version: "21.1.2"
   provider:
     dependency: transitive
     description:
@@ -1730,10 +1732,10 @@ packages:
     dependency: transitive
     description:
       name: very_good_analysis
-      sha256: "9ae7f3a3bd5764fb021b335ca28a34f040cd0ab6eec00a1b213b445dae58a4b8"
+      sha256: "1fb637c0022034b1f19ea2acb42a3603cbd8314a470646a59a2fb01f5f3a8629"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.0"
+    version: "6.0.0"
   video_player:
     dependency: transitive
     description:

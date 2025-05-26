@@ -55,7 +55,9 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   @override
   Object? read({required RegisteredStateKey key}) {
     if (!initialized) return null;
-    return Hive.box(boxName).get(key.value);
+    final result = Hive.box(boxName).get(key.value);
+    _log.info('Read ${key.value}: $result');
+    return result;
   }
 
   @override
@@ -64,6 +66,7 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
     required Object? value,
   }) async {
     if (!initialized) return false;
+    _log.info('Writing ${key.value}: $value...');
     await Hive.box(boxName).put(key.value, value);
     return true;
   }
@@ -71,6 +74,7 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   @override
   Future<bool> delete({required RegisteredStateKey key}) async {
     if (!initialized) return false;
+    _log.info('Deleting ${key.value}...');
     await Hive.box(boxName).delete(key.value);
     return true;
   }
