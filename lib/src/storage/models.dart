@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:cryptography/cryptography.dart';
@@ -10,6 +11,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
 
 part 'models.freezed.dart';
@@ -31,9 +33,19 @@ enum MessageError {
   fileUploadFailure,
   omemoUnsupported,
   notEncryptedForDevice,
+  malformedKey,
+  malformedCiphertext,
+  noDeviceSession,
+  noKeyMaterial,
   noDecryptionKey,
+  emptyDeviceList,
   invalidHMAC,
+  invalidKEX,
+  invalidEnvelope,
   encryptionFailure,
+  skippingTooManyKeys,
+  unknownSPK,
+  unknownOmemoError,
   fileDecryptionFailure,
   fileEncryptionFailure,
   plaintextFileInOmemo;
@@ -46,6 +58,44 @@ enum MessageError {
     }
     return null;
   }
+
+  String get asString => switch (this) {
+        notEncryptedForDevice => 'Message not encrypted for this device',
+        malformedKey => 'Message has malformed encrypted key',
+        unknownSPK => 'Message has unknown Signed Prekey',
+        noDeviceSession => 'No session with this device',
+        skippingTooManyKeys => 'Message would skip too many keys',
+        invalidHMAC => 'Invalid HMAC',
+        malformedCiphertext => 'Malformed ciphertext',
+        noKeyMaterial => 'Can\'t find contact\'s devices',
+        invalidKEX => 'Invalid Key Exchange Signature',
+        unknownOmemoError => 'Unknown encryption error',
+        invalidAffixElements => 'Invalid affix elements',
+        emptyDeviceList => 'Contact has no devices to encrypt for',
+        omemoUnsupported => 'Contact doesn\'t support encryption',
+        encryptionFailure => 'Encryption failed',
+        invalidEnvelope => 'Invalid contents',
+        _ => toString(),
+      };
+
+  static MessageError fromOmemo(Object? error) => switch (error) {
+        omemo.NotEncryptedForDeviceError _ => notEncryptedForDevice,
+        omemo.MalformedEncryptedKeyError _ => malformedKey,
+        omemo.UnknownSignedPrekeyError _ => unknownSPK,
+        omemo.NoSessionWithDeviceError _ => noDeviceSession,
+        omemo.SkippingTooManyKeysError _ => skippingTooManyKeys,
+        omemo.InvalidMessageHMACError _ => invalidHMAC,
+        omemo.MalformedCiphertextError _ => malformedCiphertext,
+        omemo.NoKeyMaterialAvailableError _ => noKeyMaterial,
+        omemo.InvalidKeyExchangeSignatureError _ => invalidKEX,
+        mox.UnknownOmemoError _ => unknownOmemoError,
+        mox.InvalidAffixElementsException _ => invalidAffixElements,
+        mox.EmptyDeviceListException _ => emptyDeviceList,
+        mox.OmemoNotSupportedForContactException _ => omemoUnsupported,
+        mox.EncryptionFailedException _ => encryptionFailure,
+        mox.InvalidEnvelopePayloadException _ => invalidEnvelope,
+        _ => none,
+      };
 }
 
 enum MessageWarning {
@@ -89,6 +139,8 @@ class Message with _$Message implements Insertable<Message> {
     @Default(MessageError.none) MessageError error,
     @Default(MessageWarning.none) MessageWarning warning,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
+    BTBVTrustState? trust,
+    int? deviceID,
     @Default(false) bool noStore,
     @Default(false) bool acked,
     @Default(false) bool received,
@@ -118,6 +170,8 @@ class Message with _$Message implements Insertable<Message> {
     required MessageError error,
     required MessageWarning warning,
     required EncryptionProtocol encryptionProtocol,
+    required BTBVTrustState? trust,
+    required int? deviceID,
     required bool noStore,
     required bool acked,
     required bool received,
@@ -156,6 +210,8 @@ class Message with _$Message implements Insertable<Message> {
       occupantID: get<mox.OccupantIdData>()?.id,
       encryptionProtocol:
           event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
+      deviceID: get<OmemoDeviceData>()?.id,
+      error: MessageError.fromOmemo(event.encryptionError),
     );
   }
 
@@ -203,6 +259,8 @@ class Message with _$Message implements Insertable<Message> {
         error: Value(error),
         warning: Value(warning),
         encryptionProtocol: Value(encryptionProtocol),
+        trust: Value.absentIfNull(trust),
+        deviceID: Value.absentIfNull(deviceID),
         noStore: Value(noStore),
         acked: Value(acked),
         received: Value(received),
@@ -247,6 +305,10 @@ class Messages extends Table {
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(0))();
+
+  IntColumn get trust => intEnum<BTBVTrustState>().nullable()();
+
+  IntColumn get deviceID => integer().nullable()();
 
   BoolColumn get noStore => boolean().withDefault(const Constant(false))();
 
@@ -377,7 +439,7 @@ class SignedPreKey extends omemo.OmemoKeyPair {
       keyPair.sk,
       keyPair.type,
       id: data['id'],
-      signature: data['signature'],
+      signature: List<int>.from(data['signature']),
     );
   }
 
@@ -469,6 +531,20 @@ extension KeyExchangeData on omemo.KeyExchangeData {
 // @Freezed(toJson: false, fromJson: false)
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
+
+extension TrustDisplay on BTBVTrustState {
+  IconData get toIcon => switch (this) {
+        omemo.BTBVTrustState.notTrusted => LucideIcons.shieldX,
+        omemo.BTBVTrustState.blindTrust => LucideIcons.shieldQuestion,
+        omemo.BTBVTrustState.verified => LucideIcons.shieldCheck,
+      };
+
+  Color get toColor => switch (this) {
+        omemo.BTBVTrustState.notTrusted => Colors.red,
+        omemo.BTBVTrustState.blindTrust => Colors.orange,
+        omemo.BTBVTrustState.verified => axiGreen,
+      };
+}
 
 class OmemoDevice extends omemo.OmemoDevice {
   OmemoDevice({
@@ -629,7 +705,7 @@ class OmemoDevice extends omemo.OmemoDevice {
       );
 
   static Map<int, omemo.OmemoKeyPair> onetimePreKeysFromJson(String json) {
-    final data = jsonDecode(json) as Map<String, String>;
+    final data = Map<String, String>.from(jsonDecode(json));
     return <int, omemo.OmemoKeyPair>{
       for (final entry in data.entries)
         int.parse(entry.key): OmemoKeyPair.fromJson(entry.value),
@@ -849,7 +925,7 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
       );
 
   static Map<omemo.SkippedKey, List<int>> mkSkippedFromJson(String json) {
-    final data = jsonDecode(json) as Map<String, List<int>>;
+    final data = Map<String, List<int>>.from(jsonDecode(json));
     return <omemo.SkippedKey, List<int>>{
       for (final entry in data.entries)
         SkippedKey.fromJson(entry.key): entry.value,
@@ -1082,7 +1158,7 @@ enum Presence {
         xa => Colors.red,
         away => Colors.orange,
         dnd => Colors.red,
-        chat => const Color(0xff80ee80),
+        chat => axiGreen,
         unknown => Colors.grey,
       };
 

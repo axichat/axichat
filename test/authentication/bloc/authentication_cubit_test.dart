@@ -60,7 +60,6 @@ void main() {
 
       when(() => mockXmppService.connect(
             jid: any(named: 'jid'),
-            resource: any(named: 'resource'),
             password: any(named: 'password'),
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
@@ -68,7 +67,6 @@ void main() {
           )).thenThrow(XmppAuthenticationException());
       when(() => mockXmppService.connect(
             jid: validJid,
-            resource: any(named: 'resource'),
             password: validPassword,
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
