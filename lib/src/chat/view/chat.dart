@@ -462,7 +462,7 @@ class _ChatState extends State<Chat> {
                                 createdAt: e.timestamp!,
                                 text:
                                     '${e.error.isNotNone ? e.error.asString : ''}'
-                                    '${e.error.isNotNone && e.body != null ? ': ' : ''}'
+                                    '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': ' : ''}'
                                     '${e.body}',
                                 status: e.error.isNotNone
                                     ? MessageStatus.failed
