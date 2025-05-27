@@ -492,9 +492,9 @@ class XmppService extends XmppBase
     _messageStream.close();
     _messageStream = StreamController<Message>.broadcast();
 
+    await _connection.setShouldReconnect(false);
     if (connected) {
       try {
-        await _connection.setShouldReconnect(false);
         await _connection.disconnect();
         _log.info('Gracefully disconnected.');
       } catch (e, s) {

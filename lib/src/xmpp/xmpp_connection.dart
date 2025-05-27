@@ -279,13 +279,16 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   @override
   Future<bool> getIsReconnecting() async => _reconnectionInProgress;
 
+  // Have to do Future based API to match mox implementation.
   @override
   Future<bool> canTryReconnecting() async =>
       !_reconnectionInProgress && !reachedMaxAttempts;
 
+  // Have to do Future based API to match mox implementation.
   @override
   Future<bool> getShouldReconnect() async => _shouldReconnect;
 
+  // Have to do Future based API to match mox implementation.
   @override
   Future<void> setShouldReconnect(bool value) async => _shouldReconnect = value;
 
