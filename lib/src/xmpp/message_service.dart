@@ -160,13 +160,13 @@ mixin MessageService on XmppBase {
       mox.LastMessageCorrectionManager(),
       mox.MessageReactionsManager(),
       mox.MessageProcessingHintManager(),
+      mox.EmeManager(),
       // mox.StickersManager(),
       // mox.MUCManager(),
       // mox.OOBManager(),
       // mox.SFSManager(),
       // mox.HttpFileUploadManager(),
       // mox.FileUploadNotificationManager(),
-      mox.EmeManager(),
     ]);
 
   Future<void> sendMessage({
