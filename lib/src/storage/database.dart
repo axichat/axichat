@@ -576,7 +576,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     _log.info('Saving message: ${message.stanzaID} with body: '
         '${message.body?.substring(0, min(10, message.body!.length))}...');
     await transaction(() async {
-      final chat = await into(chats).insertReturning(
+      await into(chats).insert(
         ChatsCompanion.insert(
           jid: message.chatJid,
           title: mox.JID.fromString(message.chatJid).local,
@@ -599,11 +599,12 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       );
       BTBVTrustState? trust;
       if (message.deviceID case final int deviceID) {
+        print(deviceID);
         final device = await omemoDevicesAccessor.selectByID(deviceID);
+        print(device);
         trust = device?.trust;
       }
       await messagesAccessor.insertOne(message.copyWith(
-        encryptionProtocol: chat.encryptionProtocol,
         trust: trust,
       ));
     });
@@ -735,11 +736,12 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> setOmemoTrust(omemo.BTBVTrustData trust) async {
     await transaction(() async {
       await messagesAccessor.updateTrust(trust.device, trust.state);
-      return omemoDevicesAccessor.updateOne(OmemoDevicesCompanion(
+      return omemoDevicesAccessor.insertOrUpdateOne(OmemoDevicesCompanion(
         id: Value(trust.device),
         jid: Value(trust.jid),
         trust: Value(trust.state),
         enabled: Value(trust.enabled),
+        trusted: Value(trust.trusted),
       ));
     });
   }
@@ -747,6 +749,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   @override
   Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid) async {
     final devices = await omemoDevicesAccessor.selectByJid(jid);
+    final hasVerified = devices.any((e) => e.trust.isVerified);
     return devices
         .map(
           (e) => omemo.BTBVTrustData(
@@ -754,7 +757,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
             e.id,
             e.trust,
             e.enabled,
-            false,
+            e.trust.isVerified || (e.trust.isBlind && !hasVerified),
           ),
         )
         .toList();

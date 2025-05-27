@@ -462,8 +462,7 @@ class _ChatState extends State<Chat> {
                                 createdAt: e.timestamp!,
                                 text:
                                     '${e.error.isNotNone ? e.error.asString : ''}'
-                                    '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': ' : ''}'
-                                    '${e.body}',
+                                    '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': "${e.body}"' : e.body}',
                                 status: e.error.isNotNone
                                     ? MessageStatus.failed
                                     : e.displayed
@@ -586,7 +585,7 @@ class _ChatState extends State<Chat> {
                                       padding: const EdgeInsets.all(8.0),
                                       decoration: BoxDecoration(
                                         color: context.colorScheme.destructive,
-                                        borderRadius: BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Column(
                                         spacing: 4.0,

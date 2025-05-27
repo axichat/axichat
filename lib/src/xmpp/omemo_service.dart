@@ -221,25 +221,25 @@ mixin OmemoService on MessageService {
   }
 }
 
-const omemoXmlns = 'eu.siacs.conversations.axolotl';
-const omemoDevicesXmlns = '$omemoXmlns.devicelist';
-const omemoBundlesXmlns = '$omemoXmlns.bundles';
-
-const _doNotEncryptList = [
-  // XEP-0033
-  mox.DoNotEncrypt('addresses', mox.extendedAddressingXmlns),
-  // XEP-0060
-  mox.DoNotEncrypt('pubsub', mox.pubsubXmlns),
-  mox.DoNotEncrypt('pubsub', mox.pubsubOwnerXmlns),
-  // XEP-0334
-  mox.DoNotEncrypt('no-permanent-store', mox.messageProcessingHintsXmlns),
-  mox.DoNotEncrypt('no-store', mox.messageProcessingHintsXmlns),
-  mox.DoNotEncrypt('no-copy', mox.messageProcessingHintsXmlns),
-  mox.DoNotEncrypt('store', mox.messageProcessingHintsXmlns),
-  // XEP-0359
-  mox.DoNotEncrypt('origin-id', mox.stableIdXmlns),
-  mox.DoNotEncrypt('stanza-id', mox.stableIdXmlns),
-];
+// const omemoXmlns = 'eu.siacs.conversations.axolotl';
+// const omemoDevicesXmlns = '$omemoXmlns.devicelist';
+// const omemoBundlesXmlns = '$omemoXmlns.bundles';
+//
+// const _doNotEncryptList = [
+//   // XEP-0033
+//   mox.DoNotEncrypt('addresses', mox.extendedAddressingXmlns),
+//   // XEP-0060
+//   mox.DoNotEncrypt('pubsub', mox.pubsubXmlns),
+//   mox.DoNotEncrypt('pubsub', mox.pubsubOwnerXmlns),
+//   // XEP-0334
+//   mox.DoNotEncrypt('no-permanent-store', mox.messageProcessingHintsXmlns),
+//   mox.DoNotEncrypt('no-store', mox.messageProcessingHintsXmlns),
+//   mox.DoNotEncrypt('no-copy', mox.messageProcessingHintsXmlns),
+//   mox.DoNotEncrypt('store', mox.messageProcessingHintsXmlns),
+//   // XEP-0359
+//   mox.DoNotEncrypt('origin-id', mox.stableIdXmlns),
+//   mox.DoNotEncrypt('stanza-id', mox.stableIdXmlns),
+// ];
 
 /*class OmemoManager extends mox.XmppManagerBase {
   OmemoManager(

@@ -86,8 +86,8 @@ mixin MessageService on XmppBase {
             data.replacedRatchets.values.map((e) => e.length);
         final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
         final pseudoMessageData = {
-          'ratchetsAdded': newRatchets,
-          'ratchetsReplaced': replacedRatchets,
+          'ratchetsAdded': newRatchets.toList(),
+          'ratchetsReplaced': replacedRatchets.toList(),
         };
 
         if (newCount > 0) {
@@ -222,11 +222,18 @@ mixin MessageService on XmppBase {
       stanzaID: stanzaID,
       marker: mox.ChatMarker.received,
     );
+
     await _connection.sendChatMarker(
       to: to,
       stanzaID: stanzaID,
       marker: mox.ChatMarker.displayed,
     );
+
+    await _dbOp<XmppDatabase>((db) async {
+      db.markMessageDisplayed(stanzaID);
+      db.markMessageReceived(stanzaID);
+      db.markMessageAcked(stanzaID);
+    });
   }
 
   Future<void> saveDraft({
@@ -248,7 +255,7 @@ mixin MessageService on XmppBase {
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
     final to = event.from.toBare().toString();
     final result = await _connection.discoInfoQuery(to);
-    if (result == null || result.isType<mox.DiscoError>()) return;
+    if (result == null || result.isType<mox.StanzaError>()) return;
 
     final info = result.get<mox.DiscoInfo>();
     final markable =
@@ -259,17 +266,21 @@ mixin MessageService on XmppBase {
         false;
     final id = event.extensions.get<mox.StableIdData>()?.originId ?? event.id;
 
-    if (markable &&
-        info.features.contains(mox.chatMarkersXmlns) &&
-        id != null) {
+    if (id == null) return;
+
+    if (markable && info.features.contains(mox.chatMarkersXmlns)) {
       await _connection.sendChatMarker(
         to: to,
         stanzaID: id,
         marker: mox.ChatMarker.received,
       );
+
+      await _dbOp<XmppDatabase>((db) async {
+        db.markMessageReceived(id);
+        db.markMessageAcked(id);
+      });
     } else if (deliveryReceiptRequested &&
-        info.features.contains(mox.deliveryXmlns) &&
-        id != null) {
+        info.features.contains(mox.deliveryXmlns)) {
       await _connection.sendMessage(
         mox.MessageEvent(
           _myJid!,
@@ -280,6 +291,11 @@ mixin MessageService on XmppBase {
           ]),
         ),
       );
+
+      await _dbOp<XmppDatabase>((db) async {
+        db.markMessageReceived(id);
+        db.markMessageAcked(id);
+      });
     }
   }
 
@@ -480,13 +496,12 @@ class OmemoDeviceData extends mox.StanzaHandlerExtension {
 
 class MessageManager extends mox.MessageManager {
   @override
-  List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
+  List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [
         mox.StanzaHandler(
           stanzaTag: 'message',
           callback: _attachDevice,
-          priority: mox.MessageManager.messageHandlerPriority + 1,
         ),
-        ...super.getIncomingStanzaHandlers(),
+        ...super.getIncomingPreStanzaHandlers(),
       ];
 
   Future<mox.StanzaHandlerData> _attachDevice(

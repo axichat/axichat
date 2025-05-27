@@ -204,6 +204,7 @@ class XmppService extends XmppBase
 
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
+  final resourceStorageKey = XmppStateStore.registerKey('resource');
 
   @override
   XmppService get owner => this;
@@ -244,8 +245,12 @@ class XmppService extends XmppBase
         }
       }
     })
-    ..registerHandler<mox.ResourceBoundEvent>((event) {
+    ..registerHandler<mox.ResourceBoundEvent>((event) async {
       _log.info('Bound resource: ${event.resource}...');
+
+      await _dbOp<XmppStateStore>((ss) async {
+        await ss.write(key: resourceStorageKey, value: event.resource);
+      });
     })
     ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
       _log.info('Saving FAST token...');
@@ -388,11 +393,13 @@ class XmppService extends XmppBase
 
   Future<void> _initConnection({bool preHashed = false}) async {
     _log.info('Initializing connection object...');
-    // final resource = this.resource ?? '';
+    final resource = await _dbOpReturning<XmppStateStore, String?>((ss) {
+      return ss.read(key: resourceStorageKey) as String?;
+    });
     await _connection.registerFeatureNegotiators([
       mox.ResourceBindingNegotiator(),
       mox.StartTlsNegotiator(),
-      mox.StreamManagementNegotiator(),
+      mox.StreamManagementNegotiator()..resource = resource ?? '',
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
       mox.PresenceNegotiator(),

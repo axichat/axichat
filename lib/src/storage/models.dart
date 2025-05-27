@@ -60,6 +60,10 @@ enum MessageError {
   }
 
   String get asString => switch (this) {
+        serviceUnavailable =>
+          'Recipient\'s client or server does not support this action',
+        serverNotFound => 'Could not reach server',
+        serverTimeout => 'Server timeout',
         notEncryptedForDevice => 'Message not encrypted for this device',
         malformedKey => 'Message has malformed encrypted key',
         unknownSPK => 'Message has unknown Signed Prekey',
@@ -419,7 +423,7 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
   Future<String> toJson() async => jsonEncode(await toMap());
 }
 
-class SignedPreKey extends omemo.OmemoKeyPair {
+class SignedPreKey extends omemo.OmemoKeyPair implements AsyncJsonSerializable {
   SignedPreKey(
     super.pk,
     super.sk,
@@ -443,6 +447,7 @@ class SignedPreKey extends omemo.OmemoKeyPair {
     );
   }
 
+  @override
   Future<Map<String, dynamic>> toMap() async => <String, dynamic>{
         'publicKey': base64Encode(await pk.getBytes()),
         'secretKey': base64Encode(await sk.getBytes()),
@@ -451,6 +456,7 @@ class SignedPreKey extends omemo.OmemoKeyPair {
         'signature': signature,
       };
 
+  @override
   Future<String> toJson() async => jsonEncode(await toMap());
 }
 
@@ -533,6 +539,12 @@ extension KeyExchangeData on omemo.KeyExchangeData {
 typedef BTBVTrustState = omemo.BTBVTrustState;
 
 extension TrustDisplay on BTBVTrustState {
+  bool get isNone => this == BTBVTrustState.notTrusted;
+
+  bool get isBlind => this == BTBVTrustState.blindTrust;
+
+  bool get isVerified => this == BTBVTrustState.verified;
+
   IconData get toIcon => switch (this) {
         omemo.BTBVTrustState.notTrusted => LucideIcons.shieldX,
         omemo.BTBVTrustState.blindTrust => LucideIcons.shieldQuestion,
@@ -555,6 +567,7 @@ class OmemoDevice extends omemo.OmemoDevice {
     this.oldSignedPreKey,
     this.trust = BTBVTrustState.blindTrust,
     this.enabled = true,
+    this.trusted = false,
     this.onetimePreKeys = const {},
   }) : super(
           jid,
@@ -573,6 +586,7 @@ class OmemoDevice extends omemo.OmemoDevice {
   final SignedPreKey? oldSignedPreKey;
   final BTBVTrustState trust;
   final bool enabled;
+  final bool trusted;
   final Map<int, omemo.OmemoKeyPair> onetimePreKeys;
 
   factory OmemoDevice.fromDb({
@@ -583,6 +597,7 @@ class OmemoDevice extends omemo.OmemoDevice {
     required String? oldSignedPreKey,
     required BTBVTrustState trust,
     required bool enabled,
+    required bool trusted,
     required String onetimePreKeys,
   }) =>
       OmemoDevice(
@@ -595,6 +610,7 @@ class OmemoDevice extends omemo.OmemoDevice {
             : null,
         trust: trust,
         enabled: enabled,
+        trusted: trusted,
         onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
       );
 
@@ -720,6 +736,7 @@ class OmemoDevice extends omemo.OmemoDevice {
         oldSignedPreKey: Value.absentIfNull(await oldSignedPreKey?.toJson()),
         trust: Value(trust),
         enabled: Value(enabled),
+        trusted: Value(trusted),
         onetimePreKeys: await onetimePreKeysToJson(),
       );
 
@@ -760,6 +777,8 @@ class OmemoDevices extends Table {
       intEnum<BTBVTrustState>().withDefault(const Constant(2))();
 
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+
+  BoolColumn get trusted => boolean().withDefault(const Constant(false))();
 
   TextColumn get onetimePreKeys => text()();
 
