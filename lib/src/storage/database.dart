@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
@@ -312,6 +313,26 @@ class OmemoDevicesAccessor extends BaseAccessor<OmemoDevice, $OmemoDevicesTable>
       (delete(table)..where((table) => table.jid.equals(value))).go();
 }
 
+@DriftAccessor(tables: [OmemoTrusts])
+class OmemoTrustsAccessor extends BaseAccessor<OmemoTrust, $OmemoTrustsTable>
+    with _$OmemoTrustsAccessorMixin {
+  OmemoTrustsAccessor(super.attachedDatabase);
+
+  @override
+  $OmemoTrustsTable get table => omemoTrusts;
+
+  @override
+  Future<OmemoTrust?> selectOne(OmemoTrust value) =>
+      (select(table)..whereSamePrimaryKey(value)).getSingleOrNull();
+
+  Future<List<OmemoTrust>> selectByJid(String jid) =>
+      (select(table)..where((table) => table.jid.equals(jid))).get();
+
+  @override
+  Future<void> deleteOne(String value) =>
+      (delete(table)..where((table) => table.jid.equals(value))).go();
+}
+
 @DriftAccessor(tables: [OmemoDeviceLists])
 class OmemoDeviceListsAccessor
     extends BaseAccessor<OmemoDeviceList, $OmemoDeviceListsTable>
@@ -484,6 +505,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   Messages,
   Drafts,
   OmemoDevices,
+  OmemoTrusts,
   OmemoDeviceLists,
   OmemoRatchets,
   Reactions,
@@ -500,6 +522,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   MessagesAccessor,
   DraftsAccessor,
   OmemoDevicesAccessor,
+  OmemoTrustsAccessor,
   OmemoDeviceListsAccessor,
   OmemoRatchetsAccessor,
   FileMetadataAccessor,
@@ -575,14 +598,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> saveMessage(Message message) async {
     _log.info('Saving message: ${message.stanzaID} with body: '
         '${message.body?.substring(0, min(10, message.body!.length))}...');
+    final hasBody = message.body != null;
     await transaction(() async {
       await into(chats).insert(
         ChatsCompanion.insert(
           jid: message.chatJid,
           title: mox.JID.fromString(message.chatJid).local,
           type: ChatType.chat,
-          unreadCount: const Value(1),
-          lastMessage: Value(message.body),
+          unreadCount: Value(hasBody.toBinary()),
+          lastMessage: Value.absentIfNull(message.body),
           lastChangeTimestamp: DateTime.timestamp(),
           encryptionProtocol: Value(message.encryptionProtocol),
         ),
@@ -590,7 +614,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           (old, excluded) => ChatsCompanion.custom(
             unreadCount: const Constant(0).iif(
               old.open.isValue(true),
-              old.unreadCount + const Constant(1),
+              old.unreadCount + Constant(hasBody.toBinary()),
             ),
             lastMessage: excluded.lastMessage,
             lastChangeTimestamp: excluded.lastChangeTimestamp,
@@ -599,10 +623,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       );
       BTBVTrustState? trust;
       if (message.deviceID case final int deviceID) {
-        print(deviceID);
-        final device = await omemoDevicesAccessor.selectByID(deviceID);
-        print(device);
-        trust = device?.trust;
+        final trustData = await omemoTrustsAccessor
+            .selectOne(OmemoTrust(jid: message.senderJid, device: deviceID));
+        trust = trustData?.state;
       }
       await messagesAccessor.insertOne(message.copyWith(
         trust: trust,
@@ -736,41 +759,28 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> setOmemoTrust(omemo.BTBVTrustData trust) async {
     await transaction(() async {
       await messagesAccessor.updateTrust(trust.device, trust.state);
-      return omemoDevicesAccessor.insertOrUpdateOne(OmemoDevicesCompanion(
-        id: Value(trust.device),
-        jid: Value(trust.jid),
-        trust: Value(trust.state),
-        enabled: Value(trust.enabled),
-        trusted: Value(trust.trusted),
+      return omemoTrustsAccessor.insertOrUpdateOne(OmemoTrust(
+        device: trust.device,
+        jid: trust.jid,
+        trust: trust.state,
+        enabled: trust.enabled,
+        trusted: trust.trusted,
       ));
     });
   }
 
   @override
-  Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid) async {
-    final devices = await omemoDevicesAccessor.selectByJid(jid);
-    final hasVerified = devices.any((e) => e.trust.isVerified);
-    return devices
-        .map(
-          (e) => omemo.BTBVTrustData(
-            e.jid,
-            e.id,
-            e.trust,
-            e.enabled,
-            e.trust.isVerified || (e.trust.isBlind && !hasVerified),
-          ),
-        )
-        .toList();
-  }
+  Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid) =>
+      omemoTrustsAccessor.selectByJid(jid);
 
   @override
   Future<void> resetOmemoTrust(String jid) async {
     await transaction(() async {
-      final devices = await (delete(omemoDevices)
+      final trusts = await (delete(omemoTrusts)
             ..where((table) => table.jid.equals(jid)))
           .goAndReturn();
-      for (final device in devices) {
-        await messagesAccessor.updateTrust(device.id, device.trust);
+      for (final trust in trusts) {
+        await messagesAccessor.updateTrust(trust.device, trust.state);
       }
     });
   }

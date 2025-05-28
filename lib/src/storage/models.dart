@@ -565,9 +565,6 @@ class OmemoDevice extends omemo.OmemoDevice {
     required this.identityKey,
     required this.signedPreKey,
     this.oldSignedPreKey,
-    this.trust = BTBVTrustState.blindTrust,
-    this.enabled = true,
-    this.trusted = false,
     this.onetimePreKeys = const {},
   }) : super(
           jid,
@@ -584,9 +581,6 @@ class OmemoDevice extends omemo.OmemoDevice {
   final omemo.OmemoKeyPair identityKey;
   final SignedPreKey signedPreKey;
   final SignedPreKey? oldSignedPreKey;
-  final BTBVTrustState trust;
-  final bool enabled;
-  final bool trusted;
   final Map<int, omemo.OmemoKeyPair> onetimePreKeys;
 
   factory OmemoDevice.fromDb({
@@ -595,9 +589,6 @@ class OmemoDevice extends omemo.OmemoDevice {
     required String identityKey,
     required String signedPreKey,
     required String? oldSignedPreKey,
-    required BTBVTrustState trust,
-    required bool enabled,
-    required bool trusted,
     required String onetimePreKeys,
   }) =>
       OmemoDevice(
@@ -608,9 +599,6 @@ class OmemoDevice extends omemo.OmemoDevice {
         oldSignedPreKey: oldSignedPreKey != null
             ? SignedPreKey.fromJson(oldSignedPreKey)
             : null,
-        trust: trust,
-        enabled: enabled,
-        trusted: trusted,
         onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
       );
 
@@ -734,9 +722,6 @@ class OmemoDevice extends omemo.OmemoDevice {
         identityKey: await identityKey.toJson(),
         signedPreKey: await signedPreKey.toJson(),
         oldSignedPreKey: Value.absentIfNull(await oldSignedPreKey?.toJson()),
-        trust: Value(trust),
-        enabled: Value(enabled),
-        trusted: Value(trusted),
         onetimePreKeys: await onetimePreKeysToJson(),
       );
 
@@ -773,17 +758,76 @@ class OmemoDevices extends Table {
 
   TextColumn get oldSignedPreKey => text().nullable()();
 
+  TextColumn get onetimePreKeys => text()();
+
+  @override
+  Set<Column<Object>>? get primaryKey => {jid, id};
+}
+
+class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
+  const OmemoTrust({
+    required String jid,
+    required int device,
+    BTBVTrustState trust = BTBVTrustState.blindTrust,
+    bool enabled = true,
+    bool trusted = false,
+  }) : super(
+          jid,
+          device,
+          trust,
+          enabled,
+          trusted,
+        );
+
+  factory OmemoTrust.fromDb({
+    required String jid,
+    required int device,
+    required BTBVTrustState trust,
+    required bool enabled,
+    required bool trusted,
+  }) =>
+      OmemoTrust(
+        jid: jid,
+        device: device,
+        trust: trust,
+        enabled: enabled,
+        trusted: trusted,
+      );
+
+  factory OmemoTrust.fromMox(omemo.BTBVTrustData data) => OmemoTrust(
+        device: data.device,
+        jid: data.jid,
+        trust: data.state,
+        enabled: data.enabled,
+        trusted: data.trusted,
+      );
+
+  @override
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
+      OmemoTrustsCompanion(
+        jid: Value(jid),
+        device: Value(device),
+        trust: Value(state),
+        enabled: Value(enabled),
+        trusted: Value(trusted),
+      ).toColumns(nullToAbsent);
+}
+
+@UseRowClass(OmemoTrust, constructor: 'fromDb')
+class OmemoTrusts extends Table {
+  TextColumn get jid => text()();
+
+  IntColumn get device => integer()();
+
   IntColumn get trust =>
-      intEnum<BTBVTrustState>().withDefault(const Constant(2))();
+      intEnum<BTBVTrustState>().withDefault(const Constant(1))();
 
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
 
   BoolColumn get trusted => boolean().withDefault(const Constant(false))();
 
-  TextColumn get onetimePreKeys => text()();
-
   @override
-  Set<Column<Object>>? get primaryKey => {jid};
+  Set<Column<Object>>? get primaryKey => {jid, device};
 }
 
 class OmemoDeviceLists extends Table {
