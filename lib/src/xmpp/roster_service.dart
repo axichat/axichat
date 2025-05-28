@@ -29,7 +29,8 @@ mixin RosterService on XmppBase {
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
-    ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+    ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+      if (event.resumed) return;
       _log.info('Fetching roster...');
       await requestRoster();
     })
