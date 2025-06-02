@@ -45,6 +45,9 @@ mixin MessageService on XmppBase {
   var _messageStream = StreamController<Message>.broadcast();
 
   @override
+  bool get needsReset => super.needsReset || _messageStream.hasListener;
+
+  @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
     ..registerHandler<mox.MessageEvent>((event) async {
       if (await _handleError(event)) return;
@@ -297,6 +300,14 @@ mixin MessageService on XmppBase {
         db.markMessageAcked(id);
       });
     }
+  }
+
+  @override
+  Future<void> _reset() async {
+    await super._reset();
+
+    _messageStream.close();
+    _messageStream = StreamController<Message>.broadcast();
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {

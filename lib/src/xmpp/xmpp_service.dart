@@ -125,6 +125,8 @@ abstract interface class XmppBase {
 
   mox.JID? get _myJid;
 
+  bool get needsReset => false;
+
   EventManager<mox.XmppEvent> get _eventManager =>
       EventManager<mox.XmppEvent>();
 
@@ -151,6 +153,8 @@ abstract interface class XmppBase {
     FutureOr<void> Function(T) operation, {
     bool awaitDatabase = false,
   });
+
+  Future<void> _reset() async {}
 }
 
 class XmppService extends XmppBase
@@ -231,19 +235,18 @@ class XmppService extends XmppBase
       });
     })
     ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-      // _connection.setResource(resource!, triggerEvent: false);
+      if (_connection.carbonsEnabled != true) {
+        _log.info('Enabling carbons...');
+        if (!await _connection.enableCarbons()) {
+          _log.warning('Failed to enable carbons.');
+        }
+      }
       await _omemoManager.value?.commitDevice(await _device);
       if (await _ensureOmemoDevicePublished() case final result?) {
         _log.severe('Failed to publish OMEMO device. $result');
       }
       if (event.resumed) return;
       await _omemoManager.value?.onNewConnection();
-      if (!(_connection.carbonsEnabled ?? false)) {
-        _log.info('Enabling carbons...');
-        if (!await _connection.enableCarbons()) {
-          _log.warning('Failed to enable carbons.');
-        }
-      }
     })
     ..registerHandler<mox.ResourceBoundEvent>((event) async {
       _log.info('Bound resource: ${event.resource}...');
@@ -258,6 +261,16 @@ class XmppService extends XmppBase
         await ss.write(key: fastTokenStorageKey, value: event.token.token);
         _log.info('Saved FAST token: ${event.token.token}.');
       });
+    })
+    ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
+      if (event.error is mox.StreamUndefinedConditionError) {
+        await _connection
+            .getManager<XmppStreamManagementManager>()
+            ?.resetState();
+        if (await _connection.reconnectionPolicy.canTriggerFailure()) {
+          await _connection.reconnectionPolicy.onFailure();
+        }
+      }
     });
 
   @override
@@ -298,7 +311,9 @@ class XmppService extends XmppBase
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
 
+  @override
   bool get needsReset =>
+      super.needsReset ||
       _myJid != null ||
       _eventSubscription != null ||
       _messageSubscription != null ||
@@ -397,16 +412,15 @@ class XmppService extends XmppBase
       return ss.read(key: resourceStorageKey) as String?;
     });
     await _connection.registerFeatureNegotiators([
-      mox.ResourceBindingNegotiator(),
       mox.StartTlsNegotiator(),
-      mox.StreamManagementNegotiator()..resource = resource ?? '',
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
       mox.PresenceNegotiator(),
       SaslScramNegotiator(preHashed: preHashed),
-      // mox.SaslPlainNegotiator(),
+      mox.CarbonsNegotiator(),
+      mox.StreamManagementNegotiator()..resource = resource ?? '',
       mox.Sasl2Negotiator(),
-      mox.Bind2Negotiator(),
+      mox.Bind2Negotiator()..tag = 'axichat',
       mox.FASTSaslNegotiator(),
     ]);
     await _connection.registerManagers(featureManagers);
@@ -484,10 +498,13 @@ class XmppService extends XmppBase
     }
   }
 
+  @override
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
-    _log.info('Resetting${e != null ? ' due to $e' : null}...');
+    await super._reset();
+
+    _log.info('Resetting${e != null ? ' due to $e' : ''}...');
 
     _eventManager.unregisterAllHandlers();
 
@@ -496,12 +513,10 @@ class XmppService extends XmppBase
 
     await _messageSubscription?.cancel();
     _messageSubscription = null;
-    _messageStream.close();
-    _messageStream = StreamController<Message>.broadcast();
 
-    await _connection.setShouldReconnect(false);
     if (connected) {
       try {
+        await _connection.setShouldReconnect(false);
         await _connection.disconnect();
         _log.info('Gracefully disconnected.');
       } catch (e, s) {
@@ -512,7 +527,6 @@ class XmppService extends XmppBase
       await _connection.reset();
     }
     _connection = await _buildConnection();
-    _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
 
     if (!_stateStore.isCompleted) {
       _log.warning('Cancelling state store initialization...');
