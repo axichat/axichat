@@ -502,8 +502,6 @@ class XmppService extends XmppBase
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
-    await super._reset();
-
     _log.info('Resetting${e != null ? ' due to $e' : ''}...');
 
     _eventManager.unregisterAllHandlers();
@@ -549,6 +547,7 @@ class XmppService extends XmppBase
     _myJid = null;
     _synchronousConnection = Completer<void>();
 
+    await super._reset();
     assert(!needsReset);
   }
 

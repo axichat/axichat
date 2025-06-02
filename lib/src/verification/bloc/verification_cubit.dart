@@ -12,13 +12,14 @@ class VerificationCubit extends Cubit<VerificationState> {
     required OmemoService omemoService,
   })  : _omemoService = omemoService,
         super(const VerificationState(loading: true)) {
-    _loadFingerprints();
+    loadFingerprints();
   }
 
   final String jid;
   final OmemoService _omemoService;
 
-  Future<void> _loadFingerprints() async {
+  Future<void> loadFingerprints() async {
+    emit(state.copyWith(loading: true));
     final fingerprints = await _omemoService.getFingerprints(jid: jid);
     emit(state.copyWith(fingerprints: fingerprints, loading: false));
   }
@@ -29,6 +30,6 @@ class VerificationCubit extends Cubit<VerificationState> {
   }) async {
     emit(state.copyWith(loading: true));
     await _omemoService.setDeviceTrust(jid: jid, device: device, trust: trust);
-    await _loadFingerprints();
+    await loadFingerprints();
   }
 }

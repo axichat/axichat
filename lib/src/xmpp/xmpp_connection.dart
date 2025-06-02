@@ -7,11 +7,11 @@ class XmppConnection extends mox.XmppConnection {
     XmppClientNegotiator? negotiationsHandler,
     this.socketWrapper,
   }) : super(
-    reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
-    connectivityManager ?? XmppConnectivityManager.pingDns(),
-    negotiationsHandler ?? XmppClientNegotiator(),
-    socketWrapper ?? XmppSocketWrapper(),
-  );
+          reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
+          connectivityManager ?? XmppConnectivityManager.pingDns(),
+          negotiationsHandler ?? XmppClientNegotiator(),
+          socketWrapper ?? XmppSocketWrapper(),
+        );
 
   final XmppSocketWrapper? socketWrapper;
 
@@ -87,7 +87,7 @@ class XmppConnection extends mox.XmppConnection {
       getManager<XmppStreamManagementManager>()!.loadState();
 
   Future<moxlib.Result<mox.StanzaError, mox.DiscoInfo>>? discoInfoQuery(
-      String jid) =>
+          String jid) =>
       getManager<mox.DiscoManager>()?.discoInfoQuery(mox.JID.fromString(jid));
 
   bool? get carbonsEnabled => getManager<mox.CarbonsManager>()?.isEnabled;
@@ -149,13 +149,11 @@ class XmppConnection extends mox.XmppConnection {
   }
 
   Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>
-  requestRoster() async => await getRosterManager()?.requestRoster();
+      requestRoster() async => await getRosterManager()?.requestRoster();
 
   Future<bool> addToRoster(String jid, {String? title}) async {
     if (getRosterManager() case final rm?) {
-      return await rm.addToRoster(jid, title ?? mox.JID
-          .fromString(jid)
-          .local);
+      return await rm.addToRoster(jid, title ?? mox.JID.fromString(jid).local);
     }
 
     return false;
@@ -238,10 +236,10 @@ class XmppConnection extends mox.XmppConnection {
   }
 
   void setFastToken(String? value) =>
-      getNegotiator<mox.FASTSaslNegotiator>()!.fastToken = value;
+      getNegotiator<mox.FASTSaslNegotiator>()?.fastToken = value;
 
   void setUserAgent(mox.UserAgent value) =>
-      getNegotiator<mox.Sasl2Negotiator>()!.userAgent = value;
+      getNegotiator<mox.Sasl2Negotiator>()?.userAgent = value;
 
   Future<void> reset() async {
     if (await FlutterForegroundTask.isRunningService) {
@@ -342,19 +340,19 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   // fdns1.dismail.de, fdns2.dismail.de, 1.1.1.1
   XmppConnectivityManager.pingDns()
       : this._([
-    IOEndpoint(
-      InternetAddress('116.203.32.217', type: InternetAddressType.IPv4),
-      853,
-    ),
-    IOEndpoint(
-      InternetAddress('159.69.114.157', type: InternetAddressType.IPv4),
-      853,
-    ),
-    IOEndpoint(
-      InternetAddress('1.1.1.1', type: InternetAddressType.IPv4),
-      853,
-    ),
-  ]);
+          IOEndpoint(
+            InternetAddress('116.203.32.217', type: InternetAddressType.IPv4),
+            853,
+          ),
+          IOEndpoint(
+            InternetAddress('159.69.114.157', type: InternetAddressType.IPv4),
+            853,
+          ),
+          IOEndpoint(
+            InternetAddress('1.1.1.1', type: InternetAddressType.IPv4),
+            853,
+          ),
+        ]);
 
   static const timeoutDuration = Duration(seconds: 5);
 

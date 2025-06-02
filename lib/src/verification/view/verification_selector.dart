@@ -13,10 +13,14 @@ class VerificationSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShadCard(
+      border:
+          Border.fromBorderSide(BorderSide(color: fingerprint.trust.toColor)),
       content: Column(
         spacing: 8.0,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Text('ID: ${fingerprint.deviceID.toString()}'),
+          const SizedBox.square(dimension: 8),
           DisplayFingerprint(fingerprint: fingerprint.fingerprint),
           const SizedBox.square(dimension: 8),
           Row(
@@ -24,7 +28,10 @@ class VerificationSelector extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             spacing: 8.0,
             children: [
-              Icon(fingerprint.trust.toIcon),
+              Icon(
+                fingerprint.trust.toIcon,
+                color: fingerprint.trust.toColor,
+              ),
               ShadSelect<BTBVTrustState>(
                 anchor: const ShadAnchorAuto(preferBelow: false),
                 initialValue: fingerprint.trust,
@@ -34,12 +41,12 @@ class VerificationSelector extends StatelessWidget {
                 options: BTBVTrustState.values
                     .map((trust) => ShadOption<BTBVTrustState>(
                           value: trust,
-                          child: Text(trust.name),
+                          child: Text(trust.asString),
                         ))
                     .toList(),
                 selectedOptionBuilder:
                     (BuildContext context, BTBVTrustState value) =>
-                        Text(value.name),
+                        Text(value.asString),
               ),
             ],
           ),
