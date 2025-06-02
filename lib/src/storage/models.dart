@@ -124,10 +124,7 @@ enum EncryptionProtocol {
   bool get isMls => this == mls;
 }
 
-enum PseudoMessageType {
-  newDevice,
-  changedDevice,
-}
+enum PseudoMessageType { newDevice, changedDevice }
 
 @Freezed(toJson: false, fromJson: false)
 class Message with _$Message implements Insertable<Message> {
@@ -205,9 +202,9 @@ class Message with _$Message implements Insertable<Message> {
       chatJid: chatJid,
       body: event.text,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-      noStore: get<mox.MessageProcessingHintData>()
-              ?.hints
-              .contains(mox.MessageProcessingHint.noStore) ??
+      noStore: get<mox.MessageProcessingHintData>()?.hints.contains(
+                mox.MessageProcessingHint.noStore,
+              ) ??
           false,
       quoting: get<mox.ReplyData>()?.id,
       originID: get<mox.StableIdData>()?.originId,
@@ -408,11 +405,7 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
   }
 
   static omemo.OmemoKeyPair fromMox(omemo.OmemoKeyPair keyPair) =>
-      omemo.OmemoKeyPair(
-        keyPair.pk,
-        keyPair.sk,
-        keyPair.type,
-      );
+      omemo.OmemoKeyPair(keyPair.pk, keyPair.sk, keyPair.type);
 
   Future<Map<String, dynamic>> toMap() async => <String, String>{
         'publicKey': base64Encode(await pk.getBytes()),
@@ -424,13 +417,7 @@ extension OmemoKeyPair on omemo.OmemoKeyPair {
 }
 
 class SignedPreKey extends omemo.OmemoKeyPair implements AsyncJsonSerializable {
-  SignedPreKey(
-    super.pk,
-    super.sk,
-    super.type, {
-    this.id,
-    this.signature,
-  });
+  SignedPreKey(super.pk, super.sk, super.type, {this.id, this.signature});
 
   final int? id;
   final List<int>? signature;
@@ -544,6 +531,12 @@ extension TrustDisplay on BTBVTrustState {
   bool get isBlind => this == BTBVTrustState.blindTrust;
 
   bool get isVerified => this == BTBVTrustState.verified;
+
+  String get asString => switch (this) {
+        omemo.BTBVTrustState.notTrusted => 'No trust',
+        omemo.BTBVTrustState.blindTrust => 'Blind trust',
+        omemo.BTBVTrustState.verified => 'Verified',
+      };
 
   IconData get toIcon => switch (this) {
         omemo.BTBVTrustState.notTrusted => LucideIcons.shieldX,
@@ -701,12 +694,10 @@ class OmemoDevice extends omemo.OmemoDevice {
   //       spkId, spkSignature, oldSpk, oldSpkId, opks));
   // }
   //
-  Future<String> onetimePreKeysToJson() async => jsonEncode(
-        <String, String>{
-          for (final entry in onetimePreKeys.entries)
-            entry.key.toString(): await entry.value.toJson(),
-        },
-      );
+  Future<String> onetimePreKeysToJson() async => jsonEncode(<String, String>{
+        for (final entry in onetimePreKeys.entries)
+          entry.key.toString(): await entry.value.toJson(),
+      });
 
   static Map<int, omemo.OmemoKeyPair> onetimePreKeysFromJson(String json) {
     final data = Map<String, String>.from(jsonDecode(json));
@@ -771,13 +762,10 @@ class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
     BTBVTrustState trust = BTBVTrustState.blindTrust,
     bool enabled = true,
     bool trusted = false,
-  }) : super(
-          jid,
-          device,
-          trust,
-          enabled,
-          trusted,
-        );
+    this.label,
+  }) : super(jid, device, trust, enabled, trusted);
+
+  final String? label;
 
   factory OmemoTrust.fromDb({
     required String jid,
@@ -785,6 +773,7 @@ class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
     required BTBVTrustState trust,
     required bool enabled,
     required bool trusted,
+    required String? label,
   }) =>
       OmemoTrust(
         jid: jid,
@@ -792,6 +781,7 @@ class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
         trust: trust,
         enabled: enabled,
         trusted: trusted,
+        label: label,
       );
 
   factory OmemoTrust.fromMox(omemo.BTBVTrustData data) => OmemoTrust(
@@ -810,6 +800,7 @@ class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
         trust: Value(state),
         enabled: Value(enabled),
         trusted: Value(trusted),
+        label: Value.absentIfNull(label),
       ).toColumns(nullToAbsent);
 }
 
@@ -825,6 +816,8 @@ class OmemoTrusts extends Table {
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
 
   BoolColumn get trusted => boolean().withDefault(const Constant(false))();
+
+  TextColumn get label => text().nullable()();
 
   @override
   Set<Column<Object>>? get primaryKey => {jid, device};
@@ -980,12 +973,10 @@ class OmemoRatchet extends omemo.OmemoDoubleRatchet
     );
   }
 
-  Future<String> mkSkippedToJson() async => jsonEncode(
-        <String, List<int>>{
-          for (final entry in mkSkipped.entries)
-            await entry.key.toJson(): entry.value,
-        },
-      );
+  Future<String> mkSkippedToJson() async => jsonEncode(<String, List<int>>{
+        for (final entry in mkSkipped.entries)
+          await entry.key.toJson(): entry.value,
+      });
 
   static Map<omemo.SkippedKey, List<int>> mkSkippedFromJson(String json) {
     final data = Map<String, List<int>>.from(jsonDecode(json));
@@ -1277,10 +1268,7 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
         subscription: Subscription.both,
       );
 
-  factory RosterItem.fromMox(
-    mox.XmppRosterItem item, {
-    bool isGhost = false,
-  }) {
+  factory RosterItem.fromMox(mox.XmppRosterItem item, {bool isGhost = false}) {
     final subscription = Subscription.fromString(item.subscription);
     return RosterItem(
       jid: item.jid,
@@ -1356,10 +1344,7 @@ class Roster extends Table {
 
 @Freezed(toJson: false, fromJson: false)
 class Invite with _$Invite implements Insertable<Invite> {
-  const factory Invite({
-    required String jid,
-    required String title,
-  }) = _Invite;
+  const factory Invite({required String jid, required String title}) = _Invite;
 
   const Invite._();
 
@@ -1381,11 +1366,7 @@ class Invites extends Table {
   Set<Column<Object>>? get primaryKey => {jid};
 }
 
-enum ChatType {
-  chat,
-  groupChat,
-  note,
-}
+enum ChatType { chat, groupChat, note }
 
 @Freezed(toJson: false, fromJson: false)
 class Chat with _$Chat implements Insertable<Chat> {
@@ -1398,6 +1379,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     String? avatarPath,
     String? avatarHash,
     String? lastMessage,
+    String? alert,
     @Default(0) int unreadCount,
     @Default(false) bool open,
     @Default(false) bool muted,
@@ -1419,6 +1401,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String? avatarPath,
     required String? avatarHash,
     required String? lastMessage,
+    required String? alert,
     required DateTime lastChangeTimestamp,
     required int unreadCount,
     required bool open,
@@ -1452,6 +1435,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         avatarPath: Value.absentIfNull(avatarPath),
         avatarHash: Value.absentIfNull(avatarHash),
         lastMessage: Value.absentIfNull(lastMessage),
+        alert: Value(alert),
         lastChangeTimestamp: Value(lastChangeTimestamp),
         unreadCount: Value(unreadCount),
         open: Value(open),
@@ -1482,6 +1466,8 @@ class Chats extends Table {
   TextColumn get avatarHash => text().nullable()();
 
   TextColumn get lastMessage => text().nullable()();
+
+  TextColumn get alert => text().nullable()();
 
   DateTimeColumn get lastChangeTimestamp => dateTime()();
 
@@ -1604,8 +1590,9 @@ class JsonConverter<V> extends TypeConverter<Map<String, V>, String> {
 class HashesConverter extends TypeConverter<Map<HashFunction, String>, String> {
   @override
   Map<HashFunction, String> fromSql(String fromDb) =>
-      (jsonDecode(fromDb) as Map<String, dynamic>)
-          .map((k, v) => MapEntry(HashFunction.fromName(k), v as String));
+      (jsonDecode(fromDb) as Map<String, dynamic>).map(
+        (k, v) => MapEntry(HashFunction.fromName(k), v as String),
+      );
 
   @override
   String toSql(Map<HashFunction, String> value) =>

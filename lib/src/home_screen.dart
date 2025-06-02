@@ -22,6 +22,7 @@ import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:axichat/src/roster/view/roster_invites_list.dart';
 import 'package:axichat/src/roster/view/roster_list.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -137,20 +138,33 @@ class HomeScreen extends StatelessWidget {
                               secondaryChild: openJid == null ||
                                       context.read<XmppService?>() == null
                                   ? const GuestChat()
-                                  : BlocProvider(
-                                      key: Key(openJid),
-                                      create: (context) => ChatBloc(
-                                        jid: openJid,
-                                        messageService:
-                                            context.read<XmppService>(),
-                                        chatsService:
-                                            context.read<XmppService>(),
-                                        notificationService:
-                                            context.read<NotificationService>(),
-                                        omemoService: isOmemo
-                                            ? context.read<XmppService>()
-                                            : null,
-                                      ),
+                                  : MultiBlocProvider(
+                                      providers: [
+                                        BlocProvider(
+                                          key: Key(openJid),
+                                          create: (context) => ChatBloc(
+                                            jid: openJid,
+                                            messageService:
+                                                context.read<XmppService>(),
+                                            chatsService:
+                                                context.read<XmppService>(),
+                                            notificationService: context
+                                                .read<NotificationService>(),
+                                            omemoService: isOmemo
+                                                ? context.read<XmppService>()
+                                                : null,
+                                          ),
+                                        ),
+                                        if (isOmemo)
+                                          BlocProvider(
+                                            create: (context) =>
+                                                VerificationCubit(
+                                              jid: openJid,
+                                              omemoService:
+                                                  context.read<XmppService>(),
+                                            ),
+                                          ),
+                                      ],
                                       child: const Chat(),
                                     ),
                             ),
