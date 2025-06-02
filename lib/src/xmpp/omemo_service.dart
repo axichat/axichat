@@ -1,7 +1,10 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin OmemoService on MessageService {
+mixin OmemoService on XmppBase {
   var _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
+
+  @override
+  bool get needsReset => super.needsReset || _omemoManager.isCompleted;
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
@@ -218,6 +221,12 @@ mixin OmemoService on MessageService {
   Future<void> recreateSessions({required String jid}) async {
     await _omemoManager.value?.removeAllRatchets(jid);
     await _connection.getManager<mox.OmemoManager>()!.sendOmemoHeartbeat(jid);
+  }
+
+  @override
+  Future<void> _reset() async {
+    await super._reset();
+    _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
   }
 }
 

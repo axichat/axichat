@@ -152,6 +152,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     } on XmppAuthenticationException catch (_) {
       emit(const AuthenticationFailure('Incorrect username or password'));
+      await _xmppService.disconnect();
       return;
     } on XmppAlreadyConnectedException catch (_) {
       await _xmppService.disconnect();
@@ -160,6 +161,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on Exception catch (e) {
       _log.severe(e);
       emit(const AuthenticationFailure('Error. Please try again later.'));
+      await _xmppService.disconnect();
       return;
     }
 

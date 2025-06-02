@@ -146,7 +146,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _stopTyping();
     emit(state.copyWith(typing: false));
     try {
-      await _messageService.sendMessage(jid: jid!, text: event.text);
+      await _messageService.sendMessage(
+        jid: jid!,
+        text: event.text,
+        encryptionProtocol: state.chat!.encryptionProtocol,
+      );
     } on XmppMessageException catch (_) {
       // Don't panic. User will see a visual difference in the message bubble.
     }
