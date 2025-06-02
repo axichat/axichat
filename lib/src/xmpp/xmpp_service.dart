@@ -698,7 +698,8 @@ class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
 }
 
 class XmppStreamManagementManager extends mox.StreamManagementManager {
-  XmppStreamManagementManager({required this.owner}) : super();
+  XmppStreamManagementManager({required this.owner})
+      : super(ackTimeout: const Duration(minutes: 2));
 
   final XmppService owner;
 
