@@ -145,7 +145,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       password = await _xmppService.connect(
         jid: jid,
-        password: password,
+        password: preHashed ? savedPassword : password,
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
         preHashed: preHashed,
