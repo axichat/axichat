@@ -83,9 +83,9 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> saveOmemoDeviceList(OmemoDeviceList data);
 
-  Future<void> setOmemoTrust(omemo.BTBVTrustData trust);
+  Future<void> setOmemoTrust(OmemoTrust trust);
 
-  Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid);
+  Future<List<OmemoTrust>> getOmemoTrust(String jid);
 
   Future<void> resetOmemoTrust(String jid);
 
@@ -756,7 +756,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       omemoDeviceListsAccessor.insertOrUpdateOne(data);
 
   @override
-  Future<void> setOmemoTrust(omemo.BTBVTrustData trust) async {
+  Future<void> setOmemoTrust(OmemoTrust trust) async {
     await transaction(() async {
       await messagesAccessor.updateTrust(trust.device, trust.state);
       return omemoTrustsAccessor.insertOrUpdateOne(OmemoTrust(
@@ -770,7 +770,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  Future<List<omemo.BTBVTrustData>> getOmemoTrust(String jid) =>
+  Future<List<OmemoTrust>> getOmemoTrust(String jid) =>
       omemoTrustsAccessor.selectByJid(jid);
 
   @override

@@ -49,7 +49,7 @@ mixin OmemoService on XmppBase {
                 await compute(omemo.OmemoDevice.generateNewDevice, myJid!)),
         omemo.BlindTrustBeforeVerificationTrustManager(
           commit: (trust) => _dbOp<XmppDatabase>(
-            (db) => db.setOmemoTrust(trust),
+            (db) => db.setOmemoTrust(OmemoTrust.fromMox(trust)),
           ),
           loadData: (jid) async =>
               await _dbOpReturning<XmppDatabase, List<omemo.BTBVTrustData>>(
@@ -168,32 +168,25 @@ mixin OmemoService on XmppBase {
       (await _device).getFingerprint();
 
   Future<List<OmemoFingerprint>> getFingerprints({required String jid}) async {
-    var trustMap = <int, omemo.BTBVTrustData>{};
-    await _omemoManager.value?.withTrustManager(
-      jid,
-      (e) async {
-        trustMap = await (e as omemo.BlindTrustBeforeVerificationTrustManager)
-            .getDevicesTrust(jid);
-      },
-    );
+    final trusts =
+        await _dbOpReturning<XmppDatabase, List<OmemoTrust>>((db) async {
+      return await db.getOmemoTrust(jid);
+    });
 
     final fingerprints =
         await _omemoManager.value?.getFingerprintsForJid(jid) ?? [];
-    return fingerprints.map((e) {
-      final trust = trustMap[e.deviceId] ??
-          omemo.BTBVTrustData(
-            jid,
-            e.deviceId,
-            BTBVTrustState.blindTrust,
-            false,
-            false,
-          );
+    return fingerprints.map((f) {
+      final trust = trusts.singleWhere(
+        (t) => t.device == f.deviceId,
+        orElse: () => OmemoTrust(jid: jid, device: f.deviceId),
+      );
       return OmemoFingerprint(
-        fingerprint: e.fingerprint,
-        deviceID: e.deviceId,
+        fingerprint: f.fingerprint,
+        deviceID: f.deviceId,
         trust: trust.state,
         trusted: trust.trusted,
         enabled: trust.enabled,
+        label: trust.label,
       );
     }).toList();
   }

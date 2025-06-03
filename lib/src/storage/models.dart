@@ -559,6 +559,7 @@ class OmemoDevice extends omemo.OmemoDevice {
     required this.signedPreKey,
     this.oldSignedPreKey,
     this.onetimePreKeys = const {},
+    this.label,
   }) : super(
           jid,
           id,
@@ -575,6 +576,7 @@ class OmemoDevice extends omemo.OmemoDevice {
   final SignedPreKey signedPreKey;
   final SignedPreKey? oldSignedPreKey;
   final Map<int, omemo.OmemoKeyPair> onetimePreKeys;
+  final String? label;
 
   factory OmemoDevice.fromDb({
     required String jid,
@@ -583,6 +585,7 @@ class OmemoDevice extends omemo.OmemoDevice {
     required String signedPreKey,
     required String? oldSignedPreKey,
     required String onetimePreKeys,
+    required String? label,
   }) =>
       OmemoDevice(
         jid: jid,
@@ -593,6 +596,7 @@ class OmemoDevice extends omemo.OmemoDevice {
             ? SignedPreKey.fromJson(oldSignedPreKey)
             : null,
         onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
+        label: label,
       );
 
   factory OmemoDevice.fromMox(omemo.OmemoDevice device) => OmemoDevice(
@@ -714,6 +718,7 @@ class OmemoDevice extends omemo.OmemoDevice {
         signedPreKey: await signedPreKey.toJson(),
         oldSignedPreKey: Value.absentIfNull(await oldSignedPreKey?.toJson()),
         onetimePreKeys: await onetimePreKeysToJson(),
+        label: Value(label),
       );
 
 // @override
@@ -750,6 +755,8 @@ class OmemoDevices extends Table {
   TextColumn get oldSignedPreKey => text().nullable()();
 
   TextColumn get onetimePreKeys => text()();
+
+  TextColumn get label => text().nullable()();
 
   @override
   Set<Column<Object>>? get primaryKey => {jid, id};
@@ -840,6 +847,7 @@ class OmemoFingerprint with _$OmemoFingerprint {
     required BTBVTrustState trust,
     @Default(false) bool trusted,
     @Default(false) bool enabled,
+    String? label,
   }) = _OmemoFingerprint;
 }
 
