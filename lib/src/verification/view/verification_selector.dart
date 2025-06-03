@@ -13,13 +13,29 @@ class VerificationSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShadCard(
+      columnMainAxisSize: MainAxisSize.min,
+      rowMainAxisSize: MainAxisSize.min,
       border:
           Border.fromBorderSide(BorderSide(color: fingerprint.trust.toColor)),
-      content: Column(
+      child: Column(
         spacing: 8.0,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text('ID: ${fingerprint.deviceID.toString()}'),
+          const SizedBox.square(dimension: 8),
+          SizedBox(
+            width: 200.0,
+            child: AxiTextFormField(
+              initialValue: fingerprint.label,
+              placeholder: const Text('Add label'),
+              onSubmitted: (value) =>
+                  context.read<VerificationCubit?>()?.labelFingerprint(
+                        jid: fingerprint.jid,
+                        device: fingerprint.deviceID,
+                        label: value,
+                      ),
+            ),
+          ),
           const SizedBox.square(dimension: 8),
           DisplayFingerprint(fingerprint: fingerprint.fingerprint),
           const SizedBox.square(dimension: 8),
@@ -33,11 +49,13 @@ class VerificationSelector extends StatelessWidget {
                 color: fingerprint.trust.toColor,
               ),
               ShadSelect<BTBVTrustState>(
-                anchor: const ShadAnchorAuto(preferBelow: false),
                 initialValue: fingerprint.trust,
-                onChanged: (trust) => context
-                    .read<VerificationCubit>()
-                    .setDeviceTrust(device: fingerprint.deviceID, trust: trust),
+                onChanged: (trust) =>
+                    context.read<VerificationCubit?>()?.setDeviceTrust(
+                          jid: fingerprint.jid,
+                          device: fingerprint.deviceID,
+                          trust: trust!,
+                        ),
                 options: BTBVTrustState.values
                     .map((trust) => ShadOption<BTBVTrustState>(
                           value: trust,

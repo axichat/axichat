@@ -111,6 +111,21 @@ mixin ChatsService on XmppBase {
     });
   }
 
+  Future<void> setChatAlert({
+    required String jid,
+    required String alert,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.updateChatAlert(chatJid: jid, alert: alert);
+    });
+  }
+
+  Future<void> clearChatAlert({required String jid}) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.updateChatAlert(chatJid: jid, alert: null);
+    });
+  }
+
   Future<void> deleteChat({required String jid}) async {
     await _dbOp<XmppDatabase>((db) async {
       await db.removeChat(jid);

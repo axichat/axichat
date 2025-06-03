@@ -79,7 +79,7 @@ class RosterList extends StatelessWidget {
                   options: [
                     (toggle) => ShadButton.ghost(
                           width: double.infinity,
-                          text: const Text('Draft'),
+                          child: const Text('Draft'),
                           onPressed: () => context.push(
                             const ComposeRoute().location,
                             extra: {

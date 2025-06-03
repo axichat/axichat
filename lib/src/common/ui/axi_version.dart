@@ -20,7 +20,7 @@ class AxiVersion extends StatelessWidget {
             context: context,
             builder: (context) => ShadDialog(
               title: const Text('Welcome to Axichat'),
-              content: Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox.square(
@@ -61,7 +61,6 @@ class AxiVersion extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
                 child: ShadBadge(
                   padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  text: const Text(versionTag),
                   backgroundColor:
                       Color.lerp(Colors.deepOrangeAccent, Colors.white, 0.77),
                   hoverBackgroundColor:
@@ -71,6 +70,7 @@ class AxiVersion extends StatelessWidget {
                     borderRadius: BorderRadius.circular(7.0),
                     side: const BorderSide(color: Colors.deepOrange),
                   ),
+                  child: const Text(versionTag),
                 ),
               ),
             ],

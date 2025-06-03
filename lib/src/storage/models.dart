@@ -842,6 +842,7 @@ class OmemoDeviceLists extends Table {
 @Freezed(toJson: false, fromJson: false)
 class OmemoFingerprint with _$OmemoFingerprint {
   const factory OmemoFingerprint({
+    required String jid,
     required String fingerprint,
     required int deviceID,
     required BTBVTrustState trust,

@@ -31,13 +31,6 @@ final class ChatMessageFocused extends ChatEvent {
   List<Object?> get props => [messageID];
 }
 
-final class ChatMessageUnfocused extends ChatEvent {
-  const ChatMessageUnfocused();
-
-  @override
-  List<Object?> get props => [];
-}
-
 final class _ChatTypingStopped extends ChatEvent {
   const _ChatTypingStopped();
 
@@ -100,4 +93,13 @@ final class ChatLoadEarlier extends ChatEvent {
 
   @override
   List<Object?> get props => [];
+}
+
+final class ChatAlertHidden extends ChatEvent {
+  const ChatAlertHidden({this.forever = false});
+
+  final bool forever;
+
+  @override
+  List<Object?> get props => [forever];
 }

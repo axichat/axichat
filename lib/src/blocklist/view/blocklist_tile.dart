@@ -25,7 +25,7 @@ class BlocklistTile extends StatelessWidget {
                   ? null
                   : () => context.read<BlocklistCubit?>()?.unblock(jid: jid),
               foregroundColor: context.colorScheme.destructive,
-              text: const Text('Unblock'),
+              child: const Text('Unblock'),
             ),
           ],
         );

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiMore extends StatefulWidget {
@@ -33,7 +32,6 @@ class _AxiMoreState extends State<AxiMore> {
 
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
     return ShadPopover(
       controller: popoverController,
       popover: (context) {
@@ -51,8 +49,8 @@ class _AxiMoreState extends State<AxiMore> {
       },
       child: ShadButton.ghost(
         enabled: widget.enabled,
-        icon: const Icon(LucideIcons.ellipsisVertical),
         onPressed: popoverController.toggle,
+        child: const Icon(LucideIcons.ellipsisVertical),
       ),
     );
   }

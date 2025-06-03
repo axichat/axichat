@@ -161,7 +161,7 @@ class _SignupFormState extends State<SignupForm> {
                       placeholder: const Text('Username'),
                       enabled: !loading,
                       controller: _jidTextController,
-                      suffix: Text('@${state.server}'),
+                      trailing: Text('@${state.server}'),
                       validator: (text) {
                         if (text.isEmpty) {
                           return 'Enter a username';
@@ -255,7 +255,7 @@ class _SignupFormState extends State<SignupForm> {
                                   ),
                                 ),
                                 ShadButton.ghost(
-                                  icon: const Icon(LucideIcons.refreshCw),
+                                  child: const Icon(LucideIcons.refreshCw),
                                   onPressed: () => setState(() {
                                     _captchaSrc = _loadCaptchaSrc();
                                   }),
@@ -298,7 +298,7 @@ class _SignupFormState extends State<SignupForm> {
                         onPressed: () => setState(() {
                           _currentIndex--;
                         }),
-                        text: const Text('Back'),
+                        child: const Text('Back'),
                       ),
                     if (_currentIndex < _formKeys.length - 1)
                       ShadButton(
@@ -323,14 +323,13 @@ class _SignupFormState extends State<SignupForm> {
                             _errorText = null;
                           });
                         },
-                        text: const Text('Continue'),
+                        child: const Text('Continue'),
                       )
                     else
                       ShadButton(
                         enabled: !loading,
                         onPressed: () => _onPressed(context),
-                        text: const Text('Sign up'),
-                        icon: loading
+                        leading: loading
                             ? Padding(
                                 padding: const EdgeInsets.only(right: 8.0),
                                 child: AxiProgressIndicator(
@@ -339,6 +338,7 @@ class _SignupFormState extends State<SignupForm> {
                                 ),
                               )
                             : null,
+                        child: const Text('Sign up'),
                       ),
                   ],
                 );

@@ -27,7 +27,7 @@ class ShorebirdChecker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: context.read<SettingsCubit>().animationDuration,
+      duration: context.watch<SettingsCubit>().animationDuration,
       child: FutureBuilder(
         future: checkShorebird(),
         builder: (context, snapshot) {
@@ -54,7 +54,10 @@ class ShorebirdChecker extends StatelessWidget {
             );
           }
           if (!snapshot.requireData) {
-            return const SizedBox.shrink();
+            return const Padding(
+              padding: EdgeInsets.all(4.0),
+              child: Text('No OTA updates available'),
+            );
           }
           return const Padding(
             padding: EdgeInsets.all(4.0),

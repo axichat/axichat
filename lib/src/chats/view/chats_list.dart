@@ -51,7 +51,23 @@ class ChatsList extends StatelessWidget {
                   return StatefulBuilder(builder: (context, setState) {
                     return ShadDialog(
                       title: const Text('Confirm'),
-                      content: Column(
+                      actions: [
+                        ShadButton.outline(
+                          onPressed: () => context.pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        ShadButton.destructive(
+                          onPressed: () {
+                            if (deleteMessages) {
+                              locate<ChatsCubit?>()
+                                  ?.deleteChatMessages(jid: item.jid);
+                            }
+                            return context.pop(true);
+                          },
+                          child: const Text('Continue'),
+                        )
+                      ],
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
@@ -70,22 +86,6 @@ class ChatsList extends StatelessWidget {
                           ),
                         ],
                       ),
-                      actions: [
-                        ShadButton.outline(
-                          onPressed: () => context.pop(false),
-                          text: const Text('Cancel'),
-                        ),
-                        ShadButton.destructive(
-                          onPressed: () {
-                            if (deleteMessages) {
-                              locate<ChatsCubit?>()
-                                  ?.deleteChatMessages(jid: item.jid);
-                            }
-                            return context.pop(true);
-                          },
-                          text: const Text('Continue'),
-                        )
-                      ],
                     );
                   });
                 },
@@ -104,7 +104,7 @@ class ChatsList extends StatelessWidget {
                 ShadButton.ghost(
                   width: 30.0,
                   height: 30.0,
-                  icon: Icon(
+                  child: Icon(
                     item.favorited
                         ? Icons.star_rounded
                         : Icons.star_border_rounded,

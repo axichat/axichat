@@ -36,13 +36,13 @@ class BlockButtonInline extends StatelessWidget {
                   }
                 },
           foregroundColor: context.colorScheme.destructive,
-          icon: showIcon
+          leading: showIcon
               ? const Padding(
                   padding: EdgeInsets.only(right: 8.0),
                   child: Icon(LucideIcons.userX),
                 )
               : null,
-          text: const Text('Block'),
+          child: const Text('Block'),
         );
       },
     );

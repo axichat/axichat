@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_drawer.dart';
+import 'package:axichat/src/chat/view/chat_message_details.dart';
 import 'package:axichat/src/chat/view/chat_verification_list.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -40,176 +42,39 @@ class Chat extends StatefulWidget {
 }
 
 class _ChatState extends State<Chat> {
-  late final ShadPopoverController emojiPopoverController;
-  late final FocusNode focusNode;
-  late final TextEditingController textController;
+  late final ShadPopoverController _emojiPopoverController;
+  late final FocusNode _focusNode;
+  late final TextEditingController _textController;
 
   var _chatRoute = ChatRoute.main;
 
   void _typingListener() {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
-    if (textController.text.isEmpty) return;
+    if (_textController.text.isEmpty) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
   @override
   void initState() {
     super.initState();
-    emojiPopoverController = ShadPopoverController();
-    focusNode = FocusNode();
-    textController = TextEditingController();
-    textController.addListener(_typingListener);
+    _emojiPopoverController = ShadPopoverController();
+    _focusNode = FocusNode();
+    _textController = TextEditingController();
+    _textController.addListener(_typingListener);
   }
 
   @override
   void dispose() {
-    focusNode.dispose();
-    textController.removeListener(_typingListener);
-    textController.dispose();
-    emojiPopoverController.dispose();
+    _focusNode.dispose();
+    _textController.removeListener(_typingListener);
+    _textController.dispose();
+    _emojiPopoverController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<ChatBloc, ChatState>(
-      listener: (context, state) async {
-        if (state.focused == null) return;
-        final message = state.focused!;
-        await showShadDialog(
-          context: context,
-          builder: (context) {
-            var copied = false;
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return ShadDialog(
-                  gap: 16.0,
-                  title: Text(message.stanzaID),
-                  content: Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              textBaseline: TextBaseline.alphabetic,
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              children: [
-                                Text(
-                                  'Body: ',
-                                  style: context.textTheme.muted,
-                                ),
-                                Expanded(
-                                  child: SelectableText(
-                                    message.body ?? '',
-                                    style: context.textTheme.small,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ShadButton.ghost(
-                            icon: const Icon(
-                              LucideIcons.copy,
-                            ),
-                            onPressed: () {
-                              Clipboard.setData(
-                                ClipboardData(text: message.body ?? ''),
-                              );
-                              setState(() {
-                                copied = true;
-                              });
-                            },
-                          ),
-                          if (copied)
-                            const Text(
-                              'Copied!',
-                              style: TextStyle(color: Colors.greenAccent),
-                            ),
-                        ],
-                      ),
-                      Divider(
-                        thickness: 1,
-                        color: context.colorScheme.border,
-                      ),
-                      Row(
-                        children: [
-                          Text(
-                            'Sent: ${message.acked || message.received ? 'true' : 'unknown'}',
-                          ),
-                          AxiTooltip(
-                            child: const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Icon(
-                                LucideIcons.info,
-                              ),
-                            ),
-                            builder: (context) {
-                              return ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 300.0),
-                                child: const Text(
-                                  'If false, the message may still have '
-                                  'been received but server acknowledgement '
-                                  'was disabled. Logging out and back in may '
-                                  'solve the problem.',
-                                  textAlign: TextAlign.left,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      Divider(
-                        thickness: 1,
-                        color: context.colorScheme.border,
-                      ),
-                      Row(
-                        children: [
-                          Text(
-                            'Encrypted: ${message.encryptionProtocol.isNotNone}',
-                          ),
-                        ],
-                      ),
-                      Divider(
-                        thickness: 1,
-                        color: context.colorScheme.border,
-                      ),
-                      Row(
-                        children: [
-                          Text('Error: ${message.error.name}'),
-                          if (message.error.tooltip != null)
-                            AxiTooltip(
-                              child: const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(
-                                  LucideIcons.info,
-                                ),
-                              ),
-                              builder: (context) {
-                                return ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 300.0),
-                                  child: Text(
-                                    message.error.tooltip!,
-                                    textAlign: TextAlign.left,
-                                  ),
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-        if (context.mounted) {
-          context.read<ChatBloc>().add(const ChatMessageUnfocused());
-        }
-      },
+    return BlocBuilder<ChatBloc, ChatState>(
       builder: (context, state) {
         final profile = context.watch<ProfileCubit?>()?.state;
         final user = ChatUser(
@@ -218,403 +83,448 @@ class _ChatState extends State<Chat> {
         );
         final chatType = state.chat?.type;
         final jid = state.chat?.jid;
-        return Scaffold(
-          endDrawerEnableOpenDragGesture: false,
-          endDrawer: jid == null
-              ? null
-              : ChatDrawer(
-                  state: state,
-                  showVerification: () => setState(() {
-                    _chatRoute = ChatRoute.verification;
-                  }),
-                ),
-          appBar: AppBar(
-            scrolledUnderElevation: 0,
-            forceMaterialTransparency: true,
-            shape:
-                Border(bottom: BorderSide(color: context.colorScheme.border)),
-            actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-            leading: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              icon: const Icon(
-                LucideIcons.arrowLeft,
-                size: 20.0,
-              ),
-              onPressed: () {
-                if (_chatRoute != ChatRoute.main) {
-                  return setState(() {
-                    _chatRoute = ChatRoute.main;
-                  });
-                }
-                if (textController.text.isNotEmpty) {
-                  context.read<DraftCubit?>()?.saveDraft(
-                        id: null,
-                        jids: [state.chat!.jid],
-                        body: textController.text,
-                      );
-                }
-                context.read<ChatsCubit>().toggleChat(jid: state.chat!.jid);
-              },
+        return Container(
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(color: context.colorScheme.border),
             ),
-            title: jid == null
-                ? const SizedBox.shrink()
-                : BlocBuilder<RosterCubit, RosterState>(
-                    buildWhen: (_, current) => current is RosterAvailable,
-                    builder: (context, rosterState) {
-                      final item = (rosterState is! RosterAvailable
-                              ? context.read<RosterCubit>()['items']
-                                  as List<RosterItem>
-                              : rosterState.items)
-                          ?.where((e) => e.jid == jid)
-                          .singleOrNull;
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth: 40.0,
-                              maxHeight: 40.0,
-                            ),
-                            child: (item == null)
-                                ? AxiAvatar(jid: jid)
-                                : AxiAvatar(
-                                    jid: item.jid,
-                                    subscription: item.subscription,
-                                    presence: item.presence,
-                                    status: item.status,
-                                  ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0,
-                            ),
-                            child: Text(
-                              state.chat?.title ?? '',
-                              style: context.textTheme.h4,
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              item?.status ?? '',
-                              overflow: TextOverflow.ellipsis,
-                              style: context.textTheme.muted,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-            actions: [
-              if (jid == null || _chatRoute != ChatRoute.main)
-                const SizedBox.shrink()
-              else
-                Builder(
-                  builder: (context) => AxiIconButton(
-                    iconData: LucideIcons.settings,
-                    onPressed: Scaffold.of(context).openEndDrawer,
-                  ),
-                )
-            ],
           ),
-          body: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(color: context.colorScheme.border),
+          child: Scaffold(
+            endDrawerEnableOpenDragGesture: false,
+            endDrawer: jid == null
+                ? null
+                : ChatDrawer(
+                    state: state,
+                    showVerification: () => setState(() {
+                      _chatRoute = ChatRoute.verification;
+                    }),
+                  ),
+            appBar: AppBar(
+              scrolledUnderElevation: 0,
+              forceMaterialTransparency: true,
+              shape:
+                  Border(bottom: BorderSide(color: context.colorScheme.border)),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
+              leading: ShadButton.ghost(
+                size: ShadButtonSize.sm,
+                child: const Icon(
+                  LucideIcons.arrowLeft,
+                  size: 20.0,
+                ),
+                onPressed: () {
+                  if (_chatRoute != ChatRoute.main) {
+                    return setState(() {
+                      _chatRoute = ChatRoute.main;
+                    });
+                  }
+                  if (_textController.text.isNotEmpty) {
+                    context.read<DraftCubit?>()?.saveDraft(
+                          id: null,
+                          jids: [state.chat!.jid],
+                          body: _textController.text,
+                        );
+                  }
+                  context.read<ChatsCubit>().toggleChat(jid: state.chat!.jid);
+                },
               ),
-            ),
-            child: IndexedStack(
-              index: _chatRoute.index,
-              children: [
-                LayoutBuilder(
-                  builder: (context, constraints) => DashChat(
-                    currentUser: user,
-                    onSend: (message) {
-                      context
-                          .read<ChatBloc>()
-                          .add(ChatMessageSent(text: message.text));
-                      focusNode.requestFocus();
-                    },
-                    messages: state.items
-                        .where((e) => e.body != null || e.error.isNotNone)
-                        .map(
-                          (e) => ChatMessage(
-                            user: ChatUser(
-                              id: e.senderJid,
-                              firstName: state.chat?.title,
+              title: jid == null
+                  ? const SizedBox.shrink()
+                  : BlocBuilder<RosterCubit, RosterState>(
+                      buildWhen: (_, current) => current is RosterAvailable,
+                      builder: (context, rosterState) {
+                        final item = (rosterState is! RosterAvailable
+                                ? context.read<RosterCubit>()['items']
+                                    as List<RosterItem>
+                                : rosterState.items)
+                            ?.where((e) => e.jid == jid)
+                            .singleOrNull;
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: 40.0,
+                                maxHeight: 40.0,
+                              ),
+                              child: (item == null)
+                                  ? AxiAvatar(jid: jid)
+                                  : AxiAvatar(
+                                      jid: item.jid,
+                                      subscription: item.subscription,
+                                      presence: item.presence,
+                                      status: item.status,
+                                    ),
                             ),
-                            createdAt: e.timestamp!,
-                            text: '${e.error.isNotNone ? e.error.asString : ''}'
-                                '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': "${e.body}"' : e.body}',
-                            status: e.error.isNotNone
-                                ? MessageStatus.failed
-                                : e.displayed
-                                    ? MessageStatus.read
-                                    : e.received
-                                        ? MessageStatus.received
-                                        : e.acked
-                                            ? MessageStatus.sent
-                                            : MessageStatus.pending,
-                            customProperties: {
-                              'id': e.stanzaID,
-                              'body': e.body,
-                              'edited': e.edited,
-                              'retracted': e.retracted,
-                              'error': e.error,
-                              'encrypted': e.encryptionProtocol.isNotNone,
-                              'trust': e.trust,
-                            },
-                          ),
-                        )
-                        .toList(),
-                    messageOptions: MessageOptions(
-                      showOtherUsersAvatar: chatType == ChatType.groupChat,
-                      borderRadius: 8,
-                      maxWidth: constraints.maxWidth * 0.7,
-                      messagePadding: const EdgeInsets.all(7.0),
-                      currentUserContainerColor: context.colorScheme.primary,
-                      containerColor: context.colorScheme.muted,
-                      userNameBuilder: (user) {
-                        return Padding(
-                          padding:
-                              const EdgeInsets.only(left: 2.0, bottom: 2.0),
-                          child: Text(
-                            user.getFullName(),
-                            style: context.textTheme.muted
-                                .copyWith(fontSize: 12.0),
-                          ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0,
+                              ),
+                              child: Text(
+                                state.chat?.title ?? '',
+                                style: context.textTheme.h4,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                item?.status ?? '',
+                                overflow: TextOverflow.ellipsis,
+                                style: context.textTheme.muted,
+                              ),
+                            ),
+                          ],
                         );
                       },
-                      messageTextBuilder: (message, _, __) {
-                        final extraStyle = context.textTheme.muted.copyWith(
-                          fontStyle: FontStyle.italic,
-                        );
-                        final self = message.user.id == profile?.jid;
-                        final error =
-                            message.customProperties!['error'] as MessageError;
-                        final textColor = error.isNotNone
-                            ? context.colorScheme.destructiveForeground
-                            : self
-                                ? context.colorScheme.primaryForeground
-                                : null;
-                        const iconSize = 12.0;
-                        final iconFamily = message.status!.icon.fontFamily;
-                        final iconPackage = message.status!.icon.fontPackage;
-                        final text = TextSpan(
-                          text: message.text,
-                          style: context.textTheme.small
-                              .copyWith(color: textColor),
-                        );
-                        final time = TextSpan(
-                          text:
-                              '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                              '${message.createdAt.minute.toString().padLeft(2, '0')}',
-                          style: context.textTheme.muted.copyWith(
-                            color: textColor,
-                            fontSize: iconSize,
-                          ),
-                        );
-                        final status = TextSpan(
-                          text: String.fromCharCode(
-                            message.status!.icon.codePoint,
-                          ),
-                          style: TextStyle(
-                            color: context.colorScheme.primaryForeground,
-                            fontSize: iconSize,
-                            fontFamily: iconFamily,
-                            package: iconPackage,
-                          ),
-                        );
-                        final encryption = TextSpan(
-                          text: String.fromCharCode(
-                              (message.customProperties!['encrypted']
-                                      ? LucideIcons.lock
-                                      : LucideIcons.lockOpen)
-                                  .codePoint),
-                          style: context.textTheme.muted.copyWith(
-                            color: message.customProperties!['encrypted']
-                                ? textColor
-                                : context.colorScheme.destructive,
-                            fontSize: iconSize,
-                            fontFamily: iconFamily,
-                            package: iconPackage,
-                          ),
-                        );
-                        final trust = message.customProperties!['trust']
-                            as BTBVTrustState?;
-                        final verification = trust != null
-                            ? TextSpan(
+                    ),
+              actions: [
+                if (jid == null || _chatRoute != ChatRoute.main)
+                  const SizedBox.shrink()
+                else
+                  Builder(
+                    builder: (context) => AxiIconButton(
+                      iconData: LucideIcons.settings,
+                      onPressed: Scaffold.of(context).openEndDrawer,
+                    ),
+                  )
+              ],
+            ),
+            body: Column(
+              children: [
+                const ChatAlert(),
+                Expanded(
+                  child: IndexedStack(
+                    index: _chatRoute.index,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) => DashChat(
+                          currentUser: user,
+                          onSend: (message) {
+                            context
+                                .read<ChatBloc>()
+                                .add(ChatMessageSent(text: message.text));
+                            _focusNode.requestFocus();
+                          },
+                          messages: state.items
+                              .where((e) => e.body != null || e.error.isNotNone)
+                              .map(
+                                (e) => ChatMessage(
+                                  user: ChatUser(
+                                    id: e.senderJid,
+                                    firstName: state.chat?.title,
+                                  ),
+                                  createdAt: e.timestamp!,
+                                  text:
+                                      '${e.error.isNotNone ? e.error.asString : ''}'
+                                      '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': "${e.body}"' : e.body}',
+                                  status: e.error.isNotNone
+                                      ? MessageStatus.failed
+                                      : e.displayed
+                                          ? MessageStatus.read
+                                          : e.received
+                                              ? MessageStatus.received
+                                              : e.acked
+                                                  ? MessageStatus.sent
+                                                  : MessageStatus.pending,
+                                  customProperties: {
+                                    'id': e.stanzaID,
+                                    'body': e.body,
+                                    'edited': e.edited,
+                                    'retracted': e.retracted,
+                                    'error': e.error,
+                                    'encrypted': e.encryptionProtocol.isNotNone,
+                                    'trust': e.trust,
+                                  },
+                                ),
+                              )
+                              .toList(),
+                          messageOptions: MessageOptions(
+                            showOtherUsersAvatar:
+                                chatType == ChatType.groupChat,
+                            borderRadius: 8,
+                            maxWidth: constraints.maxWidth * 0.7,
+                            messagePadding: const EdgeInsets.all(7.0),
+                            currentUserContainerColor:
+                                context.colorScheme.primary,
+                            containerColor: context.colorScheme.muted,
+                            userNameBuilder: (user) {
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                    left: 2.0, bottom: 2.0),
+                                child: Text(
+                                  user.getFullName(),
+                                  style: context.textTheme.muted
+                                      .copyWith(fontSize: 12.0),
+                                ),
+                              );
+                            },
+                            messageTextBuilder: (message, _, __) {
+                              final extraStyle =
+                                  context.textTheme.muted.copyWith(
+                                fontStyle: FontStyle.italic,
+                              );
+                              final self = message.user.id == profile?.jid;
+                              final error = message.customProperties!['error']
+                                  as MessageError;
+                              final textColor = error.isNotNone
+                                  ? context.colorScheme.destructiveForeground
+                                  : self
+                                      ? context.colorScheme.primaryForeground
+                                      : null;
+                              const iconSize = 12.0;
+                              final iconFamily =
+                                  message.status!.icon.fontFamily;
+                              final iconPackage =
+                                  message.status!.icon.fontPackage;
+                              final text = TextSpan(
+                                text: message.text,
+                                style: context.textTheme.small.copyWith(
+                                    color: textColor, fontSize: iconSize + 3),
+                              );
+                              final time = TextSpan(
                                 text:
-                                    String.fromCharCode(trust.toIcon.codePoint),
+                                    '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                    '${message.createdAt.minute.toString().padLeft(2, '0')}',
                                 style: context.textTheme.muted.copyWith(
-                                  color: trust.toColor,
+                                  color: textColor,
+                                  fontSize: iconSize,
+                                ),
+                              );
+                              final status = TextSpan(
+                                text: String.fromCharCode(
+                                  message.status!.icon.codePoint,
+                                ),
+                                style: TextStyle(
+                                  color: context.colorScheme.primaryForeground,
                                   fontSize: iconSize,
                                   fontFamily: iconFamily,
                                   package: iconPackage,
                                 ),
-                              )
-                            : null;
-                        return ShadGestureDetector(
-                          cursor: SystemMouseCursors.click,
-                          onTap: () => context.read<ChatBloc>().add(
-                                ChatMessageFocused(
-                                  message.customProperties!['id'],
+                              );
+                              final encryption = TextSpan(
+                                text: String.fromCharCode(
+                                    (message.customProperties!['encrypted']
+                                            ? LucideIcons.lock
+                                            : LucideIcons.lockOpen)
+                                        .codePoint),
+                                style: context.textTheme.muted.copyWith(
+                                  color: message.customProperties!['encrypted']
+                                      ? textColor
+                                      : context.colorScheme.destructive,
+                                  fontSize: iconSize,
+                                  fontFamily: iconFamily,
+                                  package: iconPackage,
                                 ),
-                              ),
-                          child: error.isNotNone
-                              ? Container(
-                                  padding: const EdgeInsets.all(8.0),
-                                  decoration: BoxDecoration(
-                                    color: context.colorScheme.destructive,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Column(
-                                    spacing: 4.0,
-                                    children: [
-                                      Text(
-                                        'Error!',
-                                        style: context.textTheme.small.copyWith(
-                                          color: textColor,
-                                        ),
+                              );
+                              final trust = message.customProperties!['trust']
+                                  as BTBVTrustState?;
+                              final verification = trust != null
+                                  ? TextSpan(
+                                      text: String.fromCharCode(
+                                          trust.toIcon.codePoint),
+                                      style: context.textTheme.muted.copyWith(
+                                        color: trust.toColor,
+                                        fontSize: iconSize,
+                                        fontFamily: iconFamily,
+                                        package: iconPackage,
                                       ),
-                                      DynamicInlineText(
-                                        text: text,
-                                        details: [time],
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    DynamicInlineText(
-                                      key: UniqueKey(),
-                                      text: text,
-                                      details: [
-                                        time,
-                                        if (self) status,
-                                        encryption,
-                                        if (!self && trust != null)
-                                          verification!,
-                                      ],
+                                    )
+                                  : null;
+                              return ShadContextMenuRegion(
+                                items: [
+                                  ShadContextMenuItem(
+                                    leading: const Icon(
+                                      LucideIcons.copy,
                                     ),
-                                    if (message
-                                            .customProperties?['retracted'] ??
-                                        false)
-                                      Text(
-                                        '(retracted)',
-                                        style: extraStyle,
+                                    onPressed: () async {
+                                      await Clipboard.setData(
+                                        ClipboardData(text: message.text),
+                                      );
+                                    },
+                                    child: const Text('Copy'),
+                                  ),
+                                  ShadContextMenuItem(
+                                    leading: const Icon(
+                                      LucideIcons.info,
+                                    ),
+                                    onPressed: () {
+                                      context.read<ChatBloc>().add(
+                                          ChatMessageFocused(
+                                              message.customProperties!['id']));
+                                      setState(() {
+                                        _chatRoute = ChatRoute.details;
+                                        if (_focusNode.hasFocus) {
+                                          _focusNode.unfocus();
+                                        }
+                                      });
+                                    },
+                                    child: const Text('Details'),
+                                  ),
+                                ],
+                                child: error.isNotNone
+                                    ? Container(
+                                        padding: const EdgeInsets.all(8.0),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              context.colorScheme.destructive,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        child: Column(
+                                          spacing: 4.0,
+                                          children: [
+                                            Text(
+                                              'Error!',
+                                              style: context.textTheme.small
+                                                  .copyWith(
+                                                color: textColor,
+                                              ),
+                                            ),
+                                            DynamicInlineText(
+                                              text: text,
+                                              details: [time],
+                                            ),
+                                          ],
+                                        ),
                                       )
-                                    else if (message
-                                            .customProperties?['edited'] ??
-                                        false)
-                                      Text('(edited)', style: extraStyle),
-                                  ],
-                                ),
-                        );
-                      },
-                    ),
-                    messageListOptions: MessageListOptions(
-                      separatorFrequency: SeparatorFrequency.days,
-                      typingBuilder: (_) => const Padding(
-                        padding: EdgeInsets.only(left: 16, top: 16),
-                        child: TypingIndicator(),
-                      ),
-                      onLoadEarlier:
-                          state.items.length % ChatBloc.messageBatchSize != 0
-                              ? null
-                              : () async => context
-                                  .read<ChatBloc>()
-                                  .add(const ChatLoadEarlier()),
-                      loadEarlierBuilder: Container(
-                        padding: const EdgeInsets.all(12.0),
-                        alignment: Alignment.center,
-                        child: CircularProgressIndicator(
-                          color: context.colorScheme.primary,
-                        ),
-                      ),
-                      chatFooterBuilder: state.items.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No messages',
-                                style: context.textTheme.muted,
-                              ),
-                            )
-                          : null,
-                    ),
-                    inputOptions: InputOptions(
-                      sendOnEnter: true,
-                      alwaysShowSend: true,
-                      focusNode: focusNode,
-                      textController: textController,
-                      sendButtonBuilder: (send) => ShadButton.ghost(
-                        icon: const Icon(
-                          Icons.send,
-                        ),
-                        onPressed: send,
-                      ),
-                      inputDecoration: defaultInputDecoration().copyWith(
-                        fillColor: context.colorScheme.input,
-                        hintText:
-                            'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message',
-                        border: OutlineInputBorder(
-                          borderRadius: context.radius,
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      inputToolbarStyle: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: context.colorScheme.border),
-                        ),
-                      ),
-                      leading: [
-                        ShadPopover(
-                          controller: emojiPopoverController,
-                          child: ShadButton.ghost(
-                            onPressed: emojiPopoverController.toggle,
-                            icon: const Icon(LucideIcons.smile),
+                                    : Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          DynamicInlineText(
+                                            key: UniqueKey(),
+                                            text: text,
+                                            details: [
+                                              time,
+                                              if (self) status,
+                                              encryption,
+                                              if (!self && trust != null)
+                                                verification!,
+                                            ],
+                                          ),
+                                          if (message.customProperties?[
+                                                  'retracted'] ??
+                                              false)
+                                            Text(
+                                              '(retracted)',
+                                              style: extraStyle,
+                                            )
+                                          else if (message.customProperties?[
+                                                  'edited'] ??
+                                              false)
+                                            Text('(edited)', style: extraStyle),
+                                        ],
+                                      ),
+                              );
+                            },
                           ),
-                          popover: (context) => EmojiPicker(
-                            textEditingController: textController,
-                            config: Config(
-                              emojiViewConfig: EmojiViewConfig(
-                                emojiSizeMax:
-                                    context.read<Policy>().getMaxEmojiSize(),
+                          messageListOptions: MessageListOptions(
+                            separatorFrequency: SeparatorFrequency.days,
+                            typingBuilder: (_) => const Padding(
+                              padding: EdgeInsets.only(left: 16, top: 16),
+                              child: TypingIndicator(),
+                            ),
+                            onLoadEarlier: state.items.length %
+                                        ChatBloc.messageBatchSize !=
+                                    0
+                                ? null
+                                : () async => context
+                                    .read<ChatBloc>()
+                                    .add(const ChatLoadEarlier()),
+                            loadEarlierBuilder: Container(
+                              padding: const EdgeInsets.all(12.0),
+                              alignment: Alignment.center,
+                              child: CircularProgressIndicator(
+                                color: context.colorScheme.primary,
                               ),
                             ),
+                            chatFooterBuilder: state.items.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      'No messages',
+                                      style: context.textTheme.muted,
+                                    ),
+                                  )
+                                : null,
                           ),
+                          inputOptions: InputOptions(
+                            sendOnEnter: true,
+                            alwaysShowSend: true,
+                            focusNode: _focusNode,
+                            textController: _textController,
+                            sendButtonBuilder: (send) => ShadButton.ghost(
+                              onPressed: send,
+                              child: const Icon(
+                                Icons.send,
+                              ),
+                            ),
+                            inputDecoration: defaultInputDecoration().copyWith(
+                              fillColor: context.colorScheme.input,
+                              hintText:
+                                  'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message',
+                              border: OutlineInputBorder(
+                                borderRadius: context.radius,
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            inputToolbarStyle: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(
+                                    color: context.colorScheme.border),
+                              ),
+                            ),
+                            leading: [
+                              ShadPopover(
+                                controller: _emojiPopoverController,
+                                child: ShadButton.ghost(
+                                  onPressed: _emojiPopoverController.toggle,
+                                  child: const Icon(LucideIcons.smile),
+                                ),
+                                popover: (context) => EmojiPicker(
+                                  textEditingController: _textController,
+                                  config: Config(
+                                    emojiViewConfig: EmojiViewConfig(
+                                      emojiSizeMax: context
+                                          .read<Policy>()
+                                          .getMaxEmojiSize(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            showTraillingBeforeSend: true,
+                            // trailing: [
+                            //   if (state.chat case final chat?) ...[
+                            //     ShadButton.ghost(
+                            //       onPressed: () => context.push(
+                            //         '/encryption/${chat.jid}',
+                            //         extra: context.read,
+                            //       ),
+                            //       foregroundColor: chat.encryptionProtocol.isNotNone
+                            //           ? context.colorScheme.primary
+                            //           : context.colorScheme.destructive,
+                            //       icon: Icon(
+                            //         chat.encryptionProtocol.isNotNone
+                            //             ? LucideIcons.lockKeyhole
+                            //             : LucideIcons.lockKeyholeOpen,
+                            //       ),
+                            //     ),
+                            //   ]
+                            // ],
+                          ),
+                          typingUsers: [
+                            if (state.typing == true) user,
+                            if (state.chat?.chatState?.name == 'composing')
+                              ChatUser(
+                                id: state.chat!.jid,
+                                firstName: state.chat!.title,
+                              ),
+                          ].take(1).toList(),
                         ),
-                      ],
-                      showTraillingBeforeSend: true,
-                      // trailing: [
-                      //   if (state.chat case final chat?) ...[
-                      //     ShadButton.ghost(
-                      //       onPressed: () => context.push(
-                      //         '/encryption/${chat.jid}',
-                      //         extra: context.read,
-                      //       ),
-                      //       foregroundColor: chat.encryptionProtocol.isNotNone
-                      //           ? context.colorScheme.primary
-                      //           : context.colorScheme.destructive,
-                      //       icon: Icon(
-                      //         chat.encryptionProtocol.isNotNone
-                      //             ? LucideIcons.lockKeyhole
-                      //             : LucideIcons.lockKeyholeOpen,
-                      //       ),
-                      //     ),
-                      //   ]
-                      // ],
-                    ),
-                    typingUsers: [
-                      if (state.typing == true) user,
-                      if (state.chat?.chatState?.name == 'composing')
-                        ChatUser(
-                          id: state.chat!.jid,
-                          firstName: state.chat!.title,
-                        ),
-                    ].take(1).toList(),
+                      ),
+                      VerificationList(jid: jid),
+                      const ChatMessageDetails(),
+                    ],
                   ),
                 ),
-                if (jid != null) VerificationList(jid: jid),
               ],
             ),
           ),
@@ -764,10 +674,10 @@ class _GuestChatState extends State<GuestChat> {
             focusNode: _focusNode,
             textController: _textController,
             sendButtonBuilder: (send) => ShadButton.ghost(
-              icon: const Icon(
+              onPressed: send,
+              child: const Icon(
                 Icons.send,
               ),
-              onPressed: send,
             ),
             inputDecoration: defaultInputDecoration().copyWith(
               fillColor: context.colorScheme.input,
@@ -786,7 +696,7 @@ class _GuestChatState extends State<GuestChat> {
                 controller: _emojiPopoverController,
                 child: ShadButton.ghost(
                   onPressed: _emojiPopoverController.toggle,
-                  icon: const Icon(LucideIcons.smile),
+                  child: const Icon(LucideIcons.smile),
                 ),
                 popover: (context) => EmojiPicker(
                   textEditingController: _textController,
