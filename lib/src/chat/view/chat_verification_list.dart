@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:axichat/src/verification/view/verification_selector.dart';
 import 'package:flutter/material.dart';
@@ -11,52 +12,101 @@ class VerificationList extends StatelessWidget {
     required this.jid,
   });
 
-  final String jid;
+  final String? jid;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: BlocBuilder<VerificationCubit, VerificationState>(
-        builder: (context, state) {
-          if (state.loading) return const Center(child: AxiProgressIndicator());
-          if (state.fingerprints.isEmpty) {
-            return Center(
+    return BlocBuilder<VerificationCubit, VerificationState>(
+      builder: (context, state) {
+        if (jid == null) return const SizedBox.shrink();
+        if (state.loading) return const Center(child: AxiProgressIndicator());
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          spacing: 16.0,
+          children: [
+            const SizedBox.square(dimension: 8.0),
+            Text(
+              'Expert settings',
+              style: context.textTheme.h4,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
-                'No devices found',
+                'If you verify a device, no other devices will receive '
+                'your messages until you verify them as well!',
+                textAlign: TextAlign.center,
                 style: context.textTheme.muted,
               ),
-            );
-          }
-          return SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
+            ),
+            DefaultTabController(
+              length: 2,
+              animationDuration:
+                  context.watch<SettingsCubit>().animationDuration,
+              child: Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  spacing: 16.0,
                   children: [
-                    Text(
-                      'Expert settings',
-                      style: context.textTheme.h4,
+                    TabBar(
+                      dividerHeight: 0.0,
+                      indicatorColor: context.colorScheme.primary,
+                      tabs: const [
+                        Tab(text: 'Theirs'),
+                        Tab(text: 'Yours'),
+                      ],
                     ),
-                    Text(
-                      'If you verify a device, no other devices will receive '
-                      'your messages until you verify them as well!',
-                      textAlign: TextAlign.center,
-                      style: context.textTheme.muted,
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          if (state.fingerprints.isEmpty)
+                            Center(
+                              child: Text(
+                                'No devices found',
+                                style: context.textTheme.muted,
+                              ),
+                            )
+                          else
+                            SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: state.fingerprints
+                                    .map((e) => Padding(
+                                          padding: const EdgeInsets.all(16.0),
+                                          child: VerificationSelector(
+                                              fingerprint: e),
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
+                          if (state.myFingerprints.isEmpty)
+                            Center(
+                              child: Text(
+                                'No devices found',
+                                style: context.textTheme.muted,
+                              ),
+                            )
+                          else
+                            SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: state.myFingerprints
+                                    .map((e) => Padding(
+                                          padding: const EdgeInsets.all(16.0),
+                                          child: VerificationSelector(
+                                              fingerprint: e),
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                    const SizedBox.square(dimension: 4.0),
-                    for (final fingerprint in state.fingerprints)
-                      VerificationSelector(fingerprint: fingerprint),
-                    const SizedBox.square(dimension: 8.0),
                   ],
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ],
+        );
+      },
     );
   }
 }

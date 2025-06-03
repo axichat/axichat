@@ -7,5 +7,6 @@ class ChatState with _$ChatState {
     Chat? chat,
     Message? focused,
     @Default(false) bool typing,
+    @Default(true) bool showAlert,
   }) = _ChatState;
 }

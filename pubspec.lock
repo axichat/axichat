@@ -110,6 +110,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  boxy:
+    dependency: transitive
+    description:
+      name: boxy
+      sha256: "71af0cd1bf7889c09787f26219a345aa4f38ccb98384c8ec24189e4d8e746005"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.1"
   build:
     dependency: transitive
     description:
@@ -406,6 +414,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.7"
+  extended_image:
+    dependency: transitive
+    description:
+      name: extended_image
+      sha256: f6cbb1d798f51262ed1a3d93b4f1f2aa0d76128df39af18ecb77fa740f88b2e0
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.0.1"
+  extended_image_library:
+    dependency: transitive
+    description:
+      name: extended_image_library
+      sha256: "1f9a24d3a00c2633891c6a7b5cab2807999eb2d5b597e5133b63f49d113811fe"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.1"
   fake_async:
     dependency: transitive
     description:
@@ -740,6 +764,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  http_client_helper:
+    dependency: transitive
+    description:
+      name: http_client_helper
+      sha256: "8a9127650734da86b5c73760de2b404494c968a3fd55602045ffec789dac3cb1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
   http_multi_server:
     dependency: transitive
     description:
@@ -877,10 +909,10 @@ packages:
     dependency: transitive
     description:
       name: lucide_icons_flutter
-      sha256: d9ee025290a82f39f3e3b54238b87cab07f100cbc8014126df5d51813d428654
+      sha256: d2b09156cd9b66f7194fce9abd707c4ce7184c5b43c71feb4b70d15143f6e0d4
       url: "https://pub.dev"
     source: hosted
-    version: "1.3.0"
+    version: "3.0.4"
   macros:
     dependency: transitive
     description:
@@ -1295,10 +1327,10 @@ packages:
     dependency: "direct main"
     description:
       name: shadcn_ui
-      sha256: "57285b23d33c4f9e95b07cb478279e3e2782fff9a7c6b58e5c14ab6cbbe32e80"
+      sha256: e625f8bb56a950ea105f8f8d4048193c2261b033704bbc9df0fc7f30a8f2aa40
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.4"
+    version: "0.27.0"
   shared_preferences:
     dependency: transitive
     description:
@@ -1616,6 +1648,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  universal_image:
+    dependency: transitive
+    description:
+      name: universal_image
+      sha256: "8f4aa6eaaf68cf8b033101e4c1a03390baa31b9f84bd66c14472107e35ccb037"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.10"
   unorm_dart:
     dependency: transitive
     description:

@@ -21,15 +21,35 @@ class VerificationCubit extends Cubit<VerificationState> {
   Future<void> loadFingerprints() async {
     emit(state.copyWith(loading: true));
     final fingerprints = await _omemoService.getFingerprints(jid: jid);
-    emit(state.copyWith(fingerprints: fingerprints, loading: false));
+    final myFingerprints =
+        await _omemoService.getFingerprints(jid: _omemoService.myJid!);
+    emit(state.copyWith(
+      fingerprints: fingerprints,
+      myFingerprints: myFingerprints,
+      loading: false,
+    ));
   }
 
   Future<void> setDeviceTrust({
+    required String jid,
     required int device,
     required BTBVTrustState trust,
   }) async {
     emit(state.copyWith(loading: true));
     await _omemoService.setDeviceTrust(jid: jid, device: device, trust: trust);
+    await loadFingerprints();
+  }
+
+  Future<void> labelFingerprint({
+    required String jid,
+    required int device,
+    required String label,
+  }) async {
+    await _omemoService.labelFingerprint(
+      jid: jid,
+      device: device,
+      label: label,
+    );
     await loadFingerprints();
   }
 }

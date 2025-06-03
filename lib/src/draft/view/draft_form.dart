@@ -81,14 +81,14 @@ class _DraftFormState extends State<DraftForm> {
                       ),
                       if (i == 0)
                         ShadButton.ghost(
-                          icon: const Icon(LucideIcons.plus),
+                          child: const Icon(LucideIcons.plus),
                           onPressed: () => setState(() {
                             _jids.add('');
                           }),
                         )
                       else
                         ShadButton.ghost(
-                          icon: const Icon(LucideIcons.minus),
+                          child: const Icon(LucideIcons.minus),
                           onPressed: () => setState(() {
                             _jids.removeAt(i);
                           }),
@@ -118,7 +118,7 @@ class _DraftFormState extends State<DraftForm> {
                       enabled: enabled &&
                           (_jids.any((e) => e.isNotEmpty) ||
                               _bodyTextController.text.isNotEmpty),
-                      text: const Text('Save draft'),
+                      child: const Text('Save draft'),
                       onPressed: () => context.read<DraftCubit?>()?.saveDraft(
                           id: widget.id,
                           jids: _jids,
@@ -128,7 +128,7 @@ class _DraftFormState extends State<DraftForm> {
                       enabled: enabled &&
                           _jids.any((e) => e.isNotEmpty) &&
                           _bodyTextController.text.isNotEmpty,
-                      text: const Text('Send'),
+                      child: const Text('Send'),
                       onPressed: () async {
                         if (!Form.of(context).validate()) return;
                         await context.read<DraftCubit?>()?.sendDraft(

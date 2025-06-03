@@ -50,8 +50,8 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
               )
             ],
           ),
-          content: AnimatedSize(
-            duration: context.read<SettingsCubit>().animationDuration,
+          child: AnimatedSize(
+            duration: context.watch<SettingsCubit>().animationDuration,
             child: _showFingerprint
                 ? Column(
                     children: [
@@ -59,7 +59,7 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
                       const SizedBox.square(dimension: 16.0),
                       ShadButton.secondary(
                         enabled: !_loading,
-                        text: Text(
+                        child: Text(
                           'Regenerate device',
                           style: TextStyle(
                             color: context.colorScheme.destructive,

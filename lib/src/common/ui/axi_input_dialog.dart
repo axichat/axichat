@@ -22,18 +22,18 @@ class AxiInputDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShadDialog(
       title: title,
-      content: content,
       actions: [
         ShadButton.outline(
           onPressed: () => context.pop(),
-          text: const Text('Cancel'),
+          child: const Text('Cancel'),
         ),
         ...actions,
         ShadButton(
           onPressed: callback,
-          text: Text(callbackText),
+          child: Text(callbackText),
         ),
       ],
+      child: content,
     );
   }
 }

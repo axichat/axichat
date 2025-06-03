@@ -8,19 +8,19 @@ Future<bool?> confirm(BuildContext context, {String text = 'Are you sure?'}) =>
       context: context,
       builder: (context) => ShadDialog(
         title: const Text('Confirm'),
-        content: Text(
-          text,
-          style: context.textTheme.small,
-        ),
         actions: [
           ShadButton.outline(
             onPressed: () => context.pop(false),
-            text: const Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           ShadButton.destructive(
             onPressed: () => context.pop(true),
-            text: const Text('Continue'),
+            child: const Text('Continue'),
           )
         ],
+        child: Text(
+          text,
+          style: context.textTheme.small,
+        ),
       ),
     );

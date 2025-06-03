@@ -70,8 +70,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Draft?> getDraft(int id);
 
-  Future<void> saveDraft(
-      {int? id, required List<String> jids, required String body});
+  Future<void> saveDraft({
+    int? id,
+    required List<String> jids,
+    required String body,
+  });
 
   Future<void> removeDraft(int id);
 
@@ -84,6 +87,12 @@ abstract interface class XmppDatabase implements Database {
   Future<void> saveOmemoDeviceList(OmemoDeviceList data);
 
   Future<void> setOmemoTrust(OmemoTrust trust);
+
+  Future<void> setOmemoTrustLabel({
+    required String jid,
+    required int device,
+    required String? label,
+  });
 
   Future<List<OmemoTrust>> getOmemoTrust(String jid);
 
@@ -138,6 +147,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> updateChatEncryption({
     required String chatJid,
     required EncryptionProtocol protocol,
+  });
+
+  Future<void> updateChatAlert({
+    required String chatJid,
+    required String? alert,
   });
 
   Future<void> removeChat(String jid);
@@ -770,6 +784,18 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Future<void> setOmemoTrustLabel({
+    required String jid,
+    required int device,
+    required String? label,
+  }) =>
+      omemoTrustsAccessor.updateOne(OmemoTrustsCompanion(
+        device: Value(device),
+        jid: Value(jid),
+        label: Value(label),
+      ));
+
+  @override
   Future<List<OmemoTrust>> getOmemoTrust(String jid) =>
       omemoTrustsAccessor.selectByJid(jid);
 
@@ -926,6 +952,18 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     await chatsAccessor.updateOne(ChatsCompanion(
       jid: Value(chatJid),
       chatState: Value(state),
+    ));
+  }
+
+  @override
+  Future<void> updateChatAlert({
+    required String chatJid,
+    required String? alert,
+  }) async {
+    _log.info('Updating chat alert to $alert...');
+    await chatsAccessor.updateOne(ChatsCompanion(
+      jid: Value(chatJid),
+      alert: Value(alert),
     ));
   }
 

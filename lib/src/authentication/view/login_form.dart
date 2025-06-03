@@ -92,7 +92,7 @@ class _LoginFormState extends State<LoginForm> {
                 placeholder: const Text('Username'),
                 enabled: !loading,
                 controller: _jidTextController,
-                suffix: Text('@${state.server}'),
+                trailing: Text('@${state.server}'),
                 validator: (text) {
                   if (text.isEmpty) {
                     return 'Enter a username';
@@ -112,8 +112,7 @@ class _LoginFormState extends State<LoginForm> {
                     key: loginSubmitKey,
                     enabled: !loading,
                     onPressed: () => _onPressed(context),
-                    text: const Text('Log in'),
-                    icon: AnimatedCrossFade(
+                    leading: AnimatedCrossFade(
                       crossFadeState: loading
                           ? CrossFadeState.showSecond
                           : CrossFadeState.showFirst,
@@ -127,6 +126,7 @@ class _LoginFormState extends State<LoginForm> {
                         ),
                       ),
                     ),
+                    child: const Text('Log in'),
                   );
                 },
               ),

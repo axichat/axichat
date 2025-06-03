@@ -62,7 +62,6 @@ class SettingsControls extends StatelessWidget {
             ListTile(
               title: const Text('Color Scheme'),
               trailing: ShadSelect<ShadColor>(
-                anchor: const ShadAnchorAuto(preferBelow: false),
                 initialValue: state.shadColor,
                 onChanged: (colorScheme) => context
                     .read<SettingsCubit>()

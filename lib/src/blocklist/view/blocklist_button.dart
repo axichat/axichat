@@ -85,13 +85,13 @@ class BlocklistUnblockAllButton extends StatelessWidget {
               context.read<BlocklistCubit?>()?.unblockAll();
             }
           },
-          text: const Text('Unblock all'),
-          icon: disabled
+          leading: disabled
               ? AxiProgressIndicator(
                   color: context.colorScheme.foreground,
                   semanticsLabel: 'Waiting for unblock',
                 )
               : null,
+          child: const Text('Unblock all'),
         );
       },
     );

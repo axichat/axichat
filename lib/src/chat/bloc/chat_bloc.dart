@@ -29,7 +29,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<ChatMessageFocused>(_onChatMessageFocused);
-    on<ChatMessageUnfocused>(_onChatMessageUnfocused);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<ChatMessageSent>(
@@ -41,6 +40,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
+    on<ChatAlertHidden>(_onChatAlertHidden);
     if (jid != null) {
       _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
@@ -77,7 +77,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _onChatUpdated(_ChatUpdated event, Emitter<ChatState> emit) {
-    emit(state.copyWith(chat: event.chat));
+    emit(state.copyWith(
+      chat: event.chat,
+      showAlert: event.chat.alert != null && state.chat?.alert == null,
+    ));
   }
 
   void _onChatMessagesUpdated(
@@ -101,20 +104,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatMessageFocused event,
     Emitter<ChatState> emit,
   ) {
+    print('------------- focused');
     emit(
       state.copyWith(
         focused:
             state.items.where((e) => e.stanzaID == event.messageID).firstOrNull,
       ),
     );
-  }
-
-  void _onChatMessageUnfocused(
-    ChatMessageUnfocused event,
-    Emitter<ChatState> emit,
-  ) {
-    if (state.focused == null) return;
-    emit(state.copyWith(focused: null));
   }
 
   Future<void> _onChatTypingStarted(
@@ -197,6 +193,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _messageSubscription = _messageService
         .messageStreamForChat(jid!, end: state.items.length + messageBatchSize)
         .listen((items) => add(_ChatMessagesUpdated(items)));
+  }
+
+  Future<void> _onChatAlertHidden(
+    ChatAlertHidden event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (jid == null) return;
+    emit(state.copyWith(showAlert: false));
+    if (event.forever) {
+      await _chatsService.clearChatAlert(jid: jid!);
+    }
   }
 
   Future<void> _stopTyping() async {

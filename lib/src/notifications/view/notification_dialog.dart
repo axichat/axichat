@@ -9,11 +9,10 @@ Future<bool?> showNotificationDialog(
       context: context,
       builder: (context) => ShadDialog(
         title: const Text('Enable message notifications'),
-        content: const Text('Chats can always be muted later.'),
         actions: [
           ShadButton.destructive(
             onPressed: () => context.pop(false),
-            text: const Text('Ignore'),
+            child: const Text('Ignore'),
           ),
           ShadButton(
             onPressed: () async {
@@ -23,8 +22,9 @@ Future<bool?> showNotificationDialog(
                 context.pop(true);
               }
             },
-            text: const Text('Continue'),
+            child: const Text('Continue'),
           )
         ],
+        child: const Text('Chats can always be muted later.'),
       ),
     );

@@ -72,11 +72,11 @@ class ChatDrawer extends StatelessWidget {
               ? ShadButton.ghost(
                   width: double.infinity,
                   mainAxisAlignment: MainAxisAlignment.start,
-                  icon: const Padding(
+                  leading: const Padding(
                     padding: EdgeInsets.only(right: 8.0),
                     child: Icon(LucideIcons.shieldUser),
                   ),
-                  text: const Text('Verification'),
+                  child: const Text('Verification'),
                   onPressed: () {
                     context.read<VerificationCubit>().loadFingerprints();
                     showVerification?.call();
@@ -87,11 +87,10 @@ class ChatDrawer extends StatelessWidget {
           ShadButton.ghost(
             width: double.infinity,
             mainAxisAlignment: MainAxisAlignment.start,
-            icon: const Padding(
+            leading: const Padding(
               padding: EdgeInsets.only(right: 8.0),
               child: Icon(LucideIcons.userCog),
             ),
-            text: const Text('Repair encryption'),
             foregroundColor: context.colorScheme.destructive,
             onPressed: () async {
               if (await confirm(
@@ -105,15 +104,15 @@ class ChatDrawer extends StatelessWidget {
                 context.read<ChatBloc>().add(const ChatEncryptionRepaired());
               }
             },
+            child: const Text('Repair encryption'),
           ),
           ShadButton.ghost(
             width: double.infinity,
             mainAxisAlignment: MainAxisAlignment.start,
-            icon: const Padding(
+            leading: const Padding(
               padding: EdgeInsets.only(right: 8.0),
               child: Icon(LucideIcons.flag),
             ),
-            text: const Text('Report spam'),
             foregroundColor: context.colorScheme.destructive,
             onPressed: () => context.push(
               const ComposeRoute().location,
@@ -123,6 +122,7 @@ class ChatDrawer extends StatelessWidget {
                 'body': 'I want to report \'$jid\' for spam.',
               },
             ),
+            child: const Text('Report spam'),
           ),
           BlockButtonInline(
             jid: jid!,

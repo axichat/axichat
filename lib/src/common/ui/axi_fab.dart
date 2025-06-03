@@ -17,14 +17,14 @@ class AxiFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShadButton(
       onPressed: onPressed,
-      icon: Padding(
+      leading: Padding(
         padding: const EdgeInsets.only(right: 8.0),
         child: Icon(
           iconData,
           size: 20.0,
         ),
       ),
-      text: Text(text),
+      child: Text(text),
     );
   }
 }

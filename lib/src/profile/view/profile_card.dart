@@ -122,7 +122,8 @@ class ProfileCard extends StatelessWidget {
                   ),
                 ],
               ),
-              content: ConstrainedBox(
+              trailing: const LogoutButton(),
+              child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 300.0),
                 child: AxiTextFormField(
                   placeholder: const Text('Status message'),
@@ -132,7 +133,6 @@ class ProfileCard extends StatelessWidget {
                       ?.updatePresence(status: value),
                 ),
               ),
-              trailing: const LogoutButton(),
             ),
     );
   }

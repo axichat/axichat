@@ -52,16 +52,15 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                 children: [
                   ShadButton.ghost(
                     width: double.infinity,
-                    text: const Text('All'),
                     foregroundColor: context.colorScheme.foreground,
                     onPressed: () {
                       context.read<ChatsCubit?>()?.filterChats((chat) => true);
                       popoverController.toggle();
                     },
+                    child: const Text('All'),
                   ),
                   ShadButton.ghost(
                     width: double.infinity,
-                    text: const Text('Contacts'),
                     foregroundColor: context.colorScheme.foreground,
                     onPressed: () {
                       context.read<ChatsCubit?>()?.filterChats((chat) => context
@@ -70,10 +69,10 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                           .contains(chat.jid));
                       popoverController.toggle();
                     },
+                    child: const Text('Contacts'),
                   ),
                   ShadButton.ghost(
                     width: double.infinity,
-                    text: const Text('Non-contacts'),
                     foregroundColor: context.colorScheme.foreground,
                     onPressed: () {
                       context.read<ChatsCubit?>()?.filterChats((chat) =>
@@ -83,6 +82,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                               .contains(chat.jid));
                       popoverController.toggle();
                     },
+                    child: const Text('Non-contacts'),
                   ),
                 ],
               ),
@@ -93,8 +93,8 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
       child: AxiTooltip(
         builder: (_) => const Text('Filter'),
         child: ShadButton.secondary(
-          icon: const Icon(LucideIcons.listFilter),
           onPressed: popoverController.toggle,
+          child: const Icon(LucideIcons.listFilter),
         ),
       ),
     );

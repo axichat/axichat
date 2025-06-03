@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () => setState(() {
                       _login = !_login;
                     }),
-                    text: Text(_login ? 'Sign up' : 'Log in'),
+                    child: Text(_login ? 'Sign up' : 'Log in'),
                   ),
                 ],
               ),

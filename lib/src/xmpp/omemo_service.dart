@@ -8,6 +8,14 @@ mixin OmemoService on XmppBase {
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.OmemoDeviceListUpdatedEvent>((event) async {
+      await _dbOp<XmppDatabase>((db) async {
+        await db.updateChatAlert(
+          chatJid: event.jid.toBare().toString(),
+          alert: 'Contact added new devices to this chat',
+        );
+      });
+    })
     ..registerHandler<mox.StanzaSendingCancelledEvent>((event) async {
       if (event.data.encryptionError == null || event.data.stanza.id == null) {
         return;
@@ -181,6 +189,7 @@ mixin OmemoService on XmppBase {
         orElse: () => OmemoTrust(jid: jid, device: f.deviceId),
       );
       return OmemoFingerprint(
+        jid: jid,
         fingerprint: f.fingerprint,
         deviceID: f.deviceId,
         trust: trust.state,
@@ -203,6 +212,20 @@ mixin OmemoService on XmppBase {
             .setDeviceTrust(jid, device, trust);
       },
     );
+  }
+
+  Future<void> labelFingerprint({
+    required String jid,
+    required int device,
+    String? label,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.setOmemoTrustLabel(
+        jid: jid,
+        device: device,
+        label: label,
+      );
+    });
   }
 
   Future<void> regenerateDevice() async {
