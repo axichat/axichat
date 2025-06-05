@@ -12,7 +12,7 @@ class VerificationCubit extends Cubit<VerificationState> {
     required OmemoService omemoService,
   })  : _omemoService = omemoService,
         super(const VerificationState(loading: true)) {
-    loadFingerprints();
+    _omemoService.populateTrustCache(jid: jid).then((_) => loadFingerprints());
   }
 
   final String jid;

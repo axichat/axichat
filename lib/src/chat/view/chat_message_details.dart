@@ -1,6 +1,10 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/verification/bloc/verification_cubit.dart';
+import 'package:axichat/src/verification/view/verification_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -14,94 +18,100 @@ class ChatMessageDetails extends StatelessWidget {
       builder: (context, state) {
         final message = state.focused;
         if (message == null) return const SizedBox.shrink();
-        return Column(
-          children: [
-            Row(
-              textBaseline: TextBaseline.alphabetic,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              children: [
-                Text(
-                  'Body: ',
-                  style: context.textTheme.muted,
-                ),
-                Expanded(
-                  child: SelectableText(
-                    message.body ?? '',
-                    style: context.textTheme.small,
-                  ),
-                ),
-              ],
-            ),
-            Divider(
-              thickness: 1,
-              color: context.colorScheme.border,
-            ),
-            Row(
-              children: [
-                Text(
-                  'Sent: ${message.acked || message.received ? 'true' : 'unknown'}',
-                ),
-                AxiTooltip(
-                  child: const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Icon(
-                      LucideIcons.info,
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            spacing: 24,
+            children: [
+              SelectableText(
+                message.body ?? '',
+                style: context.textTheme.lead,
+              ),
+              Wrap(
+                spacing: 12.0,
+                children: [
+                  ShadBadge.secondary(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      spacing: 6.0,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Sent'),
+                        Icon(
+                          message.acked.toIcon,
+                          color: message.acked.toColor,
+                        ),
+                      ],
                     ),
                   ),
-                  builder: (context) {
-                    return ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 300.0),
-                      child: const Text(
-                        'If false, the message may still have '
-                        'been received but server acknowledgement '
-                        'was disabled. Logging out and back in may '
-                        'solve the problem.',
-                        textAlign: TextAlign.left,
-                      ),
-                    );
+                  ShadBadge.secondary(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      spacing: 6.0,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Received'),
+                        Icon(
+                          message.received.toIcon,
+                          color: message.received.toColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                  ShadBadge.secondary(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      spacing: 6.0,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Displayed'),
+                        Icon(
+                          message.displayed.toIcon,
+                          color: message.displayed.toColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (message.deviceID != null &&
+                  context.read<VerificationCubit?>() != null)
+                BlocBuilder<VerificationCubit, VerificationState>(
+                  builder: (context, verificationState) {
+                    final list = message.senderJid ==
+                            context.read<ProfileCubit>().state.jid
+                        ? verificationState.myFingerprints
+                        : verificationState.fingerprints;
+                    final fingerprint =
+                        list.singleWhere((e) => e.deviceID == message.deviceID);
+                    return VerificationSelector(fingerprint: fingerprint);
                   },
                 ),
-              ],
-            ),
-            Divider(
-              thickness: 1,
-              color: context.colorScheme.border,
-            ),
-            Row(
-              children: [
-                Text(
-                  'Encrypted: ${message.encryptionProtocol.isNotNone}',
-                ),
-              ],
-            ),
-            Divider(
-              thickness: 1,
-              color: context.colorScheme.border,
-            ),
-            Row(
-              children: [
-                Text('Error: ${message.error.name}'),
-                if (message.error.tooltip != null)
-                  AxiTooltip(
-                    child: const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Icon(
-                        LucideIcons.info,
-                      ),
-                    ),
-                    builder: (context) {
-                      return ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 300.0),
-                        child: Text(
-                          message.error.tooltip!,
-                          textAlign: TextAlign.left,
+              Row(
+                children: [
+                  Text('Error: ${message.error.name}'),
+                  if (message.error.tooltip != null)
+                    AxiTooltip(
+                      child: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(
+                          LucideIcons.info,
                         ),
-                      );
-                    },
-                  ),
-              ],
-            ),
-          ],
+                      ),
+                      builder: (context) {
+                        return ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 300.0),
+                          child: Text(
+                            message.error.tooltip!,
+                            textAlign: TextAlign.left,
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
         );
       },
     );

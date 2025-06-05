@@ -28,6 +28,7 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
     return BlocConsumer<ProfileCubit, ProfileState>(
       listener: (context, state) => _loading = false,
       builder: (context, state) {
+        if (state.fingerprint == null) return const SizedBox.shrink();
         return ShadCard(
           rowCrossAxisAlignment: CrossAxisAlignment.center,
           columnCrossAxisAlignment: CrossAxisAlignment.center,
@@ -55,7 +56,8 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
             child: _showFingerprint
                 ? Column(
                     children: [
-                      DisplayFingerprint(fingerprint: state.fingerprint),
+                      DisplayFingerprint(
+                          fingerprint: state.fingerprint!.fingerprint),
                       const SizedBox.square(dimension: 16.0),
                       ShadButton.secondary(
                         enabled: !_loading,

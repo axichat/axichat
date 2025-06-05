@@ -41,6 +41,12 @@ mixin OmemoService on XmppBase {
       });
     });
 
+  @override
+  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
+    ..addAll([
+      OmemoManager(_getOmemoManager, _shouldEncrypt, owner: this),
+    ]);
+
   Future<void> _completeOmemoManager() async {
     OmemoDevice? device = await _dbOpReturning<XmppDatabase, OmemoDevice?>(
       (db) async {
@@ -61,7 +67,7 @@ mixin OmemoService on XmppBase {
           ),
           loadData: (jid) async =>
               await _dbOpReturning<XmppDatabase, List<omemo.BTBVTrustData>>(
-            (db) => db.getOmemoTrust(jid),
+            (db) => db.getOmemoTrusts(jid),
           ),
           removeTrust: (jid) => _dbOp<XmppDatabase>(
             (db) => db.resetOmemoTrust(jid),
@@ -172,13 +178,27 @@ mixin OmemoService on XmppBase {
     return null;
   }
 
-  Future<String> getCurrentFingerprint() async =>
-      (await _device).getFingerprint();
+  Future<OmemoFingerprint?> getCurrentFingerprint() async {
+    final device = await _device;
+    final trust = await _dbOpReturning<XmppDatabase, OmemoTrust?>((db) async {
+      return await db.getOmemoTrust(myJid!, device.id);
+    });
+
+    if (trust == null) return null;
+
+    return OmemoFingerprint(
+      jid: myJid!,
+      fingerprint: await device.getFingerprint(),
+      deviceID: device.id,
+      trust: trust.state,
+      trusted: trust.trusted,
+    );
+  }
 
   Future<List<OmemoFingerprint>> getFingerprints({required String jid}) async {
     final trusts =
         await _dbOpReturning<XmppDatabase, List<OmemoTrust>>((db) async {
-      return await db.getOmemoTrust(jid);
+      return await db.getOmemoTrusts(jid);
     });
 
     final fingerprints =
@@ -198,6 +218,16 @@ mixin OmemoService on XmppBase {
         label: trust.label,
       );
     }).toList();
+  }
+
+  Future<void> populateTrustCache({required String jid}) async {
+    await _omemoManager.value?.withTrustManager(
+      jid,
+      (tm) async {
+        await (tm as omemo.BlindTrustBeforeVerificationTrustManager)
+            .loadTrustData(jid);
+      },
+    );
   }
 
   Future<void> setDeviceTrust({
@@ -243,6 +273,81 @@ mixin OmemoService on XmppBase {
   Future<void> _reset() async {
     await super._reset();
     _omemoManager = ImpatientCompleter(Completer<omemo.OmemoManager>());
+  }
+}
+
+class OmemoDeviceData extends mox.StanzaHandlerExtension {
+  OmemoDeviceData({required this.id});
+
+  final int id;
+}
+
+class OmemoManager extends mox.OmemoManager {
+  OmemoManager(
+    super.getOmemoManager,
+    super.shouldEncryptStanza, {
+    required this.owner,
+  });
+
+  final OmemoService owner;
+
+  @override
+  List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [
+        mox.StanzaHandler(
+          stanzaTag: 'message',
+          tagXmlns: mox.omemoXmlns,
+          tagName: 'encrypted',
+          callback: _attachDevice,
+          priority: 100,
+        ),
+        ...super.getIncomingPreStanzaHandlers(),
+      ];
+
+  @override
+  List<mox.StanzaHandler> getOutgoingPreStanzaHandlers() => [
+        ...super.getOutgoingPreStanzaHandlers(),
+        mox.StanzaHandler(
+          stanzaTag: 'message',
+          callback: _attachOwnDevice,
+        ),
+      ];
+
+  Future<mox.StanzaHandlerData> _attachDevice(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    if (state.stanza
+            .firstTag('encrypted', xmlns: mox.omemoXmlns)
+            ?.firstTag('header')
+            ?.attributes['sid']
+        case final String sid) {
+      final deviceID = int.parse(sid);
+      return state
+        ..extensions.set<OmemoDeviceData>(
+          OmemoDeviceData(id: deviceID),
+        );
+    }
+
+    return state;
+  }
+
+  Future<mox.StanzaHandlerData> _attachOwnDevice(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    if (!state.encrypted) return state;
+
+    final deviceID = (await owner._device).id;
+
+    await owner._dbOp<XmppDatabase>((db) async {
+      await db.saveMessageDevice(
+        stanzaID: state.stanza.id!,
+        deviceID: deviceID,
+        to: state.stanza.to!,
+      );
+    });
+
+    return state;
   }
 }
 
