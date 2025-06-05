@@ -152,7 +152,7 @@ mixin MessageService on XmppBase {
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
-      MessageManager(),
+      mox.MessageManager(),
       mox.CarbonsManager(),
       mox.MessageDeliveryReceiptManager(),
       mox.ChatMarkerManager(),
@@ -497,40 +497,4 @@ mixin MessageService on XmppBase {
 //   });
 //   return allowed;
 // }
-}
-
-class OmemoDeviceData extends mox.StanzaHandlerExtension {
-  OmemoDeviceData({required this.id});
-
-  final int id;
-}
-
-class MessageManager extends mox.MessageManager {
-  @override
-  List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [
-        mox.StanzaHandler(
-          stanzaTag: 'message',
-          callback: _attachDevice,
-        ),
-        ...super.getIncomingPreStanzaHandlers(),
-      ];
-
-  Future<mox.StanzaHandlerData> _attachDevice(
-    mox.Stanza stanza,
-    mox.StanzaHandlerData state,
-  ) async {
-    if (state.stanza
-            .firstTag('encrypted', xmlns: mox.omemoXmlns)
-            ?.firstTag('header')
-            ?.attributes['sid']
-        case final String sid) {
-      final deviceID = int.parse(sid);
-      return state
-        ..extensions.set<OmemoDeviceData>(
-          OmemoDeviceData(id: deviceID),
-        );
-    }
-
-    return state;
-  }
 }

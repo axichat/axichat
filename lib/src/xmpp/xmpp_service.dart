@@ -284,7 +284,6 @@ class XmppService extends XmppBase
           name: appDisplayName,
         ),
       ]),
-      mox.OmemoManager(_getOmemoManager, _shouldEncrypt),
       mox.PingManager(const Duration(minutes: 3)),
       // mox.EntityCapabilitiesManager(),
       mox.PubSubManager(),

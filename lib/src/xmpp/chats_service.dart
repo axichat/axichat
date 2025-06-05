@@ -24,7 +24,7 @@ mixin ChatsService on XmppBase {
       if (a.favorited == b.favorited) {
         return b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp);
       }
-      return (!a.favorited).toSign();
+      return (!a.favorited).toSign;
     });
 
   @override

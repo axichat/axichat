@@ -1,3 +1,5 @@
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/verification/bloc/verification_cubit.dart';
@@ -38,6 +40,21 @@ class VerificationSelector extends StatelessWidget {
           ),
           const SizedBox.square(dimension: 8),
           DisplayFingerprint(fingerprint: fingerprint.fingerprint),
+          const SizedBox.square(dimension: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            spacing: 8.0,
+            children: [
+              Icon(
+                fingerprint.trusted.toShieldIcon,
+                color: fingerprint.trusted
+                    ? axiGreen
+                    : context.colorScheme.destructive,
+              ),
+              Text(fingerprint.trusted ? 'Trusted' : 'Not trusted'),
+            ],
+          ),
           const SizedBox.square(dimension: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

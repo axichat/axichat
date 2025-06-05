@@ -141,6 +141,7 @@ class Message with _$Message implements Insertable<Message> {
     @Default(MessageWarning.none) MessageWarning warning,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     BTBVTrustState? trust,
+    bool? trusted,
     int? deviceID,
     @Default(false) bool noStore,
     @Default(false) bool acked,
@@ -172,6 +173,7 @@ class Message with _$Message implements Insertable<Message> {
     required MessageWarning warning,
     required EncryptionProtocol encryptionProtocol,
     required BTBVTrustState? trust,
+    required bool? trusted,
     required int? deviceID,
     required bool noStore,
     required bool acked,
@@ -261,6 +263,7 @@ class Message with _$Message implements Insertable<Message> {
         warning: Value(warning),
         encryptionProtocol: Value(encryptionProtocol),
         trust: Value.absentIfNull(trust),
+        trusted: Value.absentIfNull(trusted),
         deviceID: Value.absentIfNull(deviceID),
         noStore: Value(noStore),
         acked: Value(acked),
@@ -308,6 +311,8 @@ class Messages extends Table {
       intEnum<EncryptionProtocol>().withDefault(const Constant(0))();
 
   IntColumn get trust => intEnum<BTBVTrustState>().nullable()();
+
+  BoolColumn get trusted => boolean().nullable()();
 
   IntColumn get deviceID => integer().nullable()();
 
