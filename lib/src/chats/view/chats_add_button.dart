@@ -1,7 +1,7 @@
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -46,21 +46,27 @@ class ChatsAddButton extends StatelessWidget {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AxiTextFormField(
-                              placeholder: const Text('Title'),
-                              enabled:
-                                  state.creationStatus == RequestStatus.loading,
-                              onChanged: (value) {
-                                setState(() => title = value);
-                              },
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: AxiTextFormField(
+                                placeholder: const Text('Title'),
+                                enabled: state.creationStatus ==
+                                    RequestStatus.loading,
+                                onChanged: (value) {
+                                  setState(() => title = value);
+                                },
+                              ),
                             ),
-                            AxiTextFormField(
-                              placeholder: const Text('Nickname'),
-                              enabled:
-                                  state.creationStatus == RequestStatus.loading,
-                              onChanged: (value) {
-                                setState(() => nickname = value);
-                              },
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: AxiTextFormField(
+                                placeholder: const Text('Nickname'),
+                                enabled: state.creationStatus ==
+                                    RequestStatus.loading,
+                                onChanged: (value) {
+                                  setState(() => nickname = value);
+                                },
+                              ),
                             ),
                           ],
                         );

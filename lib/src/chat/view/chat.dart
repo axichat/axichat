@@ -106,9 +106,8 @@ class _ChatState extends State<Chat> {
               shape:
                   Border(bottom: BorderSide(color: context.colorScheme.border)),
               actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-              leading: ShadButton.ghost(
-                size: ShadButtonSize.sm,
-                child: const Icon(
+              leading: ShadIconButton.ghost(
+                icon: const Icon(
                   LucideIcons.arrowLeft,
                   size: 20.0,
                 ),
@@ -314,8 +313,8 @@ class _ChatState extends State<Chat> {
                                 final encryption = TextSpan(
                                   text: String.fromCharCode(
                                       (message.customProperties!['encrypted']
-                                              ? LucideIcons.lock
-                                              : LucideIcons.lockOpen)
+                                              ? LucideIcons.lockKeyhole
+                                              : LucideIcons.lockKeyholeOpen)
                                           .codePoint),
                                   style: context.textTheme.muted.copyWith(
                                     color:
@@ -466,10 +465,11 @@ class _ChatState extends State<Chat> {
                               alwaysShowSend: true,
                               focusNode: _focusNode,
                               textController: _textController,
-                              sendButtonBuilder: (send) => ShadButton.ghost(
+                              sendButtonBuilder: (send) => ShadIconButton.ghost(
                                 onPressed: send,
-                                child: const Icon(
+                                icon: const Icon(
                                   Icons.send,
+                                  size: 24,
                                 ),
                               ),
                               inputDecoration:
@@ -491,9 +491,12 @@ class _ChatState extends State<Chat> {
                               leading: [
                                 ShadPopover(
                                   controller: _emojiPopoverController,
-                                  child: ShadButton.ghost(
+                                  child: ShadIconButton.ghost(
                                     onPressed: _emojiPopoverController.toggle,
-                                    child: const Icon(LucideIcons.smile),
+                                    icon: const Icon(
+                                      LucideIcons.smile,
+                                      size: 24,
+                                    ),
                                   ),
                                   popover: (context) => EmojiPicker(
                                     textEditingController: _textController,
@@ -691,10 +694,11 @@ class _GuestChatState extends State<GuestChat> {
             alwaysShowSend: true,
             focusNode: _focusNode,
             textController: _textController,
-            sendButtonBuilder: (send) => ShadButton.ghost(
+            sendButtonBuilder: (send) => ShadIconButton.ghost(
               onPressed: send,
-              child: const Icon(
+              icon: const Icon(
                 Icons.send,
+                size: 24,
               ),
             ),
             inputDecoration: defaultInputDecoration().copyWith(
@@ -712,9 +716,12 @@ class _GuestChatState extends State<GuestChat> {
             leading: [
               ShadPopover(
                 controller: _emojiPopoverController,
-                child: ShadButton.ghost(
+                child: ShadIconButton.ghost(
                   onPressed: _emojiPopoverController.toggle,
-                  child: const Icon(LucideIcons.smile),
+                  icon: const Icon(
+                    LucideIcons.smile,
+                    size: 24,
+                  ),
                 ),
                 popover: (context) => EmojiPicker(
                   textEditingController: _textController,

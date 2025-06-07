@@ -25,9 +25,9 @@ class AxiIconButton extends StatelessWidget {
       width: 36.0,
       foregroundColor: color,
       onPressed: onPressed,
+      iconSize: context.iconTheme.size,
       icon: Icon(
         iconData,
-        size: 20.0,
       ),
     );
 

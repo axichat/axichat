@@ -80,15 +80,15 @@ class _DraftFormState extends State<DraftForm> {
                         ),
                       ),
                       if (i == 0)
-                        ShadButton.ghost(
-                          child: const Icon(LucideIcons.plus),
+                        ShadIconButton.ghost(
+                          icon: const Icon(LucideIcons.plus),
                           onPressed: () => setState(() {
                             _jids.add('');
                           }),
                         )
                       else
-                        ShadButton.ghost(
-                          child: const Icon(LucideIcons.minus),
+                        ShadIconButton.ghost(
+                          icon: const Icon(LucideIcons.minus),
                           onPressed: () => setState(() {
                             _jids.removeAt(i);
                           }),
@@ -96,12 +96,15 @@ class _DraftFormState extends State<DraftForm> {
                     ],
                   ),
                 const SizedBox(height: 12),
-                AxiTextFormField(
-                  controller: _bodyTextController,
-                  enabled: enabled,
-                  minLines: 7,
-                  maxLines: 7,
-                  placeholder: const Text('Message'),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: AxiTextFormField(
+                    controller: _bodyTextController,
+                    enabled: enabled,
+                    minLines: 7,
+                    maxLines: 7,
+                    placeholder: const Text('Message'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 if (state is DraftFailure)

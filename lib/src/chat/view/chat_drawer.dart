@@ -72,9 +72,9 @@ class ChatDrawer extends StatelessWidget {
               ? ShadButton.ghost(
                   width: double.infinity,
                   mainAxisAlignment: MainAxisAlignment.start,
-                  leading: const Padding(
-                    padding: EdgeInsets.only(right: 8.0),
-                    child: Icon(LucideIcons.shieldUser),
+                  leading: Icon(
+                    LucideIcons.shieldUser,
+                    size: context.iconTheme.size,
                   ),
                   child: const Text('Verification'),
                   onPressed: () {
@@ -87,9 +87,9 @@ class ChatDrawer extends StatelessWidget {
           ShadButton.ghost(
             width: double.infinity,
             mainAxisAlignment: MainAxisAlignment.start,
-            leading: const Padding(
-              padding: EdgeInsets.only(right: 8.0),
-              child: Icon(LucideIcons.userCog),
+            leading: Icon(
+              LucideIcons.userCog,
+              size: context.iconTheme.size,
             ),
             foregroundColor: context.colorScheme.destructive,
             onPressed: () async {
@@ -109,9 +109,9 @@ class ChatDrawer extends StatelessWidget {
           ShadButton.ghost(
             width: double.infinity,
             mainAxisAlignment: MainAxisAlignment.start,
-            leading: const Padding(
-              padding: EdgeInsets.only(right: 8.0),
-              child: Icon(LucideIcons.flag),
+            leading: Icon(
+              LucideIcons.flag,
+              size: context.iconTheme.size,
             ),
             foregroundColor: context.colorScheme.destructive,
             onPressed: () => context.push(

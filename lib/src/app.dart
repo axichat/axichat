@@ -160,6 +160,7 @@ class MaterialAxichat extends StatelessWidget {
             final shadTheme =
                 theme.brightness == Brightness.light ? lightTheme : darkTheme;
             return theme.copyWith(
+              iconTheme: const IconThemeData(size: 20),
               textTheme: TextTheme(
                 displayLarge: shadTheme.textTheme.h1Large,
                 displayMedium: shadTheme.textTheme.h1,
@@ -199,6 +200,8 @@ extension ThemeExtension on BuildContext {
   ShadColorScheme get colorScheme => ShadTheme.of(this).colorScheme;
 
   ShadTextTheme get textTheme => ShadTheme.of(this).textTheme;
+
+  IconThemeData get iconTheme => IconTheme.of(this);
 
   ShadDecoration get decoration => ShadTheme.of(this).decoration;
 

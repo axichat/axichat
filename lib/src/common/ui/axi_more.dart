@@ -47,10 +47,10 @@ class _AxiMoreState extends State<AxiMore> {
           ),
         );
       },
-      child: ShadButton.ghost(
+      child: ShadIconButton.ghost(
         enabled: widget.enabled,
         onPressed: popoverController.toggle,
-        child: const Icon(LucideIcons.ellipsisVertical),
+        icon: const Icon(LucideIcons.ellipsisVertical),
       ),
     );
   }

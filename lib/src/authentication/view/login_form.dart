@@ -83,27 +83,33 @@ class _LoginFormState extends State<LoginForm> {
                 notificationService: context.read<NotificationService>(),
               ),
               const SizedBox.square(dimension: 16.0),
-              AxiTextFormField(
-                key: loginUsernameKey,
-                autocorrect: false,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
-                ],
-                placeholder: const Text('Username'),
-                enabled: !loading,
-                controller: _jidTextController,
-                trailing: Text('@${state.server}'),
-                validator: (text) {
-                  if (text.isEmpty) {
-                    return 'Enter a username';
-                  }
-                  return null;
-                },
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: AxiTextFormField(
+                  key: loginUsernameKey,
+                  autocorrect: false,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
+                  ],
+                  placeholder: const Text('Username'),
+                  enabled: !loading,
+                  controller: _jidTextController,
+                  trailing: Text('@${state.server}'),
+                  validator: (text) {
+                    if (text.isEmpty) {
+                      return 'Enter a username';
+                    }
+                    return null;
+                  },
+                ),
               ),
-              PasswordInput(
-                key: loginPasswordKey,
-                enabled: !loading,
-                controller: _passwordTextController,
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: PasswordInput(
+                  key: loginPasswordKey,
+                  enabled: !loading,
+                  controller: _passwordTextController,
+                ),
               ),
               const SizedBox.square(dimension: 16.0),
               Builder(
@@ -118,14 +124,12 @@ class _LoginFormState extends State<LoginForm> {
                           : CrossFadeState.showFirst,
                       duration: context.read<SettingsCubit>().animationDuration,
                       firstChild: const SizedBox(),
-                      secondChild: Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: AxiProgressIndicator(
-                          color: context.colorScheme.primaryForeground,
-                          semanticsLabel: 'Waiting for login',
-                        ),
+                      secondChild: AxiProgressIndicator(
+                        color: context.colorScheme.primaryForeground,
+                        semanticsLabel: 'Waiting for login',
                       ),
                     ),
+                    trailing: const SizedBox.shrink(),
                     child: const Text('Log in'),
                   );
                 },

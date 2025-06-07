@@ -1,3 +1,4 @@
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -32,7 +33,9 @@ class _PasswordInputState extends State<PasswordInput> {
       enabled: widget.enabled,
       obscureText: obscure,
       controller: widget.controller,
-      trailing: ShadButton(
+      trailing: ShadIconButton(
+        backgroundColor: context.colorScheme.muted,
+        foregroundColor: context.colorScheme.mutedForeground,
         width: 24,
         height: 24,
         padding: EdgeInsets.zero,
@@ -40,7 +43,7 @@ class _PasswordInputState extends State<PasswordInput> {
           secondaryBorder: ShadBorder.none,
           secondaryFocusedBorder: ShadBorder.none,
         ),
-        child: Icon(
+        icon: Icon(
           obscure ? LucideIcons.eyeOff : LucideIcons.eye,
           size: 16,
         ),

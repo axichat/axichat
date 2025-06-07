@@ -125,12 +125,15 @@ class ProfileCard extends StatelessWidget {
               trailing: const LogoutButton(),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 300.0),
-                child: AxiTextFormField(
-                  placeholder: const Text('Status message'),
-                  initialValue: state.status,
-                  onSubmitted: (value) => context
-                      .read<ProfileCubit?>()
-                      ?.updatePresence(status: value),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: AxiTextFormField(
+                    placeholder: const Text('Status message'),
+                    initialValue: state.status,
+                    onSubmitted: (value) => context
+                        .read<ProfileCubit?>()
+                        ?.updatePresence(status: value),
+                  ),
                 ),
               ),
             ),

@@ -146,32 +146,35 @@ class _SignupFormState extends State<SignupForm> {
                 child: [
                   Form(
                     key: _formKeys[0],
-                    child: AxiTextFormField(
-                      key: UniqueKey(),
-                      autocorrect: false,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[a-z0-9._-]'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: AxiTextFormField(
+                        key: UniqueKey(),
+                        autocorrect: false,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[a-z0-9._-]'),
+                          ),
+                        ],
+                        description: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6.0),
+                          child: Text('Case insensitive'),
                         ),
-                      ],
-                      description: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 6.0),
-                        child: Text('Case insensitive'),
+                        placeholder: const Text('Username'),
+                        enabled: !loading,
+                        controller: _jidTextController,
+                        trailing: Text('@${state.server}'),
+                        validator: (text) {
+                          if (text.isEmpty) {
+                            return 'Enter a username';
+                          }
+                          if (!RegExp(r'^[a-z][a-z0-9._-]{3,19}$')
+                              .hasMatch(text)) {
+                            return '4-20 alphanumeric, allowing ".", "_" and "-".';
+                          }
+                          return null;
+                        },
                       ),
-                      placeholder: const Text('Username'),
-                      enabled: !loading,
-                      controller: _jidTextController,
-                      trailing: Text('@${state.server}'),
-                      validator: (text) {
-                        if (text.isEmpty) {
-                          return 'Enter a username';
-                        }
-                        if (!RegExp(r'^[a-z][a-z0-9._-]{3,19}$')
-                            .hasMatch(text)) {
-                          return '4-20 alphanumeric, allowing ".", "_" and "-".';
-                        }
-                        return null;
-                      },
                     ),
                   ),
                   Form(
@@ -180,17 +183,23 @@ class _SignupFormState extends State<SignupForm> {
                       key: UniqueKey(),
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        PasswordInput(
-                          enabled: !loading,
-                          controller: _passwordTextController,
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: PasswordInput(
+                            enabled: !loading,
+                            controller: _passwordTextController,
+                          ),
                         ),
-                        PasswordInput(
-                          enabled: !loading,
-                          controller: _password2TextController,
-                          confirmValidator: (text) =>
-                              text != _passwordTextController.text
-                                  ? 'Passwords don\'t match'
-                                  : null,
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: PasswordInput(
+                            enabled: !loading,
+                            controller: _password2TextController,
+                            confirmValidator: (text) =>
+                                text != _passwordTextController.text
+                                    ? 'Passwords don\'t match'
+                                    : null,
+                          ),
                         ),
                         Align(
                           alignment: Alignment.centerLeft,
@@ -254,8 +263,8 @@ class _SignupFormState extends State<SignupForm> {
                                         color: context.colorScheme.destructive),
                                   ),
                                 ),
-                                ShadButton.ghost(
-                                  child: const Icon(LucideIcons.refreshCw),
+                                ShadIconButton.ghost(
+                                  icon: const Icon(LucideIcons.refreshCw),
                                   onPressed: () => setState(() {
                                     _captchaSrc = _loadCaptchaSrc();
                                   }),
@@ -266,18 +275,21 @@ class _SignupFormState extends State<SignupForm> {
                         ),
                         SizedBox(
                           width: captchaSize.width,
-                          child: AxiTextFormField(
-                            autocorrect: false,
-                            keyboardType: TextInputType.number,
-                            placeholder: const Text('Enter the above text'),
-                            enabled: !loading,
-                            controller: _captchaTextController,
-                            validator: (text) {
-                              if (text.isEmpty) {
-                                return 'Enter the text from the image';
-                              }
-                              return null;
-                            },
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: AxiTextFormField(
+                              autocorrect: false,
+                              keyboardType: TextInputType.number,
+                              placeholder: const Text('Enter the above text'),
+                              enabled: !loading,
+                              controller: _captchaTextController,
+                              validator: (text) {
+                                if (text.isEmpty) {
+                                  return 'Enter the text from the image';
+                                }
+                                return null;
+                              },
+                            ),
                           ),
                         ),
                       ],
@@ -329,15 +341,19 @@ class _SignupFormState extends State<SignupForm> {
                       ShadButton(
                         enabled: !loading,
                         onPressed: () => _onPressed(context),
-                        leading: loading
-                            ? Padding(
-                                padding: const EdgeInsets.only(right: 8.0),
-                                child: AxiProgressIndicator(
-                                  color: context.colorScheme.primaryForeground,
-                                  semanticsLabel: 'Waiting for signup',
-                                ),
-                              )
-                            : null,
+                        leading: AnimatedCrossFade(
+                          crossFadeState: loading
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
+                          duration:
+                              context.read<SettingsCubit>().animationDuration,
+                          firstChild: const SizedBox(),
+                          secondChild: AxiProgressIndicator(
+                            color: context.colorScheme.primaryForeground,
+                            semanticsLabel: 'Waiting for signup',
+                          ),
+                        ),
+                        trailing: const SizedBox.shrink(),
                         child: const Text('Sign up'),
                       ),
                   ],
