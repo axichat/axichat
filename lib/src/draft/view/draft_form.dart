@@ -96,15 +96,12 @@ class _DraftFormState extends State<DraftForm> {
                     ],
                   ),
                 const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: AxiTextFormField(
-                    controller: _bodyTextController,
-                    enabled: enabled,
-                    minLines: 7,
-                    maxLines: 7,
-                    placeholder: const Text('Message'),
-                  ),
+                AxiTextFormField(
+                  controller: _bodyTextController,
+                  enabled: enabled,
+                  minLines: 7,
+                  maxLines: 7,
+                  placeholder: const Text('Message'),
                 ),
                 const SizedBox(height: 12),
                 if (state is DraftFailure)
@@ -115,6 +112,7 @@ class _DraftFormState extends State<DraftForm> {
                     ),
                   ),
                 Row(
+                  spacing: 8,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     ShadButton.outline(
