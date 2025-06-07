@@ -17,13 +17,7 @@ class AxiFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShadButton(
       onPressed: onPressed,
-      leading: Padding(
-        padding: const EdgeInsets.only(right: 8.0),
-        child: Icon(
-          iconData,
-          size: 20.0,
-        ),
-      ),
+      leading: Icon(iconData),
       child: Text(text),
     );
   }

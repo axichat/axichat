@@ -101,14 +101,11 @@ class ChatsList extends StatelessWidget {
                 item.lastMessage == null
                     ? const SizedBox()
                     : DisplayTimeSince(timestamp: item.lastChangeTimestamp),
-                ShadButton.ghost(
-                  width: 30.0,
-                  height: 30.0,
-                  child: Icon(
+                ShadIconButton.ghost(
+                  icon: Icon(
                     item.favorited
                         ? Icons.star_rounded
                         : Icons.star_border_rounded,
-                    size: 22.0,
                   ),
                   onPressed: () => context.read<ChatsCubit?>()?.toggleFavorited(
                         jid: item.jid,

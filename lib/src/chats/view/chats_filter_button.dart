@@ -92,9 +92,9 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
       },
       child: AxiTooltip(
         builder: (_) => const Text('Filter'),
-        child: ShadButton.secondary(
+        child: ShadIconButton.secondary(
           onPressed: popoverController.toggle,
-          child: const Icon(LucideIcons.listFilter),
+          icon: const Icon(LucideIcons.listFilter),
         ),
       ),
     );

@@ -81,10 +81,10 @@ class XmppConnection extends mox.XmppConnection {
   }
 
   String? get saltedPassword =>
-      getNegotiator<SaslScramNegotiator>()!.saltedPassword;
+      getNegotiator<SaslScramNegotiator>()?.saltedPassword;
 
-  Future<void> loadStreamState() =>
-      getManager<XmppStreamManagementManager>()!.loadState();
+  Future<void>? loadStreamState() =>
+      getManager<XmppStreamManagementManager>()?.loadState();
 
   Future<moxlib.Result<mox.StanzaError, mox.DiscoInfo>>? discoInfoQuery(
           String jid) =>

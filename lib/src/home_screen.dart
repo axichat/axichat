@@ -48,6 +48,7 @@ class HomeScreen extends StatelessWidget {
           'Chats',
           const ChatsList(key: PageStorageKey('Chats')),
           const Row(
+            spacing: 8,
             mainAxisSize: MainAxisSize.min,
             children: [ChatsFilterButton(), DraftButton()],
           )
