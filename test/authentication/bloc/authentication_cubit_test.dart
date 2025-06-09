@@ -46,6 +46,8 @@ void main() {
         )).thenAnswer((_) async => true);
 
     when(() => mockCredentialStore.close()).thenAnswer((_) async {});
+
+    when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
   });
 
   group('login', () {

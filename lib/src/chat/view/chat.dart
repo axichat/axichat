@@ -113,6 +113,7 @@ class _ChatState extends State<Chat> {
                 ),
                 onPressed: () {
                   if (_chatRoute != ChatRoute.main) {
+                    context.read<ChatBloc>().add(ChatMessageFocused(null));
                     return setState(() {
                       _chatRoute = ChatRoute.main;
                     });
@@ -279,7 +280,7 @@ class _ChatState extends State<Chat> {
                                     : self
                                         ? context.colorScheme.primaryForeground
                                         : null;
-                                const iconSize = 12.0;
+                                const iconSize = 13.0;
                                 final iconFamily =
                                     message.status!.icon.fontFamily;
                                 final iconPackage =

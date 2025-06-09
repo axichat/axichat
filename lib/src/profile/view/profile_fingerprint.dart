@@ -1,7 +1,7 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/verification/view/verification_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -21,12 +21,10 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
   }
 
   var _showFingerprint = false;
-  var _loading = false;
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<ProfileCubit, ProfileState>(
-      listener: (context, state) => _loading = false,
+    return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         if (state.fingerprint == null) return const SizedBox.shrink();
         return ShadCard(
@@ -54,39 +52,10 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
           child: AnimatedSize(
             duration: context.watch<SettingsCubit>().animationDuration,
             child: _showFingerprint
-                ? Column(
-                    children: [
-                      DisplayFingerprint(
-                          fingerprint: state.fingerprint!.fingerprint),
-                      const SizedBox.square(dimension: 16.0),
-                      ShadButton.secondary(
-                        enabled: !_loading,
-                        child: Text(
-                          'Regenerate device',
-                          style: TextStyle(
-                            color: context.colorScheme.destructive,
-                          ),
-                        ),
-                        onPressed: () async {
-                          if (await confirm(
-                                context,
-                                text: 'Only do this if you are an expert.',
-                              ) !=
-                              true) {
-                            return;
-                          }
-                          if (context.mounted) {
-                            setState(() {
-                              _loading = true;
-                            });
-                            await context
-                                .read<ProfileCubit>()
-                                .regenerateDevice();
-                          }
-                        },
-                      ),
-                      const SizedBox.square(dimension: 8.0),
-                    ],
+                ? Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child:
+                        VerificationSelector(fingerprint: state.fingerprint!),
                   )
                 : const SizedBox.shrink(),
           ),

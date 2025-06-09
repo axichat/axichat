@@ -30,6 +30,9 @@ class ProfileCubit extends Cubit<ProfileState> {
     _statusSubscription = _presenceService.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
+    if (_omemoService != null) {
+      loadFingerprints();
+    }
   }
 
   final PresenceService _presenceService;
@@ -64,7 +67,9 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   Future<void> regenerateDevice() async {
     if (_omemoService == null) return;
+    emit(state.copyWith(regenerating: true));
     await _omemoService.regenerateDevice();
     await loadFingerprints();
+    emit(state.copyWith(regenerating: false));
   }
 }

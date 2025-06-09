@@ -106,7 +106,7 @@ void main() {
     );
 
     test(
-      'When stream negotiations resume, requests the roster.',
+      'When stream negotiations resume, does not request the roster.',
       () async {
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
         when(() => mockConnection.requestRoster())
@@ -120,7 +120,7 @@ void main() {
 
         await pumpEventQueue();
 
-        verify(() => mockConnection.requestRoster()).called(1);
+        verifyNever(() => mockConnection.requestRoster());
       },
     );
 

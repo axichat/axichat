@@ -677,15 +677,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required String to,
   }) async {
     _log.info('Updating message: $stanzaID with device: $deviceID...');
-    final trustData = await omemoTrustsAccessor
-        .selectOne(OmemoTrust(jid: to, device: deviceID));
-    final trust = trustData?.state;
-    final trusted = trustData?.trusted;
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       deviceID: Value(deviceID),
-      trust: Value(trust),
-      trusted: Value(trusted),
+      trusted: const Value(true),
     ));
   }
 

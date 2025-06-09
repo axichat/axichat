@@ -424,8 +424,6 @@ class XmppService extends XmppBase
     ]);
     await _connection.registerManagers(featureManagers);
 
-    _completeOmemoManager();
-
     await _connection.loadStreamState();
     await _dbOp<XmppStateStore>((ss) {
       _connection
