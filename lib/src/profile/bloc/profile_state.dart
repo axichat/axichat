@@ -7,6 +7,7 @@ class ProfileState with _$ProfileState {
     required String resource,
     required String title,
     OmemoFingerprint? fingerprint,
+    @Default(false) bool regenerating,
     @Default(Presence.unknown) Presence presence,
     String? status,
   }) = _ProfileState;

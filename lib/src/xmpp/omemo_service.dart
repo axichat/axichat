@@ -180,18 +180,13 @@ mixin OmemoService on XmppBase {
 
   Future<OmemoFingerprint?> getCurrentFingerprint() async {
     final device = await _device;
-    final trust = await _dbOpReturning<XmppDatabase, OmemoTrust?>((db) async {
-      return await db.getOmemoTrust(myJid!, device.id);
-    });
-
-    if (trust == null) return null;
 
     return OmemoFingerprint(
       jid: myJid!,
       fingerprint: await device.getFingerprint(),
       deviceID: device.id,
-      trust: trust.state,
-      trusted: trust.trusted,
+      trust: BTBVTrustState.blindTrust,
+      trusted: true,
     );
   }
 
@@ -203,21 +198,28 @@ mixin OmemoService on XmppBase {
 
     final fingerprints =
         await _omemoManager.value?.getFingerprintsForJid(jid) ?? [];
-    return fingerprints.map((f) {
+    return await Future.wait(fingerprints.map((f) async {
       final trust = trusts.singleWhere(
         (t) => t.device == f.deviceId,
         orElse: () => OmemoTrust(jid: jid, device: f.deviceId),
       );
+
+      var trusted = false;
+      await _omemoManager.value?.withTrustManager(jid, (tm) async {
+        trusted = await (tm as omemo.BlindTrustBeforeVerificationTrustManager)
+            .isTrusted(jid, f.deviceId);
+      });
+
       return OmemoFingerprint(
         jid: jid,
         fingerprint: f.fingerprint,
         deviceID: f.deviceId,
         trust: trust.state,
-        trusted: trust.trusted,
+        trusted: trusted,
         enabled: trust.enabled,
         label: trust.label,
       );
-    }).toList();
+    }));
   }
 
   Future<void> populateTrustCache({required String jid}) async {
@@ -290,6 +292,13 @@ class OmemoManager extends mox.OmemoManager {
   });
 
   final OmemoService owner;
+
+  @override
+  Future<void> postRegisterCallback() async {
+    await super.postRegisterCallback();
+
+    owner._completeOmemoManager();
+  }
 
   @override
   List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [

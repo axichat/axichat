@@ -10,7 +10,7 @@ extension BoolTool on bool {
   IconData get toIcon => this ? LucideIcons.check600 : LucideIcons.x600;
 
   IconData get toShieldIcon =>
-      this ? LucideIcons.shieldHalf600 : LucideIcons.shieldX600;
+      this ? LucideIcons.shieldHalf : LucideIcons.shieldX;
 
   Color get toColor => this ? axiGreen : Colors.red;
 }

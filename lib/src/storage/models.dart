@@ -773,7 +773,7 @@ class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
     required int device,
     BTBVTrustState trust = BTBVTrustState.blindTrust,
     bool enabled = true,
-    bool trusted = false,
+    bool trusted = true,
     this.label,
   }) : super(jid, device, trust, enabled, trusted);
 

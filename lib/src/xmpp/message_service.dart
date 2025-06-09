@@ -306,7 +306,7 @@ mixin MessageService on XmppBase {
   Future<void> _reset() async {
     await super._reset();
 
-    _messageStream.close();
+    await _messageStream.close();
     _messageStream = StreamController<Message>.broadcast();
   }
 
