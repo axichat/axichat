@@ -69,11 +69,13 @@ class VerificationList extends StatelessWidget {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: state.fingerprints
-                                    .map((e) => Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: VerificationSelector(
-                                              fingerprint: e),
-                                        ))
+                                    .map(
+                                      (e) => Padding(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: VerificationSelector(
+                                            fingerprint: e),
+                                      ),
+                                    )
                                     .toList(),
                               ),
                             ),

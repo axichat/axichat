@@ -104,7 +104,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatMessageFocused event,
     Emitter<ChatState> emit,
   ) {
-    print('------------- focused');
     emit(
       state.copyWith(
         focused:

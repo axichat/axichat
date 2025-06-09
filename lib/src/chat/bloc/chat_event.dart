@@ -25,7 +25,7 @@ final class _ChatMessagesUpdated extends ChatEvent {
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 
-  final String messageID;
+  final String? messageID;
 
   @override
   List<Object?> get props => [messageID];
