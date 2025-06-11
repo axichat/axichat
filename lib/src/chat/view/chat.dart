@@ -80,7 +80,7 @@ class _ChatState extends State<Chat> {
         final profile = context.watch<ProfileCubit?>()?.state;
         final user = ChatUser(
           id: profile?.jid ?? '',
-          firstName: profile?.title ?? '',
+          firstName: profile?.username ?? '',
         );
         final chatType = state.chat?.type;
         final jid = state.chat?.jid;
@@ -113,7 +113,9 @@ class _ChatState extends State<Chat> {
                 ),
                 onPressed: () {
                   if (_chatRoute != ChatRoute.main) {
-                    context.read<ChatBloc>().add(ChatMessageFocused(null));
+                    context
+                        .read<ChatBloc>()
+                        .add(const ChatMessageFocused(null));
                     return setState(() {
                       _chatRoute = ChatRoute.main;
                     });

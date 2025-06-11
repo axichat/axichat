@@ -80,6 +80,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   static const String domain = 'axi.im';
   static Uri baseUrl = Uri.parse('https://$domain:5443');
   static Uri registrationUrl = Uri.parse('$baseUrl/register/new/');
+  static Uri changePasswordUrl =
+      Uri.parse('$baseUrl/register/change_password/');
+  static Uri deleteAccountUrl = Uri.parse('$baseUrl/register/delete/');
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
