@@ -6,6 +6,7 @@ import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'profile_cubit.freezed.dart';
+
 part 'profile_state.dart';
 
 class ProfileCubit extends Cubit<ProfileState> {
@@ -18,7 +19,7 @@ class ProfileCubit extends Cubit<ProfileState> {
           ProfileState(
             jid: presenceService.myJid ?? '',
             resource: presenceService.resource ?? '',
-            title: presenceService.username ?? '',
+            username: presenceService.username ?? '',
             presence: presenceService.presence,
             status: presenceService.status,
           ),

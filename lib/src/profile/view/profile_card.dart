@@ -32,7 +32,7 @@ class ProfileCard extends StatelessWidget {
                   status: state.status,
                   active: true,
                 ),
-                title: Text(state.title),
+                title: Text(state.username),
                 subtitle: Text(
                   state.jid,
                   style: context.textTheme.muted,
@@ -67,7 +67,7 @@ class ProfileCard extends StatelessWidget {
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(state.title),
+                  Text(state.username),
                 ],
               ),
               description: Row(

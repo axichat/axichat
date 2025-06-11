@@ -9,12 +9,14 @@ const passwordMaxLength = 64;
 class PasswordInput extends StatefulWidget {
   const PasswordInput({
     super.key,
+    required this.controller,
+    this.placeholder,
     this.enabled = false,
     this.confirmValidator,
-    required this.controller,
   });
 
   final bool enabled;
+  final String? placeholder;
   final String? Function(String)? confirmValidator;
   final TextEditingController controller;
 
@@ -28,8 +30,8 @@ class _PasswordInputState extends State<PasswordInput> {
   @override
   Widget build(BuildContext context) {
     return AxiTextFormField(
-      placeholder: Text(
-          widget.confirmValidator != null ? 'Confirm password' : 'Password'),
+      placeholder: Text(widget.placeholder ??
+          (widget.confirmValidator != null ? 'Confirm password' : 'Password')),
       enabled: widget.enabled,
       obscureText: obscure,
       controller: widget.controller,

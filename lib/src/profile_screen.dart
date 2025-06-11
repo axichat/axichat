@@ -85,6 +85,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
               padding: EdgeInsets.all(12.0),
               child: ProfileCard(),
             ),
+            Row(
+              children: [],
+            ),
             const Padding(
               padding: EdgeInsets.all(12.0),
               child: ProfileFingerprint(),
