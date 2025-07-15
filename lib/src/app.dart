@@ -181,9 +181,13 @@ class MaterialAxichat extends StatelessWidget {
           builder: (context, child) {
             return BlocListener<AuthenticationCubit, AuthenticationState>(
               listener: (context, state) {
-                if (state is AuthenticationNone) {
+                if (state is AuthenticationNone &&
+                    routeLocations[_router.state.matchedLocation]!
+                        .authenticationRequired) {
                   _router.go(const LoginRoute().location);
-                } else if (state is AuthenticationComplete) {
+                } else if (state is AuthenticationComplete &&
+                    !routeLocations[_router.state.matchedLocation]!
+                        .authenticationRequired) {
                   _router.go(const HomeRoute().location);
                 }
               },
