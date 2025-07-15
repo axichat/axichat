@@ -29,7 +29,7 @@ extension on MessageStatus {
       };
 }
 
-enum ChatRoute {
+enum _ChatRoute {
   main,
   verification,
   details,
@@ -47,7 +47,7 @@ class _ChatState extends State<Chat> {
   late final FocusNode _focusNode;
   late final TextEditingController _textController;
 
-  var _chatRoute = ChatRoute.main;
+  var _chatRoute = _ChatRoute.main;
 
   void _typingListener() {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
@@ -97,7 +97,7 @@ class _ChatState extends State<Chat> {
                 : ChatDrawer(
                     state: state,
                     showVerification: () => setState(() {
-                      _chatRoute = ChatRoute.verification;
+                      _chatRoute = _ChatRoute.verification;
                     }),
                   ),
             appBar: AppBar(
@@ -112,12 +112,12 @@ class _ChatState extends State<Chat> {
                   size: 20.0,
                 ),
                 onPressed: () {
-                  if (_chatRoute != ChatRoute.main) {
+                  if (_chatRoute != _ChatRoute.main) {
                     context
                         .read<ChatBloc>()
                         .add(const ChatMessageFocused(null));
                     return setState(() {
-                      _chatRoute = ChatRoute.main;
+                      _chatRoute = _ChatRoute.main;
                     });
                   }
                   if (_textController.text.isNotEmpty) {
@@ -179,7 +179,7 @@ class _ChatState extends State<Chat> {
                       },
                     ),
               actions: [
-                if (jid == null || _chatRoute != ChatRoute.main)
+                if (jid == null || _chatRoute != _ChatRoute.main)
                   const SizedBox.shrink()
                 else
                   Builder(
@@ -367,7 +367,7 @@ class _ChatState extends State<Chat> {
                                             ChatMessageFocused(message
                                                 .customProperties!['id']));
                                         setState(() {
-                                          _chatRoute = ChatRoute.details;
+                                          _chatRoute = _ChatRoute.details;
                                           if (_focusNode.hasFocus) {
                                             _focusNode.unfocus();
                                           }

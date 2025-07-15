@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
@@ -8,6 +10,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 part 'routes.g.dart';
+
+mixin AuthenticationRouteData on GoRouteData {
+  bool get authenticationRequired;
+}
+
+final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
+  const HomeRoute().location: const HomeRoute(),
+  const ProfileRoute().location: const ProfileRoute(),
+  const ComposeRoute().location: const ComposeRoute(),
+  const LoginRoute().location: const LoginRoute(),
+});
 
 class TransitionGoRouteData extends GoRouteData {
   const TransitionGoRouteData();
@@ -28,27 +41,38 @@ class TransitionGoRouteData extends GoRouteData {
     TypedGoRoute<ComposeRoute>(path: ComposeRoute.path),
   ],
 )
-class HomeRoute extends TransitionGoRouteData {
+class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const HomeRoute();
+
+  static const String path = '/';
+
+  @override
+  bool get authenticationRequired => true;
 
   @override
   Widget build(BuildContext context, GoRouterState state) => const HomeScreen();
 }
 
-class ProfileRoute extends TransitionGoRouteData {
+class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const ProfileRoute();
 
   static const path = 'profile';
+
+  @override
+  bool get authenticationRequired => true;
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       ProfileScreen(locate: state.extra! as T Function<T>());
 }
 
-class ComposeRoute extends TransitionGoRouteData {
+class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const ComposeRoute();
 
   static const path = 'compose';
+
+  @override
+  bool get authenticationRequired => true;
 
   @override
   Widget build(BuildContext context, GoRouterState state) {
@@ -63,8 +87,11 @@ class ComposeRoute extends TransitionGoRouteData {
 }
 
 @TypedGoRoute<LoginRoute>(path: '/login')
-class LoginRoute extends GoRouteData {
+class LoginRoute extends GoRouteData with AuthenticationRouteData {
   const LoginRoute();
+
+  @override
+  bool get authenticationRequired => false;
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>

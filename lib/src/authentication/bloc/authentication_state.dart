@@ -27,6 +27,31 @@ final class AuthenticationComplete extends AuthenticationState {
   List<Object?> get props => [];
 }
 
+final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {
+  const AuthenticationPasswordChangeSuccess(this.successText);
+
+  final String successText;
+
+  @override
+  List<Object?> get props => [successText];
+}
+
+final class AuthenticationPasswordChangeInProgress extends AuthenticationComplete {
+  const AuthenticationPasswordChangeInProgress();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class AuthenticationPasswordChangeFailure extends AuthenticationComplete {
+  const AuthenticationPasswordChangeFailure(this.errorText);
+
+  final String errorText;
+
+  @override
+  List<Object?> get props => [errorText];
+}
+
 final class AuthenticationFailure extends AuthenticationState {
   const AuthenticationFailure(this.errorText);
 

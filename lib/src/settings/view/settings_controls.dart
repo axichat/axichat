@@ -9,7 +9,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class SettingsControls extends StatelessWidget {
-  const SettingsControls({super.key});
+  const SettingsControls({
+    super.key,
+    this.showDivider = false,
+  });
+
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -21,13 +26,16 @@ class SettingsControls extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (context.read<Capability>().canForegroundService) ...[
-              // Padding(
-              //   padding: const EdgeInsets.symmetric(
-              //     horizontal: 16.0,
-              //     vertical: 6.0,
-              //   ),
-              //   child: Text('Important', style: context.textTheme.muted),
-              // ),
+              if (showDivider) ...[
+                const AxiListDivider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 6.0,
+                  ),
+                  child: Text('Important', style: context.textTheme.muted),
+                ),
+              ],
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: NotificationRequest(

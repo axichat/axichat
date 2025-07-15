@@ -235,7 +235,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           return pwned == hash;
         })) {
           emit(const AuthenticationSignupFailure(
-              'Hackers have already found this password, so it is insecure. '
+              'Hackers have already found this password so it is insecure. '
               'Use a different one or allow insecure passwords.'));
           return false;
         }
@@ -265,5 +265,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _xmppService.disconnect();
 
     emit(const AuthenticationNone());
+  }
+
+  Future<void> changePassword({
+    required String username,
+    required String host,
+    required String oldPassword,
+    required String password,
+    required String password2,
+  }) async {
+    emit(const AuthenticationPasswordChangeInProgress());
+    final response = await http.post(
+      AuthenticationCubit.changePasswordUrl,
+      body: {
+        'username': username,
+        'host': host,
+        'passwordold': oldPassword,
+        'password': password,
+        'password2': password2,
+      },
+    );
+    if (response.statusCode == 200) {
+      emit(AuthenticationPasswordChangeSuccess(response.body));
+    } else {
+      emit(AuthenticationPasswordChangeFailure(response.body));
+    }
   }
 }
