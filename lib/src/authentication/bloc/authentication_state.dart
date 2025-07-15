@@ -36,7 +36,8 @@ final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {
   List<Object?> get props => [successText];
 }
 
-final class AuthenticationPasswordChangeInProgress extends AuthenticationComplete {
+final class AuthenticationPasswordChangeInProgress
+    extends AuthenticationComplete {
   const AuthenticationPasswordChangeInProgress();
 
   @override
@@ -45,6 +46,22 @@ final class AuthenticationPasswordChangeInProgress extends AuthenticationComplet
 
 final class AuthenticationPasswordChangeFailure extends AuthenticationComplete {
   const AuthenticationPasswordChangeFailure(this.errorText);
+
+  final String errorText;
+
+  @override
+  List<Object?> get props => [errorText];
+}
+
+final class AuthenticationUnregisterInProgress extends AuthenticationComplete {
+  const AuthenticationUnregisterInProgress();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class AuthenticationUnregisterFailure extends AuthenticationComplete {
+  const AuthenticationUnregisterFailure(this.errorText);
 
   final String errorText;
 

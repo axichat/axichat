@@ -291,4 +291,25 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       emit(AuthenticationPasswordChangeFailure(response.body));
     }
   }
+
+  Future<void> unregister({
+    required String username,
+    required String host,
+    required String password,
+  }) async {
+    emit(const AuthenticationUnregisterInProgress());
+    final response = await http.post(
+      AuthenticationCubit.deleteAccountUrl,
+      body: {
+        'username': username,
+        'host': host,
+        'password': password,
+      },
+    );
+    if (response.statusCode == 200) {
+      await logout(severity: LogoutSeverity.burn);
+    } else {
+      emit(AuthenticationUnregisterFailure(response.body));
+    }
+  }
 }
