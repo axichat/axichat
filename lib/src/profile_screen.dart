@@ -1,20 +1,24 @@
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
+import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/profile/view/profile_card.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+import 'authentication/view/logout_button.dart';
 
 enum _ProfileRoute {
   main,
@@ -106,20 +110,134 @@ class _ProfileBodyState extends State<_ProfileBody> {
                     children: [
                       const ConnectivityIndicator(),
                       const ShorebirdChecker(),
-                      const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: ProfileCard(),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ShadButton.secondary(
-                            child: const Text('Change password'),
-                            onPressed: () => setState(() {
-                              _profileRoute = _ProfileRoute.changePassword;
-                            }),
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: BlocBuilder<ProfileCubit, ProfileState>(
+                          builder: (context, profileState) => ShadCard(
+                            rowMainAxisSize: MainAxisSize.max,
+                            columnCrossAxisAlignment: CrossAxisAlignment.center,
+                            leading: Hero(
+                              tag: 'avatar',
+                              child: AxiAvatar(
+                                jid: profileState.jid,
+                                subscription: Subscription.both,
+                                presence: profileState.presence,
+                                status: profileState.status,
+                                active: true,
+                              ),
+                            ),
+                            title: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Hero(
+                                  tag: 'title',
+                                  child: Text(profileState.username),
+                                ),
+                              ],
+                            ),
+                            description: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Expanded(
+                                  child: Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        WidgetSpan(
+                                          child: AxiTooltip(
+                                            builder: (_) => ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                  maxWidth: 300.0),
+                                              child: const Text(
+                                                'This is your Jabber ID. Comprised of your '
+                                                'username and domain, it\'s a unique address '
+                                                'that represents you on the XMPP network.',
+                                                textAlign: TextAlign.left,
+                                              ),
+                                            ),
+                                            child: Hero(
+                                              tag: 'subtitle',
+                                              child: SelectableText(
+                                                profileState.jid,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        if (profileState.resource.isNotEmpty)
+                                          WidgetSpan(
+                                            child: AxiTooltip(
+                                              builder: (_) => ConstrainedBox(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                        maxWidth: 300.0),
+                                                child: const Text(
+                                                  'This is your XMPP resource. Every device '
+                                                  'you use has a different one, which is why '
+                                                  'your phone can have a different presence '
+                                                  'to your desktop.',
+                                                  textAlign: TextAlign.left,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                '/${profileState.resource}',
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            trailing: const LogoutButton(),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              spacing: 8.0,
+                              children: [
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 300.0),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: AxiTextFormField(
+                                      placeholder: const Text('Status message'),
+                                      initialValue: profileState.status,
+                                      onSubmitted: (value) => context
+                                          .read<ProfileCubit?>()
+                                          ?.updatePresence(status: value),
+                                    ),
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  spacing: 8.0,
+                                  children: [
+                                    ShadButton.secondary(
+                                      child: const Text('Change password'),
+                                      onPressed: () => setState(() {
+                                        _profileRoute =
+                                            _ProfileRoute.changePassword;
+                                      }),
+                                    ),
+                                    ShadButton.secondary(
+                                      child: Text(
+                                        'Delete account',
+                                        style: TextStyle(
+                                            color: context
+                                                .colorScheme.destructive),
+                                      ),
+                                      onPressed: () => setState(() {
+                                        _profileRoute = _ProfileRoute.delete;
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
                       const Padding(
                         padding: EdgeInsets.all(12.0),
@@ -148,6 +266,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   const Padding(
                     padding: EdgeInsets.all(16.0),
                     child: ChangePasswordForm(),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: UnregisterForm(),
                   ),
                 ],
               ),

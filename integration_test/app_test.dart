@@ -4,7 +4,7 @@ import 'package:axichat/main.dart' as app;
 import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/logout_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/profile/view/profile_card.dart';
+import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:flutter/material.dart';
@@ -103,7 +103,7 @@ void main() {
 
         await tester.tap(find.byKey(loginSubmitKey));
 
-        final findProfileCard = find.byType(ProfileCard);
+        final findProfileCard = find.byType(ProfileTile);
         await tester.pumpUntil(findProfileCard);
 
         final findContactsTab = find.widgetWithText(Tab, 'Contacts');

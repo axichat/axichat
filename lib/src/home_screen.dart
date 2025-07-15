@@ -16,7 +16,7 @@ import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/profile/view/profile_card.dart';
+import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:axichat/src/roster/view/roster_invites_list.dart';
@@ -288,9 +288,7 @@ class Nexus extends StatelessWidget {
             ),
           ),
         ),
-        const ProfileCard(
-          active: true,
-        ),
+        const ProfileTile(),
       ],
     );
   }
