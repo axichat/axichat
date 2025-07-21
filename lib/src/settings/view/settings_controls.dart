@@ -40,6 +40,7 @@ class SettingsControls extends StatelessWidget {
                 padding: const EdgeInsets.all(12.0),
                 child: NotificationRequest(
                   notificationService: context.read<NotificationService>(),
+                  capability: context.read<Capability>(),
                 ),
               ),
             ],
