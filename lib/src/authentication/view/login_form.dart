@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
@@ -81,6 +82,7 @@ class _LoginFormState extends State<LoginForm> {
                   : const SizedBox(height: 40),
               NotificationRequest(
                 notificationService: context.read<NotificationService>(),
+                capability: context.read<Capability>(),
               ),
               const SizedBox.square(dimension: 16.0),
               Padding(

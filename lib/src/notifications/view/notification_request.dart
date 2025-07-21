@@ -1,4 +1,5 @@
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -7,9 +8,11 @@ class NotificationRequest extends StatefulWidget {
   const NotificationRequest({
     super.key,
     required this.notificationService,
+    required this.capability,
   });
 
   final NotificationService notificationService;
+  final Capability capability;
 
   @override
   State<NotificationRequest> createState() => _NotificationRequestState();
@@ -24,7 +27,7 @@ class _NotificationRequestState extends State<NotificationRequest> {
       initialData: withForeground,
       future: _future,
       builder: (context, snapshot) {
-        if (!snapshot.hasData || withForeground) {
+        if (!snapshot.hasData || withForeground || !widget.capability.canForegroundService) {
           return const SizedBox.shrink();
         }
 
