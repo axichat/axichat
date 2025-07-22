@@ -13,7 +13,7 @@ definitions:
       script: |
         Set-ExecutionPolicy RemoteSigned -scope CurrentUser
         iwr -UseBasicParsing 'https://raw.githubusercontent.com/shorebirdtech/install/main/install.ps1'|iex
-        refreshenv
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     - &fetch_dependencies
       name: Fetch Dependencies
       script: |
@@ -265,6 +265,7 @@ workflows:
           shorebird release windows
       - name: Export bundle
         script: |
+          choco install vcredist140 
           Move-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
           Move-Item -Path C:\Windows\System32\vcredist140.dll -Destination build/windows/x64/runner/Release 
           Move-Item -Path C:\Windows\System32\vcredist140_1.dll -Destination build/windows/x64/runner/Release 
