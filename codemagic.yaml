@@ -13,6 +13,7 @@ definitions:
       script: |
         Set-ExecutionPolicy RemoteSigned -scope CurrentUser
         iwr -UseBasicParsing 'https://raw.githubusercontent.com/shorebirdtech/install/main/install.ps1'|iex
+        refreshenv
     - &fetch_dependencies
       name: Fetch Dependencies
       script: |
