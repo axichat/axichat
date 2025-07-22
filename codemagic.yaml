@@ -8,6 +8,11 @@ definitions:
 
         # Add Shorebird to PATH
         echo PATH="$HOME/.shorebird/bin:$PATH" >> $CM_ENV
+    - &shorebird_install_windows
+      name: Install Shorebird Windows
+      script: |
+        Set-ExecutionPolicy RemoteSigned -scope CurrentUser
+        iwr -UseBasicParsing 'https://raw.githubusercontent.com/shorebirdtech/install/main/install.ps1'|iex
     - &fetch_dependencies
       name: Fetch Dependencies
       script: |
@@ -26,8 +31,8 @@ definitions:
         cat ~/.ssh/config 
         cat .git/config 
         git remote -v
-    - &github_release
-      name: Publish to GitHub
+    - &github_release_create_android
+      name: Create Android GitHub Release
       script: |
         git remote set-url origin https://github.com/axichat/axichat.git
         git remote -v
@@ -37,9 +42,40 @@ definitions:
         gh release create $CM_TAG \
         --verify-tag \
         --notes-from-tag \
-        --title "axichat ${CM_TAG}" \
-        build/app/outputs/flutter-apk/*.apk \
+        --title "axichat ${CM_TAG}"
+    - &github_release_upload_android
+      name: Upload to Android GitHub Releases
+      script: |
+        git remote set-url origin https://github.com/axichat/axichat.git
+        git remote -v
+        
+        echo $GITHUB_TOKEN | gh auth login --with-token
+        
+        gh release upload $CM_TAG \
+        'build/app/outputs/flutter-apk/*.apk#axichat android' \
         build/app/outputs/flutter-apk/*.sha1
+    - &github_release_create_windows
+      name: Create Windows GitHub Release
+      script: |
+        git remote set-url origin https://github.com/axichat/axichat.git
+        git remote -v
+        
+        echo $env:GITHUB_TOKEN | gh auth login --with-token
+        
+        gh release create $env:CM_TAG \
+        --verify-tag \
+        --notes-from-tag \
+        --title "axichat ${env:CM_TAG}"
+    - &github_release_upload_windows
+      name: Upload to Windows GitHub Releases
+      script: |
+        git remote set-url origin https://github.com/axichat/axichat.git
+        git remote -v
+        
+        echo $env:GITHUB_TOKEN | gh auth login --with-token
+        
+        gh release upload $env:CM_TAG \
+        'build\windows\x64\runner\release.zip#axichat windows'
 
 workflows:
   test-workflow:
@@ -115,7 +151,8 @@ workflows:
       - name: Shorebird Release
         script: |
           shorebird release android --flavor production --artifact=apk
-      - *github_release
+      - *github_release_create_android
+      - *github_release_upload_android
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/app/outputs/flutter-apk/*.sha1
@@ -170,7 +207,8 @@ workflows:
       - name: Shorebird Release Development
         script: |
           shorebird release android --flavor development --artifact=apk
-      - *github_release
+      - *github_release_create_android
+      - *github_release_upload_android
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
       - build/app/outputs/flutter-apk/*.sha1
@@ -195,4 +233,44 @@ workflows:
           shorebird patch android --flavor development \
           --artifact=apk \
           --release-version=${{ inputs.release_version }}
-          
+  release-windows-workflow:
+    name: Windows Release Workflow
+    triggering:
+      events:
+        - tag
+      branch_patterns:
+        - pattern: 'master'
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: 'v+([0-9]).+([0-9]).+([0-9])'
+          include: true
+    max_build_duration: 60
+    instance_type: windows_x2
+    environment:
+      flutter: stable
+      groups:
+        - shorebird
+        - github
+    scripts:
+      - *build_runner
+      - *shorebird_install_windows
+      - *fetch_dependencies
+      - name: Configure for Windows
+        script: |
+          flutter config --enable-windows-desktop
+      - name: Shorebird Release
+        script: |
+          shorebird release windows
+      - name: Export bundle
+        script: |
+          Move-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
+          Move-Item -Path C:\Windows\System32\vcredist140.dll -Destination build/windows/x64/runner/Release 
+          Move-Item -Path C:\Windows\System32\vcredist140_1.dll -Destination build/windows/x64/runner/Release 
+          cd build/windows/x64/runner/Release
+          7z a -r ../release.zip ./*
+      - *github_release_create_windows
+      - *github_release_upload_windows
+    artifacts:
+      - build\windows\x64\runner\release.zip
+
