@@ -52,6 +52,9 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
+include_directories("C:\\Program Files\\OpenSSL-Win64\\include")
+link_directories("C:\\Program Files\\OpenSSL-Win64\\lib")
+link_libraries(libssl libcrypto)
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
