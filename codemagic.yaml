@@ -59,9 +59,8 @@ definitions:
         
         echo $GITHUB_TOKEN | gh auth login --with-token
         
-        gh release upload $CM_TAG \
-        'build/app/outputs/flutter-apk/*.apk#axichat android' \
-        build/app/outputs/flutter-apk/*.sha1
+        gh release upload $CM_TAG './build/app/outputs/flutter-apk/*.apk#axichat android' \
+        ./build/app/outputs/flutter-apk/*.sha1
     - &github_release_create_windows
       name: Create Windows GitHub Release
       script: |
