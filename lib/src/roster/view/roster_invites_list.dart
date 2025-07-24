@@ -1,5 +1,5 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/blocklist/view/block_button_inline.dart';
+import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -51,15 +51,23 @@ class RosterInvitesList extends StatelessWidget {
               builder: (context, disabled) {
                 return AxiListTile(
                   key: Key(invite.jid),
-                  onDismissed: disabled
-                      ? null
-                      : (_) => context
-                          .read<RosterCubit>()
-                          .rejectContact(jid: invite.jid),
-                  confirmDismiss: (_) => confirm(
-                    context,
-                    text: 'Reject invite from ${invite.jid}?',
-                  ),
+                  menuItems: [
+                    AxiDeleteMenuItem(
+                      onPressed: () async {
+                        if (!disabled &&
+                            await confirm(context,
+                                    text:
+                                        'Reject invite from ${invite.jid}?') ==
+                                true &&
+                            context.mounted) {
+                          context
+                              .read<RosterCubit>()
+                              .rejectContact(jid: invite.jid);
+                        }
+                      },
+                    ),
+                    BlockMenuItem(jid: invite.jid),
+                  ],
                   leading: AxiAvatar(jid: invite.jid),
                   title: invite.title,
                   subtitle: invite.jid,
@@ -76,14 +84,6 @@ class RosterInvitesList extends StatelessWidget {
                                     title: invite.title,
                                   );
                             },
-                    ),
-                    AxiMore(
-                      options: [
-                        (toggle) => BlockButtonInline(
-                              jid: invite.jid,
-                              callback: toggle,
-                            ),
-                      ],
                     ),
                   ],
                 );

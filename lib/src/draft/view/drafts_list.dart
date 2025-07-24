@@ -57,12 +57,16 @@ class DraftsList extends StatelessWidget {
                   'body': item.body,
                 },
               ),
-              onDismissed: (_) =>
-                  context.read<DraftCubit?>()?.deleteDraft(id: item.id),
-              confirmDismiss: (_) => confirm(
-                context,
-                text: 'Delete draft?',
-              ),
+              menuItems: [
+                AxiDeleteMenuItem(
+                  onPressed: () async {
+                    if (await confirm(context, text: 'Delete draft?') == true &&
+                        context.mounted) {
+                      context.read<DraftCubit?>()?.deleteDraft(id: item.id);
+                    }
+                  },
+                )
+              ],
               leading: AxiAvatar(
                 jid: recipients == 1 ? item.jids[0] : recipients.toString(),
               ),

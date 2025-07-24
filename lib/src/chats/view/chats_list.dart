@@ -41,55 +41,60 @@ class ChatsList extends StatelessWidget {
             return AxiListTile(
               key: Key(item.jid),
               badgeCount: item.unreadCount,
-              onTap: () => locate<ChatsCubit?>()?.toggleChat(jid: item.jid),
-              onDismissed: (_) =>
-                  locate<ChatsCubit?>()?.deleteChat(jid: item.jid),
-              confirmDismiss: (_) => showShadDialog<bool>(
-                context: context,
-                builder: (context) {
-                  var deleteMessages = false;
-                  return StatefulBuilder(builder: (context, setState) {
-                    return ShadDialog(
-                      title: const Text('Confirm'),
-                      actions: [
-                        ShadButton.outline(
-                          onPressed: () => context.pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        ShadButton.destructive(
-                          onPressed: () {
-                            if (deleteMessages) {
-                              locate<ChatsCubit?>()
-                                  ?.deleteChatMessages(jid: item.jid);
-                            }
-                            return context.pop(true);
-                          },
-                          child: const Text('Continue'),
-                        )
-                      ],
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Delete chat: ${item.title}',
-                            style: context.textTheme.small,
-                          ),
-                          const SizedBox.square(dimension: 10.0),
-                          ShadCheckbox(
-                            value: deleteMessages,
-                            onChanged: (value) =>
-                                setState(() => deleteMessages = value),
-                            label: Text(
-                              'Permanently delete messages',
-                              style: context.textTheme.muted,
+              onTap: () =>
+                  context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
+              menuItems: [
+                AxiDeleteMenuItem(
+                  onPressed: () => showShadDialog<bool>(
+                    context: context,
+                    builder: (context) {
+                      var deleteMessages = false;
+                      return StatefulBuilder(builder: (context, setState) {
+                        return ShadDialog(
+                          title: const Text('Confirm'),
+                          actions: [
+                            ShadButton.outline(
+                              onPressed: () => context.pop(),
+                              child: const Text('Cancel'),
                             ),
+                            ShadButton.destructive(
+                              onPressed: () {
+                                if (deleteMessages) {
+                                  locate<ChatsCubit?>()
+                                      ?.deleteChatMessages(jid: item.jid);
+                                }
+                                locate<ChatsCubit?>()
+                                    ?.deleteChat(jid: item.jid);
+                                return context.pop();
+                              },
+                              child: const Text('Continue'),
+                            )
+                          ],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Delete chat: ${item.title}',
+                                style: context.textTheme.small,
+                              ),
+                              const SizedBox.square(dimension: 10.0),
+                              ShadCheckbox(
+                                value: deleteMessages,
+                                onChanged: (value) =>
+                                    setState(() => deleteMessages = value),
+                                label: Text(
+                                  'Permanently delete messages',
+                                  style: context.textTheme.muted,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    );
-                  });
-                },
-              ),
+                        );
+                      });
+                    },
+                  ),
+                ),
+              ],
               selected: item.open,
               leading: AxiAvatar(
                 jid: item.jid,
