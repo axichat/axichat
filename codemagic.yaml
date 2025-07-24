@@ -50,12 +50,7 @@ definitions:
         
         echo $GITHUB_TOKEN | gh auth login --with-token
         
-        gh release view $CM_TAG
-        
-        gh release create $CM_TAG \
-        --verify-tag \
-        --notes-from-tag \
-        --title "axichat ${CM_TAG}"
+        sh -c "if gh release view \"$RELEASE_TAG\" &>/dev/null; then echo "Release exists, skipping."; else gh release create $CM_TAG --verify-tag --notes-from-tag --title \"axichat ${CM_TAG}\"; fi"
     - &github_release_upload_android
       name: Upload to Android GitHub Releases
       script: |
@@ -75,8 +70,10 @@ definitions:
         
         echo $env:GITHUB_TOKEN | gh auth login --with-token
         
-        if (gh release view $env:CM_TAG > $null) {
-          Write-Host "Release already exists, skipping."
+        $releaseInfo = gh release view $env:CM_TAG --json tagName | ConvertFrom-Json
+        
+        if ($releaseInfo.tagName -eq $env:CM_TAG) {
+          Write-Host "Release exists, skipping."
         } else {
           gh release create $env:CM_TAG --verify-tag --notes-from-tag --title "axichat ${env:CM_TAG}"
         }
