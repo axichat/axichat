@@ -155,7 +155,12 @@ void main() {
 
         await tester.pumpUntil(findRosterTile);
 
-        await tester.drag(findRosterTile, const Offset(300, 0));
+        await tester.longPress(findRosterTile);
+
+        final findDeleteMenuItem =
+            find.widgetWithText(ShadContextMenuItem, 'Delete');
+        await tester.pumpUntil(findDeleteMenuItem);
+        await tester.tap(findDeleteMenuItem);
 
         await tester.pumpUntil(find.widgetWithText(ShadDialog, 'Confirm'));
 
