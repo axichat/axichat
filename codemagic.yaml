@@ -270,7 +270,7 @@ workflows:
           flutter config --enable-windows-desktop
       - name: Shorebird Release
         script: |
-          shorebird release windows --flavor production
+          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production
       - name: Export bundle
         script: |
           Move-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
