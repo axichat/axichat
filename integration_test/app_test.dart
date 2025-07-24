@@ -98,9 +98,6 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byType(ShadCheckboxFormField));
-        await tester.pumpAndSettle();
-
         await tester.tap(find.byKey(loginSubmitKey));
 
         final findProfileCard = find.byType(ProfileTile);
