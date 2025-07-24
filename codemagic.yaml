@@ -50,6 +50,8 @@ definitions:
         
         echo $GITHUB_TOKEN | gh auth login --with-token
         
+        gh release view $CM_TAG
+        
         gh release create $CM_TAG \
         --verify-tag \
         --notes-from-tag \
@@ -61,8 +63,6 @@ definitions:
         git remote -v
         
         echo $GITHUB_TOKEN | gh auth login --with-token
-        
-        gh release view $CM_TAG
         
         gh release upload $CM_TAG \
         'build/app/outputs/flutter-apk/*.apk#axichat android' \
