@@ -13,8 +13,7 @@ class AxiListTile extends StatelessWidget {
     this.actions,
     this.selected = false,
     this.onTap,
-    this.onDismissed,
-    this.confirmDismiss,
+    this.menuItems,
     this.badgeCount = 0,
   });
 
@@ -25,22 +24,15 @@ class AxiListTile extends StatelessWidget {
   final List<Widget>? actions;
   final bool selected;
   final void Function()? onTap;
-  final void Function(DismissDirection)? onDismissed;
-  final ConfirmDismissCallback? confirmDismiss;
+  final List<Widget>? menuItems;
   final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
-    final dismissible = onDismissed != null && super.key != null;
-    assert(onDismissed != null ? super.key != null : true);
-
     Widget child = ListTile(
       titleAlignment: ListTileTitleAlignment.center,
       horizontalTitleGap: 16.0,
-      contentPadding: EdgeInsets.only(
-        left: 16.0,
-        right: dismissible ? 0.0 : 16.0,
-      ),
+      contentPadding: const EdgeInsets.only(left: 16.0, right: 16.0),
       minTileHeight: 70.0,
       selected: selected,
       selectedTileColor: context.colorScheme.accent,
@@ -77,19 +69,7 @@ class AxiListTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ...?actions,
-          if (dismissible)
-            Container(
-              height: 60.0,
-              width: 4.0,
-              margin: const EdgeInsets.all(7.0),
-              decoration: BoxDecoration(
-                color: context.colorScheme.border,
-                borderRadius: BorderRadius.circular(20),
-              ),
-            )
-        ],
+        children: [...?actions],
       ),
     );
 
@@ -101,35 +81,9 @@ class AxiListTile extends StatelessWidget {
       );
     }
 
-    if (dismissible) {
-      assert(
-        super.key != null,
-        'A key must be provided for dismissible tiles.',
-      );
-      child = Dismissible(
-        key: super.key!,
-        background: Container(
-          padding: const EdgeInsets.all(8.0),
-          decoration: BoxDecoration(
-            color: context.colorScheme.destructive,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(
-                LucideIcons.trash,
-                color: context.colorScheme.destructiveForeground,
-              ),
-              Icon(
-                LucideIcons.trash,
-                color: context.colorScheme.destructiveForeground,
-              ),
-            ],
-          ),
-        ),
-        confirmDismiss: confirmDismiss,
-        onDismissed: onDismissed,
+    if (menuItems != null) {
+      child = ShadContextMenuRegion(
+        items: menuItems!,
         child: child,
       );
     }

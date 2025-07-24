@@ -219,10 +219,11 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                         ),
                                       ),
                                     ),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
+                                    OverflowBar(
+                                      overflowAlignment:
+                                          OverflowBarAlignment.center,
                                       spacing: 8.0,
+                                      overflowSpacing: 8.0,
                                       children: [
                                         ShadButton.secondary(
                                           child: const Text('Change password'),

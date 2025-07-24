@@ -1,5 +1,5 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/blocklist/view/block_button_inline.dart';
+import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -54,15 +54,33 @@ class RosterList extends StatelessWidget {
               key: Key(item.jid),
               onTap: () =>
                   context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
-              onDismissed: state is RosterLoading && state.jid == item.jid
-                  ? null
-                  : (_) => context
-                      .read<RosterCubit?>()
-                      ?.removeContact(jid: item.jid),
-              confirmDismiss: (_) => confirm(
-                context,
-                text: 'Remove ${item.jid} from contacts?',
-              ),
+              menuItems: [
+                ShadContextMenuItem(
+                  leading: const Icon(LucideIcons.pencilLine),
+                  child: const Text('Compose'),
+                  onPressed: () => context.push(
+                    const ComposeRoute().location,
+                    extra: {
+                      'locate': context.read,
+                      'jids': [item.jid],
+                    },
+                  ),
+                ),
+                BlockMenuItem(jid: item.jid),
+                AxiDeleteMenuItem(
+                  onPressed: () async {
+                    if (!(state is RosterLoading && state.jid == item.jid) &&
+                        await confirm(context,
+                                text: 'Remove ${item.jid} from contacts?') ==
+                            true &&
+                        context.mounted) {
+                      context
+                          .read<RosterCubit?>()
+                          ?.removeContact(jid: item.jid);
+                    }
+                  },
+                ),
+              ],
               selected: open,
               leading: AxiAvatar(
                 jid: item.jid,
@@ -74,27 +92,6 @@ class RosterList extends StatelessWidget {
               ),
               title: item.title,
               subtitle: item.jid,
-              actions: [
-                AxiMore(
-                  options: [
-                    (toggle) => ShadButton.ghost(
-                          width: double.infinity,
-                          child: const Text('Draft'),
-                          onPressed: () => context.push(
-                            const ComposeRoute().location,
-                            extra: {
-                              'locate': context.read,
-                              'jids': [item.jid],
-                            },
-                          ),
-                        ),
-                    (toggle) => BlockButtonInline(
-                          jid: item.jid,
-                          callback: toggle,
-                        ),
-                  ],
-                ),
-              ],
             );
           },
         );

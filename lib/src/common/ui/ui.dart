@@ -6,6 +6,7 @@ export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'axi_confirm.dart';
+export 'axi_delete_menu_item.dart';
 export 'axi_fab.dart';
 export 'axi_icon_button.dart';
 export 'axi_input_dialog.dart';
