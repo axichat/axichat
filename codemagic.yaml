@@ -260,6 +260,7 @@ workflows:
       - name: Shorebird Release
         script: |
           choco install openssl --version 3.1.1 -y
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv
           shorebird release windows --flavor production
           # & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production --verbose
