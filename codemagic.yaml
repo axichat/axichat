@@ -62,6 +62,8 @@ definitions:
         
         echo $GITHUB_TOKEN | gh auth login --with-token
         
+        gh release view $CM_TAG
+        
         gh release upload $CM_TAG \
         'build/app/outputs/flutter-apk/*.apk#axichat android' \
         build/app/outputs/flutter-apk/*.sha1
@@ -73,7 +75,11 @@ definitions:
         
         echo $env:GITHUB_TOKEN | gh auth login --with-token
         
-        gh release create $env:CM_TAG --verify-tag --notes-from-tag --title "axichat ${env:CM_TAG}"
+        if (gh release view $env:CM_TAG > $null) {
+          Write-Host "Release already exists, skipping."
+        } else {
+          gh release create $env:CM_TAG --verify-tag --notes-from-tag --title "axichat ${env:CM_TAG}"
+        }
     - &github_release_upload_windows
       name: Upload to Windows GitHub Releases
       script: |
