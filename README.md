@@ -1,5 +1,9 @@
 ## Axichat
 
+### The Center of Decentralization
+
+Download the [latest version](https://github.com/axichat/axichat/releases/latest)
+
 <p float="left">
   <img src="/metadata/en-US/images/phoneScreenshots/1-unread_chats_white.png" width="49%"  alt="Chats page"/>
   <img src="/metadata/en-US/images/phoneScreenshots/4-open_chat_dark.png" width="49%"  alt="Message page"/>
