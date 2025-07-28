@@ -82,7 +82,7 @@ void main() {
       (tester) async {
         await app.main();
 
-        await tester.pumpAndSettle(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
 
         await tester.pumpUntil(find.text(LoginForm.title));
 
@@ -163,10 +163,7 @@ void main() {
 
         await tester.tap(findContinueButton);
 
-        await pumpEventQueue();
-        await tester.pumpAndSettle();
-
-        expect(findRosterTile, findsNothing);
+        await tester.pumpUntilGone(findRosterTile);
 
         await tester.pumpUntil(findProfileCard);
         await tester.pumpUntilGone(find.byType(ShadToast));
