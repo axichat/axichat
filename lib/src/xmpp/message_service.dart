@@ -239,15 +239,12 @@ mixin MessageService on XmppBase {
     });
   }
 
-  Future<void> saveDraft({
+  Future<int> saveDraft({
     int? id,
     required List<String> jids,
     required String body,
-  }) async {
-    await _dbOp<XmppDatabase>((db) async {
-      await db.saveDraft(id: id, jids: jids, body: body);
-    });
-  }
+  }) async =>
+    await _dbOpReturning<XmppDatabase, int>((db) => db.saveDraft(id: id, jids: jids, body: body));
 
   Future<void> deleteDraft({required int id}) async {
     await _dbOp<XmppDatabase>((db) async {
