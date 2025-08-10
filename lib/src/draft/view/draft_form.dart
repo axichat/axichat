@@ -126,7 +126,7 @@ class _DraftFormState extends State<DraftForm> {
                       onPressed: () => setState(() async => id = await context
                           .read<DraftCubit?>()
                           ?.saveDraft(
-                              id: id = id,
+                              id: id,
                               jids: _jids,
                               body: _bodyTextController.text)),
                     ),
