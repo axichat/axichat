@@ -206,6 +206,7 @@ class Nexus extends StatelessWidget {
                       ShadToast.destructive(
                         title: const Text('Whoops!'),
                         description: Text(state.message),
+                        alignment: Alignment.topRight,
                         showCloseIconOnlyWhenHovered: false,
                       ),
                     );
@@ -214,6 +215,7 @@ class Nexus extends StatelessWidget {
                       ShadToast(
                         title: const Text('Success!'),
                         description: Text(state.message),
+                        alignment: Alignment.topRight,
                         showCloseIconOnlyWhenHovered: false,
                       ),
                     );
@@ -229,6 +231,7 @@ class Nexus extends StatelessWidget {
                       ShadToast.destructive(
                         title: const Text('Whoops!'),
                         description: Text(state.message),
+                        alignment: Alignment.topRight,
                         showCloseIconOnlyWhenHovered: false,
                       ),
                     );
@@ -237,6 +240,7 @@ class Nexus extends StatelessWidget {
                       ShadToast(
                         title: const Text('Success!'),
                         description: Text(state.message),
+                        alignment: Alignment.topRight,
                         showCloseIconOnlyWhenHovered: false,
                       ),
                     );
