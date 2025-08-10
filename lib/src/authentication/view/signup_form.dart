@@ -43,7 +43,7 @@ class _SignupFormState extends State<SignupForm> {
   var _currentIndex = 0;
   String? _errorText;
 
-  late Future<String> _captchaSrc;
+  late Future<String> _captchaSrc = _loadCaptchaSrc();
 
   @override
   void initState() {
@@ -217,14 +217,13 @@ class _SignupFormState extends State<SignupForm> {
                           alignment: Alignment.centerLeft,
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
-                            child: ShadCheckbox(
+                            child: ShadCheckboxFormField(
                               enabled: !loading,
-                              value: allowInsecurePassword,
-                              label: const Text('Allow insecure password'),
-                              sublabel: const Text('Not recommended'),
-                              onChanged: (value) => setState(() {
-                                allowInsecurePassword = value;
-                              }),
+                              initialValue: false,
+                              inputLabel: const Text('Allow insecure password'),
+                              inputSublabel: const Text('Not recommended'),
+                              onChanged: (value) =>
+                                  allowInsecurePassword = value,
                             ),
                           ),
                         ),
@@ -305,6 +304,7 @@ class _SignupFormState extends State<SignupForm> {
               builder: (context) {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: 8.0,
                   children: [
                     if (_currentIndex >= 1)
                       ShadButton.secondary(
