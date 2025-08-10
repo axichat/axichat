@@ -53,6 +53,7 @@ class _DraftFormState extends State<DraftForm> {
             if (state is DraftSaveComplete) {
               ShadToaster.maybeOf(context)?.show(const ShadToast(
                 title: Text('Draft saved'),
+                alignment: Alignment.topRight,
                 showCloseIconOnlyWhenHovered: false,
               ));
             }
