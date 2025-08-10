@@ -27,6 +27,8 @@ class _DraftFormState extends State<DraftForm> {
   late TextEditingController _bodyTextController;
   late List<String> _jids;
 
+  late var id = widget.id;
+
   @override
   void initState() {
     super.initState();
@@ -121,10 +123,12 @@ class _DraftFormState extends State<DraftForm> {
                           (_jids.any((e) => e.isNotEmpty) ||
                               _bodyTextController.text.isNotEmpty),
                       child: const Text('Save draft'),
-                      onPressed: () => context.read<DraftCubit?>()?.saveDraft(
-                          id: widget.id,
-                          jids: _jids,
-                          body: _bodyTextController.text),
+                      onPressed: () => setState(() async => id = await context
+                          .read<DraftCubit?>()
+                          ?.saveDraft(
+                              id: id = id,
+                              jids: _jids,
+                              body: _bodyTextController.text)),
                     ),
                     ShadButton(
                       enabled: enabled &&
@@ -134,7 +138,7 @@ class _DraftFormState extends State<DraftForm> {
                       onPressed: () async {
                         if (!Form.of(context).validate()) return;
                         await context.read<DraftCubit?>()?.sendDraft(
-                            id: widget.id,
+                            id: id,
                             jids: _jids,
                             body: _bodyTextController.text);
                         if (!context.mounted) return;

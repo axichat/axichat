@@ -76,7 +76,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Draft?> getDraft(int id);
 
-  Future<void> saveDraft({
+  Future<int> saveDraft({
     int? id,
     required List<String> jids,
     required String body,
@@ -240,7 +240,7 @@ abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
   Future<void> insertOne(Insertable<D> data) =>
       into(table).insert(data, mode: InsertMode.insertOrIgnore);
 
-  Future<void> insertOrUpdateOne(Insertable<D> data) =>
+  Future<int> insertOrUpdateOne(Insertable<D> data) =>
       into(table).insertOnConflictUpdate(data);
 
   Future<void> updateOne(Insertable<D> data) =>
@@ -762,7 +762,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<Draft?> getDraft(int id) => draftsAccessor.selectOne(id);
 
   @override
-  Future<void> saveDraft({
+  Future<int> saveDraft({
     int? id,
     required List<String> jids,
     required String body,

@@ -57,13 +57,15 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     emit(DraftSendComplete());
   }
 
-  Future<void> saveDraft({
+  Future<int> saveDraft({
     required int? id,
     required List<String> jids,
     required String body,
   }) async {
-    await _messageService.saveDraft(id: id, jids: jids, body: body);
+    final savedID =
+        await _messageService.saveDraft(id: id, jids: jids, body: body);
     emit(DraftSaveComplete());
+    return savedID;
   }
 
   Future<void> deleteDraft({required int id}) async {
