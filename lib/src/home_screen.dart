@@ -119,7 +119,7 @@ class HomeScreen extends StatelessWidget {
               final openJid = context.watch<ChatsCubit?>()?.state.openJid;
               return PopScope(
                 canPop: false,
-                onPopInvoked: (_) {
+                onPopInvokedWithResult: (_, __) {
                   if (openJid case final jid?) {
                     context.read<ChatsCubit?>()?.toggleChat(jid: jid);
                   }

@@ -1,29 +1,23 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin RosterService on XmppBase {
+mixin RosterService on XmppBase, BaseStreamService {
   Stream<List<RosterItem>> rosterStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<RosterItem>>>(
-          (db) async => db
-              .watchRoster(start: start, end: end)
-              .startWith(await db.getRoster()),
-        ),
-      ));
+      createPaginatedStream<RosterItem, XmppDatabase>(
+        watchFunction: (db) async => db.watchRoster(start: start, end: end),
+        getFunction: (db) => db.getRoster(),
+      );
 
   Stream<List<Invite>> invitesStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<Invite>>>(
-          (db) async => db
-              .watchInvites(start: start, end: end)
-              .startWith(await db.getInvites(start: start, end: end)),
-        ),
-      ));
+      createPaginatedStream<Invite, XmppDatabase>(
+        watchFunction: (db) async => db.watchInvites(start: start, end: end),
+        getFunction: (db) => db.getInvites(start: start, end: end),
+      );
 
   final _log = Logger('RosterService');
 
@@ -37,20 +31,24 @@ mixin RosterService on XmppBase {
     ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
       final requester = event.from.toBare().toString().toLowerCase();
       _log.info('Subscription request received from $requester');
-      await _dbOp<XmppDatabase>((db) async {
-        final item = await db.getRosterItem(requester);
-        if (item != null) {
-          _log.info('Accepting subscription request from $requester...');
-          try {
-            await _acceptSubscriptionRequest(item);
-          } on XmppRosterException catch (_) {}
-          return;
-        }
-        await db.saveInvite(Invite(
-          jid: requester,
-          title: event.from.local,
-        ));
-      });
+      final db = await database;
+      await db.executeOperation(
+        operation: () async {
+          final item = await db.getRosterItem(requester);
+          if (item != null) {
+            _log.info('Accepting subscription request from $requester...');
+            try {
+              await _acceptSubscriptionRequest(item);
+            } on XmppRosterException catch (_) {}
+            return;
+          }
+          await db.saveInvite(Invite(
+            jid: requester,
+            title: event.from.local,
+          ));
+        },
+        operationName: 'handle subscription request',
+      );
     });
 
   @override
@@ -67,9 +65,11 @@ mixin RosterService on XmppBase {
             .items
             .map((e) => RosterItem.fromMox(e))
             .toList();
-        await _dbOp<XmppDatabase>((db) async {
-          await db.saveRosterItems(items);
-        });
+        final db = await database;
+        await db.executeOperation(
+          operation: () => db.saveRosterItems(items),
+          operationName: 'save roster items',
+        );
       }
     }
   }
@@ -94,9 +94,11 @@ mixin RosterService on XmppBase {
       case mox.RosterRemovalResult.okay:
         return;
       case mox.RosterRemovalResult.itemNotFound:
-        await _dbOp<XmppDatabase>((db) async {
-          await db.removeRosterItem(jid);
-        });
+        final db = await database;
+        await db.executeOperation(
+          operation: () => db.removeRosterItem(jid),
+          operationName: 'remove roster item',
+        );
       case mox.RosterRemovalResult.error:
         throw XmppRosterException();
     }
@@ -119,9 +121,11 @@ mixin RosterService on XmppBase {
     final rejected = await _connection.rejectSubscriptionRequest(jid);
 
     if (rejected) {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.deleteInvite(jid);
-      });
+      final db = await database;
+      await db.executeOperation(
+        operation: () => db.deleteInvite(jid),
+        operationName: 'delete invite',
+      );
       return;
     }
 
@@ -148,19 +152,23 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> modified,
     List<mox.XmppRosterItem> added,
   ) async {
-    await owner._dbOp<XmppDatabase>((db) async {
-      for (final jid in removed) {
-        await db.removeRosterItem(jid);
-      }
+    final db = await owner.database;
+    await db.executeOperation(
+      operation: () async {
+        for (final jid in removed) {
+          await db.removeRosterItem(jid);
+        }
 
-      for (final item in added) {
-        await db.saveRosterItem(RosterItem.fromMox(item));
-      }
+        for (final item in added) {
+          await db.saveRosterItem(RosterItem.fromMox(item));
+        }
 
-      for (final item in modified) {
-        await db.updateRosterItem(RosterItem.fromMox(item));
-      }
-    });
+        for (final item in modified) {
+          await db.updateRosterItem(RosterItem.fromMox(item));
+        }
+      },
+      operationName: 'commit roster changes',
+    );
 
     if (version != null) {
       _log.info('Saving roster version: $version...');
@@ -178,9 +186,9 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     });
     _log.info('Loaded roster version: $version.');
 
-    final rosterItems =
-        await owner._dbOpReturning<XmppDatabase, List<mox.XmppRosterItem>>(
-      (db) async => (await db.getRoster())
+    final db = await owner.database;
+    final rosterItems = await db.executeQuery<List<mox.XmppRosterItem>>(
+      operation: () async => (await db.getRoster())
           .map(
             (item) => mox.XmppRosterItem(
               jid: item.jid,
@@ -191,6 +199,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
             ),
           )
           .toList(),
+      operationName: 'load roster cache',
     );
     return mox.RosterCacheLoadResult(version, rosterItems);
   }
