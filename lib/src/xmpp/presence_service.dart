@@ -1,6 +1,6 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin PresenceService on XmppBase {
+mixin PresenceService on XmppBase, BaseStreamService {
   final presenceStorageKey = XmppStateStore.registerKey('my_presence');
   final statusStorageKey = XmppStateStore.registerKey('my_status');
 
@@ -25,16 +25,17 @@ mixin PresenceService on XmppBase {
   }
 
   Stream<Presence?> get presenceStream =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppStateStore, Stream<Presence?>>((ss) =>
+      createSingleItemStream<Presence?, XmppStateStore>(
+        watchFunction: (ss) async =>
             ss.watch<Presence?>(key: presenceStorageKey) ??
-            Stream.value(Presence.unknown)),
-      ));
+            Stream.value(Presence.unknown),
+      );
 
-  Stream<String?> get statusStream => StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppStateStore, Stream<String?>>((ss) =>
-            ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null)),
-      ));
+  Stream<String?> get statusStream =>
+      createSingleItemStream<String?, XmppStateStore>(
+        watchFunction: (ss) async =>
+            ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null),
+      );
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
@@ -66,13 +67,15 @@ mixin PresenceService on XmppBase {
       return;
     }
 
-    await _dbOp<XmppDatabase>((db) async {
-      await db.updatePresence(
+    final db = await database;
+    await db.executeOperation(
+      operation: () => db.updatePresence(
         jid: jid,
         presence: presence,
         status: status,
-      );
-    });
+      ),
+      operationName: 'update presence',
+    );
   }
 }
 
@@ -105,9 +108,11 @@ class XmppPresenceManager extends mox.PresenceManager {
                 mox.SubscriptionRequestReceivedEvent(from: jid),
               );
             } else if (stanza.type?.contains('unsubscribe') ?? false) {
-              await owner._dbOp<XmppDatabase>((db) async {
-                await db.deleteInvite(jid.toString());
-              });
+              final db = await owner.database;
+              await db.executeOperation(
+                operation: () => db.deleteInvite(jid.toString()),
+                operationName: 'delete invite on unsubscribe',
+              );
             }
 
             _log.info('Incoming presence from: ${jid.toString()}...');

@@ -38,20 +38,5 @@ class DisplayFingerprint extends StatelessWidget {
           )
       ],
     );
-    GridView(
-      shrinkWrap: true,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 7.0,
-      ),
-      children: strings.indexed.map((e) {
-        final (index, string) = e;
-        return Text(
-          string,
-          textAlign: index.isEven ? TextAlign.right : TextAlign.left,
-          style: context.textTheme.small.copyWith(color: stringToColor(string)),
-        );
-      }).toList(),
-    );
   }
 }

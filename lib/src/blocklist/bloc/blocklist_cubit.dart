@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';

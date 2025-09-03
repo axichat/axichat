@@ -1,7 +1,6 @@
 import 'dart:core';
 import 'dart:isolate';
 
-import 'package:axichat/main.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';

@@ -14,6 +14,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/database_extensions.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
@@ -31,6 +32,7 @@ import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
 
+part 'base_stream_service.dart';
 part 'blocking_service.dart';
 part 'chats_service.dart';
 part 'message_service.dart';
@@ -125,6 +127,8 @@ abstract interface class XmppBase {
 
   mox.JID? get _myJid;
 
+  Future<XmppDatabase> get database;
+
   bool get needsReset => false;
 
   EventManager<mox.XmppEvent> get _eventManager =>
@@ -159,6 +163,7 @@ abstract interface class XmppBase {
 
 class XmppService extends XmppBase
     with
+        BaseStreamService,
         MessageService,
         OmemoService,
         RosterService,
@@ -212,6 +217,9 @@ class XmppService extends XmppBase
 
   @override
   XmppService get owner => this;
+
+  @override
+  Future<XmppDatabase> get database => _database.future;
 
   @override
   String? get myJid => _myJid?.toBare().toString();

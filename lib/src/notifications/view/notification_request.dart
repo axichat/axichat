@@ -27,7 +27,9 @@ class _NotificationRequestState extends State<NotificationRequest> {
       initialData: withForeground,
       future: _future,
       builder: (context, snapshot) {
-        if (!snapshot.hasData || withForeground || !widget.capability.canForegroundService) {
+        if (!snapshot.hasData ||
+            withForeground ||
+            !widget.capability.canForegroundService) {
           return const SizedBox.shrink();
         }
 

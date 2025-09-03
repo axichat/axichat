@@ -1,17 +1,14 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin BlockingService on XmppBase {
+mixin BlockingService on XmppBase, BaseStreamService {
   Stream<List<BlocklistData>> blocklistStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>(
-          (db) async => db
-              .watchBlocklist(start: start, end: end)
-              .startWith(await db.getBlocklist(start: start, end: end)),
-        ),
-      ));
+      createPaginatedStream<BlocklistData, XmppDatabase>(
+        watchFunction: (db) async => db.watchBlocklist(start: start, end: end),
+        getFunction: (db) => db.getBlocklist(start: start, end: end),
+      );
 
   final _log = Logger('BlockingService');
 
@@ -22,19 +19,25 @@ mixin BlockingService on XmppBase {
       await requestBlocklist();
     })
     ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.blockJids(event.items);
-      });
+      final db = await database;
+      await db.executeOperation(
+        operation: () => db.blockJids(event.items),
+        operationName: 'block JIDs',
+      );
     })
     ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.unblockJids(event.items);
-      });
+      final db = await database;
+      await db.executeOperation(
+        operation: () => db.unblockJids(event.items),
+        operationName: 'unblock JIDs',
+      );
     })
     ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.deleteBlocklist();
-      });
+      final db = await database;
+      await db.executeOperation(
+        operation: () => db.deleteBlocklist(),
+        operationName: 'delete blocklist',
+      );
     });
 
   @override
@@ -45,9 +48,11 @@ mixin BlockingService on XmppBase {
 
   Future<void> requestBlocklist() async {
     if (await _connection.requestBlocklist() case final blocked?) {
-      await owner._dbOp<XmppDatabase>((db) async {
-        db.replaceBlocklist(blocked);
-      });
+      final db = await owner.database;
+      await db.executeOperation(
+        operation: () => db.replaceBlocklist(blocked),
+        operationName: 'replace blocklist',
+      );
     }
   }
 
