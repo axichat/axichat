@@ -269,8 +269,15 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
             ..limit(limit))
           .watch();
 
-  Future<List<Message>> selectChatMessages(String jid) =>
-      (select(table)..where((table) => table.chatJid.equals(jid))).get();
+  Future<List<Message>> selectChatMessages(String jid) => (select(table)
+        ..where((table) => table.chatJid.equals(jid))
+        ..orderBy([
+          (t) => OrderingTerm(
+                expression: t.timestamp,
+                mode: OrderingMode.desc,
+              )
+        ]))
+      .get();
 
   @override
   Future<Message?> selectOne(String stanzaID) =>

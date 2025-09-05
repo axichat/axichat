@@ -16,29 +16,28 @@ extension MessageEvent on mox.MessageEvent {
   }
 }
 
-mixin MessageService on XmppBase {
+mixin MessageService on XmppBase, BaseStreamService {
   Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
     int end = 50,
   }) =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<Message>>>(
-          (db) => db.watchChatMessages(jid, start: start, end: end),
-        ),
-      ));
+      createSingleItemStream<List<Message>, XmppDatabase>(
+        watchFunction: (db) async {
+          final stream = db.watchChatMessages(jid, start: start, end: end);
+          final initial = await db.getChatMessages(jid, start: start, end: end);
+          return stream.startWith(initial);
+        },
+      );
 
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<Draft>>>(
-          (db) async => db
-              .watchDrafts(start: start, end: end)
-              .startWith(await db.getDrafts(start: start, end: end)),
-        ),
-      ));
+      createPaginatedStream<Draft, XmppDatabase>(
+        watchFunction: (db) async => db.watchDrafts(start: start, end: end),
+        getFunction: (db) => db.getDrafts(start: start, end: end),
+      );
 
   final _log = Logger('MessageService');
 
@@ -77,9 +76,9 @@ mixin MessageService on XmppBase {
       final metadata = _extractFileMetadata(event);
 
       if (metadata != null) {
-        await _dbOp<XmppDatabase>((db) async {
-          await db.saveFileMetadata(metadata);
-        });
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveFileMetadata(metadata),
+        );
       }
 
       if (event.get<mox.OmemoData>() case final data?) {
@@ -94,34 +93,34 @@ mixin MessageService on XmppBase {
         };
 
         if (newCount > 0) {
-          await _dbOp<XmppDatabase>((db) async {
-            await db.saveMessage(Message(
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveMessage(Message(
               stanzaID: _connection.generateId(),
               senderJid: myJid!.toString(),
               chatJid: message.chatJid,
               pseudoMessageType: PseudoMessageType.newDevice,
               pseudoMessageData: pseudoMessageData,
-            ));
-          });
+            )),
+          );
         }
 
         if (replacedCount > 0) {
-          await _dbOp<XmppDatabase>((db) async {
-            await db.saveMessage(Message(
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveMessage(Message(
               stanzaID: _connection.generateId(),
               senderJid: myJid!.toString(),
               chatJid: message.chatJid,
               pseudoMessageType: PseudoMessageType.changedDevice,
               pseudoMessageData: pseudoMessageData,
-            ));
-          });
+            )),
+          );
         }
       }
 
       if (!message.noStore) {
-        await _dbOp<XmppDatabase>((db) async {
-          await db.saveMessage(message);
-        });
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessage(message),
+        );
       }
 
       _messageStream.add(message);
@@ -129,24 +128,26 @@ mixin MessageService on XmppBase {
     ..registerHandler<mox.ChatMarkerEvent>((event) async {
       _log.info('Received chat marker from ${event.from}');
 
-      await _dbOp<XmppDatabase>((db) async {
-        switch (event.type) {
-          case mox.ChatMarker.displayed:
-            db.markMessageDisplayed(event.id);
-            db.markMessageReceived(event.id);
-            db.markMessageAcked(event.id);
-          case mox.ChatMarker.received:
-            db.markMessageReceived(event.id);
-            db.markMessageAcked(event.id);
-          case mox.ChatMarker.acknowledged:
-            db.markMessageAcked(event.id);
-        }
-      });
+      await _dbOp<XmppDatabase>(
+        (db) async {
+          switch (event.type) {
+            case mox.ChatMarker.displayed:
+              db.markMessageDisplayed(event.id);
+              db.markMessageReceived(event.id);
+              db.markMessageAcked(event.id);
+            case mox.ChatMarker.received:
+              db.markMessageReceived(event.id);
+              db.markMessageAcked(event.id);
+            case mox.ChatMarker.acknowledged:
+              db.markMessageAcked(event.id);
+          }
+        },
+      );
     })
     ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.markMessageReceived(event.id);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) => db.markMessageReceived(event.id),
+      );
     });
 
   @override
@@ -187,9 +188,9 @@ mixin MessageService on XmppBase {
     );
     _log.info('Sending message: ${message.stanzaID} '
         'with body: ${text.substring(0, min(10, text.length))}...');
-    await _dbOp<XmppDatabase>((db) async {
-      await db.saveMessage(message);
-    });
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessage(message),
+    );
 
     if (!await _connection.sendMessage(message.toMox())) {
       _log.info(
@@ -198,23 +199,26 @@ mixin MessageService on XmppBase {
         e,
       );
 
-      await _dbOp<XmppDatabase>((db) async {
-        await db.saveMessageError(
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveMessageError(
           error: MessageError.unknown,
           stanzaID: message.stanzaID,
-        );
-      });
+        ),
+      );
 
       throw XmppMessageException();
     }
   }
 
   Future<bool> _canSendChatMarkers({required String to}) async {
-    return to != myJid &&
-        await _dbOpReturning<XmppDatabase, bool>((db) async {
-          final chat = await db.getChat(to);
-          return chat?.markerResponsive ?? false;
-        });
+    if (to == myJid) return false;
+
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
+        final chat = await db.getChat(to);
+        return chat?.markerResponsive ?? false;
+      },
+    );
   }
 
   Future<void> sendReadMarker(String to, String stanzaID) async {
@@ -232,24 +236,29 @@ mixin MessageService on XmppBase {
       marker: mox.ChatMarker.displayed,
     );
 
-    await _dbOp<XmppDatabase>((db) async {
-      db.markMessageDisplayed(stanzaID);
-      db.markMessageReceived(stanzaID);
-      db.markMessageAcked(stanzaID);
-    });
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        db.markMessageDisplayed(stanzaID);
+        db.markMessageReceived(stanzaID);
+        db.markMessageAcked(stanzaID);
+      },
+    );
   }
 
   Future<int> saveDraft({
     int? id,
     required List<String> jids,
     required String body,
-  }) async =>
-    await _dbOpReturning<XmppDatabase, int>((db) => db.saveDraft(id: id, jids: jids, body: body));
+  }) async {
+    return await _dbOpReturning<XmppDatabase, int>(
+      (db) => db.saveDraft(id: id, jids: jids, body: body),
+    );
+  }
 
   Future<void> deleteDraft({required int id}) async {
-    await _dbOp<XmppDatabase>((db) async {
-      await db.removeDraft(id);
-    });
+    await _dbOp<XmppDatabase>(
+      (db) => db.removeDraft(id),
+    );
   }
 
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
@@ -275,10 +284,12 @@ mixin MessageService on XmppBase {
         marker: mox.ChatMarker.received,
       );
 
-      await _dbOp<XmppDatabase>((db) async {
-        db.markMessageReceived(id);
-        db.markMessageAcked(id);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) async {
+          db.markMessageReceived(id);
+          db.markMessageAcked(id);
+        },
+      );
     } else if (deliveryReceiptRequested &&
         info.features.contains(mox.deliveryXmlns)) {
       await _connection.sendMessage(
@@ -292,10 +303,12 @@ mixin MessageService on XmppBase {
         ),
       );
 
-      await _dbOp<XmppDatabase>((db) async {
-        db.markMessageReceived(id);
-        db.markMessageAcked(id);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) async {
+          db.markMessageReceived(id);
+          db.markMessageAcked(id);
+        },
+      );
     }
   }
 
@@ -383,49 +396,55 @@ mixin MessageService on XmppBase {
       _ => MessageError.unknown,
     };
 
-    await _dbOp<XmppDatabase>((db) async {
-      await db.saveMessageError(stanzaID: event.id!, error: error);
-    });
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessageError(stanzaID: event.id!, error: error),
+    );
     return true;
   }
 
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.updateChatState(chatJid: jid, state: state);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) => db.updateChatState(chatJid: jid, state: state),
+      );
     }
   }
 
   Future<bool> _handleCorrection(mox.MessageEvent event, String jid) async {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
-    var edited = false;
-    await _dbOp<XmppDatabase>((db) async {
-      if (await db.getMessageByOriginID(correction.id) case final message?) {
-        if (!message.authorized(event.from) || !message.editable) return;
-        await db.saveMessageEdit(
-          stanzaID: message.stanzaID,
-          body: event.extensions.get<mox.MessageBodyData>()?.body,
-        );
-        edited = true;
-      }
-    });
-    return edited;
+
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
+        if (await db.getMessageByOriginID(correction.id) case final message?) {
+          if (!message.authorized(event.from) || !message.editable) {
+            return false;
+          }
+          await db.saveMessageEdit(
+            stanzaID: message.stanzaID,
+            body: event.extensions.get<mox.MessageBodyData>()?.body,
+          );
+          return true;
+        }
+        return false;
+      },
+    );
   }
 
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
     final retraction = event.extensions.get<mox.MessageRetractionData>();
     if (retraction == null) return false;
-    var retracted = false;
-    await _dbOp<XmppDatabase>((db) async {
-      if (await db.getMessageByOriginID(retraction.id) case final message?) {
-        if (!message.authorized(event.from)) return;
-        await db.markMessageRetracted(message.stanzaID);
-        retracted = true;
-      }
-    });
-    return retracted;
+
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
+        if (await db.getMessageByOriginID(retraction.id) case final message?) {
+          if (!message.authorized(event.from)) return false;
+          await db.markMessageRetracted(message.stanzaID);
+          return true;
+        }
+        return false;
+      },
+    );
   }
 
   // Future<bool> _handleReactions(mox.MessageEvent event, String jid) async {

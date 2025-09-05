@@ -1,17 +1,14 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin BlockingService on XmppBase {
+mixin BlockingService on XmppBase, BaseStreamService {
   Stream<List<BlocklistData>> blocklistStream({
     int start = 0,
     int end = basePageItemLimit,
   }) =>
-      StreamCompleter.fromFuture(Future.value(
-        _dbOpReturning<XmppDatabase, Stream<List<BlocklistData>>>(
-          (db) async => db
-              .watchBlocklist(start: start, end: end)
-              .startWith(await db.getBlocklist(start: start, end: end)),
-        ),
-      ));
+      createPaginatedStream<BlocklistData, XmppDatabase>(
+        watchFunction: (db) async => db.watchBlocklist(start: start, end: end),
+        getFunction: (db) => db.getBlocklist(start: start, end: end),
+      );
 
   final _log = Logger('BlockingService');
 
@@ -22,19 +19,19 @@ mixin BlockingService on XmppBase {
       await requestBlocklist();
     })
     ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.blockJids(event.items);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) => db.blockJids(event.items),
+      );
     })
     ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.unblockJids(event.items);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) => db.unblockJids(event.items),
+      );
     })
     ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
-      await _dbOp<XmppDatabase>((db) async {
-        await db.deleteBlocklist();
-      });
+      await _dbOp<XmppDatabase>(
+        (db) => db.deleteBlocklist(),
+      );
     });
 
   @override
@@ -45,9 +42,9 @@ mixin BlockingService on XmppBase {
 
   Future<void> requestBlocklist() async {
     if (await _connection.requestBlocklist() case final blocked?) {
-      await owner._dbOp<XmppDatabase>((db) async {
-        db.replaceBlocklist(blocked);
-      });
+      await _dbOp<XmppDatabase>(
+        (db) => db.replaceBlocklist(blocked),
+      );
     }
   }
 
