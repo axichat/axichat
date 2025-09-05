@@ -49,10 +49,8 @@ mixin ChatsService on XmppBase, BaseStreamService {
   }
 
   Future<void> openChat(String jid) async {
-    final db = await database;
-    final closed = await db.safeGetItem<Chat>(
-      getter: () => db.openChat(jid),
-      itemName: 'chat to close',
+    final closed = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.openChat(jid),
     );
     if (closed != null) {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
@@ -61,14 +59,12 @@ mixin ChatsService on XmppBase, BaseStreamService {
   }
 
   Future<void> closeChat() async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () async {
+    await _dbOp<XmppDatabase>(
+      (db) async {
         final closed = await db.closeChat();
         if (closed == null) return;
         await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
       },
-      operationName: 'close chat',
     );
   }
 
@@ -76,10 +72,8 @@ mixin ChatsService on XmppBase, BaseStreamService {
     required String jid,
     required bool muted,
   }) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.markChatMuted(jid: jid, muted: muted),
-      operationName: 'toggle chat muted',
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatMuted(jid: jid, muted: muted),
     );
   }
 
@@ -87,10 +81,8 @@ mixin ChatsService on XmppBase, BaseStreamService {
     required String jid,
     required bool favorited,
   }) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.markChatFavorited(jid: jid, favorited: favorited),
-      operationName: 'toggle chat favorited',
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatFavorited(jid: jid, favorited: favorited),
     );
   }
 
@@ -98,20 +90,15 @@ mixin ChatsService on XmppBase, BaseStreamService {
     required String jid,
     required bool responsive,
   }) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () =>
-          db.markChatMarkerResponsive(jid: jid, responsive: responsive),
-      operationName: 'toggle chat marker responsive',
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatMarkerResponsive(jid: jid, responsive: responsive),
     );
   }
 
   Future<void> toggleAllChatsMarkerResponsive(
       {required bool responsive}) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.markChatsMarkerResponsive(responsive: responsive),
-      operationName: 'toggle all chats marker responsive',
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatsMarkerResponsive(responsive: responsive),
     );
   }
 
@@ -119,11 +106,8 @@ mixin ChatsService on XmppBase, BaseStreamService {
     required String jid,
     required EncryptionProtocol protocol,
   }) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () =>
-          db.updateChatEncryption(chatJid: jid, protocol: protocol),
-      operationName: 'set chat encryption',
+    await _dbOp<XmppDatabase>(
+      (db) => db.updateChatEncryption(chatJid: jid, protocol: protocol),
     );
   }
 
@@ -131,34 +115,26 @@ mixin ChatsService on XmppBase, BaseStreamService {
     required String jid,
     required String alert,
   }) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.updateChatAlert(chatJid: jid, alert: alert),
-      operationName: 'set chat alert',
+    await _dbOp<XmppDatabase>(
+      (db) => db.updateChatAlert(chatJid: jid, alert: alert),
     );
   }
 
   Future<void> clearChatAlert({required String jid}) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.updateChatAlert(chatJid: jid, alert: null),
-      operationName: 'clear chat alert',
+    await _dbOp<XmppDatabase>(
+      (db) => db.updateChatAlert(chatJid: jid, alert: null),
     );
   }
 
   Future<void> deleteChat({required String jid}) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.removeChat(jid),
-      operationName: 'delete chat',
+    await _dbOp<XmppDatabase>(
+      (db) => db.removeChat(jid),
     );
   }
 
   Future<void> deleteChatMessages({required String jid}) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.removeChatMessages(jid),
-      operationName: 'delete chat messages',
+    await _dbOp<XmppDatabase>(
+      (db) => db.removeChatMessages(jid),
     );
   }
 }

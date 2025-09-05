@@ -56,25 +56,24 @@ mixin PresenceService on XmppBase, BaseStreamService {
     String? status,
   }) async {
     if (jid == myJid) {
-      await _dbOp<XmppStateStore>((ss) async {
-        await ss.writeAll(
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.writeAll(
           data: {
             presenceStorageKey: presence,
             statusStorageKey: status,
           },
-        );
-      });
+        ),
+        awaitDatabase: true,
+      );
       return;
     }
 
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.updatePresence(
+    await _dbOp<XmppDatabase>(
+      (db) => db.updatePresence(
         jid: jid,
         presence: presence,
         status: status,
       ),
-      operationName: 'update presence',
     );
   }
 }
@@ -108,10 +107,8 @@ class XmppPresenceManager extends mox.PresenceManager {
                 mox.SubscriptionRequestReceivedEvent(from: jid),
               );
             } else if (stanza.type?.contains('unsubscribe') ?? false) {
-              final db = await owner.database;
-              await db.executeOperation(
-                operation: () => db.deleteInvite(jid.toString()),
-                operationName: 'delete invite on unsubscribe',
+              await owner._dbOp<XmppDatabase>(
+                (db) => db.deleteInvite(jid.toString()),
               );
             }
 
