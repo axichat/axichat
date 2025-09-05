@@ -153,6 +153,10 @@ BlocProvider
 create: (context) => ChatsCubit(
 chatsService: context.read<XmppService>(),
 ),
+BlocProvider(
+  create: (context) => ChatsCubit(
+    chatsService: context.read<XmppService>(),
+  ),
 )
 ```
 
