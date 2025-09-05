@@ -4,7 +4,6 @@
 
 - All styles, themes, and components should be global and controlled from this directory
 - This is to minimise number of edits required to update the UI
-- @ui/dynamic_inline_text.dart makes message metadata appear on the same line as the last line of
 - `@ui/dynamic_inline_text.dart` makes message metadata appear on the same line as the last line of
   text if there is enough horizontal space, otherwise on the line below
 

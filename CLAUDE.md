@@ -153,10 +153,6 @@ BlocProvider
 create: (context) => ChatsCubit(
 chatsService: context.read<XmppService>(),
 ),
-BlocProvider(
-  create: (context) => ChatsCubit(
-    chatsService: context.read<XmppService>(),
-  ),
 )
 ```
 
@@ -195,20 +191,20 @@ key
 jidKey
 ); // ✅ Type-safe
 // await credentialStore.read(key: 'typo'); // ❌ Runtime error
-await credentialStore.read(key: jidKey); // ✅ Type-safe
-// await credentialStore.read(key: 'typo'); // ❌ Runtime error
+```
 
 ### Models Organization
 
 ```
+
 lib/src/storage/
-├── models.dart              # Export barrel (DO NOT add logic here)
+├── models.dart # Export barrel (DO NOT add logic here)
 ├── models/
-│   ├── message_models.dart # Message, Reaction, Notification
-│   ├── omemo_models.dart   # All crypto models with parallel toJson
-│   ├── chat_models.dart    # Chat, RosterItem, Presence
-│   ├── file_models.dart    # FileMetadata, Sticker, Draft
-│   └── database_converters.dart # JSON converters
+│ ├── message_models.dart # Message, Reaction, Notification
+│ ├── omemo_models.dart # All crypto models with parallel toJson
+│ ├── chat_models.dart # Chat, RosterItem, Presence
+│ ├── file_models.dart # FileMetadata, Sticker, Draft
+│ └── database_converters.dart # JSON converters
 └── database_extensions.dart # Database operation helpers
 
 ```
