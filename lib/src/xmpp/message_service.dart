@@ -76,10 +76,8 @@ mixin MessageService on XmppBase, BaseStreamService {
       final metadata = _extractFileMetadata(event);
 
       if (metadata != null) {
-        final db = await database;
-        await db.executeOperation(
-          operation: () => db.saveFileMetadata(metadata),
-          operationName: 'save file metadata',
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveFileMetadata(metadata),
         );
       }
 
@@ -95,39 +93,33 @@ mixin MessageService on XmppBase, BaseStreamService {
         };
 
         if (newCount > 0) {
-          final db = await database;
-          await db.executeOperation(
-            operation: () => db.saveMessage(Message(
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveMessage(Message(
               stanzaID: _connection.generateId(),
               senderJid: myJid!.toString(),
               chatJid: message.chatJid,
               pseudoMessageType: PseudoMessageType.newDevice,
               pseudoMessageData: pseudoMessageData,
             )),
-            operationName: 'save new device message',
           );
         }
 
         if (replacedCount > 0) {
-          final db = await database;
-          await db.executeOperation(
-            operation: () => db.saveMessage(Message(
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveMessage(Message(
               stanzaID: _connection.generateId(),
               senderJid: myJid!.toString(),
               chatJid: message.chatJid,
               pseudoMessageType: PseudoMessageType.changedDevice,
               pseudoMessageData: pseudoMessageData,
             )),
-            operationName: 'save changed device message',
           );
         }
       }
 
       if (!message.noStore) {
-        final db = await database;
-        await db.executeOperation(
-          operation: () => db.saveMessage(message),
-          operationName: 'save message',
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessage(message),
         );
       }
 
@@ -136,9 +128,8 @@ mixin MessageService on XmppBase, BaseStreamService {
     ..registerHandler<mox.ChatMarkerEvent>((event) async {
       _log.info('Received chat marker from ${event.from}');
 
-      final db = await database;
-      await db.executeOperation(
-        operation: () async {
+      await _dbOp<XmppDatabase>(
+        (db) async {
           switch (event.type) {
             case mox.ChatMarker.displayed:
               db.markMessageDisplayed(event.id);
@@ -151,14 +142,11 @@ mixin MessageService on XmppBase, BaseStreamService {
               db.markMessageAcked(event.id);
           }
         },
-        operationName: 'update chat marker status',
       );
     })
     ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.markMessageReceived(event.id),
-        operationName: 'mark message received',
+      await _dbOp<XmppDatabase>(
+        (db) => db.markMessageReceived(event.id),
       );
     });
 
@@ -200,10 +188,8 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
     _log.info('Sending message: ${message.stanzaID} '
         'with body: ${text.substring(0, min(10, text.length))}...');
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.saveMessage(message),
-      operationName: 'save outgoing message',
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessage(message),
     );
 
     if (!await _connection.sendMessage(message.toMox())) {
@@ -213,13 +199,11 @@ mixin MessageService on XmppBase, BaseStreamService {
         e,
       );
 
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.saveMessageError(
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveMessageError(
           error: MessageError.unknown,
           stanzaID: message.stanzaID,
         ),
-        operationName: 'save message error',
       );
 
       throw XmppMessageException();
@@ -229,13 +213,11 @@ mixin MessageService on XmppBase, BaseStreamService {
   Future<bool> _canSendChatMarkers({required String to}) async {
     if (to == myJid) return false;
 
-    final db = await database;
-    return await db.executeQuery<bool>(
-      operation: () async {
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
         final chat = await db.getChat(to);
         return chat?.markerResponsive ?? false;
       },
-      operationName: 'check chat marker capability',
     );
   }
 
@@ -254,14 +236,12 @@ mixin MessageService on XmppBase, BaseStreamService {
       marker: mox.ChatMarker.displayed,
     );
 
-    final db = await database;
-    await db.executeOperation(
-      operation: () async {
+    await _dbOp<XmppDatabase>(
+      (db) async {
         db.markMessageDisplayed(stanzaID);
         db.markMessageReceived(stanzaID);
         db.markMessageAcked(stanzaID);
       },
-      operationName: 'mark read message status',
     );
   }
 
@@ -270,18 +250,14 @@ mixin MessageService on XmppBase, BaseStreamService {
     required List<String> jids,
     required String body,
   }) async {
-    final db = await database;
-    return await db.executeQuery<int>(
-      operation: () => db.saveDraft(id: id, jids: jids, body: body),
-      operationName: 'save draft',
+    return await _dbOpReturning<XmppDatabase, int>(
+      (db) => db.saveDraft(id: id, jids: jids, body: body),
     );
   }
 
   Future<void> deleteDraft({required int id}) async {
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.removeDraft(id),
-      operationName: 'delete draft',
+    await _dbOp<XmppDatabase>(
+      (db) => db.removeDraft(id),
     );
   }
 
@@ -308,13 +284,11 @@ mixin MessageService on XmppBase, BaseStreamService {
         marker: mox.ChatMarker.received,
       );
 
-      final db = await database;
-      await db.executeOperation(
-        operation: () async {
+      await _dbOp<XmppDatabase>(
+        (db) async {
           db.markMessageReceived(id);
           db.markMessageAcked(id);
         },
-        operationName: 'acknowledge message with chat marker',
       );
     } else if (deliveryReceiptRequested &&
         info.features.contains(mox.deliveryXmlns)) {
@@ -329,13 +303,11 @@ mixin MessageService on XmppBase, BaseStreamService {
         ),
       );
 
-      final db = await database;
-      await db.executeOperation(
-        operation: () async {
+      await _dbOp<XmppDatabase>(
+        (db) async {
           db.markMessageReceived(id);
           db.markMessageAcked(id);
         },
-        operationName: 'acknowledge message with delivery receipt',
       );
     }
   }
@@ -424,20 +396,16 @@ mixin MessageService on XmppBase, BaseStreamService {
       _ => MessageError.unknown,
     };
 
-    final db = await database;
-    await db.executeOperation(
-      operation: () => db.saveMessageError(stanzaID: event.id!, error: error),
-      operationName: 'save message error',
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessageError(stanzaID: event.id!, error: error),
     );
     return true;
   }
 
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.updateChatState(chatJid: jid, state: state),
-        operationName: 'update chat state',
+      await _dbOp<XmppDatabase>(
+        (db) => db.updateChatState(chatJid: jid, state: state),
       );
     }
   }
@@ -446,9 +414,8 @@ mixin MessageService on XmppBase, BaseStreamService {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
 
-    final db = await database;
-    return await db.executeQuery<bool>(
-      operation: () async {
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
         if (await db.getMessageByOriginID(correction.id) case final message?) {
           if (!message.authorized(event.from) || !message.editable) {
             return false;
@@ -461,7 +428,6 @@ mixin MessageService on XmppBase, BaseStreamService {
         }
         return false;
       },
-      operationName: 'handle message correction',
     );
   }
 
@@ -469,9 +435,8 @@ mixin MessageService on XmppBase, BaseStreamService {
     final retraction = event.extensions.get<mox.MessageRetractionData>();
     if (retraction == null) return false;
 
-    final db = await database;
-    return await db.executeQuery<bool>(
-      operation: () async {
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
         if (await db.getMessageByOriginID(retraction.id) case final message?) {
           if (!message.authorized(event.from)) return false;
           await db.markMessageRetracted(message.stanzaID);
@@ -479,7 +444,6 @@ mixin MessageService on XmppBase, BaseStreamService {
         }
         return false;
       },
-      operationName: 'handle message retraction',
     );
   }
 

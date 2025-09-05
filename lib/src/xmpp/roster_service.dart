@@ -31,9 +31,8 @@ mixin RosterService on XmppBase, BaseStreamService {
     ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
       final requester = event.from.toBare().toString().toLowerCase();
       _log.info('Subscription request received from $requester');
-      final db = await database;
-      await db.executeOperation(
-        operation: () async {
+      await _dbOp<XmppDatabase>(
+        (db) async {
           final item = await db.getRosterItem(requester);
           if (item != null) {
             _log.info('Accepting subscription request from $requester...');
@@ -47,7 +46,6 @@ mixin RosterService on XmppBase, BaseStreamService {
             title: event.from.local,
           ));
         },
-        operationName: 'handle subscription request',
       );
     });
 
@@ -65,10 +63,8 @@ mixin RosterService on XmppBase, BaseStreamService {
             .items
             .map((e) => RosterItem.fromMox(e))
             .toList();
-        final db = await database;
-        await db.executeOperation(
-          operation: () => db.saveRosterItems(items),
-          operationName: 'save roster items',
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveRosterItems(items),
         );
       }
     }
@@ -94,10 +90,8 @@ mixin RosterService on XmppBase, BaseStreamService {
       case mox.RosterRemovalResult.okay:
         return;
       case mox.RosterRemovalResult.itemNotFound:
-        final db = await database;
-        await db.executeOperation(
-          operation: () => db.removeRosterItem(jid),
-          operationName: 'remove roster item',
+        await _dbOp<XmppDatabase>(
+          (db) => db.removeRosterItem(jid),
         );
       case mox.RosterRemovalResult.error:
         throw XmppRosterException();
@@ -121,10 +115,8 @@ mixin RosterService on XmppBase, BaseStreamService {
     final rejected = await _connection.rejectSubscriptionRequest(jid);
 
     if (rejected) {
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.deleteInvite(jid),
-        operationName: 'delete invite',
+      await _dbOp<XmppDatabase>(
+        (db) => db.deleteInvite(jid),
       );
       return;
     }
@@ -152,9 +144,8 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> modified,
     List<mox.XmppRosterItem> added,
   ) async {
-    final db = await owner.database;
-    await db.executeOperation(
-      operation: () async {
+    await owner._dbOp<XmppDatabase>(
+      (db) async {
         for (final jid in removed) {
           await db.removeRosterItem(jid);
         }
@@ -167,28 +158,28 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
           await db.updateRosterItem(RosterItem.fromMox(item));
         }
       },
-      operationName: 'commit roster changes',
     );
 
     if (version != null) {
       _log.info('Saving roster version: $version...');
-      await owner._dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: rosterVersionKey, value: version);
-      });
+      await owner._dbOp<XmppStateStore>(
+        (ss) => ss.write(key: rosterVersionKey, value: version),
+        awaitDatabase: true,
+      );
     }
   }
 
   @override
   Future<mox.RosterCacheLoadResult> loadRosterCache() async {
     String? version;
-    await owner._dbOp<XmppStateStore>((ss) {
-      version = ss.read(key: rosterVersionKey) as String?;
-    });
+    version = await owner._dbOpReturning<XmppStateStore, String?>(
+      (ss) => ss.read(key: rosterVersionKey) as String?,
+    );
     _log.info('Loaded roster version: $version.');
 
-    final db = await owner.database;
-    final rosterItems = await db.executeQuery<List<mox.XmppRosterItem>>(
-      operation: () async => (await db.getRoster())
+    final rosterItems =
+        await owner._dbOpReturning<XmppDatabase, List<mox.XmppRosterItem>>(
+      (db) async => (await db.getRoster())
           .map(
             (item) => mox.XmppRosterItem(
               jid: item.jid,
@@ -199,7 +190,6 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
             ),
           )
           .toList(),
-      operationName: 'load roster cache',
     );
     return mox.RosterCacheLoadResult(version, rosterItems);
   }

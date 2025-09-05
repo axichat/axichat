@@ -19,24 +19,18 @@ mixin BlockingService on XmppBase, BaseStreamService {
       await requestBlocklist();
     })
     ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.blockJids(event.items),
-        operationName: 'block JIDs',
+      await _dbOp<XmppDatabase>(
+        (db) => db.blockJids(event.items),
       );
     })
     ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.unblockJids(event.items),
-        operationName: 'unblock JIDs',
+      await _dbOp<XmppDatabase>(
+        (db) => db.unblockJids(event.items),
       );
     })
     ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
-      final db = await database;
-      await db.executeOperation(
-        operation: () => db.deleteBlocklist(),
-        operationName: 'delete blocklist',
+      await _dbOp<XmppDatabase>(
+        (db) => db.deleteBlocklist(),
       );
     });
 
@@ -48,10 +42,8 @@ mixin BlockingService on XmppBase, BaseStreamService {
 
   Future<void> requestBlocklist() async {
     if (await _connection.requestBlocklist() case final blocked?) {
-      final db = await owner.database;
-      await db.executeOperation(
-        operation: () => db.replaceBlocklist(blocked),
-        operationName: 'replace blocklist',
+      await _dbOp<XmppDatabase>(
+        (db) => db.replaceBlocklist(blocked),
       );
     }
   }

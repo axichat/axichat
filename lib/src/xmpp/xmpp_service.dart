@@ -237,9 +237,7 @@ class XmppService extends XmppBase
     })
     ..registerHandler<mox.StanzaAckedEvent>((event) async {
       if (event.stanza.id == null) return;
-      await _dbOp<XmppDatabase>((db) async {
-        await db.markMessageAcked(event.stanza.id!);
-      });
+      await _dbOp<XmppDatabase>((db) => db.markMessageAcked(event.stanza.id!));
     })
     ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
       if (_connection.carbonsEnabled != true) {
@@ -258,9 +256,8 @@ class XmppService extends XmppBase
     ..registerHandler<mox.ResourceBoundEvent>((event) async {
       _log.info('Bound resource: ${event.resource}...');
 
-      await _dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: resourceStorageKey, value: event.resource);
-      });
+      await _dbOp<XmppStateStore>(
+          (ss) => ss.write(key: resourceStorageKey, value: event.resource));
     })
     ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
       _log.info('Saving FAST token...');
@@ -380,9 +377,8 @@ class XmppService extends XmppBase
               body: message.body,
               extraConditions: [
                 message.senderJid != myJid,
-                !await _dbOpReturning<XmppDatabase, bool>((db) async {
-                  return (await db.getChat(message.chatJid))?.muted ?? false;
-                }),
+                !await _dbOpReturning<XmppDatabase, bool>((db) async =>
+                    (await db.getChat(message.chatJid))?.muted ?? false),
               ],
             );
           },
@@ -414,9 +410,8 @@ class XmppService extends XmppBase
 
   Future<void> _initConnection({bool preHashed = false}) async {
     _log.info('Initializing connection object...');
-    final resource = await _dbOpReturning<XmppStateStore, String?>((ss) {
-      return ss.read(key: resourceStorageKey) as String?;
-    });
+    final resource = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) async => ss.read(key: resourceStorageKey) as String?);
     await _connection.registerFeatureNegotiators([
       mox.StartTlsNegotiator(),
       mox.CSINegotiator(),
@@ -432,7 +427,7 @@ class XmppService extends XmppBase
     await _connection.registerManagers(featureManagers);
 
     await _connection.loadStreamState();
-    await _dbOp<XmppStateStore>((ss) {
+    await _dbOp<XmppStateStore>((ss) async {
       _connection
         ..setFastToken(ss.read(key: fastTokenStorageKey) as String?)
         ..setUserAgent(mox.UserAgent(

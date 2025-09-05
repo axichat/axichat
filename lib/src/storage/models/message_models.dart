@@ -42,6 +42,8 @@ enum MessageError {
   fileEncryptionFailure,
   plaintextFileInOmemo;
 
+  bool get isNone => this == none;
+
   bool get isNotNone => this != none;
 
   String? get tooltip {
@@ -224,7 +226,7 @@ class Message with _$Message implements Insertable<Message> {
       mox.JID.fromString(senderJid).toBare() == jid.toBare();
 
   bool get editable =>
-      error.isNotNone &&
+      error.isNone &&
       fileMetadataID == null &&
       !isFileUploadNotification &&
       !fileUploading &&

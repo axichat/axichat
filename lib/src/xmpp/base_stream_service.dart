@@ -29,29 +29,4 @@ mixin BaseStreamService on XmppBase {
     );
     yield* await stream;
   }
-
-  /// Simplified database query operation with built-in error handling
-  Future<T> dbQuery<T>({
-    required Future<T> Function(XmppDatabase db) operation,
-    String? operationName,
-  }) async {
-    final db = await database;
-    return await db.executeQuery<T>(
-      operation: () => operation(db),
-      operationName: operationName,
-    );
-  }
-
-  /// Simplified database operation without return value
-  Future<void> dbOperation({
-    required Future<void> Function(XmppDatabase db) operation,
-    String? operationName,
-    bool awaitDatabase = false,
-  }) async {
-    final db = await database;
-    return await db.executeOperation(
-      operation: () => operation(db),
-      operationName: operationName,
-    );
-  }
 }
