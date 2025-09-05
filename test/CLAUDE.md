@@ -3,7 +3,7 @@
 ## Test Organization
 
 - MUST follow Flutter testing guidelines
-- Mirror the @lib/src/ directory
+- Mirror the `@lib/src/` directory
 
 ```
 lib/src/chat/bloc/chat_bloc.dart  →  test/chat/bloc/chat_bloc_test.dart
