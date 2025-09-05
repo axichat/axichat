@@ -3,7 +3,7 @@ import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_tile.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
