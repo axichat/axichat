@@ -191,7 +191,8 @@ key
 jidKey
 ); // ✅ Type-safe
 // await credentialStore.read(key: 'typo'); // ❌ Runtime error
-```
+await credentialStore.read(key: jidKey); // ✅ Type-safe
+// await credentialStore.read(key: 'typo'); // ❌ Runtime error
 
 ### Models Organization
 
