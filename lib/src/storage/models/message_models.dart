@@ -230,6 +230,11 @@ class Message with _$Message implements Insertable<Message> {
       fileMetadataID == null &&
       !isFileUploadNotification &&
       !fileUploading &&
+  bool get editable =>
+      error == MessageError.none &&
+      fileMetadataID == null &&
+      !isFileUploadNotification &&
+      !fileUploading &&
       !fileDownloading;
 
   bool get isPseudoMessage =>
