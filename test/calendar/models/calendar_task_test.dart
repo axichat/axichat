@@ -1,0 +1,228 @@
+import 'dart:convert';
+
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('CalendarTask', () {
+    const deviceId = 'test-device-123';
+    final testTime = DateTime(2024, 1, 15, 10, 30);
+
+    group('factory CalendarTask.create', () {
+      test('creates task with required fields', () {
+        final task = CalendarTask.create(
+          title: 'Test Task',
+          deviceId: deviceId,
+        );
+
+        expect(task.title, equals('Test Task'));
+        expect(task.deviceId, equals(deviceId));
+        expect(task.id, isNotEmpty);
+        expect(task.isCompleted, isFalse);
+        expect(task.createdAt, isNotNull);
+        expect(task.modifiedAt, equals(task.createdAt));
+        expect(task.description, isNull);
+        expect(task.scheduledTime, isNull);
+        expect(task.duration, isNull);
+      });
+
+      test('creates task with all optional fields', () {
+        const duration = Duration(hours: 1, minutes: 30);
+        final task = CalendarTask.create(
+          title: 'Meeting',
+          description: 'Team standup',
+          scheduledTime: testTime,
+          duration: duration,
+          deviceId: deviceId,
+        );
+
+        expect(task.title, equals('Meeting'));
+        expect(task.description, equals('Team standup'));
+        expect(task.scheduledTime, equals(testTime));
+        expect(task.duration, equals(duration));
+        expect(task.deviceId, equals(deviceId));
+      });
+
+      test('generates unique IDs for different tasks', () {
+        final task1 = CalendarTask.create(title: 'Task 1', deviceId: deviceId);
+        final task2 = CalendarTask.create(title: 'Task 2', deviceId: deviceId);
+
+        expect(task1.id, isNot(equals(task2.id)));
+      });
+    });
+
+    group('JSON serialization', () {
+      late CalendarTask task;
+
+      setUp(() {
+        task = CalendarTask(
+          id: 'test-id-123',
+          title: 'Test Task',
+          description: 'Task description',
+          scheduledTime: testTime,
+          duration: const Duration(hours: 2),
+          isCompleted: true,
+          createdAt: testTime,
+          modifiedAt: testTime.add(const Duration(minutes: 5)),
+          deviceId: deviceId,
+        );
+      });
+
+      test('toJson produces valid JSON', () {
+        final json = task.toJson();
+
+        expect(json['id'], equals('test-id-123'));
+        expect(json['title'], equals('Test Task'));
+        expect(json['description'], equals('Task description'));
+        expect(json['is_completed'], isTrue);
+        expect(json['device_id'], equals(deviceId));
+        expect(json['scheduled_time'], isNotNull);
+        expect(json['duration'], equals(7200000000)); // 2 hours in microseconds
+      });
+
+      test('fromJson reconstructs task correctly', () {
+        final json = task.toJson();
+        final reconstructed = CalendarTask.fromJson(json);
+
+        expect(reconstructed, equals(task));
+      });
+
+      test('handles null values correctly', () {
+        final taskWithNulls = CalendarTask(
+          id: 'test-id',
+          title: 'Simple Task',
+          createdAt: testTime,
+          modifiedAt: testTime,
+          deviceId: deviceId,
+        );
+
+        final json = taskWithNulls.toJson();
+        final reconstructed = CalendarTask.fromJson(json);
+
+        expect(reconstructed.description, isNull);
+        expect(reconstructed.scheduledTime, isNull);
+        expect(reconstructed.duration, isNull);
+        expect(reconstructed.isCompleted, isFalse);
+      });
+
+      test('roundtrip serialization maintains data integrity', () {
+        final jsonString = jsonEncode(task.toJson());
+        final parsedJson = jsonDecode(jsonString) as Map<String, dynamic>;
+        final reconstructed = CalendarTask.fromJson(parsedJson);
+
+        expect(reconstructed.id, equals(task.id));
+        expect(reconstructed.title, equals(task.title));
+        expect(reconstructed.description, equals(task.description));
+        expect(reconstructed.isCompleted, equals(task.isCompleted));
+        expect(reconstructed.deviceId, equals(task.deviceId));
+        expect(reconstructed.scheduledTime, equals(task.scheduledTime));
+        expect(reconstructed.duration, equals(task.duration));
+      });
+    });
+
+    group('copyWith', () {
+      late CalendarTask originalTask;
+
+      setUp(() {
+        originalTask = CalendarTask.create(
+          title: 'Original Task',
+          description: 'Original description',
+          deviceId: deviceId,
+        );
+      });
+
+      test('creates copy with updated title', () {
+        final updated = originalTask.copyWith(title: 'Updated Task');
+
+        expect(updated.title, equals('Updated Task'));
+        expect(updated.id, equals(originalTask.id));
+        expect(updated.description, equals(originalTask.description));
+        expect(updated.deviceId, equals(originalTask.deviceId));
+      });
+
+      test('creates copy with completion status changed', () {
+        final completed = originalTask.copyWith(isCompleted: true);
+
+        expect(completed.isCompleted, isTrue);
+        expect(completed.id, equals(originalTask.id));
+        expect(completed.title, equals(originalTask.title));
+      });
+
+      test('creates copy with null values', () {
+        final taskWithSchedule = originalTask.copyWith(
+          scheduledTime: testTime,
+          description: 'Has schedule',
+        );
+
+        final clearedSchedule = taskWithSchedule.copyWith(
+          scheduledTime: null,
+          description: null,
+        );
+
+        expect(clearedSchedule.scheduledTime, isNull);
+        expect(clearedSchedule.description, isNull);
+        expect(clearedSchedule.title, equals(originalTask.title));
+      });
+    });
+
+    group('validation', () {
+      test('accepts valid task data', () {
+        expect(
+          () => CalendarTask(
+            id: 'valid-id',
+            title: 'Valid Title',
+            createdAt: testTime,
+            modifiedAt: testTime,
+            deviceId: deviceId,
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('accepts empty title', () {
+        // Note: Based on the model, empty titles are technically allowed
+        // but should be validated at the BLoC/UI layer
+        expect(
+          () => CalendarTask(
+            id: 'test-id',
+            title: '',
+            createdAt: testTime,
+            modifiedAt: testTime,
+            deviceId: deviceId,
+          ),
+          returnsNormally,
+        );
+      });
+    });
+
+    group('equality', () {
+      test('tasks with same data are equal', () {
+        final task1 = CalendarTask(
+          id: 'same-id',
+          title: 'Same Task',
+          createdAt: testTime,
+          modifiedAt: testTime,
+          deviceId: deviceId,
+        );
+
+        final task2 = CalendarTask(
+          id: 'same-id',
+          title: 'Same Task',
+          createdAt: testTime,
+          modifiedAt: testTime,
+          deviceId: deviceId,
+        );
+
+        expect(task1, equals(task2));
+        expect(task1.hashCode, equals(task2.hashCode));
+      });
+
+      test('tasks with different IDs are not equal', () {
+        final task1 = CalendarTask.create(title: 'Task', deviceId: deviceId);
+        final task2 = CalendarTask.create(title: 'Task', deviceId: deviceId);
+
+        expect(task1, isNot(equals(task2)));
+      });
+    });
+  });
+}

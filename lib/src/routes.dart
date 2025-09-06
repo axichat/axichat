@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
@@ -19,6 +20,7 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const HomeRoute().location: const HomeRoute(),
   const ProfileRoute().location: const ProfileRoute(),
   const ComposeRoute().location: const ComposeRoute(),
+  const CalendarRoute().location: const CalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
 });
 
@@ -39,6 +41,7 @@ class TransitionGoRouteData extends GoRouteData {
   routes: [
     TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
     TypedGoRoute<ComposeRoute>(path: ComposeRoute.path),
+    TypedGoRoute<CalendarRoute>(path: CalendarRoute.path),
   ],
 )
 class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
@@ -84,6 +87,19 @@ class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
       body: extra['body'] ?? '',
     );
   }
+}
+
+class CalendarRoute extends TransitionGoRouteData with AuthenticationRouteData {
+  const CalendarRoute();
+
+  static const path = 'calendar';
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const CalendarWidget();
 }
 
 @TypedGoRoute<LoginRoute>(path: '/login')
