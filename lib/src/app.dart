@@ -56,21 +56,30 @@ class Axichat extends StatelessWidget {
           RepositoryProvider<Box<CalendarModel>>.value(value: _calendarBox),
         if (_calendarBox != null)
           RepositoryProvider(
-            create: (context) => CalendarSyncManager(
-              calendarBox: _calendarBox,
-              deviceId: 'device-${DateTime.now().millisecondsSinceEpoch}',
-              sendCalendarMessage: (message) async {
-                // Send calendar sync message to ourselves (myJid)
-                // OMEMO will automatically distribute to all our devices
-                final xmppService = context.read<XmppService>();
-                if (xmppService.myJid != null) {
-                  await xmppService.sendMessage(
-                    jid: xmppService.myJid!,
-                    text: message,
-                  );
-                }
-              },
-            ),
+            create: (context) {
+              final syncManager = CalendarSyncManager(
+                calendarBox: _calendarBox,
+                deviceId: 'device-${DateTime.now().millisecondsSinceEpoch}',
+                sendCalendarMessage: (message) async {
+                  // Send calendar sync message to ourselves (myJid)
+                  // OMEMO will automatically distribute to all our devices
+                  final xmppService = context.read<XmppService>();
+                  if (xmppService.myJid != null) {
+                    await xmppService.sendMessage(
+                      jid: xmppService.myJid!,
+                      text: message,
+                    );
+                  }
+                },
+              );
+
+              // Register the callback with XmppService to handle incoming sync messages
+              final xmppService = context.read<XmppService>();
+              xmppService
+                  .setCalendarSyncCallback(syncManager.onCalendarMessage);
+
+              return syncManager;
+            },
           ),
         if (_xmppService == null)
           RepositoryProvider(
@@ -131,6 +140,7 @@ class Axichat extends StatelessWidget {
             BlocProvider(
               create: (context) => CalendarBloc(
                 calendarBox: context.read<Box<CalendarModel>>(),
+                syncManager: context.read<CalendarSyncManager>(),
               )..add(const CalendarStarted()),
             ),
         ],

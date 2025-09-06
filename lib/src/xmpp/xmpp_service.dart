@@ -211,6 +211,9 @@ class XmppService extends XmppBase
   final Capability _capability;
   final Policy _policy;
 
+  // Calendar sync message callback
+  Future<void> Function(CalendarSyncMessage)? _calendarSyncCallback;
+
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
   final resourceStorageKey = XmppStateStore.registerKey('resource');
@@ -607,6 +610,12 @@ class XmppService extends XmppBase
       _log.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
     }
+  }
+
+  /// Register a callback to handle calendar sync messages
+  void setCalendarSyncCallback(
+      Future<void> Function(CalendarSyncMessage) callback) {
+    _calendarSyncCallback = callback;
   }
 
   static String generateResource() => 'axi.${generateRandomString(

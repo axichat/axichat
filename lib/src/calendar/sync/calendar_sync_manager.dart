@@ -67,6 +67,18 @@ class CalendarSyncManager {
       final localModel =
           _calendarBox.get('calendar') ?? CalendarModel.empty(_deviceId);
 
+      // Use checksum for conflict detection
+      final localChecksum = _calculateChecksum(localModel.toJson());
+      final remoteChecksum =
+          message.checksum ?? _calculateChecksum(message.data!);
+
+      if (localChecksum == remoteChecksum) {
+        developer.log('Calendars already in sync - no changes needed');
+        return;
+      }
+
+      developer.log(
+          'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)');
       final mergedModel = _mergeModels(localModel, remoteModel);
       await _calendarBox.put('calendar', mergedModel);
     } catch (e) {
@@ -96,6 +108,30 @@ class CalendarSyncManager {
       'calendar_sync': syncMessage.toJson(),
     });
     await _sendCalendarMessage(messageJson);
+  }
+
+  /// Send task update to other devices
+  Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
+    await _sendTaskUpdate(task, operation);
+  }
+
+  /// Request full calendar sync from other devices
+  Future<void> requestFullSync() async {
+    final syncMessage = CalendarSyncMessage.request(
+      deviceId: _deviceId,
+    );
+
+    final messageJson = jsonEncode({
+      'calendar_sync': syncMessage.toJson(),
+    });
+    await _sendCalendarMessage(messageJson);
+  }
+
+  /// Push full calendar to other devices
+  Future<void> pushFullSync() async {
+    final model =
+        _calendarBox.get('calendar') ?? CalendarModel.empty(_deviceId);
+    await _sendFullCalendar(model);
   }
 
   Future<void> _sendTaskUpdate(CalendarTask task, String operation) async {

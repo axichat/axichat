@@ -487,8 +487,16 @@ mixin MessageService on XmppBase, BaseStreamService {
       _log.info(
           'Received calendar sync message type: ${syncMessage.type} from ${event.from}');
 
-      // TODO: Route to CalendarSyncManager when available
-      // For now, just log that we received it
+      // Route to CalendarSyncManager for processing  
+      if (owner is XmppService && (owner as XmppService)._calendarSyncCallback != null) {
+        try {
+          await (owner as XmppService)._calendarSyncCallback!(syncMessage);
+        } catch (e) {
+          _log.warning('Calendar sync callback failed: $e');
+        }
+      } else {
+        _log.info('No calendar sync callback registered - message ignored');
+      }
 
       return true; // Handled - don't process as regular chat message
     } catch (e) {

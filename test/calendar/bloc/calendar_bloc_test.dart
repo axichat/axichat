@@ -5,37 +5,54 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:hive/hive.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 
 class MockCalendarBox extends Mock implements Box<CalendarModel> {}
+class MockCalendarSyncManager extends Mock implements CalendarSyncManager {}
 
 void main() {
   group('CalendarBloc', () {
     late CalendarBloc calendarBloc;
     late MockCalendarBox mockCalendarBox;
+    late MockCalendarSyncManager mockSyncManager;
     const deviceId = 'test-device-123';
     final testTime = DateTime(2024, 1, 15, 10, 30);
 
     setUpAll(() {
       // Register fallback values for mocktail
       registerFallbackValue(CalendarModel.empty(deviceId));
+      registerFallbackValue(CalendarTask.create(
+        title: 'test',
+        deviceId: deviceId,
+      ));
     });
 
     setUp(() {
       mockCalendarBox = MockCalendarBox();
+      mockSyncManager = MockCalendarSyncManager();
 
-      // Default mock behavior
+      // Default mock behavior for calendar box
       when(() => mockCalendarBox.get('calendar')).thenReturn(null);
       when(() => mockCalendarBox.put('calendar', any()))
           .thenAnswer((_) async {});
       when(() => mockCalendarBox.watch())
           .thenAnswer((_) => const Stream.empty());
 
+      // Default mock behavior for sync manager
+      when(() => mockSyncManager.sendTaskUpdate(any(), any()))
+          .thenAnswer((_) async {});
+      when(() => mockSyncManager.requestFullSync())
+          .thenAnswer((_) async {});
+      when(() => mockSyncManager.pushFullSync())
+          .thenAnswer((_) async {});
+
       calendarBloc = CalendarBloc(
         calendarBox: mockCalendarBox,
+        syncManager: mockSyncManager,
         deviceId: deviceId,
       );
     });
@@ -57,7 +74,7 @@ void main() {
       'CalendarStarted loads empty model when box is empty',
       build: () {
         when(() => mockCalendarBox.get('calendar')).thenReturn(null);
-        return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+        return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
       },
       act: (bloc) => bloc.add(const CalendarEvent.started()),
       expect: () => [
@@ -80,7 +97,7 @@ void main() {
           ),
         );
         when(() => mockCalendarBox.get('calendar')).thenReturn(existingModel);
-        return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+        return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
       },
       act: (bloc) => bloc.add(const CalendarEvent.started()),
       expect: () => [
@@ -95,7 +112,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarTaskAdded creates and saves new task',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         act: (bloc) => bloc.add(const CalendarEvent.taskAdded(
           title: 'New Task',
           description: 'Task description',
@@ -118,7 +135,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarTaskAdded creates task with scheduled time and duration',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         act: (bloc) => bloc.add(CalendarEvent.taskAdded(
           title: 'Scheduled Task',
           scheduledTime: testTime,
@@ -146,7 +163,7 @@ void main() {
             ),
           );
           when(() => mockCalendarBox.get('calendar')).thenReturn(initialModel);
-          return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+          return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
         },
         seed: () {
           final task =
@@ -171,7 +188,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarTaskDeleted removes task',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         seed: () {
           final task =
               CalendarTask.create(title: 'Task to Delete', deviceId: deviceId);
@@ -194,7 +211,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarTaskCompleted toggles completion status',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         seed: () {
           final task = CalendarTask.create(
               title: 'Task to Complete', deviceId: deviceId);
@@ -218,7 +235,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarTaskCompleted does nothing for non-existent task',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         act: (bloc) => bloc.add(const CalendarEvent.taskCompleted(
           taskId: 'non-existent-id',
           completed: true,
@@ -233,7 +250,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarViewChanged updates view mode',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         act: (bloc) =>
             bloc.add(const CalendarEvent.viewChanged(view: CalendarView.day)),
         expect: () => [
@@ -245,7 +262,7 @@ void main() {
       blocTest<CalendarBloc, CalendarState>(
         'CalendarDateSelected updates selected date',
         build: () =>
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId),
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId),
         act: (bloc) => bloc.add(CalendarEvent.dateSelected(date: testTime)),
         expect: () => [
           predicate<CalendarState>((state) => state.selectedDate == testTime),
@@ -275,7 +292,7 @@ void main() {
 
           when(() => mockCalendarBox.get('calendar'))
               .thenReturn(modelWithTasks);
-          return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+          return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
         },
         act: (bloc) => bloc.add(const CalendarEvent.dataChanged()),
         expect: () => [
@@ -323,7 +340,7 @@ void main() {
               .addTask(completed);
 
           when(() => mockCalendarBox.get('calendar')).thenReturn(model);
-          return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+          return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
         },
         act: (bloc) => bloc.add(const CalendarEvent.started()),
         expect: () => [
@@ -367,7 +384,7 @@ void main() {
               .addTask(nextTask);
 
           when(() => mockCalendarBox.get('calendar')).thenReturn(model);
-          return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+          return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
         },
         act: (bloc) => bloc.add(const CalendarEvent.started()),
         expect: () => [
@@ -391,7 +408,7 @@ void main() {
           final model = CalendarModel.empty(deviceId).addTask(pastTask);
 
           when(() => mockCalendarBox.get('calendar')).thenReturn(model);
-          return CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+          return CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
         },
         act: (bloc) => bloc.add(const CalendarEvent.started()),
         expect: () => [
@@ -407,7 +424,7 @@ void main() {
             .thenAnswer((_) => streamController.stream);
 
         final bloc =
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
 
         // Simulate box change
         streamController.add(BoxEvent('calendar', null, false));
@@ -428,7 +445,7 @@ void main() {
             .thenAnswer((_) => streamController.stream);
 
         final bloc =
-            CalendarBloc(calendarBox: mockCalendarBox, deviceId: deviceId);
+            CalendarBloc(calendarBox: mockCalendarBox, syncManager: mockSyncManager, deviceId: deviceId);
 
         expect(streamController.hasListener, isTrue);
 

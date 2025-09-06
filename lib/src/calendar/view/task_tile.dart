@@ -6,6 +6,7 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/time_formatter.dart';
 import 'feedback_system.dart';
 import 'task_input.dart';
 
@@ -232,7 +233,7 @@ class _TaskTileState extends State<TaskTile> {
     if (widget.task.scheduledTime == null) return null;
 
     return Text(
-      _formatTime(widget.task.scheduledTime!),
+      TimeFormatter.formatDateTime(widget.task.scheduledTime!),
       style: TextStyle(
         fontSize: fontSize,
         color: _getTimeColor(context),
@@ -359,15 +360,8 @@ class _TaskTileState extends State<TaskTile> {
     );
   }
 
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
   String _formatDuration(Duration duration) {
-    if (duration.inMinutes < 60) {
-      return '${duration.inMinutes}m';
-    }
-    return '${duration.inHours}h';
+    return TimeFormatter.formatDurationShort(duration);
   }
 
   Color _getTimeColor(BuildContext context) {

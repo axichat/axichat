@@ -7,6 +7,7 @@ import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/time_formatter.dart';
 import 'feedback_system.dart';
 
 class SyncControls extends StatelessWidget {
@@ -21,11 +22,27 @@ class SyncControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveHelper.layoutBuilder(
-      context,
-      mobile: _buildMobileControls(context),
-      tablet: _buildTabletControls(context),
-      desktop: _buildDesktopControls(context),
+    return BlocListener<CalendarBloc, CalendarState>(
+      listenWhen: (previous, current) =>
+          previous.isSyncing != current.isSyncing ||
+          previous.syncError != current.syncError,
+      listener: (context, state) {
+        if (!state.isSyncing &&
+            state.syncError == null &&
+            state.lastSyncTime != null) {
+          // Sync completed successfully
+          _showSyncSnackbar(context, 'Calendar synced successfully');
+        } else if (!state.isSyncing && state.syncError != null) {
+          // Sync failed
+          _showSyncSnackbar(context, 'Sync failed: ${state.syncError}');
+        }
+      },
+      child: ResponsiveHelper.layoutBuilder(
+        context,
+        mobile: _buildMobileControls(context),
+        tablet: _buildTabletControls(context),
+        desktop: _buildDesktopControls(context),
+      ),
     );
   }
 
@@ -263,13 +280,7 @@ class SyncControls extends StatelessWidget {
   }
 
   String _formatSyncTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    return TimeFormatter.formatSyncTime(time);
   }
 
   void _requestSync(BuildContext context) {
