@@ -8,14 +8,17 @@ import 'package:uuid/uuid.dart';
 import '../models/calendar_exceptions.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
+import '../sync/calendar_sync_manager.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
 class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
   CalendarBloc({
     required Box<CalendarModel> calendarBox,
+    required CalendarSyncManager syncManager,
     String? deviceId,
   })  : _calendarBox = calendarBox,
+        _syncManager = syncManager,
         _deviceId = deviceId ?? const Uuid().v4(),
         super(CalendarState.initial(deviceId ?? const Uuid().v4())) {
     on<CalendarStarted>(_onCalendarStarted);
@@ -24,6 +27,8 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     on<CalendarTaskUpdated>(_onCalendarTaskUpdated);
     on<CalendarTaskDeleted>(_onCalendarTaskDeleted);
     on<CalendarTaskCompleted>(_onCalendarTaskCompleted);
+    on<CalendarSyncRequested>(_onCalendarSyncRequested);
+    on<CalendarSyncPushed>(_onCalendarSyncPushed);
     on<CalendarViewChanged>(_onCalendarViewChanged);
     on<CalendarDateSelected>(_onCalendarDateSelected);
     on<CalendarErrorCleared>(_onCalendarErrorCleared);
@@ -34,6 +39,7 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
   }
 
   final Box<CalendarModel> _calendarBox;
+  final CalendarSyncManager _syncManager;
   final String _deviceId;
   late final StreamSubscription _boxSubscription;
 
@@ -100,6 +106,13 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
       final updatedModel = state.model.addTask(task);
       await _calendarBox.put('calendar', updatedModel);
 
+      // Send sync update to other devices
+      try {
+        await _syncManager.sendTaskUpdate(task, 'add');
+      } catch (e) {
+        developer.log('Failed to sync task addition: $e', name: 'CalendarBloc');
+      }
+
       emit(state.copyWith(isLoading: false));
     } catch (e) {
       final error =
@@ -132,6 +145,13 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
       final updatedModel = state.model.updateTask(event.task);
       await _calendarBox.put('calendar', updatedModel);
 
+      // Send sync update to other devices
+      try {
+        await _syncManager.sendTaskUpdate(event.task, 'update');
+      } catch (e) {
+        developer.log('Failed to sync task update: $e', name: 'CalendarBloc');
+      }
+
       emit(state.copyWith(isLoading: false));
     } catch (e) {
       final error =
@@ -151,8 +171,18 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
 
       emit(state.copyWith(isLoading: true, error: null));
 
+      // Get the task before deleting for sync
+      final taskToDelete = state.model.tasks[event.taskId]!;
+
       final updatedModel = state.model.deleteTask(event.taskId);
       await _calendarBox.put('calendar', updatedModel);
+
+      // Send sync update to other devices
+      try {
+        await _syncManager.sendTaskUpdate(taskToDelete, 'delete');
+      } catch (e) {
+        developer.log('Failed to sync task deletion: $e', name: 'CalendarBloc');
+      }
 
       emit(state.copyWith(isLoading: false));
     } catch (e) {
@@ -177,6 +207,14 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
       final updatedModel = state.model.updateTask(updatedTask);
       await _calendarBox.put('calendar', updatedModel);
 
+      // Send sync update to other devices
+      try {
+        await _syncManager.sendTaskUpdate(updatedTask, 'update');
+      } catch (e) {
+        developer.log('Failed to sync task completion: $e',
+            name: 'CalendarBloc');
+      }
+
       emit(state.copyWith(isLoading: false));
     } catch (e) {
       final error = e is CalendarException
@@ -200,6 +238,48 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
   void _onCalendarErrorCleared(
       CalendarErrorCleared event, Emitter<CalendarState> emit) {
     emit(state.copyWith(error: null, syncError: null));
+  }
+
+  Future<void> _onCalendarSyncRequested(
+      CalendarSyncRequested event, Emitter<CalendarState> emit) async {
+    try {
+      emit(state.copyWith(isSyncing: true, syncError: null));
+
+      await _syncManager.requestFullSync();
+
+      emit(state.copyWith(
+        isSyncing: false,
+        lastSyncTime: DateTime.now(),
+      ));
+    } catch (e) {
+      final error = 'Sync request failed: $e';
+      developer.log('Error requesting sync: $e', name: 'CalendarBloc');
+      emit(state.copyWith(
+        isSyncing: false,
+        syncError: error,
+      ));
+    }
+  }
+
+  Future<void> _onCalendarSyncPushed(
+      CalendarSyncPushed event, Emitter<CalendarState> emit) async {
+    try {
+      emit(state.copyWith(isSyncing: true, syncError: null));
+
+      await _syncManager.pushFullSync();
+
+      emit(state.copyWith(
+        isSyncing: false,
+        lastSyncTime: DateTime.now(),
+      ));
+    } catch (e) {
+      final error = 'Sync push failed: $e';
+      developer.log('Error pushing sync: $e', name: 'CalendarBloc');
+      emit(state.copyWith(
+        isSyncing: false,
+        syncError: error,
+      ));
+    }
   }
 
   List<CalendarTask> _getDueReminders(CalendarModel model) {

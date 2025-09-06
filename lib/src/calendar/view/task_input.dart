@@ -7,6 +7,7 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/time_formatter.dart';
 import 'error_display.dart';
 
 class TaskInput extends StatefulWidget {
@@ -241,7 +242,9 @@ class _TaskInputState extends State<TaskInput> {
             children: [
               const Icon(Icons.access_time, size: 16),
               const SizedBox(width: 8),
-              Text(_formatTime(_selectedTime)),
+              Text(_selectedTime == null
+                  ? 'Select time'
+                  : TimeFormatter.formatTimeOfDay(context, _selectedTime!)),
             ],
           ),
         ),
@@ -421,16 +424,8 @@ class _TaskInputState extends State<TaskInput> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  String _formatTime(TimeOfDay? time) {
-    if (time == null) return 'Select time';
-    return time.format(context);
-  }
-
   String _formatDuration(Duration duration) {
-    if (duration.inMinutes < 60) {
-      return '${duration.inMinutes} min';
-    }
-    return '${duration.inHours} hour${duration.inHours > 1 ? 's' : ''}';
+    return TimeFormatter.formatDuration(duration);
   }
 }
 

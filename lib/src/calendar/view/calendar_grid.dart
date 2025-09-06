@@ -6,6 +6,7 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/time_formatter.dart';
 
 class CalendarGrid extends StatefulWidget {
   final CalendarState state;
@@ -261,7 +262,7 @@ class _CalendarGridState extends State<CalendarGrid> {
               ),
               if (!compact && height > 40)
                 Text(
-                  _formatTime(taskTime),
+                  TimeFormatter.formatDateTime(taskTime),
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.white70,
@@ -327,10 +328,6 @@ class _CalendarGridState extends State<CalendarGrid> {
     return '${hour - 12}p';
   }
 
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
   void _selectDate(DateTime date) {
     context.read<CalendarBloc>().add(CalendarEvent.dateSelected(date: date));
   }
@@ -351,7 +348,7 @@ class _CalendarGridState extends State<CalendarGrid> {
             ],
             if (task.scheduledTime != null) ...[
               const Text('Scheduled:'),
-              Text(_formatTime(task.scheduledTime!)),
+              Text(TimeFormatter.formatDateTime(task.scheduledTime!)),
               const SizedBox(height: 8),
             ],
             const Text('Status:'),

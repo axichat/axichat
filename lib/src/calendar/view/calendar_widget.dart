@@ -326,10 +326,6 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     }
   }
 
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
   String _getMonthName(int month) {
     const months = [
       'January',
