@@ -12,6 +12,11 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -30,20 +35,43 @@ class Axichat extends StatelessWidget {
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
+    Box<CalendarModel>? calendarBox,
   })  : _xmppService = xmppService,
         _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
-        _policy = policy ?? const Policy();
+        _policy = policy ?? const Policy(),
+        _calendarBox = calendarBox;
 
   final XmppBase? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
+  final Box<CalendarModel>? _calendarBox;
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
+        if (_calendarBox != null)
+          RepositoryProvider<Box<CalendarModel>>.value(value: _calendarBox),
+        if (_calendarBox != null)
+          RepositoryProvider(
+            create: (context) => CalendarSyncManager(
+              calendarBox: _calendarBox,
+              deviceId: 'device-${DateTime.now().millisecondsSinceEpoch}',
+              sendCalendarMessage: (message) async {
+                // Send calendar sync message to ourselves (myJid)
+                // OMEMO will automatically distribute to all our devices
+                final xmppService = context.read<XmppService>();
+                if (xmppService.myJid != null) {
+                  await xmppService.sendMessage(
+                    jid: xmppService.myJid!,
+                    text: message,
+                  );
+                }
+              },
+            ),
+          ),
         if (_xmppService == null)
           RepositoryProvider(
             create: (context) => XmppService(
@@ -54,6 +82,12 @@ class Axichat extends StatelessWidget {
                 await Hive.initFlutter(prefix);
                 if (!Hive.isAdapterRegistered(1)) {
                   Hive.registerAdapter(PresenceAdapter());
+                }
+                if (!Hive.isAdapterRegistered(30)) {
+                  Hive.registerAdapter(CalendarTaskAdapter());
+                }
+                if (!Hive.isAdapterRegistered(31)) {
+                  Hive.registerAdapter(CalendarModelAdapter());
                 }
                 await Hive.openBox(
                   XmppStateStore.boxName,
@@ -93,6 +127,12 @@ class Axichat extends StatelessWidget {
               notificationService: context.read<NotificationService>(),
             ),
           ),
+          if (_calendarBox != null)
+            BlocProvider(
+              create: (context) => CalendarBloc(
+                calendarBox: context.read<Box<CalendarModel>>(),
+              )..add(const CalendarStarted()),
+            ),
         ],
         child: MaterialAxichat(),
       ),

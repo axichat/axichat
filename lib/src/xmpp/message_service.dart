@@ -58,6 +58,9 @@ mixin MessageService on XmppBase, BaseStreamService {
       if (await _handleCorrection(event, message.senderJid)) return;
       if (await _handleRetraction(event, message.senderJid)) return;
 
+      // Handle calendar sync messages
+      if (await _handleCalendarSync(event)) return;
+
       if (!event.displayable && event.encryptionError == null) return;
       if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
         return;
@@ -456,6 +459,43 @@ mixin MessageService on XmppBase, BaseStreamService {
   //   });
   //   return true;
   // }
+
+  Future<bool> _handleCalendarSync(mox.MessageEvent event) async {
+    // Check if this is a calendar sync message by looking at the message body
+    final messageText = event.text;
+    if (messageText.isEmpty) return false;
+
+    try {
+      final messageData = jsonDecode(messageText);
+      if (messageData is! Map<String, dynamic> ||
+          !messageData.containsKey('calendar_sync')) {
+        return false;
+      }
+
+      // SECURITY: Only accept calendar sync messages from our own JID
+      final senderJid = event.from.toBare().toString();
+      if (senderJid != myJid) {
+        _log.warning(
+            'Rejected calendar sync message from unauthorized JID: $senderJid');
+        return true; // Handled - don't process as regular chat message
+      }
+
+      // This is a calendar sync message - parse and process it
+      final syncData = messageData['calendar_sync'] as Map<String, dynamic>;
+      final syncMessage = CalendarSyncMessage.fromJson(syncData);
+
+      _log.info(
+          'Received calendar sync message type: ${syncMessage.type} from ${event.from}');
+
+      // TODO: Route to CalendarSyncManager when available
+      // For now, just log that we received it
+
+      return true; // Handled - don't process as regular chat message
+    } catch (e) {
+      // Not a valid calendar sync message, let it be processed normally
+      return false;
+    }
+  }
 
   Future<void> _handleFile(mox.MessageEvent event, String jid) async {}
 

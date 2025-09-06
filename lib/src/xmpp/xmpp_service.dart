@@ -17,6 +17,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';

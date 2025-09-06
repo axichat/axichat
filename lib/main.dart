@@ -1,12 +1,15 @@
 // ignore_for_file: avoid_print
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -29,6 +32,11 @@ Future<void> main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
 
+  await Hive.initFlutter();
+  Hive.registerAdapter(CalendarTaskAdapter());
+  Hive.registerAdapter(CalendarModelAdapter());
+  final calendarBox = await Hive.openBox<CalendarModel>('calendar');
+
   const capability = Capability();
   final notificationService = NotificationService();
 
@@ -45,10 +53,11 @@ Future<void> main() async {
               child: Axichat(
                 notificationService: notificationService,
                 capability: capability,
+                calendarBox: calendarBox,
               ),
             ),
           )
-        : Axichat(capability: capability),
+        : Axichat(capability: capability, calendarBox: calendarBox),
   );
 }
 

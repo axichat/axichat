@@ -1,5 +1,8 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -34,9 +37,26 @@ class ChatsList extends StatelessWidget {
 
         return ListView.separated(
           separatorBuilder: (_, __) => const AxiListDivider(),
-          itemCount: items.length,
+          itemCount: items.length + 1,
           itemBuilder: (context, index) {
-            final item = items[index];
+            if (index == 0) {
+              final calendarBloc = context.read<CalendarBloc?>();
+              if (calendarBloc != null) {
+                return BlocBuilder<CalendarBloc, CalendarState>(
+                  bloc: calendarBloc,
+                  builder: (context, state) => CalendarTile(
+                    onTap: () => context.go('/calendar'),
+                    nextTask: state.nextTask,
+                    dueReminderCount: state.dueReminders?.length ?? 0,
+                  ),
+                );
+              } else {
+                return CalendarTile(
+                  onTap: () => context.go('/calendar'),
+                );
+              }
+            }
+            final item = items[index - 1];
             final locate = context.read;
             return AxiListTile(
               key: Key(item.jid),
