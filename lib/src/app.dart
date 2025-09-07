@@ -2,6 +2,12 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -12,11 +18,6 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
-import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -36,17 +37,20 @@ class Axichat extends StatelessWidget {
     Capability? capability,
     Policy? policy,
     Box<CalendarModel>? calendarBox,
+    Box<CalendarModel>? guestCalendarBox,
   })  : _xmppService = xmppService,
         _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy(),
-        _calendarBox = calendarBox;
+        _calendarBox = calendarBox,
+        _guestCalendarBox = guestCalendarBox;
 
   final XmppBase? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
   final Box<CalendarModel>? _calendarBox;
+  final Box<CalendarModel>? _guestCalendarBox;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +58,11 @@ class Axichat extends StatelessWidget {
       providers: [
         if (_calendarBox != null)
           RepositoryProvider<Box<CalendarModel>>.value(value: _calendarBox),
+        if (_guestCalendarBox != null)
+          RepositoryProvider<Box<CalendarModel>>(
+            create: (_) => _guestCalendarBox,
+            key: const Key('guest_calendar_box'),
+          ),
         if (_calendarBox != null)
           RepositoryProvider(
             create: (context) {
@@ -143,6 +152,13 @@ class Axichat extends StatelessWidget {
                 syncManager: context.read<CalendarSyncManager>(),
               )..add(const CalendarStarted()),
             ),
+          if (_guestCalendarBox != null)
+            BlocProvider(
+              create: (context) => GuestCalendarBloc(
+                guestCalendarBox: _guestCalendarBox,
+              )..add(const CalendarStarted()),
+              key: const Key('guest_calendar_bloc'),
+            ),
         ],
         child: MaterialAxichat(),
       ),
@@ -158,6 +174,11 @@ class MaterialAxichat extends StatelessWidget {
     redirect: (context, routerState) {
       if (context.read<AuthenticationCubit>().state
           is! AuthenticationComplete) {
+        // Check if the current route allows guest access
+        final location = routeLocations[routerState.matchedLocation];
+        if (location?.authenticationRequired == false) {
+          return null; // Allow access to guest routes
+        }
         return const LoginRoute().location;
       }
       return null;
@@ -231,13 +252,12 @@ class MaterialAxichat extends StatelessWidget {
           builder: (context, child) {
             return BlocListener<AuthenticationCubit, AuthenticationState>(
               listener: (context, state) {
+                final location = routeLocations[_router.state.matchedLocation]!;
                 if (state is AuthenticationNone &&
-                    routeLocations[_router.state.matchedLocation]!
-                        .authenticationRequired) {
+                    location.authenticationRequired) {
                   _router.go(const LoginRoute().location);
                 } else if (state is AuthenticationComplete &&
-                    !routeLocations[_router.state.matchedLocation]!
-                        .authenticationRequired) {
+                    !location.authenticationRequired) {
                   _router.go(const HomeRoute().location);
                 }
               },

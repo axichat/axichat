@@ -21,9 +21,13 @@ class CalendarGrid extends StatefulWidget {
 }
 
 class _CalendarGridState extends State<CalendarGrid> {
-  static const double hourHeight = 60.0;
   static const int startHour = 6;
   static const int endHour = 22;
+
+  double _getHourHeight(BuildContext context, bool compact) {
+    if (compact) return 45.0;
+    return ResponsiveHelper.isMobile(context) ? 50.0 : 60.0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,13 +58,16 @@ class _CalendarGridState extends State<CalendarGrid> {
       children: [
         _buildDayHeaders(weekDates, compact),
         Expanded(
-          child: Row(
-            children: [
-              _buildTimeColumn(compact),
-              ...weekDates.map((date) => Expanded(
-                    child: _buildDayColumn(date, compact),
-                  )),
-            ],
+          child: SingleChildScrollView(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTimeColumn(compact),
+                ...weekDates.map((date) => Expanded(
+                      child: _buildDayColumn(date, compact),
+                    )),
+              ],
+            ),
           ),
         ),
       ],
@@ -131,6 +138,7 @@ class _CalendarGridState extends State<CalendarGrid> {
   }
 
   Widget _buildTimeColumn(bool compact) {
+    final hourHeight = _getHourHeight(context, compact);
     return SizedBox(
       width: compact ? 50 : 70,
       child: Column(
@@ -164,14 +172,15 @@ class _CalendarGridState extends State<CalendarGrid> {
       ),
       child: Stack(
         children: [
-          _buildTimeSlots(),
+          _buildTimeSlots(compact),
           ..._buildTasksForDay(date, compact),
         ],
       ),
     );
   }
 
-  Widget _buildTimeSlots() {
+  Widget _buildTimeSlots(bool compact) {
+    final hourHeight = _getHourHeight(context, compact);
     return Column(
       children: List.generate(endHour - startHour + 1, (index) {
         return Container(
@@ -219,6 +228,7 @@ class _CalendarGridState extends State<CalendarGrid> {
 
     if (hour < startHour || hour > endHour) return null;
 
+    final hourHeight = _getHourHeight(context, compact);
     final topOffset =
         (hour - startHour) * hourHeight + (minute / 60 * hourHeight);
     final duration = task.duration ?? const Duration(hours: 1);
