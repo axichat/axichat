@@ -9,6 +9,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -65,6 +66,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       _login = !_login;
                     }),
                     child: Text(_login ? 'Sign up' : 'Log in'),
+                  ),
+                  const SizedBox(height: 16),
+                  ShadButton.outline(
+                    onPressed: () => context.go('/guest-calendar'),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.calendar_today),
+                        SizedBox(width: 8),
+                        Text('Try Calendar (Guest Mode)'),
+                      ],
+                    ),
                   ),
                 ],
               ),

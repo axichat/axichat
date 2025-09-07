@@ -36,6 +36,7 @@ Future<void> main() async {
   Hive.registerAdapter(CalendarTaskAdapter());
   Hive.registerAdapter(CalendarModelAdapter());
   final calendarBox = await Hive.openBox<CalendarModel>('calendar');
+  final guestCalendarBox = await Hive.openBox<CalendarModel>('guest_calendar');
 
   const capability = Capability();
   final notificationService = NotificationService();
@@ -54,10 +55,15 @@ Future<void> main() async {
                 notificationService: notificationService,
                 capability: capability,
                 calendarBox: calendarBox,
+                guestCalendarBox: guestCalendarBox,
               ),
             ),
           )
-        : Axichat(capability: capability, calendarBox: calendarBox),
+        : Axichat(
+            capability: capability,
+            calendarBox: calendarBox,
+            guestCalendarBox: guestCalendarBox,
+          ),
   );
 }
 

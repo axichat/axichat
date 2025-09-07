@@ -487,8 +487,9 @@ mixin MessageService on XmppBase, BaseStreamService {
       _log.info(
           'Received calendar sync message type: ${syncMessage.type} from ${event.from}');
 
-      // Route to CalendarSyncManager for processing  
-      if (owner is XmppService && (owner as XmppService)._calendarSyncCallback != null) {
+      // Route to CalendarSyncManager for processing
+      if (owner is XmppService &&
+          (owner as XmppService)._calendarSyncCallback != null) {
         try {
           await (owner as XmppService)._calendarSyncCallback!(syncMessage);
         } catch (e) {
