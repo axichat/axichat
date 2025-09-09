@@ -29,12 +29,10 @@ void main() {
   group('GuestCalendarBloc', () {
     late MockBox mockBox;
     late GuestCalendarBloc bloc;
-    final testDeviceId = 'test-device';
 
     setUp(() {
       mockBox = MockBox();
-      bloc =
-          GuestCalendarBloc(guestCalendarBox: mockBox, deviceId: testDeviceId);
+      bloc = GuestCalendarBloc(guestCalendarBox: mockBox);
     });
 
     tearDown(() {
@@ -43,7 +41,6 @@ void main() {
 
     test('initial state contains empty calendar', () {
       expect(bloc.state.model.tasks, isEmpty);
-      expect(bloc.state.model.deviceId, equals(testDeviceId));
     });
 
     group('CalendarStarted', () {
@@ -73,10 +70,8 @@ void main() {
             isCompleted: false,
             createdAt: now,
             modifiedAt: now,
-            deviceId: testDeviceId,
           );
-          final existingCalendar =
-              CalendarModel.empty(testDeviceId).addTask(task);
+          final existingCalendar = CalendarModel.empty().addTask(task);
           when(() => mockBox.get('calendar')).thenReturn(existingCalendar);
           return bloc;
         },
@@ -95,10 +90,10 @@ void main() {
       blocTest<GuestCalendarBloc, CalendarState>(
         'adds task to calendar without sync',
         build: () {
-          final initialCalendar = CalendarModel.empty(testDeviceId);
+          final initialCalendar = CalendarModel.empty();
           when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
           when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => Stream.empty());
+          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
           return bloc;
         },
         act: (bloc) => bloc.add(const CalendarEvent.taskAdded(
@@ -117,9 +112,9 @@ void main() {
       blocTest<GuestCalendarBloc, CalendarState>(
         'validates task input',
         build: () {
-          final initialCalendar = CalendarModel.empty(testDeviceId);
+          final initialCalendar = CalendarModel.empty();
           when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
-          when(() => mockBox.watch()).thenAnswer((_) => Stream.empty());
+          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
           return bloc;
         },
         act: (bloc) => bloc.add(const CalendarEvent.taskAdded(title: '')),
@@ -144,13 +139,11 @@ void main() {
             isCompleted: false,
             createdAt: now,
             modifiedAt: now,
-            deviceId: testDeviceId,
           );
-          final initialCalendar =
-              CalendarModel.empty(testDeviceId).addTask(task);
+          final initialCalendar = CalendarModel.empty().addTask(task);
           when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
           when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => Stream.empty());
+          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
           return bloc;
         },
         act: (bloc) {
@@ -160,7 +153,6 @@ void main() {
             isCompleted: false,
             createdAt: DateTime.now(),
             modifiedAt: DateTime.now(),
-            deviceId: testDeviceId,
           );
           bloc.add(CalendarEvent.taskUpdated(task: updatedTask));
         },
@@ -185,13 +177,11 @@ void main() {
             isCompleted: false,
             createdAt: now,
             modifiedAt: now,
-            deviceId: testDeviceId,
           );
-          final initialCalendar =
-              CalendarModel.empty(testDeviceId).addTask(task);
+          final initialCalendar = CalendarModel.empty().addTask(task);
           when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
           when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => Stream.empty());
+          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
           return bloc;
         },
         act: (bloc) =>
@@ -217,13 +207,11 @@ void main() {
             isCompleted: false,
             createdAt: now,
             modifiedAt: now,
-            deviceId: testDeviceId,
           );
-          final initialCalendar =
-              CalendarModel.empty(testDeviceId).addTask(task);
+          final initialCalendar = CalendarModel.empty().addTask(task);
           when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
           when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => Stream.empty());
+          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
           return bloc;
         },
         act: (bloc) => bloc.add(const CalendarEvent.taskCompleted(

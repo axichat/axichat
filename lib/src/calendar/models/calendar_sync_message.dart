@@ -13,7 +13,6 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     Map<String, dynamic>? data,
     String? checksum,
     required DateTime timestamp,
-    String? deviceId,
     String? taskId,
     String? operation, // 'add', 'update', 'delete'
   }) = _CalendarSyncMessage;
@@ -21,37 +20,31 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
   factory CalendarSyncMessage.fromJson(Map<String, dynamic> json) =>
       _$CalendarSyncMessageFromJson(json);
 
-  factory CalendarSyncMessage.request({required String deviceId}) =>
-      CalendarSyncMessage(
+  factory CalendarSyncMessage.request() => CalendarSyncMessage(
         type: 'calendar_request',
         timestamp: DateTime.now(),
-        deviceId: deviceId,
       );
 
   factory CalendarSyncMessage.full({
     required Map<String, dynamic> data,
     required String checksum,
-    required String deviceId,
   }) =>
       CalendarSyncMessage(
         type: 'calendar_full',
         data: data,
         checksum: checksum,
         timestamp: DateTime.now(),
-        deviceId: deviceId,
       );
 
   factory CalendarSyncMessage.update({
     required String taskId,
     required String operation,
-    required String deviceId,
     Map<String, dynamic>? data,
   }) =>
       CalendarSyncMessage(
         type: 'calendar_update',
         data: data,
         timestamp: DateTime.now(),
-        deviceId: deviceId,
         taskId: taskId,
         operation: operation,
       );
@@ -65,12 +58,6 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       XmlElement(XmlName('type'))..innerText = type,
       XmlElement(XmlName('timestamp'))..innerText = timestamp.toIso8601String(),
     ]);
-
-    if (deviceId != null) {
-      element.children.add(
-        XmlElement(XmlName('device_id'))..innerText = deviceId!,
-      );
-    }
 
     if (checksum != null) {
       element.children.add(
@@ -122,7 +109,6 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     }
 
     final timestamp = DateTime.parse(timestampStr);
-    final deviceId = getText('device_id');
     final checksum = getText('checksum');
     final taskId = getText('task_id');
     final operation = getText('operation');
@@ -142,7 +128,6 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       data: data,
       checksum: checksum,
       timestamp: timestamp,
-      deviceId: deviceId,
       taskId: taskId,
       operation: operation,
     );

@@ -1,5 +1,5 @@
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:freezed_annotation/freezed_annotation.dart';

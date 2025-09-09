@@ -6,7 +6,6 @@ import 'package:test/test.dart';
 
 void main() {
   group('CalendarModel', () {
-    const deviceId = 'test-device-123';
     final testTime = DateTime(2024, 1, 15, 10, 30);
     late CalendarTask testTask1;
     late CalendarTask testTask2;
@@ -18,7 +17,6 @@ void main() {
         description: 'First task description',
         createdAt: testTime,
         modifiedAt: testTime,
-        deviceId: deviceId,
       );
 
       testTask2 = CalendarTask(
@@ -28,22 +26,20 @@ void main() {
         duration: const Duration(minutes: 30),
         createdAt: testTime,
         modifiedAt: testTime,
-        deviceId: deviceId,
       );
     });
 
     group('factory CalendarModel.empty', () {
       test('creates empty model with correct defaults', () {
-        final model = CalendarModel.empty(deviceId);
+        final model = CalendarModel.empty();
 
         expect(model.tasks, isEmpty);
-        expect(model.deviceId, equals(deviceId));
         expect(model.lastModified, isNotNull);
         expect(model.checksum, isNotEmpty);
       });
 
       test('generates valid checksum for empty model', () {
-        final model = CalendarModel.empty(deviceId);
+        final model = CalendarModel.empty();
         final calculatedChecksum = model.calculateChecksum();
 
         expect(model.checksum, equals(calculatedChecksum));
@@ -55,7 +51,6 @@ void main() {
         // Create a base model with fixed timestamp
         final baseModel = CalendarModel(
           lastModified: testTime,
-          deviceId: deviceId,
           checksum: '',
         );
 
@@ -69,7 +64,6 @@ void main() {
       test('produces different checksums for different data', () {
         final baseModel = CalendarModel(
           lastModified: testTime,
-          deviceId: deviceId,
           checksum: '',
         );
 
@@ -80,7 +74,7 @@ void main() {
       });
 
       test('checksum changes when tasks change', () {
-        final emptyModel = CalendarModel.empty(deviceId);
+        final emptyModel = CalendarModel.empty();
         final modelWithTask = emptyModel.addTask(testTask1);
 
         expect(emptyModel.checksum, isNot(equals(modelWithTask.checksum)));
@@ -93,14 +87,12 @@ void main() {
 
         final model1 = CalendarModel(
           lastModified: fixedTime,
-          deviceId: deviceId,
           checksum: '',
           tasks: tasks,
         );
 
         final model2 = CalendarModel(
           lastModified: fixedTime,
-          deviceId: deviceId,
           checksum: '',
           tasks: tasks,
         );
@@ -113,7 +105,7 @@ void main() {
       late CalendarModel baseModel;
 
       setUp(() {
-        baseModel = CalendarModel.empty(deviceId);
+        baseModel = CalendarModel.empty();
       });
 
       group('addTask', () {
@@ -176,7 +168,6 @@ void main() {
             title: 'Does not exist',
             createdAt: testTime,
             modifiedAt: testTime,
-            deviceId: deviceId,
           );
 
           final result = modelWithTask.updateTask(nonExistentTask);
@@ -233,8 +224,7 @@ void main() {
       late CalendarModel model;
 
       setUp(() {
-        model =
-            CalendarModel.empty(deviceId).addTask(testTask1).addTask(testTask2);
+        model = CalendarModel.empty().addTask(testTask1).addTask(testTask2);
       });
 
       test('toJson produces valid JSON', () {
@@ -242,7 +232,6 @@ void main() {
 
         expect(json['tasks'], isA<Map>());
         expect(json['last_modified'], isNotNull);
-        expect(json['device_id'], equals(deviceId));
         expect(json['checksum'], isNotEmpty);
       });
 
@@ -253,7 +242,6 @@ void main() {
         final reconstructed = CalendarModel.fromJson(parsedJson);
 
         expect(reconstructed.tasks, hasLength(2));
-        expect(reconstructed.deviceId, equals(model.deviceId));
         expect(reconstructed.checksum, equals(model.checksum));
         expect(reconstructed.lastModified.millisecondsSinceEpoch,
             equals(model.lastModified.millisecondsSinceEpoch));
@@ -270,7 +258,6 @@ void main() {
         final reconstructed = CalendarModel.fromJson(parsedJson);
 
         expect(reconstructed.tasks.keys, equals(model.tasks.keys));
-        expect(reconstructed.deviceId, equals(model.deviceId));
         expect(reconstructed.checksum, equals(model.checksum));
 
         // Verify tasks are preserved
@@ -280,12 +267,11 @@ void main() {
       });
 
       test('handles empty model serialization', () {
-        final emptyModel = CalendarModel.empty(deviceId);
+        final emptyModel = CalendarModel.empty();
         final json = emptyModel.toJson();
         final reconstructed = CalendarModel.fromJson(json);
 
         expect(reconstructed.tasks, isEmpty);
-        expect(reconstructed.deviceId, equals(deviceId));
         expect(reconstructed.checksum, equals(emptyModel.checksum));
       });
     });
@@ -296,7 +282,6 @@ void main() {
         final fixedTime = DateTime(2024, 1, 15, 12, 0);
         final baseModel = CalendarModel(
           lastModified: fixedTime,
-          deviceId: deviceId,
           checksum: 'test-checksum',
         );
 
@@ -311,42 +296,22 @@ void main() {
         final fixedTime = DateTime(2024, 1, 15, 12, 0);
         final baseModel1 = CalendarModel(
           lastModified: fixedTime,
-          deviceId: deviceId,
           checksum: 'checksum1',
           tasks: {testTask1.id: testTask1},
         );
         final baseModel2 = CalendarModel(
           lastModified: fixedTime,
-          deviceId: deviceId,
           checksum: 'checksum2',
           tasks: {testTask2.id: testTask2},
         );
 
         expect(baseModel1, isNot(equals(baseModel2)));
       });
-
-      test('models with different device IDs are not equal', () {
-        final fixedTime = DateTime(2024, 1, 15, 12, 0);
-        final model1 = CalendarModel(
-          lastModified: fixedTime,
-          deviceId: 'device-1',
-          checksum: 'checksum',
-          tasks: {testTask1.id: testTask1},
-        );
-        final model2 = CalendarModel(
-          lastModified: fixedTime,
-          deviceId: 'device-2',
-          checksum: 'checksum',
-          tasks: {testTask1.id: testTask1},
-        );
-
-        expect(model1, isNot(equals(model2)));
-      });
     });
 
     group('conflict resolution scenarios', () {
       test('adding same task overwrites existing', () {
-        final model = CalendarModel.empty(deviceId);
+        final model = CalendarModel.empty();
         final task1 = testTask1.copyWith(title: 'Original');
         final task2 = testTask1.copyWith(title: 'Updated');
 
@@ -357,7 +322,7 @@ void main() {
       });
 
       test('model operations are atomic', () {
-        final originalModel = CalendarModel.empty(deviceId).addTask(testTask1);
+        final originalModel = CalendarModel.empty().addTask(testTask1);
         final updatedTask = testTask1.copyWith(title: 'Updated');
 
         final result = originalModel.updateTask(updatedTask);

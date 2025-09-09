@@ -2,12 +2,10 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -29,68 +27,48 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'localization/app_localizations.dart';
 
-class Axichat extends StatelessWidget {
+class Axichat extends StatefulWidget {
   Axichat({
     super.key,
     XmppBase? xmppService,
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
-    Box<CalendarModel>? calendarBox,
     Box<CalendarModel>? guestCalendarBox,
   })  : _xmppService = xmppService,
         _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy(),
-        _calendarBox = calendarBox,
         _guestCalendarBox = guestCalendarBox;
 
   final XmppBase? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
-  final Box<CalendarModel>? _calendarBox;
   final Box<CalendarModel>? _guestCalendarBox;
+
+  @override
+  State<Axichat> createState() => _AxichatState();
+}
+
+class _AxichatState extends State<Axichat> {
+  Box<CalendarModel>? _calendarBox;
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        if (_calendarBox != null)
-          RepositoryProvider<Box<CalendarModel>>.value(value: _calendarBox),
-        if (_guestCalendarBox != null)
+        if (widget._guestCalendarBox != null)
           RepositoryProvider<Box<CalendarModel>>(
-            create: (_) => _guestCalendarBox,
+            create: (_) => widget._guestCalendarBox!,
             key: const Key('guest_calendar_box'),
           ),
         if (_calendarBox != null)
-          RepositoryProvider(
-            create: (context) {
-              final syncManager = CalendarSyncManager(
-                calendarBox: _calendarBox,
-                deviceId: 'device-${DateTime.now().millisecondsSinceEpoch}',
-                sendCalendarMessage: (message) async {
-                  // Send calendar sync message to ourselves (myJid)
-                  // OMEMO will automatically distribute to all our devices
-                  final xmppService = context.read<XmppService>();
-                  if (xmppService.myJid != null) {
-                    await xmppService.sendMessage(
-                      jid: xmppService.myJid!,
-                      text: message,
-                    );
-                  }
-                },
-              );
-
-              // Register the callback with XmppService to handle incoming sync messages
-              final xmppService = context.read<XmppService>();
-              xmppService
-                  .setCalendarSyncCallback(syncManager.onCalendarMessage);
-
-              return syncManager;
-            },
+          RepositoryProvider<Box<CalendarModel>>(
+            create: (_) => _calendarBox!,
+            key: const Key('calendar_box'),
           ),
-        if (_xmppService == null)
+        if (widget._xmppService == null)
           RepositoryProvider(
             create: (context) => XmppService(
               buildConnection: () => withForeground
@@ -111,6 +89,14 @@ class Axichat extends StatelessWidget {
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
                 );
+                // Open encrypted calendar box for logged-in users
+                final calendarBox = await Hive.openBox<CalendarModel>(
+                  'calendar',
+                  encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+                );
+                setState(() {
+                  _calendarBox = calendarBox;
+                });
                 return XmppStateStore();
               },
               buildDatabase: (prefix, passphrase) async {
@@ -119,16 +105,16 @@ class Axichat extends StatelessWidget {
                   passphrase: passphrase,
                 );
               },
-              notificationService: _notificationService,
-              capability: _capability,
-              policy: _policy,
+              notificationService: widget._notificationService,
+              capability: widget._capability,
+              policy: widget._policy,
             ),
           )
         else
-          RepositoryProvider.value(value: _xmppService),
-        RepositoryProvider.value(value: _notificationService),
-        RepositoryProvider.value(value: _capability),
-        RepositoryProvider.value(value: _policy),
+          RepositoryProvider.value(value: widget._xmppService),
+        RepositoryProvider.value(value: widget._notificationService),
+        RepositoryProvider.value(value: widget._capability),
+        RepositoryProvider.value(value: widget._policy),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -145,17 +131,10 @@ class Axichat extends StatelessWidget {
               notificationService: context.read<NotificationService>(),
             ),
           ),
-          if (_calendarBox != null)
-            BlocProvider(
-              create: (context) => CalendarBloc(
-                calendarBox: context.read<Box<CalendarModel>>(),
-                syncManager: context.read<CalendarSyncManager>(),
-              )..add(const CalendarStarted()),
-            ),
-          if (_guestCalendarBox != null)
+          if (widget._guestCalendarBox != null)
             BlocProvider(
               create: (context) => GuestCalendarBloc(
-                guestCalendarBox: _guestCalendarBox,
+                guestCalendarBox: widget._guestCalendarBox!,
               )..add(const CalendarStarted()),
               key: const Key('guest_calendar_bloc'),
             ),

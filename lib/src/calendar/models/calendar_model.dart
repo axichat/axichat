@@ -13,18 +13,16 @@ class CalendarModel with _$CalendarModel {
   const factory CalendarModel({
     @HiveField(0) @Default({}) Map<String, CalendarTask> tasks,
     @HiveField(1) required DateTime lastModified,
-    @HiveField(2) required String deviceId,
     @HiveField(3) required String checksum,
   }) = _CalendarModel;
 
   factory CalendarModel.fromJson(Map<String, dynamic> json) =>
       _$CalendarModelFromJson(json);
 
-  factory CalendarModel.empty(String deviceId) {
+  factory CalendarModel.empty() {
     final now = DateTime.now();
     final model = CalendarModel(
       lastModified: now,
-      deviceId: deviceId,
       checksum: '',
     );
     return model.copyWith(checksum: model.calculateChecksum());
