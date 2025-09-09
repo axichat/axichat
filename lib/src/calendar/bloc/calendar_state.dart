@@ -21,8 +21,8 @@ class CalendarState with _$CalendarState {
     CalendarTask? nextTask,
   }) = _CalendarState;
 
-  factory CalendarState.initial(String deviceId) => CalendarState(
-        model: CalendarModel.empty(deviceId),
+  factory CalendarState.initial() => CalendarState(
+        model: CalendarModel.empty(),
         selectedDate: DateTime.now(),
       );
 }

@@ -12,14 +12,11 @@ import '../models/calendar_task.dart';
 class CalendarSyncManager {
   CalendarSyncManager({
     required Box<CalendarModel> calendarBox,
-    required String deviceId,
     required Future<void> Function(String) sendCalendarMessage,
   })  : _calendarBox = calendarBox,
-        _deviceId = deviceId,
         _sendCalendarMessage = sendCalendarMessage;
 
   final Box<CalendarModel> _calendarBox;
-  final String _deviceId;
   final Future<void> Function(String) _sendCalendarMessage;
 
   Future<void> onCalendarMessage(CalendarSyncMessage message) async {
@@ -49,8 +46,7 @@ class CalendarSyncManager {
 
   Future<void> _handleRequestMessage(CalendarSyncMessage message) async {
     try {
-      final model =
-          _calendarBox.get('calendar') ?? CalendarModel.empty(_deviceId);
+      final model = _calendarBox.get('calendar') ?? CalendarModel.empty();
       await _sendFullCalendar(model);
     } catch (e) {
       developer.log('Error handling request message: $e',
@@ -64,8 +60,7 @@ class CalendarSyncManager {
 
     try {
       final remoteModel = CalendarModel.fromJson(message.data!);
-      final localModel =
-          _calendarBox.get('calendar') ?? CalendarModel.empty(_deviceId);
+      final localModel = _calendarBox.get('calendar') ?? CalendarModel.empty();
 
       // Use checksum for conflict detection
       final localChecksum = _calculateChecksum(localModel.toJson());
@@ -101,7 +96,6 @@ class CalendarSyncManager {
     final syncMessage = CalendarSyncMessage.full(
       data: model.toJson(),
       checksum: model.checksum,
-      deviceId: _deviceId,
     );
 
     final messageJson = jsonEncode({
@@ -117,9 +111,7 @@ class CalendarSyncManager {
 
   /// Request full calendar sync from other devices
   Future<void> requestFullSync() async {
-    final syncMessage = CalendarSyncMessage.request(
-      deviceId: _deviceId,
-    );
+    final syncMessage = CalendarSyncMessage.request();
 
     final messageJson = jsonEncode({
       'calendar_sync': syncMessage.toJson(),
@@ -129,8 +121,7 @@ class CalendarSyncManager {
 
   /// Push full calendar to other devices
   Future<void> pushFullSync() async {
-    final model =
-        _calendarBox.get('calendar') ?? CalendarModel.empty(_deviceId);
+    final model = _calendarBox.get('calendar') ?? CalendarModel.empty();
     await _sendFullCalendar(model);
   }
 
@@ -139,7 +130,6 @@ class CalendarSyncManager {
       taskId: task.id,
       operation: operation,
       data: task.toJson(),
-      deviceId: _deviceId,
     );
 
     final messageJson = jsonEncode({
@@ -172,8 +162,7 @@ class CalendarSyncManager {
   }
 
   Future<void> _mergeTask(CalendarTask remoteTask, String operation) async {
-    final currentModel =
-        _calendarBox.get('calendar') ?? CalendarModel.empty(_deviceId);
+    final currentModel = _calendarBox.get('calendar') ?? CalendarModel.empty();
 
     CalendarModel updatedModel;
     switch (operation) {

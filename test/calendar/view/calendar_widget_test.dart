@@ -4,27 +4,22 @@ import 'package:test/test.dart';
 
 void main() {
   group('CalendarWidget Logic Tests', () {
-    const deviceId = 'test-device-123';
-
     group('task filtering logic', () {
       test('filters tasks for selected date correctly', () {
         final selectedDate = DateTime(2024, 1, 15);
         final task1 = CalendarTask.create(
           title: 'Task on 15th',
           scheduledTime: DateTime(2024, 1, 15, 10, 0),
-          deviceId: deviceId,
         );
         final task2 = CalendarTask.create(
           title: 'Task on 16th',
           scheduledTime: DateTime(2024, 1, 16, 10, 0),
-          deviceId: deviceId,
         );
         final taskWithoutDate = CalendarTask.create(
           title: 'Task without date',
-          deviceId: deviceId,
         );
 
-        final modelWithTasks = CalendarModel.empty(deviceId)
+        final modelWithTasks = CalendarModel.empty()
             .addTask(task1)
             .addTask(task2)
             .addTask(taskWithoutDate);
@@ -47,20 +42,17 @@ void main() {
         final task1 = CalendarTask.create(
           title: 'Morning Task',
           scheduledTime: DateTime(2024, 1, 15, 9, 0),
-          deviceId: deviceId,
         );
         final task2 = CalendarTask.create(
           title: 'Afternoon Task',
           scheduledTime: DateTime(2024, 1, 15, 14, 0),
-          deviceId: deviceId,
         );
         final task3 = CalendarTask.create(
           title: 'Evening Task',
           scheduledTime: DateTime(2024, 1, 15, 18, 0),
-          deviceId: deviceId,
         );
 
-        final modelWithTasks = CalendarModel.empty(deviceId)
+        final modelWithTasks = CalendarModel.empty()
             .addTask(task2) // Add in random order
             .addTask(task3)
             .addTask(task1);
@@ -89,7 +81,7 @@ void main() {
 
       test('handles empty task list', () {
         final selectedDate = DateTime(2024, 1, 15);
-        final emptyModel = CalendarModel.empty(deviceId);
+        final emptyModel = CalendarModel.empty();
 
         final tasks = emptyModel.tasks.values.where((task) {
           if (task.scheduledTime == null) return false;

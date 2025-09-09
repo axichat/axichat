@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 class LoadingIndicator extends StatelessWidget {
   const LoadingIndicator({
@@ -27,9 +28,7 @@ class LoadingIndicator extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               message!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+              style: calendarSubtitleTextStyle,
               textAlign: TextAlign.center,
             ),
           ],
@@ -88,17 +87,7 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
           height: widget.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.borderRadius),
-            gradient: LinearGradient(
-              colors: [
-                Colors.grey.shade300,
-                Colors.grey.shade100,
-                Colors.grey.shade300,
-              ],
-              stops: const [0.0, 0.5, 1.0],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              transform: GradientRotation(_animation.value * 3.14159),
-            ),
+            color: calendarSelectedDayColor,
           ),
         );
       },
@@ -112,13 +101,13 @@ class TaskSkeletonTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: calendarPadding16,
+      margin: calendarMarginSmall,
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: calendarContainerColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Theme.of(context).dividerColor,
+          color: calendarBorderColor,
           width: 1,
         ),
       ),

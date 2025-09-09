@@ -5,18 +5,15 @@ import 'package:test/test.dart';
 
 void main() {
   group('CalendarTask', () {
-    const deviceId = 'test-device-123';
     final testTime = DateTime(2024, 1, 15, 10, 30);
 
     group('factory CalendarTask.create', () {
       test('creates task with required fields', () {
         final task = CalendarTask.create(
           title: 'Test Task',
-          deviceId: deviceId,
         );
 
         expect(task.title, equals('Test Task'));
-        expect(task.deviceId, equals(deviceId));
         expect(task.id, isNotEmpty);
         expect(task.isCompleted, isFalse);
         expect(task.createdAt, isNotNull);
@@ -33,19 +30,17 @@ void main() {
           description: 'Team standup',
           scheduledTime: testTime,
           duration: duration,
-          deviceId: deviceId,
         );
 
         expect(task.title, equals('Meeting'));
         expect(task.description, equals('Team standup'));
         expect(task.scheduledTime, equals(testTime));
         expect(task.duration, equals(duration));
-        expect(task.deviceId, equals(deviceId));
       });
 
       test('generates unique IDs for different tasks', () {
-        final task1 = CalendarTask.create(title: 'Task 1', deviceId: deviceId);
-        final task2 = CalendarTask.create(title: 'Task 2', deviceId: deviceId);
+        final task1 = CalendarTask.create(title: 'Task 1');
+        final task2 = CalendarTask.create(title: 'Task 2');
 
         expect(task1.id, isNot(equals(task2.id)));
       });
@@ -64,7 +59,6 @@ void main() {
           isCompleted: true,
           createdAt: testTime,
           modifiedAt: testTime.add(const Duration(minutes: 5)),
-          deviceId: deviceId,
         );
       });
 
@@ -75,7 +69,6 @@ void main() {
         expect(json['title'], equals('Test Task'));
         expect(json['description'], equals('Task description'));
         expect(json['is_completed'], isTrue);
-        expect(json['device_id'], equals(deviceId));
         expect(json['scheduled_time'], isNotNull);
         expect(json['duration'], equals(7200000000)); // 2 hours in microseconds
       });
@@ -93,7 +86,6 @@ void main() {
           title: 'Simple Task',
           createdAt: testTime,
           modifiedAt: testTime,
-          deviceId: deviceId,
         );
 
         final json = taskWithNulls.toJson();
@@ -114,7 +106,6 @@ void main() {
         expect(reconstructed.title, equals(task.title));
         expect(reconstructed.description, equals(task.description));
         expect(reconstructed.isCompleted, equals(task.isCompleted));
-        expect(reconstructed.deviceId, equals(task.deviceId));
         expect(reconstructed.scheduledTime, equals(task.scheduledTime));
         expect(reconstructed.duration, equals(task.duration));
       });
@@ -127,7 +118,6 @@ void main() {
         originalTask = CalendarTask.create(
           title: 'Original Task',
           description: 'Original description',
-          deviceId: deviceId,
         );
       });
 
@@ -137,7 +127,6 @@ void main() {
         expect(updated.title, equals('Updated Task'));
         expect(updated.id, equals(originalTask.id));
         expect(updated.description, equals(originalTask.description));
-        expect(updated.deviceId, equals(originalTask.deviceId));
       });
 
       test('creates copy with completion status changed', () {
@@ -173,7 +162,6 @@ void main() {
             title: 'Valid Title',
             createdAt: testTime,
             modifiedAt: testTime,
-            deviceId: deviceId,
           ),
           returnsNormally,
         );
@@ -188,7 +176,6 @@ void main() {
             title: '',
             createdAt: testTime,
             modifiedAt: testTime,
-            deviceId: deviceId,
           ),
           returnsNormally,
         );
@@ -202,7 +189,6 @@ void main() {
           title: 'Same Task',
           createdAt: testTime,
           modifiedAt: testTime,
-          deviceId: deviceId,
         );
 
         final task2 = CalendarTask(
@@ -210,7 +196,6 @@ void main() {
           title: 'Same Task',
           createdAt: testTime,
           modifiedAt: testTime,
-          deviceId: deviceId,
         );
 
         expect(task1, equals(task2));
@@ -218,8 +203,8 @@ void main() {
       });
 
       test('tasks with different IDs are not equal', () {
-        final task1 = CalendarTask.create(title: 'Task', deviceId: deviceId);
-        final task2 = CalendarTask.create(title: 'Task', deviceId: deviceId);
+        final task1 = CalendarTask.create(title: 'Task');
+        final task2 = CalendarTask.create(title: 'Task');
 
         expect(task1, isNot(equals(task2)));
       });

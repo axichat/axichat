@@ -3,6 +3,7 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/duration_adapter.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
@@ -33,9 +34,9 @@ Future<void> main() async {
   );
 
   await Hive.initFlutter();
+  Hive.registerAdapter(DurationAdapter());
   Hive.registerAdapter(CalendarTaskAdapter());
   Hive.registerAdapter(CalendarModelAdapter());
-  final calendarBox = await Hive.openBox<CalendarModel>('calendar');
   final guestCalendarBox = await Hive.openBox<CalendarModel>('guest_calendar');
 
   const capability = Capability();
@@ -54,14 +55,12 @@ Future<void> main() async {
               child: Axichat(
                 notificationService: notificationService,
                 capability: capability,
-                calendarBox: calendarBox,
                 guestCalendarBox: guestCalendarBox,
               ),
             ),
           )
         : Axichat(
             capability: capability,
-            calendarBox: calendarBox,
             guestCalendarBox: guestCalendarBox,
           ),
   );

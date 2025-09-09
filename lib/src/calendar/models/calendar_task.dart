@@ -17,7 +17,6 @@ class CalendarTask with _$CalendarTask {
     @HiveField(5) @Default(false) bool isCompleted,
     @HiveField(6) required DateTime createdAt,
     @HiveField(7) required DateTime modifiedAt,
-    @HiveField(8) required String deviceId,
   }) = _CalendarTask;
 
   factory CalendarTask.fromJson(Map<String, dynamic> json) =>
@@ -28,7 +27,6 @@ class CalendarTask with _$CalendarTask {
     String? description,
     DateTime? scheduledTime,
     Duration? duration,
-    required String deviceId,
   }) {
     final now = DateTime.now();
     return CalendarTask(
@@ -39,7 +37,6 @@ class CalendarTask with _$CalendarTask {
       duration: duration,
       createdAt: now,
       modifiedAt: now,
-      deviceId: deviceId,
     );
   }
 }

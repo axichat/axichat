@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
@@ -54,39 +55,66 @@ class _CalendarGridState extends State<CalendarGrid> {
   Widget _buildWeekView({required bool compact}) {
     final weekDates = _getWeekDates(widget.state.selectedDate);
 
-    return Column(
-      children: [
-        _buildDayHeaders(weekDates, compact),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildTimeColumn(compact),
-                ...weekDates.map((date) => Expanded(
-                      child: _buildDayColumn(date, compact),
-                    )),
-              ],
+    return Container(
+      decoration: BoxDecoration(
+        color: calendarContainerColor,
+        borderRadius:
+            const BorderRadius.all(Radius.circular(calendarBorderRadius)),
+        border: Border.all(color: calendarBorderColor, width: 1),
+        boxShadow: calendarLightShadow,
+      ),
+      child: Column(
+        children: [
+          _buildDayHeaders(weekDates, compact),
+          Expanded(
+            child: Container(
+              decoration: const BoxDecoration(
+                color: calendarContainerColor,
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(calendarBorderRadius),
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTimeColumn(compact),
+                    ...weekDates.map((date) => Expanded(
+                          child: _buildDayColumn(date, compact),
+                        )),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildDayHeaders(List<DateTime> weekDates, bool compact) {
     return Container(
-      height: compact ? 50 : 60,
-      decoration: BoxDecoration(
+      height: compact ? calendarDayHeaderHeight * 1.8 : calendarHeaderHeight,
+      decoration: const BoxDecoration(
+        color: calendarContainerColor,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(calendarBorderRadius),
+        ),
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
+          bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
       ),
       child: Row(
         children: [
           SizedBox(
             width: compact ? 50 : 70,
-            child: const Center(child: Text('')),
+            child: Center(
+              child: Icon(
+                Icons.schedule,
+                color: calendarTimeLabelColor,
+                size: compact ? 16 : 20,
+              ),
+            ),
           ),
           ...weekDates.map((date) => Expanded(
                 child: _buildDayHeader(date, compact),
@@ -100,38 +128,62 @@ class _CalendarGridState extends State<CalendarGrid> {
     final isToday = _isToday(date);
     final isSelected = _isSameDay(date, widget.state.selectedDate);
 
-    return GestureDetector(
-      onTap: () => _selectDate(date),
-      child: Container(
-        margin: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).primaryColor
-              : isToday
-                  ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
+    return AnimatedContainer(
+      duration: baseAnimationDuration,
+      curve: Curves.easeInOut,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _selectDate(date),
+          borderRadius: BorderRadius.circular(calendarEventRadius),
+          child: Container(
+            margin: calendarPadding4,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? calendarSelectedDayColor
+                  : isToday
+                      ? calendarSelectedDayColor.withValues(alpha: 0.5)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(calendarEventRadius),
+              border: isToday
+                  ? Border.all(
+                      color: const Color(0xff007AFF),
+                      width: 1) // Blue accent for today
                   : null,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _getDayName(date.weekday, compact),
-              style: TextStyle(
-                fontSize: compact ? 12 : 14,
-                fontWeight: FontWeight.w500,
-                color: isSelected ? Colors.white : null,
-              ),
             ),
-            Text(
-              date.day.toString(),
-              style: TextStyle(
-                fontSize: compact ? 16 : 18,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : null,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    _getDayName(date.weekday, compact),
+                    style: TextStyle(
+                      fontSize: compact ? 11 : 13,
+                      fontWeight: FontWeight.w600,
+                      color: calendarSubtitleColor,
+                      letterSpacing: 0.5,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Flexible(
+                  child: Text(
+                    date.day.toString(),
+                    style: TextStyle(
+                      fontSize: compact ? 16 : 20,
+                      fontWeight: FontWeight.bold,
+                      color: isToday
+                          ? const Color(0xff007AFF) // Blue for today
+                          : calendarTitleColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -139,21 +191,38 @@ class _CalendarGridState extends State<CalendarGrid> {
 
   Widget _buildTimeColumn(bool compact) {
     final hourHeight = _getHourHeight(context, compact);
-    return SizedBox(
+    return Container(
       width: compact ? 50 : 70,
+      decoration: const BoxDecoration(
+        color: calendarContainerColor,
+        border: Border(
+          right: BorderSide(
+            color: calendarBorderColor,
+            width: 1,
+          ),
+        ),
+      ),
       child: Column(
         children: List.generate(endHour - startHour + 1, (index) {
           final hour = startHour + index;
+          final isCurrentHour = DateTime.now().hour == hour;
           return Container(
             height: hourHeight,
             alignment: Alignment.topCenter,
+            decoration: const BoxDecoration(
+              color: Colors.transparent,
+            ),
             child: Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: calendarSpacing8),
               child: Text(
                 _formatHour(hour),
                 style: TextStyle(
-                  fontSize: compact ? 10 : 12,
-                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  fontSize: compact ? 10 : 11,
+                  fontWeight: isCurrentHour ? FontWeight.w600 : FontWeight.w400,
+                  color: isCurrentHour
+                      ? calendarTitleColor
+                      : calendarTimeLabelColor,
+                  letterSpacing: 0.3,
                 ),
               ),
             ),
@@ -164,10 +233,16 @@ class _CalendarGridState extends State<CalendarGrid> {
   }
 
   Widget _buildDayColumn(DateTime date, bool compact) {
+    final isSelected = _isSameDay(date, widget.state.selectedDate);
+
     return Container(
       decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: Theme.of(context).dividerColor),
+        color: isSelected ? calendarSelectedDayColor : calendarContainerColor,
+        border: const Border(
+          left: BorderSide(
+            color: calendarBorderColor,
+            width: 1,
+          ),
         ),
       ),
       child: Stack(
@@ -181,21 +256,28 @@ class _CalendarGridState extends State<CalendarGrid> {
 
   Widget _buildTimeSlots(bool compact) {
     final hourHeight = _getHourHeight(context, compact);
+
     return Column(
       children: List.generate(endHour - startHour + 1, (index) {
         return Container(
           height: hourHeight,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
+            color: Colors.transparent,
             border: Border(
               top: BorderSide(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+                color: calendarBorderColor,
+                width: 1,
               ),
             ),
           ),
-          child: GestureDetector(
-            onTap: () {
-              // TODO: Handle time slot tap for new task creation
-            },
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                // TODO: Handle time slot tap for new task creation
+              },
+              child: const SizedBox.expand(),
+            ),
           ),
         );
       }),
@@ -234,55 +316,93 @@ class _CalendarGridState extends State<CalendarGrid> {
     final duration = task.duration ?? const Duration(hours: 1);
     final height = (duration.inMinutes / 60) * hourHeight;
 
+    // Get priority color
+    Color taskColor = _getTaskColor(task);
+
     return Positioned(
       top: topOffset,
-      left: index * 4.0, // Slight offset for overlapping tasks
-      right: 4.0,
-      height: height.clamp(20.0, double.infinity),
-      child: GestureDetector(
-        onTap: () => _showTaskDetails(task),
-        child: Container(
-          margin: const EdgeInsets.all(1),
-          padding: EdgeInsets.all(compact ? 2 : 4),
-          decoration: BoxDecoration(
-            color: task.isCompleted
-                ? Colors.grey.withValues(alpha: 0.6)
-                : Theme.of(context).primaryColor.withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: task.isCompleted
-                  ? Colors.grey
-                  : Theme.of(context).primaryColor,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                task.title,
-                style: TextStyle(
-                  fontSize: compact ? 10 : 12,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white,
-                  decoration:
-                      task.isCompleted ? TextDecoration.lineThrough : null,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: compact ? 1 : 2,
+      left: index * 6.0 + 4.0,
+      right: 6.0,
+      height: height.clamp(32, double.infinity),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showTaskDetails(task),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 1),
+              padding:
+                  EdgeInsets.all(compact ? calendarSpacing6 : calendarSpacing8),
+              decoration: BoxDecoration(
+                color: task.isCompleted
+                    ? taskColor.withValues(alpha: 0.3)
+                    : taskColor,
+                borderRadius: const BorderRadius.all(
+                    Radius.circular(calendarEventRadius)),
+                boxShadow: calendarLightShadow,
               ),
-              if (!compact && height > 40)
-                Text(
-                  TimeFormatter.formatDateTime(taskTime),
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.white70,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (!compact && height > 50) ...[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          task.title,
+                          style: TextStyle(
+                            fontSize: compact ? 9 : 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            decoration: task.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                            letterSpacing: 0.3,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: compact ? 1 : 2,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-            ],
+                  if (!compact && height > 45) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      TimeFormatter.formatDateTime(taskTime),
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Color _getTaskColor(CalendarTask task) {
+    // Hash-based consistent color assignment using task ID
+    final hash = task.id.hashCode.abs();
+    final colorIndex = hash % calendarEventColors.length;
+    return calendarEventColors[colorIndex];
   }
 
   List<DateTime> _getWeekDates(DateTime date) {
