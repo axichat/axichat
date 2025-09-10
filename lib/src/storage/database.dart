@@ -88,11 +88,17 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> saveOmemoDevice(OmemoDevice device);
 
+  Future<void> deleteOmemoDevice(String jid);
+
   Future<OmemoDeviceList?> getOmemoDeviceList(String jid);
 
   Future<void> saveOmemoDeviceList(OmemoDeviceList data);
 
+  Future<void> deleteOmemoDeviceList(String jid);
+
   Future<List<OmemoTrust>> getOmemoTrusts(String jid);
+
+  Future<List<OmemoTrust>> getAllOmemoTrusts();
 
   Future<OmemoTrust?> getOmemoTrust(String jid, int device);
 
@@ -108,9 +114,15 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<OmemoRatchet>> getOmemoRatchets(String jid);
 
+  Future<void> saveOmemoRatchet(OmemoRatchet ratchet);
+
   Future<void> saveOmemoRatchets(List<OmemoRatchet> ratchets);
 
   Future<void> removeOmemoRatchets(List<(String, int)> ratchets);
+
+  Future<DateTime?> getLastPreKeyRotationTime(String jid);
+
+  Future<void> setLastPreKeyRotationTime(String jid, DateTime time);
 
   Future<void> saveFileMetadata(FileMetadataData metadata);
 
@@ -794,6 +806,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
+  Future<void> deleteOmemoDevice(String jid) async {
+    await (delete(omemoDevices)..where((t) => t.jid.equals(jid))).go();
+  }
+
+  @override
   Future<OmemoDeviceList?> getOmemoDeviceList(String jid) =>
       omemoDeviceListsAccessor.selectOne(jid);
 
@@ -802,8 +819,16 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       omemoDeviceListsAccessor.insertOrUpdateOne(data);
 
   @override
+  Future<void> deleteOmemoDeviceList(String jid) async {
+    await (delete(omemoDeviceLists)..where((t) => t.jid.equals(jid))).go();
+  }
+
+  @override
   Future<List<OmemoTrust>> getOmemoTrusts(String jid) =>
       omemoTrustsAccessor.selectByJid(jid);
+
+  @override
+  Future<List<OmemoTrust>> getAllOmemoTrusts() => select(omemoTrusts).get();
 
   @override
   Future<OmemoTrust?> getOmemoTrust(String jid, int device) =>
@@ -860,10 +885,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       omemoRatchetsAccessor.selectByJid(jid);
 
   @override
+  Future<void> saveOmemoRatchet(OmemoRatchet ratchet) async {
+    await omemoRatchetsAccessor.insertOrUpdateOne(ratchet.toDb());
+  }
+
+  @override
   Future<void> saveOmemoRatchets(List<OmemoRatchet> ratchets) async {
     await transaction(() async {
       for (final ratchet in ratchets) {
-        await omemoRatchetsAccessor.insertOrUpdateOne(await ratchet.toDb());
+        await omemoRatchetsAccessor.insertOrUpdateOne(ratchet.toDb());
       }
     });
   }
@@ -879,6 +909,23 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
             .go();
       }
     });
+  }
+
+  @override
+  Future<DateTime?> getLastPreKeyRotationTime(String jid) async {
+    // For now, we'll store this in the omemo_devices table
+    // You may want to add a dedicated column or table for this
+    final device = await omemoDevicesAccessor.selectByJid(jid);
+    // TODO: Add lastPreKeyRotation column to omemo_devices table
+    // For now, return null to indicate no rotation time stored
+    return null;
+  }
+
+  @override
+  Future<void> setLastPreKeyRotationTime(String jid, DateTime time) async {
+    // TODO: Add lastPreKeyRotation column to omemo_devices table
+    // For now, this is a no-op
+    // You'll need to update the database schema to properly store this
   }
 
   @override

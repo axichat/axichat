@@ -148,7 +148,11 @@ class XmppPresenceManager extends mox.PresenceManager {
         ),
       ];
 
-  Future<void> sendPresence({Presence? presence, String? status}) async {
+  @override
+  Future<void> sendPresence(
+      {String? show, String? status, mox.JID? to, int? priority}) async {
+    // Convert show string to Presence enum for backward compatibility
+    final presence = show != null ? Presence.fromString(show) : null;
     final stanza = mox.Stanza.presence(
       type: presence != null && presence.isUnavailable
           ? Presence.unavailable.name
@@ -187,13 +191,13 @@ class XmppPresenceManager extends mox.PresenceManager {
   }
 
   @override
-  Future<void> sendInitialPresence() async {
+  Future<void> sendInitialPresence({int? priority}) async {
     Presence? presence;
     String? status;
     await owner._dbOp<XmppStateStore>((ss) {
       presence = ss.read(key: owner.presenceStorageKey) as Presence?;
       status = ss.read(key: owner.statusStorageKey) as String?;
     });
-    await sendPresence(presence: presence, status: status);
+    await sendPresence(show: presence?.name, status: status);
   }
 }

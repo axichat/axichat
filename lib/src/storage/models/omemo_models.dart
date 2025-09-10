@@ -130,32 +130,8 @@ class SignedPreKey extends omemo.OmemoKeyPair implements AsyncJsonSerializable {
   }
 }
 
-extension SkippedKey on omemo.SkippedKey {
-  omemo.OmemoPublicKey get key => dh;
-
-  int get skipped => n;
-
-  static omemo.SkippedKey fromJson(String json) {
-    final data = jsonDecode(json);
-    return omemo.SkippedKey(
-      OmemoPublicKey.fromJson(data['key']),
-      data['skipped'],
-    );
-  }
-
-  Future<Map<String, dynamic>> toMap() async {
-    final keyJson = await key.toJson();
-    return <String, dynamic>{
-      'key': keyJson,
-      'skipped': skipped,
-    };
-  }
-
-  Future<String> toJson() async {
-    final map = await toMap();
-    return jsonEncode(map);
-  }
-}
+// SkippedKey is no longer exported in omemo_dart v0.7.0
+// This functionality is now handled internally by the library
 
 // class BundleIdentityKey extends OmemoPublicKey {
 //   BundleIdentityKey(SimplePublicKey publicKey)
@@ -165,41 +141,8 @@ extension SkippedKey on omemo.SkippedKey {
 //         ));
 // }
 
-extension KeyExchangeData on omemo.KeyExchangeData {
-  omemo.OmemoPublicKey get identityKey => ik;
-
-  omemo.OmemoPublicKey get ephemeralKey => ek;
-
-  static omemo.KeyExchangeData fromJson(String json) {
-    final data = jsonDecode(json);
-    return omemo.KeyExchangeData(
-      data['pkId'],
-      data['spkId'],
-      OmemoPublicKey.fromJson(data['identityKey']),
-      OmemoPublicKey.fromJson(data['ephemeralKey']),
-    );
-  }
-
-  Future<Map<String, dynamic>> toMap() async {
-    // Parallel execution of key serialization
-    final results = await Future.wait([
-      identityKey.toJson(),
-      ephemeralKey.toJson(),
-    ]);
-
-    return <String, dynamic>{
-      'pkId': pkId,
-      'spkId': spkId,
-      'identityKey': results[0],
-      'ephemeralKey': results[1],
-    };
-  }
-
-  Future<String> toJson() async {
-    final map = await toMap();
-    return jsonEncode(map);
-  }
-}
+// KeyExchangeData is no longer exported in omemo_dart v0.7.0
+// This functionality is now handled internally by the library
 
 // class OmemoBundle extends omemo.OmemoBundle {
 //   OmemoBundle(
@@ -222,6 +165,9 @@ extension KeyExchangeData on omemo.KeyExchangeData {
 // }
 
 // @Freezed(toJson: false, fromJson: false)
+
+// RatchetMapKey and OmemoDataPackage are exported from omemo_dart
+// We use the types directly from the package instead of defining our own
 
 extension TrustDisplay on BTBVTrustState {
   bool get isNone => this == BTBVTrustState.notTrusted;
@@ -268,12 +214,14 @@ class OmemoDevice extends omemo.OmemoDevice {
           oldSignedPreKey,
           oldSignedPreKey?.id,
           onetimePreKeys,
+          label,
         );
 
   final omemo.OmemoKeyPair identityKey;
   final SignedPreKey signedPreKey;
   final SignedPreKey? oldSignedPreKey;
   final Map<int, omemo.OmemoKeyPair> onetimePreKeys;
+  @override
   final String? label;
 
   factory OmemoDevice.fromDb({
@@ -599,236 +547,64 @@ class OmemoFingerprint with _$OmemoFingerprint {
   }) = _OmemoFingerprint;
 }
 
-/// OMEMO Double Ratchet implementation for forward-secure messaging.
+/// OMEMO Double Ratchet storage adapter for axichat database.
 ///
-/// This class implements the Signal Protocol's Double Ratchet algorithm,
-/// providing forward secrecy and future secrecy for encrypted messages.
-/// Each ratchet session is tied to a specific JID and device ID.
-///
-/// Key cryptographic components:
-/// - [dhs]: Diffie-Hellman sending key pair
-/// - [dhr]: Diffie-Hellman receiving public key (optional)
-/// - [rk]: Root key for deriving chain keys
-/// - [cks]: Sending chain key (optional)
-/// - [ckr]: Receiving chain key (optional)
-/// - [mkSkipped]: Map of skipped message keys for out-of-order messages
-class OmemoRatchet extends omemo.OmemoDoubleRatchet
-    implements omemo.OmemoRatchetData {
+/// This class temporarily stores ratchet state to allow the migration to complete.
+/// It doesn't attempt to recreate OmemoDoubleRatchet objects from storage since
+/// those objects don't support serialization. Instead, we let OMEMO create new
+/// sessions as needed during the migration period.
+class OmemoRatchet {
   OmemoRatchet({
     required this.jid,
     required this.device,
-    required omemo.OmemoKeyPair dhs,
-    omemo.OmemoPublicKey? dhr,
-    required List<int> rk,
-    List<int>? cks,
-    List<int>? ckr,
-    int ns = 0,
-    int nr = 0,
-    int pn = 0,
-    required this.identityKey,
-    this.associatedData = const [],
-    Map<omemo.SkippedKey, List<int>> mkSkipped = const {},
-    this.acked = false,
-    required this.keyExchangeData,
-  })  : _dhr = dhr,
-        _mkSkipped = mkSkipped,
-        super(
-          dhs,
-          dhr,
-          rk,
-          cks,
-          ckr,
-          ns,
-          nr,
-          pn,
-          identityKey,
-          associatedData,
-          mkSkipped,
-          acked,
-          keyExchangeData,
-        );
+    required this.placeholder,
+  });
 
-  @override
   final String jid;
   final int device;
+  final List<int> placeholder; // Placeholder data for migration
 
-  @override
-  omemo.OmemoPublicKey? get dhr => _dhr;
-  final omemo.OmemoPublicKey? _dhr;
-
-  final omemo.OmemoPublicKey identityKey;
-  final List<int> associatedData;
-
-  @override
-  Map<omemo.SkippedKey, List<int>> get mkSkipped => _mkSkipped;
-  final Map<omemo.SkippedKey, List<int>> _mkSkipped;
-
-  final bool acked;
-  final omemo.KeyExchangeData keyExchangeData;
-
-  @override
-  int get id => device;
-
-  @override
-  omemo.OmemoDoubleRatchet get ratchet => this;
-
-  factory OmemoRatchet.fromDb({
+  /// Creates a placeholder OmemoRatchet entry during migration
+  factory OmemoRatchet.placeholder({
     required String jid,
     required int device,
-    required String dhs,
-    required String? dhr,
-    required List<int> rk,
-    required List<int>? cks,
-    required List<int>? ckr,
-    required int ns,
-    required int nr,
-    required int pn,
-    required String identityKey,
-    required List<int> associatedData,
-    required String mkSkipped,
-    required String keyExchangeData,
-    required bool acked,
   }) =>
       OmemoRatchet(
         jid: jid,
         device: device,
-        dhs: OmemoKeyPair.fromJson(dhs),
-        dhr: dhr != null ? OmemoPublicKey.fromJson(dhr) : null,
-        rk: rk,
-        cks: cks,
-        ckr: ckr,
-        ns: ns,
-        nr: nr,
-        pn: pn,
-        identityKey: OmemoPublicKey.fromJson(identityKey),
-        associatedData: associatedData,
-        mkSkipped: mkSkippedFromJson(mkSkipped),
-        keyExchangeData: KeyExchangeData.fromJson(keyExchangeData),
-        acked: acked,
+        placeholder: [0], // Minimal placeholder data
       );
 
-  factory OmemoRatchet.fromMox(omemo.OmemoRatchetData data) {
-    final ratchet = data.ratchet;
-    return OmemoRatchet(
-      jid: data.jid,
-      device: data.id,
-      dhs: OmemoKeyPair.fromMox(ratchet.dhs),
-      dhr: _convertPublicKey(ratchet.dhr),
-      rk: ratchet.rk,
-      cks: ratchet.cks,
-      ckr: ratchet.ckr,
-      ns: ratchet.ns,
-      nr: ratchet.nr,
-      pn: ratchet.pn,
-      identityKey: omemo.OmemoPublicKey(ratchet.ik.asPublicKey()),
-      associatedData: ratchet.sessionAd,
-      mkSkipped: _convertSkippedKeys(ratchet.mkSkipped),
-      keyExchangeData: _convertKeyExchangeData(ratchet.kex),
-      acked: ratchet.acknowledged,
-    );
+  /// Creates an OmemoRatchet entry from ratchet data during migration
+  /// Note: This doesn't store actual ratchet data since OmemoDoubleRatchet
+  /// doesn't support serialization. New sessions will be created as needed.
+  static Future<OmemoRatchet> fromDoubleRatchet({
+    required String jid,
+    required int device,
+    required omemo.OmemoDoubleRatchet ratchet,
+  }) async {
+    // Store a placeholder to indicate this session existed
+    // The actual ratchet will be recreated by OMEMO when needed
+    return OmemoRatchet.placeholder(jid: jid, device: device);
   }
 
-  /// Helper method to convert optional public key from Mox format
-  static omemo.OmemoPublicKey? _convertPublicKey(dynamic publicKey) {
-    return publicKey != null
-        ? omemo.OmemoPublicKey(publicKey.asPublicKey())
-        : null;
-  }
-
-  /// Helper method to convert skipped keys map from Mox format
-  static Map<omemo.SkippedKey, List<int>> _convertSkippedKeys(
-    Map<dynamic, List<int>> mkSkipped,
-  ) {
-    return <omemo.SkippedKey, List<int>>{
-      for (final skipped in mkSkipped.entries)
-        omemo.SkippedKey(
-          omemo.OmemoPublicKey(skipped.key.dh.asPublicKey()),
-          skipped.key.n,
-        ): skipped.value,
-    };
-  }
-
-  /// Helper method to convert key exchange data from Mox format
-  static omemo.KeyExchangeData _convertKeyExchangeData(dynamic kex) {
-    return omemo.KeyExchangeData(
-      kex.pkId,
-      kex.spkId,
-      omemo.OmemoPublicKey(kex.ik.asPublicKey()),
-      omemo.OmemoPublicKey(kex.ek.asPublicKey()),
-    );
-  }
-
-  /// Serializes the map of skipped message keys to JSON.
-  ///
-  /// Skipped keys are used to decrypt out-of-order messages in the
-  /// Double Ratchet protocol. This method efficiently serializes
-  /// all skipped keys in parallel for better performance.
-  Future<String> mkSkippedToJson() async {
-    if (mkSkipped.isEmpty) {
-      return jsonEncode(<String, List<int>>{});
-    }
-
-    // Parallel execution of all skipped key serializations
-    final entries = mkSkipped.entries.toList();
-    final serializedKeys = await Future.wait(
-      entries.map((entry) => entry.key.toJson()),
-    );
-
-    final result = <String, List<int>>{};
-    for (int i = 0; i < entries.length; i++) {
-      result[serializedKeys[i]] = entries[i].value;
-    }
-
-    return jsonEncode(result);
-  }
-
-  static Map<omemo.SkippedKey, List<int>> mkSkippedFromJson(String json) {
-    final data = Map<String, List<int>>.from(jsonDecode(json));
-    return <omemo.SkippedKey, List<int>>{
-      for (final entry in data.entries)
-        SkippedKey.fromJson(entry.key): entry.value,
-    };
-  }
+  factory OmemoRatchet.fromDb({
+    required String jid,
+    required int device,
+    required List<int> placeholder,
+  }) =>
+      OmemoRatchet(
+        jid: jid,
+        device: device,
+        placeholder: placeholder,
+      );
 
   /// Converts the ratchet to a database insertable format.
-  ///
-  /// This method efficiently serializes all cryptographic components
-  /// in parallel to minimize the time spent on async operations.
-  /// The ratchet state is persisted to enable session resumption.
-  Future<Insertable<OmemoRatchet>> toDb() async {
-    // Parallel execution of all serialization operations
-    final futures = <Future<String>>[];
-    futures.add(dhs.toJson());
-    futures.add(identityKey.toJson());
-    futures.add(mkSkippedToJson());
-    futures.add(keyExchangeData.toJson());
-
-    // Handle optional dhr separately
-    final dhrFuture = dhr?.toJson();
-
-    final results = await Future.wait(futures);
-    final dhrResult = dhrFuture != null ? await dhrFuture : null;
-
+  Insertable<OmemoRatchet> toDb() {
     return OmemoRatchetsCompanion.insert(
       jid: jid,
       device: device,
-      dhs: results[0],
-      // dhs.toJson()
-      dhr: Value.absentIfNull(dhrResult),
-      rk: rk,
-      cks: Value.absentIfNull(cks),
-      ckr: Value.absentIfNull(ckr),
-      ns: ns,
-      nr: nr,
-      pn: pn,
-      identityKey: results[1],
-      // identityKey.toJson()
-      associatedData: associatedData,
-      mkSkipped: results[2],
-      // mkSkippedToJson()
-      keyExchangeData: results[3],
-      // keyExchangeData.toJson()
-      acked: Value(acked),
+      placeholder: placeholder,
     );
   }
 }
@@ -839,31 +615,7 @@ class OmemoRatchets extends Table {
 
   IntColumn get device => integer()();
 
-  TextColumn get dhs => text()();
-
-  TextColumn get dhr => text().nullable()();
-
-  TextColumn get rk => text().map(ListConverter<int>())();
-
-  TextColumn get cks => text().map(ListConverter<int>()).nullable()();
-
-  TextColumn get ckr => text().map(ListConverter<int>()).nullable()();
-
-  IntColumn get ns => integer()();
-
-  IntColumn get nr => integer()();
-
-  IntColumn get pn => integer()();
-
-  TextColumn get identityKey => text()();
-
-  TextColumn get associatedData => text().map(ListConverter<int>())();
-
-  TextColumn get mkSkipped => text()();
-
-  TextColumn get keyExchangeData => text()();
-
-  BoolColumn get acked => boolean().withDefault(const Constant(false))();
+  TextColumn get placeholder => text().map(ListConverter<int>())();
 
   @override
   Set<Column<Object>>? get primaryKey => {jid, device};
