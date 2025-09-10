@@ -249,3 +249,4 @@ const mobileHoverStrategies = ShadHoverStrategies(
 All custom UI components use `Axi` prefix: `AxiAppBar`, `AxiAvatar`, `AxiMessageTile`
 
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`
+- NEVER read from .pub-cache

@@ -26,6 +26,8 @@ import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
+import 'package:omemo_dart/omemo_dart.dart'
+    show RatchetMapKey, OmemoDataPackage; // For persistence types only
 import 'package:path/path.dart' as p;
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
@@ -246,12 +248,10 @@ class XmppService extends XmppBase
           _log.warning('Failed to enable carbons.');
         }
       }
-      await _omemoManager.value?.commitDevice(await _device);
-      if (await _ensureOmemoDevicePublished() case final result?) {
-        _log.severe('Failed to publish OMEMO device. $result');
-      }
+      // Device publishing is now handled internally by OmemoManager
+      // when it's initialized with the device
       if (event.resumed) return;
-      await _omemoManager.value?.onNewConnection();
+      // Connection handling is now automatic in moxxmpp v0.5.0
     })
     ..registerHandler<mox.ResourceBoundEvent>((event) async {
       _log.info('Bound resource: ${event.resource}...');
@@ -370,20 +370,6 @@ class XmppService extends XmppBase
             .asBroadcastStream()
             .listen(_eventManager.executeHandlers);
 
-        _messageSubscription = _messageStream.stream.listen(
-          (message) async {
-            await _notificationService.sendNotification(
-              title: message.senderJid,
-              body: message.body,
-              extraConditions: [
-                message.senderJid != myJid,
-                !await _dbOpReturning<XmppDatabase, bool>((db) async =>
-                    (await db.getChat(message.chatJid))?.muted ?? false),
-              ],
-            );
-          },
-        );
-
         _connection.connectionSettings = XmppConnectionSettings(
           jid: _myJid!.toBare(),
           password: password,
@@ -402,6 +388,21 @@ class XmppService extends XmppBase
 
         _log.info('Login successful. Initializing databases...');
         await _initDatabases(databasePrefix, databasePassphrase);
+
+        // Set up message subscription after database is initialized
+        _messageSubscription = _messageStream.stream.listen(
+          (message) async {
+            await _notificationService.sendNotification(
+              title: message.senderJid,
+              body: message.body,
+              extraConditions: [
+                message.senderJid != myJid,
+                !await _dbOpReturning<XmppDatabase, bool>((db) async =>
+                    (await db.getChat(message.chatJid))?.muted ?? false),
+              ],
+            );
+          },
+        );
 
         return _connection.saltedPassword;
       },
@@ -695,6 +696,17 @@ class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   }
 }
 
+/// Custom Stream Management manager that adds persistent state storage.
+///
+/// This wrapper extends the base StreamManagementManager to persist stream state
+/// to the database, enabling:
+/// - Stream resumption after app restarts
+/// - Reliable message delivery tracking across sessions
+/// - Persistence of acknowledgment counters (c2s/s2c)
+/// - Storage of stream resumption ID and location
+///
+/// This is essential for maintaining XMPP stream continuity and preventing
+/// message loss during network disruptions or app lifecycle changes.
 class XmppStreamManagementManager extends mox.StreamManagementManager {
   XmppStreamManagementManager({required this.owner})
       : super(ackTimeout: const Duration(minutes: 2));
@@ -767,63 +779,15 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   }
 }
 
-class PubSubManager extends mox.PubSubManager {
-  @override
-  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
-    mox.JID jid,
-    String node,
-    String? id,
-  ) async {
-    final result = await getAttributes().sendStanza(
-      mox.StanzaDetails(
-        mox.Stanza.iq(
-          type: 'get',
-          to: jid.toString(),
-          children: [
-            mox.XMLNode.xmlns(
-              tag: 'pubsub',
-              xmlns: mox.pubsubXmlns,
-              children: [
-                mox.XMLNode(
-                  tag: 'items',
-                  attributes: <String, String>{'node': node},
-                  children: id != null
-                      ? [
-                          mox.XMLNode(
-                            tag: 'item',
-                            attributes: <String, String>{'id': id},
-                          ),
-                        ]
-                      : [],
-                ),
-              ],
-            ),
-          ],
-        ),
-        shouldEncrypt: false,
-      ),
-    );
+// PubSubManager wrapper removed - moxxmpp v0.5.0's base implementation works correctly
 
-    if (result!.attributes['type'] != 'result') {
-      return moxlib.Result(mox.getPubSubError(result));
-    }
-
-    final pubsub = result.firstTag('pubsub', xmlns: mox.pubsubXmlns);
-    if (pubsub == null) return moxlib.Result(mox.getPubSubError(result));
-
-    final itemElement = pubsub.firstTag('items')?.firstTag('item');
-    if (itemElement == null) return moxlib.Result(mox.NoItemReturnedError());
-
-    final item = mox.PubSubItem(
-      id: itemElement.attributes['id']! as String,
-      payload: itemElement.children[0],
-      node: node,
-    );
-
-    return moxlib.Result(item);
-  }
-}
-
+/// Custom SASL SCRAM negotiator that adds support for pre-hashed passwords.
+///
+/// This wrapper is necessary for the app's security model where passwords can be
+/// stored in a pre-hashed format rather than plaintext. This allows for:
+/// - Secure password storage without keeping plaintext
+/// - Faster reconnection using cached salted passwords
+/// - Compatibility with the app's credential management system
 class SaslScramNegotiator extends mox.SaslScramNegotiator {
   SaslScramNegotiator({
     this.preHashed = false,

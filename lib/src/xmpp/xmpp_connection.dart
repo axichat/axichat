@@ -7,10 +7,12 @@ class XmppConnection extends mox.XmppConnection {
     XmppClientNegotiator? negotiationsHandler,
     this.socketWrapper,
   }) : super(
-          reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
-          connectivityManager ?? XmppConnectivityManager.pingDns(),
-          negotiationsHandler ?? XmppClientNegotiator(),
-          socketWrapper ?? XmppSocketWrapper(),
+          reconnectionPolicy:
+              reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
+          connectivityManager:
+              connectivityManager ?? XmppConnectivityManager.pingDns(),
+          negotiationsHandler: negotiationsHandler ?? XmppClientNegotiator(),
+          socket: socketWrapper ?? XmppSocketWrapper(),
         );
 
   final XmppSocketWrapper? socketWrapper;
@@ -46,7 +48,7 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.omemoManager);
       case == mox.DiscoManager:
         return getManagerById(mox.discoManager);
-      case == PubSubManager:
+      case == mox.PubSubManager:
         return getManagerById(mox.pubsubManager);
       case == XmppPresenceManager:
         return getManagerById(mox.presenceManager);
@@ -127,10 +129,11 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<void> sendPresence({Presence? presence, String? status}) async {
     if (getManager<XmppPresenceManager>() case final pm?) {
-      return await pm.sendPresence(
-        presence: presence,
+      await pm.sendPresence(
+        show: presence?.name,
         status: status,
       );
+      return;
     }
 
     throw XmppPresenceException();
