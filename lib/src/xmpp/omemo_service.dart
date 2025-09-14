@@ -10,6 +10,19 @@ mixin OmemoService on XmppBase {
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+    ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+      if (event.resumed) return;
+      _omemoLogger.info(
+          'Stream negotiation done, ensuring OMEMO device is published...');
+      // OMEMO manager should already be initialized and registered by now
+      // This handler focuses on post-connection setup like device publishing
+      if (_omemoManager.isCompleted) {
+        await _ensureOmemoDevicePublished();
+      } else {
+        _omemoLogger
+            .warning('OMEMO manager not ready during stream negotiation done');
+      }
+    })
     ..registerHandler<mox.OmemoDeviceListUpdatedEvent>((event) async {
       await _dbOp<XmppDatabase>(
         (db) => db.updateChatAlert(
@@ -46,15 +59,49 @@ mixin OmemoService on XmppBase {
   @override
   List<mox.XmppManagerBase> get featureManagers {
     final managers = super.featureManagers;
-    // Add the OMEMO manager if it's been initialized
+    // OMEMO manager should now be completed during _initConnection()
+    // before featureManagers is called
     if (_omemoManager.isCompleted) {
       try {
-        managers.add(_omemoManager.value!);
-      } catch (_) {
-        // Manager not yet available
+        final manager = _omemoManager.value;
+        if (manager != null) {
+          managers.add(manager);
+          _omemoLogger.info('OMEMO manager added to featureManagers');
+        }
+      } catch (e) {
+        _omemoLogger.severe('OMEMO manager completed but not available: $e');
       }
+    } else {
+      _omemoLogger
+          .warning('OMEMO manager not completed when featureManagers called');
     }
     return managers;
+  }
+
+  /// Device callback for lazy loading - called when OMEMO manager needs the device
+  Future<omemo.OmemoDevice> _getDeviceCallback() async {
+    return await _dbOpReturning<XmppDatabase, omemo.OmemoDevice>(
+      (db) async {
+        try {
+          // Try to get existing device from database
+          final existingDevice = await db.getOmemoDevice(myJid!);
+          if (existingDevice != null) {
+            return existingDevice;
+          }
+
+          // Generate new device if none exists
+          _omemoLogger.info('Generating new OMEMO device...');
+          final newDevice = await omemo.OmemoDevice.generateNewDevice(myJid!);
+          await db.saveOmemoDevice(OmemoDevice.fromMox(newDevice));
+          _omemoLogger.info(
+              'New OMEMO device generated and saved with ID: ${newDevice.id}');
+          return newDevice;
+        } catch (e) {
+          _omemoLogger.severe('Device callback failed: $e');
+          rethrow;
+        }
+      },
+    );
   }
 
   /// Get or create the OMEMO device from database
@@ -99,13 +146,12 @@ mixin OmemoService on XmppBase {
     if (_omemoManager.isCompleted) return;
 
     try {
-      // Get the OMEMO device from database or generate a new one
-      final device = await _getOrCreateDevice();
+      _omemoLogger.info('Starting OMEMO manager initialization...');
 
-      // Create the OmemoManager with the new v0.5.0 API
+      // Create the OmemoManager with the new v0.5.0 callback API
       final manager = mox.OmemoManager(
         _shouldEncryptStanza, // ShouldEncryptStanzaCallback
-        device, // OmemoDevice
+        _getDeviceCallback, // GetOmemoDeviceCallback - lazy loading
         const mox.TrustManagerConfig.btbv(), // Use BTBV trust manager config
         persistence: await _createPersistence(), // Optional persistence
         enableMessageQueueing: true, // Prevent race conditions
@@ -114,11 +160,10 @@ mixin OmemoService on XmppBase {
 
       // Complete the future with the manager
       _omemoManager.complete(manager);
+      _omemoLogger.info('OMEMO manager initialization completed successfully');
 
       // Note: The manager will be registered via featureManagers list
-
-      // Ensure our device is published
-      await _ensureOmemoDevicePublished();
+      // Device publishing will be handled by StreamNegotiationsDoneEvent handler
     } catch (e) {
       _omemoLogger.severe('Failed to initialize OmemoManager: $e');
       // Don't complete the completer on error to allow retry
@@ -133,8 +178,16 @@ mixin OmemoService on XmppBase {
   Future<bool> _shouldEncryptStanza(mox.JID to, mox.Stanza stanza) async {
     return await _dbOpReturning<XmppDatabase, bool>(
       (db) async {
-        final chat = await db.getChat(to.toBare().toString());
-        return chat?.encryptionProtocol == EncryptionProtocol.omemo;
+        final chatJid = to.toBare().toString();
+        final chat = await db.getChat(chatJid);
+        final shouldEncrypt =
+            chat?.encryptionProtocol == EncryptionProtocol.omemo;
+
+        if (shouldEncrypt) {
+          _omemoLogger.info('Encrypting message to $chatJid with OMEMO');
+        }
+
+        return shouldEncrypt;
       },
     );
   }
@@ -142,7 +195,16 @@ mixin OmemoService on XmppBase {
   Future<mox.OmemoError?> _ensureOmemoDevicePublished() async {
     // Device publishing is now handled internally by OmemoManager
     // when it's initialized with the device
-    return null;
+    try {
+      await _getOmemoManager();
+      _omemoLogger.info(
+          'OMEMO manager initialized, device publishing handled internally');
+      // The manager automatically publishes the device bundle on initialization
+      return null;
+    } catch (e) {
+      _omemoLogger.severe('Failed to ensure OMEMO device published: $e');
+      return mox.UnknownOmemoError();
+    }
   }
 
   Future<OmemoFingerprint?> getCurrentFingerprint() async {
@@ -297,6 +359,10 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
   _OmemoPersistenceImpl(this._service);
 
   final OmemoService _service;
+
+  // Registered key for storing prekey rotation timestamp
+  static final _prekeyRotationKey =
+      XmppStateStore.registerKey('omemo_prekey_rotation');
 
   @override
   Future<void> storeDevice(omemo.OmemoDevice device) async {
@@ -500,15 +566,22 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<void> storeLastPreKeyRotation(DateTime timestamp) async {
-    // PreKey rotation tracking is not implemented in our current database schema
-    // This would require adding a metadata table
-    // For now, we'll no-op this
+    await _service._dbOp<XmppStateStore>(
+      (stateStore) => stateStore.write(
+        key: _prekeyRotationKey,
+        value: timestamp.millisecondsSinceEpoch,
+      ),
+    );
   }
 
   @override
   Future<DateTime?> loadLastPreKeyRotation() async {
-    // PreKey rotation tracking is not implemented
-    return null;
+    final timestampMs = await _service._dbOpReturning<XmppStateStore, int?>(
+      (stateStore) => stateStore.read(key: _prekeyRotationKey) as int?,
+    );
+
+    if (timestampMs == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(timestampMs);
   }
 }
 

@@ -25,9 +25,9 @@ import 'package:logging/logging.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
-import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:omemo_dart/omemo_dart.dart'
     show RatchetMapKey, OmemoDataPackage; // For persistence types only
+import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
@@ -386,10 +386,6 @@ class XmppService extends XmppBase
           throw XmppAuthenticationException();
         }
 
-        _log.info('Login successful. Initializing databases...');
-        await _initDatabases(databasePrefix, databasePassphrase);
-
-        // Set up message subscription after database is initialized
         _messageSubscription = _messageStream.stream.listen(
           (message) async {
             await _notificationService.sendNotification(
@@ -403,6 +399,9 @@ class XmppService extends XmppBase
             );
           },
         );
+
+        _log.info('Login successful. Initializing databases...');
+        await _initDatabases(databasePrefix, databasePassphrase);
 
         return _connection.saltedPassword;
       },
@@ -425,6 +424,10 @@ class XmppService extends XmppBase
       mox.Bind2Negotiator()..tag = 'axichat',
       mox.FASTSaslNegotiator(),
     ]);
+
+    // Initialize OMEMO manager before registering managers
+    await _completeOmemoManager();
+
     await _connection.registerManagers(featureManagers);
 
     await _connection.loadStreamState();

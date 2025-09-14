@@ -236,16 +236,25 @@ class Message with _$Message implements Insertable<Message> {
       pseudoMessageType != null && pseudoMessageData != null;
 
   mox.MessageEvent toMox() {
+    final extensions = <mox.StanzaHandlerExtension>[
+      mox.MessageBodyData(body),
+      const mox.MarkableData(true),
+      mox.MessageIdData(stanzaID),
+      mox.ChatState.active,
+    ];
+
+    // Add OMEMO flag if encryption is requested
+    if (encryptionProtocol == EncryptionProtocol.omemo) {
+      // The OmemoManager will intercept based on _shouldEncryptStanza callback
+      // But we should ensure the message is properly flagged
+      extensions.add(mox.StableIdData(originID ?? stanzaID, null));
+    }
+
     return mox.MessageEvent(
       mox.JID.fromString(senderJid),
       mox.JID.fromString(chatJid),
       false,
-      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(body),
-        const mox.MarkableData(true),
-        mox.MessageIdData(stanzaID),
-        mox.ChatState.active,
-      ]),
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList(extensions),
       id: stanzaID,
     );
   }
