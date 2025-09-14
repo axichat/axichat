@@ -16,7 +16,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
     ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
       _log.info('Fetching blocklist...');
-      await requestBlocklist();
+      requestBlocklist();
     })
     ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
       await _dbOp<XmppDatabase>(

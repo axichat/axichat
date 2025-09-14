@@ -269,10 +269,10 @@ packages:
     dependency: transitive
     description:
       name: code_builder
-      sha256: "0ec10bf4a89e4c613960bf1e8b42c64127021740fb21640c29c909826a5eea3e"
+      sha256: "11654819532ba94c34de52ff5feb52bd81cba1de00ef2ed622fd50295f9d4243"
       url: "https://pub.dev"
     source: hosted
-    version: "4.10.1"
+    version: "4.11.0"
   collection:
     dependency: transitive
     description:
@@ -848,10 +848,10 @@ packages:
     dependency: transitive
     description:
       name: leak_tracker
-      sha256: "8dcda04c3fc16c14f48a7bb586d4be1f0d1572731b6d81d51772ef47c02081e0"
+      sha256: "33e2e26bdd85a0112ec15400c8cbffea70d0f9c3407491f672a2fad47915e2de"
       url: "https://pub.dev"
     source: hosted
-    version: "11.0.1"
+    version: "11.0.2"
   leak_tracker_flutter_testing:
     dependency: transitive
     description:
@@ -969,7 +969,7 @@ packages:
     description:
       path: "packages/moxxmpp"
       ref: "v0.5.0"
-      resolved-ref: "129d38c0992402eac9da9d4082bc46c69c3f05e0"
+      resolved-ref: "1367a2174bbfe6cd5532e527162bfafa923e99c1"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.5.0"
@@ -978,7 +978,7 @@ packages:
     description:
       path: "packages/moxxmpp_socket_tcp"
       ref: HEAD
-      resolved-ref: "129d38c0992402eac9da9d4082bc46c69c3f05e0"
+      resolved-ref: "1367a2174bbfe6cd5532e527162bfafa923e99c1"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.4.1"
@@ -1411,10 +1411,10 @@ packages:
     dependency: "direct main"
     description:
       name: shorebird_code_push
-      sha256: cc78bbf651d320414e6ce66d6f3e825f91050050bf94bbe27f7eb3eebfdfde1c
+      sha256: "82203f39a66c78548da944dbe4079c2aa2a60fa5bc1105ed707b144c94f04349"
       url: "https://pub.dev"
     source: hosted
-    version: "2.0.4"
+    version: "2.0.5"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -1664,10 +1664,10 @@ packages:
     dependency: transitive
     description:
       name: url_launcher_android
-      sha256: "69ee86740f2847b9a4ba6cffa74ed12ce500bbe2b07f3dc1e643439da60637b7"
+      sha256: "07cffecb7d68cbc6437cd803d5f11a86fe06736735c3dfe46ff73bcb0f958eed"
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.18"
+    version: "6.3.21"
   url_launcher_ios:
     dependency: transitive
     description:
@@ -1902,4 +1902,4 @@ packages:
     version: "3.1.3"
 sdks:
   dart: ">=3.9.0 <4.0.0"
-  flutter: ">=3.32.0"
+  flutter: ">=3.35.0"
