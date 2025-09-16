@@ -21,6 +21,7 @@ abstract class BaseCalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     on<CalendarTaskDeleted>(_onCalendarTaskDeleted);
     on<CalendarTaskCompleted>(_onCalendarTaskCompleted);
     on<CalendarTaskDropped>(_onCalendarTaskDropped);
+    on<CalendarTaskResized>(_onCalendarTaskResized);
     on<CalendarQuickTaskAdded>(_onCalendarQuickTaskAdded);
     on<CalendarViewChanged>(_onCalendarViewChanged);
     on<CalendarDateSelected>(_onCalendarDateSelected);
@@ -182,6 +183,56 @@ abstract class BaseCalendarBloc extends Bloc<CalendarEvent, CalendarState> {
       await onTaskUpdated(updatedTask);
     } catch (e) {
       logError('Failed to drop task', e);
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> _onCalendarTaskResized(
+      CalendarTaskResized event, Emitter<CalendarState> emit) async {
+    try {
+      // Find the task
+      final task = state.model.tasks[event.taskId];
+      if (task == null) {
+        throw CalendarTaskNotFoundException(event.taskId);
+      }
+
+      // Calculate new scheduled time
+      final scheduledDate = task.scheduledTime ?? DateTime.now();
+      final newScheduledTime = DateTime(
+        scheduledDate.year,
+        scheduledDate.month,
+        scheduledDate.day,
+        event.startHour.floor(),
+        ((event.startHour - event.startHour.floor()) * 60).round(),
+      );
+
+      // Update the task with new time and duration
+      final updatedTask = task.copyWith(
+        scheduledTime: newScheduledTime,
+        duration: Duration(minutes: (event.duration * 60).round()),
+        daySpan: event.daySpan,
+      );
+
+      // Update in storage
+      final updatedModel = state.model.copyWith(
+        tasks: Map.from(state.model.tasks)..[event.taskId] = updatedTask,
+      );
+      await _calendarBox.put('calendar', updatedModel);
+
+      // Emit new state to trigger UI rebuild
+      final dueReminders = _getDueReminders(updatedModel);
+      final nextTask = _getNextTask(updatedModel);
+
+      emit(state.copyWith(
+        model: updatedModel,
+        dueReminders: dueReminders,
+        nextTask: nextTask,
+      ));
+
+      // Call hook for subclasses
+      await onTaskUpdated(updatedTask);
+    } catch (e) {
+      logError('Failed to resize task', e);
       emit(state.copyWith(error: e.toString()));
     }
   }

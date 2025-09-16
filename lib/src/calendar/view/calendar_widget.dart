@@ -279,12 +279,35 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   }
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
-    context.read<CalendarBloc>().add(
-          CalendarEvent.taskDropped(
-            taskId: task.id,
-            time: newTime,
-          ),
-        );
+    // If the task has been resized (duration changed), use taskResized event
+    final originalTask =
+        context.read<CalendarBloc>().state.model.tasks[task.id];
+    if (originalTask != null &&
+        (originalTask.duration != task.duration ||
+            originalTask.scheduledTime != task.scheduledTime)) {
+      // This handles both resize and time change
+      final startHour =
+          task.scheduledTime!.hour + (task.scheduledTime!.minute / 60.0);
+      final durationHours =
+          (task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
+
+      context.read<CalendarBloc>().add(
+            CalendarEvent.taskResized(
+              taskId: task.id,
+              startHour: startHour,
+              duration: durationHours,
+              daySpan: task.effectiveDaySpan,
+            ),
+          );
+    } else {
+      // Simple time change only
+      context.read<CalendarBloc>().add(
+            CalendarEvent.taskDropped(
+              taskId: task.id,
+              time: newTime,
+            ),
+          );
+    }
   }
 
   void _showQuickAddModal(Offset position, {required DateTime prefilledTime}) {

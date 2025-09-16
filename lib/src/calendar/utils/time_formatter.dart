@@ -36,6 +36,26 @@ class TimeFormatter {
     return '$displayHour:$minuteStr $amPm';
   }
 
+  /// Format date to short format (e.g., "Jan 15")
+  static String formatShortDate(DateTime date) {
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return '${months[date.month]} ${date.day}';
+  }
+
   /// Format duration to human-readable format
   static String formatDuration(Duration duration) {
     if (duration.inMinutes < 60) {
