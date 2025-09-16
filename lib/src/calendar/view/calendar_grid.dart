@@ -6,6 +6,7 @@ import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
+import 'resizable_task_widget.dart';
 
 class OverlapInfo {
   final int columnIndex;
@@ -15,88 +16,6 @@ class OverlapInfo {
     required this.columnIndex,
     required this.totalColumns,
   });
-}
-
-enum _ResizeDirection { top, bottom }
-
-class _ResizeHandle extends StatefulWidget {
-  final CalendarTask task;
-  final _ResizeDirection direction;
-  final Function(CalendarTask, DateTime, Duration) onResize;
-
-  const _ResizeHandle({
-    required this.task,
-    required this.direction,
-    required this.onResize,
-  });
-
-  @override
-  State<_ResizeHandle> createState() => _ResizeHandleState();
-}
-
-class _ResizeHandleState extends State<_ResizeHandle> {
-  bool _isHovering = false;
-  bool _isDragging = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeUpDown,
-      onEnter: (_) => setState(() => _isHovering = true),
-      onExit: (_) => setState(() => _isHovering = false),
-      child: GestureDetector(
-        onPanStart: (details) => setState(() => _isDragging = true),
-        onPanUpdate: _handlePanUpdate,
-        onPanEnd: (details) => setState(() => _isDragging = false),
-        child: Container(
-          height: 4,
-          decoration: BoxDecoration(
-            color: (_isHovering || _isDragging)
-                ? Colors.white.withValues(alpha: 0.3)
-                : Colors.transparent,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _handlePanUpdate(DragUpdateDetails details) {
-    if (widget.task.scheduledTime == null) return;
-
-    final originalTime = widget.task.scheduledTime!;
-    final originalDuration = widget.task.duration ?? const Duration(hours: 1);
-
-    // Calculate time delta based on drag distance (roughly 15 minutes per 20 pixels)
-    final deltaMinutes = (details.delta.dy / 20 * 15).round();
-    final timeDelta = Duration(minutes: deltaMinutes);
-
-    late DateTime newTime;
-    late Duration newDuration;
-
-    if (widget.direction == _ResizeDirection.top) {
-      // Resizing from top: adjust start time and duration
-      newTime = originalTime.add(timeDelta);
-      final newDurationMinutes =
-          originalDuration.inMinutes - timeDelta.inMinutes;
-      newDuration =
-          Duration(minutes: newDurationMinutes.clamp(15, 1440)); // Max 24 hours
-
-      // Adjust start time if duration was clamped
-      if (newDurationMinutes < 15) {
-        newTime =
-            originalTime.add(originalDuration - const Duration(minutes: 15));
-      }
-    } else {
-      // Resizing from bottom: adjust duration only
-      newTime = originalTime;
-      final newDurationMinutes =
-          originalDuration.inMinutes + timeDelta.inMinutes;
-      newDuration =
-          Duration(minutes: newDurationMinutes.clamp(15, 1440)); // Max 24 hours
-    }
-
-    widget.onResize(widget.task, newTime, newDuration);
-  }
 }
 
 class CalendarGrid extends StatefulWidget {
@@ -161,9 +80,13 @@ class _CalendarGridState extends State<CalendarGrid>
     }
   }
 
+  static const double hourSlotHeight = 60.0;
+  static const double quarterSlotHeight = 15.0; // hourSlotHeight / 4
+  static const double timeColumnWidth = 80.0;
+  static const double dayHeaderHeight = 40.0;
+
   double _getHourHeight(BuildContext context, bool compact) {
-    if (compact) return 36.0;
-    return ResponsiveHelper.isMobile(context) ? 40.0 : 48.0;
+    return hourSlotHeight; // Fixed hour height for consistent quarter-hour slots
   }
 
   @override
@@ -291,10 +214,9 @@ class _CalendarGridState extends State<CalendarGrid>
       ),
       child: Row(
         children: [
-          SizedBox(
-            width:
-                compact ? 50 : 90, // Updated from 70px to 90px to match target
-            child: const SizedBox(), // Empty space for time column
+          const SizedBox(
+            width: timeColumnWidth,
+            child: SizedBox(), // Empty space for time column
           ),
           ...weekDates.asMap().entries.map((entry) {
             final index = entry.key;
@@ -308,131 +230,33 @@ class _CalendarGridState extends State<CalendarGrid>
     );
   }
 
-  Widget _buildViewModeToggle(bool compact) {
-    return Center(
-      child: Container(
-        decoration: BoxDecoration(
-          color: calendarSelectedDayColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: calendarBorderColor, width: 1),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _toggleViewMode(CalendarView.week),
-                borderRadius: BorderRadius.circular(4),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 4 : 6,
-                    vertical: compact ? 2 : 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.state.viewMode == CalendarView.week
-                        ? const Color(0xff007AFF)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Icon(
-                    Icons.view_week,
-                    color: widget.state.viewMode == CalendarView.week
-                        ? Colors.white
-                        : calendarTimeLabelColor,
-                    size: compact ? 12 : 14,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _toggleViewMode(CalendarView.day),
-                borderRadius: BorderRadius.circular(4),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 4 : 6,
-                    vertical: compact ? 2 : 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.state.viewMode == CalendarView.day
-                        ? const Color(0xff007AFF)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Icon(
-                    Icons.view_day,
-                    color: widget.state.viewMode == CalendarView.day
-                        ? Colors.white
-                        : calendarTimeLabelColor,
-                    size: compact ? 12 : 14,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildDayHeader(DateTime date, bool compact, {bool isFirst = false}) {
     final isToday = _isToday(date);
-    final isSelected = _isSameDay(date, widget.state.selectedDate) &&
-        widget.state.viewMode == CalendarView.day;
 
     return InkWell(
-      onTap: () => _selectDateAndSwitchToDay(date),
+      onTap: widget.state.viewMode == CalendarView.week
+          ? () => _selectDateAndSwitchToDay(date)
+          : null,
+      hoverColor: calendarSidebarBackgroundColor,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            left: isFirst
-                ? const BorderSide(color: calendarBorderColor, width: 0.5)
-                : BorderSide.none,
-            right: const BorderSide(color: calendarBorderColor, width: 0.5),
+          color: isToday
+              ? calendarPrimaryColor.withValues(alpha: 0.05)
+              : Colors.white,
+          border: const Border(
+            right: BorderSide(color: calendarBorderColor),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                _getDayName(date.weekday, false).substring(0, 3).toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
-                  color: calendarTimeLabelColor,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+        child: Center(
+          child: Text(
+            '${_getDayOfWeekShort(date).substring(0, 3)} ${date.day}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isToday ? calendarPrimaryColor : calendarTitleColor,
+              letterSpacing: 0.5,
             ),
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xff0969DA) // Use target blue color
-                    : isToday
-                        ? const Color(0xff0969DA)
-                        : Colors.transparent,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '${date.day}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color:
-                      isSelected || isToday ? Colors.white : calendarTitleColor,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -447,9 +271,9 @@ class _CalendarGridState extends State<CalendarGrid>
         isDayView ? (endHour - startHour + 1) * 4 : (endHour - startHour + 1);
 
     return Container(
-      width: compact ? 50 : 90, // Updated from 70px to 90px to match target
+      width: timeColumnWidth,
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: calendarSidebarBackgroundColor,
         border: Border(
           right: BorderSide(
             color: calendarBorderColor,
@@ -544,13 +368,18 @@ class _CalendarGridState extends State<CalendarGrid>
           ),
         ),
       ),
-      child: Stack(
-        clipBehavior: Clip.none, // Allow tasks to overflow cell boundaries
-        children: [
-          _buildTimeSlots(compact,
-              isDayView: isDayView, date: date, isToday: isToday),
-          ..._buildTasksForDay(date, compact, isDayView: isDayView),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _buildTimeSlots(compact,
+                  isDayView: isDayView, date: date, isToday: isToday),
+              ..._buildTasksForDayWithWidth(date, compact, constraints.maxWidth,
+                  isDayView: isDayView),
+            ],
+          );
+        },
       ),
     );
   }
@@ -575,8 +404,8 @@ class _CalendarGridState extends State<CalendarGrid>
             decoration: BoxDecoration(
               color: isToday
                   ? (hour % 2 == 0
-                      ? const Color(0xff0969DA).withValues(alpha: 0.02)
-                      : const Color(0xff0969DA).withValues(alpha: 0.04))
+                      ? const Color(0xff0969DA).withValues(alpha: 0.01)
+                      : const Color(0xff0969DA).withValues(alpha: 0.02))
                   : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc)),
               border: Border(
                 top: BorderSide(
@@ -650,8 +479,8 @@ class _CalendarGridState extends State<CalendarGrid>
             decoration: BoxDecoration(
               color: isToday
                   ? (hour % 2 == 0
-                      ? const Color(0xff0969DA).withValues(alpha: 0.02)
-                      : const Color(0xff0969DA).withValues(alpha: 0.04))
+                      ? const Color(0xff0969DA).withValues(alpha: 0.01)
+                      : const Color(0xff0969DA).withValues(alpha: 0.02))
                   : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc)),
               border: const Border(
                 top: BorderSide(
@@ -743,29 +572,14 @@ class _CalendarGridState extends State<CalendarGrid>
     widget.onTaskDragEnd?.call(task, dropTime);
   }
 
-  List<Widget> _buildTasksForDay(DateTime date, bool compact,
+  List<Widget> _buildTasksForDayWithWidth(
+      DateTime date, bool compact, double dayWidth,
       {bool isDayView = false}) {
     final tasks = _getTasksForDay(date);
     final widgets = <Widget>[];
 
     // Calculate overlaps for all tasks
     final overlapMap = _calculateEventOverlaps(tasks);
-
-    // Calculate cell width more conservatively to prevent oversized tasks
-    // Estimate calendar area width (screen minus sidebar, assuming ~300px sidebar)
-    final screenWidth = MediaQuery.of(context).size.width;
-    final estimatedCalendarWidth =
-        screenWidth - 300; // Conservative sidebar width estimate
-    final timeColumnWidth =
-        compact ? 50.0 : 90.0; // Updated from 70.0 to 90.0 to match target
-
-    // Calculate actual cell width
-    final cellWidth = isDayView
-        ? estimatedCalendarWidth - timeColumnWidth
-        : (estimatedCalendarWidth - timeColumnWidth) / 7;
-
-    // Use 90% to ensure tasks fit properly within cells
-    final containerWidth = (cellWidth * 0.90).clamp(60.0, 150.0);
 
     for (final task in tasks) {
       if (task.scheduledTime == null) continue;
@@ -776,9 +590,9 @@ class _CalendarGridState extends State<CalendarGrid>
         task,
         overlapInfo,
         compact,
-        containerWidth,
-        cellWidth,
+        dayWidth,
         isDayView: isDayView,
+        currentDate: date, // Pass the current date for multi-day handling
       );
       if (widget != null) {
         widgets.add(widget);
@@ -788,301 +602,55 @@ class _CalendarGridState extends State<CalendarGrid>
     return widgets;
   }
 
-  Widget? _buildTaskWidget(CalendarTask task, OverlapInfo overlapInfo,
-      bool compact, double containerWidth, double cellWidth,
-      {bool isDayView = false}) {
+  Widget? _buildTaskWidget(
+      CalendarTask task, OverlapInfo overlapInfo, bool compact, double dayWidth,
+      {bool isDayView = false, DateTime? currentDate}) {
     if (task.scheduledTime == null) return null;
 
     final taskTime = task.scheduledTime!;
     final hour = taskTime.hour.toDouble();
     final minute = taskTime.minute.toDouble();
 
+    // Check if task's scheduled time is outside visible hours
     if (hour < startHour || hour > endHour) return null;
 
-    final hourHeight = _getHourHeight(context, compact);
-    final slotHeight = isDayView ? hourHeight / 4 : hourHeight;
+    // Calculate pixel-perfect positioning
+    final startTimeHours = hour + (minute / 60.0);
+    final topOffset = (startTimeHours - startHour) * hourSlotHeight;
 
-    late final double topOffset;
-    late final double height;
+    // Height is always based on task duration, not day span
+    final duration = task.duration ?? const Duration(hours: 1);
+    final height = (duration.inMinutes / 60.0) * hourSlotHeight;
 
-    if (isDayView) {
-      // Day view: position based on 15-minute slots
-      final totalMinutesFromStart = ((hour - startHour) * 60) + minute;
-      final slotIndex = totalMinutesFromStart / 15;
-      topOffset = slotIndex * slotHeight;
-      final duration = task.duration ?? const Duration(hours: 1);
-      height = (duration.inMinutes / 15) * slotHeight;
-    } else {
-      // Week view: position based on hour slots
-      topOffset = (hour - startHour) * hourHeight + (minute / 60 * hourHeight);
-      final duration = task.duration ?? const Duration(hours: 1);
-      height = (duration.inMinutes / 60) * hourHeight;
-    }
-
-    // Get priority color
-    Color taskColor = _getTaskColor(task);
-
-    // Calculate width and left offset based on overlap - center tasks in cells
-    final columnWidth = containerWidth / overlapInfo.totalColumns;
-    final eventWidth = columnWidth - 4; // Minimal padding for 95% width
-    // Center the task within its cell
-    final cellLeftMargin = (cellWidth - containerWidth) / 2;
+    // Calculate width and position based on overlap
+    final columnWidth = dayWidth / overlapInfo.totalColumns;
+    final eventWidth = columnWidth - 4; // Leave 2px margin on each side
     final leftOffset =
-        cellLeftMargin + (columnWidth * overlapInfo.columnIndex) + 2;
+        (columnWidth * overlapInfo.columnIndex) + 2; // 2px margin from left
 
-    return Positioned(
-      top: topOffset,
+    return ResizableTaskWidget(
+      task: task,
+      onResize: (updatedTask) {
+        // Immediately update the task via drag end callback
+        if (widget.onTaskDragEnd != null && updatedTask.scheduledTime != null) {
+          widget.onTaskDragEnd!(updatedTask, updatedTask.scheduledTime!);
+        }
+      },
+      dayWidth: dayWidth,
+      hourHeight: hourSlotHeight,
+      quarterHeight: quarterSlotHeight,
       left: leftOffset,
+      top: topOffset,
       width: eventWidth,
-      height: height.clamp(36, double.infinity),
-      child: Draggable<CalendarTask>(
-        data: task,
-        feedback: Transform.scale(
-          scale: 1.05, // Slightly scale up during drag
-          child: Material(
-            elevation: 12, // Increased shadow
-            borderRadius: BorderRadius.circular(4),
-            child: Opacity(
-              opacity: 0.8, // Semi-transparent copy
-              child: Container(
-                width: eventWidth,
-                height: height.clamp(36, double.infinity),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: taskColor,
-                  borderRadius: BorderRadius.circular(4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    ),
-                    BoxShadow(
-                      color: taskColor.withValues(alpha: 0.3),
-                      blurRadius: 0,
-                      offset: const Offset(0, 0),
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      style: taskTitleTextStyle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (height > 45)
-                      Text(
-                        TimeFormatter.formatDateTime(taskTime),
-                        style: taskMetadataTextStyle.copyWith(
-                          fontSize: 9,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        childWhenDragging: Opacity(
-          opacity: 0.5,
-          child: Container(
-            decoration: BoxDecoration(
-              color: _getTaskColor(task).withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: _getTaskColor(task),
-                width: 2,
-                strokeAlign: BorderSide.strokeAlignInside,
-              ),
-            ),
-          ),
-        ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                final renderBox = context.findRenderObject() as RenderBox?;
-                if (renderBox != null) {
-                  // Get the actual global position of the task widget
-                  final globalOffset = renderBox.localToGlobal(Offset.zero);
-                  // Position dropdown to the right of the task
-                  final dropdownPosition = Offset(
-                    globalOffset.dx + eventWidth + 8, // Right edge + padding
-                    globalOffset.dy + (height / 2) - 20, // Vertically centered
-                  );
-                  widget.onTaskTapped?.call(task, dropdownPosition);
-                }
-              },
-              borderRadius: BorderRadius.circular(4),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 0.5),
-                  padding: EdgeInsets.all(
-                      compact ? calendarSpacing4 : calendarSpacing6),
-                  decoration: BoxDecoration(
-                    color: task.isCompleted
-                        ? taskColor.withValues(alpha: 0.6)
-                        : taskColor,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: taskColor.withValues(alpha: 0.8),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 3,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      // Main content
-                      Positioned.fill(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 2, horizontal: 4),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final hasSpace = constraints.maxHeight > 32;
-                              final showTime =
-                                  !compact && hasSpace && height > 50;
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Flexible(
-                                    child: Row(
-                                      children: [
-                                        if (!compact && hasSpace) ...[
-                                          Container(
-                                            width: 6,
-                                            height: 6,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.9),
-                                              borderRadius:
-                                                  BorderRadius.circular(3),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                        ],
-                                        Expanded(
-                                          child: Text(
-                                            task.title,
-                                            style: (compact
-                                                    ? taskTitleCompactTextStyle
-                                                    : taskTitleTextStyle)
-                                                .copyWith(
-                                              decoration: task.isCompleted
-                                                  ? TextDecoration.lineThrough
-                                                  : null,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            maxLines: showTime ? 1 : 2,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (showTime) ...[
-                                    const SizedBox(height: 1),
-                                    Flexible(
-                                      child: Text(
-                                        TimeFormatter.formatDateTime(taskTime),
-                                        style: taskMetadataTextStyle.copyWith(
-                                          fontSize: 8,
-                                          color: Colors.white
-                                              .withValues(alpha: 0.8),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      // Resize handles - positioned at absolute edges
-                      if (height > 32) ...[
-                        // Top resize handle - extends above the task
-                        Positioned(
-                          top: -2,
-                          left: 0,
-                          right: 0,
-                          height: 4,
-                          child: _ResizeHandle(
-                            task: task,
-                            direction: _ResizeDirection.top,
-                            onResize: (task, newTime, newDuration) {
-                              // Handle resize callback - trigger immediate task update
-                              widget.onTaskDragEnd?.call(
-                                  task.copyWith(
-                                    scheduledTime: newTime,
-                                    duration: newDuration,
-                                  ),
-                                  newTime);
-                            },
-                          ),
-                        ),
-                        // Bottom resize handle - extends below the task
-                        Positioned(
-                          bottom: -2,
-                          left: 0,
-                          right: 0,
-                          height: 4,
-                          child: _ResizeHandle(
-                            task: task,
-                            direction: _ResizeDirection.bottom,
-                            onResize: (task, newTime, newDuration) {
-                              // Handle resize callback - trigger immediate task update
-                              widget.onTaskDragEnd?.call(
-                                  task.copyWith(
-                                    scheduledTime: newTime,
-                                    duration: newDuration,
-                                  ),
-                                  newTime);
-                            },
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+      height: height.clamp(20, double.infinity), // Minimum height of 20px
+      isDayView: isDayView,
+      onTap: () {
+        if (widget.onTaskTapped != null) {
+          widget.onTaskTapped!(
+              task, Offset(leftOffset + eventWidth, topOffset));
+        }
+      },
     );
-  }
-
-  Color _getTaskColor(CalendarTask task) {
-    // Priority-based color assignment matching target design
-    switch (task.effectivePriority) {
-      case TaskPriority.critical:
-        return const Color(0xFFDC3545); // Red - critical (important + urgent)
-      case TaskPriority.important:
-        return const Color(0xFF28A745); // Green - important only
-      case TaskPriority.urgent:
-        return const Color(0xFFFD7E14); // Orange - urgent only
-      case TaskPriority.none:
-        return const Color(0xFF0969DA); // Blue - normal
-    }
   }
 
   Map<String, OverlapInfo> _calculateEventOverlaps(List<CalendarTask> tasks) {
@@ -1168,7 +736,26 @@ class _CalendarGridState extends State<CalendarGrid>
   List<CalendarTask> _getTasksForDay(DateTime date) {
     return widget.state.model.tasks.values.where((task) {
       if (task.scheduledTime == null) return false;
-      return _isSameDay(task.scheduledTime!, date);
+
+      final taskStart = task.scheduledTime!;
+      final daySpan = task.effectiveDaySpan;
+
+      // Check if task spans across this day
+      if (daySpan > 1) {
+        // Multi-day task: check if date falls within the span
+        final taskEnd = taskStart.add(Duration(days: daySpan - 1));
+        final dateOnly = DateTime(date.year, date.month, date.day);
+        final taskStartOnly =
+            DateTime(taskStart.year, taskStart.month, taskStart.day);
+        final taskEndOnly = DateTime(taskEnd.year, taskEnd.month, taskEnd.day);
+
+        return dateOnly.isAtSameMomentAs(taskStartOnly) ||
+            dateOnly.isAtSameMomentAs(taskEndOnly) ||
+            (dateOnly.isAfter(taskStartOnly) && dateOnly.isBefore(taskEndOnly));
+      }
+
+      // Single day task: check if it's on this day
+      return _isSameDay(taskStart, date);
     }).toList()
       ..sort((a, b) {
         if (a.scheduledTime == null && b.scheduledTime == null) return 0;
@@ -1189,21 +776,17 @@ class _CalendarGridState extends State<CalendarGrid>
         date1.day == date2.day;
   }
 
-  String _getDayName(int weekday, bool compact) {
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const fullDayNames = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday'
+  String _getDayOfWeekShort(DateTime date) {
+    const dayNames = [
+      'SUNDAY',
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY'
     ];
-
-    return compact
-        ? dayNames[weekday - 1]
-        : fullDayNames[weekday - 1].substring(0, 3);
+    return dayNames[date.weekday % 7];
   }
 
   String _formatHour(int hour) {
@@ -1219,50 +802,5 @@ class _CalendarGridState extends State<CalendarGrid>
     if (widget.state.viewMode == CalendarView.week) {
       widget.onViewChanged(CalendarView.day);
     }
-  }
-
-  void _toggleViewMode(CalendarView view) {
-    widget.onViewChanged(view);
-  }
-
-  void _showTaskDetails(CalendarTask task) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(task.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (task.description?.isNotEmpty == true) ...[
-              const Text('Description:'),
-              Text(task.description!),
-              const SizedBox(height: 8),
-            ],
-            if (task.scheduledTime != null) ...[
-              const Text('Scheduled:'),
-              Text(TimeFormatter.formatDateTime(task.scheduledTime!)),
-              const SizedBox(height: 8),
-            ],
-            const Text('Status:'),
-            Text(task.isCompleted ? 'Completed' : 'Pending'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              // Task completion would need a separate callback
-              // For now, just close the dialog
-              Navigator.of(context).pop();
-            },
-            child: Text(task.isCompleted ? 'Mark Incomplete' : 'Mark Complete'),
-          ),
-        ],
-      ),
-    );
   }
 }

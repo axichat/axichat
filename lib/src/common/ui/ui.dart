@@ -51,21 +51,31 @@ const calendarEventColors = [
   Color(0xffffcc02), // Yellow
 ];
 
-// Clean background colors - updated to match target design
-const calendarBackgroundColor =
-    Color(0xffffffff); // Changed from #f8f9fa to #ffffff
-const calendarContainerColor = Color(0xffffffff);
-const calendarBorderColor = Color(0xffe1e4e8);
-const calendarSelectedDayColor = Color(0xfff6f8fa);
+// Ultrathink calendar color palette
+const calendarPrimaryColor = Color(0xFF0969DA);
+const calendarPrimaryHoverColor = Color(0xFF0860CA);
+const calendarBackgroundColor = Color(0xFFFFFFFF);
+const calendarContainerColor = Color(0xFFFFFFFF);
+const calendarSidebarBackgroundColor = Color(0xFFF7F8FA);
+const calendarBorderColor = Color(0xFFE1E4E8);
+const calendarBorderDarkColor = Color(0xFFD1D5DA);
+const calendarBorderLightColor = Color(0xFFF0F0F0);
+const calendarSelectedDayColor = Color(0xFFF6F8FA);
+
+// Typography colors
+const calendarTitleColor = Color(0xFF24292E);
+const calendarSubtitleColor = Color(0xFF6A737D);
+const calendarTextLightColor = Color(0xFF959DA5);
+const calendarTimeLabelColor = Color(0xFF6A737D);
+
+// Status colors for task priorities
+const calendarSuccessColor = Color(0xFF28A745);
+const calendarDangerColor = Color(0xFFDC3545);
+const calendarWarningColor = Color(0xFFFD7E14);
+const calendarYellowColor = Color(0xFFFFC107);
 
 // Sidebar specific colors
-const sidebarBackgroundColor =
-    Color(0xfff7f8fa); // Sidebar uses this instead of white
-
-// Professional typography colors
-const calendarTitleColor = Color(0xff24292f);
-const calendarSubtitleColor = Color(0xff656d76);
-const calendarTimeLabelColor = Color(0xff8c959f);
+const sidebarBackgroundColor = Color(0xFFF7F8FA);
 
 // Complete shadow system for visual hierarchy
 const calendarLightShadow = [
