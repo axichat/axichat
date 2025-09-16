@@ -51,33 +51,51 @@ const calendarEventColors = [
   Color(0xffffcc02), // Yellow
 ];
 
-// Clean background colors
-const calendarBackgroundColor = Color(0xfff7f7f7);
+// Clean background colors - updated to match target design
+const calendarBackgroundColor =
+    Color(0xffffffff); // Changed from #f8f9fa to #ffffff
 const calendarContainerColor = Color(0xffffffff);
-const calendarBorderColor = Color(0xffe5e5e5);
-const calendarSelectedDayColor = Color(0xfff5f5f5);
+const calendarBorderColor = Color(0xffe1e4e8);
+const calendarSelectedDayColor = Color(0xfff6f8fa);
+
+// Sidebar specific colors
+const sidebarBackgroundColor =
+    Color(0xfff7f8fa); // Sidebar uses this instead of white
 
 // Professional typography colors
-const calendarTitleColor = Color(0xff1d1d1f);
-const calendarSubtitleColor = Color(0xff6e6e73);
-const calendarTimeLabelColor = Color(0xff8e8e93);
+const calendarTitleColor = Color(0xff24292f);
+const calendarSubtitleColor = Color(0xff656d76);
+const calendarTimeLabelColor = Color(0xff8c959f);
 
-// Subtle shadow system
+// Complete shadow system for visual hierarchy
 const calendarLightShadow = [
   BoxShadow(
-    color: Color(0x14000000), // rgba(0,0,0,0.08)
-    blurRadius: 4,
+    color: Color(0x10000000), // rgba(0,0,0,0.06)
+    blurRadius: 6,
     offset: Offset(0, 1),
   ),
 ];
 
 const calendarMediumShadow = [
   BoxShadow(
-    color: Color(0x1f000000), // rgba(0,0,0,0.12)
-    blurRadius: 8,
+    color: Color(0x18000000), // rgba(0,0,0,0.09)
+    blurRadius: 12,
     offset: Offset(0, 2),
   ),
 ];
+
+const calendarStrongShadow = [
+  BoxShadow(
+    color: Color(0x20000000), // rgba(0,0,0,0.12)
+    blurRadius: 16,
+    offset: Offset(0, 4),
+  ),
+];
+
+// Elevation levels
+const calendarElevation1 = calendarLightShadow; // Cards, containers
+const calendarElevation2 = calendarMediumShadow; // Floating elements
+const calendarElevation3 = calendarStrongShadow; // Modals, dropdowns
 
 // Clean spacing constants
 const calendarBorderRadius = 6.0;
@@ -104,7 +122,7 @@ const calendarMarginSmall = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const calendarMarginMedium = EdgeInsets.symmetric(horizontal: 12, vertical: 6);
 const calendarMarginLarge = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
 
-// Typography constants
+// Typography constants - Complete hierarchy system
 const calendarTitleTextStyle = TextStyle(
   fontSize: 22,
   fontWeight: FontWeight.w600,
@@ -125,6 +143,65 @@ const calendarTimeLabelTextStyle = TextStyle(
   color: calendarTimeLabelColor,
 );
 
+// Additional typography hierarchy
+const calendarHeaderTextStyle = TextStyle(
+  fontSize: 16,
+  fontWeight: FontWeight.w600,
+  color: calendarTitleColor,
+  letterSpacing: -0.2,
+);
+
+const calendarBodyTextStyle = TextStyle(
+  fontSize: 14,
+  fontWeight: FontWeight.w400,
+  color: calendarTitleColor,
+  letterSpacing: -0.1,
+);
+
+const calendarCaptionTextStyle = TextStyle(
+  fontSize: 12,
+  fontWeight: FontWeight.w500,
+  color: calendarSubtitleColor,
+  letterSpacing: 0.0,
+);
+
+// Task-specific typography - updated to match target design
+const taskTitleTextStyle = TextStyle(
+  fontSize: 11,
+  fontWeight: FontWeight.w600,
+  color: Colors.white,
+  letterSpacing: 0.1,
+);
+
+const taskTitleCompactTextStyle = TextStyle(
+  fontSize: 10,
+  fontWeight: FontWeight.w600,
+  color: Colors.white,
+  letterSpacing: 0.1,
+);
+
+const taskDescriptionTextStyle = TextStyle(
+  fontSize: 13,
+  fontWeight: FontWeight.w400,
+  color: calendarSubtitleColor,
+  letterSpacing: -0.1,
+);
+
+const taskMetadataTextStyle = TextStyle(
+  fontSize: 11,
+  fontWeight: FontWeight.w400,
+  color: calendarTimeLabelColor,
+  letterSpacing: 0.0,
+);
+
+// Section headers - uppercase with proper letter-spacing
+const sectionHeaderTextStyle = TextStyle(
+  fontSize: 13,
+  fontWeight: FontWeight.w600,
+  color: calendarTitleColor,
+  letterSpacing: 0.5,
+);
+
 // Legacy gradient definitions (to be removed in favor of clean design)
 const calendarPrimaryGradient = LinearGradient(
   colors: [Color(0xff80ffa0), Color(0xff40e0a0)],
@@ -140,9 +217,18 @@ const calendarCardShadow = [
   ),
 ];
 
-// Task-specific constants
+// Task-specific constants - updated to match target design
 const taskCompletedColor = Color(0xff8e8e93);
 const calendarCardRadius = 6.0;
+
+// Task priority colors matching target HTML design exactly
+const taskCriticalColor =
+    Color(0xFFDC3545); // Red - critical (important + urgent)
+const taskImportantColor = Color(0xFF28A745); // Green - important only
+const taskUrgentColor = Color(0xFFFD7E14); // Orange - urgent only
+const taskNormalColor = Color(0xFF0969DA); // Blue - normal
+
+// Legacy colors (kept for backward compatibility)
 const taskHighPriorityColor = Color(0xffff3b30);
 const taskMediumPriorityColor = Color(0xffff9500);
 const taskLowPriorityColor = Color(0xff34c759);

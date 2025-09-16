@@ -38,6 +38,47 @@ class LoadingIndicator extends StatelessWidget {
   }
 }
 
+class CalendarLoadingIndicator extends StatelessWidget {
+  const CalendarLoadingIndicator({
+    super.key,
+    this.message = 'Loading calendar...',
+  });
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: calendarPadding16,
+      decoration: BoxDecoration(
+        color: calendarContainerColor,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        boxShadow: calendarMediumShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 16,
+              color: calendarTitleColor,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SkeletonLoader extends StatefulWidget {
   const SkeletonLoader({
     super.key,

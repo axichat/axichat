@@ -43,6 +43,40 @@ class CalendarEvent with _$CalendarEvent {
   }) = CalendarDateSelected;
 
   const factory CalendarEvent.errorCleared() = CalendarErrorCleared;
+
+  // Enhanced events for weekly schedule
+  const factory CalendarEvent.dayViewSelected({
+    required int dayIndex,
+  }) = CalendarDayViewSelected;
+
+  const factory CalendarEvent.taskDragStarted({
+    required String taskId,
+  }) = CalendarTaskDragStarted;
+
+  const factory CalendarEvent.taskDropped({
+    required String taskId,
+    required DateTime time,
+    int? dayIndex,
+  }) = CalendarTaskDropped;
+
+  const factory CalendarEvent.taskResized({
+    required String taskId,
+    required double startHour,
+    required double duration,
+    int? daySpan,
+  }) = CalendarTaskResized;
+
+  const factory CalendarEvent.taskPriorityChanged({
+    required String taskId,
+    required TaskPriority priority,
+  }) = CalendarTaskPriorityChanged;
+
+  const factory CalendarEvent.quickTaskAdded({
+    required String text,
+    String? description,
+    DateTime? deadline,
+    @Default(TaskPriority.none) TaskPriority priority,
+  }) = CalendarQuickTaskAdded;
 }
 
 enum CalendarView { week, day, month }

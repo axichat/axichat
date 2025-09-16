@@ -20,6 +20,8 @@ abstract class BaseCalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     on<CalendarTaskUpdated>(_onCalendarTaskUpdated);
     on<CalendarTaskDeleted>(_onCalendarTaskDeleted);
     on<CalendarTaskCompleted>(_onCalendarTaskCompleted);
+    on<CalendarTaskDropped>(_onCalendarTaskDropped);
+    on<CalendarQuickTaskAdded>(_onCalendarQuickTaskAdded);
     on<CalendarViewChanged>(_onCalendarViewChanged);
     on<CalendarDateSelected>(_onCalendarDateSelected);
     on<CalendarErrorCleared>(_onCalendarErrorCleared);
@@ -158,6 +160,32 @@ abstract class BaseCalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     }
   }
 
+  Future<void> _onCalendarTaskDropped(
+      CalendarTaskDropped event, Emitter<CalendarState> emit) async {
+    try {
+      // Find the task
+      final task = state.model.tasks[event.taskId];
+      if (task == null) {
+        throw CalendarTaskNotFoundException(event.taskId);
+      }
+
+      // Update the scheduled time
+      final updatedTask = task.copyWith(scheduledTime: event.time);
+
+      // Update in storage
+      final updatedModel = state.model.copyWith(
+        tasks: Map.from(state.model.tasks)..[event.taskId] = updatedTask,
+      );
+      await _calendarBox.put('calendar', updatedModel);
+
+      // Call hook for subclasses
+      await onTaskUpdated(updatedTask);
+    } catch (e) {
+      logError('Failed to drop task', e);
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
   Future<void> _onCalendarTaskCompleted(
       CalendarTaskCompleted event, Emitter<CalendarState> emit) async {
     try {
@@ -178,6 +206,41 @@ abstract class BaseCalendarBloc extends Bloc<CalendarEvent, CalendarState> {
       emit(state.copyWith(isLoading: false));
     } catch (e) {
       await _handleError(e, 'Failed to update task completion', emit);
+    }
+  }
+
+  Future<void> _onCalendarQuickTaskAdded(
+      CalendarQuickTaskAdded event, Emitter<CalendarState> emit) async {
+    try {
+      // Validate input
+      if (event.text.trim().isEmpty) {
+        throw const CalendarValidationException(
+            'text', 'Task text cannot be empty');
+      }
+
+      emit(state.copyWith(isLoading: true, error: null));
+
+      // Parse the natural language input
+      final task = CalendarTask.fromNaturalLanguage(event.text);
+
+      // Override with any explicit values passed in the event
+      final finalTask = task.copyWith(
+        description: event.description ?? task.description,
+        deadline: event.deadline ?? task.deadline,
+        priority: event.priority != TaskPriority.none
+            ? event.priority
+            : task.priority,
+      );
+
+      final updatedModel = state.model.addTask(finalTask);
+      await _calendarBox.put('calendar', updatedModel);
+
+      // Allow subclasses to handle sync logic
+      await onTaskAdded(finalTask);
+
+      emit(state.copyWith(isLoading: false));
+    } catch (e) {
+      await _handleError(e, 'Failed to add quick task', emit);
     }
   }
 

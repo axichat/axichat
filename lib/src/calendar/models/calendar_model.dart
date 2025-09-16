@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:crypto/crypto.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -8,7 +9,7 @@ part 'calendar_model.freezed.dart';
 part 'calendar_model.g.dart';
 
 @freezed
-@HiveType(typeId: 31)
+@HiveType(typeId: 33)
 class CalendarModel with _$CalendarModel {
   const factory CalendarModel({
     @HiveField(0) @Default({}) Map<String, CalendarTask> tasks,

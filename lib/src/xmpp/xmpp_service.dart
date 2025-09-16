@@ -176,7 +176,6 @@ class XmppService extends XmppBase
     this._buildDatabase,
     this._notificationService,
     this._capability,
-    this._policy,
   );
 
   static XmppService? _instance;
@@ -195,11 +194,7 @@ class XmppService extends XmppBase
         buildDatabase,
         notificationService ?? NotificationService(),
         capability,
-        policy,
       );
-
-  @override
-  final _log = Logger('XmppService');
 
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
@@ -209,7 +204,6 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
   final NotificationService _notificationService;
   final Capability _capability;
-  final Policy _policy;
 
   // Calendar sync message callback
   Future<void> Function(CalendarSyncMessage)? _calendarSyncCallback;
