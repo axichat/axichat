@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
+import '../models/calendar_task.dart';
 
 /// Parses natural language date/time strings into structured data
 class SmartTaskParser {
+  // Enhanced time pattern to catch more formats
   static final _timePattern = RegExp(
-    r'(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)?',
+    r'(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM|oclock)?',
+    caseSensitive: false,
+  );
+
+  // Location patterns (at/in/@ followed by location)
+  static final _locationPattern = RegExp(
+    r'\b(?:at|in|@)\s+([^,\n]+?)(?:\s+(?:at|on|in)\s|\s*$)',
     caseSensitive: false,
   );
 
@@ -27,14 +35,33 @@ class SmartTaskParser {
     caseSensitive: false,
   );
 
-  /// Parses a natural language input and extracts task title and scheduled time
+  /// Parses a natural language input and returns a CalendarTask
+  static CalendarTask parseToTask(String input) {
+    final result = parse(input);
+    return CalendarTask.create(
+      title: result.title,
+      scheduledTime: result.scheduledTime,
+      location: result.location,
+      duration: result.scheduledTime != null ? const Duration(hours: 1) : null,
+    );
+  }
+
+  /// Parses a natural language input and extracts task title, scheduled time, and location
   static TaskParseResult parse(String input) {
     String taskTitle = input;
     DateTime? scheduledTime;
+    String? location;
 
     final now = DateTime.now();
 
-    // Try to extract time first (e.g., "3pm", "15:30", "3:30 PM")
+    // Extract location first (to avoid conflicts with time parsing)
+    final locationMatch = _locationPattern.firstMatch(input);
+    if (locationMatch != null) {
+      location = locationMatch.group(1)!.trim();
+      taskTitle = taskTitle.replaceAll(locationMatch.group(0)!, '').trim();
+    }
+
+    // Try to extract time (e.g., "3pm", "15:30", "3:30 PM", "2 o'clock")
     TimeOfDay? extractedTime;
     final timeMatch = _timePattern.firstMatch(input);
     if (timeMatch != null) {
@@ -43,10 +70,27 @@ class SmartTaskParser {
           timeMatch.group(2) != null ? int.parse(timeMatch.group(2)!) : 0;
       final period = timeMatch.group(3)?.toLowerCase();
 
+      // Handle explicit AM/PM or o'clock
       if (period != null) {
-        if (period == 'pm' && hour != 12) hour += 12;
-        if (period == 'am' && hour == 12) hour = 0;
+        if (period.contains('pm') && hour != 12) {
+          hour += 12;
+        } else if (period.contains('am') && hour == 12) {
+          hour = 0;
+        } else if (period.contains('clock')) {
+          // For "oclock" without AM/PM, apply smart PM assumption
+          if (hour >= 1 && hour <= 7) {
+            hour += 12; // 1-7 o'clock → assume PM
+          }
+        }
+      } else {
+        // Smart PM assumption for ambiguous times (1-7 → PM, 8-12 → keep as is)
+        if (hour >= 1 && hour <= 7) {
+          hour += 12;
+        }
       }
+
+      // Handle 24-hour format edge cases
+      if (hour >= 24) hour = hour - 24;
 
       if (hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
         extractedTime = TimeOfDay(hour: hour, minute: minute);
@@ -152,6 +196,7 @@ class SmartTaskParser {
     return TaskParseResult(
       title: taskTitle.isEmpty ? input : taskTitle,
       scheduledTime: scheduledTime,
+      location: location,
     );
   }
 
@@ -232,9 +277,11 @@ class SmartTaskParser {
 class TaskParseResult {
   final String title;
   final DateTime? scheduledTime;
+  final String? location;
 
   const TaskParseResult({
     required this.title,
     this.scheduledTime,
+    this.location,
   });
 }

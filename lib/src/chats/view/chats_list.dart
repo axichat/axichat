@@ -45,16 +45,16 @@ class ChatsList extends StatelessWidget {
                 return BlocBuilder<CalendarBloc, CalendarState>(
                   bloc: calendarBloc,
                   builder: (context, state) => CalendarTile(
-                    onTap: () => context.go('/calendar'),
+                    onTap: () => context.read<ChatsCubit>().toggleCalendar(),
                     nextTask: state.nextTask,
                     dueReminderCount: state.dueReminders?.length ?? 0,
                   ),
                 );
-              } else {
-                return CalendarTile(
-                  onTap: () => context.go('/calendar'),
-                );
               }
+              // Fallback if no calendar bloc (shouldn't happen for logged-in users)
+              return CalendarTile(
+                onTap: () => context.read<ChatsCubit>().toggleCalendar(),
+              );
             }
             final item = items[index - 1];
             final locate = context.read;

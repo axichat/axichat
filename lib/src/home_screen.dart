@@ -3,6 +3,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
+import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -26,6 +31,7 @@ import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -108,6 +114,34 @@ class HomeScreen extends StatelessWidget {
                   blockingService: context.read<XmppService>(),
                 ),
               ),
+            // Always provide CalendarBloc for logged-in users
+            if (Hive.isBoxOpen('calendar'))
+              BlocProvider(
+                create: (context) {
+                  final calendarBox = Hive.box<CalendarModel>('calendar');
+                  final xmppService = context.read<XmppService>();
+
+                  final syncManager = CalendarSyncManager(
+                    calendarBox: calendarBox,
+                    sendCalendarMessage: (message) async {
+                      if (xmppService.myJid != null) {
+                        await xmppService.sendMessage(
+                          jid: xmppService.myJid!,
+                          text: message,
+                        );
+                      }
+                    },
+                  );
+
+                  xmppService
+                      .setCalendarSyncCallback(syncManager.onCalendarMessage);
+
+                  return CalendarBloc(
+                    calendarBox: calendarBox,
+                    syncManager: syncManager,
+                  )..add(const CalendarStarted());
+                },
+              ),
             BlocProvider(
               create: (context) => ConnectivityCubit(
                 xmppBase: context.read<XmppService>(),
@@ -117,11 +151,16 @@ class HomeScreen extends StatelessWidget {
           child: Builder(
             builder: (context) {
               final openJid = context.watch<ChatsCubit?>()?.state.openJid;
+              final openCalendar =
+                  context.watch<ChatsCubit?>()?.state.openCalendar ?? false;
               return PopScope(
                 canPop: false,
                 onPopInvokedWithResult: (_, __) {
-                  if (openJid case final jid?) {
-                    context.read<ChatsCubit?>()?.toggleChat(jid: jid);
+                  final chatsCubit = context.read<ChatsCubit?>();
+                  if (chatsCubit?.state.openCalendar ?? false) {
+                    chatsCubit?.toggleCalendar();
+                  } else if (openJid case final jid?) {
+                    chatsCubit?.toggleChat(jid: jid);
                   }
                 },
                 child: Column(
@@ -134,40 +173,44 @@ class HomeScreen extends StatelessWidget {
                           return SafeArea(
                             top: state is ConnectivityConnected,
                             child: AxiAdaptiveLayout(
-                              invertPriority: openJid != null,
+                              invertPriority: openJid != null || openCalendar,
                               primaryChild: Nexus(tabs: tabs),
-                              secondaryChild: openJid == null ||
-                                      context.read<XmppService?>() == null
-                                  ? const GuestChat()
-                                  : MultiBlocProvider(
-                                      providers: [
-                                        BlocProvider(
-                                          key: Key(openJid),
-                                          create: (context) => ChatBloc(
-                                            jid: openJid,
-                                            messageService:
-                                                context.read<XmppService>(),
-                                            chatsService:
-                                                context.read<XmppService>(),
-                                            notificationService: context
-                                                .read<NotificationService>(),
-                                            omemoService: isOmemo
-                                                ? context.read<XmppService>()
-                                                : null,
-                                          ),
-                                        ),
-                                        if (isOmemo)
-                                          BlocProvider(
-                                            create: (context) =>
-                                                VerificationCubit(
-                                              jid: openJid,
-                                              omemoService:
-                                                  context.read<XmppService>(),
+                              secondaryChild: openCalendar
+                                  ? const CalendarWidget()
+                                  : openJid == null ||
+                                          context.read<XmppService?>() == null
+                                      ? const GuestChat()
+                                      : MultiBlocProvider(
+                                          providers: [
+                                            BlocProvider(
+                                              key: Key(openJid),
+                                              create: (context) => ChatBloc(
+                                                jid: openJid,
+                                                messageService:
+                                                    context.read<XmppService>(),
+                                                chatsService:
+                                                    context.read<XmppService>(),
+                                                notificationService:
+                                                    context.read<
+                                                        NotificationService>(),
+                                                omemoService: isOmemo
+                                                    ? context
+                                                        .read<XmppService>()
+                                                    : null,
+                                              ),
                                             ),
-                                          ),
-                                      ],
-                                      child: const Chat(),
-                                    ),
+                                            if (isOmemo)
+                                              BlocProvider(
+                                                create: (context) =>
+                                                    VerificationCubit(
+                                                  jid: openJid,
+                                                  omemoService: context
+                                                      .read<XmppService>(),
+                                                ),
+                                              ),
+                                          ],
+                                          child: const Chat(),
+                                        ),
                             ),
                           );
                         },

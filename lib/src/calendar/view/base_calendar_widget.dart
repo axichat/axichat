@@ -206,11 +206,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       child: ShadSelect<CalendarView>(
         placeholder: const Text(
           'View',
-          style: TextStyle(
-            color: calendarSubtitleColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
+          style: calendarCaptionTextStyle,
         ),
         options: CalendarView.values
             .map((view) => ShadOption(
@@ -220,9 +216,8 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
             .toList(),
         selectedOptionBuilder: (context, value) => Text(
           value.name.toUpperCase(),
-          style: const TextStyle(
+          style: calendarCaptionTextStyle.copyWith(
             color: calendarTitleColor,
-            fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -264,7 +259,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   Widget _buildDesktopLayout(CalendarState state) {
     return Row(
       children: [
-        SizedBox(width: 250, child: _buildSidebar(state)),
+        SizedBox(width: 320, child: _buildSidebar(state)),
         const VerticalDivider(),
         Expanded(flex: 3, child: _buildCalendarGrid(state)),
         const VerticalDivider(),
@@ -297,7 +292,29 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   }
 
   Widget _buildCalendarGrid(CalendarState state) {
-    return CalendarGrid(state: state);
+    return CalendarGrid(
+      state: state,
+      onTaskTapped: (task, position) {
+        // TODO: Handle task tap in base implementation
+      },
+      onEmptySlotTapped: (time, position) {
+        // TODO: Handle empty slot tap in base implementation
+      },
+      onTaskDragEnd: (task, newTime) {
+        context.read<T>().add(
+              CalendarEvent.taskDropped(
+                taskId: task.id,
+                time: newTime,
+              ),
+            );
+      },
+      onDateSelected: (date) => context.read<T>().add(
+            CalendarEvent.dateSelected(date: date),
+          ),
+      onViewChanged: (view) => context.read<T>().add(
+            CalendarEvent.viewChanged(view: view),
+          ),
+    );
   }
 
   Widget _buildTaskList(CalendarState state) {
@@ -365,8 +382,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
               children: [
                 const Padding(
                   padding: EdgeInsets.all(16.0),
-                  child: Text('Quick Stats',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text('Quick Stats', style: calendarBodyTextStyle),
                 ),
                 ListTile(
                   leading: const Icon(Icons.today),
@@ -397,7 +413,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Guest Mode', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('Guest Mode', style: calendarBodyTextStyle),
         const SizedBox(height: 8),
         Text(
           'Your tasks are saved locally on this device. Sign up to sync across devices.',
@@ -424,7 +440,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
               width: 56,
               height: 56,
               decoration: const BoxDecoration(
-                color: axiGreen,
+                color: Colors.blue,
                 shape: BoxShape.circle,
                 boxShadow: calendarMediumShadow,
               ),

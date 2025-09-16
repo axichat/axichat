@@ -22,6 +22,20 @@ class TimeFormatter {
     return '${diff.inDays}d ago';
   }
 
+  /// Format time to 12-hour format (e.g., "2:00 PM")
+  static String formatTime(DateTime time) {
+    final hour = time.hour;
+    final minute = time.minute;
+    final amPm = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0
+        ? 12
+        : hour > 12
+            ? hour - 12
+            : hour;
+    final minuteStr = minute.toString().padLeft(2, '0');
+    return '$displayHour:$minuteStr $amPm';
+  }
+
   /// Format duration to human-readable format
   static String formatDuration(Duration duration) {
     if (duration.inMinutes < 60) {

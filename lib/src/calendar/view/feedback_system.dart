@@ -70,10 +70,34 @@ class FeedbackSystem {
         ));
   }
 
+  static void showError(
+    BuildContext context,
+    String message, {
+    Duration? duration,
+    VoidCallback? onTap,
+  }) {
+    _showFeedback(
+        context,
+        FeedbackMessage(
+          message: message,
+          type: FeedbackType.error,
+          duration: duration ?? const Duration(seconds: 5),
+          onTap: onTap,
+        ));
+  }
+
   static void _showFeedback(BuildContext context, FeedbackMessage feedback) {
     final colors = _getColorsForType(context, feedback.type);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) {
+      // Fallback: try to find ScaffoldMessenger in the root context
+      debugPrint(
+          'Warning: ScaffoldMessenger not found for feedback: ${feedback.message}');
+      return;
+    }
+
+    messenger.showSnackBar(
       SnackBar(
         content: GestureDetector(
           onTap: feedback.onTap,

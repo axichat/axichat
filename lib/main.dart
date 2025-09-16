@@ -13,6 +13,7 @@ import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 import 'src/app.dart';
 
@@ -34,10 +35,50 @@ Future<void> main() async {
   );
 
   await Hive.initFlutter();
-  Hive.registerAdapter(DurationAdapter());
-  Hive.registerAdapter(CalendarTaskAdapter());
-  Hive.registerAdapter(CalendarModelAdapter());
-  final guestCalendarBox = await Hive.openBox<CalendarModel>('guest_calendar');
+
+  // Register adapters in consistent order to prevent typeId conflicts
+  Hive.registerAdapter(DurationAdapter()); // typeId: 32
+  Hive.registerAdapter(TaskPriorityAdapter()); // typeId: 31
+  Hive.registerAdapter(CalendarTaskAdapter()); // typeId: 30
+  Hive.registerAdapter(CalendarModelAdapter()); // typeId: 33
+
+  print('Hive adapters registered successfully');
+
+  // Handle corrupted calendar data from typeId issues
+  Box<CalendarModel>? guestCalendarBox;
+  try {
+    guestCalendarBox = await Hive.openBox<CalendarModel>('guest_calendar');
+  } catch (e) {
+    // Handle any Hive error (typeId conflicts, unknown typeIds, corruption)
+    print('Calendar data corruption detected: $e');
+    print('Clearing corrupted calendar data...');
+
+    try {
+      await Hive.deleteBoxFromDisk('guest_calendar');
+    } catch (deleteError) {
+      print('Error deleting corrupted box: $deleteError');
+
+      // Force clear by manually deleting Hive files
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final hiveDir = Directory(appDir.path);
+        final guestCalendarFiles = hiveDir
+            .listSync()
+            .where((file) => file.path.contains('guest_calendar'))
+            .toList();
+
+        for (final file in guestCalendarFiles) {
+          await file.delete();
+          print('Deleted corrupted file: ${file.path}');
+        }
+      } catch (forceDeleteError) {
+        print('Force delete failed: $forceDeleteError');
+      }
+    }
+
+    guestCalendarBox = await Hive.openBox<CalendarModel>('guest_calendar');
+    print('Calendar data reset complete');
+  }
 
   const capability = Capability();
   final notificationService = NotificationService();

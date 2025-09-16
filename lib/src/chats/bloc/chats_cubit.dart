@@ -15,6 +15,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         super(
           ChatsState(
             openJid: null,
+            openCalendar: false,
             items: null,
             filter: (chat) => true,
             creationStatus: RequestStatus.none,
@@ -50,7 +51,24 @@ class ChatsCubit extends Cubit<ChatsState> {
       await _chatsService.closeChat();
       return;
     }
+    // Close calendar when opening chat
+    if (state.openCalendar) {
+      emit(state.copyWith(openCalendar: false));
+    }
     await _chatsService.openChat(jid);
+  }
+
+  void toggleCalendar() {
+    if (state.openCalendar) {
+      // Close calendar
+      emit(state.copyWith(openCalendar: false));
+    } else {
+      // Open calendar and close any open chat
+      emit(state.copyWith(openCalendar: true, openJid: null));
+      if (state.openJid != null) {
+        _chatsService.closeChat();
+      }
+    }
   }
 
   Future<void> toggleFavorited({
