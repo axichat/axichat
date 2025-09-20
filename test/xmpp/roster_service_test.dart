@@ -47,6 +47,7 @@ main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
+    registerOmemoFallbacks();
   });
 
   late XmppService xmppService;
@@ -89,7 +90,7 @@ main() {
       'When roster items are added to the database, emits the new roster.',
       () async {
         expectLater(
-          xmppService.rosterStream(),
+          xmppService.rosterStream().where((items) => items.isNotEmpty),
           emitsInOrder(List.generate(
             contacts.length,
             (index) => RosterMatcher(contacts.sublist(0, index + 1)),

@@ -43,6 +43,21 @@ class FakeUserAgent extends Fake implements mox.UserAgent {}
 
 class FakeStanzaDetails extends Fake implements mox.StanzaDetails {}
 
+class FakeOmemoDevice extends Fake implements OmemoDevice {}
+
+class FakeOmemoRatchet extends Fake implements OmemoRatchet {}
+
+class FakeOmemoDeviceList extends Fake implements OmemoDeviceList {}
+
+class FakeOmemoTrust extends Fake implements OmemoTrust {}
+
+void registerOmemoFallbacks() {
+  registerFallbackValue(FakeOmemoDevice());
+  registerFallbackValue(FakeOmemoRatchet());
+  registerFallbackValue(FakeOmemoDeviceList());
+  registerFallbackValue(FakeOmemoTrust());
+}
+
 extension RoundableDateTime on DateTime {
   DateTime get floorSeconds => copyWith(millisecond: 0, microsecond: 0);
 }
@@ -114,6 +129,8 @@ void prepareMockConnection() {
       .thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
 
   when(() => mockConnection.saltedPassword).thenReturn('');
+  when(() => mockConnection.omemoActivityStream)
+      .thenAnswer((_) => const Stream<mox.OmemoActivityEvent>.empty());
 }
 
 Future<void> connectSuccessfully(XmppService xmppService) async {
@@ -121,6 +138,24 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
         key: any(named: 'key'),
         value: any(named: 'value'),
       )).thenAnswer((_) async => true);
+
+  when(() => mockDatabase.getOmemoDevice(any())).thenAnswer((_) async => null);
+  when(() => mockDatabase.saveOmemoDevice(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.deleteOmemoDevice(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoRatchets(any()))
+      .thenAnswer((_) async => <OmemoRatchet>[]);
+  when(() => mockDatabase.saveOmemoRatchet(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.removeOmemoRatchets(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoDeviceList(any()))
+      .thenAnswer((_) async => null);
+  when(() => mockDatabase.saveOmemoDeviceList(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.deleteOmemoDeviceList(any()))
+      .thenAnswer((_) async {});
+  when(() => mockDatabase.setOmemoTrust(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoTrusts(any()))
+      .thenAnswer((_) async => <OmemoTrust>[]);
+  when(() => mockDatabase.getAllOmemoTrusts())
+      .thenAnswer((_) async => <OmemoTrust>[]);
 
   when(() => mockConnection.connect(
         shouldReconnect: false,
@@ -144,6 +179,24 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
         key: any(named: 'key'),
         value: any(named: 'value'),
       )).thenAnswer((_) async => true);
+
+  when(() => mockDatabase.getOmemoDevice(any())).thenAnswer((_) async => null);
+  when(() => mockDatabase.saveOmemoDevice(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.deleteOmemoDevice(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoRatchets(any()))
+      .thenAnswer((_) async => <OmemoRatchet>[]);
+  when(() => mockDatabase.saveOmemoRatchet(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.removeOmemoRatchets(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoDeviceList(any()))
+      .thenAnswer((_) async => null);
+  when(() => mockDatabase.saveOmemoDeviceList(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.deleteOmemoDeviceList(any()))
+      .thenAnswer((_) async {});
+  when(() => mockDatabase.setOmemoTrust(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoTrusts(any()))
+      .thenAnswer((_) async => <OmemoTrust>[]);
+  when(() => mockDatabase.getAllOmemoTrusts())
+      .thenAnswer((_) async => <OmemoTrust>[]);
 
   when(() => mockConnection.connect(
         shouldReconnect: false,

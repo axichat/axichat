@@ -511,10 +511,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_local_notifications
-      sha256: a9966c850de5e445331b854fa42df96a8020066d67f125a5964cbc6556643f68
+      sha256: "7ed76be64e8a7d01dfdf250b8434618e2a028c9dfa2a3c41dc9b531d4b3fc8a5"
       url: "https://pub.dev"
     source: hosted
-    version: "19.4.1"
+    version: "19.4.2"
   flutter_local_notifications_linux:
     dependency: transitive
     description:
@@ -535,10 +535,10 @@ packages:
     dependency: transitive
     description:
       name: flutter_local_notifications_windows
-      sha256: ed46d7ae4ec9d19e4c8fa2badac5fe27ba87a3fe387343ce726f927af074ec98
+      sha256: "8d658f0d367c48bd420e7cf2d26655e2d1130147bca1eea917e576ca76668aaf"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.2"
+    version: "1.0.3"
   flutter_localizations:
     dependency: "direct main"
     description: flutter
@@ -968,17 +968,17 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/moxxmpp"
-      ref: "v0.5.0"
-      resolved-ref: "1367a2174bbfe6cd5532e527162bfafa923e99c1"
+      ref: "v0.6.2"
+      resolved-ref: "3d916f91d5965fcc8b2b61612c04801b18d80b46"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
-    version: "0.5.0"
+    version: "0.6.2"
   moxxmpp_socket_tcp:
     dependency: "direct main"
     description:
       path: "packages/moxxmpp_socket_tcp"
       ref: HEAD
-      resolved-ref: "1367a2174bbfe6cd5532e527162bfafa923e99c1"
+      resolved-ref: "3d916f91d5965fcc8b2b61612c04801b18d80b46"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.4.1"
@@ -1018,11 +1018,11 @@ packages:
     dependency: transitive
     description:
       path: "."
-      ref: "v0.7.0"
-      resolved-ref: "743af37374685bc26d2225f36bc05b50248a4a8f"
+      ref: "v0.7.1"
+      resolved-ref: cd43d4dd4b3d50ddb020657e980092aa9120aa7a
       url: "https://gitlab.com/axichat/omemo_dart.git"
     source: git
-    version: "0.7.0"
+    version: "0.7.1"
   optional:
     dependency: transitive
     description:
@@ -1211,10 +1211,10 @@ packages:
     dependency: transitive
     description:
       name: pool
-      sha256: "20fe868b6314b322ea036ba325e6fc0711a22948856475e2c2b6306e8ab39c2a"
+      sha256: "978783255c543aa3586a1b3c21f6e9d720eb315376a915872c61ef8b5c20177d"
       url: "https://pub.dev"
     source: hosted
-    version: "1.5.1"
+    version: "1.5.2"
   posix:
     dependency: transitive
     description:
@@ -1664,10 +1664,10 @@ packages:
     dependency: transitive
     description:
       name: url_launcher_android
-      sha256: "07cffecb7d68cbc6437cd803d5f11a86fe06736735c3dfe46ff73bcb0f958eed"
+      sha256: "199bc33e746088546a39cc5f36bac5a278c5e53b40cb3196f99e7345fdcfae6b"
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.21"
+    version: "6.3.22"
   url_launcher_ios:
     dependency: transitive
     description:

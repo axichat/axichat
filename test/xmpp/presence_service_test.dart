@@ -18,6 +18,7 @@ main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
+    registerOmemoFallbacks();
   });
 
   late XmppService xmppService;

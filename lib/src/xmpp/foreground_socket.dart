@@ -64,12 +64,17 @@ class ForegroundSocket extends TaskHandler {
     WidgetsFlutterBinding.ensureInitialized();
 
     Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen(
-      (record) => kDebugMode
-          ? print('${record.level.name}: ${record.time}: ${record.message}'
-              '${record.stackTrace != null ? 'Exception: ${record.error} ' 'Stack Trace: ${record.stackTrace}' : ''}')
-          : null,
-    );
+    Logger.root.onRecord.listen((record) {
+      if (!kDebugMode) return;
+      final buffer = StringBuffer()
+        ..write('${record.level.name}: ${record.time}: ${record.message}');
+      if (record.stackTrace != null) {
+        buffer
+          ..write(' Exception: ${record.error}')
+          ..write(' Stack Trace: ${record.stackTrace}');
+      }
+      print(buffer.toString());
+    });
 
     _log.info('onStart called.');
     _socket ??= XmppSocketWrapper();

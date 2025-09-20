@@ -203,7 +203,7 @@ class OmemoDevice extends omemo.OmemoDevice {
     required this.signedPreKey,
     this.oldSignedPreKey,
     this.onetimePreKeys = const {},
-    this.label,
+    String? label,
   }) : super(
           jid,
           id,
@@ -221,8 +221,6 @@ class OmemoDevice extends omemo.OmemoDevice {
   final SignedPreKey signedPreKey;
   final SignedPreKey? oldSignedPreKey;
   final Map<int, omemo.OmemoKeyPair> onetimePreKeys;
-  @override
-  final String? label;
 
   factory OmemoDevice.fromDb({
     required String jid,

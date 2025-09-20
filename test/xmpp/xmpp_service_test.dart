@@ -23,6 +23,7 @@ void main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
     registerFallbackValue(FakeStanzaDetails());
+    registerOmemoFallbacks();
   });
 
   late XmppService xmppService;

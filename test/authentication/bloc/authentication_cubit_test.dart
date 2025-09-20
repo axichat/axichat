@@ -37,6 +37,9 @@ void main() {
     mockNotificationService = MockNotificationService();
     mockHttpClient = MockHttpClient();
 
+    when(() => mockXmppService.omemoActivityStream)
+        .thenAnswer((_) => const Stream.empty());
+
     when(() => mockCredentialStore.read(key: any(named: 'key')))
         .thenAnswer((_) async => null);
 

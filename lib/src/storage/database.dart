@@ -915,7 +915,6 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<DateTime?> getLastPreKeyRotationTime(String jid) async {
     // For now, we'll store this in the omemo_devices table
     // You may want to add a dedicated column or table for this
-    final device = await omemoDevicesAccessor.selectByJid(jid);
     // TODO: Add lastPreKeyRotation column to omemo_devices table
     // For now, return null to indicate no rotation time stored
     return null;
@@ -1297,7 +1296,7 @@ QueryExecutor _openDatabase(File file, String passphrase) {
   return LazyDatabase(() async {
     final token = RootIsolateToken.instance!;
     if (kDebugMode) {
-      // await file.delete();
+      await file.delete();
     }
     return NativeDatabase.createInBackground(
       file,
