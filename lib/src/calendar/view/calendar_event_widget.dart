@@ -73,7 +73,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
   Color get _eventColor {
     if (widget.task.isCompleted) {
-      return _priorityColor.withValues(alpha: 0.3);
+      return _priorityColor.withValues(alpha: 0.85);
     }
     return _priorityColor;
   }

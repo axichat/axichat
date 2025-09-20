@@ -7,8 +7,6 @@ import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 void main() {
   testWidgets('ResizableTaskWidget invokes onTap when tapped', (tester) async {
     final task = CalendarTask.create(title: 'Sample Task');
-    final overlayLink = LayerLink();
-
     bool tapped = false;
 
     await tester.pumpWidget(
@@ -23,7 +21,6 @@ void main() {
             width: 100,
             height: 40,
             isDayView: false,
-            overlayLink: overlayLink,
             onTap: (selectedTask, bounds) {
               tapped = true;
             },

@@ -125,7 +125,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       margin: calendarPadding16,
       constraints: const BoxConstraints(
         maxWidth: 400,
-        maxHeight: 500,
+        maxHeight: 540,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -144,19 +144,22 @@ class _QuickAddModalState extends State<QuickAddModal>
             // Form content
             Flexible(
               child: SingleChildScrollView(
-                padding: calendarPadding16,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: calendarSpacing16,
+                  vertical: calendarSpacing12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildTaskNameInput(),
-                    const SizedBox(height: calendarSpacing16),
+                    const SizedBox(height: calendarSpacing12),
                     _buildDescriptionInput(),
-                    const SizedBox(height: calendarSpacing16),
+                    const SizedBox(height: calendarSpacing12),
                     _buildPriorityToggles(),
-                    const SizedBox(height: calendarSpacing16),
+                    const SizedBox(height: calendarSpacing12),
                     if (widget.prefilledDateTime != null) ...[
                       _buildRecurrenceSection(),
-                      const SizedBox(height: calendarSpacing16),
+                      const SizedBox(height: calendarSpacing12),
                       _buildTimeInfo(),
                     ],
                   ],
@@ -313,7 +316,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             onChanged: (value) => setState(() => _isImportant = value),
           ),
         ),
-        const SizedBox(width: calendarSpacing12),
+        const SizedBox(width: 10),
         Expanded(
           child: PriorityCheckboxTile(
             label: 'Urgent',
@@ -339,19 +342,19 @@ class _QuickAddModalState extends State<QuickAddModal>
         ),
         const SizedBox(height: calendarSpacing8),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: RecurrenceFrequency.values
               .map(_buildRecurrenceFrequencyButton)
               .toList(),
         ),
         if (_recurrenceFrequency == RecurrenceFrequency.weekly ||
             _recurrenceFrequency == RecurrenceFrequency.weekdays) ...[
-          const SizedBox(height: calendarSpacing12),
+          const SizedBox(height: 10),
           _buildWeekdaySelector(),
         ],
         if (_recurrenceFrequency != RecurrenceFrequency.none) ...[
-          const SizedBox(height: calendarSpacing12),
+          const SizedBox(height: 10),
           _buildRecurrenceIntervalControls(),
         ],
       ],
@@ -374,7 +377,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           'Repeat every',
           style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
         ),
-        const SizedBox(width: calendarSpacing12),
+        const SizedBox(width: 10),
         SizedBox(
           width: 72,
           child: ShadSelect<int>(

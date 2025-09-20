@@ -110,8 +110,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
 
   Widget _buildMediumTile(BuildContext context) {
     final taskColor = _getTaskColor(widget.task);
-    final textColor =
-        widget.task.isCompleted ? calendarTimeLabelColor : Colors.white;
+    final textColor = Colors.white;
     final eventColor = widget.task.isCompleted ? taskCompletedColor : taskColor;
 
     return Container(
@@ -340,6 +339,17 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             )
           : Checkbox(
               value: widget.task.isCompleted,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              activeColor: calendarPrimaryColor,
+              checkColor: Colors.white,
+              side: BorderSide(
+                color: calendarPrimaryColor,
+                width: widget.task.isCompleted ? 2 : 1.5,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
               onChanged: (completed) {
                 if (completed != null && !_isUpdating) {
                   setState(() => _isUpdating = true);
@@ -365,9 +375,8 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
         fontSize: fontSize,
         fontWeight: FontWeight.w500,
         decoration: widget.task.isCompleted ? TextDecoration.lineThrough : null,
-        color: widget.task.isCompleted
-            ? calendarTimeLabelColor
-            : calendarTitleColor,
+        color:
+            widget.task.isCompleted ? calendarPrimaryColor : calendarTitleColor,
       ),
     );
   }
@@ -509,6 +518,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
   }
 
   Color _getTimeColor(BuildContext context) {
+    if (widget.task.isCompleted) return calendarPrimaryColor;
     if (_isOverdue()) return Colors.red;
     if (_isDueSoon()) return Colors.orange;
     return calendarTimeLabelColor;
