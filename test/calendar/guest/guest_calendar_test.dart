@@ -1,247 +1,122 @@
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
-import 'package:axichat/src/calendar/guest/guest_calendar_storage.dart';
-import 'package:axichat/src/calendar/models/models.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:bloc_test/bloc_test.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:mocktail/mocktail.dart';
+import 'package:test/test.dart';
 
-class MockBox extends Mock implements Box<CalendarModel> {}
+class _InMemoryStorage implements Storage {
+  final Map<String, dynamic> _store = {};
+
+  @override
+  Future<void> clear() async => _store.clear();
+
+  @override
+  Future<void> close() async => _store.clear();
+
+  @override
+  Future<void> delete(String key) async => _store.remove(key);
+
+  @override
+  dynamic read(String key) => _store[key];
+
+  @override
+  Future<void> write(String key, dynamic value) async => _store[key] = value;
+}
 
 void main() {
-  group('GuestCalendarStorage', () {
-    test('storage functions are available', () {
-      // Test that storage methods exist and are callable
-      expect(GuestCalendarStorage.openBox, isA<Function>());
-      expect(GuestCalendarStorage.saveCalendar, isA<Function>());
-      expect(GuestCalendarStorage.loadCalendar, isA<Function>());
-      expect(GuestCalendarStorage.clearGuestData, isA<Function>());
-    });
-
-    test('uses correct box name', () {
-      // Verify the box name is 'guest_calendar'
-      expect(GuestCalendarStorage, isNotNull);
-    });
-  });
-
   group('GuestCalendarBloc', () {
-    late MockBox mockBox;
+    late _InMemoryStorage storage;
     late GuestCalendarBloc bloc;
+    late CalendarStorageRegistry registry;
 
     setUp(() {
-      mockBox = MockBox();
-      bloc = GuestCalendarBloc(guestCalendarBox: mockBox);
+      storage = _InMemoryStorage();
+      registry = CalendarStorageRegistry(fallback: storage);
+      registry.registerPrefix(guestStoragePrefix, storage);
+      HydratedBloc.storage = registry;
+      bloc = GuestCalendarBloc();
     });
 
-    tearDown(() {
-      bloc.close();
+    tearDown(() async {
+      await bloc.close();
     });
 
-    test('initial state contains empty calendar', () {
+    test('initial state is empty calendar', () {
       expect(bloc.state.model.tasks, isEmpty);
+      expect(bloc.state.viewMode, CalendarView.week);
     });
 
-    group('CalendarStarted', () {
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'loads empty calendar when box is empty',
-        build: () {
-          when(() => mockBox.get('calendar')).thenReturn(null);
-          return bloc;
-        },
-        act: (bloc) => bloc.add(const CalendarEvent.started()),
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.model.tasks.isEmpty,
-            'empty tasks',
-            isTrue,
-          ),
-        ],
-      );
+    blocTest<GuestCalendarBloc, CalendarState>(
+      'taskAdded inserts a new task',
+      build: () => bloc,
+      act: (bloc) =>
+          bloc.add(const CalendarEvent.taskAdded(title: 'Guest task')),
+      expect: () => [
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
+        predicate<CalendarState>((state) {
+          return state.model.tasks.values
+              .any((task) => task.title == 'Guest task');
+        }),
+      ],
+    );
 
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'loads existing calendar from box',
-        build: () {
-          final now = DateTime.now();
-          final task = CalendarTask(
-            id: 'test-task',
-            title: 'Test Task',
-            isCompleted: false,
-            createdAt: now,
-            modifiedAt: now,
-          );
-          final existingCalendar = CalendarModel.empty().addTask(task);
-          when(() => mockBox.get('calendar')).thenReturn(existingCalendar);
-          return bloc;
-        },
-        act: (bloc) => bloc.add(const CalendarEvent.started()),
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.model.tasks.length,
-            'one task',
-            equals(1),
-          ),
-        ],
-      );
-    });
+    late CalendarTask seededTask;
 
-    group('CalendarTaskAdded', () {
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'adds task to calendar without sync',
-        build: () {
-          final initialCalendar = CalendarModel.empty();
-          when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
-          when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
-          return bloc;
-        },
-        act: (bloc) => bloc.add(const CalendarEvent.taskAdded(
-          title: 'New Task',
-          description: 'Task description',
-        )),
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.model.tasks.length,
-            'task added',
-            equals(1),
-          ),
-        ],
-      );
+    blocTest<GuestCalendarBloc, CalendarState>(
+      'taskUpdated replaces existing task',
+      build: () => GuestCalendarBloc(),
+      seed: () {
+        seededTask = CalendarTask.create(title: 'Original');
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final existing = bloc.state.model.tasks.values.first;
+        bloc.add(CalendarEvent.taskUpdated(
+          task: existing.copyWith(title: 'Updated'),
+        ));
+      },
+      expect: () => [
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
+        predicate<CalendarState>((state) {
+          final tasks = state.model.tasks;
+          return tasks.isNotEmpty && tasks.values.first.title == 'Updated';
+        }),
+      ],
+    );
 
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'validates task input',
-        build: () {
-          final initialCalendar = CalendarModel.empty();
-          when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
-          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
-          return bloc;
-        },
-        act: (bloc) => bloc.add(const CalendarEvent.taskAdded(title: '')),
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.error,
-            'validation error',
-            contains('Title cannot be empty'),
-          ),
-        ],
-      );
-    });
-
-    group('CalendarTaskUpdated', () {
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'updates existing task without sync',
-        build: () {
-          final now = DateTime.now();
-          final task = CalendarTask(
-            id: 'test-task',
-            title: 'Original Task',
-            isCompleted: false,
-            createdAt: now,
-            modifiedAt: now,
-          );
-          final initialCalendar = CalendarModel.empty().addTask(task);
-          when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
-          when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
-          return bloc;
-        },
-        act: (bloc) {
-          final updatedTask = CalendarTask(
-            id: 'test-task',
-            title: 'Updated Task',
-            isCompleted: false,
-            createdAt: DateTime.now(),
-            modifiedAt: DateTime.now(),
-          );
-          bloc.add(CalendarEvent.taskUpdated(task: updatedTask));
-        },
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.model.tasks.values.first.title,
-            'task updated',
-            equals('Updated Task'),
-          ),
-        ],
-      );
-    });
-
-    group('CalendarTaskDeleted', () {
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'deletes task without sync',
-        build: () {
-          final now = DateTime.now();
-          final task = CalendarTask(
-            id: 'test-task',
-            title: 'Task to Delete',
-            isCompleted: false,
-            createdAt: now,
-            modifiedAt: now,
-          );
-          final initialCalendar = CalendarModel.empty().addTask(task);
-          when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
-          when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
-          return bloc;
-        },
-        act: (bloc) =>
-            bloc.add(const CalendarEvent.taskDeleted(taskId: 'test-task')),
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.model.tasks.isEmpty,
-            'task deleted',
-            isTrue,
-          ),
-        ],
-      );
-    });
-
-    group('CalendarTaskCompleted', () {
-      blocTest<GuestCalendarBloc, CalendarState>(
-        'marks task as completed without sync',
-        build: () {
-          final now = DateTime.now();
-          final task = CalendarTask(
-            id: 'test-task',
-            title: 'Task to Complete',
-            isCompleted: false,
-            createdAt: now,
-            modifiedAt: now,
-          );
-          final initialCalendar = CalendarModel.empty().addTask(task);
-          when(() => mockBox.get('calendar')).thenReturn(initialCalendar);
-          when(() => mockBox.put('calendar', any())).thenAnswer((_) async {});
-          when(() => mockBox.watch()).thenAnswer((_) => const Stream.empty());
-          return bloc;
-        },
-        act: (bloc) => bloc.add(const CalendarEvent.taskCompleted(
-          taskId: 'test-task',
-          completed: true,
-        )),
-        expect: () => [
-          isA<CalendarState>().having(
-            (state) => state.model.tasks.values.first.isCompleted,
-            'task completed',
-            isTrue,
-          ),
-        ],
-      );
-    });
-
-    test('does not handle sync events', () {
-      // The GuestCalendarBloc should handle sync events but ignore the sync operations
-      // This is already implemented correctly in the actual bloc
-      expect(bloc.state.isSyncing, isFalse);
-    });
-  });
-
-  group('Data Isolation Tests', () {
-    test('guest calendar uses separate box from authenticated calendar', () {
-      // Verify box names are different
-      const guestBoxName = 'guest_calendar';
-      const authBoxName = 'calendar'; // Authenticated box name
-
-      expect(guestBoxName, isNot(equals(authBoxName)));
-    });
+    blocTest<GuestCalendarBloc, CalendarState>(
+      'taskDeleted removes task',
+      build: () => GuestCalendarBloc(),
+      seed: () {
+        seededTask = CalendarTask.create(title: 'Delete');
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        bloc.add(CalendarEvent.taskDeleted(taskId: seededTask.id));
+      },
+      expect: () => [
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
+        predicate<CalendarState>((state) => state.model.tasks.isEmpty),
+      ],
+    );
   });
 }

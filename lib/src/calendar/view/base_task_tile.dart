@@ -515,11 +515,10 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
   }
 
   Color _getStatusColor(BuildContext context) {
-    if (widget.task.isCompleted) return Colors.green;
-    if (_isOverdue()) return Colors.red;
-    if (_isDueSoon()) return Colors.orange;
-    return calendarEventColors[
-        0]; // Use first calendar color instead of Theme.primaryColor
+    if (widget.task.isCompleted) return taskCompletedColor;
+    if (_isOverdue()) return calendarDangerColor;
+    if (_isDueSoon()) return calendarWarningColor;
+    return widget.task.priorityColor;
   }
 
   String _getStatusText() {
@@ -547,8 +546,6 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
   }
 
   Color _getTaskColor(CalendarTask task) {
-    final hash = task.id.hashCode;
-    final colorIndex = hash.abs() % calendarEventColors.length;
-    return calendarEventColors[colorIndex];
+    return task.priorityColor;
   }
 }

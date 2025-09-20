@@ -5,7 +5,7 @@ import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -31,7 +31,7 @@ import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -115,31 +115,40 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             // Always provide CalendarBloc for logged-in users
-            if (Hive.isBoxOpen('calendar'))
+            if (context.read<Storage?>() != null)
               BlocProvider(
                 create: (context) {
-                  final calendarBox = Hive.box<CalendarModel>('calendar');
+                  final reminderController =
+                      context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
 
-                  final syncManager = CalendarSyncManager(
-                    calendarBox: calendarBox,
-                    sendCalendarMessage: (message) async {
-                      if (xmppService.myJid != null) {
-                        await xmppService.sendMessage(
-                          jid: xmppService.myJid!,
-                          text: message,
-                        );
-                      }
-                    },
-                  );
-
-                  xmppService
-                      .setCalendarSyncCallback(syncManager.onCalendarMessage);
-
                   return CalendarBloc(
-                    calendarBox: calendarBox,
-                    syncManager: syncManager,
-                  )..add(const CalendarStarted());
+                    reminderController: reminderController,
+                    syncManagerBuilder: (bloc) {
+                      final manager = CalendarSyncManager(
+                        readModel: () => bloc.currentModel,
+                        applyModel: (model) async {
+                          bloc.add(
+                            CalendarEvent.remoteModelApplied(model: model),
+                          );
+                        },
+                        sendCalendarMessage: (message) async {
+                          final jid = xmppService.myJid;
+                          if (jid != null) {
+                            await xmppService.sendMessage(
+                              jid: jid,
+                              text: message,
+                            );
+                          }
+                        },
+                      );
+
+                      xmppService.setCalendarSyncCallback(
+                        manager.onCalendarMessage,
+                      );
+                      return manager;
+                    },
+                  )..add(const CalendarEvent.started());
                 },
               ),
             BlocProvider(

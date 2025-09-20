@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:axichat/main.dart';
@@ -6,6 +7,9 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -22,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -35,24 +40,50 @@ class Axichat extends StatefulWidget {
     Capability? capability,
     Policy? policy,
     Box<CalendarModel>? guestCalendarBox,
+    Storage? guestCalendarStorage,
+    required CalendarStorageRegistry storageRegistry,
   })  : _xmppService = xmppService,
         _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy(),
-        _guestCalendarBox = guestCalendarBox;
+        _guestCalendarBox = guestCalendarBox,
+        _guestCalendarStorage = guestCalendarStorage,
+        _storageRegistry = storageRegistry;
 
   final XmppBase? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
   final Box<CalendarModel>? _guestCalendarBox;
+  final Storage? _guestCalendarStorage;
+  final CalendarStorageRegistry _storageRegistry;
 
   @override
   State<Axichat> createState() => _AxichatState();
 }
 
 class _AxichatState extends State<Axichat> {
-  Box<CalendarModel>? _calendarBox;
+  Storage? _calendarStorage;
+  late final CalendarReminderController _reminderController =
+      CalendarReminderController(
+    notificationService: widget._notificationService,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    final guestStorage = widget._guestCalendarStorage;
+    if (guestStorage != null &&
+        !widget._storageRegistry.hasPrefix(guestStoragePrefix)) {
+      widget._storageRegistry.registerPrefix(guestStoragePrefix, guestStorage);
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_reminderController.clearAll());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,11 +94,10 @@ class _AxichatState extends State<Axichat> {
             create: (_) => widget._guestCalendarBox!,
             key: const Key('guest_calendar_box'),
           ),
-        if (_calendarBox != null)
-          RepositoryProvider<Box<CalendarModel>>(
-            create: (_) => _calendarBox!,
-            key: const Key('calendar_box'),
-          ),
+        RepositoryProvider<Storage?>(
+          create: (_) => _calendarStorage,
+          key: const Key('calendar_storage'),
+        ),
         if (widget._xmppService == null)
           RepositoryProvider(
             create: (context) => XmppService(
@@ -82,6 +112,12 @@ class _AxichatState extends State<Axichat> {
                 if (!Hive.isAdapterRegistered(30)) {
                   Hive.registerAdapter(CalendarTaskAdapter());
                 }
+                if (!Hive.isAdapterRegistered(34)) {
+                  Hive.registerAdapter(RecurrenceRuleAdapter());
+                }
+                if (!Hive.isAdapterRegistered(35)) {
+                  Hive.registerAdapter(RecurrenceFrequencyAdapter());
+                }
                 if (!Hive.isAdapterRegistered(31)) {
                   Hive.registerAdapter(CalendarModelAdapter());
                 }
@@ -89,13 +125,34 @@ class _AxichatState extends State<Axichat> {
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
                 );
-                // Open encrypted calendar box for logged-in users
                 final calendarBox = await Hive.openBox<CalendarModel>(
                   'calendar',
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
                 );
+                final encryptionKey = deriveCalendarEncryptionKey(passphrase);
+                final storage = await buildAuthCalendarStorage(
+                  encryptionKey: encryptionKey,
+                );
+
+                final storageKey = '${authStoragePrefix}_state';
+                final hasHydratedState = storage.read(storageKey) != null;
+                final legacyModel = calendarBox.get('calendar');
+                if (!hasHydratedState && legacyModel != null) {
+                  final seedState = {
+                    'model': legacyModel.toJson(),
+                    'selectedDate': DateTime.now().toIso8601String(),
+                    'viewMode': 'week',
+                  };
+                  await storage.write(storageKey, seedState);
+                }
+
+                await calendarBox.close();
+
+                widget._storageRegistry
+                    .registerPrefix(authStoragePrefix, storage);
+
                 setState(() {
-                  _calendarBox = calendarBox;
+                  _calendarStorage = storage;
                 });
                 return XmppStateStore();
               },
@@ -115,6 +172,7 @@ class _AxichatState extends State<Axichat> {
         RepositoryProvider.value(value: widget._notificationService),
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
+        RepositoryProvider.value(value: _reminderController),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -131,10 +189,10 @@ class _AxichatState extends State<Axichat> {
               notificationService: context.read<NotificationService>(),
             ),
           ),
-          if (widget._guestCalendarBox != null)
+          if (widget._guestCalendarStorage != null)
             BlocProvider(
               create: (context) => GuestCalendarBloc(
-                guestCalendarBox: widget._guestCalendarBox!,
+                reminderController: _reminderController,
               )..add(const CalendarStarted()),
               key: const Key('guest_calendar_bloc'),
             ),
