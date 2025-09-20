@@ -28,7 +28,7 @@ class PriorityCheckboxTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(10),

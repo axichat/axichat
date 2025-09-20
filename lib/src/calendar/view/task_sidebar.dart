@@ -910,7 +910,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           section: _SidebarSection.unscheduled,
           itemCount: unscheduledTasks.length,
           expandedChild: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: _buildTaskList(
               unscheduledTasks,
               emptyLabel: 'No unscheduled tasks',
@@ -919,13 +919,13 @@ class _TaskSidebarState extends State<TaskSidebar>
           ),
           collapsedChild: _buildCollapsedPreview(unscheduledTasks),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         _buildAccordionSection(
           title: 'REMINDERS',
           section: _SidebarSection.reminders,
           itemCount: reminderTasks.length,
           expandedChild: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: _buildReminderList(reminderTasks),
           ),
           collapsedChild: _buildCollapsedPreview(reminderTasks),
@@ -971,7 +971,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                 }),
                 child: Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     children: [
                       Expanded(
@@ -1003,7 +1003,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   duration: const Duration(milliseconds: 220),
                   firstChild: const SizedBox.shrink(),
                   secondChild: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
                     child: expandedChild,
                   ),
                   crossFadeState: isExpanded
@@ -1017,8 +1017,8 @@ class _TaskSidebarState extends State<TaskSidebar>
                 duration: const Duration(milliseconds: 160),
                 firstChild: Container(
                   key: ValueKey('${section.name}-collapsed'),
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                  constraints: const BoxConstraints(minHeight: 64),
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                  constraints: const BoxConstraints(minHeight: 40),
                   child: collapsedChild,
                 ),
                 secondChild: const SizedBox.shrink(),
@@ -1098,7 +1098,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
@@ -1124,7 +1124,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     required bool isHovering,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1139,9 +1139,8 @@ class _TaskSidebarState extends State<TaskSidebar>
             Text(
               label,
               style: TextStyle(
-                color: isHovering
-                    ? calendarPrimaryColor
-                    : calendarTimeLabelColor,
+                color:
+                    isHovering ? calendarPrimaryColor : calendarTimeLabelColor,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
@@ -1254,35 +1253,39 @@ class _TaskSidebarState extends State<TaskSidebar>
                       final screenSize = MediaQuery.of(tileContext).size;
 
                       const double margin = 16.0;
-                      const double dropdownMaxHeight = 460.0;
+                      const double dropdownMaxHeight =
+                          644.0; // Increased by 40% from 460
 
                       final availableBelow = screenSize.height -
                           (tileOrigin.dy + tileSize.height) -
                           margin;
                       final availableAbove = tileOrigin.dy - margin;
 
-                      bool showAbove = availableAbove > availableBelow &&
-                          availableAbove > 0;
-                      if (!showAbove && availableBelow <= 0 && availableAbove > 0) {
+                      bool showAbove =
+                          availableAbove > availableBelow && availableAbove > 0;
+                      if (!showAbove &&
+                          availableBelow <= 0 &&
+                          availableAbove > 0) {
                         showAbove = true;
                       }
 
-                      double availableSpace = showAbove
-                          ? availableAbove
-                          : availableBelow;
+                      double availableSpace =
+                          showAbove ? availableAbove : availableBelow;
 
                       if (availableSpace <= 0) {
                         availableSpace = dropdownMaxHeight;
                       }
 
-                      double effectiveMaxHeight = availableSpace >= dropdownMaxHeight
-                          ? dropdownMaxHeight
-                          : availableSpace;
+                      double effectiveMaxHeight =
+                          availableSpace >= dropdownMaxHeight
+                              ? dropdownMaxHeight
+                              : availableSpace;
                       if (effectiveMaxHeight > dropdownMaxHeight) {
                         effectiveMaxHeight = dropdownMaxHeight;
                       }
                       if (effectiveMaxHeight < 220 && availableSpace > 220) {
-                        effectiveMaxHeight = math.min(availableSpace, dropdownMaxHeight);
+                        effectiveMaxHeight =
+                            math.min(availableSpace, dropdownMaxHeight);
                       }
                       if (effectiveMaxHeight < 160) {
                         effectiveMaxHeight = availableSpace <= 0
@@ -1358,7 +1361,7 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   Widget _buildTaskTileBody(CalendarTask task) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1683,8 +1686,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   void _openTaskPopover(String taskId) {
     final controller = _popoverControllerFor(taskId);
     if (_activePopoverTaskId != null && _activePopoverTaskId != taskId) {
-      final activeController =
-          _taskPopoverControllers[_activePopoverTaskId!];
+      final activeController = _taskPopoverControllers[_activePopoverTaskId!];
       activeController?.hide();
     }
     controller.show();
@@ -1704,5 +1706,4 @@ class _TaskSidebarState extends State<TaskSidebar>
       setState(() => _activePopoverTaskId = null);
     }
   }
-
 }

@@ -15,7 +15,7 @@ class EditTaskDropdown extends StatefulWidget {
     required this.onClose,
     required this.onTaskUpdated,
     required this.onTaskDeleted,
-    this.maxHeight = 460,
+    this.maxHeight = 520,
   });
 
   final CalendarTask task;
@@ -95,7 +95,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: 340,
+        width: 360,
         constraints: BoxConstraints(
           maxHeight: widget.maxHeight,
           minWidth: 320,
@@ -120,28 +120,28 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             Flexible(
               child: SingleChildScrollView(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildTitleField(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildDescriptionField(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _buildLocationField(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     _buildScheduleToggle(),
                     if (_isScheduled) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       _buildScheduleFields(),
                     ],
-                    const SizedBox(height: 16),
-                    _buildDeadlineField(),
-                    const SizedBox(height: 16),
-                    _buildRecurrenceSection(),
-                    const SizedBox(height: 16),
-                    _buildPriorityRow(),
                     const SizedBox(height: 12),
+                    _buildDeadlineField(),
+                    const SizedBox(height: 12),
+                    _buildRecurrenceSection(),
+                    const SizedBox(height: 12),
+                    _buildPriorityRow(),
+                    const SizedBox(height: 10),
                     _buildCompletedCheckbox(),
                   ],
                 ),
@@ -208,7 +208,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   Widget _buildScheduleToggle() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         border: Border.all(color: calendarBorderColor),
         borderRadius: BorderRadius.circular(6),
@@ -244,7 +244,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           ShadButton.outline(
             size: ShadButtonSize.sm,
             foregroundColor: calendarPrimaryColor,
@@ -266,8 +266,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
               size: 18,
               color: calendarPrimaryColor,
             ),
-            child:
-                Text(_isScheduled ? 'Remove schedule' : 'Add to schedule'),
+            child: Text(_isScheduled ? 'Remove schedule' : 'Add to schedule'),
           ),
         ],
       ),
@@ -281,23 +280,21 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         Row(
           children: [
             Expanded(
-              child:
-                  _buildDateTile('Start date', _startTime, _pickStartDate),
+              child: _buildDateTile('Start date', _startTime, _pickStartDate),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
-              child:
-                  _buildDateTile('End date', _endTime, _pickEndDate),
+              child: _buildDateTile('End date', _endTime, _pickEndDate),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
               child: _buildTimeTile('Start time', _startTime, _pickStartTime),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: _buildTimeTile('End time', _endTime, _pickEndTime),
             ),
@@ -320,7 +317,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         DeadlinePickerField(
           value: _deadline,
           onChanged: (value) => setState(() => _deadline = value),
@@ -342,22 +339,22 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: RecurrenceFrequency.values
               .map(_buildRecurrenceFrequencyButton)
               .toList(),
         ),
         if (_recurrenceFrequency == RecurrenceFrequency.weekly ||
             _recurrenceFrequency == RecurrenceFrequency.weekdays) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _buildWeekdaySelector(),
         ],
         if (_recurrenceFrequency != RecurrenceFrequency.none)
           Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.only(top: 10),
             child: _buildRecurrenceIntervalPicker(),
           ),
       ],
@@ -393,8 +390,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             };
           } else if (frequency == RecurrenceFrequency.weekly &&
               _selectedWeekdays.isEmpty) {
-            final defaultDay =
-                _startTime?.weekday ?? DateTime.now().weekday;
+            final defaultDay = _startTime?.weekday ?? DateTime.now().weekday;
             _selectedWeekdays = {defaultDay};
           }
         });
@@ -425,7 +421,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           'Repeat every',
           style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         SizedBox(
           width: 72,
           child: ShadSelect<int>(
@@ -444,7 +440,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                 radius: BorderRadius.circular(8),
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             trailing: Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
@@ -452,7 +448,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Text(
           _recurrenceIntervalUnit(_recurrenceFrequency),
           style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
@@ -474,8 +470,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     ];
 
     return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+      spacing: 4,
+      runSpacing: 4,
       children: List.generate(values.length, (index) {
         final value = values[index];
         final isSelected = _selectedWeekdays.contains(value);
@@ -485,7 +481,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
               ? ShadButtonVariant.primary
               : ShadButtonVariant.outline,
           size: ShadButtonSize.sm,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
           hoverBackgroundColor: isSelected
               ? calendarPrimaryHoverColor
@@ -569,24 +565,11 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   Widget _buildCompletedCheckbox() {
-    return InkWell(
-      onTap: () => setState(() => _isCompleted = !_isCompleted),
-      borderRadius: BorderRadius.circular(6),
-      child: Row(
-        children: [
-          Checkbox(
-            value: _isCompleted,
-            activeColor: calendarPrimaryColor,
-            onChanged: (value) =>
-                setState(() => _isCompleted = value ?? !_isCompleted),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Mark as completed',
-            style: TextStyle(fontSize: 13, color: calendarTitleColor),
-          ),
-        ],
-      ),
+    return _buildPriorityCheckbox(
+      label: 'Mark as completed',
+      value: _isCompleted,
+      color: calendarPrimaryColor,
+      onChanged: (value) => setState(() => _isCompleted = value),
     );
   }
 
@@ -646,7 +629,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xff0969DA), width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       filled: true,
       fillColor: Colors.white,
     );

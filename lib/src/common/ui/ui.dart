@@ -217,7 +217,7 @@ const calendarCardShadow = [
 ];
 
 // Task-specific constants - updated to match target design
-const taskCompletedColor = Color(0xff8e8e93);
+const taskCompletedColor = calendarPrimaryColor;
 const calendarCardRadius = 6.0;
 
 // Task priority colors matching target HTML design exactly

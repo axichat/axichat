@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show LayerLink;
-
 import '../models/calendar_task.dart';
 
 class ResizableTaskWidget extends StatefulWidget {
@@ -13,8 +11,9 @@ class ResizableTaskWidget extends StatefulWidget {
   final double width;
   final double height;
   final bool isDayView;
+  final bool isPopoverOpen;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
-  final LayerLink overlayLink;
+  final VoidCallback? onDragStarted;
 
   const ResizableTaskWidget({
     super.key,
@@ -26,8 +25,9 @@ class ResizableTaskWidget extends StatefulWidget {
     required this.width,
     required this.height,
     required this.isDayView,
+    this.isPopoverOpen = false,
     this.onTap,
-    required this.overlayLink,
+    this.onDragStarted,
   });
 
   @override
@@ -39,19 +39,16 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   bool isResizing = false;
   String? activeHandle;
 
-  // Track drag from start position
   double _dragStartY = 0;
   double _dragStartX = 0;
   double _totalDragDeltaY = 0;
   double _totalDragDeltaX = 0;
 
-  // Original values when resize starts
   late double _originalStartHour;
   late double _originalDurationHours;
   late DateTime _originalScheduledTime;
   late DateTime? _originalEndDate;
 
-  // Temporary values during resize
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
   DateTime? _tempEndDate;
@@ -61,179 +58,186 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
+    final taskColor = _taskColor;
 
-    return SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: CompositedTransformTarget(
-        link: widget.overlayLink,
-        child: Draggable<CalendarTask>(
-          data: task,
-          feedback: Material(
-            elevation: 8,
-            color: Colors.transparent,
-            child: Container(
-              width: widget.width,
-              height: widget.height,
-              decoration: BoxDecoration(
-                color: _taskColor.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: [
+    Widget buildFeedback() {
+      return Material(
+        elevation: 8,
+        color: Colors.transparent,
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: taskColor.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(6),
+          child: Text(
+            task.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    Widget buildTaskBody() {
+      final showHoverEffects = widget.isPopoverOpen || isHovering || isResizing;
+      return Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: task.isCompleted
+              ? taskColor.withOpacity(0.5)
+              : taskColor.withOpacity(isResizing ? 0.7 : 0.9),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: isResizing
+                ? Colors.white.withOpacity(0.5)
+                : taskColor.withOpacity(0.3),
+            width: isResizing ? 2 : 1,
+          ),
+          boxShadow: showHoverEffects
+              ? const [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black26,
                     blurRadius: 4,
-                    offset: const Offset(0, 2),
+                    offset: Offset(0, 2),
                   ),
-                ],
-              ),
-              padding: const EdgeInsets.all(6),
-              child: Text(
-                task.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          onDragEnd: (_) {
-            // Ensure hover styling resets after drag completes.
-            if (mounted) {
-              setState(() {
-                isHovering = false;
-              });
-            }
-          },
-          childWhenDragging: Container(
-            decoration: BoxDecoration(
-              color: _taskColor.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: _taskColor,
-                width: 1,
-              ),
-            ),
-          ),
-          child: MouseRegion(
-            onEnter: (_) => setState(() => isHovering = true),
-            onExit: (_) => setState(() => isHovering = false),
-            cursor: isResizing
-                ? SystemMouseCursors.resizeUpDown
-                : SystemMouseCursors.click,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                final handler = widget.onTap;
-                if (handler == null) return;
-
-                final renderBox = context.findRenderObject() as RenderBox?;
-                if (renderBox == null) {
-                  handler(task, Rect.zero);
-                  return;
-                }
-
-                final origin = renderBox.localToGlobal(Offset.zero);
-                handler(task, origin & renderBox.size);
-              },
-              child: Container(
-                margin: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: task.isCompleted
-                      ? _taskColor.withOpacity(0.5)
-                      : _taskColor.withOpacity(isResizing ? 0.7 : 0.9),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: isResizing
-                        ? Colors.white.withOpacity(0.5)
-                        : _taskColor.withOpacity(0.3),
-                    width: isResizing ? 2 : 1,
-                  ),
-                  boxShadow: isHovering || isResizing
-                      ? const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
-                          ),
-                        ]
-                      : const [],
-                ),
-                child: Stack(
+                ]
+              : const [],
+        ),
+        child: Stack(
+          children: [
+            ClipRect(
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    ClipRect(
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Row(
-                                children: [
-                                  if (task.effectiveDaySpan > 1) ...[
-                                    Icon(
-                                      Icons.calendar_view_week,
-                                      size: 12,
-                                      color: Colors.white.withOpacity(0.9),
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  Expanded(
-                                    child: Text(
-                                      task.title,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        decoration: task.isCompleted
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: widget.height > 40 ? 2 : 1,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                    Row(
+                      children: [
+                        if (task.effectiveDaySpan > 1) ...[
+                          Icon(
+                            Icons.calendar_view_week,
+                            size: 12,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              decoration: task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
                             ),
-                            if (widget.height > 40) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                task.effectiveDaySpan > 1
-                                    ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
-                                    : _formatTimeRange(),
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ],
-                            if (widget.height > 56 &&
-                                task.description?.isNotEmpty == true) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                task.description!,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.75),
-                                  fontSize: 10,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: widget.height > 40 ? 2 : 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (widget.height > 40) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        task.effectiveDaySpan > 1
+                            ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
+                            : _formatTimeRange(),
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
-                    ),
-                    if ((isHovering || isResizing) && !task.isCompleted)
-                      ..._buildResizeHandles(),
+                    ],
+                    if (widget.height > 56 &&
+                        task.description?.isNotEmpty == true) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        task.description!,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.75),
+                          fontSize: 10,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
+            if (showHoverEffects && !task.isCompleted) ..._buildResizeHandles(),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: Draggable<CalendarTask>(
+        data: task,
+        feedback: buildFeedback(),
+        onDragStarted: widget.onDragStarted,
+        onDragEnd: (_) {
+          if (mounted) {
+            setState(() => isHovering = false);
+          }
+        },
+        childWhenDragging: Container(
+          decoration: BoxDecoration(
+            color: taskColor.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: taskColor, width: 1),
+          ),
+        ),
+        child: MouseRegion(
+          onEnter: (_) {
+            if (!widget.isPopoverOpen) {
+              setState(() => isHovering = true);
+            }
+          },
+          onExit: (_) {
+            if (!widget.isPopoverOpen) {
+              setState(() => isHovering = false);
+            }
+          },
+          cursor: isResizing
+              ? SystemMouseCursors.resizeUpDown
+              : SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              final handler = widget.onTap;
+              if (handler == null) return;
+
+              final renderBox = context.findRenderObject() as RenderBox?;
+              if (renderBox == null) {
+                handler(task, Rect.zero);
+                return;
+              }
+
+              final origin = renderBox.localToGlobal(Offset.zero);
+              handler(task, origin & renderBox.size);
+            },
+            child: buildTaskBody(),
           ),
         ),
       ),

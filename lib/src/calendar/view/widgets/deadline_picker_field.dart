@@ -177,17 +177,15 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final triggerBox =
         _triggerKey.currentContext?.findRenderObject() as RenderBox?;
     final triggerSize = triggerBox?.size ?? Size.zero;
-    final triggerOrigin =
-        triggerBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final triggerOrigin = triggerBox?.localToGlobal(Offset.zero) ?? Offset.zero;
 
     final screenSize = MediaQuery.of(context).size;
     const dropdownWidth = 320.0;
     const dropdownMaxHeight = 440.0;
     const margin = 16.0;
 
-    final availableBelow = screenSize.height -
-        (triggerOrigin.dy + triggerSize.height) -
-        margin;
+    final availableBelow =
+        screenSize.height - (triggerOrigin.dy + triggerSize.height) - margin;
     final availableAbove = triggerOrigin.dy - margin;
 
     final normalizedBelow = math.max(0.0, availableBelow);
@@ -427,9 +425,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               ),
               const SizedBox(width: 8),
               Icon(
-                _isOpen
-                    ? Icons.keyboard_arrow_up
-                    : Icons.keyboard_arrow_down,
+                _isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
                 size: 20,
                 color: calendarTimeLabelColor,
               ),

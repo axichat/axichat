@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../common/ui/ui.dart';
 import '../utils/smart_parser.dart';
 
 part 'calendar_task.freezed.dart';
@@ -155,6 +156,9 @@ extension CalendarTaskExtensions on CalendarTask {
   bool get hasDeadline => deadline != null;
 
   Color get priorityColor {
+    if (isCompleted) {
+      return calendarPrimaryColor;
+    }
     switch (effectivePriority) {
       case TaskPriority.critical:
         return const Color(0xFFDC3545);
