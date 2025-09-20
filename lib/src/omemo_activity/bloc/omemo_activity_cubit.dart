@@ -31,7 +31,7 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
   final Duration _failedRetention;
   final Map<_OmemoActivityKey, List<String>> _activeOperations = {};
   final Map<String, Timer> _retentionTimers = {};
-  final Map<_RatchetBuildKey, String> _pendingRatchetBuilds = {};
+  final Map<String, _RatchetTracker> _ratchetTrackers = {};
   late final StreamSubscription<mox.OmemoActivityEvent> _subscription;
 
   static final _logger = Logger('OmemoActivityCubit');
@@ -46,10 +46,8 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     if (_handlePersistRatchetEvent(event)) {
       return;
     }
-
-    if (_maybeTrackRatchetBuild(event)) {
-      // The build tracker handles its own operation; continue processing the
-      // original event so fetch operations still surface as toasts.
+    if (_handleRatchetFetchEvent(event)) {
+      return;
     }
     final descriptor = _descriptorForEvent(event);
     final operationType =
@@ -103,43 +101,37 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     );
   }
 
-  bool _maybeTrackRatchetBuild(mox.OmemoActivityEvent event) {
-    if (event.operation != mox.OmemoActivityOperation.fetchDeviceBundle) {
-      return false;
-    }
-    if (event.stage != mox.OmemoActivityStage.end || event.error != null) {
-      return false;
-    }
-    final key = _RatchetBuildKey(event.jid, event.deviceId);
-    if (!key.isValid || _pendingRatchetBuilds.containsKey(key)) {
-      return false;
-    }
-
-    final target = _formatTarget(event.jid);
-    final labels = _labelsForOperation(
-      mox.OmemoActivityOperation.persistRatchets,
-      target,
-      event.deviceId,
-    );
-
-    final id = _startOperation(
-      type: OmemoOperationType.buildingRatchet,
-      jid: event.jid,
-      displayName: target,
-      messageOverride: labels.start,
-    );
-    _pendingRatchetBuilds[key] = id;
-    return true;
-  }
+  static const _pendingGrace = Duration(milliseconds: 200);
 
   bool _handlePersistRatchetEvent(mox.OmemoActivityEvent event) {
     if (event.operation != mox.OmemoActivityOperation.persistRatchets) {
       return false;
     }
 
+    final key = _ratchetDeviceKey(event.jid, event.deviceId);
+    final target = _formatTarget(event.jid ?? _xmppBase.myJid);
+    final labels = _labelsForOperation(
+      mox.OmemoActivityOperation.persistRatchets,
+      target,
+      event.deviceId,
+    );
+
     if (event.stage == mox.OmemoActivityStage.start) {
-      // Ignore default handling. We'll surface the build progress via the
-      // fetchDeviceBundle-derived operations.
+      final tracker = _ensureRatchetTracker(
+        key: key,
+        createType: OmemoOperationType.buildingRatchet,
+        jid: event.jid,
+        target: target,
+        message: labels.start,
+      );
+      tracker.cancelDeferredCompletion();
+      tracker.sawPersistPhase = true;
+      tracker.persistCount++;
+      _updateOperation(
+        tracker.operationId,
+        status: OmemoOperationStatus.inProgress,
+        messageOverride: labels.start,
+      );
       return true;
     }
 
@@ -147,42 +139,120 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
       return true;
     }
 
-    bool handled = false;
+    _logger.finest(
+      'persistRatchet end: jid=${event.jid ?? '(self)'} '
+      'device=${event.deviceId ?? 'n/a'}',
+    );
 
-    void handleKey(_RatchetBuildKey key) {
-      final operationId = _pendingRatchetBuilds.remove(key);
-      if (operationId == null) {
-        return;
-      }
-      handled = true;
-      if (event.error != null) {
-        _failOperation(operationId, event.error.toString());
+    final tracker = _ratchetTrackers[key];
+    if (tracker == null) {
+      _logger.warning(
+        'persistRatchet end without matching start: '
+        'jid=${event.jid ?? '(self)'} device=${event.deviceId ?? 'n/a'}',
+      );
+      return false;
+    }
+
+    tracker.cancelDeferredCompletion();
+
+    if (tracker.persistCount > 0) {
+      tracker.persistCount--;
+    }
+
+    if (event.error != null) {
+      _failOperation(tracker.operationId, event.error.toString());
+      _ratchetTrackers.remove(key);
+    } else {
+      if (tracker.fetchCount == 0 && tracker.persistCount == 0) {
+        _completeOperation(tracker.operationId, labels.success);
+        _ratchetTrackers.remove(key);
       } else {
-        final target = _formatTarget(key.jid);
-        final labels = _labelsForOperation(
-          mox.OmemoActivityOperation.persistRatchets,
-          target,
-          key.deviceId,
+        _updateOperation(
+          tracker.operationId,
+          status: OmemoOperationStatus.inProgress,
+          messageOverride: labels.start,
         );
-        _completeOperation(operationId, labels.success);
       }
     }
 
-    if (event.deviceId != null) {
-      handleKey(_RatchetBuildKey(event.jid, event.deviceId));
-    } else if (event.jid != null) {
-      final pending = _pendingRatchetBuilds.keys
-          .where((key) => key.jid == event.jid)
-          .toList();
-      for (final key in pending) {
-        handleKey(key);
-      }
+    return true;
+  }
+
+  bool _handleRatchetFetchEvent(mox.OmemoActivityEvent event) {
+    if (event.operation != mox.OmemoActivityOperation.fetchDeviceBundle) {
+      return false;
+    }
+    final key = _ratchetDeviceKey(event.jid, event.deviceId);
+    final target = _formatTarget(event.jid ?? _xmppBase.myJid);
+    final fetchLabels = _labelsForOperation(
+      event.operation,
+      target,
+      event.deviceId,
+    );
+    final persistLabels = _labelsForOperation(
+      mox.OmemoActivityOperation.persistRatchets,
+      target,
+      event.deviceId,
+    );
+
+    if (event.stage == mox.OmemoActivityStage.start) {
+      final tracker = _ensureRatchetTracker(
+        key: key,
+        createType: OmemoOperationType.buildingRatchet,
+        jid: event.jid,
+        target: target,
+        message: fetchLabels.start,
+      );
+      tracker.cancelDeferredCompletion();
+      tracker.fetchCount++;
+      _updateOperation(
+        tracker.operationId,
+        status: OmemoOperationStatus.inProgress,
+        messageOverride: fetchLabels.start,
+      );
+      return true;
     }
 
-    // If we didn't start a build ourselves (e.g. persistence triggered outside
-    // of a fetch flow), fall back to normal processing so the user still gets
-    // feedback.
-    return handled;
+    if (event.stage != mox.OmemoActivityStage.end) {
+      return true;
+    }
+
+    final tracker = _ratchetTrackers[key];
+    if (tracker == null) {
+      _logger.warning(
+        'ratchet fetch end without matching start: '
+        'jid=${event.jid ?? '(self)'} device=${event.deviceId ?? 'n/a'}',
+      );
+      return false;
+    }
+
+    tracker.cancelDeferredCompletion();
+
+    if (tracker.fetchCount > 0) {
+      tracker.fetchCount--;
+    }
+
+    if (event.error != null) {
+      _failOperation(tracker.operationId, event.error.toString());
+      _ratchetTrackers.remove(key);
+    } else {
+      if (!tracker.sawPersistPhase && tracker.fetchCount == 0) {
+        tracker.deferredCompletion = Timer(_pendingGrace, () {
+          if (!_ratchetTrackers.containsKey(key)) return;
+          if (tracker.fetchCount == 0 && tracker.persistCount == 0) {
+            _completeOperation(tracker.operationId, fetchLabels.success);
+            _ratchetTrackers.remove(key);
+          }
+        });
+      }
+      _updateOperation(
+        tracker.operationId,
+        status: OmemoOperationStatus.inProgress,
+        messageOverride: persistLabels.start,
+      );
+    }
+
+    return true;
   }
 
   String _startOperation({
@@ -239,6 +309,61 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     operations[index] = updated;
     _scheduleTeardown(updated);
     emit(state.copyWith(operations: List.unmodifiable(operations)));
+  }
+
+  String? get _selfBareJidOrNull {
+    final jid = _xmppBase.myJid;
+    if (jid == null || jid.isEmpty) return null;
+    try {
+      return mox.JID.fromString(jid).toBare().toString();
+    } catch (_) {
+      return jid;
+    }
+  }
+
+  static const _selfSentinel = '__self__';
+
+  String _normalizedRatchetJid(String? jid) {
+    final selfBare = _selfBareJidOrNull;
+    if (jid == null) return _selfSentinel;
+    try {
+      final bare = mox.JID.fromString(jid).toBare().toString();
+      if (selfBare != null && bare == selfBare) {
+        return _selfSentinel;
+      }
+      return bare;
+    } catch (_) {
+      if (selfBare != null && jid == selfBare) {
+        return _selfSentinel;
+      }
+      return jid;
+    }
+  }
+
+  String _ratchetDeviceKey(String? jid, int? deviceId) =>
+      '${_normalizedRatchetJid(jid)}:${deviceId ?? -1}';
+
+  _RatchetTracker _ensureRatchetTracker({
+    required String key,
+    required OmemoOperationType createType,
+    required String? jid,
+    required String? target,
+    required String? message,
+  }) {
+    final existing = _ratchetTrackers[key];
+    if (existing != null) {
+      return existing;
+    }
+
+    final id = _startOperation(
+      type: createType,
+      jid: jid ?? _selfBareJidOrNull,
+      displayName: target,
+      messageOverride: message,
+    );
+    final tracker = _RatchetTracker(operationId: id);
+    _ratchetTrackers[key] = tracker;
+    return tracker;
   }
 
   void _scheduleTeardown(OmemoOperation operation) {
@@ -336,11 +461,11 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.buildingRatchet,
           startMessageBuilder: (target, __) =>
-              'Building secure session${_forTarget(target)}...',
+              'Building ratchets${_forTarget(target)}...',
           successMessageBuilder: (target, __) =>
-              'Secure session ready${_forTarget(target)}',
+              'Ratchets ready${_forTarget(target)}',
           failureMessageBuilder: (target, __) =>
-              'Failed to save secure session${_forTarget(target)}',
+              'Failed to build ratchets${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.removeRatchets:
         return _OmemoOperationDescriptor(
@@ -418,14 +543,24 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     String? target,
     int? deviceId,
   ) {
-    final name = _humanizeOperation(operation);
-    final context = _forDevice(target, deviceId).isNotEmpty
-        ? _forDevice(target, deviceId)
-        : _forTarget(target);
-    return _OperationLabels(
-      start: '$name$context...',
-      success: '$name complete$context',
-    );
+    switch (operation) {
+      case mox.OmemoActivityOperation.persistRatchets:
+        return _OperationLabels(
+          start:
+              'Building ratchets${_forDevice(target, deviceId).isNotEmpty ? _forDevice(target, deviceId) : _forTarget(target)}...',
+          success:
+              'Ratchets ready${_forDevice(target, deviceId).isNotEmpty ? _forDevice(target, deviceId) : _forTarget(target)}',
+        );
+      default:
+        final name = _humanizeOperation(operation);
+        final context = _forDevice(target, deviceId).isNotEmpty
+            ? _forDevice(target, deviceId)
+            : _forTarget(target);
+        return _OperationLabels(
+          start: '$name$context...',
+          success: '$name complete$context',
+        );
+    }
   }
 
   static String _humanizeOperation(mox.OmemoActivityOperation operation) {
@@ -509,6 +644,17 @@ class OmemoOperation {
   final String? messageOverride;
   final String? error;
 
+  static final OmemoOperation empty = OmemoOperation._empty();
+
+  OmemoOperation._empty()
+      : this(
+          id: '__empty__',
+          type: OmemoOperationType.initializing,
+          startedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        );
+
+  bool get isEmpty => identical(this, empty);
+
   OmemoOperation copyWith({
     OmemoOperationStatus? status,
     String? messageOverride,
@@ -535,7 +681,7 @@ class OmemoOperation {
         OmemoOperationType.refreshingDeviceList =>
           'Refreshing encryption keys${_targetSuffix()}...',
         OmemoOperationType.buildingRatchet =>
-          'Establishing secure session${_targetSuffix()}...',
+          'Building ratchets${_targetSuffix()}...',
         OmemoOperationType.rotatingPreKeys =>
           'Rotating pre-keys${_targetSuffix()}...',
       };
@@ -617,21 +763,17 @@ class _OmemoActivityKey {
   int get hashCode => Object.hash(operation, jid, deviceId);
 }
 
-class _RatchetBuildKey {
-  const _RatchetBuildKey(this.jid, this.deviceId);
+class _RatchetTracker {
+  _RatchetTracker({required this.operationId});
 
-  final String? jid;
-  final int? deviceId;
+  final String operationId;
+  int fetchCount = 0;
+  int persistCount = 0;
+  bool sawPersistPhase = false;
+  Timer? deferredCompletion;
 
-  bool get isValid => jid != null && deviceId != null;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _RatchetBuildKey &&
-        other.jid == jid &&
-        other.deviceId == deviceId;
+  void cancelDeferredCompletion() {
+    deferredCompletion?.cancel();
+    deferredCompletion = null;
   }
-
-  @override
-  int get hashCode => Object.hash(jid, deviceId);
 }
