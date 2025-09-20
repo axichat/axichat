@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
@@ -15,22 +15,18 @@ import 'resizable_task_widget.dart';
 
 class _TaskPopoverLayout {
   const _TaskPopoverLayout({
-    required this.anchor,
+    required this.topLeft,
     required this.maxHeight,
   });
 
-  final ShadAnchorBase anchor;
+  final Offset topLeft;
   final double maxHeight;
 }
 
 _TaskPopoverLayout _defaultTaskPopoverLayout() {
   return const _TaskPopoverLayout(
-    anchor: ShadAnchor(
-      childAlignment: Alignment.centerRight,
-      overlayAlignment: Alignment.centerLeft,
-      offset: Offset(12, 0),
-    ),
-    maxHeight: 560, // Increased by 40% from 400
+    topLeft: Offset.zero,
+    maxHeight: 560,
   );
 }
 
@@ -75,12 +71,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ScrollController _verticalController;
   Timer? _clockTimer;
   bool _hasAutoScrolled = false;
-  final Map<String, ShadPopoverController> _taskPopoverControllers = {};
   final Map<String, _TaskPopoverLayout> _taskPopoverLayouts = {};
-  final Map<String, Object> _taskPopoverGroups = {};
+  OverlayEntry? _activePopoverEntry;
   String? _activeTaskPopoverId;
-  static final Object _fallbackPopoverGroup = Object();
-  static const double _taskPopoverHoverBridgeExtent = 16.0;
+  bool _popoverDismissArmed = false;
+  final Map<String, GlobalKey> _taskItemKeys = {};
   static const double _taskPopoverHorizontalGap = 12.0;
 
   // Track hovered cell for hover effects
@@ -113,10 +108,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _viewTransitionController.dispose();
     _clockTimer?.cancel();
     _verticalController.dispose();
-    for (final controller in _taskPopoverControllers.values) {
-      controller.dispose();
-    }
-    _taskPopoverControllers.clear();
+    _activePopoverEntry?.remove();
+    _activePopoverEntry = null;
     super.dispose();
   }
 
@@ -316,273 +309,277 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _cleanupTaskPopovers(Set<String> activeIds) {
     final removedIds = <String>[
-      for (final id in _taskPopoverControllers.keys)
+      for (final id in _taskPopoverLayouts.keys)
         if (!activeIds.contains(id)) id,
     ];
 
     for (final id in removedIds) {
-      _taskPopoverControllers.remove(id)?.dispose();
-      _taskPopoverLayouts.remove(id);
-      _taskPopoverGroups.remove(id);
       if (_activeTaskPopoverId == id) {
-        _activeTaskPopoverId = null;
+        // Keep the active popover alive even if its backing tile
+        // wasn't part of this build (e.g., due to animation).
+        continue;
+      }
+      _taskPopoverLayouts.remove(id);
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_activeTaskPopoverId == id) {
+            _closeTaskPopover(id, reason: 'cleanup');
+          }
+        });
       }
     }
   }
 
-  ShadPopoverController _popoverControllerFor(String taskId) {
-    final existing = _taskPopoverControllers[taskId];
-    if (existing != null) {
-      return existing;
+  void _updateActivePopoverLayoutForTask(String taskId) {
+    final key = _taskItemKeys[taskId];
+    if (key == null) return;
+    final context = key.currentContext;
+    if (context == null) return;
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    final rect = offset & renderBox.size;
+    final layout = _calculateTaskPopoverLayout(rect);
+    _taskPopoverLayouts[taskId] = layout;
+    if (_activeTaskPopoverId == taskId) {
+      _activePopoverEntry?.markNeedsBuild();
     }
-
-    final controller = ShadPopoverController();
-    controller.addListener(() {
-      if (!mounted) return;
-      if (!controller.isOpen && _activeTaskPopoverId == taskId) {
-        setState(() {
-          _activeTaskPopoverId = null;
-        });
-      }
-    });
-
-    _taskPopoverControllers[taskId] = controller;
-    return controller;
   }
 
   _TaskPopoverLayout _calculateTaskPopoverLayout(Rect bounds) {
     final mediaQuery = MediaQuery.of(context);
-    final screenSize = mediaQuery.size;
-    final safePadding = mediaQuery.padding;
-    const dropdownWidth = 360.0;
-    const dropdownMaxHeight = 728.0; // Increased by 40% from 520
-    const margin = 16.0;
+    final Size screenSize = mediaQuery.size;
+    final EdgeInsets safePadding = mediaQuery.padding;
+    const double dropdownWidth = 360.0;
+    const double dropdownMaxHeight = 728.0;
+    const double minimumHeight = 160.0;
+    const double margin = 16.0;
 
-    // Calculate actual usable screen area (excluding status bar, nav bar, etc)
-    final usableTop = safePadding.top + margin;
-    final usableBottom = screenSize.height - safePadding.bottom - margin;
-    final usableHeight = usableBottom - usableTop;
+    final double usableLeft = margin;
+    final double usableRight = screenSize.width - margin;
+    final double usableTop = safePadding.top + margin;
+    final double usableBottom = screenSize.height - safePadding.bottom - margin;
+    final double usableHeight = math.max(0, usableBottom - usableTop);
 
-    // Calculate available space on each side of the task
-    final leftSpace = bounds.left - margin;
-    final rightSpace = screenSize.width - bounds.right - margin;
+    final double leftSpace = bounds.left - usableLeft;
+    final double rightSpace = usableRight - bounds.right;
 
-    // Determine which side to place the popover based on available space
     final bool placeOnRight;
-    if (rightSpace >= dropdownWidth) {
-      placeOnRight = true; // Enough space on right
-    } else if (leftSpace >= dropdownWidth) {
-      placeOnRight = false; // Enough space on left
+    if (rightSpace >= dropdownWidth && leftSpace < dropdownWidth) {
+      placeOnRight = true;
+    } else if (leftSpace >= dropdownWidth && rightSpace < dropdownWidth) {
+      placeOnRight = false;
     } else {
-      placeOnRight = rightSpace > leftSpace; // Use side with more space
+      placeOnRight = rightSpace >= leftSpace;
     }
 
-    // Calculate vertical positioning using dynamic alignment strategy
-    final taskTop = bounds.top;
-    final taskBottom = bounds.bottom;
-    final taskCenterY = bounds.top + bounds.height / 2;
-
-    // Start with desired max height
     double effectiveMaxHeight = dropdownMaxHeight;
-
-    // Check total available vertical space
-    if (effectiveMaxHeight > usableHeight) {
-      effectiveMaxHeight = usableHeight.clamp(160.0, dropdownMaxHeight);
-    }
-
-    // Determine vertical alignment and offset based on available space
-    final popoverHalfHeight = effectiveMaxHeight / 2;
-    final spaceAbove = taskCenterY - usableTop;
-    final spaceBelow = usableBottom - taskCenterY;
-
-    Alignment childVerticalAlignment;
-    double verticalOffset = 0;
-
-    // Check if we can center the popover vertically
-    if (spaceAbove >= popoverHalfHeight && spaceBelow >= popoverHalfHeight) {
-      // Enough space to center - use center alignment
-      childVerticalAlignment = Alignment.center;
-      verticalOffset = 0;
-    } else if (spaceAbove < popoverHalfHeight &&
-        spaceBelow >= effectiveMaxHeight - spaceAbove) {
-      // Not enough space above, align to top of task
-      childVerticalAlignment = Alignment.topCenter;
-
-      // Calculate offset to ensure popover doesn't go off top
-      final popoverTop = taskTop;
-      if (popoverTop < usableTop) {
-        verticalOffset = usableTop - popoverTop;
-      }
-
-      // Check if we need to reduce height
-      if (taskTop + verticalOffset + effectiveMaxHeight > usableBottom) {
-        effectiveMaxHeight = usableBottom - (taskTop + verticalOffset);
-        effectiveMaxHeight = effectiveMaxHeight.clamp(160.0, dropdownMaxHeight);
-      }
-    } else if (spaceBelow < popoverHalfHeight &&
-        spaceAbove >= effectiveMaxHeight - spaceBelow) {
-      // Not enough space below, align to bottom of task
-      childVerticalAlignment = Alignment.bottomCenter;
-
-      // Calculate offset to ensure popover doesn't go off bottom
-      final popoverBottom = taskBottom;
-      if (popoverBottom + effectiveMaxHeight > usableBottom) {
-        verticalOffset = usableBottom - (popoverBottom + effectiveMaxHeight);
-      }
-
-      // Check if we need to reduce height
-      if (taskBottom + verticalOffset - effectiveMaxHeight < usableTop) {
-        effectiveMaxHeight = (taskBottom + verticalOffset) - usableTop;
-        effectiveMaxHeight = effectiveMaxHeight.clamp(160.0, dropdownMaxHeight);
-      }
+    if (usableHeight <= 0) {
+      effectiveMaxHeight = minimumHeight;
     } else {
-      // Limited space on both sides - use whichever has more space
-      if (spaceBelow > spaceAbove) {
-        // More space below - align to top of task
-        childVerticalAlignment = Alignment.topCenter;
-        effectiveMaxHeight = (spaceBelow * 2).clamp(160.0, dropdownMaxHeight);
-
-        // Ensure it doesn't go off screen
-        if (taskTop < usableTop) {
-          verticalOffset = usableTop - taskTop;
-        }
-      } else {
-        // More space above - align to bottom of task
-        childVerticalAlignment = Alignment.bottomCenter;
-        effectiveMaxHeight = (spaceAbove * 2).clamp(160.0, dropdownMaxHeight);
-
-        // Ensure it doesn't go off screen
-        if (taskBottom > usableBottom) {
-          verticalOffset = usableBottom - taskBottom;
-        }
+      effectiveMaxHeight = math.min(dropdownMaxHeight, usableHeight);
+      if (effectiveMaxHeight < minimumHeight) {
+        effectiveMaxHeight = usableHeight;
       }
     }
 
-    // Combine horizontal and vertical alignments
-    final Alignment childAlignment;
-    final Alignment overlayAlignment;
+    final double halfHeight = effectiveMaxHeight / 2;
+    final double taskCenterY = bounds.top + (bounds.height / 2);
+    final double clampedCenterY = taskCenterY.clamp(
+      usableTop + halfHeight,
+      usableBottom - halfHeight,
+    );
 
-    if (placeOnRight) {
-      if (childVerticalAlignment == Alignment.center) {
-        childAlignment = Alignment.centerRight;
-        overlayAlignment = Alignment.centerLeft;
-      } else if (childVerticalAlignment == Alignment.topCenter) {
-        childAlignment = Alignment.topRight;
-        overlayAlignment = Alignment.topLeft;
-      } else {
-        childAlignment = Alignment.bottomRight;
-        overlayAlignment = Alignment.bottomLeft;
-      }
-    } else {
-      if (childVerticalAlignment == Alignment.center) {
-        childAlignment = Alignment.centerLeft;
-        overlayAlignment = Alignment.centerRight;
-      } else if (childVerticalAlignment == Alignment.topCenter) {
-        childAlignment = Alignment.topLeft;
-        overlayAlignment = Alignment.topRight;
-      } else {
-        childAlignment = Alignment.bottomLeft;
-        overlayAlignment = Alignment.bottomRight;
-      }
+    double top = clampedCenterY - halfHeight;
+    if (top < usableTop) {
+      top = usableTop;
+    }
+    if (top + effectiveMaxHeight > usableBottom) {
+      top = usableBottom - effectiveMaxHeight;
     }
 
-    // Simple horizontal offset for gap between task and popover
-    const horizontalGap = _taskPopoverHorizontalGap;
-    final horizontalOffset = placeOnRight ? horizontalGap : -horizontalGap;
+    double left = placeOnRight
+        ? bounds.right + _taskPopoverHorizontalGap
+        : bounds.left - dropdownWidth - _taskPopoverHorizontalGap;
 
-    // Use ShadAnchorAuto when near edges for better automatic positioning
-    final ShadAnchorBase anchor;
-    final needsAutoPositioning =
-        verticalOffset.abs() > 50; // Large offset indicates edge case
-
-    if (needsAutoPositioning) {
-      // Use auto positioning for edge cases
-      final Alignment targetAlign;
-      final Alignment followerAlign;
-
-      if (placeOnRight) {
-        targetAlign = Alignment.centerRight;
-        followerAlign = Alignment.centerLeft;
-      } else {
-        targetAlign = Alignment.centerLeft;
-        followerAlign = Alignment.centerRight;
-      }
-
-      anchor = ShadAnchorAuto(
-        targetAnchor: targetAlign,
-        followerAnchor: followerAlign,
-        offset: Offset(horizontalOffset, 0),
-      );
-    } else {
-      // Use manual positioning when we have good space
-      anchor = ShadAnchor(
-        childAlignment: childAlignment,
-        overlayAlignment: overlayAlignment,
-        offset: Offset(horizontalOffset, verticalOffset),
-      );
-    }
-
-    // Debug output to understand positioning (disabled in production)
-    // print('Task bounds: $bounds');
-    // print('Usable area: top=$usableTop, bottom=$usableBottom');
-    // print('Space: above=$spaceAbove, below=$spaceBelow');
-    // print('Alignment: child=$childAlignment, overlay=$overlayAlignment');
-    // print('Offset: horizontal=$horizontalOffset, vertical=$verticalOffset');
-    // print('Max height: $effectiveMaxHeight');
+    left = left.clamp(usableLeft, usableRight - dropdownWidth);
 
     return _TaskPopoverLayout(
-      anchor: anchor,
+      topLeft: Offset(left, top),
       maxHeight: effectiveMaxHeight,
     );
   }
 
   void _onScheduledTaskTapped(CalendarTask task, Rect bounds) {
-    final controller = _popoverControllerFor(task.id);
-
-    if (controller.isOpen) {
+    if (_activeTaskPopoverId == task.id) {
       _closeTaskPopover(task.id, reason: 'toggle-close');
       return;
     }
 
     final layout = _calculateTaskPopoverLayout(bounds);
+    _openTaskPopover(task, layout);
+  }
 
+  void _closeTaskPopover(String taskId, {String reason = 'manual'}) {
+    assert(() {
+      debugPrint(
+          'Close popover for $taskId reason=$reason armed=$_popoverDismissArmed');
+      return true;
+    }());
+    _taskPopoverLayouts.remove(taskId);
+    if (_activeTaskPopoverId != taskId) {
+      return;
+    }
+
+    _activeTaskPopoverId = null;
+    _popoverDismissArmed = false;
+    _activePopoverEntry?.remove();
+    _activePopoverEntry = null;
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _openTaskPopover(CalendarTask task, _TaskPopoverLayout layout) {
     if (_activeTaskPopoverId != null && _activeTaskPopoverId != task.id) {
       _closeTaskPopover(_activeTaskPopoverId!, reason: 'switch-target');
     }
 
-    if (!mounted) return;
-
-    final groupId = Object();
-
-    setState(() {
-      _taskPopoverLayouts[task.id] = layout;
-      _taskPopoverGroups[task.id] = groupId;
-      _activeTaskPopoverId = task.id;
-    });
-
+    _taskPopoverLayouts[task.id] = layout;
+    _activeTaskPopoverId = task.id;
+    _popoverDismissArmed = false;
+    _ensurePopoverEntry();
+    if (mounted) {
+      setState(() {});
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final updatedController = _taskPopoverControllers[task.id];
-      if (updatedController != null && !updatedController.isOpen) {
-        updatedController.show();
-      }
+      _popoverDismissArmed = true;
+      _activePopoverEntry?.markNeedsBuild();
     });
   }
 
-  void _closeTaskPopover(String taskId, {String reason = 'manual'}) {
-    final controller = _taskPopoverControllers[taskId];
-    if (controller == null) {
+  void _ensurePopoverEntry() {
+    if (_activePopoverEntry != null) {
+      _activePopoverEntry!.markNeedsBuild();
       return;
     }
 
-    if (controller.isOpen) {
-      controller.hide();
+    final overlayState = Overlay.of(context, rootOverlay: true);
+    if (overlayState == null) {
+      return;
     }
-    _taskPopoverLayouts.remove(taskId);
-    _taskPopoverGroups.remove(taskId);
-    if (_activeTaskPopoverId == taskId) {
-      _activeTaskPopoverId = null;
-    }
+
+    _activePopoverEntry = OverlayEntry(
+      builder: (overlayContext) {
+        final taskId = _activeTaskPopoverId;
+        if (taskId == null) {
+          return const SizedBox.shrink();
+        }
+
+        final layout =
+            _taskPopoverLayouts[taskId] ?? _defaultTaskPopoverLayout();
+
+        final renderBox = overlayState.context.findRenderObject() as RenderBox?;
+        final offset = renderBox == null
+            ? layout.topLeft
+            : renderBox.globalToLocal(layout.topLeft);
+
+        const double popoverWidth = 360.0;
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (event) {
+                  final currentId = _activeTaskPopoverId;
+                  if (currentId == null || !_popoverDismissArmed) {
+                    return;
+                  }
+
+                  final overlayBox =
+                      overlayState.context.findRenderObject() as RenderBox?;
+                  if (overlayBox == null) {
+                    _closeTaskPopover(currentId, reason: 'outside-tap');
+                    return;
+                  }
+
+                  final layout = _taskPopoverLayouts[currentId] ??
+                      _defaultTaskPopoverLayout();
+                  final Offset topLeft = layout.topLeft;
+                  final Rect popoverRect = Rect.fromLTWH(
+                    topLeft.dx,
+                    topLeft.dy,
+                    popoverWidth,
+                    layout.maxHeight,
+                  );
+
+                  final Offset localPosition =
+                      overlayBox.globalToLocal(event.position);
+
+                  if (!popoverRect.contains(localPosition)) {
+                    _closeTaskPopover(currentId, reason: 'outside-tap');
+                  }
+                },
+              ),
+            ),
+            Positioned(
+              left: offset.dx,
+              top: offset.dy,
+              width: popoverWidth,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: layout.maxHeight),
+                child: Material(
+                  color: Colors.transparent,
+                  child: BlocProvider<T>.value(
+                    value: widget.bloc,
+                    child: BlocBuilder<T, CalendarState>(
+                      builder: (context, state) {
+                        final latestTask = state.model.tasks[taskId];
+                        if (latestTask == null) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _closeTaskPopover(taskId, reason: 'missing-task');
+                          });
+                          return const SizedBox.shrink();
+                        }
+
+                        return EditTaskDropdown(
+                          task: latestTask,
+                          maxHeight: layout.maxHeight,
+                          onClose: () => _closeTaskPopover(taskId,
+                              reason: 'dropdown-close'),
+                          onTaskUpdated: (updatedTask) {
+                            context.read<T>().add(
+                                  CalendarEvent.taskUpdated(
+                                    task: updatedTask,
+                                  ),
+                                );
+                          },
+                          onTaskDeleted: (deletedTaskId) {
+                            context.read<T>().add(
+                                  CalendarEvent.taskDeleted(
+                                    taskId: deletedTaskId,
+                                  ),
+                                );
+                            _closeTaskPopover(deletedTaskId,
+                                reason: 'task-deleted');
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    overlayState.insert(_activePopoverEntry!);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _popoverDismissArmed = true;
+    });
   }
 
   Widget _buildDayHeaders(List<DateTime> weekDates, bool compact) {
@@ -1241,89 +1238,41 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       height: clampedHeight,
       child: Builder(
         builder: (context) {
-          final bloc = widget.bloc;
-          final controller = _popoverControllerFor(task.id);
-          final layout =
-              _taskPopoverLayouts[task.id] ?? _defaultTaskPopoverLayout();
-          final groupId = _taskPopoverGroups[task.id] ?? _fallbackPopoverGroup;
-          final hoverBridgeExtent = _taskPopoverHoverBridgeExtent;
           final isPopoverOpen = _activeTaskPopoverId == task.id;
+          if (isPopoverOpen) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _updateActivePopoverLayoutForTask(task.id);
+            });
+          }
 
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: -hoverBridgeExtent,
-                right: -hoverBridgeExtent,
-                top: -hoverBridgeExtent,
-                bottom: -hoverBridgeExtent,
-                child: ShadMouseArea(
-                  groupId: groupId,
-                  behavior: HitTestBehavior.opaque,
-                  child: const SizedBox.expand(),
-                ),
-              ),
-              ShadPopover(
-                controller: controller,
-                closeOnTapOutside: false,
-                groupId: groupId,
-                areaGroupId: groupId,
-                effects: const [],
-                anchor: layout.anchor,
-                padding: EdgeInsets.zero,
-                popover: (popoverContext) {
-                  return BlocProvider<T>.value(
-                    value: bloc,
-                    child: BlocBuilder<T, CalendarState>(
-                      builder: (context, state) {
-                        final latestTask = state.model.tasks[task.id] ?? task;
+          final globalKey =
+              _taskItemKeys.putIfAbsent(task.id, () => GlobalKey());
 
-                        return EditTaskDropdown(
-                          task: latestTask,
-                          maxHeight: layout.maxHeight,
-                          onClose: () => _closeTaskPopover(task.id,
-                              reason: 'dropdown-close'),
-                          onTaskUpdated: (updatedTask) {
-                            context.read<T>().add(
-                                  CalendarEvent.taskUpdated(task: updatedTask),
-                                );
-                          },
-                          onTaskDeleted: (taskId) {
-                            context.read<T>().add(
-                                  CalendarEvent.taskDeleted(taskId: taskId),
-                                );
-                            _closeTaskPopover(taskId, reason: 'task-deleted');
-                          },
-                        );
-                      },
-                    ),
+          return KeyedSubtree(
+            key: globalKey,
+            child: ResizableTaskWidget(
+              key: ValueKey(task.id),
+              task: task,
+              onResize: (updatedTask) {
+                if (widget.onTaskDragEnd != null &&
+                    updatedTask.scheduledTime != null) {
+                  widget.onTaskDragEnd!(
+                    updatedTask,
+                    updatedTask.scheduledTime!,
                   );
-                },
-                child: ResizableTaskWidget(
-                  key: ValueKey(task.id),
-                  task: task,
-                  onResize: (updatedTask) {
-                    if (widget.onTaskDragEnd != null &&
-                        updatedTask.scheduledTime != null) {
-                      widget.onTaskDragEnd!(
-                        updatedTask,
-                        updatedTask.scheduledTime!,
-                      );
-                    }
-                  },
-                  dayWidth: dayWidth,
-                  hourHeight: hourSlotHeight,
-                  quarterHeight: quarterSlotHeight,
-                  width: eventWidth,
-                  height: clampedHeight,
-                  isDayView: isDayView,
-                  isPopoverOpen: isPopoverOpen,
-                  onTap: (tappedTask, bounds) {
-                    _onScheduledTaskTapped(tappedTask, bounds);
-                  },
-                ),
-              ),
-            ],
+                }
+              },
+              dayWidth: dayWidth,
+              hourHeight: hourSlotHeight,
+              quarterHeight: quarterSlotHeight,
+              width: eventWidth,
+              height: clampedHeight,
+              isDayView: isDayView,
+              isPopoverOpen: isPopoverOpen,
+              onTap: (tappedTask, bounds) {
+                _onScheduledTaskTapped(tappedTask, bounds);
+              },
+            ),
           );
         },
       ),
