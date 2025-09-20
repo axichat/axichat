@@ -294,7 +294,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   Widget _buildCalendarGrid(CalendarState state) {
     return CalendarGrid(
       state: state,
-      onTaskTapped: (task, position) {
+      onTaskTapped: (task, link, bounds) {
         // TODO: Handle task tap in base implementation
       },
       onEmptySlotTapped: (time, position) {

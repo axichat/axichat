@@ -5,10 +5,15 @@ import 'dart:math';
 import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 ///Call [init].
 class NotificationService {
@@ -16,6 +21,7 @@ class NotificationService {
       : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
+  bool _tzInitialized = false;
 
   bool mute = false;
 
@@ -52,6 +58,8 @@ class NotificationService {
       initializationSettings,
       onDidReceiveNotificationResponse: notificationTapBackground,
     );
+
+    await _ensureTimeZones();
   }
 
   Future<NotificationAppLaunchDetails?> getAppNotificationAppLaunchDetails() =>
@@ -60,54 +68,71 @@ class NotificationService {
   Future<bool> hasAllNotificationPermissions() async {
     if (!needsPermissions) return true;
 
-    if (!await Permission.notification.isGranted) {
+    try {
+      if (!await Permission.notification.isGranted) {
+        return false;
+      }
+
+      if (Platform.isAndroid) {
+        if (!await Permission.ignoreBatteryOptimizations.isGranted) {
+          return false;
+        }
+
+        if (!await Permission.systemAlertWindow.isGranted) {
+          return false;
+        }
+      }
+      return true;
+    } on MissingPluginException catch (error, stackTrace) {
+      debugPrint(
+        'Permission plugin unavailable; disabling notifications: $error',
+      );
+      mute = true;
+      debugPrintStack(stackTrace: stackTrace);
       return false;
     }
-
-    if (Platform.isAndroid) {
-      if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-        return false;
-      }
-
-      if (!await Permission.systemAlertWindow.isGranted) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   Future<bool> requestAllNotificationPermissions() async {
     if (!needsPermissions) return true;
 
-    if (!await Permission.notification.request().isGranted) {
-      await AppSettings.openAppSettings(
-        type: AppSettingsType.notification,
-        asAnotherTask: true,
-      );
-      if (!await Permission.notification.isGranted) return false;
-    }
-
-    if (Platform.isAndroid) {
-      if (!await Permission.ignoreBatteryOptimizations.request().isGranted) {
+    try {
+      if (!await Permission.notification.request().isGranted) {
         await AppSettings.openAppSettings(
-          type: AppSettingsType.batteryOptimization,
+          type: AppSettingsType.notification,
           asAnotherTask: true,
         );
-        if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-          return false;
+        if (!await Permission.notification.isGranted) return false;
+      }
+
+      if (Platform.isAndroid) {
+        if (!await Permission.ignoreBatteryOptimizations.request().isGranted) {
+          await AppSettings.openAppSettings(
+            type: AppSettingsType.batteryOptimization,
+            asAnotherTask: true,
+          );
+          if (!await Permission.ignoreBatteryOptimizations.isGranted) {
+            return false;
+          }
+        }
+
+        if (!await Permission.systemAlertWindow.request().isGranted) {
+          await FlutterForegroundTask.openSystemAlertWindowSettings();
+          if (!await Permission.systemAlertWindow.isGranted) {
+            return false;
+          }
         }
       }
 
-      if (!await Permission.systemAlertWindow.request().isGranted) {
-        await FlutterForegroundTask.openSystemAlertWindowSettings();
-        if (!await Permission.systemAlertWindow.isGranted) {
-          return false;
-        }
-      }
+      return true;
+    } on MissingPluginException catch (error, stackTrace) {
+      debugPrint(
+        'Permission plugin unavailable while requesting permissions: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+      mute = true;
+      return false;
     }
-
-    return true;
   }
 
   Future<void> sendNotification({
@@ -122,24 +147,7 @@ class NotificationService {
       if (!await condition) return;
     }
 
-    final packageInfo = await PackageInfo.fromPlatform();
-
-    var androidDetails = AndroidNotificationDetails(
-      channel,
-      channel,
-      groupKey: '${packageInfo.packageName}.MESSAGES',
-      importance: Importance.max,
-      priority: Priority.high,
-      icon: androidIconPath,
-    );
-    const windowsDetails = WindowsNotificationDetails();
-    const linuxDetails = LinuxNotificationDetails();
-
-    var notificationDetails = NotificationDetails(
-      android: androidDetails,
-      windows: windowsDetails,
-      linux: linuxDetails,
-    );
+    final notificationDetails = await _notificationDetails();
 
     await _plugin.show(
       Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
@@ -151,4 +159,69 @@ class NotificationService {
   }
 
   Future<void> dismissNotifications() => _plugin.cancelAll();
+
+  Future<void> scheduleNotification({
+    required int id,
+    required DateTime scheduledAt,
+    required String title,
+    String? body,
+    String? payload,
+  }) async {
+    if (mute) return;
+    if (!await hasAllNotificationPermissions()) return;
+    await _ensureTimeZones();
+
+    final notificationDetails = await _notificationDetails();
+    final scheduled = tz.TZDateTime.from(scheduledAt, tz.local);
+
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduled,
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: payload,
+      matchDateTimeComponents: null,
+    );
+  }
+
+  Future<void> cancelNotification(int id) => _plugin.cancel(id);
+
+  Future<void> _ensureTimeZones() async {
+    if (_tzInitialized) {
+      return;
+    }
+
+    tz.initializeTimeZones();
+    try {
+      final name = await FlutterNativeTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
+    } catch (_) {
+      tz.setLocalLocation(tz.UTC);
+    }
+
+    _tzInitialized = true;
+  }
+
+  Future<NotificationDetails> _notificationDetails() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    final androidDetails = AndroidNotificationDetails(
+      channel,
+      channel,
+      groupKey: '${packageInfo.packageName}.MESSAGES',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: androidIconPath,
+    );
+    const windowsDetails = WindowsNotificationDetails();
+    const linuxDetails = LinuxNotificationDetails();
+
+    return NotificationDetails(
+      android: androidDetails,
+      windows: windowsDetails,
+      linux: linuxDetails,
+    );
+  }
 }

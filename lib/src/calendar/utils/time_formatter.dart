@@ -72,4 +72,30 @@ class TimeFormatter {
     }
     return '${duration.inHours}h';
   }
+
+  /// Format date to a readable string (e.g., "Aug 21, 2025").
+  static String formatFriendlyDate(DateTime date) {
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    final month = months[date.month];
+    return '$month ${date.day}, ${date.year}';
+  }
+
+  /// Format date and time together (e.g., "Aug 21, 2025 · 5:00 PM").
+  static String formatFriendlyDateTime(DateTime dateTime) {
+    return '${formatFriendlyDate(dateTime)} · ${formatTime(dateTime)}';
+  }
 }

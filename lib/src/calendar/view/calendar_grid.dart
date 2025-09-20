@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -5,7 +7,6 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
-import '../utils/time_formatter.dart';
 import 'resizable_task_widget.dart';
 
 class OverlapInfo {
@@ -20,7 +21,8 @@ class OverlapInfo {
 
 class CalendarGrid extends StatefulWidget {
   final CalendarState state;
-  final Function(CalendarTask, Offset)? onTaskTapped;
+  final void Function(CalendarTask task, LayerLink link, Rect bounds)?
+      onTaskTapped;
   final Function(DateTime, Offset)? onEmptySlotTapped;
   final Function(CalendarTask, DateTime)? onTaskDragEnd;
   final void Function(DateTime date) onDateSelected;
@@ -46,9 +48,15 @@ class _CalendarGridState extends State<CalendarGrid>
   static const int endHour = 24;
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
+  late final ScrollController _verticalController;
+  Timer? _clockTimer;
+  bool _hasAutoScrolled = false;
+  final Map<String, LayerLink> _taskLinks = {};
 
   // Track hovered cell for hover effects
   String? _hoveredCellKey;
+  DateTime? _dragPreviewStart;
+  Duration? _dragPreviewDuration;
 
   @override
   void initState() {
@@ -62,12 +70,56 @@ class _CalendarGridState extends State<CalendarGrid>
       curve: Curves.easeInOut,
     );
     _viewTransitionController.value = 1.0; // Start fully visible
+    _verticalController = ScrollController();
+    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
   }
 
   @override
   void dispose() {
     _viewTransitionController.dispose();
+    _clockTimer?.cancel();
+    _verticalController.dispose();
     super.dispose();
+  }
+
+  void _updateDragPreview(DateTime start, Duration duration) {
+    if (_dragPreviewStart == start && _dragPreviewDuration == duration) {
+      return;
+    }
+    setState(() {
+      _dragPreviewStart = start;
+      _dragPreviewDuration = duration;
+    });
+  }
+
+  void _clearDragPreview() {
+    if (_dragPreviewStart == null && _dragPreviewDuration == null) {
+      return;
+    }
+    setState(() {
+      _dragPreviewStart = null;
+      _dragPreviewDuration = null;
+    });
+  }
+
+  bool _isPreviewAnchor(DateTime slotStart) {
+    if (_dragPreviewStart == null) return false;
+    return slotStart.isAtSameMomentAs(_dragPreviewStart!);
+  }
+
+  bool _isPreviewSlot(DateTime slotStart, Duration slotDuration) {
+    if (_dragPreviewStart == null || _dragPreviewDuration == null) {
+      return false;
+    }
+    final previewStart = _dragPreviewStart!;
+    final previewEnd = previewStart.add(_dragPreviewDuration!);
+    final slotEnd = slotStart.add(slotDuration);
+    return slotStart.isBefore(previewEnd) && slotEnd.isAfter(previewStart);
   }
 
   @override
@@ -77,14 +129,18 @@ class _CalendarGridState extends State<CalendarGrid>
     if (oldWidget.state.viewMode != widget.state.viewMode) {
       _viewTransitionController.reset();
       _viewTransitionController.forward();
+      _hasAutoScrolled = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
+    } else if (!_isSameDay(
+        oldWidget.state.selectedDate, widget.state.selectedDate)) {
+      _hasAutoScrolled = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
     }
   }
 
-  static const double hourSlotHeight = 60.0;
-  static const double quarterSlotHeight = 15.0; // hourSlotHeight / 4
+  static const double hourSlotHeight = 40.0;
+  static const double quarterSlotHeight = 10.0; // hourSlotHeight / 4
   static const double timeColumnWidth = 80.0;
-  static const double dayHeaderHeight = 40.0;
-
   double _getHourHeight(BuildContext context, bool compact) {
     return hourSlotHeight; // Fixed hour height for consistent quarter-hour slots
   }
@@ -134,6 +190,7 @@ class _CalendarGridState extends State<CalendarGrid>
                 borderRadius: BorderRadius.zero, // Remove rounded corners
               ),
               child: SingleChildScrollView(
+                controller: _verticalController,
                 child: AnimatedBuilder(
                   animation: _viewTransitionAnimation,
                   builder: (context, child) {
@@ -154,10 +211,12 @@ class _CalendarGridState extends State<CalendarGrid>
   Widget _buildGridContent(
       bool isWeekView, List<DateTime> weekDates, bool compact) {
     final isMobile = ResponsiveHelper.isMobile(context);
+    final visibleTaskIds = <String>{};
+    late final Widget content;
 
     if (isWeekView && isMobile) {
       // Mobile week view: horizontal scroll for day columns
-      return Row(
+      content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildTimeColumn(compact),
@@ -165,10 +224,15 @@ class _CalendarGridState extends State<CalendarGrid>
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: weekDates.map((date) {
+                children: weekDates.asMap().entries.map((entry) {
                   return SizedBox(
                     width: 120, // Fixed width for mobile day columns
-                    child: _buildDayColumn(date, compact),
+                    child: _buildDayColumn(
+                      entry.value,
+                      compact,
+                      isFirstColumn: entry.key == 0,
+                      visibleTaskIds: visibleTaskIds,
+                    ),
                   );
                 }).toList(),
               ),
@@ -178,28 +242,47 @@ class _CalendarGridState extends State<CalendarGrid>
       );
     } else if (isWeekView) {
       // Desktop/tablet week view: equal width columns
-      return Row(
+      content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildTimeColumn(compact),
-          ...weekDates.map((date) => Expanded(
-                child: _buildDayColumn(date, compact),
-              )),
+          ...weekDates.asMap().entries.map(
+                (entry) => Expanded(
+                  child: _buildDayColumn(
+                    entry.value,
+                    compact,
+                    isFirstColumn: entry.key == 0,
+                    visibleTaskIds: visibleTaskIds,
+                  ),
+                ),
+              ),
         ],
       );
     } else {
       // Day view: single column
-      return Row(
+      content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildTimeColumn(compact),
           Expanded(
-            child: _buildDayColumn(widget.state.selectedDate, compact,
-                isDayView: true),
+            child: _buildDayColumn(
+              widget.state.selectedDate,
+              compact,
+              isDayView: true,
+              isFirstColumn: true,
+              visibleTaskIds: visibleTaskIds,
+            ),
           ),
         ],
       );
     }
+
+    _cleanupTaskLinks(visibleTaskIds);
+    return content;
+  }
+
+  void _cleanupTaskLinks(Set<String> activeIds) {
+    _taskLinks.removeWhere((key, _) => !activeIds.contains(key));
   }
 
   Widget _buildDayHeaders(List<DateTime> weekDates, bool compact) {
@@ -214,9 +297,15 @@ class _CalendarGridState extends State<CalendarGrid>
       ),
       child: Row(
         children: [
-          const SizedBox(
+          Container(
             width: timeColumnWidth,
-            child: SizedBox(), // Empty space for time column
+            decoration: const BoxDecoration(
+              color: calendarSidebarBackgroundColor,
+              border: Border(
+                top: BorderSide(color: calendarBorderColor, width: 1),
+                right: BorderSide(color: calendarBorderColor, width: 1),
+              ),
+            ),
           ),
           ...weekDates.asMap().entries.map((entry) {
             final index = entry.key;
@@ -243,8 +332,8 @@ class _CalendarGridState extends State<CalendarGrid>
           color: isToday
               ? calendarPrimaryColor.withValues(alpha: 0.05)
               : Colors.white,
-          border: const Border(
-            right: BorderSide(color: calendarBorderColor),
+          border: Border(
+            right: const BorderSide(color: calendarBorderColor),
           ),
         ),
         child: Center(
@@ -289,7 +378,14 @@ class _CalendarGridState extends State<CalendarGrid>
             final hour = totalMinutes ~/ 60;
             final minute = totalMinutes % 60;
             final isCurrentTime = _isCurrentTimeSlot(hour, minute);
-            final showLabel = minute == 0; // Only show label on the hour
+            final label = minute == 0
+                ? _formatHour(hour)
+                : minute == 15
+                    ? ':15'
+                    : minute == 30
+                        ? ':30'
+                        : ':45';
+            final isFirstSlot = index == 0;
 
             return Container(
               height: slotHeight,
@@ -298,37 +394,47 @@ class _CalendarGridState extends State<CalendarGrid>
                 color: Colors.transparent,
                 border: Border(
                   top: BorderSide(
-                    color: minute == 0
-                        ? calendarBorderColor // Stronger border for hour marks
-                        : calendarBorderColor.withValues(
-                            alpha: 0.3), // Lighter border for 15-minute marks
-                    width: minute == 0 ? 1.0 : 0.5,
+                    color: isFirstSlot
+                        ? Colors.transparent
+                        : minute == 0
+                            ? calendarBorderColor
+                            : calendarBorderColor.withValues(alpha: 0.3),
+                    width: isFirstSlot
+                        ? 0
+                        : minute == 0
+                            ? 1.0
+                            : 0.5,
                   ),
                 ),
               ),
-              child: showLabel
-                  ? Text(
-                      _formatHour(hour),
-                      style: calendarTimeLabelTextStyle.copyWith(
-                        fontSize: compact ? 10 : 11,
-                        fontWeight:
-                            isCurrentTime ? FontWeight.w600 : FontWeight.w400,
-                        color: isCurrentTime
-                            ? calendarTitleColor
-                            : calendarTimeLabelColor,
-                      ),
-                    )
-                  : null,
+              child: Text(
+                label,
+                style: calendarTimeLabelTextStyle.copyWith(
+                  fontSize: minute == 0 ? (compact ? 10 : 11) : 9,
+                  fontWeight: isCurrentTime ? FontWeight.w600 : FontWeight.w400,
+                  color: isCurrentTime
+                      ? calendarTitleColor
+                      : calendarTimeLabelColor,
+                ),
+              ),
             );
           } else {
             // Week view: hourly slots
             final hour = startHour + index;
             final isCurrentHour = DateTime.now().hour == hour;
+            final isFirstSlot = index == 0;
             return Container(
               height: hourHeight,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: Colors.transparent,
+                border: Border(
+                  top: BorderSide(
+                    color:
+                        isFirstSlot ? Colors.transparent : calendarBorderColor,
+                    width: isFirstSlot ? 0 : 1.0,
+                  ),
+                ),
               ),
               child: Text(
                 _formatHour(hour),
@@ -353,7 +459,9 @@ class _CalendarGridState extends State<CalendarGrid>
   }
 
   Widget _buildDayColumn(DateTime date, bool compact,
-      {bool isDayView = false}) {
+      {bool isDayView = false,
+      bool isFirstColumn = false,
+      required Set<String> visibleTaskIds}) {
     final isToday = _isToday(date);
 
     return Container(
@@ -375,11 +483,68 @@ class _CalendarGridState extends State<CalendarGrid>
             children: [
               _buildTimeSlots(compact,
                   isDayView: isDayView, date: date, isToday: isToday),
+              if (_shouldShowCurrentTimeIndicator(date))
+                _buildCurrentTimeIndicator(
+                  date,
+                  constraints.maxWidth,
+                  compact,
+                  isDayView,
+                ),
               ..._buildTasksForDayWithWidth(date, compact, constraints.maxWidth,
-                  isDayView: isDayView),
+                  isDayView: isDayView, visibleTaskIds: visibleTaskIds),
             ],
           );
         },
+      ),
+    );
+  }
+
+  bool _shouldShowCurrentTimeIndicator(DateTime date) {
+    return _isSameDay(date, DateTime.now());
+  }
+
+  Widget _buildCurrentTimeIndicator(
+      DateTime date, double columnWidth, bool compact, bool isDayView) {
+    final now = DateTime.now();
+    final minutesFromStart = (now.hour * 60 + now.minute) - (startHour * 60);
+    if (minutesFromStart < 0 || minutesFromStart > (endHour - startHour) * 60) {
+      return const SizedBox.shrink();
+    }
+
+    final hourHeight = _getHourHeight(context, compact);
+    final double slotHeight = isDayView ? hourHeight / 4 : hourHeight;
+    final double rawOffset =
+        (minutesFromStart / (isDayView ? 15 : 60)) * slotHeight - 4;
+    final double position = rawOffset < 0 ? 0 : rawOffset;
+
+    return Positioned(
+      top: position,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: SizedBox(
+          height: 8,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: calendarPrimaryColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Container(
+                  height: 2,
+                  color: calendarPrimaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -398,6 +563,8 @@ class _CalendarGridState extends State<CalendarGrid>
           final totalMinutes = (startHour * 60) + (index * 15);
           final hour = totalMinutes ~/ 60;
           final minute = totalMinutes % 60;
+          final isFirstSlot = index == 0;
+          final targetDate = date ?? widget.state.selectedDate;
 
           return Container(
             height: slotHeight,
@@ -409,17 +576,24 @@ class _CalendarGridState extends State<CalendarGrid>
                   : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc)),
               border: Border(
                 top: BorderSide(
-                  color: minute == 0
-                      ? calendarBorderColor // Stronger border for hour marks
-                      : calendarBorderColor.withValues(
-                          alpha: 0.3), // Lighter border for 15-minute marks
-                  width: minute == 0 ? 1.0 : 0.5,
+                  color: isFirstSlot
+                      ? Colors.transparent
+                      : minute == 0
+                          ? calendarBorderColor
+                          : calendarBorderColor.withValues(alpha: 0.3),
+                  width: isFirstSlot
+                      ? 0
+                      : minute == 0
+                          ? 1.0
+                          : 0.5,
                 ),
               ),
             ),
             child: DragTarget<CalendarTask>(
-              onAcceptWithDetails: (details) {
-                final targetDate = date ?? widget.state.selectedDate;
+              onWillAccept: (task) {
+                if (task == null) {
+                  return false;
+                }
                 final slotTime = DateTime(
                   targetDate.year,
                   targetDate.month,
@@ -427,12 +601,49 @@ class _CalendarGridState extends State<CalendarGrid>
                   hour,
                   minute,
                 );
+                final duration = task.duration ?? const Duration(hours: 1);
+                _updateDragPreview(slotTime, duration);
+                return true;
+              },
+              onLeave: (_) {
+                final slotTime = DateTime(
+                  targetDate.year,
+                  targetDate.month,
+                  targetDate.day,
+                  hour,
+                  minute,
+                );
+                if (_isPreviewAnchor(slotTime)) {
+                  _clearDragPreview();
+                }
+              },
+              onAcceptWithDetails: (details) {
+                final slotTime = DateTime(
+                  targetDate.year,
+                  targetDate.month,
+                  targetDate.day,
+                  hour,
+                  minute,
+                );
+                _clearDragPreview();
                 _handleTaskDrop(details.data, slotTime);
               },
               builder: (context, candidateData, rejectedData) {
-                final isDragHovering = candidateData.isNotEmpty;
                 final cellKey = '${date?.toIso8601String()}_${hour}_$minute';
                 final isMouseHovering = _hoveredCellKey == cellKey;
+                final slotTime = DateTime(
+                  targetDate.year,
+                  targetDate.month,
+                  targetDate.day,
+                  hour,
+                  minute,
+                );
+                const slotDuration = Duration(minutes: 15);
+                final isPreviewSlot = _isPreviewSlot(slotTime, slotDuration);
+                final isPreviewAnchor = _isPreviewAnchor(slotTime);
+                final previewColor = isPreviewAnchor
+                    ? const Color(0xff0969DA).withValues(alpha: 0.2)
+                    : const Color(0xff0969DA).withValues(alpha: 0.12);
 
                 return MouseRegion(
                   cursor: SystemMouseCursors.click,
@@ -440,8 +651,8 @@ class _CalendarGridState extends State<CalendarGrid>
                   onExit: (_) => setState(() => _hoveredCellKey = null),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    color: isDragHovering
-                        ? const Color(0xff0969DA).withValues(alpha: 0.15)
+                    color: isPreviewSlot
+                        ? previewColor
                         : isMouseHovering
                             ? const Color(0xff0969DA).withValues(alpha: 0.05)
                             : Colors.transparent,
@@ -449,7 +660,6 @@ class _CalendarGridState extends State<CalendarGrid>
                       onTap: () {
                         // Only handle tap if no tasks are present in this slot
                         if (!_hasTaskInSlot(date, hour, minute)) {
-                          final targetDate = date ?? widget.state.selectedDate;
                           final slotTime = DateTime(
                             targetDate.year,
                             targetDate.month,
@@ -474,6 +684,8 @@ class _CalendarGridState extends State<CalendarGrid>
         } else {
           // Week view: hourly slots
           final hour = startHour + index;
+          final isFirstSlot = index == 0;
+          final targetDate = date ?? widget.state.selectedDate;
           return Container(
             height: hourHeight,
             decoration: BoxDecoration(
@@ -482,28 +694,64 @@ class _CalendarGridState extends State<CalendarGrid>
                       ? const Color(0xff0969DA).withValues(alpha: 0.01)
                       : const Color(0xff0969DA).withValues(alpha: 0.02))
                   : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc)),
-              border: const Border(
+              border: Border(
                 top: BorderSide(
-                  color: calendarBorderColor,
-                  width: 1.0,
+                  color: isFirstSlot ? Colors.transparent : calendarBorderColor,
+                  width: isFirstSlot ? 0 : 1.0,
                 ),
               ),
             ),
             child: DragTarget<CalendarTask>(
-              onAcceptWithDetails: (details) {
-                final targetDate = date ?? widget.state.selectedDate;
+              onWillAccept: (task) {
+                if (task == null) {
+                  return false;
+                }
                 final slotTime = DateTime(
                   targetDate.year,
                   targetDate.month,
                   targetDate.day,
                   hour,
                 );
+                final duration = task.duration ?? const Duration(hours: 1);
+                _updateDragPreview(slotTime, duration);
+                return true;
+              },
+              onLeave: (_) {
+                final slotTime = DateTime(
+                  targetDate.year,
+                  targetDate.month,
+                  targetDate.day,
+                  hour,
+                );
+                if (_isPreviewAnchor(slotTime)) {
+                  _clearDragPreview();
+                }
+              },
+              onAcceptWithDetails: (details) {
+                final slotTime = DateTime(
+                  targetDate.year,
+                  targetDate.month,
+                  targetDate.day,
+                  hour,
+                );
+                _clearDragPreview();
                 _handleTaskDrop(details.data, slotTime);
               },
               builder: (context, candidateData, rejectedData) {
-                final isDragHovering = candidateData.isNotEmpty;
                 final cellKey = '${date?.toIso8601String()}_${hour}_0';
                 final isMouseHovering = _hoveredCellKey == cellKey;
+                final slotTime = DateTime(
+                  targetDate.year,
+                  targetDate.month,
+                  targetDate.day,
+                  hour,
+                );
+                const slotDuration = Duration(hours: 1);
+                final isPreviewSlot = _isPreviewSlot(slotTime, slotDuration);
+                final isPreviewAnchor = _isPreviewAnchor(slotTime);
+                final previewColor = isPreviewAnchor
+                    ? const Color(0xff0969DA).withValues(alpha: 0.2)
+                    : const Color(0xff0969DA).withValues(alpha: 0.12);
 
                 return MouseRegion(
                   cursor: SystemMouseCursors.click,
@@ -511,8 +759,8 @@ class _CalendarGridState extends State<CalendarGrid>
                   onExit: (_) => setState(() => _hoveredCellKey = null),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    color: isDragHovering
-                        ? const Color(0xff0969DA).withValues(alpha: 0.15)
+                    color: isPreviewSlot
+                        ? previewColor
                         : isMouseHovering
                             ? const Color(0xff0969DA).withValues(alpha: 0.05)
                             : Colors.transparent,
@@ -520,7 +768,6 @@ class _CalendarGridState extends State<CalendarGrid>
                       onTap: () {
                         // Only handle tap if no tasks are present in this slot
                         if (!_hasTaskInSlot(date, hour, 0)) {
-                          final targetDate = date ?? widget.state.selectedDate;
                           final slotTime = DateTime(
                             targetDate.year,
                             targetDate.month,
@@ -572,17 +819,71 @@ class _CalendarGridState extends State<CalendarGrid>
     widget.onTaskDragEnd?.call(task, dropTime);
   }
 
+  void _maybeAutoScroll() {
+    if (_hasAutoScrolled || !mounted) return;
+    if (!_verticalController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
+      return;
+    }
+
+    final now = DateTime.now();
+    final bool isDayView = widget.state.viewMode == CalendarView.day;
+    final List<DateTime> weekDates = _getWeekDates(widget.state.selectedDate);
+    final bool compact = ResponsiveHelper.isMobile(context);
+
+    final bool shouldScroll = isDayView
+        ? _isSameDay(widget.state.selectedDate, now)
+        : weekDates.any((date) => _isSameDay(date, now));
+
+    if (!shouldScroll) {
+      _hasAutoScrolled = true;
+      return;
+    }
+
+    final minutesFromStart = (now.hour * 60 + now.minute) - (startHour * 60);
+    if (minutesFromStart < 0 || minutesFromStart > (endHour - startHour) * 60) {
+      _hasAutoScrolled = true;
+      return;
+    }
+
+    final hourHeight = _getHourHeight(context, compact);
+    final double slotHeight = isDayView ? hourHeight / 4 : hourHeight;
+    final double offset =
+        (minutesFromStart / (isDayView ? 15 : 60)) * slotHeight;
+
+    final position = _verticalController.position;
+    final viewport = position.viewportDimension;
+    double target = offset - viewport / 2;
+    target = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    _verticalController.jumpTo(target);
+    _hasAutoScrolled = true;
+  }
+
   List<Widget> _buildTasksForDayWithWidth(
       DateTime date, bool compact, double dayWidth,
-      {bool isDayView = false}) {
+      {bool isDayView = false, required Set<String> visibleTaskIds}) {
     final tasks = _getTasksForDay(date);
     final widgets = <Widget>[];
+
+    final weekStartDate = DateTime(
+      widget.state.weekStart.year,
+      widget.state.weekStart.month,
+      widget.state.weekStart.day,
+    );
+    final weekEndDate = DateTime(
+      widget.state.weekEnd.year,
+      widget.state.weekEnd.month,
+      widget.state.weekEnd.day,
+    );
 
     // Calculate overlaps for all tasks
     final overlapMap = _calculateEventOverlaps(tasks);
 
     for (final task in tasks) {
       if (task.scheduledTime == null) continue;
+
+      visibleTaskIds.add(task.id);
+      final link = _taskLinks.putIfAbsent(task.id, () => LayerLink());
 
       final overlapInfo = overlapMap[task.id] ??
           const OverlapInfo(columnIndex: 0, totalColumns: 1);
@@ -593,6 +894,9 @@ class _CalendarGridState extends State<CalendarGrid>
         dayWidth,
         isDayView: isDayView,
         currentDate: date, // Pass the current date for multi-day handling
+        weekStartDate: weekStartDate,
+        weekEndDate: weekEndDate,
+        link: link,
       );
       if (widget != null) {
         widgets.add(widget);
@@ -604,10 +908,42 @@ class _CalendarGridState extends State<CalendarGrid>
 
   Widget? _buildTaskWidget(
       CalendarTask task, OverlapInfo overlapInfo, bool compact, double dayWidth,
-      {bool isDayView = false, DateTime? currentDate}) {
-    if (task.scheduledTime == null) return null;
+      {bool isDayView = false,
+      DateTime? currentDate,
+      DateTime? weekStartDate,
+      DateTime? weekEndDate,
+      required LayerLink link}) {
+    if (task.scheduledTime == null || currentDate == null) return null;
 
     final taskTime = task.scheduledTime!;
+    final dayDate =
+        DateTime(currentDate.year, currentDate.month, currentDate.day);
+    final eventStartDate =
+        DateTime(taskTime.year, taskTime.month, taskTime.day);
+
+    DateTime? effectiveEndDateTime = task.effectiveEndDate;
+    effectiveEndDateTime ??=
+        task.duration != null ? taskTime.add(task.duration!) : taskTime;
+    final eventEndDate = DateTime(effectiveEndDateTime.year,
+        effectiveEndDateTime.month, effectiveEndDateTime.day);
+
+    final clampedWeekStart = weekStartDate ?? eventStartDate;
+    final clampedWeekEnd = weekEndDate ?? eventEndDate;
+
+    final clampedStart = eventStartDate.isBefore(clampedWeekStart)
+        ? clampedWeekStart
+        : eventStartDate;
+    final clampedEnd =
+        eventEndDate.isAfter(clampedWeekEnd) ? clampedWeekEnd : eventEndDate;
+
+    if (dayDate.isAfter(clampedEnd) || dayDate.isBefore(clampedStart)) {
+      return null;
+    }
+
+    if (!isDayView && !DateUtils.isSameDay(dayDate, clampedStart)) {
+      return null;
+    }
+
     final hour = taskTime.hour.toDouble();
     final minute = taskTime.minute.toDouble();
 
@@ -623,33 +959,47 @@ class _CalendarGridState extends State<CalendarGrid>
     final height = (duration.inMinutes / 60.0) * hourSlotHeight;
 
     // Calculate width and position based on overlap
-    final columnWidth = dayWidth / overlapInfo.totalColumns;
-    final eventWidth = columnWidth - 4; // Leave 2px margin on each side
+    final totalColumns =
+        overlapInfo.totalColumns == 0 ? 1 : overlapInfo.totalColumns;
+    final columnWidth = dayWidth / totalColumns;
+    final baseWidth = columnWidth - 4; // Leave 2px margin on each side
     final leftOffset =
         (columnWidth * overlapInfo.columnIndex) + 2; // 2px margin from left
 
-    return ResizableTaskWidget(
-      task: task,
-      onResize: (updatedTask) {
-        // Immediately update the task via drag end callback
-        if (widget.onTaskDragEnd != null && updatedTask.scheduledTime != null) {
-          widget.onTaskDragEnd!(updatedTask, updatedTask.scheduledTime!);
-        }
-      },
-      dayWidth: dayWidth,
-      hourHeight: hourSlotHeight,
-      quarterHeight: quarterSlotHeight,
+    final clampedHeight = height.clamp(20.0, double.infinity).toDouble();
+
+    final spanDays = !isDayView
+        ? ((clampedEnd.difference(dayDate).inDays + 1).clamp(1, 7)).toInt()
+        : 1;
+    final eventWidth = !isDayView ? (columnWidth * spanDays) - 4 : baseWidth;
+
+    return Positioned(
       left: leftOffset,
       top: topOffset,
       width: eventWidth,
-      height: height.clamp(20, double.infinity), // Minimum height of 20px
-      isDayView: isDayView,
-      onTap: () {
-        if (widget.onTaskTapped != null) {
-          widget.onTaskTapped!(
-              task, Offset(leftOffset + eventWidth, topOffset));
-        }
-      },
+      height: clampedHeight,
+      child: ResizableTaskWidget(
+        key: ValueKey(task.id),
+        task: task,
+        onResize: (updatedTask) {
+          if (widget.onTaskDragEnd != null &&
+              updatedTask.scheduledTime != null) {
+            widget.onTaskDragEnd!(updatedTask, updatedTask.scheduledTime!);
+          }
+        },
+        dayWidth: dayWidth,
+        hourHeight: hourSlotHeight,
+        quarterHeight: quarterSlotHeight,
+        width: eventWidth,
+        height: clampedHeight,
+        isDayView: isDayView,
+        overlayLink: link,
+        onTap: (tappedTask, bounds) {
+          if (widget.onTaskTapped != null) {
+            widget.onTaskTapped!(tappedTask, link, bounds);
+          }
+        },
+      ),
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/calendar_model.dart';
 
+/// Legacy helper retained for backward compatibility with older tests.
 class GuestCalendarStorage {
   GuestCalendarStorage._();
 

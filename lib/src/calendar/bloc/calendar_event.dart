@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 
 part 'calendar_event.freezed.dart';
@@ -15,6 +16,13 @@ class CalendarEvent with _$CalendarEvent {
     DateTime? scheduledTime,
     String? description,
     Duration? duration,
+    DateTime? deadline,
+    String? location,
+    int? daySpan,
+    DateTime? endDate,
+    @Default(TaskPriority.none) TaskPriority priority,
+    double? startHour,
+    RecurrenceRule? recurrence,
   }) = CalendarTaskAdded;
 
   const factory CalendarEvent.taskUpdated({
@@ -33,6 +41,15 @@ class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.syncRequested() = CalendarSyncRequested;
 
   const factory CalendarEvent.syncPushed() = CalendarSyncPushed;
+
+  const factory CalendarEvent.remoteModelApplied({
+    required CalendarModel model,
+  }) = CalendarRemoteModelApplied;
+
+  const factory CalendarEvent.remoteTaskApplied({
+    required CalendarTask task,
+    required String operation,
+  }) = CalendarRemoteTaskApplied;
 
   const factory CalendarEvent.viewChanged({
     required CalendarView view,

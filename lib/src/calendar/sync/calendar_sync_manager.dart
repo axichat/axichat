@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/calendar_exceptions.dart';
 import '../models/calendar_model.dart';
@@ -11,12 +10,15 @@ import '../models/calendar_task.dart';
 
 class CalendarSyncManager {
   CalendarSyncManager({
-    required Box<CalendarModel> calendarBox,
+    required CalendarModel Function() readModel,
+    required Future<void> Function(CalendarModel) applyModel,
     required Future<void> Function(String) sendCalendarMessage,
-  })  : _calendarBox = calendarBox,
+  })  : _readModel = readModel,
+        _applyModel = applyModel,
         _sendCalendarMessage = sendCalendarMessage;
 
-  final Box<CalendarModel> _calendarBox;
+  final CalendarModel Function() _readModel;
+  final Future<void> Function(CalendarModel) _applyModel;
   final Future<void> Function(String) _sendCalendarMessage;
 
   Future<void> onCalendarMessage(CalendarSyncMessage message) async {
@@ -46,7 +48,7 @@ class CalendarSyncManager {
 
   Future<void> _handleRequestMessage(CalendarSyncMessage message) async {
     try {
-      final model = _calendarBox.get('calendar') ?? CalendarModel.empty();
+      final model = _readModel();
       await _sendFullCalendar(model);
     } catch (e) {
       developer.log('Error handling request message: $e',
@@ -60,7 +62,7 @@ class CalendarSyncManager {
 
     try {
       final remoteModel = CalendarModel.fromJson(message.data!);
-      final localModel = _calendarBox.get('calendar') ?? CalendarModel.empty();
+      final localModel = _readModel();
 
       // Use checksum for conflict detection
       final localChecksum = _calculateChecksum(localModel.toJson());
@@ -75,7 +77,7 @@ class CalendarSyncManager {
       developer.log(
           'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)');
       final mergedModel = _mergeModels(localModel, remoteModel);
-      await _calendarBox.put('calendar', mergedModel);
+      await _applyModel(mergedModel);
     } catch (e) {
       developer.log('Error handling full calendar message: $e');
     }
@@ -121,7 +123,7 @@ class CalendarSyncManager {
 
   /// Push full calendar to other devices
   Future<void> pushFullSync() async {
-    final model = _calendarBox.get('calendar') ?? CalendarModel.empty();
+    final model = _readModel();
     await _sendFullCalendar(model);
   }
 
@@ -162,7 +164,7 @@ class CalendarSyncManager {
   }
 
   Future<void> _mergeTask(CalendarTask remoteTask, String operation) async {
-    final currentModel = _calendarBox.get('calendar') ?? CalendarModel.empty();
+    final currentModel = _readModel();
 
     CalendarModel updatedModel;
     switch (operation) {
@@ -182,6 +184,6 @@ class CalendarSyncManager {
         return;
     }
 
-    await _calendarBox.put('calendar', updatedModel);
+    await _applyModel(updatedModel);
   }
 }

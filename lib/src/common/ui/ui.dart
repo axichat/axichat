@@ -39,18 +39,6 @@ const basePageItemLimit = 15;
 
 const axiGreen = Color(0xff80ffa0);
 
-// Clean professional calendar design constants
-// Event colors (7-color rotation system)
-const calendarEventColors = [
-  Color(0xff007AFF), // Blue
-  Color(0xff5856d6), // Purple
-  Color(0xffff9500), // Orange
-  Color(0xffff3b30), // Red
-  Color(0xff34c759), // Green
-  Color(0xff5ac8fa), // Teal
-  Color(0xffffcc02), // Yellow
-];
-
 // Ultrathink calendar color palette
 const calendarPrimaryColor = Color(0xFF0969DA);
 const calendarPrimaryHoverColor = Color(0xFF0860CA);
@@ -73,6 +61,7 @@ const calendarSuccessColor = Color(0xFF28A745);
 const calendarDangerColor = Color(0xFFDC3545);
 const calendarWarningColor = Color(0xFFFD7E14);
 const calendarYellowColor = Color(0xFFFFC107);
+const calendarNeutralColor = Color(0xFF9CA3AF);
 
 // Sidebar specific colors
 const sidebarBackgroundColor = Color(0xFFF7F8FA);

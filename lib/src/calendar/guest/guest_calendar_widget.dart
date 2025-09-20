@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
+import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
@@ -14,8 +15,8 @@ import '../view/error_display.dart';
 import '../view/feedback_system.dart';
 import '../view/loading_indicator.dart';
 import '../view/quick_add_modal.dart';
+import '../view/task_sidebar.dart';
 import 'guest_calendar_bloc.dart';
-import 'guest_task_sidebar.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({super.key});
@@ -26,8 +27,8 @@ class GuestCalendarWidget extends StatefulWidget {
 
 class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   CalendarTask? _selectedTask;
-  Offset? _editPosition;
   bool _sidebarVisible = true;
+  OverlayEntry? _editOverlay;
 
   @override
   Widget build(BuildContext context) {
@@ -57,22 +58,6 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
               // Loading overlay
               if (state.isLoading) _buildLoadingOverlay(),
-
-              // Edit task dropdown
-              if (_selectedTask != null && _editPosition != null)
-                EditTaskDropdown(
-                  task: _selectedTask!,
-                  position: _editPosition!,
-                  onClose: _closeEditDropdown,
-                  onTaskUpdated: (task) =>
-                      context.read<GuestCalendarBloc>().add(
-                            CalendarEvent.taskUpdated(task: task),
-                          ),
-                  onTaskDeleted: (taskId) =>
-                      context.read<GuestCalendarBloc>().add(
-                            CalendarEvent.taskDeleted(taskId: taskId),
-                          ),
-                ),
             ],
           ),
         );
@@ -142,6 +127,16 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
         }
       });
     }
+
+    if (_selectedTask != null) {
+      final updatedTask = state.model.tasks[_selectedTask!.id];
+      if (updatedTask != null && updatedTask != _selectedTask) {
+        setState(() {
+          _selectedTask = updatedTask;
+        });
+        _editOverlay?.markNeedsBuild();
+      }
+    }
   }
 
   Widget _buildErrorBanner(CalendarState state) {
@@ -189,11 +184,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
         if (state.error != null) _buildErrorBanner(state),
 
         // Collapsible sidebar drawer or overlay
-        if (_sidebarVisible)
-          const SizedBox(
-            height: 200,
-            child: GuestTaskSidebar(),
-          ),
+        if (_sidebarVisible) _buildSidebarWithProvider(height: 200),
 
         // Toggle button
         Container(
@@ -232,7 +223,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     return Row(
       children: [
         // Resizable sidebar - extends full height
-        const GuestTaskSidebar(),
+        _buildSidebarWithProvider(),
 
         // Main content area with navigation and calendar
         Expanded(
@@ -270,7 +261,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     return Row(
       children: [
         // Full sidebar always visible - extends full height
-        const GuestTaskSidebar(),
+        _buildSidebarWithProvider(),
 
         // Main content area with navigation and calendar
         Expanded(
@@ -304,6 +295,19 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     );
   }
 
+  Widget _buildSidebarWithProvider({double? height}) {
+    final sidebar = BlocProvider<BaseCalendarBloc>.value(
+      value: context.read<GuestCalendarBloc>(),
+      child: const TaskSidebar(),
+    );
+
+    if (height != null) {
+      return SizedBox(height: height, child: sidebar);
+    }
+
+    return sidebar;
+  }
+
   Widget _buildCalendarGridWithHandlers(CalendarState state) {
     return CalendarGrid(
       state: state,
@@ -319,11 +323,91 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     );
   }
 
-  void _onTaskTapped(CalendarTask task, Offset position) {
+  void _onTaskTapped(CalendarTask task, LayerLink link, Rect bounds) {
+    _showEditOverlay(task, link, bounds);
+  }
+
+  @override
+  void dispose() {
+    _removeEditOverlay();
+    super.dispose();
+  }
+
+  void _showEditOverlay(CalendarTask task, LayerLink link, Rect bounds) {
+    _removeEditOverlay();
     setState(() {
       _selectedTask = task;
-      _editPosition = position;
     });
+
+    final overlay = Overlay.of(context);
+
+    const dropdownWidth = 340.0;
+    const dropdownHeight = 440.0;
+    final screenSize = MediaQuery.of(context).size;
+
+    double horizontalOffset = bounds.width + 12;
+    if (bounds.right + dropdownWidth + 16 > screenSize.width) {
+      horizontalOffset = -(dropdownWidth + 12);
+    }
+
+    double verticalOffset = bounds.height + 8;
+    if (bounds.bottom + dropdownHeight + 16 > screenSize.height) {
+      verticalOffset = -(dropdownHeight + 8);
+    }
+
+    _editOverlay = OverlayEntry(
+      builder: (context) {
+        final bloc = context.read<GuestCalendarBloc>();
+        final latestTask = bloc.state.model.tasks[task.id] ?? task;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _closeEditDropdown,
+          child: Stack(
+            children: [
+              CompositedTransformFollower(
+                link: link,
+                showWhenUnlinked: false,
+                offset: Offset(horizontalOffset, verticalOffset),
+                child: Material(
+                  color: Colors.transparent,
+                  child: EditTaskDropdown(
+                    task: latestTask,
+                    onClose: _closeEditDropdown,
+                    onTaskUpdated: _handleTaskUpdated,
+                    onTaskDeleted: _handleTaskDeleted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    overlay.insert(_editOverlay!);
+  }
+
+  void _handleTaskUpdated(CalendarTask task) {
+    context.read<GuestCalendarBloc>().add(
+          CalendarEvent.taskUpdated(task: task),
+        );
+    setState(() {
+      _selectedTask = task;
+    });
+    _editOverlay?.markNeedsBuild();
+  }
+
+  void _handleTaskDeleted(String taskId) {
+    context.read<GuestCalendarBloc>().add(
+          CalendarEvent.taskDeleted(taskId: taskId),
+        );
+    _closeEditDropdown();
+  }
+
+  void _removeEditOverlay() {
+    _editOverlay?..remove();
+    _editOverlay = null;
   }
 
   void _onEmptySlotTapped(DateTime time, Offset position) {
@@ -373,6 +457,8 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
                 scheduledTime: task.scheduledTime,
                 description: task.description,
                 duration: task.duration,
+                priority: task.priority ?? TaskPriority.none,
+                recurrence: task.recurrence,
               ),
             ),
       ),
@@ -380,9 +466,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   void _closeEditDropdown() {
+    _removeEditOverlay();
     setState(() {
       _selectedTask = null;
-      _editPosition = null;
     });
   }
 }

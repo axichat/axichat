@@ -1,0 +1,40 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
+
+void main() {
+  testWidgets('ResizableTaskWidget invokes onTap when tapped', (tester) async {
+    final task = CalendarTask.create(title: 'Sample Task');
+    final overlayLink = LayerLink();
+
+    bool tapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ResizableTaskWidget(
+            task: task,
+            onResize: (_) {},
+            dayWidth: 100,
+            hourHeight: 40,
+            quarterHeight: 10,
+            width: 100,
+            height: 40,
+            isDayView: false,
+            overlayLink: overlayLink,
+            onTap: (selectedTask, bounds) {
+              tapped = true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(ResizableTaskWidget));
+    await tester.pump();
+
+    expect(tapped, isTrue);
+  });
+}

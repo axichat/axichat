@@ -1,16 +1,17 @@
 import 'dart:developer' as developer;
 
-import 'package:hive/hive.dart';
-
 import '../bloc/base_calendar_bloc.dart';
-import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
+import '../reminders/calendar_reminder_controller.dart';
+import '../storage/storage_builders.dart';
 
 class GuestCalendarBloc extends BaseCalendarBloc {
   GuestCalendarBloc({
-    required Box<CalendarModel> guestCalendarBox,
+    CalendarReminderController? reminderController,
   }) : super(
-          calendarBox: guestCalendarBox,
+          storagePrefix: guestStoragePrefix,
+          storageId: 'state',
+          reminderController: reminderController,
         );
 
   @override

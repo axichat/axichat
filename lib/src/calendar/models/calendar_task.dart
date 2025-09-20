@@ -8,6 +8,42 @@ import '../utils/smart_parser.dart';
 part 'calendar_task.freezed.dart';
 part 'calendar_task.g.dart';
 
+@HiveType(typeId: 35)
+enum RecurrenceFrequency {
+  @HiveField(0)
+  none,
+  @HiveField(1)
+  daily,
+  @HiveField(2)
+  weekdays,
+  @HiveField(3)
+  weekly,
+  @HiveField(4)
+  monthly,
+}
+
+@freezed
+@HiveType(typeId: 34)
+class RecurrenceRule with _$RecurrenceRule {
+  const factory RecurrenceRule({
+    @HiveField(0) required RecurrenceFrequency frequency,
+    @HiveField(1) @Default(1) int interval,
+    @HiveField(2) List<int>? byWeekdays,
+  }) = _RecurrenceRule;
+
+  const RecurrenceRule._();
+
+  factory RecurrenceRule.fromJson(Map<String, dynamic> json) =>
+      _$RecurrenceRuleFromJson(json);
+
+  static const RecurrenceRule none = RecurrenceRule(
+    frequency: RecurrenceFrequency.none,
+    interval: 1,
+  );
+
+  bool get isNone => frequency == RecurrenceFrequency.none;
+}
+
 @HiveType(typeId: 31)
 enum TaskPriority {
   @HiveField(0)
@@ -37,6 +73,8 @@ class CalendarTask with _$CalendarTask {
     @HiveField(10) int? daySpan,
     @HiveField(11) TaskPriority? priority,
     @HiveField(12) double? startHour,
+    @HiveField(13) DateTime? endDate,
+    @HiveField(14) RecurrenceRule? recurrence,
   }) = _CalendarTask;
 
   factory CalendarTask.fromJson(Map<String, dynamic> json) =>
@@ -49,9 +87,11 @@ class CalendarTask with _$CalendarTask {
     Duration? duration,
     String? location,
     DateTime? deadline,
-    int daySpan = 1,
+    int? daySpan,
+    DateTime? endDate,
     TaskPriority priority = TaskPriority.none,
     double? startHour,
+    RecurrenceRule? recurrence,
   }) {
     final now = DateTime.now();
     return CalendarTask(
@@ -62,9 +102,11 @@ class CalendarTask with _$CalendarTask {
       duration: duration,
       location: location,
       deadline: deadline,
-      daySpan: daySpan == 1 ? null : daySpan,
+      daySpan: daySpan,
+      endDate: endDate,
       priority: priority == TaskPriority.none ? null : priority,
       startHour: startHour,
+      recurrence: recurrence?.isNone == true ? null : recurrence,
       createdAt: now,
       modifiedAt: now,
     );
@@ -77,8 +119,33 @@ class CalendarTask with _$CalendarTask {
 }
 
 extension CalendarTaskExtensions on CalendarTask {
-  int get effectiveDaySpan => daySpan ?? 1;
+  int get effectiveDaySpan {
+    if (endDate != null && scheduledTime != null) {
+      final startDay = DateTime(
+        scheduledTime!.year,
+        scheduledTime!.month,
+        scheduledTime!.day,
+      );
+      final endDay = DateTime(endDate!.year, endDate!.month, endDate!.day);
+      return endDay.difference(startDay).inDays + 1;
+    }
+    return daySpan ?? 1;
+  }
+
+  DateTime? get effectiveEndDate {
+    if (endDate != null) return endDate;
+    if (scheduledTime != null && duration != null) {
+      return scheduledTime!.add(duration!);
+    }
+    if (scheduledTime != null && daySpan != null && daySpan! > 1) {
+      return scheduledTime!.add(Duration(days: daySpan! - 1));
+    }
+    return null;
+  }
+
   TaskPriority get effectivePriority => priority ?? TaskPriority.none;
+
+  RecurrenceRule get effectiveRecurrence => recurrence ?? RecurrenceRule.none;
 
   bool get isCritical => effectivePriority == TaskPriority.critical;
   bool get isImportant => effectivePriority == TaskPriority.important;
@@ -90,13 +157,13 @@ extension CalendarTaskExtensions on CalendarTask {
   Color get priorityColor {
     switch (effectivePriority) {
       case TaskPriority.critical:
-        return const Color(0xFFDC3545); // Red
+        return const Color(0xFFDC3545);
       case TaskPriority.important:
-        return const Color(0xFF28A745); // Green
+        return const Color(0xFF28A745);
       case TaskPriority.urgent:
-        return const Color(0xFFFD7E14); // Orange
+        return const Color(0xFFFD7E14);
       case TaskPriority.none:
-        return const Color(0xFF0969DA); // Blue
+        return const Color(0xFF9CA3AF);
     }
   }
 }
