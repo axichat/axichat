@@ -149,11 +149,17 @@ class XmppPresenceManager extends mox.PresenceManager {
       ];
 
   @override
-  Future<void> sendPresence(
-      {String? show, String? status, mox.JID? to, int? priority}) async {
+  Future<void> sendPresence({
+    int? priority,
+    String? show,
+    String? status,
+    mox.JID? to,
+    bool trackDirected = false,
+  }) async {
     // Convert show string to Presence enum for backward compatibility
     final presence = show != null ? Presence.fromString(show) : null;
     final stanza = mox.Stanza.presence(
+      to: to?.toString(),
       type: presence != null && presence.isUnavailable
           ? Presence.unavailable.name
           : null,
@@ -161,6 +167,8 @@ class XmppPresenceManager extends mox.PresenceManager {
         if (presence != null && !presence.isUnavailable)
           mox.XMLNode(tag: 'show', text: presence.name),
         if (status != null) mox.XMLNode(tag: 'status', text: status),
+        if (priority != null)
+          mox.XMLNode(tag: 'priority', text: priority.toString()),
         for (final attachment in _attachments) ...await attachment(),
       ],
     );

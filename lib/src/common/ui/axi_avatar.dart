@@ -49,12 +49,16 @@ class _AxiAvatarState extends State<AxiAvatar> {
       children: [
         BlocBuilder<SettingsCubit, SettingsState>(
           builder: (context, state) {
+            final baseJid = widget.jid;
+            final initial = baseJid.isNotEmpty
+                ? baseJid.substring(0, 1).toUpperCase()
+                : '?';
             return CircleAvatar(
               backgroundColor: state.colorfulAvatars
                   ? stringToColor(widget.jid)
                   : context.colorScheme.secondary,
               child: Text(
-                widget.jid.substring(0, 1).toUpperCase(),
+                initial,
                 style: state.colorfulAvatars
                     ? null
                     : TextStyle(color: context.colorScheme.secondaryForeground),

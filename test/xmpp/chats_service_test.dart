@@ -48,6 +48,7 @@ main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(mox.ChatState.active);
     registerFallbackValue(FakeUserAgent());
+    registerOmemoFallbacks();
   });
 
   late XmppService xmppService;

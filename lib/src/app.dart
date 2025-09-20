@@ -5,7 +5,9 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -26,7 +28,7 @@ import 'localization/app_localizations.dart';
 class Axichat extends StatelessWidget {
   Axichat({
     super.key,
-    XmppBase? xmppService,
+    XmppService? xmppService,
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
@@ -35,7 +37,7 @@ class Axichat extends StatelessWidget {
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy();
 
-  final XmppBase? _xmppService;
+  final XmppService? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
@@ -45,7 +47,7 @@ class Axichat extends StatelessWidget {
     return MultiRepositoryProvider(
       providers: [
         if (_xmppService == null)
-          RepositoryProvider(
+          RepositoryProvider<XmppService>(
             create: (context) => XmppService(
               buildConnection: () => withForeground
                   ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
@@ -69,11 +71,10 @@ class Axichat extends StatelessWidget {
               },
               notificationService: _notificationService,
               capability: _capability,
-              policy: _policy,
             ),
           )
         else
-          RepositoryProvider.value(value: _xmppService),
+          RepositoryProvider<XmppService>.value(value: _xmppService),
         RepositoryProvider.value(value: _notificationService),
         RepositoryProvider.value(value: _capability),
         RepositoryProvider.value(value: _policy),
@@ -91,6 +92,11 @@ class Axichat extends StatelessWidget {
               ),
               xmppService: context.read<XmppService>(),
               notificationService: context.read<NotificationService>(),
+            ),
+          ),
+          BlocProvider(
+            create: (context) => OmemoActivityCubit(
+              xmppBase: context.read<XmppService>(),
             ),
           ),
         ],
@@ -191,7 +197,12 @@ class MaterialAxichat extends StatelessWidget {
                   _router.go(const HomeRoute().location);
                 }
               },
-              child: child,
+              child: Stack(
+                children: [
+                  if (child != null) child else const SizedBox.shrink(),
+                  const OmemoOperationOverlay(),
+                ],
+              ),
             );
           },
         );
@@ -206,8 +217,6 @@ extension ThemeExtension on BuildContext {
   ShadTextTheme get textTheme => ShadTheme.of(this).textTheme;
 
   IconThemeData get iconTheme => IconTheme.of(this);
-
-  ShadDecoration get decoration => ShadTheme.of(this).decoration;
 
   BorderRadius get radius => ShadTheme.of(this).radius;
 }

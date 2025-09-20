@@ -34,6 +34,7 @@ main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeMessageEvent());
     registerFallbackValue(FakeUserAgent());
+    registerOmemoFallbacks();
   });
 
   late XmppService xmppService;

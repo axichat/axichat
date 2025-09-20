@@ -4,6 +4,8 @@ final _omemoLogger = Logger('OmemoService');
 
 mixin OmemoService on XmppBase {
   var _omemoManager = ImpatientCompleter(Completer<mox.OmemoManager>());
+  mox.OmemoPersistence? _omemoPersistence;
+  Future<void>? _pendingOmemoInitialization;
 
   @override
   bool get needsReset => super.needsReset || _omemoManager.isCompleted;
@@ -41,16 +43,25 @@ mixin OmemoService on XmppBase {
               notSupportedForContactException) {
         error = notSupportedForContactException;
       } else if (event.data.cancelReason is mox.UnknownOmemoError) {
-        error = (event.data.encryptionError as mox.OmemoEncryptionError)
-            .deviceEncryptionErrors
-            .values
-            .first
-            .singleOrNull
-            ?.error;
+        final encryptionError =
+            event.data.encryptionError as mox.OmemoEncryptionError;
+        Object? extractedError;
+        for (final deviceErrors
+            in encryptionError.deviceEncryptionErrors.values) {
+          if (deviceErrors.isEmpty) continue;
+          extractedError = deviceErrors.first.error;
+          break;
+        }
+        error = extractedError ?? omemo.NoKeyMaterialAvailableError();
+      }
+      var messageError = MessageError.fromOmemo(error);
+      if (messageError.isNone &&
+          event.data.cancelReason is mox.UnknownOmemoError) {
+        messageError = MessageError.noKeyMaterial;
       }
       await _dbOp<XmppDatabase>(
         (db) => db.saveMessageError(
-          error: MessageError.fromOmemo(error),
+          error: messageError,
           stanzaID: event.data.stanza.id!,
         ),
       );
@@ -80,19 +91,30 @@ mixin OmemoService on XmppBase {
 
   /// Device callback for lazy loading - called when OMEMO manager needs the device
   Future<omemo.OmemoDevice> _getDeviceCallback() async {
+    final jid = myJid;
+    if (jid == null) {
+      _omemoLogger.warning(
+        'Attempted to resolve OMEMO device before JID was available.',
+      );
+      throw mox.OmemoManagerNotInitializedError();
+    }
     return await _dbOpReturning<XmppDatabase, omemo.OmemoDevice>(
       (db) async {
         try {
           // Try to get existing device from database
-          final existingDevice = await db.getOmemoDevice(myJid!);
+          final existingDevice = await db.getOmemoDevice(jid);
           if (existingDevice != null) {
             return existingDevice;
           }
 
           // Generate new device if none exists
           _omemoLogger.info('Generating new OMEMO device...');
-          final newDevice = await omemo.OmemoDevice.generateNewDevice(myJid!);
-          await db.saveOmemoDevice(OmemoDevice.fromMox(newDevice));
+          final payload = await compute(
+            _generateOmemoDevicePayload,
+            _OmemoDeviceGenerationArgs(jid: jid, excludedIds: const []),
+          );
+          final newDevice = _rebuildOmemoDevice(payload);
+          await db.saveOmemoDevice(newDevice);
           _omemoLogger.info(
               'New OMEMO device generated and saved with ID: ${newDevice.id}');
           return newDevice;
@@ -106,11 +128,18 @@ mixin OmemoService on XmppBase {
 
   /// Get or create the OMEMO device from database
   Future<omemo.OmemoDevice> _getOrCreateDevice() async {
+    final jid = myJid;
+    if (jid == null) {
+      _omemoLogger.warning(
+        'Attempted to access OMEMO device before JID was available.',
+      );
+      throw mox.OmemoManagerNotInitializedError();
+    }
     // Try to get existing device from database
     final existingDevice = await _dbOpReturning<XmppDatabase, OmemoDevice?>(
       (db) async {
         try {
-          return await db.getOmemoDevice(myJid!);
+          return await db.getOmemoDevice(jid);
         } catch (e) {
           return null;
         }
@@ -121,16 +150,21 @@ mixin OmemoService on XmppBase {
       return existingDevice;
     }
 
-    // Generate a new device if none exists
-    final newDevice = await mox.OmemoManager.generateUniqueDevice(
-      jid: myJid!,
-      connection: _connection,
+    final reservedIds = await _dbOpReturning<XmppDatabase, List<int>>(
+      (db) async =>
+          (await db.getOmemoDeviceList(jid))?.devices.toList() ?? <int>[],
     );
 
-    // Save the new device to database
+    final payload = await compute(
+      _generateOmemoDevicePayload,
+      _OmemoDeviceGenerationArgs(jid: jid, excludedIds: reservedIds),
+    );
+
+    final newDevice = _rebuildOmemoDevice(payload);
+
     await _dbOp<XmppDatabase>(
       (db) async {
-        await db.saveOmemoDevice(OmemoDevice.fromMox(newDevice));
+        await db.saveOmemoDevice(newDevice);
       },
     );
 
@@ -145,25 +179,24 @@ mixin OmemoService on XmppBase {
   Future<void> _completeOmemoManager() async {
     if (_omemoManager.isCompleted) return;
 
-    try {
-      _omemoLogger.info('Starting OMEMO manager initialization...');
+    if (myJid == null) {
+      _omemoLogger.fine('Deferring OmemoManager creation until JID is known.');
+      return;
+    }
 
-      // Create the OmemoManager with the new v0.5.0 callback API
+    try {
+      _omemoLogger.info('Creating OMEMO manager (manual initialization)...');
+
       final manager = mox.OmemoManager(
-        _shouldEncryptStanza, // ShouldEncryptStanzaCallback
-        _getDeviceCallback, // GetOmemoDeviceCallback - lazy loading
-        const mox.TrustManagerConfig.btbv(), // Use BTBV trust manager config
-        persistence: await _createPersistence(), // Optional persistence
-        enableMessageQueueing: true, // Prevent race conditions
-        heartbeatInterval: const Duration(hours: 48), // Auto heartbeat
+        _shouldEncryptStanza,
+        _getDeviceCallback,
+        const mox.TrustManagerConfig.btbv(),
+        enableMessageQueueing: true,
+        initializeManually: true,
       );
 
-      // Complete the future with the manager
       _omemoManager.complete(manager);
-      _omemoLogger.info('OMEMO manager initialization completed successfully');
-
-      // Note: The manager will be registered via featureManagers list
-      // Device publishing will be handled by StreamNegotiationsDoneEvent handler
+      _omemoLogger.info('OMEMO manager created; initialization deferred.');
     } catch (e) {
       _omemoLogger.severe('Failed to initialize OmemoManager: $e');
       // Don't complete the completer on error to allow retry
@@ -193,34 +226,138 @@ mixin OmemoService on XmppBase {
   }
 
   Future<mox.OmemoError?> _ensureOmemoDevicePublished() async {
-    // Device publishing is now handled internally by OmemoManager
-    // when it's initialized with the device
-    try {
-      await _getOmemoManager();
-      _omemoLogger.info(
-          'OMEMO manager initialized, device publishing handled internally');
-      // The manager automatically publishes the device bundle on initialization
+    final jid = myJid;
+    if (jid == null) return null;
+
+    final manager = await _getOmemoManager();
+    if (!manager.isInitialized) {
+      _omemoLogger.fine('Skipping OMEMO publish; manager not initialized.');
       return null;
-    } catch (e) {
-      _omemoLogger.severe('Failed to ensure OMEMO device published: $e');
-      return mox.UnknownOmemoError();
+    }
+
+    // One-time reset of the bundles node to ensure maxItems='max'
+    // if (!_bundlesNodeReset) {
+    //   _bundlesNodeReset = true;
+    //   _omemoLogger.info('Performing one-time OMEMO bundles node reset...');
+    //   final resetSuccess = await _resetOmemoBundlesNode();
+    //   if (!resetSuccess) {
+    //     _omemoLogger
+    //         .warning('Failed to reset OMEMO bundles node, continuing anyway');
+    //   }
+    // }
+
+    final device = await _getOrCreateDevice();
+    final deviceListResult =
+        await manager.getDeviceList(mox.JID.fromString(jid));
+
+    if (deviceListResult.isType<List<int>>()) {
+      final devices = deviceListResult.get<List<int>>();
+      if (devices.contains(device.id)) {
+        _omemoLogger.fine('Device already published');
+        return null;
+      }
+    }
+
+    return await _publishOwnDeviceBundle(manager, device);
+  }
+
+  Future<mox.OmemoError?> _publishOwnDeviceBundle(
+    mox.OmemoManager manager,
+    omemo.OmemoDevice device,
+  ) async {
+    final bundle = await device.toBundle();
+    final publishResult = await manager.publishBundle(bundle);
+
+    if (publishResult.isType<mox.OmemoError>()) {
+      final error = publishResult.get<mox.OmemoError>();
+      _omemoLogger.warning('OMEMO bundle publish failed', error);
+      return error;
+    }
+
+    _omemoLogger.info(
+      'OMEMO device bundle published for ${device.jid}:${device.id}.',
+    );
+    return null;
+  }
+
+  Future<void> _initializeOmemoManagerIfNeeded() async {
+    if (_pendingOmemoInitialization != null) {
+      await _pendingOmemoInitialization;
+      return;
+    }
+
+    if (!_omemoManager.isCompleted) {
+      await _completeOmemoManager();
+      if (!_omemoManager.isCompleted) {
+        return;
+      }
+    }
+
+    final manager = await _getOmemoManager();
+    if (manager.isInitialized) {
+      return;
+    }
+
+    _pendingOmemoInitialization = () async {
+      _omemoLogger.info('Initializing OMEMO manager after storage unlock...');
+      _omemoPersistence ??= await _createPersistence();
+
+      try {
+        await manager.initialize(persistence: _omemoPersistence);
+        _omemoLogger.info('OMEMO manager initialization finished.');
+
+        final publishError = await _ensureOmemoDevicePublished();
+        if (publishError != null) {
+          _omemoLogger.warning(
+            'Initial OMEMO publish reported error: $publishError',
+          );
+        }
+      } on mox.OmemoManagerNotInitializedError catch (error, stackTrace) {
+        _omemoLogger.warning(
+          'OMEMO manager deferred initialization; prerequisites missing.',
+          error,
+          stackTrace,
+        );
+        return;
+      } catch (error, stackTrace) {
+        _omemoLogger.severe(
+          'Failed to initialize OMEMO manager after storage unlock.',
+          error,
+          stackTrace,
+        );
+        rethrow;
+      }
+    }();
+
+    try {
+      await _pendingOmemoInitialization;
+    } finally {
+      _pendingOmemoInitialization = null;
     }
   }
 
   Future<OmemoFingerprint?> getCurrentFingerprint() async {
-    final device = await _getOrCreateDevice();
+    try {
+      final device = await _getOrCreateDevice();
 
-    // Generate fingerprint from device's identity key
-    final identityKeyBytes = await device.ik.pk.getBytes();
-    final fingerprint = base64.encode(identityKeyBytes);
+      // Generate fingerprint from device's identity key
+      final identityKeyBytes = await device.ik.pk.getBytes();
+      final fingerprint = base64.encode(identityKeyBytes);
 
-    return OmemoFingerprint(
-      jid: myJid!,
-      fingerprint: fingerprint,
-      deviceID: device.id,
-      trust: BTBVTrustState.blindTrust,
-      trusted: true,
-    );
+      final jid = myJid;
+      if (jid == null) return null;
+
+      return OmemoFingerprint(
+        jid: jid,
+        fingerprint: fingerprint,
+        deviceID: device.id,
+        trust: BTBVTrustState.blindTrust,
+        trusted: true,
+      );
+    } on mox.OmemoManagerNotInitializedError {
+      _omemoLogger.fine('Fingerprint requested before OMEMO initialization.');
+      return null;
+    }
   }
 
   Future<List<OmemoFingerprint>> getFingerprints({required String jid}) async {
@@ -298,16 +435,26 @@ mixin OmemoService on XmppBase {
   Future<void> regenerateDevice() async {
     final old = await _getOrCreateDevice();
 
-    // Generate a new device
-    final newDevice = await mox.OmemoManager.generateUniqueDevice(
-      jid: myJid!,
-      connection: _connection,
+    final reservedIds = await _dbOpReturning<XmppDatabase, List<int>>(
+      (db) async {
+        final deviceList = await db.getOmemoDeviceList(myJid!);
+        return [
+          if (deviceList != null) ...deviceList.devices,
+          old.id,
+        ];
+      },
     );
 
-    // Save the new device to database
+    final payload = await compute(
+      _generateOmemoDevicePayload,
+      _OmemoDeviceGenerationArgs(jid: myJid!, excludedIds: reservedIds),
+    );
+
+    final newDevice = _rebuildOmemoDevice(payload);
+
     await _dbOp<XmppDatabase>(
       (db) async {
-        await db.saveOmemoDevice(OmemoDevice.fromMox(newDevice));
+        await db.saveOmemoDevice(newDevice);
       },
     );
 
@@ -316,39 +463,93 @@ mixin OmemoService on XmppBase {
 
     // Reinitialize the manager with the new device
     _omemoManager = ImpatientCompleter(Completer<mox.OmemoManager>());
+    _omemoPersistence = null;
     await _completeOmemoManager();
+    await _initializeOmemoManagerIfNeeded();
   }
 
   Future<void> recreateSessions({required String jid}) async {
-    // Get all devices for the JID to remove their ratchets
-    final deviceList = await _dbOpReturning<XmppDatabase, OmemoDeviceList?>(
-      (db) => db.getOmemoDeviceList(jid),
-    );
-
-    if (deviceList != null && deviceList.devices.isNotEmpty) {
-      // Remove all ratchets for the JID from database
-      await _dbOp<XmppDatabase>(
-        (db) => db.removeOmemoRatchets(
-          deviceList.devices.map((deviceId) => (jid, deviceId)).toList(),
-        ),
+    try {
+      await _initializeOmemoManagerIfNeeded();
+    } catch (error, stackTrace) {
+      _omemoLogger.severe(
+        'Failed to initialize OMEMO before recreating sessions for $jid.',
+        error,
+        stackTrace,
       );
+      return;
     }
 
-    // Send heartbeat to re-establish sessions
     final manager = await _getOmemoManager();
-    await manager.sendOmemoHeartbeat(jid);
+    if (!manager.isInitialized) {
+      _omemoLogger.warning(
+        'Skipping session recreation for $jid; OMEMO manager is not initialized.',
+      );
+      return;
+    }
+
+    await manager.resetAllSessions(mox.JID.fromString(jid));
   }
 
   @override
   Future<void> _reset() async {
     await super._reset();
     _omemoManager = ImpatientCompleter(Completer<mox.OmemoManager>());
+    _omemoPersistence = null;
+    _pendingOmemoInitialization = null;
   }
 }
 
 // OmemoDeviceData extension removed - moxxmpp v0.5.0 OmemoManager handles
 // device attachment internally. The OmemoDeviceData class in message_models.dart
 // is still used for extracting device info from received messages.
+
+class _OmemoDeviceGenerationArgs {
+  const _OmemoDeviceGenerationArgs({
+    required this.jid,
+    required this.excludedIds,
+  });
+
+  final String jid;
+  final List<int> excludedIds;
+}
+
+Future<Map<String, Object?>> _generateOmemoDevicePayload(
+  _OmemoDeviceGenerationArgs args,
+) async {
+  final exclusions = args.excludedIds.toSet();
+  late OmemoDevice device;
+  do {
+    final generatedDevice = await omemo.OmemoDevice.generateNewDevice(args.jid);
+    device = OmemoDevice.fromMox(generatedDevice);
+  } while (exclusions.contains(device.id));
+
+  return _serializeOmemoDevice(device);
+}
+
+Future<Map<String, Object?>> _serializeOmemoDevice(OmemoDevice device) async =>
+    {
+      'jid': device.jid,
+      'id': device.id,
+      'identityKey': await device.identityKey.toJson(),
+      'signedPreKey': await device.signedPreKey.toJson(),
+      'oldSignedPreKey': device.oldSignedPreKey != null
+          ? await device.oldSignedPreKey!.toJson()
+          : null,
+      'onetimePreKeys': await device.onetimePreKeysToJson(),
+      'label': device.label,
+    };
+
+OmemoDevice _rebuildOmemoDevice(Map<String, Object?> payload) =>
+    OmemoDevice.fromDb(
+      jid: payload['jid'] as String,
+      id: payload['id'] as int,
+      identityKey: payload['identityKey'] as String,
+      signedPreKey: payload['signedPreKey'] as String,
+      oldSignedPreKey: payload['oldSignedPreKey'] as String?,
+      onetimePreKeys: payload['onetimePreKeys'] as String,
+      label: payload['label'] as String?,
+    );
 
 /// Database-backed implementation of [mox.OmemoPersistence] for axichat.
 ///
@@ -364,8 +565,16 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
   static final _prekeyRotationKey =
       XmppStateStore.registerKey('omemo_prekey_rotation');
 
+  bool get _hasDatabase => _service.isDatabaseReady;
+
+  bool get _hasStateStore => _service.isStateStoreReady;
+
   @override
   Future<void> storeDevice(omemo.OmemoDevice device) async {
+    if (!_hasDatabase) {
+      _omemoLogger.fine('Skipping storeDevice; database not ready yet.');
+      return;
+    }
     await _service._dbOp<XmppDatabase>(
       (db) => db.saveOmemoDevice(OmemoDevice.fromMox(device)),
     );
@@ -373,6 +582,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<omemo.OmemoDevice?> loadDevice() async {
+    if (!_hasDatabase) return null;
     return await _service._dbOpReturning<XmppDatabase, OmemoDevice?>(
       (db) async {
         try {
@@ -386,6 +596,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<void> deleteDevice() async {
+    if (!_hasDatabase) return;
     await _service._dbOp<XmppDatabase>(
       (db) => db.deleteOmemoDevice(_service.myJid!),
     );
@@ -393,23 +604,64 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<void> storeRatchets(List<omemo.OmemoRatchetData> ratchets) async {
+    if (!_hasDatabase) return;
+    if (ratchets.isEmpty) {
+      _omemoLogger.fine('No ratchets provided to storeRatchets; skipping.');
+      return;
+    }
+
     _omemoLogger.info('Storing ${ratchets.length} ratchets');
 
     await _service._dbOp<XmppDatabase>((db) async {
       for (final ratchetData in ratchets) {
-        // Store the OmemoDoubleRatchet directly as serialized data
-        final ratchet = await OmemoRatchet.fromDoubleRatchet(
-          jid: ratchetData.jid,
-          device: ratchetData.id,
-          ratchet: ratchetData.ratchet,
+        _service.emitOmemoActivity(
+          mox.OmemoActivityEvent(
+            operation: mox.OmemoActivityOperation.persistRatchets,
+            stage: mox.OmemoActivityStage.start,
+            jid: ratchetData.jid,
+            deviceId: ratchetData.id,
+          ),
         );
-        await db.saveOmemoRatchet(ratchet);
+        // Store the OmemoDoubleRatchet directly as serialized data
+        try {
+          final ratchet = await OmemoRatchet.fromDoubleRatchet(
+            jid: ratchetData.jid,
+            device: ratchetData.id,
+            ratchet: ratchetData.ratchet,
+          );
+          await db.saveOmemoRatchet(ratchet);
+          _service.emitOmemoActivity(
+            mox.OmemoActivityEvent(
+              operation: mox.OmemoActivityOperation.persistRatchets,
+              stage: mox.OmemoActivityStage.end,
+              jid: ratchetData.jid,
+              deviceId: ratchetData.id,
+            ),
+          );
+        } catch (error, stackTrace) {
+          _omemoLogger.severe(
+            'Failed to persist ratchet for ${ratchetData.jid}:${ratchetData.id}.',
+            error,
+            stackTrace,
+          );
+          _service.emitOmemoActivity(
+            mox.OmemoActivityEvent(
+              operation: mox.OmemoActivityOperation.persistRatchets,
+              stage: mox.OmemoActivityStage.end,
+              jid: ratchetData.jid,
+              deviceId: ratchetData.id,
+              error: error,
+            ),
+          );
+          rethrow;
+        }
       }
     });
   }
 
   @override
   Future<void> removeRatchets(List<RatchetMapKey> keys) async {
+    if (!_hasDatabase) return;
     final keyPairs = keys.map((key) => (key.jid, key.deviceId)).toList();
     await _service._dbOp<XmppDatabase>(
       (db) => db.removeOmemoRatchets(keyPairs),
@@ -418,6 +670,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<OmemoDataPackage?> loadRatchets(String jid) async {
+    if (!_hasDatabase) return null;
     return await _service._dbOpReturning<XmppDatabase, OmemoDataPackage?>(
       (db) async {
         // Load device list
@@ -445,6 +698,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<void> storeDeviceList(String jid, List<int> devices) async {
+    if (!_hasDatabase) return;
     final deviceList = OmemoDeviceList(jid: jid, devices: devices);
     await _service._dbOp<XmppDatabase>(
       (db) => db.saveOmemoDeviceList(deviceList),
@@ -453,6 +707,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<List<int>?> loadDeviceList(String jid) async {
+    if (!_hasDatabase) return null;
     final deviceList =
         await _service._dbOpReturning<XmppDatabase, OmemoDeviceList?>(
       (db) => db.getOmemoDeviceList(jid),
@@ -462,6 +717,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<void> clearDeviceList(String jid) async {
+    if (!_hasDatabase) return;
     await _service._dbOp<XmppDatabase>(
       (db) => db.deleteOmemoDeviceList(jid),
     );
@@ -469,6 +725,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<void> storeTrust(String jid, int deviceId, int trustState) async {
+    if (!_hasDatabase) return;
     // Convert int trust state to BTBVTrustState enum
     final trust = switch (trustState) {
       0 => BTBVTrustState.notTrusted,
@@ -492,6 +749,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<int?> loadTrust(String jid, int deviceId) async {
+    if (!_hasDatabase) return null;
     final trust = await _service._dbOpReturning<XmppDatabase, OmemoTrust?>(
       (db) async {
         try {
@@ -515,6 +773,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<Map<String, Map<int, int>>> loadAllTrust() async {
+    if (!_hasDatabase) return <String, Map<int, int>>{};
     final allTrusts =
         await _service._dbOpReturning<XmppDatabase, List<OmemoTrust>>(
       (db) async {
@@ -560,12 +819,18 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
   }
 
   @override
+  Future<void> removeCachedBundle(String jid, int deviceId) async {
+    // Bundle caching is not implemented
+  }
+
+  @override
   Future<void> clearBundleCache() async {
     // Bundle caching is not implemented
   }
 
   @override
   Future<void> storeLastPreKeyRotation(DateTime timestamp) async {
+    if (!_hasStateStore) return;
     await _service._dbOp<XmppStateStore>(
       (stateStore) => stateStore.write(
         key: _prekeyRotationKey,
@@ -576,6 +841,7 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
 
   @override
   Future<DateTime?> loadLastPreKeyRotation() async {
+    if (!_hasStateStore) return null;
     final timestampMs = await _service._dbOpReturning<XmppStateStore, int?>(
       (stateStore) => stateStore.read(key: _prekeyRotationKey) as int?,
     );

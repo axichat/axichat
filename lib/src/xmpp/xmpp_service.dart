@@ -10,7 +10,6 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
-import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -160,6 +159,14 @@ abstract interface class XmppBase {
   });
 
   Future<void> _reset() async {}
+
+  bool get isDatabaseReady;
+
+  bool get isStateStoreReady;
+
+  Stream<mox.OmemoActivityEvent> get omemoActivityStream;
+
+  void emitOmemoActivity(mox.OmemoActivityEvent event) {}
 }
 
 class XmppService extends XmppBase
@@ -177,7 +184,6 @@ class XmppService extends XmppBase
     this._buildDatabase,
     this._notificationService,
     this._capability,
-    this._policy,
   );
 
   static XmppService? _instance;
@@ -188,7 +194,6 @@ class XmppService extends XmppBase
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
     NotificationService? notificationService,
     Capability capability = const Capability(),
-    Policy policy = const Policy(),
   }) =>
       _instance ??= XmppService._(
         buildConnection,
@@ -196,11 +201,9 @@ class XmppService extends XmppBase
         buildDatabase,
         notificationService ?? NotificationService(),
         capability,
-        policy,
       );
 
-  @override
-  final _log = Logger('XmppService');
+  final Logger _xmppLogger = Logger('XmppService');
 
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
@@ -210,17 +213,36 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
   final NotificationService _notificationService;
   final Capability _capability;
-  final Policy _policy;
 
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
   final resourceStorageKey = XmppStateStore.registerKey('resource');
+
+  final StreamController<mox.OmemoActivityEvent> _omemoActivityController =
+      StreamController<mox.OmemoActivityEvent>.broadcast();
+  StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
 
   @override
   XmppService get owner => this;
 
   @override
   Future<XmppDatabase> get database => _database.future;
+
+  @override
+  @override
+  bool get isDatabaseReady => _database.isCompleted;
+
+  @override
+  bool get isStateStoreReady => _stateStore.isCompleted;
+
+  @override
+  Stream<mox.OmemoActivityEvent> get omemoActivityStream =>
+      _omemoActivityController.stream;
+
+  @override
+  void emitOmemoActivity(mox.OmemoActivityEvent event) {
+    _omemoActivityController.add(event);
+  }
 
   @override
   String? get myJid => _myJid?.toBare().toString();
@@ -243,9 +265,9 @@ class XmppService extends XmppBase
     })
     ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
       if (_connection.carbonsEnabled != true) {
-        _log.info('Enabling carbons...');
+        _xmppLogger.info('Enabling carbons...');
         if (!await _connection.enableCarbons()) {
-          _log.warning('Failed to enable carbons.');
+          _xmppLogger.warning('Failed to enable carbons.');
         }
       }
       // Device publishing is now handled internally by OmemoManager
@@ -254,16 +276,16 @@ class XmppService extends XmppBase
       // Connection handling is now automatic in moxxmpp v0.5.0
     })
     ..registerHandler<mox.ResourceBoundEvent>((event) async {
-      _log.info('Bound resource: ${event.resource}...');
+      _xmppLogger.info('Bound resource: ${event.resource}...');
 
       await _dbOp<XmppStateStore>(
           (ss) => ss.write(key: resourceStorageKey, value: event.resource));
     })
     ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
-      _log.info('Saving FAST token...');
+      _xmppLogger.info('Saving FAST token...');
       await _dbOp<XmppStateStore>((ss) async {
         await ss.write(key: fastTokenStorageKey, value: event.token.token);
-        _log.info('Saved FAST token: ${event.token.token}.');
+        _xmppLogger.info('Saved FAST token: ${event.token.token}.');
       });
     })
     ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
@@ -354,8 +376,11 @@ class XmppService extends XmppBase
     return await deferToError(
       defer: _reset,
       operation: () async {
-        _log.info('Attempting login...');
+        _xmppLogger.info('Attempting login...');
         _connection = await _buildConnection();
+        _omemoActivitySubscription?.cancel();
+        _omemoActivitySubscription = _connection.omemoActivityStream
+            .listen(_omemoActivityController.add);
 
         if (!_stateStore.isCompleted) {
           _stateStore.complete(
@@ -382,7 +407,7 @@ class XmppService extends XmppBase
         );
 
         if (result.isType<mox.XmppError>() || !result.get<bool>()) {
-          _log.info('Login rejected by server.');
+          _xmppLogger.info('Login rejected by server.');
           throw XmppAuthenticationException();
         }
 
@@ -400,7 +425,7 @@ class XmppService extends XmppBase
           },
         );
 
-        _log.info('Login successful. Initializing databases...');
+        _xmppLogger.info('Login successful. Initializing databases...');
         await _initDatabases(databasePrefix, databasePassphrase);
 
         return _connection.saltedPassword;
@@ -409,7 +434,7 @@ class XmppService extends XmppBase
   }
 
   Future<void> _initConnection({bool preHashed = false}) async {
-    _log.info('Initializing connection object...');
+    _xmppLogger.info('Initializing connection object...');
     final resource = await _dbOpReturning<XmppStateStore, String?>(
         (ss) async => ss.read(key: resourceStorageKey) as String?);
     await _connection.registerFeatureNegotiators([
@@ -451,7 +476,7 @@ class XmppService extends XmppBase
       defer: _reset,
       operation: () async {
         try {
-          _log.info('Opening databases...');
+          _xmppLogger.info('Opening databases...');
           if (!_stateStore.isCompleted) {
             _stateStore.complete(await _buildStateStore(prefix, passphrase));
           }
@@ -459,21 +484,37 @@ class XmppService extends XmppBase
             _database.complete(await _buildDatabase(prefix, passphrase));
           }
         } on Exception catch (e) {
-          _log.severe('Failed to create databases:', e);
+          _xmppLogger.severe('Failed to create databases:', e);
           throw XmppDatabaseCreationException(e);
         }
       },
     );
+
+    try {
+      await _initializeOmemoManagerIfNeeded();
+    } on mox.OmemoManagerNotInitializedError catch (error, stackTrace) {
+      _xmppLogger.severe(
+        'OMEMO manager refused to initialize after database unlock.',
+        error,
+        stackTrace,
+      );
+    } catch (error, stackTrace) {
+      _xmppLogger.severe(
+        'Failed to initialize OMEMO manager after database unlock.',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future<void> burn() async {
     await _dbOp<XmppStateStore>((ss) async {
-      _log.info('Wiping state store...');
+      _xmppLogger.info('Wiping state store...');
       await ss.deleteAll(burn: true);
     });
 
     await _dbOp<XmppDatabase>((db) async {
-      _log.info('Wiping database...');
+      _xmppLogger.info('Wiping database...');
       await db.deleteAll();
       await db.close();
       await db.deleteFile();
@@ -482,9 +523,9 @@ class XmppService extends XmppBase
 
   @override
   Future<void> disconnect() async {
-    _log.info('Logging out...');
+    _xmppLogger.info('Logging out...');
     await _reset();
-    _log.info('Logged out.');
+    _xmppLogger.info('Logged out.');
   }
 
   Future<void> setClientState([bool active = true]) async {
@@ -492,10 +533,10 @@ class XmppService extends XmppBase
 
     if (_connection.getManager<mox.CSIManager>() case final csi?) {
       if (active) {
-        _log.info('Setting CSI to active...');
+        _xmppLogger.info('Setting CSI to active...');
         await csi.setActive();
       } else {
-        _log.info('Setting CSI to inactive...');
+        _xmppLogger.info('Setting CSI to inactive...');
         await csi.setInactive();
       }
     }
@@ -505,7 +546,7 @@ class XmppService extends XmppBase
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
-    _log.info('Resetting${e != null ? ' due to $e' : ''}...');
+    _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
 
     _eventManager.unregisterAllHandlers();
 
@@ -515,13 +556,17 @@ class XmppService extends XmppBase
     await _messageSubscription?.cancel();
     _messageSubscription = null;
 
+    await _omemoActivitySubscription?.cancel();
+    _omemoActivitySubscription = null;
+
     if (connected) {
       try {
         await _connection.setShouldReconnect(false);
         await _connection.disconnect();
-        _log.info('Gracefully disconnected.');
+        _xmppLogger.info('Gracefully disconnected.');
       } catch (e, s) {
-        _log.severe('Graceful disconnect failed. Closing forcefully...', e, s);
+        _xmppLogger.severe(
+            'Graceful disconnect failed. Closing forcefully...', e, s);
       }
     }
     if (withForeground) {
@@ -530,19 +575,19 @@ class XmppService extends XmppBase
     _connection = await _buildConnection();
 
     if (!_stateStore.isCompleted) {
-      _log.warning('Cancelling state store initialization...');
+      _xmppLogger.warning('Cancelling state store initialization...');
       _stateStore.completeError(XmppAbortedException());
     } else {
-      _log.info('Closing state store...');
+      _xmppLogger.info('Closing state store...');
       await _stateStore.value?.close();
     }
     _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
 
     if (!_database.isCompleted) {
-      _log.warning('Cancelling database initialization...');
+      _xmppLogger.warning('Cancelling database initialization...');
       _database.completeError(XmppAbortedException());
     } else {
-      _log.info('Closing database...');
+      _xmppLogger.info('Closing database...');
       await _database.value?.close();
     }
     _database = ImpatientCompleter(Completer<XmppDatabase>());
@@ -551,7 +596,29 @@ class XmppService extends XmppBase
     _synchronousConnection = Completer<void>();
 
     await super._reset();
-    assert(!needsReset);
+
+    final residuals = <String>[];
+    if (_messageStream.hasListener) residuals.add('messageStream');
+    if (_omemoManager.isCompleted) residuals.add('omemoManager');
+    if (_myJid != null) residuals.add('myJid');
+    if (_eventSubscription != null) residuals.add('eventSubscription');
+    if (_messageSubscription != null) residuals.add('messageSubscription');
+    if (_omemoActivitySubscription != null) {
+      residuals.add('omemoActivitySubscription');
+    }
+    if (_stateStore.isCompleted) residuals.add('stateStore');
+    if (_database.isCompleted) residuals.add('database');
+    if (_synchronousConnection.isCompleted) {
+      residuals.add('synchronousConnection');
+    }
+
+    if (residuals.isNotEmpty) {
+      _xmppLogger.severe(
+        'Reset left residual state: ${residuals.join(', ')}',
+      );
+    }
+
+    assert(residuals.isEmpty);
   }
 
   Future<void> close() async {
@@ -568,20 +635,20 @@ class XmppService extends XmppBase
   @override
   Future<V> _dbOpReturning<D extends Database, V>(
       FutureOr<V> Function(D) operation) async {
-    _log.info('Retrieving completer for $D...');
+    _xmppLogger.info('Retrieving completer for $D...');
 
     try {
-      _log.info('Awaiting completer for $D...');
+      _xmppLogger.info('Awaiting completer for $D...');
       final db = await _getDatabaseCompleter<D>().future;
-      _log.info('Completed completer for $D.');
+      _xmppLogger.info('Completed completer for $D.');
       return await operation(db);
     } on XmppAbortedException catch (e, s) {
-      _log.warning('Owner called reset before $D initialized.', e, s);
+      _xmppLogger.warning('Owner called reset before $D initialized.', e, s);
       rethrow;
     } on XmppException {
       rethrow;
     } on Exception catch (e, s) {
-      _log.severe('Unexpected exception during operation on $D.', e, s);
+      _xmppLogger.severe('Unexpected exception during operation on $D.', e, s);
       throw XmppUnknownException(e);
     }
   }
@@ -591,23 +658,23 @@ class XmppService extends XmppBase
     FutureOr<void> Function(T) operation, {
     bool awaitDatabase = false,
   }) async {
-    _log.info('Retrieving completer for $T...');
+    _xmppLogger.info('Retrieving completer for $T...');
 
     final completer = _getDatabaseCompleter<T>();
 
     if (!awaitDatabase && !completer.isCompleted) return;
 
     try {
-      _log.info('Awaiting completer for $T...');
+      _xmppLogger.info('Awaiting completer for $T...');
       final db = await completer.future;
-      _log.info('Completed completer for $T.');
+      _xmppLogger.info('Completed completer for $T.');
       return await operation(db);
     } on XmppAbortedException catch (_) {
       return;
     } on XmppException {
       rethrow;
     } on Exception catch (e, s) {
-      _log.severe('Unexpected exception during operation on $T.', e, s);
+      _xmppLogger.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
     }
   }

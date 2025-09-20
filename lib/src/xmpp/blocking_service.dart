@@ -10,12 +10,12 @@ mixin BlockingService on XmppBase, BaseStreamService {
         getFunction: (db) => db.getBlocklist(start: start, end: end),
       );
 
-  final _log = Logger('BlockingService');
+  final Logger _blockingLogger = Logger('BlockingService');
 
   @override
   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
     ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
-      _log.info('Fetching blocklist...');
+      _blockingLogger.info('Fetching blocklist...');
       requestBlocklist();
     })
     ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
@@ -49,17 +49,17 @@ mixin BlockingService on XmppBase, BaseStreamService {
   }
 
   Future<void> block({required String jid}) async {
-    _log.info('Requesting to block $jid...');
+    _blockingLogger.info('Requesting to block $jid...');
     await _connection.block(jid);
   }
 
   Future<void> unblock({required String jid}) async {
-    _log.info('Requesting to unblock $jid...');
+    _blockingLogger.info('Requesting to unblock $jid...');
     await _connection.unblock(jid);
   }
 
   Future<void> unblockAll() async {
-    _log.info('Requesting to unblock all...');
+    _blockingLogger.info('Requesting to unblock all...');
     await _connection.unblockAll();
   }
 }
