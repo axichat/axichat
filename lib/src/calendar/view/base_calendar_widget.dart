@@ -7,6 +7,7 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import 'calendar_grid.dart';
 import 'error_display.dart';
@@ -302,7 +303,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       onTaskDragEnd: (task, newTime) {
         context.read<T>().add(
               CalendarEvent.taskDropped(
-                taskId: task.id,
+                taskId: task.baseId,
                 time: newTime,
               ),
             );
