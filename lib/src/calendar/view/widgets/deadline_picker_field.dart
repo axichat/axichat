@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -16,12 +15,16 @@ class DeadlinePickerField extends StatefulWidget {
     required this.onChanged,
     this.placeholder = 'Set deadline (optional)',
     this.showStatusColors = true,
+    this.showTimeSelectors = true,
+    this.overlayWidth = 320.0,
   });
 
   final DateTime? value;
   final DeadlineChanged onChanged;
   final String placeholder;
   final bool showStatusColors;
+  final bool showTimeSelectors;
+  final double overlayWidth;
 
   @override
   State<DeadlinePickerField> createState() => _DeadlinePickerFieldState();
@@ -69,6 +72,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     55,
   ];
   static const double _timeItemHeight = 40;
+  static const double _timePickerDesiredHeight = 440.0;
+  static const double _datePickerDesiredHeight = 456.0;
 
   final LayerLink _layerLink = LayerLink();
   final GlobalKey _dropdownKey = GlobalKey();
@@ -77,6 +82,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   OverlayEntry? _overlayEntry;
   bool _isOpen = false;
   bool _pointerRouteAttached = false;
+  double _overlayVerticalOffset = 0;
+  double _overlayHorizontalOffset = 0;
+  bool _overlayPlaceBelow = true;
+  double _overlayGap = 0;
 
   DateTime? _currentValue;
   late DateTime _visibleMonth;
@@ -132,6 +141,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   void _markOverlayNeedsBuild() {
     _overlayEntry?.markNeedsBuild();
+    if (_isOpen) {
+      _scheduleOverlayMeasurement();
+    }
   }
 
   void _handlePointerEvent(PointerEvent event) {
@@ -179,8 +191,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final triggerOrigin = triggerBox?.localToGlobal(Offset.zero) ?? Offset.zero;
 
     final screenSize = MediaQuery.of(context).size;
-    const dropdownWidth = 320.0;
-    const dropdownMaxHeight = 440.0;
+    final dropdownWidth = widget.overlayWidth;
     const margin = 16.0;
 
     final availableBelow =
@@ -190,28 +201,32 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final normalizedBelow = math.max(0.0, availableBelow);
     final normalizedAbove = math.max(0.0, availableAbove);
 
-    double effectiveMaxHeight;
-    double verticalOffset;
+    final gap = widget.showTimeSelectors ? 8.0 : 4.0;
+    final desiredHeight = widget.showTimeSelectors
+        ? _timePickerDesiredHeight
+        : _datePickerDesiredHeight;
 
-    if (normalizedBelow >= dropdownMaxHeight) {
-      verticalOffset = triggerSize.height + 8;
-      effectiveMaxHeight = dropdownMaxHeight;
-    } else if (normalizedAbove >= dropdownMaxHeight) {
-      verticalOffset = -(dropdownMaxHeight + 8);
-      effectiveMaxHeight = dropdownMaxHeight;
-    } else if (normalizedBelow >= normalizedAbove) {
-      effectiveMaxHeight = math.min(
-        dropdownMaxHeight,
-        math.max(240.0, normalizedBelow),
-      );
-      verticalOffset = triggerSize.height + 8;
+    bool placeBelow;
+    if (normalizedBelow <= 0 && normalizedAbove <= 0) {
+      placeBelow = true;
+    } else if (normalizedBelow <= 0) {
+      placeBelow = false;
+    } else if (normalizedAbove <= 0) {
+      placeBelow = true;
     } else {
-      effectiveMaxHeight = math.min(
-        dropdownMaxHeight,
-        math.max(240.0, normalizedAbove),
-      );
-      verticalOffset = -(effectiveMaxHeight + 8);
+      placeBelow = normalizedBelow >= normalizedAbove;
     }
+
+    _overlayPlaceBelow = placeBelow;
+    _overlayGap = gap;
+
+    final availableSpace = placeBelow ? normalizedBelow : normalizedAbove;
+    final effectiveMaxHeight = availableSpace > 0
+        ? math.min(desiredHeight, availableSpace)
+        : desiredHeight;
+    final verticalOffset =
+        placeBelow ? triggerSize.height + gap : -(effectiveMaxHeight + gap);
+    _overlayVerticalOffset = verticalOffset;
 
     double horizontalOffset = 0;
     final rightEdge = triggerOrigin.dx + dropdownWidth;
@@ -223,13 +238,14 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     if (adjustedLeft < margin) {
       horizontalOffset += margin - adjustedLeft;
     }
+    _overlayHorizontalOffset = horizontalOffset;
 
     final overlayEntry = OverlayEntry(
       builder: (context) {
         return CompositedTransformFollower(
           link: _layerLink,
           showWhenUnlinked: false,
-          offset: Offset(horizontalOffset, verticalOffset),
+          offset: Offset(_overlayHorizontalOffset, _overlayVerticalOffset),
           child: Align(
             alignment: Alignment.topLeft,
             child: SizedBox(
@@ -245,6 +261,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         Overlay.maybeOf(context, rootOverlay: false) ?? Overlay.of(context);
     overlayState.insert(overlayEntry);
     _overlayEntry = overlayEntry;
+    _scheduleOverlayMeasurement();
 
     _attachPointerRoute();
     setState(() {
@@ -266,15 +283,45 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     _overlayEntry = null;
   }
 
+  void _scheduleOverlayMeasurement() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isOpen) return;
+
+      final dropdownBox =
+          _dropdownKey.currentContext?.findRenderObject() as RenderBox?;
+      final triggerBox =
+          _triggerKey.currentContext?.findRenderObject() as RenderBox?;
+
+      if (dropdownBox == null || triggerBox == null) {
+        return;
+      }
+
+      final dropdownHeight = dropdownBox.size.height;
+      final triggerHeight = triggerBox.size.height;
+      final desiredVertical = _overlayPlaceBelow
+          ? triggerHeight + _overlayGap
+          : -(dropdownHeight + _overlayGap);
+
+      if ((desiredVertical - _overlayVerticalOffset).abs() > 0.5) {
+        setState(() {
+          _overlayVerticalOffset = desiredVertical;
+        });
+        _overlayEntry?.markNeedsBuild();
+      }
+    });
+  }
+
   void _onDaySelected(DateTime date) {
     final baseTime = _currentValue ?? DateTime.now();
-    final newValue = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      baseTime.hour,
-      baseTime.minute,
-    );
+    final newValue = widget.showTimeSelectors
+        ? DateTime(
+            date.year,
+            date.month,
+            date.day,
+            baseTime.hour,
+            baseTime.minute,
+          )
+        : DateTime(date.year, date.month, date.day);
     setState(() {
       _currentValue = newValue;
       _visibleMonth = date;
@@ -284,6 +331,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   void _onHourSelected(int hour) {
+    if (!widget.showTimeSelectors) return;
     final value = _currentValue ?? DateTime.now();
     final updated = DateTime(
       value.year,
@@ -299,6 +347,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   void _onMinuteSelected(int minute) {
+    if (!widget.showTimeSelectors) return;
     final value = _currentValue ?? DateTime.now();
     final updated = DateTime(
       value.year,
@@ -318,8 +367,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     setState(() => _currentValue = null);
     widget.onChanged(null);
     _markOverlayNeedsBuild();
-    _animateHour(fallback.hour);
-    _animateMinute(_roundToFive(fallback.minute));
+    if (widget.showTimeSelectors) {
+      _animateHour(fallback.hour);
+      _animateMinute(_roundToFive(fallback.minute));
+    }
   }
 
   Color _borderColor(DateTime? value) {
@@ -341,7 +392,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       return Colors.white;
     }
     final border = _borderColor(value);
-    return border.withOpacity(0.05);
+    return Color.lerp(Colors.white, border, 0.05) ?? Colors.white;
   }
 
   Color _iconColor(DateTime? value) {
@@ -389,38 +440,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (widget.value != null) ...[
-                      Text(
-                        _deadlineLabel(widget.value!),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: iconColor,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        TimeFormatter.formatFriendlyDateTime(widget.value!),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: calendarTitleColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ] else
-                      Text(
-                        widget.placeholder,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: calendarTimeLabelColor,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                  ],
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _buildFieldContent(iconColor),
                 ),
               ),
               const SizedBox(width: 8),
@@ -432,6 +454,60 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFieldContent(Color iconColor) {
+    if (widget.value != null) {
+      final displayDate = widget.showTimeSelectors
+          ? TimeFormatter.formatFriendlyDateTime(widget.value!)
+          : TimeFormatter.formatFriendlyDate(widget.value!);
+      final label = _deadlineLabel(widget.value!);
+
+      if (!widget.showTimeSelectors && label == displayDate) {
+        return Text(
+          displayDate,
+          style: const TextStyle(
+            fontSize: 14,
+            color: calendarTitleColor,
+            fontWeight: FontWeight.w500,
+          ),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: iconColor,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            displayDate,
+            style: const TextStyle(
+              fontSize: 14,
+              color: calendarTitleColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Text(
+      widget.placeholder,
+      style: const TextStyle(
+        fontSize: 14,
+        color: calendarTimeLabelColor,
+        fontWeight: FontWeight.w400,
       ),
     );
   }
@@ -466,21 +542,32 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
             borderRadius: BorderRadius.circular(12),
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final desiredHeight = widget.showTimeSelectors
+                    ? _timePickerDesiredHeight
+                    : _datePickerDesiredHeight;
+                final useScroll = constraints.maxHeight < desiredHeight;
+
+                final content = Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildMonthHeader(),
+                    _buildCalendarGrid(),
+                    if (widget.showTimeSelectors) _buildTimeSelectors(),
+                    _buildActions(),
+                  ],
+                );
+
+                if (!useScroll) {
+                  return content;
+                }
+
                 return SingleChildScrollView(
                   padding: EdgeInsets.zero,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       minHeight: constraints.maxHeight,
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildMonthHeader(),
-                        _buildCalendarGrid(),
-                        _buildTimeSelectors(),
-                        _buildActions(),
-                      ],
-                    ),
+                    child: content,
                   ),
                 );
               },
@@ -643,6 +730,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   Widget _buildTimeSelectors() {
+    if (!widget.showTimeSelectors) {
+      return const SizedBox.shrink();
+    }
+
     final selected = _currentValue ?? DateTime.now();
     final selectedHour = selected.hour;
     final selectedMinute = _roundToFive(selected.minute);
@@ -772,11 +863,21 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         child: InkWell(
           borderRadius: BorderRadius.zero,
           onTap: onTap,
-          splashColor: calendarPrimaryColor.withOpacity(0.12),
+          splashColor: Color.lerp(
+                Colors.transparent,
+                calendarPrimaryColor,
+                0.12,
+              ) ??
+              Colors.transparent,
           child: Container(
             decoration: BoxDecoration(
               color: selected
-                  ? calendarPrimaryColor.withOpacity(0.12)
+                  ? Color.lerp(
+                        Colors.transparent,
+                        calendarPrimaryColor,
+                        0.12,
+                      ) ??
+                      Colors.transparent
                   : Colors.transparent,
             ),
             alignment: Alignment.center,
@@ -795,8 +896,14 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   Widget _buildActions() {
+    final verticalPadding = widget.showTimeSelectors ? 10.0 : 8.0;
+    final horizontalPadding = widget.showTimeSelectors ? 12.0 : 16.0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
       decoration: const BoxDecoration(
         border: Border(
           top: BorderSide(color: calendarBorderColor, width: 1),
