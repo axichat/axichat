@@ -5,7 +5,6 @@ import '../models/calendar_task.dart';
 class ResizableTaskWidget extends StatefulWidget {
   final CalendarTask task;
   final Function(CalendarTask) onResize;
-  final double dayWidth;
   final double hourHeight;
   final double quarterHeight;
   final double width;
@@ -19,7 +18,6 @@ class ResizableTaskWidget extends StatefulWidget {
     super.key,
     required this.task,
     required this.onResize,
-    required this.dayWidth,
     required this.hourHeight,
     required this.quarterHeight,
     required this.width,
@@ -40,18 +38,12 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   String? activeHandle;
 
   double _dragStartY = 0;
-  double _dragStartX = 0;
   double _totalDragDeltaY = 0;
-  double _totalDragDeltaX = 0;
 
   late double _originalStartHour;
   late double _originalDurationHours;
-  late DateTime _originalScheduledTime;
-  late DateTime? _originalEndDate;
-
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
-  DateTime? _tempEndDate;
 
   Color get _taskColor => widget.task.priorityColor;
 
@@ -306,73 +298,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       ),
     ];
 
-    // Add horizontal handles for week view (allows extending to multiple days)
-    // Show for all tasks in week view, not just multi-day tasks
-    if (!widget.isDayView) {
-      handles.add(
-        // Left handle
-        Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: 6,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeLeftRight,
-            child: GestureDetector(
-              onPanStart: (details) => _startResize('left', details),
-              onPanUpdate: (details) => _updateResize('left', details),
-              onPanEnd: (_) => _endResize(),
-              child: Container(
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 3,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(
-                          isResizing && activeHandle == 'left' ? 0.8 : 0.4),
-                      borderRadius: BorderRadius.circular(1.5),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      handles.add(
-        // Right handle
-        Positioned(
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 6,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeLeftRight,
-            child: GestureDetector(
-              onPanStart: (details) => _startResize('right', details),
-              onPanUpdate: (details) => _updateResize('right', details),
-              onPanEnd: (_) => _endResize(),
-              child: Container(
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 3,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(
-                          isResizing && activeHandle == 'right' ? 0.8 : 0.4),
-                      borderRadius: BorderRadius.circular(1.5),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
     return handles;
   }
 
@@ -383,22 +308,16 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       isResizing = true;
       activeHandle = handleType;
       _dragStartY = details.localPosition.dy;
-      _dragStartX = details.localPosition.dx;
       _totalDragDeltaY = 0;
-      _totalDragDeltaX = 0;
 
       // Store original values
       final time = widget.task.scheduledTime!;
       _originalStartHour = time.hour + (time.minute / 60.0);
       _originalDurationHours =
           (widget.task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
-      _originalScheduledTime = time;
-      _originalEndDate = widget.task.effectiveEndDate ?? time;
-
       // Clear temporary values
       _tempScheduledTime = null;
       _tempDuration = null;
-      _tempEndDate = null;
     });
 
     HapticFeedback.selectionClick();
@@ -409,7 +328,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
     // Accumulate total drag distance
     _totalDragDeltaY = details.localPosition.dy - _dragStartY;
-    _totalDragDeltaX = details.localPosition.dx - _dragStartX;
 
     if (handleType == 'top' || handleType == 'bottom') {
       // Calculate quarter-hour changes and snap to discrete cells
@@ -437,7 +355,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           ((newStartHour % 1) * 60).round(),
         );
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
-        _tempEndDate = _originalEndDate;
 
         // Update in real-time
         widget.onResize(widget.task.copyWith(
@@ -452,84 +369,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
         _tempScheduledTime = widget.task.scheduledTime;
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
-        _tempEndDate = _originalEndDate;
 
         // Update in real-time
         widget.onResize(widget.task.copyWith(
           duration: _tempDuration,
-        ));
-      }
-    } else if (handleType == 'left' || handleType == 'right') {
-      // Handle horizontal resizing for multi-day events
-      // Use independent start/end dates for proper manipulation
-      final rawSteps = _totalDragDeltaX / widget.dayWidth;
-      final daysChanged = rawSteps >= 0 ? rawSteps.floor() : rawSteps.ceil();
-
-      // Only proceed if there's an actual change
-      if (daysChanged == 0) return;
-
-      if (handleType == 'left') {
-        // Left handle: move start date, keep end date fixed
-        // Dragging left (negative deltaX) = earlier start date
-        // Dragging right (positive deltaX) = later start date
-        final newStartDate =
-            _originalScheduledTime.add(Duration(days: daysChanged));
-
-        // Keep the same time of day for the start
-        final newStartDateTime = DateTime(
-          newStartDate.year,
-          newStartDate.month,
-          newStartDate.day,
-          _originalScheduledTime.hour,
-          _originalScheduledTime.minute,
-        );
-
-        // Don't allow start to go past end
-        if (_originalEndDate != null &&
-            newStartDateTime.isAfter(_originalEndDate!)) {
-          return;
-        }
-
-        _tempScheduledTime = newStartDateTime;
-        _tempDuration = widget.task.duration;
-        _tempEndDate = _originalEndDate;
-
-        // Update in real-time
-        widget.onResize(widget.task.copyWith(
-          scheduledTime: _tempScheduledTime,
-          endDate: _tempEndDate,
-          daySpan: null, // Clear deprecated field
-        ));
-      } else if (handleType == 'right') {
-        // Right handle: move end date, keep start date fixed
-        // Dragging right (positive deltaX) = later end date
-        // Dragging left (negative deltaX) = earlier end date
-        final originalEnd = _originalEndDate ?? _originalScheduledTime;
-        final newEndDate = originalEnd.add(Duration(days: daysChanged));
-
-        // Keep the same time of day for the end
-        final newEndDateTime = DateTime(
-          newEndDate.year,
-          newEndDate.month,
-          newEndDate.day,
-          originalEnd.hour,
-          originalEnd.minute,
-        );
-
-        // Don't allow end to go before start
-        if (newEndDateTime.isBefore(_originalScheduledTime)) {
-          return;
-        }
-
-        _tempScheduledTime = _originalScheduledTime;
-        _tempDuration = widget.task.duration;
-        _tempEndDate = newEndDateTime;
-
-        // Update in real-time
-        widget.onResize(widget.task.copyWith(
-          scheduledTime: _tempScheduledTime,
-          endDate: _tempEndDate,
-          daySpan: null, // Clear deprecated field
         ));
       }
     }
@@ -541,10 +384,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       isResizing = false;
       activeHandle = null;
       _totalDragDeltaY = 0;
-      _totalDragDeltaX = 0;
       _tempScheduledTime = null;
       _tempDuration = null;
-      _tempEndDate = null;
     });
   }
 

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -242,8 +241,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       },
     );
 
-    final overlayState = Overlay.of(context, rootOverlay: false);
-    (overlayState ?? Overlay.of(context))?.insert(overlayEntry);
+    final overlayState =
+        Overlay.maybeOf(context, rootOverlay: false) ?? Overlay.of(context);
+    overlayState.insert(overlayEntry);
     _overlayEntry = overlayEntry;
 
     _attachPointerRoute();

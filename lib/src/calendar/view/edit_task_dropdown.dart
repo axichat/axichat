@@ -44,6 +44,9 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   RecurrenceFrequency _recurrenceFrequency = RecurrenceFrequency.none;
   int _recurrenceInterval = 1;
+  DateTime? _recurrenceUntil;
+  int? _recurrenceCount;
+  late final TextEditingController _recurrenceCountController;
   Set<int> _selectedWeekdays = const {
     DateTime.monday,
     DateTime.tuesday,
@@ -77,6 +80,14 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     final recurrence = task.recurrence ?? RecurrenceRule.none;
     _recurrenceFrequency = recurrence.frequency;
     _recurrenceInterval = recurrence.interval;
+    _recurrenceUntil = recurrence.until;
+    _recurrenceCount = recurrence.count;
+    if (_recurrenceUntil != null && _recurrenceCount != null) {
+      _recurrenceCount = null;
+    }
+    _recurrenceCountController = TextEditingController(
+      text: _recurrenceCount?.toString() ?? '',
+    );
     if (recurrence.byWeekdays != null && recurrence.byWeekdays!.isNotEmpty) {
       _selectedWeekdays = recurrence.byWeekdays!.toSet();
     }
@@ -87,6 +98,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _recurrenceCountController.dispose();
     super.dispose();
   }
 
@@ -352,11 +364,16 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           const SizedBox(height: 10),
           _buildWeekdaySelector(),
         ],
-        if (_recurrenceFrequency != RecurrenceFrequency.none)
+        if (_recurrenceFrequency != RecurrenceFrequency.none) ...[
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: _buildRecurrenceIntervalPicker(),
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _buildRecurrenceEndControls(),
+          ),
+        ],
       ],
     );
   }
@@ -380,6 +397,11 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         setState(() {
           _recurrenceFrequency = frequency;
           _recurrenceInterval = 1;
+          if (frequency == RecurrenceFrequency.none) {
+            _recurrenceUntil = null;
+            _recurrenceCount = null;
+            _recurrenceCountController.clear();
+          }
           if (frequency == RecurrenceFrequency.weekdays) {
             _selectedWeekdays = const {
               DateTime.monday,
@@ -452,6 +474,99 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         Text(
           _recurrenceIntervalUnit(_recurrenceFrequency),
           style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecurrenceEndControls() {
+    final untilLabel = _recurrenceUntil == null
+        ? 'End on date (optional)'
+        : DateFormat('MMM d, yyyy').format(_recurrenceUntil!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  final now = DateTime.now();
+                  final initial = _recurrenceUntil ??
+                      (_startTime ?? now).add(const Duration(days: 1));
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: initial,
+                    firstDate: DateTime(now.year - 1),
+                    lastDate: DateTime(now.year + 5),
+                  );
+                  if (picked == null) return;
+                  setState(() {
+                    _recurrenceUntil =
+                        DateTime(picked.year, picked.month, picked.day);
+                    _recurrenceCount = null;
+                    _recurrenceCountController.clear();
+                  });
+                },
+                style: OutlinedButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  side: const BorderSide(color: calendarBorderColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        untilLabel,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    if (_recurrenceUntil != null)
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 16),
+                        tooltip: 'Clear end date',
+                        onPressed: () {
+                          setState(() {
+                            _recurrenceUntil = null;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _recurrenceCountController,
+                keyboardType: TextInputType.number,
+                decoration: _inputDecoration('End after (count)'),
+                onChanged: (value) {
+                  final parsed = int.tryParse(value);
+                  setState(() {
+                    if (parsed == null || parsed <= 0) {
+                      _recurrenceCount = null;
+                    } else {
+                      _recurrenceCount = parsed;
+                      _recurrenceUntil = null;
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose either an end date or number of occurrences. Leave both blank to repeat indefinitely.',
+          style: TextStyle(fontSize: 11, color: calendarSubtitleColor),
         ),
       ],
     );
@@ -878,6 +993,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         frequency: _recurrenceFrequency,
         interval: _recurrenceInterval,
         byWeekdays: weekdays,
+        until: _recurrenceUntil,
+        count: _recurrenceCount,
       );
     }
 

@@ -15,7 +15,6 @@ void main() {
           body: ResizableTaskWidget(
             task: task,
             onResize: (_) {},
-            dayWidth: 100,
             hourHeight: 40,
             quarterHeight: 10,
             width: 100,

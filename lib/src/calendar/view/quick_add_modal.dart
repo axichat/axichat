@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
@@ -38,6 +39,10 @@ class _QuickAddModalState extends State<QuickAddModal>
   RecurrenceFrequency _recurrenceFrequency = RecurrenceFrequency.none;
   int _recurrenceInterval = 1;
   late Set<int> _selectedWeekdays;
+  DateTime? _recurrenceUntil;
+  int? _recurrenceCount;
+  final TextEditingController _recurrenceCountController =
+      TextEditingController();
 
   @override
   void initState() {
@@ -81,6 +86,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _taskNameController.dispose();
     _descriptionController.dispose();
     _taskNameFocusNode.dispose();
+    _recurrenceCountController.dispose();
     super.dispose();
   }
 
@@ -356,6 +362,8 @@ class _QuickAddModalState extends State<QuickAddModal>
         if (_recurrenceFrequency != RecurrenceFrequency.none) ...[
           const SizedBox(height: 10),
           _buildRecurrenceIntervalControls(),
+          const SizedBox(height: 10),
+          _buildRecurrenceEndControls(),
         ],
       ],
     );
@@ -501,6 +509,11 @@ class _QuickAddModalState extends State<QuickAddModal>
         setState(() {
           _recurrenceFrequency = frequency;
           _recurrenceInterval = 1;
+          if (frequency == RecurrenceFrequency.none) {
+            _recurrenceUntil = null;
+            _recurrenceCount = null;
+            _recurrenceCountController.clear();
+          }
           if (frequency == RecurrenceFrequency.weekdays) {
             _selectedWeekdays = const {
               DateTime.monday,
@@ -525,6 +538,142 @@ class _QuickAddModalState extends State<QuickAddModal>
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
+    );
+  }
+
+  Widget _buildRecurrenceEndControls() {
+    final untilLabel = _recurrenceUntil == null
+        ? 'End on date (optional)'
+        : DateFormat('MMM d, yyyy').format(_recurrenceUntil!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: calendarBorderColor),
+                  borderRadius: BorderRadius.circular(calendarBorderRadius),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(calendarBorderRadius),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(calendarBorderRadius),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final initial = _recurrenceUntil ??
+                          (widget.prefilledDateTime ?? now)
+                              .add(const Duration(days: 1));
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: initial,
+                        firstDate: DateTime(now.year - 1),
+                        lastDate: DateTime(now.year + 5),
+                      );
+                      if (picked == null) return;
+                      setState(() {
+                        _recurrenceUntil =
+                            DateTime(picked.year, picked.month, picked.day);
+                        _recurrenceCount = null;
+                        _recurrenceCountController.clear();
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: calendarSpacing12,
+                        vertical: calendarSpacing12,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today,
+                            size: 16,
+                            color: calendarSubtitleColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              untilLabel,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: calendarTitleColor,
+                              ),
+                            ),
+                          ),
+                          if (_recurrenceUntil != null)
+                            InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                setState(() {
+                                  _recurrenceUntil = null;
+                                });
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: calendarSubtitleColor,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _recurrenceCountController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'End after (count)',
+                  labelStyle: const TextStyle(
+                    color: calendarSubtitleColor,
+                    fontSize: 13,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(calendarBorderRadius),
+                    borderSide: const BorderSide(color: calendarBorderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(calendarBorderRadius),
+                    borderSide:
+                        const BorderSide(color: Color(0xff007AFF), width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: calendarSpacing12,
+                    vertical: calendarSpacing12,
+                  ),
+                ),
+                onChanged: (value) {
+                  final parsed = int.tryParse(value);
+                  setState(() {
+                    if (parsed == null || parsed <= 0) {
+                      _recurrenceCount = null;
+                    } else {
+                      _recurrenceCount = parsed;
+                      _recurrenceUntil = null;
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose either an end date or number of occurrences. Leave both blank to repeat indefinitely.',
+          style: TextStyle(fontSize: 11, color: calendarSubtitleColor),
+        ),
+      ],
     );
   }
 
@@ -670,6 +819,14 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     RecurrenceRule? recurrence;
     if (_recurrenceFrequency != RecurrenceFrequency.none) {
+      final defaultWeekday =
+          widget.prefilledDateTime?.weekday ?? DateTime.monday;
+      final normalizedWeekdays = (_selectedWeekdays.isEmpty
+              ? {defaultWeekday}
+              : _selectedWeekdays)
+          .toList()
+        ..sort();
+
       switch (_recurrenceFrequency) {
         case RecurrenceFrequency.none:
           break;
@@ -677,32 +834,34 @@ class _QuickAddModalState extends State<QuickAddModal>
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.daily,
             interval: _recurrenceInterval,
+            until: _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
         case RecurrenceFrequency.weekdays:
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.weekdays,
-            interval: 1,
-            byWeekdays: const [
-              DateTime.monday,
-              DateTime.tuesday,
-              DateTime.wednesday,
-              DateTime.thursday,
-              DateTime.friday,
-            ],
+            interval: _recurrenceInterval,
+            byWeekdays: normalizedWeekdays,
+            until: _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
         case RecurrenceFrequency.weekly:
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.weekly,
             interval: _recurrenceInterval,
-            byWeekdays: _selectedWeekdays.toList()..sort(),
+            byWeekdays: normalizedWeekdays,
+            until: _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
         case RecurrenceFrequency.monthly:
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.monthly,
             interval: _recurrenceInterval,
+            until: _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
       }
