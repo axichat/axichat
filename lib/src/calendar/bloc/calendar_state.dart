@@ -38,15 +38,15 @@ extension CalendarStateExtensions on CalendarState {
 
   DateTime get weekStart {
     final date = selectedDate;
-    final weekday = date.weekday;
-    final daysToSubtract = weekday == DateTime.sunday ? 0 : weekday;
-    return DateTime(date.year, date.month, date.day - daysToSubtract);
+    final weekday = date.weekday; // Monday = 1, Sunday = 7
+    final daysFromMonday = weekday - DateTime.monday;
+    return DateTime(date.year, date.month, date.day)
+        .subtract(Duration(days: daysFromMonday));
   }
 
   DateTime get weekEnd {
     final start = weekStart;
-    return start
-        .add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    return start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
   }
 
   List<CalendarTask> get tasksForSelectedWeek =>

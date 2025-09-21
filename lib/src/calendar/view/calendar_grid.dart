@@ -775,6 +775,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             children: [
               _buildTimeSlots(compact,
                   isDayView: isDayView, date: date, isToday: isToday),
+              ..._buildTasksForDayWithWidth(date, compact, constraints.maxWidth,
+                  isDayView: isDayView, visibleTaskIds: visibleTaskIds),
               if (_shouldShowCurrentTimeIndicator(date))
                 _buildCurrentTimeIndicator(
                   date,
@@ -782,8 +784,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   compact,
                   isDayView,
                 ),
-              ..._buildTasksForDayWithWidth(date, compact, constraints.maxWidth,
-                  isDayView: isDayView, visibleTaskIds: visibleTaskIds),
             ],
           );
         },
