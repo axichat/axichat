@@ -13,6 +13,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isPopoverOpen;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
   final VoidCallback? onDragStarted;
+  final bool enableInteractions;
 
   const ResizableTaskWidget({
     super.key,
@@ -26,6 +27,7 @@ class ResizableTaskWidget extends StatefulWidget {
     this.isPopoverOpen = false,
     this.onTap,
     this.onDragStarted,
+    this.enableInteractions = true,
   });
 
   @override
@@ -85,7 +87,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     }
 
     Widget buildTaskBody() {
-      final showHoverEffects = widget.isPopoverOpen || isHovering || isResizing;
+      final showHoverEffects = widget.enableInteractions &&
+          (widget.isPopoverOpen || isHovering || isResizing);
       return Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
@@ -181,59 +184,67 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       );
     }
 
-    return SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: Draggable<CalendarTask>(
-        data: task,
-        feedback: buildFeedback(),
-        onDragStarted: widget.onDragStarted,
-        onDragEnd: (_) {
-          if (mounted) {
+    Widget buildInteractiveContent() {
+      return MouseRegion(
+        onEnter: (_) {
+          if (!widget.isPopoverOpen && widget.enableInteractions) {
+            setState(() => isHovering = true);
+          }
+        },
+        onExit: (_) {
+          if (!widget.isPopoverOpen && widget.enableInteractions) {
             setState(() => isHovering = false);
           }
         },
-        childWhenDragging: Container(
-          decoration: BoxDecoration(
-            color: taskColor.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: taskColor, width: 1),
-          ),
-        ),
-        child: MouseRegion(
-          onEnter: (_) {
-            if (!widget.isPopoverOpen) {
-              setState(() => isHovering = true);
-            }
-          },
-          onExit: (_) {
-            if (!widget.isPopoverOpen) {
-              setState(() => isHovering = false);
-            }
-          },
-          cursor: isResizing
-              ? SystemMouseCursors.resizeUpDown
-              : SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              final handler = widget.onTap;
-              if (handler == null) return;
+        cursor: widget.enableInteractions && isResizing
+            ? SystemMouseCursors.resizeUpDown
+            : SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            final handler = widget.onTap;
+            if (handler == null) return;
 
-              final renderBox = context.findRenderObject() as RenderBox?;
-              if (renderBox == null) {
-                handler(task, Rect.zero);
-                return;
-              }
+            final renderBox = context.findRenderObject() as RenderBox?;
+            if (renderBox == null) {
+              handler(task, Rect.zero);
+              return;
+            }
 
-              final origin = renderBox.localToGlobal(Offset.zero);
-              handler(task, origin & renderBox.size);
-            },
-            child: buildTaskBody(),
-          ),
+            final origin = renderBox.localToGlobal(Offset.zero);
+            handler(task, origin & renderBox.size);
+          },
+          child: buildTaskBody(),
         ),
-      ),
+      );
+    }
+
+    final content = SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: widget.enableInteractions
+          ? Draggable<CalendarTask>(
+              data: task,
+              feedback: buildFeedback(),
+              onDragStarted: widget.onDragStarted,
+              onDragEnd: (_) {
+                if (mounted) {
+                  setState(() => isHovering = false);
+                }
+              },
+              childWhenDragging: Container(
+                decoration: BoxDecoration(
+                  color: taskColor.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: taskColor, width: 1),
+                ),
+              ),
+              child: buildInteractiveContent(),
+            )
+          : buildInteractiveContent(),
     );
+
+    return content;
   }
 
   List<Widget> _buildResizeHandles() {

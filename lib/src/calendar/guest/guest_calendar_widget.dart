@@ -7,6 +7,7 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../view/calendar_grid.dart';
 import '../view/calendar_navigation.dart';
@@ -316,9 +317,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
-    // If the task has been resized (duration changed), use taskResized event
+    final baseId = task.baseId;
     final originalTask =
-        context.read<GuestCalendarBloc>().state.model.tasks[task.id];
+        context.read<GuestCalendarBloc>().state.model.tasks[baseId];
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
@@ -330,7 +331,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
       context.read<GuestCalendarBloc>().add(
             CalendarEvent.taskResized(
-              taskId: task.id,
+              taskId: baseId,
               startHour: startHour,
               duration: durationHours,
               daySpan: task.effectiveDaySpan,
@@ -340,7 +341,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
       // Simple time change only
       context.read<GuestCalendarBloc>().add(
             CalendarEvent.taskDropped(
-              taskId: task.id,
+              taskId: baseId,
               time: newTime,
             ),
           );

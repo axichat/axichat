@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -12,6 +13,7 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'widgets/deadline_picker_field.dart';
@@ -813,96 +815,97 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   Widget _buildAdvancedRecurrenceEndControls() {
     final untilLabel = _advancedRecurrenceUntil == null
-        ? 'End on date (optional)'
+        ? 'End on date'
         : DateFormat('MMM d, yyyy').format(_advancedRecurrenceUntil!);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () async {
-                  final now = DateTime.now();
-                  final initial = _advancedRecurrenceUntil ??
-                      (_advancedStartTime ?? now).add(const Duration(days: 1));
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: initial,
-                    firstDate: DateTime(now.year - 1),
-                    lastDate: DateTime(now.year + 5),
-                  );
-                  if (picked == null) return;
-                  setState(() {
-                    _advancedRecurrenceUntil =
-                        DateTime(picked.year, picked.month, picked.day);
-                    _advancedRecurrenceCount = null;
-                    _advancedRecurrenceCountController.clear();
-                  });
-                },
-                style: OutlinedButton.styleFrom(
-                  alignment: Alignment.centerLeft,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  side: const BorderSide(color: calendarBorderColor),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+        Expanded(
+          child: SizedBox(
+            height: 36,
+            child: OutlinedButton(
+              onPressed: () async {
+                final now = DateTime.now();
+                final initial = _advancedRecurrenceUntil ??
+                    (_advancedStartTime ?? now).add(const Duration(days: 1));
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: initial,
+                  firstDate: DateTime(now.year - 1),
+                  lastDate: DateTime(now.year + 5),
+                );
+                if (picked == null) return;
+                setState(() {
+                  _advancedRecurrenceUntil =
+                      DateTime(picked.year, picked.month, picked.day);
+                  _advancedRecurrenceCount = null;
+                  _advancedRecurrenceCountController.clear();
+                });
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size.fromHeight(36),
+                side: const BorderSide(color: calendarBorderColor),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        untilLabel,
-                        style: const TextStyle(fontSize: 12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today, size: 14),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      untilLabel,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_advancedRecurrenceUntil != null)
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _advancedRecurrenceUntil = null;
+                        });
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(Icons.close, size: 14),
                       ),
                     ),
-                    if (_advancedRecurrenceUntil != null)
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        tooltip: 'Clear end date',
-                        onPressed: () {
-                          setState(() {
-                            _advancedRecurrenceUntil = null;
-                          });
-                        },
-                      ),
-                  ],
-                ),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _advancedRecurrenceCountController,
-                keyboardType: TextInputType.number,
-                decoration:
-                    _fieldDecoration('End after (count)').copyWith(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
-                onChanged: (value) {
-                  final parsed = int.tryParse(value);
-                  setState(() {
-                    if (parsed == null || parsed <= 0) {
-                      _advancedRecurrenceCount = null;
-                    } else {
-                      _advancedRecurrenceCount = parsed;
-                      _advancedRecurrenceUntil = null;
-                    }
-                  });
-                },
-              ),
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 6),
-        const Text(
-          'Choose either an end date or number of occurrences. Leave both blank to repeat indefinitely.',
-          style: TextStyle(fontSize: 11, color: calendarSubtitleColor),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SizedBox(
+            height: 36,
+            child: TextField(
+              controller: _advancedRecurrenceCountController,
+              keyboardType: TextInputType.number,
+              textAlignVertical: TextAlignVertical.center,
+              decoration: _fieldDecoration('End after').copyWith(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: (value) {
+                final parsed = int.tryParse(value);
+                setState(() {
+                  if (parsed == null || parsed <= 0) {
+                    _advancedRecurrenceCount = null;
+                  } else {
+                    _advancedRecurrenceCount = parsed;
+                    _advancedRecurrenceUntil = null;
+                  }
+                });
+              },
+            ),
+          ),
         ),
       ],
     );
@@ -1426,8 +1429,9 @@ class _TaskSidebarState extends State<TaskSidebar>
                         popover: (context) {
                           return BlocBuilder<BaseCalendarBloc, CalendarState>(
                             builder: (context, state) {
+                              final baseId = task.baseId;
                               final latestTask =
-                                  state.model.tasks[task.id] ?? task;
+                                  state.model.tasks[baseId] ?? task;
 
                               return EditTaskDropdown(
                                 task: latestTask,
@@ -1446,9 +1450,9 @@ class _TaskSidebarState extends State<TaskSidebar>
                                           taskId: taskId,
                                         ),
                                       );
-                                  _closeTaskPopover(taskId);
+                                  _closeTaskPopover(task.id);
                                   _taskPopoverControllers
-                                      .remove(taskId)
+                                      .remove(task.id)
                                       ?.dispose();
                                 },
                               );

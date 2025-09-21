@@ -6,6 +6,7 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'feedback_system.dart';
@@ -321,9 +322,10 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     return ActionFeedback(
       onTap: () {
         setState(() => _isUpdating = true);
+        final baseId = widget.task.baseId;
         context.read<T>().add(
               CalendarEvent.taskCompleted(
-                taskId: widget.task.id,
+                taskId: baseId,
                 completed: !widget.task.isCompleted,
               ),
             );
@@ -353,9 +355,10 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
               onChanged: (completed) {
                 if (completed != null && !_isUpdating) {
                   setState(() => _isUpdating = true);
+                  final baseId = widget.task.baseId;
                   context.read<T>().add(
                         CalendarEvent.taskCompleted(
-                          taskId: widget.task.id,
+                          taskId: baseId,
                           completed: completed,
                         ),
                       );
@@ -501,7 +504,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           TextButton(
             onPressed: () {
               context.read<T>().add(
-                    CalendarEvent.taskDeleted(taskId: widget.task.id),
+                    CalendarEvent.taskDeleted(taskId: widget.task.baseId),
                   );
               Navigator.of(context).pop();
             },

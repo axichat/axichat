@@ -6,6 +6,7 @@ import '../../common/ui/ui.dart';
 import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import '../utils/time_formatter.dart';
 
 class CalendarEventWidget extends StatefulWidget {
@@ -127,15 +128,19 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   Widget _buildDraggableEvent() {
+    if (widget.task.isOccurrence) {
+      return _buildEventContainer(interactive: false);
+    }
+
     return Draggable<CalendarTask>(
       data: widget.task,
       feedback: _buildEventContainer(isDragging: true),
-      childWhenDragging: _buildEventContainer(isGhost: true),
+      childWhenDragging: _buildEventContainer(isGhost: true, interactive: false),
       onDragStarted: () {
         setState(() => _isDragging = true);
         HapticFeedback.selectionClick();
         context.read<CalendarBloc>().add(
-              CalendarEvent.taskDragStarted(taskId: widget.task.id),
+              CalendarEvent.taskDragStarted(taskId: widget.task.baseId),
             );
       },
       onDragEnd: (details) {
@@ -145,11 +150,23 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     );
   }
 
-  Widget _buildEventContainer({bool isDragging = false, bool isGhost = false}) {
+  Widget _buildEventContainer({
+    bool isDragging = false,
+    bool isGhost = false,
+    bool interactive = true,
+  }) {
     return MouseRegion(
-      onEnter: (_) => _onHoverChanged(true),
-      onExit: (_) => _onHoverChanged(false),
-      cursor: _getMouseCursor(),
+      onEnter: (_) {
+        if (interactive) {
+          _onHoverChanged(true);
+        }
+      },
+      onExit: (_) {
+        if (interactive) {
+          _onHoverChanged(false);
+        }
+      },
+      cursor: _getMouseCursor(interactive),
       child: GestureDetector(
         onTap: widget.onTap ?? _handleTap,
         child: AnimatedContainer(
@@ -175,7 +192,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
           child: Stack(
             children: [
               _buildEventContent(),
-              if (_isHovering && !isDragging && widget.isDayView)
+              if (interactive && _isHovering && !isDragging && widget.isDayView)
                 _buildResizeHandles(),
             ],
           ),
@@ -290,6 +307,10 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   Widget _buildResizeHandles() {
+    if (widget.task.isOccurrence) {
+      return const SizedBox.shrink();
+    }
+
     return Stack(
       children: [
         // Top resize handle - at the very edge
@@ -419,7 +440,8 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     );
   }
 
-  SystemMouseCursor _getMouseCursor() {
+  SystemMouseCursor _getMouseCursor(bool interactive) {
+    if (!interactive) return SystemMouseCursors.basic;
     if (_isResizing) return SystemMouseCursors.resizeUpDown;
     if (_isHovering && !_isDragging) return SystemMouseCursors.click;
     return SystemMouseCursors.grab;
@@ -443,6 +465,9 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   void _startResize(ResizeDirection direction) {
+    if (widget.task.isOccurrence) {
+      return;
+    }
     setState(() {
       _isResizing = true;
       _resizeAccumulatedDelta = 0;
@@ -453,7 +478,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   void _updateResize(dynamic details, ResizeDirection direction) {
-    if (!widget.isDayView ||
+    if (!widget.isDayView || widget.task.isOccurrence ||
         _resizeStartTime == null ||
         _resizeStartDuration == null) {
       return;
@@ -583,6 +608,9 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   int? _tempDaySpan;
 
   void _endResize() {
+    if (widget.task.isOccurrence) {
+      return;
+    }
     setState(() => _isResizing = false);
 
     if (_tempStartTime != null && _tempDuration != null) {
@@ -590,7 +618,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
       context.read<CalendarBloc>().add(
             CalendarEvent.taskResized(
-              taskId: widget.task.id,
+              taskId: widget.task.baseId,
               startHour: startHour,
               duration: _tempDuration!.inMinutes / 60.0,
               daySpan: _tempDaySpan ?? widget.task.effectiveDaySpan,

@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 
 part 'calendar_state.freezed.dart';
@@ -48,25 +49,93 @@ extension CalendarStateExtensions on CalendarState {
         .add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
   }
 
-  List<CalendarTask> get tasksForSelectedWeek {
-    final start = weekStart;
-    final end = weekEnd;
-    return scheduledTasks.where((task) {
-      final taskDate = task.scheduledTime!;
-      return taskDate.isAfter(start.subtract(const Duration(seconds: 1))) &&
-          taskDate.isBefore(end.add(const Duration(seconds: 1)));
-    }).toList();
-  }
+  List<CalendarTask> get tasksForSelectedWeek =>
+      tasksInRange(weekStart, weekEnd);
 
   List<CalendarTask> get tasksForSelectedDay {
     if (selectedDayIndex == null) return [];
     final dayStart = weekStart.add(Duration(days: selectedDayIndex!));
-    final dayEnd =
-        dayStart.add(const Duration(hours: 23, minutes: 59, seconds: 59));
-    return scheduledTasks.where((task) {
-      final taskDate = task.scheduledTime!;
-      return taskDate.isAfter(dayStart.subtract(const Duration(seconds: 1))) &&
-          taskDate.isBefore(dayEnd.add(const Duration(seconds: 1)));
-    }).toList();
+    final dayEnd = dayStart.add(
+      const Duration(hours: 23, minutes: 59, seconds: 59, milliseconds: 999),
+    );
+    return tasksInRange(dayStart, dayEnd);
+  }
+
+  List<CalendarTask> tasksForDate(DateTime date) {
+    final dayStart = DateTime(date.year, date.month, date.day);
+    final dayEnd = dayStart.add(
+      const Duration(hours: 23, minutes: 59, seconds: 59, milliseconds: 999),
+    );
+    return tasksInRange(dayStart, dayEnd);
+  }
+
+  List<CalendarTask> tasksInRange(DateTime rangeStart, DateTime rangeEnd) {
+    final normalizedStart = DateTime(
+      rangeStart.year,
+      rangeStart.month,
+      rangeStart.day,
+      rangeStart.hour,
+      rangeStart.minute,
+      rangeStart.second,
+      rangeStart.millisecond,
+      rangeStart.microsecond,
+    );
+    final normalizedEnd = DateTime(
+      rangeEnd.year,
+      rangeEnd.month,
+      rangeEnd.day,
+      rangeEnd.hour,
+      rangeEnd.minute,
+      rangeEnd.second,
+      rangeEnd.millisecond,
+      rangeEnd.microsecond,
+    );
+
+    final results = <CalendarTask>[];
+
+    for (final task in model.tasks.values) {
+      final scheduled = task.scheduledTime;
+      if (scheduled == null) continue;
+
+      final taskEnd = task.effectiveEndDate ?? scheduled;
+      if (_overlapsRange(scheduled, taskEnd, normalizedStart, normalizedEnd)) {
+        results.add(task);
+      }
+
+      final generated = task.occurrencesWithin(normalizedStart, normalizedEnd);
+      for (final occurrence in generated) {
+        final occurrenceStart = occurrence.scheduledTime;
+        if (occurrenceStart == null) continue;
+        final occurrenceEnd = occurrence.effectiveEndDate ?? occurrenceStart;
+        if (_overlapsRange(
+          occurrenceStart,
+          occurrenceEnd,
+          normalizedStart,
+          normalizedEnd,
+        )) {
+          results.add(occurrence);
+        }
+      }
+    }
+
+    results.sort((a, b) {
+      final aTime = a.scheduledTime;
+      final bTime = b.scheduledTime;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return aTime.compareTo(bTime);
+    });
+
+    return results;
+  }
+
+  bool _overlapsRange(
+    DateTime eventStart,
+    DateTime eventEnd,
+    DateTime rangeStart,
+    DateTime rangeEnd,
+  ) {
+    return !eventEnd.isBefore(rangeStart) && !eventStart.isAfter(rangeEnd);
   }
 }

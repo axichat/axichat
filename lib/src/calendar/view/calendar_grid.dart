@@ -9,6 +9,7 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import 'edit_task_dropdown.dart';
 import 'resizable_task_widget.dart';
@@ -527,7 +528,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     value: widget.bloc,
                     child: BlocBuilder<T, CalendarState>(
                       builder: (context, state) {
-                        final latestTask = state.model.tasks[taskId];
+                        final baseId = baseTaskIdFrom(taskId);
+                        final latestTask = state.model.tasks[baseId];
                         if (latestTask == null) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             _closeTaskPopover(taskId, reason: 'missing-task');
@@ -553,7 +555,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     taskId: deletedTaskId,
                                   ),
                                 );
-                            _closeTaskPopover(deletedTaskId,
+                            _closeTaskPopover(taskId,
                                 reason: 'task-deleted');
                           },
                         );
@@ -1260,6 +1262,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               height: clampedHeight,
               isDayView: isDayView,
               isPopoverOpen: isPopoverOpen,
+              enableInteractions: !task.isOccurrence,
               onTap: (tappedTask, bounds) {
                 _onScheduledTaskTapped(tappedTask, bounds);
               },
@@ -1351,34 +1354,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   List<CalendarTask> _getTasksForDay(DateTime date) {
-    return widget.state.model.tasks.values.where((task) {
-      if (task.scheduledTime == null) return false;
-
-      final taskStart = task.scheduledTime!;
-      final daySpan = task.effectiveDaySpan;
-
-      // Check if task spans across this day
-      if (daySpan > 1) {
-        // Multi-day task: check if date falls within the span
-        final taskEnd = taskStart.add(Duration(days: daySpan - 1));
-        final dateOnly = DateTime(date.year, date.month, date.day);
-        final taskStartOnly =
-            DateTime(taskStart.year, taskStart.month, taskStart.day);
-        final taskEndOnly = DateTime(taskEnd.year, taskEnd.month, taskEnd.day);
-
-        return dateOnly.isAtSameMomentAs(taskStartOnly) ||
-            dateOnly.isAtSameMomentAs(taskEndOnly) ||
-            (dateOnly.isAfter(taskStartOnly) && dateOnly.isBefore(taskEndOnly));
-      }
-
-      // Single day task: check if it's on this day
-      return _isSameDay(taskStart, date);
-    }).toList()
+    final tasks = widget.state.tasksForDate(date);
+    return tasks
+        .where((task) => task.scheduledTime != null)
+        .toList()
       ..sort((a, b) {
-        if (a.scheduledTime == null && b.scheduledTime == null) return 0;
-        if (a.scheduledTime == null) return 1;
-        if (b.scheduledTime == null) return -1;
-        return a.scheduledTime!.compareTo(b.scheduledTime!);
+        final aTime = a.scheduledTime;
+        final bTime = b.scheduledTime;
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        return aTime.compareTo(bTime);
       });
   }
 
