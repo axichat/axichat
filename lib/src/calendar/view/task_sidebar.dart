@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -50,8 +49,9 @@ class _TaskSidebarState extends State<TaskSidebar>
   RecurrenceFrequency _advancedRecurrenceFrequency = RecurrenceFrequency.none;
   int _advancedRecurrenceInterval = 1;
   DateTime? _advancedRecurrenceUntil;
-  int? _advancedRecurrenceCount;
-  final TextEditingController _advancedRecurrenceCountController =
+  int? _advancedRecurrenceEndAfterAmount;
+  RecurrenceEndUnit _advancedRecurrenceEndAfterUnit = RecurrenceEndUnit.days;
+  final TextEditingController _advancedRecurrenceEndAfterController =
       TextEditingController();
   Set<int> _advancedSelectedWeekdays = const {
     DateTime.monday,
@@ -69,7 +69,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
-    _advancedRecurrenceCountController.dispose();
+    _advancedRecurrenceEndAfterController.dispose();
     _scrollController.dispose();
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
@@ -327,13 +327,13 @@ class _TaskSidebarState extends State<TaskSidebar>
             value: _selectedDeadline,
             onChanged: (value) => setState(() => _selectedDeadline = value),
           ),
-          const SizedBox(height: 12),
+          _advancedDivider(),
           _buildAdvancedScheduleToggle(),
           if (_scheduleEnabled) ...[
             const SizedBox(height: 10),
             _buildAdvancedScheduleFields(),
           ],
-          const SizedBox(height: 12),
+          _advancedDivider(),
           _buildAdvancedRecurrenceSection(),
         ],
       ),
@@ -427,6 +427,19 @@ class _TaskSidebarState extends State<TaskSidebar>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _advancedDivider() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Container(
+        height: 1,
+        decoration: BoxDecoration(
+          color: calendarBorderColor.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(999),
+        ),
       ),
     );
   }
@@ -601,6 +614,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
       }
     });
+    _recalculateAdvancedRecurrenceEndFromAmount();
   }
 
   Future<void> _pickAdvancedEndDate() async {
@@ -647,6 +661,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
       }
     });
+    _recalculateAdvancedRecurrenceEndFromAmount();
   }
 
   Future<void> _pickAdvancedEndTime() async {
@@ -702,10 +717,8 @@ class _TaskSidebarState extends State<TaskSidebar>
             padding: const EdgeInsets.only(top: 12),
             child: _buildAdvancedRecurrenceInterval(),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: _buildAdvancedRecurrenceEndControls(),
-          ),
+          const SizedBox(height: 14),
+          _buildAdvancedRecurrenceEndControls(),
         ],
       ],
     );
@@ -732,8 +745,9 @@ class _TaskSidebarState extends State<TaskSidebar>
           _advancedRecurrenceInterval = 1;
           if (frequency == RecurrenceFrequency.none) {
             _advancedRecurrenceUntil = null;
-            _advancedRecurrenceCount = null;
-            _advancedRecurrenceCountController.clear();
+            _advancedRecurrenceEndAfterAmount = null;
+            _advancedRecurrenceEndAfterController.clear();
+            _advancedRecurrenceEndAfterUnit = RecurrenceEndUnit.days;
           }
           if (frequency == RecurrenceFrequency.weekdays) {
             _advancedSelectedWeekdays = const {
@@ -750,6 +764,9 @@ class _TaskSidebarState extends State<TaskSidebar>
             _advancedSelectedWeekdays = {defaultDay};
           }
         });
+        if (frequency != RecurrenceFrequency.none) {
+          _recalculateAdvancedRecurrenceEndFromAmount();
+        }
       },
       child: Text(
         _recurrenceLabel(frequency),
@@ -777,14 +794,15 @@ class _TaskSidebarState extends State<TaskSidebar>
           'Repeat every',
           style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         SizedBox(
-          width: 72,
+          width: 118,
           child: ShadSelect<int>(
             initialValue: _advancedRecurrenceInterval,
             onChanged: (value) {
               if (value == null) return;
               setState(() => _advancedRecurrenceInterval = value);
+              _recalculateAdvancedRecurrenceEndFromAmount();
             },
             options: options,
             selectedOptionBuilder: (context, value) => Text('$value'),
@@ -793,18 +811,18 @@ class _TaskSidebarState extends State<TaskSidebar>
               border: ShadBorder.all(
                 color: calendarBorderColor,
                 width: 1,
-                radius: BorderRadius.circular(8),
+                radius: BorderRadius.circular(10),
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            trailing: Icon(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            trailing: const Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
               color: calendarSubtitleColor,
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Text(
           _recurrenceIntervalUnit(_advancedRecurrenceFrequency),
           style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
@@ -814,101 +832,149 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildAdvancedRecurrenceEndControls() {
-    final untilLabel = _advancedRecurrenceUntil == null
-        ? 'End on date'
-        : DateFormat('MMM d, yyyy').format(_advancedRecurrenceUntil!);
+    const units = RecurrenceEndUnit.values;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: SizedBox(
-            height: 36,
-            child: OutlinedButton(
-              onPressed: () async {
-                final now = DateTime.now();
-                final initial = _advancedRecurrenceUntil ??
-                    (_advancedStartTime ?? now).add(const Duration(days: 1));
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: initial,
-                  firstDate: DateTime(now.year - 1),
-                  lastDate: DateTime(now.year + 5),
-                );
-                if (picked == null) return;
-                setState(() {
-                  _advancedRecurrenceUntil =
-                      DateTime(picked.year, picked.month, picked.day);
-                  _advancedRecurrenceCount = null;
-                  _advancedRecurrenceCountController.clear();
-                });
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                minimumSize: const Size.fromHeight(36),
-                side: const BorderSide(color: calendarBorderColor),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today, size: 14),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      untilLabel,
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (_advancedRecurrenceUntil != null)
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _advancedRecurrenceUntil = null;
-                        });
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.all(2),
-                        child: Icon(Icons.close, size: 14),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+        SizedBox(
+          height: 48,
+          child: DeadlinePickerField(
+            value: _advancedRecurrenceUntil,
+            placeholder: 'End',
+            showStatusColors: false,
+            showTimeSelectors: false,
+            onChanged: (value) {
+              setState(() {
+                _advancedRecurrenceUntil = value == null
+                    ? null
+                    : DateTime(value.year, value.month, value.day);
+                if (_advancedRecurrenceUntil != null) {
+                  _advancedRecurrenceEndAfterAmount = null;
+                  _advancedRecurrenceEndAfterController.clear();
+                }
+              });
+            },
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SizedBox(
-            height: 36,
-            child: TextField(
-              controller: _advancedRecurrenceCountController,
-              keyboardType: TextInputType.number,
-              textAlignVertical: TextAlignVertical.center,
-              decoration: _fieldDecoration('End after').copyWith(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
+        const SizedBox(height: 16),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: calendarBorderColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _advancedRecurrenceEndAfterController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration.collapsed(
+                      hintText: 'Count',
+                      hintStyle: TextStyle(
+                        color: calendarSubtitleColor.withValues(alpha: 0.55),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    onChanged: (value) {
+                      final parsed = int.tryParse(value);
+                      if (parsed == null || parsed <= 0) {
+                        setState(() {
+                          _advancedRecurrenceEndAfterAmount = null;
+                          _advancedRecurrenceUntil = null;
+                        });
+                        return;
+                      }
+                      _setAdvancedRecurrenceEndAfterAmount(parsed);
+                    },
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 28,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  color: calendarBorderColor.withValues(alpha: 0.5),
+                ),
+                SizedBox(
+                  width: 132,
+                  child: ShadSelect<RecurrenceEndUnit>(
+                    initialValue: _advancedRecurrenceEndAfterUnit,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _advancedRecurrenceEndAfterUnit = value);
+                      _recalculateAdvancedRecurrenceEndFromAmount();
+                    },
+                    options: units
+                        .map(
+                          (unit) => ShadOption<RecurrenceEndUnit>(
+                            value: unit,
+                            child: Text(unit.label),
+                          ),
+                        )
+                        .toList(),
+                    selectedOptionBuilder: (context, value) =>
+                        Text(value.label),
+                    decoration: ShadDecoration(
+                      color: Colors.white,
+                      border: ShadBorder.all(
+                        color: Colors.transparent,
+                        radius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    trailing: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: calendarSubtitleColor,
+                    ),
+                  ),
+                ),
               ],
-              onChanged: (value) {
-                final parsed = int.tryParse(value);
-                setState(() {
-                  if (parsed == null || parsed <= 0) {
-                    _advancedRecurrenceCount = null;
-                  } else {
-                    _advancedRecurrenceCount = parsed;
-                    _advancedRecurrenceUntil = null;
-                  }
-                });
-              },
             ),
           ),
         ),
       ],
     );
+  }
+
+  void _setAdvancedRecurrenceEndAfterAmount(int amount) {
+    final base = _advancedRecurrenceBaseDate();
+    final weekdays = _advancedRecurrenceFrequency == RecurrenceFrequency.weekly
+        ? (_advancedSelectedWeekdays.toList()..sort())
+        : null;
+    final until = calculateRecurrenceEndDate(
+      start: base,
+      frequency: _advancedRecurrenceFrequency,
+      interval: _advancedRecurrenceInterval,
+      byWeekdays: weekdays,
+      unit: _advancedRecurrenceEndAfterUnit,
+      amount: amount,
+    );
+
+    setState(() {
+      _advancedRecurrenceEndAfterAmount = amount;
+      _advancedRecurrenceUntil = until;
+    });
+  }
+
+  void _recalculateAdvancedRecurrenceEndFromAmount() {
+    final amount = _advancedRecurrenceEndAfterAmount;
+    if (amount == null || amount <= 0) {
+      return;
+    }
+    _setAdvancedRecurrenceEndAfterAmount(amount);
+  }
+
+  DateTime _advancedRecurrenceBaseDate() {
+    return _advancedStartTime ?? DateTime.now();
   }
 
   String _recurrenceLabel(RecurrenceFrequency frequency) {
@@ -984,6 +1050,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                 };
               }
             });
+            _recalculateAdvancedRecurrenceEndFromAmount();
           },
           child: Text(
             labels[index],
@@ -1721,7 +1788,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           interval: _advancedRecurrenceInterval,
           byWeekdays: weekdays,
           until: _advancedRecurrenceUntil,
-          count: _advancedRecurrenceCount,
+          count: null,
         );
       }
 
@@ -1759,8 +1826,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       _advancedRecurrenceFrequency = RecurrenceFrequency.none;
       _advancedRecurrenceInterval = 1;
       _advancedRecurrenceUntil = null;
-      _advancedRecurrenceCount = null;
-      _advancedRecurrenceCountController.clear();
+      _advancedRecurrenceEndAfterAmount = null;
+      _advancedRecurrenceEndAfterController.clear();
+      _advancedRecurrenceEndAfterUnit = RecurrenceEndUnit.days;
       _advancedSelectedWeekdays = const {
         DateTime.monday,
         DateTime.tuesday,
