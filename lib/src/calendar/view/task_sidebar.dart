@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -46,6 +47,10 @@ class _TaskSidebarState extends State<TaskSidebar>
   DateTime? _advancedEndTime;
   RecurrenceFrequency _advancedRecurrenceFrequency = RecurrenceFrequency.none;
   int _advancedRecurrenceInterval = 1;
+  DateTime? _advancedRecurrenceUntil;
+  int? _advancedRecurrenceCount;
+  final TextEditingController _advancedRecurrenceCountController =
+      TextEditingController();
   Set<int> _advancedSelectedWeekdays = const {
     DateTime.monday,
     DateTime.tuesday,
@@ -62,6 +67,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _advancedRecurrenceCountController.dispose();
     _scrollController.dispose();
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
@@ -689,11 +695,16 @@ class _TaskSidebarState extends State<TaskSidebar>
           const SizedBox(height: 12),
           _buildAdvancedWeekdaySelector(),
         ],
-        if (_advancedRecurrenceFrequency != RecurrenceFrequency.none)
+        if (_advancedRecurrenceFrequency != RecurrenceFrequency.none) ...[
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: _buildAdvancedRecurrenceInterval(),
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _buildAdvancedRecurrenceEndControls(),
+          ),
+        ],
       ],
     );
   }
@@ -717,6 +728,11 @@ class _TaskSidebarState extends State<TaskSidebar>
         setState(() {
           _advancedRecurrenceFrequency = frequency;
           _advancedRecurrenceInterval = 1;
+          if (frequency == RecurrenceFrequency.none) {
+            _advancedRecurrenceUntil = null;
+            _advancedRecurrenceCount = null;
+            _advancedRecurrenceCountController.clear();
+          }
           if (frequency == RecurrenceFrequency.weekdays) {
             _advancedSelectedWeekdays = const {
               DateTime.monday,
@@ -790,6 +806,103 @@ class _TaskSidebarState extends State<TaskSidebar>
         Text(
           _recurrenceIntervalUnit(_advancedRecurrenceFrequency),
           style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAdvancedRecurrenceEndControls() {
+    final untilLabel = _advancedRecurrenceUntil == null
+        ? 'End on date (optional)'
+        : DateFormat('MMM d, yyyy').format(_advancedRecurrenceUntil!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  final now = DateTime.now();
+                  final initial = _advancedRecurrenceUntil ??
+                      (_advancedStartTime ?? now).add(const Duration(days: 1));
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: initial,
+                    firstDate: DateTime(now.year - 1),
+                    lastDate: DateTime(now.year + 5),
+                  );
+                  if (picked == null) return;
+                  setState(() {
+                    _advancedRecurrenceUntil =
+                        DateTime(picked.year, picked.month, picked.day);
+                    _advancedRecurrenceCount = null;
+                    _advancedRecurrenceCountController.clear();
+                  });
+                },
+                style: OutlinedButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  side: const BorderSide(color: calendarBorderColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        untilLabel,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    if (_advancedRecurrenceUntil != null)
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 16),
+                        tooltip: 'Clear end date',
+                        onPressed: () {
+                          setState(() {
+                            _advancedRecurrenceUntil = null;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _advancedRecurrenceCountController,
+                keyboardType: TextInputType.number,
+                decoration:
+                    _fieldDecoration('End after (count)').copyWith(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                onChanged: (value) {
+                  final parsed = int.tryParse(value);
+                  setState(() {
+                    if (parsed == null || parsed <= 0) {
+                      _advancedRecurrenceCount = null;
+                    } else {
+                      _advancedRecurrenceCount = parsed;
+                      _advancedRecurrenceUntil = null;
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Choose either an end date or number of occurrences. Leave both blank to repeat indefinitely.',
+          style: TextStyle(fontSize: 11, color: calendarSubtitleColor),
         ),
       ],
     );
@@ -1506,16 +1619,6 @@ class _TaskSidebarState extends State<TaskSidebar>
     return tasksCopy;
   }
 
-  String _getDeadlineLabel(DateTime deadline) {
-    final now = DateTime.now();
-    if (deadline.isBefore(now)) {
-      return 'OVERDUE';
-    } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-      return 'DUE SOON';
-    }
-    return 'DEADLINE';
-  }
-
   String _getFullDeadlineText(DateTime deadline) {
     return TimeFormatter.formatFriendlyDateTime(deadline);
   }
@@ -1613,6 +1716,8 @@ class _TaskSidebarState extends State<TaskSidebar>
           frequency: _advancedRecurrenceFrequency,
           interval: _advancedRecurrenceInterval,
           byWeekdays: weekdays,
+          until: _advancedRecurrenceUntil,
+          count: _advancedRecurrenceCount,
         );
       }
 
@@ -1649,6 +1754,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       _advancedEndTime = null;
       _advancedRecurrenceFrequency = RecurrenceFrequency.none;
       _advancedRecurrenceInterval = 1;
+      _advancedRecurrenceUntil = null;
+      _advancedRecurrenceCount = null;
+      _advancedRecurrenceCountController.clear();
       _advancedSelectedWeekdays = const {
         DateTime.monday,
         DateTime.tuesday,

@@ -421,11 +421,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _closeTaskPopover(String taskId, {String reason = 'manual'}) {
-    assert(() {
-      debugPrint(
-          'Close popover for $taskId reason=$reason armed=$_popoverDismissArmed');
-      return true;
-    }());
     _taskPopoverLayouts.remove(taskId);
     if (_activeTaskPopoverId != taskId) {
       return;
@@ -465,9 +460,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final overlayState = Overlay.of(context, rootOverlay: true);
-    if (overlayState == null) {
-      return;
-    }
 
     _activePopoverEntry = OverlayEntry(
       builder: (overlayContext) {
@@ -1262,7 +1254,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   );
                 }
               },
-              dayWidth: dayWidth,
               hourHeight: hourSlotHeight,
               quarterHeight: quarterSlotHeight,
               width: eventWidth,

@@ -30,6 +30,8 @@ class RecurrenceRule with _$RecurrenceRule {
     @HiveField(0) required RecurrenceFrequency frequency,
     @HiveField(1) @Default(1) int interval,
     @HiveField(2) List<int>? byWeekdays,
+    @HiveField(3) DateTime? until,
+    @HiveField(4) int? count,
   }) = _RecurrenceRule;
 
   const RecurrenceRule._();
@@ -40,6 +42,8 @@ class RecurrenceRule with _$RecurrenceRule {
   static const RecurrenceRule none = RecurrenceRule(
     frequency: RecurrenceFrequency.none,
     interval: 1,
+    until: null,
+    count: null,
   );
 
   bool get isNone => frequency == RecurrenceFrequency.none;
