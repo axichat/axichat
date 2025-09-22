@@ -297,7 +297,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildCalendarGridWithHandlers(CalendarState state) {
-    return CalendarGrid(
+    return CalendarGrid<GuestCalendarBloc>(
       state: state,
       onEmptySlotTapped: _onEmptySlotTapped,
       onTaskDragEnd: _onTaskDragEnd,

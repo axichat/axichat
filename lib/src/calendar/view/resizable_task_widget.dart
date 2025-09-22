@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/calendar_task.dart';
@@ -89,99 +91,226 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     Widget buildTaskBody() {
       final showHoverEffects = widget.enableInteractions &&
           (widget.isPopoverOpen || isHovering || isResizing);
-      final contentHeight = (widget.height - 16).clamp(0.0, double.infinity);
-      final showTime = contentHeight >= 34;
-      final showDescription =
-          task.description?.isNotEmpty == true && contentHeight >= 68;
+      final decoration = BoxDecoration(
+        color: task.isCompleted
+            ? taskColor.withOpacity(0.5)
+            : taskColor.withOpacity(isResizing ? 0.7 : 0.9),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isResizing
+              ? Colors.white.withOpacity(0.5)
+              : taskColor.withOpacity(0.3),
+          width: isResizing ? 2 : 1,
+        ),
+        boxShadow: showHoverEffects
+            ? const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ]
+            : const [],
+      );
+
+      final double availableHeight =
+          (widget.height - 4).clamp(0.0, double.infinity);
+      final bool showHandles =
+          showHoverEffects && !task.isCompleted && availableHeight >= 14;
+
+      if (availableHeight <= 6) {
+        return Container(
+          margin: const EdgeInsets.all(2),
+          decoration: decoration,
+          child: Stack(
+            children: [
+              if (showHandles) ..._buildResizeHandles(),
+            ],
+          ),
+        );
+      }
+
+      final double padding;
+      if (availableHeight >= 96) {
+        padding = 8;
+      } else if (availableHeight >= 72) {
+        padding = 6;
+      } else if (availableHeight >= 48) {
+        padding = 4;
+      } else {
+        padding = 2;
+      }
+
+      final double innerHeight =
+          (availableHeight - padding * 2).clamp(0.0, double.infinity);
+
+      if (innerHeight <= 10) {
+        return Container(
+          margin: const EdgeInsets.all(2),
+          decoration: decoration,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                task.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  decoration:
+                      task.isCompleted ? TextDecoration.lineThrough : null,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      final bool stackedTime = innerHeight >= 36;
+      final bool inlineTime =
+          !stackedTime && innerHeight >= 16 && widget.width >= 140;
+      final bool showTime = stackedTime || inlineTime;
+      final bool showDescription =
+          task.description?.isNotEmpty == true && innerHeight >= 56;
+
+      final double spacing = innerHeight >= 90
+          ? 6
+          : innerHeight >= 64
+              ? 4
+              : innerHeight >= 40
+                  ? 2
+                  : 0;
+
+      final int titleLines = innerHeight >= 48 ? 2 : 1;
+      final int descriptionLines = showDescription
+          ? math.max(1, (innerHeight / 18).floor() - (stackedTime ? 1 : 0))
+          : 0;
+      final TextOverflow descriptionOverflow =
+          descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
+
+      Widget buildTitle() {
+        final title = Text(
+          task.title,
+          maxLines: titleLines,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+          ),
+        );
+
+        if (showTime && inlineTime) {
+          final timeText = task.effectiveDaySpan > 1
+              ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
+              : _formatTimeRange();
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (task.effectiveDaySpan > 1) ...[
+                Icon(
+                  Icons.calendar_view_week,
+                  size: 12,
+                  color: Colors.white.withOpacity(0.9),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Expanded(child: title),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  timeText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (task.effectiveDaySpan > 1) ...[
+              Icon(
+                Icons.calendar_view_week,
+                size: 12,
+                color: Colors.white.withOpacity(0.9),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(child: title),
+          ],
+        );
+      }
+
+      final children = <Widget>[buildTitle()];
+
+      if (showTime && !inlineTime) {
+        if (spacing > 0) {
+          children.add(SizedBox(height: spacing));
+        }
+        children.add(
+          Text(
+            task.effectiveDaySpan > 1
+                ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
+                : _formatTimeRange(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        );
+      }
+
+      if (showDescription) {
+        if (spacing > 0) {
+          children.add(SizedBox(height: spacing));
+        }
+        children.add(
+          Text(
+            task.description!,
+            maxLines: descriptionLines,
+            overflow: descriptionOverflow,
+            softWrap: true,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.75),
+              fontSize: 10,
+              height: 1.2,
+            ),
+          ),
+        );
+      }
+
       return Container(
         margin: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: task.isCompleted
-              ? taskColor.withOpacity(0.5)
-              : taskColor.withOpacity(isResizing ? 0.7 : 0.9),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: isResizing
-                ? Colors.white.withOpacity(0.5)
-                : taskColor.withOpacity(0.3),
-            width: isResizing ? 2 : 1,
-          ),
-          boxShadow: showHoverEffects
-              ? const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ]
-              : const [],
-        ),
+        decoration: decoration,
         child: Stack(
           children: [
             ClipRect(
               child: Padding(
-                padding: const EdgeInsets.all(6),
+                padding: EdgeInsets.all(padding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        if (task.effectiveDaySpan > 1) ...[
-                          Icon(
-                            Icons.calendar_view_week,
-                            size: 12,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: Text(
-                            task.title,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              decoration: task.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: widget.height > 40 ? 2 : 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (showTime) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        task.effectiveDaySpan > 1
-                            ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
-                            : _formatTimeRange(),
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                    if (showDescription) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        task.description!,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 10,
-                        ),
-                        maxLines: contentHeight >= 96 ? 2 : 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
+                  children: children,
                 ),
               ),
             ),
-            if (showHoverEffects && !task.isCompleted) ..._buildResizeHandles(),
+            if (showHandles) ..._buildResizeHandles(),
           ],
         ),
       );

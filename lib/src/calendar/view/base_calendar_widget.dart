@@ -293,7 +293,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   }
 
   Widget _buildCalendarGrid(CalendarState state) {
-    return CalendarGrid(
+    return CalendarGrid<T>(
       state: state,
       onEmptySlotTapped: (time, position) {
         // TODO: Handle empty slot tap in base implementation

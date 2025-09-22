@@ -83,6 +83,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   DateTime? _dragPreviewStart;
   Duration? _dragPreviewDuration;
 
+  late T _capturedBloc;
+  bool _blocInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +105,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_blocInitialized) {
+      _capturedBloc = context.read<T>();
+      _blocInitialized = true;
+    }
   }
 
   @override
@@ -494,7 +506,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final overlayState = Overlay.of(context, rootOverlay: true);
-    final bloc = context.read<T>();
 
     _activePopoverEntry = OverlayEntry(
       builder: (overlayContext) {
@@ -559,7 +570,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 child: Material(
                   color: Colors.transparent,
                   child: BlocProvider<T>.value(
-                    value: bloc,
+                    value: _capturedBloc,
                     child: BlocBuilder<T, CalendarState>(
                       builder: (context, state) {
                         final baseId = baseTaskIdFrom(taskId);
