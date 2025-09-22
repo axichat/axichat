@@ -4,9 +4,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
-import '../utils/time_formatter.dart';
 import 'priority_checkbox_tile.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'widgets/schedule_range_fields.dart';
 
 class EditTaskDropdown extends StatefulWidget {
   const EditTaskDropdown({
@@ -36,7 +36,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   bool _isImportant = false;
   bool _isUrgent = false;
   bool _isCompleted = false;
-  bool _isScheduled = false;
 
   DateTime? _startTime;
   DateTime? _endTime;
@@ -55,8 +54,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     DateTime.friday,
   };
 
-  final DateFormat _timeFormatter = DateFormat('h:mm a');
-
   @override
   void initState() {
     super.initState();
@@ -69,8 +66,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     _isImportant = task.isImportant || task.isCritical;
     _isUrgent = task.isUrgent || task.isCritical;
     _isCompleted = task.isCompleted;
-    _isScheduled = task.scheduledTime != null;
-
     _startTime = task.scheduledTime;
     _endTime =
         task.scheduledTime?.add(task.duration ?? const Duration(hours: 1));
@@ -140,11 +135,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                     const SizedBox(height: 10),
                     _buildLocationField(),
                     _sectionDivider(),
-                    _buildScheduleToggle(),
-                    if (_isScheduled) ...[
-                      const SizedBox(height: 10),
-                      _buildScheduleFields(),
-                    ],
+                    _buildScheduleSection(),
                     _sectionDivider(),
                     _buildDeadlineField(),
                     _sectionDivider(),
@@ -229,99 +220,46 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     );
   }
 
-  Widget _buildScheduleToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: calendarBorderColor),
-        borderRadius: BorderRadius.circular(6),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text(
-                  'Schedule on calendar',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: calendarTitleColor,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Flexible(
-                  child: Text(
-                    'Choose when this task should appear on the timeline.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: calendarSubtitleColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          ShadButton.outline(
-            size: ShadButtonSize.sm,
-            foregroundColor: calendarPrimaryColor,
-            hoverForegroundColor: calendarPrimaryHoverColor,
-            hoverBackgroundColor: calendarPrimaryColor.withOpacity(0.08),
-            onPressed: () {
-              setState(() {
-                _isScheduled = !_isScheduled;
-                if (_isScheduled && _startTime == null) {
-                  final now = DateTime.now();
-                  final base = DateTime(now.year, now.month, now.day, now.hour);
-                  _startTime = base.add(const Duration(hours: 1));
-                  _endTime = _startTime!.add(const Duration(hours: 1));
-                }
-              });
-            },
-            leading: Icon(
-              _isScheduled ? Icons.event_busy : Icons.event_available,
-              size: 18,
-              color: calendarPrimaryColor,
-            ),
-            child: Text(_isScheduled ? 'Remove schedule' : 'Add to schedule'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScheduleFields() {
+  Widget _buildScheduleSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildDateTile('Start date', _startTime, _pickStartDate),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildDateTile('End date', _endTime, _pickEndDate),
-            ),
-          ],
+        const Text(
+          'Schedule',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.2,
+          ),
         ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTimeTile('Start time', _startTime, _pickStartTime),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildTimeTile('End time', _endTime, _pickEndTime),
-            ),
-          ],
+        const SizedBox(height: 6),
+        ScheduleRangeFields(
+          start: _startTime,
+          end: _endTime,
+          onStartChanged: (value) {
+            setState(() {
+              _startTime = value;
+              if (value == null) {
+                _endTime = null;
+                return;
+              }
+              if (_endTime == null || _endTime!.isBefore(value)) {
+                _endTime = value.add(const Duration(hours: 1));
+              }
+            });
+          },
+          onEndChanged: (value) {
+            setState(() {
+              _endTime = value;
+              if (value == null) {
+                return;
+              }
+              if (_startTime != null && value.isBefore(_startTime!)) {
+                _endTime = _startTime!.add(const Duration(minutes: 15));
+              }
+            });
+          },
         ),
       ],
     );
@@ -757,102 +695,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     );
   }
 
-  Widget _buildDateTile(
-      String label, DateTime? value, Future<void> Function() onTap) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: calendarBorderColor),
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined,
-                    size: 16, color: calendarSubtitleColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    value == null
-                        ? 'Select'
-                        : TimeFormatter.formatFriendlyDate(value),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: calendarTitleColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimeTile(
-      String label, DateTime? value, Future<void> Function() onTap) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: calendarBorderColor),
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.access_time,
-                    size: 16, color: calendarSubtitleColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    value == null ? 'Select' : _timeFormatter.format(value),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: calendarTitleColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildPriorityCheckbox({
     required String label,
     required bool value,
@@ -865,94 +707,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       color: color,
       onChanged: onChanged,
     );
-  }
-
-  Future<void> _pickStartDate() async {
-    final base = _startTime ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: base,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-    if (picked == null) return;
-    setState(() {
-      _startTime = DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        _startTime?.hour ?? 9,
-        _startTime?.minute ?? 0,
-      );
-      if (_endTime == null || _endTime!.isBefore(_startTime!)) {
-        _endTime = _startTime!.add(const Duration(hours: 1));
-      }
-    });
-  }
-
-  Future<void> _pickStartTime() async {
-    final base = _startTime ?? DateTime.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(base),
-    );
-    if (picked == null) return;
-    setState(() {
-      _startTime = DateTime(
-        base.year,
-        base.month,
-        base.day,
-        picked.hour,
-        picked.minute,
-      );
-      if (_endTime == null || _endTime!.isBefore(_startTime!)) {
-        _endTime = _startTime!.add(const Duration(hours: 1));
-      }
-    });
-  }
-
-  Future<void> _pickEndDate() async {
-    final base = _endTime ?? _startTime ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: base,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-    if (picked == null) return;
-    setState(() {
-      _endTime = DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        _endTime?.hour ?? (_startTime?.hour ?? 10),
-        _endTime?.minute ?? (_startTime?.minute ?? 0),
-      );
-      if (_startTime != null && _endTime!.isBefore(_startTime!)) {
-        _endTime = _startTime!.add(const Duration(hours: 1));
-      }
-    });
-  }
-
-  Future<void> _pickEndTime() async {
-    final base = _endTime ?? _startTime ?? DateTime.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(base),
-    );
-    if (picked == null) return;
-    setState(() {
-      _endTime = DateTime(
-        base.year,
-        base.month,
-        base.day,
-        picked.hour,
-        picked.minute,
-      );
-      if (_startTime != null && _endTime!.isBefore(_startTime!)) {
-        _endTime = _startTime!.add(const Duration(hours: 1));
-      }
-    });
   }
 
   void _handleSave() {
@@ -973,7 +727,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
     Duration? duration;
     DateTime? scheduledTime;
-    if (_isScheduled && _startTime != null && _endTime != null) {
+    if (_startTime != null && _endTime != null) {
       duration = _endTime!.difference(_startTime!);
       if (duration.inMinutes < 15) {
         duration = const Duration(minutes: 15);
