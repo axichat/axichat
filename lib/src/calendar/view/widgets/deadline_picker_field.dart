@@ -72,8 +72,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     55,
   ];
   static const double _timeItemHeight = 40;
-  static const double _timePickerDesiredHeight = 440.0;
-  static const double _datePickerDesiredHeight = 456.0;
+  static const double _timePickerDesiredHeight = 660.0;
+  static const double _datePickerExpandedHeight = 428.0;
 
   final LayerLink _layerLink = LayerLink();
   final GlobalKey _dropdownKey = GlobalKey();
@@ -204,7 +204,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final gap = widget.showTimeSelectors ? 8.0 : 4.0;
     final desiredHeight = widget.showTimeSelectors
         ? _timePickerDesiredHeight
-        : _datePickerDesiredHeight;
+        : _datePickerExpandedHeight;
 
     bool placeBelow;
     if (normalizedBelow <= 0 && normalizedAbove <= 0) {
@@ -396,7 +396,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   Color _iconColor(DateTime? value) {
-    if (!widget.showStatusColors || value == null) {
+    if (!widget.showStatusColors) {
+      return calendarSubtitleColor;
+    }
+    if (value == null) {
       return calendarTimeLabelColor;
     }
     if (value.isBefore(DateTime.now())) {
@@ -434,7 +437,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           child: Row(
             children: [
               Icon(
-                widget.value == null ? Icons.event_outlined : Icons.event,
+                Icons.calendar_today_outlined,
                 size: 20,
                 color: iconColor,
               ),
@@ -464,8 +467,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           ? TimeFormatter.formatFriendlyDateTime(widget.value!)
           : TimeFormatter.formatFriendlyDate(widget.value!);
       final label = _deadlineLabel(widget.value!);
+      final showLabel = widget.showStatusColors;
 
-      if (!widget.showTimeSelectors && label == displayDate) {
+      if (!showLabel || (!widget.showTimeSelectors && label == displayDate)) {
         return Text(
           displayDate,
           style: const TextStyle(
@@ -527,6 +531,79 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   Widget _buildDropdownContent(double maxHeight) {
+    Widget buildContent(BoxConstraints constraints) {
+      final desiredHeight = widget.showTimeSelectors
+          ? _timePickerDesiredHeight
+          : _datePickerExpandedHeight;
+      final needsScroll = constraints.maxHeight < desiredHeight;
+
+      if (widget.showTimeSelectors) {
+        final header = _buildMonthHeader();
+        final grid = _buildCalendarGrid();
+        final timeSelectors = _buildTimeSelectors();
+        final actions = _buildActions();
+
+        if (!needsScroll) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              header,
+              grid,
+              timeSelectors,
+              actions,
+            ],
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            header,
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                physics: const ClampingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    grid,
+                    timeSelectors,
+                  ],
+                ),
+              ),
+            ),
+            actions,
+          ],
+        );
+      }
+
+      final header = _buildMonthHeader();
+      final grid = _buildCalendarGrid();
+      final actions = _buildActions();
+
+      if (!needsScroll) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [header, grid, actions],
+        );
+      }
+
+      return Column(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          header,
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.zero,
+              physics: const ClampingScrollPhysics(),
+              child: grid,
+            ),
+          ),
+          actions,
+        ],
+      );
+    }
+
     return KeyedSubtree(
       key: _dropdownKey,
       child: ConstrainedBox(
@@ -540,38 +617,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           elevation: 12,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final desiredHeight = widget.showTimeSelectors
-                    ? _timePickerDesiredHeight
-                    : _datePickerDesiredHeight;
-                final useScroll = constraints.maxHeight < desiredHeight;
-
-                final content = Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildMonthHeader(),
-                    _buildCalendarGrid(),
-                    if (widget.showTimeSelectors) _buildTimeSelectors(),
-                    _buildActions(),
-                  ],
-                );
-
-                if (!useScroll) {
-                  return content;
-                }
-
-                return SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: content,
-                  ),
-                );
-              },
-            ),
+            child: LayoutBuilder(builder: (context, constraints) {
+              return buildContent(constraints);
+            }),
           ),
         ),
       ),

@@ -6,8 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
-import 'priority_checkbox_tile.dart';
-
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
@@ -16,6 +14,7 @@ import '../utils/recurrence_utils.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'priority_checkbox_tile.dart';
 
 enum _SidebarSection { unscheduled, reminders }
 
@@ -49,9 +48,8 @@ class _TaskSidebarState extends State<TaskSidebar>
   RecurrenceFrequency _advancedRecurrenceFrequency = RecurrenceFrequency.none;
   int _advancedRecurrenceInterval = 1;
   DateTime? _advancedRecurrenceUntil;
-  int? _advancedRecurrenceEndAfterAmount;
-  RecurrenceEndUnit _advancedRecurrenceEndAfterUnit = RecurrenceEndUnit.days;
-  final TextEditingController _advancedRecurrenceEndAfterController =
+  int? _advancedRecurrenceCount;
+  final TextEditingController _advancedRecurrenceCountController =
       TextEditingController();
   Set<int> _advancedSelectedWeekdays = const {
     DateTime.monday,
@@ -69,7 +67,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
-    _advancedRecurrenceEndAfterController.dispose();
+    _advancedRecurrenceCountController.dispose();
     _scrollController.dispose();
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
@@ -521,7 +519,8 @@ class _TaskSidebarState extends State<TaskSidebar>
             ),
             child: Row(
               children: [
-                const Icon(Icons.event, size: 16, color: calendarSubtitleColor),
+                const Icon(Icons.calendar_today_outlined,
+                    size: 16, color: calendarSubtitleColor),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -614,7 +613,6 @@ class _TaskSidebarState extends State<TaskSidebar>
         _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
       }
     });
-    _recalculateAdvancedRecurrenceEndFromAmount();
   }
 
   Future<void> _pickAdvancedEndDate() async {
@@ -661,7 +659,6 @@ class _TaskSidebarState extends State<TaskSidebar>
         _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
       }
     });
-    _recalculateAdvancedRecurrenceEndFromAmount();
   }
 
   Future<void> _pickAdvancedEndTime() async {
@@ -745,9 +742,8 @@ class _TaskSidebarState extends State<TaskSidebar>
           _advancedRecurrenceInterval = 1;
           if (frequency == RecurrenceFrequency.none) {
             _advancedRecurrenceUntil = null;
-            _advancedRecurrenceEndAfterAmount = null;
-            _advancedRecurrenceEndAfterController.clear();
-            _advancedRecurrenceEndAfterUnit = RecurrenceEndUnit.days;
+            _advancedRecurrenceCount = null;
+            _advancedRecurrenceCountController.clear();
           }
           if (frequency == RecurrenceFrequency.weekdays) {
             _advancedSelectedWeekdays = const {
@@ -764,9 +760,6 @@ class _TaskSidebarState extends State<TaskSidebar>
             _advancedSelectedWeekdays = {defaultDay};
           }
         });
-        if (frequency != RecurrenceFrequency.none) {
-          _recalculateAdvancedRecurrenceEndFromAmount();
-        }
       },
       child: Text(
         _recurrenceLabel(frequency),
@@ -802,7 +795,6 @@ class _TaskSidebarState extends State<TaskSidebar>
             onChanged: (value) {
               if (value == null) return;
               setState(() => _advancedRecurrenceInterval = value);
-              _recalculateAdvancedRecurrenceEndFromAmount();
             },
             options: options,
             selectedOptionBuilder: (context, value) => Text('$value'),
@@ -832,149 +824,92 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildAdvancedRecurrenceEndControls() {
-    const units = RecurrenceEndUnit.values;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 48,
-          child: DeadlinePickerField(
-            value: _advancedRecurrenceUntil,
-            placeholder: 'End',
-            showStatusColors: false,
-            showTimeSelectors: false,
-            onChanged: (value) {
-              setState(() {
-                _advancedRecurrenceUntil = value == null
-                    ? null
-                    : DateTime(value.year, value.month, value.day);
-                if (_advancedRecurrenceUntil != null) {
-                  _advancedRecurrenceEndAfterAmount = null;
-                  _advancedRecurrenceEndAfterController.clear();
-                }
-              });
-            },
+        const Text(
+          'END DATE',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
           ),
         ),
+        const SizedBox(height: 6),
+        DeadlinePickerField(
+          value: _advancedRecurrenceUntil,
+          placeholder: 'End',
+          showStatusColors: false,
+          showTimeSelectors: false,
+          onChanged: (value) {
+            setState(() {
+              _advancedRecurrenceUntil = value == null
+                  ? null
+                  : DateTime(value.year, value.month, value.day);
+              if (_advancedRecurrenceUntil != null) {
+                _advancedRecurrenceCount = null;
+                _advancedRecurrenceCountController.clear();
+              }
+            });
+          },
+        ),
         const SizedBox(height: 16),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: calendarBorderColor),
+        const Text(
+          'COUNT',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _advancedRecurrenceEndAfterController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration.collapsed(
-                      hintText: 'Count',
-                      hintStyle: TextStyle(
-                        color: calendarSubtitleColor.withValues(alpha: 0.55),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
-                    onChanged: (value) {
-                      final parsed = int.tryParse(value);
-                      if (parsed == null || parsed <= 0) {
-                        setState(() {
-                          _advancedRecurrenceEndAfterAmount = null;
-                          _advancedRecurrenceUntil = null;
-                        });
-                        return;
-                      }
-                      _setAdvancedRecurrenceEndAfterAmount(parsed);
-                    },
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 28,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  color: calendarBorderColor.withValues(alpha: 0.5),
-                ),
-                SizedBox(
-                  width: 132,
-                  child: ShadSelect<RecurrenceEndUnit>(
-                    initialValue: _advancedRecurrenceEndAfterUnit,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _advancedRecurrenceEndAfterUnit = value);
-                      _recalculateAdvancedRecurrenceEndFromAmount();
-                    },
-                    options: units
-                        .map(
-                          (unit) => ShadOption<RecurrenceEndUnit>(
-                            value: unit,
-                            child: Text(unit.label),
-                          ),
-                        )
-                        .toList(),
-                    selectedOptionBuilder: (context, value) =>
-                        Text(value.label),
-                    decoration: ShadDecoration(
-                      color: Colors.white,
-                      border: ShadBorder.all(
-                        color: Colors.transparent,
-                        radius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    trailing: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: calendarSubtitleColor,
-                    ),
-                  ),
-                ),
-              ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _advancedRecurrenceCountController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Repeat times',
+            hintStyle: TextStyle(
+              color: calendarSubtitleColor.withValues(alpha: 0.55),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: calendarPrimaryColor, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
           ),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+          ],
+          onChanged: (value) {
+            final parsed = int.tryParse(value);
+            setState(() {
+              if (parsed == null || parsed <= 0) {
+                _advancedRecurrenceCount = null;
+              } else {
+                _advancedRecurrenceCount = parsed;
+                _advancedRecurrenceUntil = null;
+              }
+            });
+          },
         ),
       ],
     );
-  }
-
-  void _setAdvancedRecurrenceEndAfterAmount(int amount) {
-    final base = _advancedRecurrenceBaseDate();
-    final weekdays = _advancedRecurrenceFrequency == RecurrenceFrequency.weekly
-        ? (_advancedSelectedWeekdays.toList()..sort())
-        : null;
-    final until = calculateRecurrenceEndDate(
-      start: base,
-      frequency: _advancedRecurrenceFrequency,
-      interval: _advancedRecurrenceInterval,
-      byWeekdays: weekdays,
-      unit: _advancedRecurrenceEndAfterUnit,
-      amount: amount,
-    );
-
-    setState(() {
-      _advancedRecurrenceEndAfterAmount = amount;
-      _advancedRecurrenceUntil = until;
-    });
-  }
-
-  void _recalculateAdvancedRecurrenceEndFromAmount() {
-    final amount = _advancedRecurrenceEndAfterAmount;
-    if (amount == null || amount <= 0) {
-      return;
-    }
-    _setAdvancedRecurrenceEndAfterAmount(amount);
-  }
-
-  DateTime _advancedRecurrenceBaseDate() {
-    return _advancedStartTime ?? DateTime.now();
   }
 
   String _recurrenceLabel(RecurrenceFrequency frequency) {
@@ -1050,7 +985,6 @@ class _TaskSidebarState extends State<TaskSidebar>
                 };
               }
             });
-            _recalculateAdvancedRecurrenceEndFromAmount();
           },
           child: Text(
             labels[index],
@@ -1438,55 +1372,98 @@ class _TaskSidebarState extends State<TaskSidebar>
                       const double margin = 16.0;
                       const double dropdownMaxHeight =
                           644.0; // Increased by 40% from 460
+                      const double dropdownWidth = 360.0;
+                      const double preferredVerticalGap = 8.0;
+                      const double preferredHorizontalGap = 12.0;
 
                       final availableBelow = screenSize.height -
                           (tileOrigin.dy + tileSize.height) -
                           margin;
                       final availableAbove = tileOrigin.dy - margin;
+                      final availableRight = screenSize.width -
+                          (tileOrigin.dx + tileSize.width) -
+                          margin;
+                      final availableLeft = tileOrigin.dx - margin;
 
-                      bool showAbove =
-                          availableAbove > availableBelow && availableAbove > 0;
-                      if (!showAbove &&
-                          availableBelow <= 0 &&
-                          availableAbove > 0) {
+                      final normalizedAbove = math.max(0.0, availableAbove);
+                      final normalizedBelow = math.max(0.0, availableBelow);
+
+                      final heightIfAbove =
+                          math.min(dropdownMaxHeight, normalizedAbove);
+                      final heightIfBelow =
+                          math.min(dropdownMaxHeight, normalizedBelow);
+
+                      bool showAbove;
+                      if (heightIfAbove <= 0 && heightIfBelow <= 0) {
+                        showAbove = false;
+                      } else if (heightIfBelow <= 0) {
                         showAbove = true;
+                      } else if (heightIfAbove <= 0) {
+                        showAbove = false;
+                      } else if ((heightIfBelow - heightIfAbove).abs() <= 4) {
+                        showAbove = normalizedAbove > normalizedBelow;
+                      } else {
+                        showAbove = heightIfAbove > heightIfBelow;
                       }
 
-                      double availableSpace =
-                          showAbove ? availableAbove : availableBelow;
+                      final availableSpace =
+                          showAbove ? normalizedAbove : normalizedBelow;
 
-                      if (availableSpace <= 0) {
-                        availableSpace = dropdownMaxHeight;
-                      }
-
-                      double effectiveMaxHeight =
-                          availableSpace >= dropdownMaxHeight
-                              ? dropdownMaxHeight
-                              : availableSpace;
-                      if (effectiveMaxHeight > dropdownMaxHeight) {
+                      double effectiveMaxHeight = availableSpace > 0
+                          ? math.min(dropdownMaxHeight, availableSpace)
+                          : dropdownMaxHeight;
+                      if (effectiveMaxHeight <= 0) {
                         effectiveMaxHeight = dropdownMaxHeight;
                       }
-                      if (effectiveMaxHeight < 220 && availableSpace > 220) {
-                        effectiveMaxHeight =
-                            math.min(availableSpace, dropdownMaxHeight);
-                      }
-                      if (effectiveMaxHeight < 160) {
-                        effectiveMaxHeight = availableSpace <= 0
-                            ? math.min(160.0, dropdownMaxHeight)
-                            : math.min(availableSpace, 160.0);
+
+                      bool openToLeft =
+                          availableRight < dropdownWidth && availableLeft > 0;
+                      if (openToLeft && availableLeft < dropdownWidth) {
+                        openToLeft = availableLeft >= availableRight;
                       }
 
-                      final anchor = showAbove
-                          ? ShadAnchorAuto(
-                              followerAnchor: Alignment.bottomLeft,
-                              targetAnchor: Alignment.topRight,
-                              offset: const Offset(12, -8),
-                            )
-                          : ShadAnchorAuto(
-                              followerAnchor: Alignment.topLeft,
-                              targetAnchor: Alignment.bottomRight,
-                              offset: const Offset(12, 8),
-                            );
+                      final extraAbove =
+                          math.max(0.0, normalizedAbove - effectiveMaxHeight);
+                      final extraBelow =
+                          math.max(0.0, normalizedBelow - effectiveMaxHeight);
+                      final extraVerticalSpace =
+                          showAbove ? extraAbove : extraBelow;
+                      final appliedVerticalGap =
+                          math.min(preferredVerticalGap, extraVerticalSpace);
+
+                      final triggerLeft = tileOrigin.dx;
+                      final triggerRight = tileOrigin.dx + tileSize.width;
+
+                      double desiredLeft;
+                      if (openToLeft) {
+                        desiredLeft = triggerRight -
+                            dropdownWidth -
+                            preferredHorizontalGap;
+                      } else {
+                        desiredLeft = triggerLeft + preferredHorizontalGap;
+                      }
+
+                      final minLeft = margin;
+                      final maxLeft = screenSize.width - margin - dropdownWidth;
+                      final overlayLeft = desiredLeft.clamp(minLeft, maxLeft);
+                      final horizontalOffset = overlayLeft - triggerLeft;
+
+                      final verticalOffset =
+                          showAbove ? -appliedVerticalGap : appliedVerticalGap;
+
+                      final targetAnchor =
+                          showAbove ? Alignment.topLeft : Alignment.bottomLeft;
+                      final childAnchor =
+                          showAbove ? Alignment.bottomLeft : Alignment.topLeft;
+
+                      final anchor = ShadAnchor(
+                        overlayAlignment: targetAnchor,
+                        childAlignment: childAnchor,
+                        offset: Offset(
+                          horizontalOffset,
+                          verticalOffset,
+                        ),
+                      );
 
                       return ShadPopover(
                         controller: controller,
@@ -1577,7 +1554,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.event,
+                    Icons.calendar_today_outlined,
                     size: 12,
                     color: _getDeadlineColor(task.deadline!),
                   ),
@@ -1787,8 +1764,10 @@ class _TaskSidebarState extends State<TaskSidebar>
           frequency: _advancedRecurrenceFrequency,
           interval: _advancedRecurrenceInterval,
           byWeekdays: weekdays,
-          until: _advancedRecurrenceUntil,
-          count: null,
+          until: _advancedRecurrenceCount != null
+              ? null
+              : _advancedRecurrenceUntil,
+          count: _advancedRecurrenceCount,
         );
       }
 
@@ -1826,9 +1805,8 @@ class _TaskSidebarState extends State<TaskSidebar>
       _advancedRecurrenceFrequency = RecurrenceFrequency.none;
       _advancedRecurrenceInterval = 1;
       _advancedRecurrenceUntil = null;
-      _advancedRecurrenceEndAfterAmount = null;
-      _advancedRecurrenceEndAfterController.clear();
-      _advancedRecurrenceEndAfterUnit = RecurrenceEndUnit.days;
+      _advancedRecurrenceCount = null;
+      _advancedRecurrenceCountController.clear();
       _advancedSelectedWeekdays = const {
         DateTime.monday,
         DateTime.tuesday,

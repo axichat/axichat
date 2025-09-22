@@ -4,7 +4,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
-import '../utils/recurrence_utils.dart';
 import 'priority_checkbox_tile.dart';
 import 'widgets/deadline_picker_field.dart';
 
@@ -41,9 +40,8 @@ class _QuickAddModalState extends State<QuickAddModal>
   int _recurrenceInterval = 1;
   late Set<int> _selectedWeekdays;
   DateTime? _recurrenceUntil;
-  int? _recurrenceEndAfterAmount;
-  RecurrenceEndUnit _recurrenceEndAfterUnit = RecurrenceEndUnit.days;
-  final TextEditingController _recurrenceEndAfterController =
+  int? _recurrenceCount;
+  final TextEditingController _recurrenceCountController =
       TextEditingController();
 
   @override
@@ -88,7 +86,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _taskNameController.dispose();
     _descriptionController.dispose();
     _taskNameFocusNode.dispose();
-    _recurrenceEndAfterController.dispose();
+    _recurrenceCountController.dispose();
     super.dispose();
   }
 
@@ -408,7 +406,6 @@ class _QuickAddModalState extends State<QuickAddModal>
             onChanged: (value) {
               if (value == null) return;
               setState(() => _recurrenceInterval = value);
-              _recalculateRecurrenceEndFromAmount();
             },
             options: intervalOptions,
             selectedOptionBuilder: (context, value) => Text('$value'),
@@ -479,7 +476,6 @@ class _QuickAddModalState extends State<QuickAddModal>
                 _selectedWeekdays = {..._selectedWeekdays, value};
               }
             });
-            _recalculateRecurrenceEndFromAmount();
           },
           child: Text(
             labels[index],
@@ -528,9 +524,8 @@ class _QuickAddModalState extends State<QuickAddModal>
           _recurrenceInterval = 1;
           if (frequency == RecurrenceFrequency.none) {
             _recurrenceUntil = null;
-            _recurrenceEndAfterAmount = null;
-            _recurrenceEndAfterController.clear();
-            _recurrenceEndAfterUnit = RecurrenceEndUnit.days;
+            _recurrenceCount = null;
+            _recurrenceCountController.clear();
           }
           if (frequency == RecurrenceFrequency.weekdays) {
             _selectedWeekdays = const {
@@ -548,9 +543,6 @@ class _QuickAddModalState extends State<QuickAddModal>
             }
           }
         });
-        if (frequency != RecurrenceFrequency.none) {
-          _recalculateRecurrenceEndFromAmount();
-        }
       },
       child: Text(
         _recurrenceLabel(frequency),
@@ -563,149 +555,92 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Widget _buildRecurrenceEndControls() {
-    const units = RecurrenceEndUnit.values;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 48,
-          child: DeadlinePickerField(
-            value: _recurrenceUntil,
-            placeholder: 'End',
-            showStatusColors: false,
-            showTimeSelectors: false,
-            onChanged: (value) {
-              setState(() {
-                _recurrenceUntil = value == null
-                    ? null
-                    : DateTime(value.year, value.month, value.day);
-                if (_recurrenceUntil != null) {
-                  _recurrenceEndAfterAmount = null;
-                  _recurrenceEndAfterController.clear();
-                }
-              });
-            },
+        const Text(
+          'END DATE',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
           ),
         ),
+        const SizedBox(height: 6),
+        DeadlinePickerField(
+          value: _recurrenceUntil,
+          placeholder: 'End',
+          showStatusColors: false,
+          showTimeSelectors: false,
+          onChanged: (value) {
+            setState(() {
+              _recurrenceUntil = value == null
+                  ? null
+                  : DateTime(value.year, value.month, value.day);
+              if (_recurrenceUntil != null) {
+                _recurrenceCount = null;
+                _recurrenceCountController.clear();
+              }
+            });
+          },
+        ),
         const SizedBox(height: 16),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(calendarBorderRadius),
-            border: Border.all(color: calendarBorderColor),
+        const Text(
+          'COUNT',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _recurrenceEndAfterController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration.collapsed(
-                      hintText: 'Count',
-                      hintStyle: TextStyle(
-                        color: calendarSubtitleColor.withValues(alpha: 0.55),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
-                    onChanged: (value) {
-                      final parsed = int.tryParse(value);
-                      if (parsed == null || parsed <= 0) {
-                        setState(() {
-                          _recurrenceEndAfterAmount = null;
-                          _recurrenceUntil = null;
-                        });
-                        return;
-                      }
-                      _setRecurrenceEndAfterAmount(parsed);
-                    },
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 28,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  color: calendarBorderColor.withValues(alpha: 0.5),
-                ),
-                SizedBox(
-                  width: 132,
-                  child: ShadSelect<RecurrenceEndUnit>(
-                    initialValue: _recurrenceEndAfterUnit,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _recurrenceEndAfterUnit = value);
-                      _recalculateRecurrenceEndFromAmount();
-                    },
-                    options: units
-                        .map(
-                          (unit) => ShadOption<RecurrenceEndUnit>(
-                            value: unit,
-                            child: Text(unit.label),
-                          ),
-                        )
-                        .toList(),
-                    selectedOptionBuilder: (context, value) =>
-                        Text(value.label),
-                    decoration: ShadDecoration(
-                      color: Colors.white,
-                      border: ShadBorder.all(
-                        color: Colors.transparent,
-                        radius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    trailing: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 16,
-                      color: calendarSubtitleColor,
-                    ),
-                  ),
-                ),
-              ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _recurrenceCountController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Repeat times',
+            hintStyle: TextStyle(
+              color: calendarSubtitleColor.withValues(alpha: 0.55),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              borderSide:
+                  const BorderSide(color: calendarPrimaryColor, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
           ),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+          ],
+          onChanged: (value) {
+            final parsed = int.tryParse(value);
+            setState(() {
+              if (parsed == null || parsed <= 0) {
+                _recurrenceCount = null;
+              } else {
+                _recurrenceCount = parsed;
+                _recurrenceUntil = null;
+              }
+            });
+          },
         ),
       ],
     );
-  }
-
-  void _setRecurrenceEndAfterAmount(int amount) {
-    final base = _recurrenceBaseDate();
-    final weekdays = _recurrenceFrequency == RecurrenceFrequency.weekly
-        ? (_selectedWeekdays.toList()..sort())
-        : null;
-    final until = calculateRecurrenceEndDate(
-      start: base,
-      frequency: _recurrenceFrequency,
-      interval: _recurrenceInterval,
-      byWeekdays: weekdays,
-      unit: _recurrenceEndAfterUnit,
-      amount: amount,
-    );
-
-    setState(() {
-      _recurrenceEndAfterAmount = amount;
-      _recurrenceUntil = until;
-    });
-  }
-
-  void _recalculateRecurrenceEndFromAmount() {
-    final amount = _recurrenceEndAfterAmount;
-    if (amount == null || amount <= 0) {
-      return;
-    }
-    _setRecurrenceEndAfterAmount(amount);
-  }
-
-  DateTime _recurrenceBaseDate() {
-    return widget.prefilledDateTime ?? DateTime.now();
   }
 
   String _recurrenceLabel(RecurrenceFrequency frequency) {
@@ -865,8 +800,8 @@ class _QuickAddModalState extends State<QuickAddModal>
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.daily,
             interval: _recurrenceInterval,
-            until: _recurrenceUntil,
-            count: null,
+            until: _recurrenceCount != null ? null : _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
         case RecurrenceFrequency.weekdays:
@@ -874,8 +809,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             frequency: RecurrenceFrequency.weekdays,
             interval: _recurrenceInterval,
             byWeekdays: normalizedWeekdays,
-            until: _recurrenceUntil,
-            count: null,
+            until: _recurrenceCount != null ? null : _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
         case RecurrenceFrequency.weekly:
@@ -883,16 +818,16 @@ class _QuickAddModalState extends State<QuickAddModal>
             frequency: RecurrenceFrequency.weekly,
             interval: _recurrenceInterval,
             byWeekdays: normalizedWeekdays,
-            until: _recurrenceUntil,
-            count: null,
+            until: _recurrenceCount != null ? null : _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
         case RecurrenceFrequency.monthly:
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.monthly,
             interval: _recurrenceInterval,
-            until: _recurrenceUntil,
-            count: null,
+            until: _recurrenceCount != null ? null : _recurrenceUntil,
+            count: _recurrenceCount,
           );
           break;
       }

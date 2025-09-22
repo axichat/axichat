@@ -79,6 +79,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   final Map<String, GlobalKey> _taskItemKeys = {};
   static const double _taskPopoverHorizontalGap = 12.0;
 
+  double _resolvedHourHeight = hourSlotHeight;
+
   // Track hovered cell for hover effects
   DateTime? _dragPreviewStart;
   Duration? _dragPreviewDuration;
@@ -169,7 +171,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const double quarterSlotHeight = 10.0; // hourSlotHeight / 4
   static const double timeColumnWidth = 80.0;
   double _getHourHeight(BuildContext context, bool compact) {
-    return hourSlotHeight; // Fixed hour height for consistent quarter-hour slots
+    return _resolvedHourHeight;
   }
 
   @override
@@ -211,28 +213,61 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         children: [
           _buildDayHeaders(headerDates, compact),
           Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xfffafbfc),
-                borderRadius: BorderRadius.zero, // Remove rounded corners
-              ),
-              child: SingleChildScrollView(
-                controller: _verticalController,
-                child: AnimatedBuilder(
-                  animation: _viewTransitionAnimation,
-                  builder: (context, child) {
-                    return FadeTransition(
-                      opacity: _viewTransitionAnimation,
-                      child: _buildGridContent(isWeekView, weekDates, compact),
-                    );
-                  },
-                ),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableHeight = constraints.maxHeight;
+                final isDayView = widget.state.viewMode == CalendarView.day;
+                _resolvedHourHeight = _resolveHourHeight(
+                  availableHeight,
+                  isDayView: isDayView,
+                );
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xfffafbfc),
+                    borderRadius: BorderRadius.zero, // Remove rounded corners
+                  ),
+                  child: SingleChildScrollView(
+                    controller: _verticalController,
+                    child: AnimatedBuilder(
+                      animation: _viewTransitionAnimation,
+                      builder: (context, child) {
+                        return FadeTransition(
+                          opacity: _viewTransitionAnimation,
+                          child:
+                              _buildGridContent(isWeekView, weekDates, compact),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
     );
+  }
+
+  double _resolveHourHeight(double availableHeight, {required bool isDayView}) {
+    if (!availableHeight.isFinite || availableHeight <= 0) {
+      return hourSlotHeight;
+    }
+
+    final totalSlots =
+        isDayView ? (endHour - startHour + 1) * 4 : (endHour - startHour + 1);
+    final minSlotHeight = isDayView ? quarterSlotHeight : hourSlotHeight;
+    final minRequiredHeight = totalSlots * minSlotHeight;
+
+    if (availableHeight <= minRequiredHeight) {
+      return hourSlotHeight;
+    }
+
+    final slotHeight = availableHeight / totalSlots;
+    if (isDayView) {
+      final computedHourHeight = slotHeight * 4;
+      return math.max(hourSlotHeight, computedHourHeight);
+    }
+    return math.max(hourSlotHeight, slotHeight);
   }
 
   Widget _buildGridContent(
@@ -555,8 +590,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     taskId: deletedTaskId,
                                   ),
                                 );
-                            _closeTaskPopover(taskId,
-                                reason: 'task-deleted');
+                            _closeTaskPopover(taskId, reason: 'task-deleted');
                           },
                         );
                       },
@@ -1204,11 +1238,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     // Calculate pixel-perfect positioning
     final startTimeHours = hour + (minute / 60.0);
-    final topOffset = (startTimeHours - startHour) * hourSlotHeight;
+    final topOffset = (startTimeHours - startHour) * _resolvedHourHeight;
 
     // Height is always based on task duration, not day span
     final duration = task.duration ?? const Duration(hours: 1);
-    final height = (duration.inMinutes / 60.0) * hourSlotHeight;
+    final height = (duration.inMinutes / 60.0) * _resolvedHourHeight;
 
     // Calculate width and position based on overlap
     final totalColumns =
@@ -1256,8 +1290,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   );
                 }
               },
-              hourHeight: hourSlotHeight,
-              quarterHeight: quarterSlotHeight,
+              hourHeight: _resolvedHourHeight,
+              quarterHeight: _resolvedHourHeight / 4,
               width: eventWidth,
               height: clampedHeight,
               isDayView: isDayView,
@@ -1355,9 +1389,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   List<CalendarTask> _getTasksForDay(DateTime date) {
     final tasks = widget.state.tasksForDate(date);
-    return tasks
-        .where((task) => task.scheduledTime != null)
-        .toList()
+    return tasks.where((task) => task.scheduledTime != null).toList()
       ..sort((a, b) {
         final aTime = a.scheduledTime;
         final bTime = b.scheduledTime;
