@@ -89,6 +89,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     Widget buildTaskBody() {
       final showHoverEffects = widget.enableInteractions &&
           (widget.isPopoverOpen || isHovering || isResizing);
+      final contentHeight = (widget.height - 16).clamp(0.0, double.infinity);
+      final showTime = contentHeight >= 34;
+      final showDescription =
+          task.description?.isNotEmpty == true && contentHeight >= 68;
       return Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
@@ -148,7 +152,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                         ),
                       ],
                     ),
-                    if (widget.height > 40) ...[
+                    if (showTime) ...[
                       const SizedBox(height: 2),
                       Text(
                         task.effectiveDaySpan > 1
@@ -161,8 +165,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                         ),
                       ),
                     ],
-                    if (widget.height > 56 &&
-                        task.description?.isNotEmpty == true) ...[
+                    if (showDescription) ...[
                       const SizedBox(height: 2),
                       Text(
                         task.description!,
@@ -170,7 +173,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                           color: Colors.white.withOpacity(0.75),
                           fontSize: 10,
                         ),
-                        maxLines: 2,
+                        maxLines: contentHeight >= 96 ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
