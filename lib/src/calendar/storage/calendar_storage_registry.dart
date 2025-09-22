@@ -28,6 +28,9 @@ class CalendarStorageRegistry implements Storage {
 
   bool hasPrefix(String prefix) => _prefixToStorage.containsKey(prefix);
 
+  /// Returns the registered storage for [prefix] if present.
+  Storage? storageForPrefix(String prefix) => _prefixToStorage[prefix];
+
   Storage _storageFor(String key) {
     for (final entry in _prefixToStorage.entries) {
       if (key.startsWith(entry.key)) {

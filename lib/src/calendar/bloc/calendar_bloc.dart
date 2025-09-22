@@ -14,9 +14,11 @@ import 'calendar_state.dart';
 class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
+    required Storage storage,
     CalendarReminderController? reminderController,
   })  : _syncManagerBuilder = syncManagerBuilder,
         super(
+          storage: storage,
           storagePrefix: authStoragePrefix,
           storageId: 'state',
           reminderController: reminderController,

@@ -47,12 +47,10 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final Function(CalendarTask, DateTime)? onTaskDragEnd;
   final void Function(DateTime date) onDateSelected;
   final void Function(CalendarView view) onViewChanged;
-  final T bloc;
 
   const CalendarGrid({
     super.key,
     required this.state,
-    required this.bloc,
     this.onEmptySlotTapped,
     this.onTaskDragEnd,
     required this.onDateSelected,
@@ -496,6 +494,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final overlayState = Overlay.of(context, rootOverlay: true);
+    final bloc = context.read<T>();
 
     _activePopoverEntry = OverlayEntry(
       builder: (overlayContext) {
@@ -560,7 +559,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 child: Material(
                   color: Colors.transparent,
                   child: BlocProvider<T>.value(
-                    value: widget.bloc,
+                    value: bloc,
                     child: BlocBuilder<T, CalendarState>(
                       builder: (context, state) {
                         final baseId = baseTaskIdFrom(taskId);
