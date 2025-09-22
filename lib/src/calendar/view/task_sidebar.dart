@@ -15,6 +15,7 @@ import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'priority_checkbox_tile.dart';
+import 'widgets/schedule_range_fields.dart';
 
 enum _SidebarSection { unscheduled, reminders }
 
@@ -42,7 +43,6 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   _SidebarSection? _expandedSection = _SidebarSection.unscheduled;
   bool _showAdvancedOptions = false;
-  bool _scheduleEnabled = false;
   DateTime? _advancedStartTime;
   DateTime? _advancedEndTime;
   RecurrenceFrequency _advancedRecurrenceFrequency = RecurrenceFrequency.none;
@@ -287,15 +287,9 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildAdvancedOptions({Key? key}) {
-    return Container(
+    return Padding(
       key: key,
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: calendarBorderColor),
-      ),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -326,11 +320,17 @@ class _TaskSidebarState extends State<TaskSidebar>
             onChanged: (value) => setState(() => _selectedDeadline = value),
           ),
           _advancedDivider(),
-          _buildAdvancedScheduleToggle(),
-          if (_scheduleEnabled) ...[
-            const SizedBox(height: 10),
-            _buildAdvancedScheduleFields(),
-          ],
+          const Text(
+            'Schedule',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: calendarSubtitleColor,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          _buildAdvancedScheduleFields(),
           _advancedDivider(),
           _buildAdvancedRecurrenceSection(),
         ],
@@ -354,81 +354,6 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedScheduleToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border.all(color: calendarBorderColor),
-        borderRadius: BorderRadius.circular(6),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text(
-                  'Schedule on calendar',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: calendarTitleColor,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Flexible(
-                  child: Text(
-                    'Choose when this task should appear on the timeline.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: calendarSubtitleColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          ShadButton.outline(
-            size: ShadButtonSize.sm,
-            foregroundColor: calendarPrimaryColor,
-            hoverForegroundColor: calendarPrimaryHoverColor,
-            hoverBackgroundColor: calendarPrimaryColor.withOpacity(0.08),
-            onPressed: () {
-              setState(() {
-                _scheduleEnabled = !_scheduleEnabled;
-                if (_scheduleEnabled && _advancedStartTime == null) {
-                  final now = DateTime.now();
-                  final base = DateTime(
-                    now.year,
-                    now.month,
-                    now.day,
-                    now.hour,
-                  );
-                  _advancedStartTime = base.add(const Duration(hours: 1));
-                  _advancedEndTime =
-                      _advancedStartTime!.add(const Duration(hours: 1));
-                }
-              });
-            },
-            leading: Icon(
-              _scheduleEnabled ? Icons.event_busy : Icons.event_available,
-              size: 18,
-              color: calendarPrimaryColor,
-            ),
-            child: Text(
-              _scheduleEnabled ? 'Remove schedule' : 'Add to schedule',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _advancedDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -443,244 +368,35 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildAdvancedScheduleFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildAdvancedDateTile(
-                label: 'Start date',
-                value: _advancedStartTime,
-                onTap: _pickAdvancedStartDate,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildAdvancedDateTile(
-                label: 'End date',
-                value: _advancedEndTime,
-                onTap: _pickAdvancedEndDate,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildAdvancedTimeTile(
-                label: 'Start time',
-                value: _advancedStartTime,
-                onTap: _pickAdvancedStartTime,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildAdvancedTimeTile(
-                label: 'End time',
-                value: _advancedEndTime,
-                onTap: _pickAdvancedEndTime,
-              ),
-            ),
-          ],
-        ),
-      ],
+    return ScheduleRangeFields(
+      start: _advancedStartTime,
+      end: _advancedEndTime,
+      onStartChanged: (value) {
+        setState(() {
+          _advancedStartTime = value;
+          if (value == null) {
+            _advancedEndTime = null;
+            return;
+          }
+          if (_advancedEndTime == null || _advancedEndTime!.isBefore(value)) {
+            _advancedEndTime = value.add(const Duration(hours: 1));
+          }
+        });
+      },
+      onEndChanged: (value) {
+        setState(() {
+          _advancedEndTime = value;
+          if (value == null) {
+            return;
+          }
+          if (_advancedStartTime != null &&
+              value.isBefore(_advancedStartTime!)) {
+            _advancedEndTime =
+                _advancedStartTime!.add(const Duration(minutes: 15));
+          }
+        });
+      },
     );
-  }
-
-  Widget _buildAdvancedDateTile({
-    required String label,
-    required DateTime? value,
-    required Future<void> Function() onTap,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: calendarBorderColor),
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined,
-                    size: 16, color: calendarSubtitleColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    value == null
-                        ? 'Select'
-                        : TimeFormatter.formatFriendlyDate(value),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: calendarTitleColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAdvancedTimeTile({
-    required String label,
-    required DateTime? value,
-    required Future<void> Function() onTap,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: calendarBorderColor),
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.access_time,
-                    size: 16, color: calendarSubtitleColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    value == null ? 'Select' : TimeFormatter.formatTime(value),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: calendarTitleColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _pickAdvancedStartDate() async {
-    final base = _advancedStartTime ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: base,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-    if (picked == null) return;
-    setState(() {
-      _advancedStartTime = DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        _advancedStartTime?.hour ?? 9,
-        _advancedStartTime?.minute ?? 0,
-      );
-      if (_advancedEndTime == null ||
-          _advancedEndTime!.isBefore(_advancedStartTime!)) {
-        _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
-      }
-    });
-  }
-
-  Future<void> _pickAdvancedEndDate() async {
-    final base = _advancedEndTime ?? _advancedStartTime ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: base,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-    if (picked == null) return;
-    setState(() {
-      _advancedEndTime = DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        _advancedEndTime?.hour ?? 10,
-        _advancedEndTime?.minute ?? 0,
-      );
-      if (_advancedStartTime != null &&
-          _advancedEndTime!.isBefore(_advancedStartTime!)) {
-        _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
-      }
-    });
-  }
-
-  Future<void> _pickAdvancedStartTime() async {
-    final base = _advancedStartTime ?? DateTime.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(base),
-    );
-    if (picked == null) return;
-    setState(() {
-      _advancedStartTime = DateTime(
-        base.year,
-        base.month,
-        base.day,
-        picked.hour,
-        picked.minute,
-      );
-      if (_advancedEndTime == null ||
-          _advancedEndTime!.isBefore(_advancedStartTime!)) {
-        _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
-      }
-    });
-  }
-
-  Future<void> _pickAdvancedEndTime() async {
-    final base = _advancedEndTime ?? _advancedStartTime ?? DateTime.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(base),
-    );
-    if (picked == null) return;
-    setState(() {
-      _advancedEndTime = DateTime(
-        base.year,
-        base.month,
-        base.day,
-        picked.hour,
-        picked.minute,
-      );
-      if (_advancedStartTime != null &&
-          _advancedEndTime!.isBefore(_advancedStartTime!)) {
-        _advancedEndTime = _advancedStartTime!.add(const Duration(hours: 1));
-      }
-    });
   }
 
   Widget _buildAdvancedRecurrenceSection() {
@@ -1708,19 +1424,9 @@ class _TaskSidebarState extends State<TaskSidebar>
 
     final priority = _getPriority();
     final hasLocation = _locationController.text.trim().isNotEmpty;
-    final hasSchedule = _scheduleEnabled &&
-        _advancedStartTime != null &&
-        _advancedEndTime != null;
+    final hasSchedule = _advancedStartTime != null && _advancedEndTime != null;
     final hasRecurrence =
         _advancedRecurrenceFrequency != RecurrenceFrequency.none;
-
-    if (hasSchedule &&
-        (_advancedStartTime == null || _advancedEndTime == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please choose start and end times.')),
-      );
-      return;
-    }
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
       context.read<BaseCalendarBloc>().add(
@@ -1799,7 +1505,6 @@ class _TaskSidebarState extends State<TaskSidebar>
       _isImportant = false;
       _isUrgent = false;
       _showAdvancedOptions = false;
-      _scheduleEnabled = false;
       _advancedStartTime = null;
       _advancedEndTime = null;
       _advancedRecurrenceFrequency = RecurrenceFrequency.none;
