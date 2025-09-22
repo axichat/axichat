@@ -247,10 +247,8 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   }
 
   Widget _buildCalendarGridWithHandlers(CalendarState state) {
-    final calendarBloc = context.watch<CalendarBloc>();
     return CalendarGrid(
       state: state,
-      bloc: calendarBloc,
       onEmptySlotTapped: _onEmptySlotTapped,
       onTaskDragEnd: _onTaskDragEnd,
       onDateSelected: (date) => context.read<CalendarBloc>().add(
@@ -268,8 +266,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
     final baseId = task.baseId;
-    final originalTask =
-        context.read<CalendarBloc>().state.model.tasks[baseId];
+    final originalTask = context.read<CalendarBloc>().state.model.tasks[baseId];
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {

@@ -4,9 +4,8 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/duration_adapter.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
-import 'package:axichat/src/calendar/storage/calendar_hydrated_storage.dart';
-import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
@@ -37,6 +36,7 @@ Future<void> main() async {
     storageDirectory: await getApplicationDocumentsDirectory(),
   );
   final storageRegistry = CalendarStorageRegistry(fallback: baseStorage);
+  final storageManager = CalendarStorageManager(registry: storageRegistry);
   HydratedBloc.storage = storageRegistry;
 
   await Hive.initFlutter();
@@ -53,7 +53,6 @@ Future<void> main() async {
 
   // Handle corrupted calendar data from typeId issues
   Box<CalendarModel>? guestCalendarBox;
-  Storage? guestCalendarStorage;
   try {
     guestCalendarBox = await Hive.openBox<CalendarModel>('guest_calendar');
   } catch (e) {
@@ -89,24 +88,8 @@ Future<void> main() async {
   }
 
   // Initialize hydrated storage for the guest calendar, migrating legacy data
-  guestCalendarStorage = await CalendarHydratedStorage.open(
-    boxName: 'guest_calendar_state',
-    prefix: guestStoragePrefix,
-  );
-
-  storageRegistry.registerPrefix(guestStoragePrefix, guestCalendarStorage);
-
   final legacyModel = guestCalendarBox.get('calendar');
-  final storageKey = '${guestStoragePrefix}state';
-  final hasHydratedState = guestCalendarStorage.read(storageKey) != null;
-  if (!hasHydratedState && legacyModel != null) {
-    final seedState = {
-      'model': legacyModel.toJson(),
-      'selectedDate': DateTime.now().toIso8601String(),
-      'viewMode': 'week',
-    };
-    await guestCalendarStorage.write(storageKey, seedState);
-  }
+  await storageManager.ensureGuestStorage(legacyModel: legacyModel);
 
   const capability = Capability();
   final notificationService = NotificationService();
@@ -125,16 +108,14 @@ Future<void> main() async {
                 notificationService: notificationService,
                 capability: capability,
                 guestCalendarBox: guestCalendarBox,
-                guestCalendarStorage: guestCalendarStorage,
-                storageRegistry: storageRegistry,
+                storageManager: storageManager,
               ),
             ),
           )
         : Axichat(
             capability: capability,
             guestCalendarBox: guestCalendarBox,
-            guestCalendarStorage: guestCalendarStorage,
-            storageRegistry: storageRegistry,
+            storageManager: storageManager,
           ),
   );
 }

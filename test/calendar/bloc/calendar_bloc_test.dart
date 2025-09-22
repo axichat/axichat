@@ -61,6 +61,7 @@ void main() {
 
       bloc = CalendarBloc(
         syncManagerBuilder: (_) => syncManager,
+        storage: storage,
       );
     });
 
@@ -116,6 +117,7 @@ void main() {
       'taskUpdated replaces existing task and syncs',
       build: () => CalendarBloc(
         syncManagerBuilder: (_) => syncManager,
+        storage: storage,
       ),
       seed: () {
         seededTask = CalendarTask.create(title: 'Original');
@@ -147,6 +149,7 @@ void main() {
       'taskDeleted removes task and syncs',
       build: () => CalendarBloc(
         syncManagerBuilder: (_) => syncManager,
+        storage: storage,
       ),
       seed: () {
         seededTask = CalendarTask.create(title: 'Delete me');
@@ -173,6 +176,7 @@ void main() {
       'taskCompleted toggles completion and syncs',
       build: () => CalendarBloc(
         syncManagerBuilder: (_) => syncManager,
+        storage: storage,
       ),
       seed: () {
         seededTask = CalendarTask.create(title: 'Complete me');

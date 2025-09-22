@@ -39,7 +39,7 @@ void main() {
       registry = CalendarStorageRegistry(fallback: storage);
       registry.registerPrefix(guestStoragePrefix, storage);
       HydratedBloc.storage = registry;
-      bloc = GuestCalendarBloc();
+      bloc = GuestCalendarBloc(storage: storage);
     });
 
     tearDown(() async {
@@ -73,7 +73,10 @@ void main() {
 
     blocTest<GuestCalendarBloc, CalendarState>(
       'taskUpdated replaces existing task',
-      build: () => GuestCalendarBloc(),
+      build: () {
+        storage.clear();
+        return GuestCalendarBloc(storage: storage);
+      },
       seed: () {
         seededTask = CalendarTask.create(title: 'Original');
         final model = CalendarModel.empty().addTask(seededTask);
@@ -100,7 +103,10 @@ void main() {
 
     blocTest<GuestCalendarBloc, CalendarState>(
       'taskDeleted removes task',
-      build: () => GuestCalendarBloc(),
+      build: () {
+        storage.clear();
+        return GuestCalendarBloc(storage: storage);
+      },
       seed: () {
         seededTask = CalendarTask.create(title: 'Delete');
         final model = CalendarModel.empty().addTask(seededTask);

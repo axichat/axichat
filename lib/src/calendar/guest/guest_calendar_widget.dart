@@ -297,10 +297,8 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildCalendarGridWithHandlers(CalendarState state) {
-    final calendarBloc = context.watch<GuestCalendarBloc>();
     return CalendarGrid(
       state: state,
-      bloc: calendarBloc,
       onEmptySlotTapped: _onEmptySlotTapped,
       onTaskDragEnd: _onTaskDragEnd,
       onDateSelected: (date) => context.read<GuestCalendarBloc>().add(

@@ -7,12 +7,14 @@ import '../models/calendar_exceptions.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../reminders/calendar_reminder_controller.dart';
+import '../storage/calendar_storage_registry.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
 abstract class BaseCalendarBloc
     extends HydratedBloc<CalendarEvent, CalendarState> {
   BaseCalendarBloc({
+    required Storage storage,
     required String storagePrefix,
     String storageId = '',
     CalendarReminderController? reminderController,
@@ -21,7 +23,9 @@ abstract class BaseCalendarBloc
         _now = now ?? DateTime.now,
         _storagePrefix = storagePrefix,
         _storageId = storageId,
+        _storage = storage,
         super(CalendarState.initial()) {
+    _assertStorageRegistered();
     on<CalendarStarted>(_onStarted);
     on<CalendarDataChanged>(_onDataChanged);
     on<CalendarTaskAdded>(_onTaskAdded);
@@ -42,6 +46,7 @@ abstract class BaseCalendarBloc
   final DateTime Function() _now;
   final String _storagePrefix;
   final String _storageId;
+  final Storage _storage;
   Future<void> _pendingReminderSync = Future.value();
 
   @override
@@ -96,6 +101,21 @@ abstract class BaseCalendarBloc
     } catch (error) {
       logError('Failed to persist calendar state', error);
       return null;
+    }
+  }
+
+  void _assertStorageRegistered() {
+    final hydratedStorage = HydratedBloc.storage;
+    if (hydratedStorage is CalendarStorageRegistry) {
+      final registered = hydratedStorage.storageForPrefix(storagePrefix);
+      assert(
+        registered != null,
+        '$runtimeType requires storage for prefix "$storagePrefix" to be registered.',
+      );
+      assert(
+        identical(registered, _storage),
+        '$runtimeType received an unregistered storage instance for prefix "$storagePrefix".',
+      );
     }
   }
 

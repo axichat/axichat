@@ -121,6 +121,7 @@ class HomeScreen extends StatelessWidget {
                   final reminderController =
                       context.read<CalendarReminderController>();
                   final xmppService = context.read<XmppService>();
+                  final storage = context.read<Storage?>()!;
 
                   return CalendarBloc(
                     reminderController: reminderController,
@@ -148,6 +149,7 @@ class HomeScreen extends StatelessWidget {
                       );
                       return manager;
                     },
+                    storage: storage,
                   )..add(const CalendarEvent.started());
                 },
               ),
