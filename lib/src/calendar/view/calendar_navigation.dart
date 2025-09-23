@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../bloc/calendar_event.dart';
@@ -13,6 +13,10 @@ class CalendarNavigation extends StatelessWidget {
     required this.onViewChanged,
     required this.onErrorCleared,
     this.sidebarVisible = true,
+    this.onUndo,
+    this.onRedo,
+    this.canUndo = false,
+    this.canRedo = false,
   });
 
   final CalendarState state;
@@ -20,6 +24,10 @@ class CalendarNavigation extends StatelessWidget {
   final void Function(CalendarView view) onViewChanged;
   final VoidCallback onErrorCleared;
   final bool sidebarVisible;
+  final VoidCallback? onUndo;
+  final VoidCallback? onRedo;
+  final bool canUndo;
+  final bool canRedo;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +40,7 @@ class CalendarNavigation extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Row(
             children: [
@@ -62,10 +70,19 @@ class CalendarNavigation extends StatelessWidget {
               ],
             ],
           ),
-          _DateLabel(
-            state: state,
-            onDateSelected: onDateSelected,
+          Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: _DateLabel(
+                state: state,
+                onDateSelected: onDateSelected,
+              ),
+            ),
           ),
+          if (onUndo != null || onRedo != null) ...[
+            const SizedBox(width: 16),
+            _buildUndoRedoGroup(),
+          ],
         ],
       ),
     );
@@ -107,6 +124,78 @@ class CalendarNavigation extends StatelessWidget {
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
       child: Text(label),
+    );
+  }
+
+  Widget _buildUndoRedoGroup() {
+    final controls = <Widget>[];
+    if (onUndo != null) {
+      controls.add(
+        _iconControl(
+          icon: Icons.undo_rounded,
+          tooltip: 'Undo',
+          onPressed: canUndo ? onUndo : null,
+        ),
+      );
+    }
+    if (onRedo != null) {
+      if (controls.isNotEmpty) {
+        controls.add(const SizedBox(width: 8));
+      }
+      controls.add(
+        _iconControl(
+          icon: Icons.redo_rounded,
+          tooltip: 'Redo',
+          onPressed: canRedo ? onRedo : null,
+        ),
+      );
+    }
+    if (controls.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: controls);
+  }
+
+  Widget _iconControl({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    final shortcut =
+        icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
+    return Tooltip(
+      message: '$tooltip ($shortcut)',
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(
+          icon,
+          size: 16,
+          color: onPressed != null ? calendarTitleColor : calendarSubtitleColor,
+        ),
+        label: Text(
+          tooltip,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color:
+                onPressed != null ? calendarTitleColor : calendarSubtitleColor,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          side: BorderSide(
+            color:
+                onPressed != null ? calendarPrimaryColor : calendarBorderColor,
+          ),
+          foregroundColor:
+              onPressed != null ? calendarTitleColor : calendarSubtitleColor,
+          backgroundColor: onPressed != null
+              ? calendarPrimaryColor.withValues(alpha: 0.08)
+              : Colors.white,
+          disabledForegroundColor: calendarSubtitleColor,
+          disabledBackgroundColor: Colors.white,
+        ),
+      ),
     );
   }
 }

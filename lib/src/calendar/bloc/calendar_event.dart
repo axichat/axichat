@@ -104,6 +104,34 @@ class CalendarEvent with _$CalendarEvent {
     DateTime? deadline,
     @Default(TaskPriority.none) TaskPriority priority,
   }) = CalendarQuickTaskAdded;
+
+  const factory CalendarEvent.selectionModeEntered({
+    String? taskId,
+  }) = CalendarSelectionModeEntered;
+
+  const factory CalendarEvent.selectionToggled({
+    required String taskId,
+  }) = CalendarSelectionToggled;
+
+  const factory CalendarEvent.selectionCleared() = CalendarSelectionCleared;
+
+  const factory CalendarEvent.selectionPriorityChanged({
+    required TaskPriority priority,
+  }) = CalendarSelectionPriorityChanged;
+
+  const factory CalendarEvent.selectionCompletedToggled({
+    required bool completed,
+  }) = CalendarSelectionCompletedToggled;
+
+  const factory CalendarEvent.selectionDeleted() = CalendarSelectionDeleted;
+
+  const factory CalendarEvent.selectionRecurrenceChanged({
+    RecurrenceRule? recurrence,
+  }) = CalendarSelectionRecurrenceChanged;
+
+  const factory CalendarEvent.undoRequested() = CalendarUndoRequested;
+
+  const factory CalendarEvent.redoRequested() = CalendarRedoRequested;
 }
 
 enum CalendarView { week, day, month }

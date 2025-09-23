@@ -67,4 +67,36 @@ class CalendarModel with _$CalendarModel {
     );
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
+
+  CalendarModel replaceTasks(Map<String, CalendarTask> replacements) {
+    if (replacements.isEmpty) {
+      return this;
+    }
+    final updatedTasks = {...tasks}..addAll(replacements);
+    final now = DateTime.now();
+    final updated = copyWith(
+      tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel removeTasks(Iterable<String> taskIds) {
+    final updatedTasks = Map<String, CalendarTask>.from(tasks);
+    var modified = false;
+    for (final id in taskIds) {
+      if (updatedTasks.remove(id) != null) {
+        modified = true;
+      }
+    }
+    if (!modified) {
+      return this;
+    }
+    final now = DateTime.now();
+    final updated = copyWith(
+      tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
 }

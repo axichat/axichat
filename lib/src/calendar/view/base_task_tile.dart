@@ -10,6 +10,7 @@ import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'feedback_system.dart';
+import 'widgets/calendar_completion_checkbox.dart';
 
 abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   const BaseTaskTile({
@@ -339,21 +340,10 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
               height: 20,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Checkbox(
+          : CalendarCompletionCheckbox(
               value: widget.task.isCompleted,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
-              activeColor: calendarPrimaryColor,
-              checkColor: Colors.white,
-              side: BorderSide(
-                color: calendarPrimaryColor,
-                width: widget.task.isCompleted ? 2 : 1.5,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
               onChanged: (completed) {
-                if (completed != null && !_isUpdating) {
+                if (!_isUpdating) {
                   setState(() => _isUpdating = true);
                   final baseId = widget.task.baseId;
                   context.read<T>().add(

@@ -53,6 +53,16 @@ class _TaskSidebarState extends State<TaskSidebar>
       TextEditingController();
   late Set<int> _advancedSelectedWeekdays;
 
+  String _selectionRecurrenceSignature = '';
+  RecurrenceFrequency _selectionRecurrenceFrequency = RecurrenceFrequency.none;
+  int _selectionRecurrenceInterval = 1;
+  DateTime? _selectionRecurrenceUntil;
+  int? _selectionRecurrenceCount;
+  final TextEditingController _selectionRecurrenceCountController =
+      TextEditingController();
+  Set<int> _selectionSelectedWeekdays = {DateTime.monday};
+  bool _selectionRecurrenceMixed = false;
+
   final Map<String, ShadPopoverController> _taskPopoverControllers = {};
   String? _activePopoverTaskId;
 
@@ -60,6 +70,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   void initState() {
     super.initState();
     _advancedSelectedWeekdays = {DateTime.now().weekday};
+    _selectionSelectedWeekdays = {DateTime.now().weekday};
   }
 
   @override
@@ -68,6 +79,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _descriptionController.dispose();
     _locationController.dispose();
     _advancedRecurrenceCountController.dispose();
+    _selectionRecurrenceCountController.dispose();
     _scrollController.dispose();
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
@@ -101,16 +113,9 @@ class _TaskSidebarState extends State<TaskSidebar>
           Positioned.fill(
             child: BlocBuilder<BaseCalendarBloc, CalendarState>(
               builder: (context, state) {
-                final unscheduledTasks = _sortTasksByDeadline(
-                  state.unscheduledTasks
-                      .where((task) => task.deadline == null)
-                      .toList(),
-                );
-                final reminderTasks = _sortTasksByDeadline(
-                  state.unscheduledTasks
-                      .where((task) => task.deadline != null)
-                      .toList(),
-                );
+                final content = state.isSelectionMode
+                    ? _buildSelectionPanel(state)
+                    : _buildUnscheduledContent(state);
 
                 return Scrollbar(
                   controller: _scrollController,
@@ -120,16 +125,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                     controller: _scrollController,
                     padding: const EdgeInsets.only(bottom: 24),
                     physics: const ClampingScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildAddTaskSection(),
-                        _buildTaskSections(
-                          unscheduledTasks,
-                          reminderTasks,
-                        ),
-                      ],
-                    ),
+                    child: content,
                   ),
                 );
               },
@@ -218,6 +214,906 @@ class _TaskSidebarState extends State<TaskSidebar>
           ),
           const SizedBox(height: 16),
           _buildAddButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnscheduledContent(CalendarState state) {
+    final unscheduledTasks = _sortTasksByDeadline(
+      state.unscheduledTasks.where((task) => task.deadline == null).toList(),
+    );
+    final reminderTasks = _sortTasksByDeadline(
+      state.unscheduledTasks.where((task) => task.deadline != null).toList(),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildAddTaskSection(),
+        _buildTaskSections(
+          unscheduledTasks,
+          reminderTasks,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionPanel(CalendarState state) {
+    final tasks = _selectedTasks(state);
+    _syncSelectionRecurrenceState(tasks);
+    final total = tasks.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: calendarBorderColor, width: 1),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'SELECTION MODE',
+                      style: calendarHeaderTextStyle.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                        color: calendarTimeLabelColor,
+                      ),
+                    ),
+                  ),
+                  ShadButton.outline(
+                    size: ShadButtonSize.sm,
+                    onPressed: () => context
+                        .read<BaseCalendarBloc>()
+                        .add(const CalendarEvent.selectionCleared()),
+                    child: const Text('Exit'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$total task${total == 1 ? '' : 's'} selected',
+                style: calendarSubtitleTextStyle,
+              ),
+              const SizedBox(height: 16),
+              _buildSelectionActions(tasks),
+              const SizedBox(height: 16),
+              Text(
+                'Set Priority',
+                style: calendarHeaderTextStyle.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildPriorityControls(tasks),
+              const SizedBox(height: 16),
+              Text(
+                'Repeat',
+                style: calendarHeaderTextStyle.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildSelectionRecurrenceSection(tasks),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _buildSelectedTaskList(tasks),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionActions(List<CalendarTask> tasks) {
+    final bloc = context.read<BaseCalendarBloc>();
+    final hasTasks = tasks.isNotEmpty;
+    final bool allCompleted =
+        hasTasks && tasks.every((task) => task.isCompleted);
+    final bool anyCompleted = tasks.any((task) => task.isCompleted);
+    final bool isIndeterminate = hasTasks && anyCompleted && !allCompleted;
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 240),
+          child: PriorityCheckboxTile(
+            label: 'Mark as completed',
+            value: allCompleted,
+            isIndeterminate: isIndeterminate,
+            color: calendarPrimaryColor,
+            onChanged: hasTasks
+                ? (completed) => bloc.add(
+                      CalendarEvent.selectionCompletedToggled(
+                        completed: completed,
+                      ),
+                    )
+                : null,
+          ),
+        ),
+        _selectionActionButton(
+          icon: Icons.clear_all,
+          label: 'Clear Selection',
+          onPressed: () => bloc.add(
+            const CalendarEvent.selectionCleared(),
+          ),
+        ),
+        _selectionActionButton(
+          icon: Icons.delete_outline,
+          label: 'Delete Selected',
+          onPressed: hasTasks
+              ? () => bloc.add(const CalendarEvent.selectionDeleted())
+              : null,
+          backgroundColor: calendarDangerColor,
+          hoverBackgroundColor: calendarDangerColor.withValues(alpha: 0.85),
+          foregroundColor: Colors.white,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPriorityControls(List<CalendarTask> tasks) {
+    final bloc = context.read<BaseCalendarBloc>();
+    final bool hasTasks = tasks.isNotEmpty;
+
+    final bool allImportant =
+        hasTasks && tasks.every((task) => task.isImportant || task.isCritical);
+    final bool anyImportant =
+        tasks.any((task) => task.isImportant || task.isCritical);
+
+    final bool allUrgent =
+        hasTasks && tasks.every((task) => task.isUrgent || task.isCritical);
+    final bool anyUrgent =
+        tasks.any((task) => task.isUrgent || task.isCritical);
+
+    void updatePriority({required bool important, required bool urgent}) {
+      final TaskPriority target;
+      if (important && urgent) {
+        target = TaskPriority.critical;
+      } else if (important) {
+        target = TaskPriority.important;
+      } else if (urgent) {
+        target = TaskPriority.urgent;
+      } else {
+        target = TaskPriority.none;
+      }
+      bloc.add(
+        CalendarEvent.selectionPriorityChanged(priority: target),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: PriorityCheckboxTile(
+            label: 'Important',
+            value: allImportant,
+            isIndeterminate: anyImportant && !allImportant,
+            color: calendarSuccessColor,
+            onChanged: hasTasks
+                ? (selected) => updatePriority(
+                      important: selected,
+                      urgent: allUrgent,
+                    )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: PriorityCheckboxTile(
+            label: 'Urgent',
+            value: allUrgent,
+            isIndeterminate: anyUrgent && !allUrgent,
+            color: calendarWarningColor,
+            onChanged: hasTasks
+                ? (selected) => updatePriority(
+                      important: allImportant,
+                      urgent: selected,
+                    )
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionRecurrenceSection(List<CalendarTask> tasks) {
+    final bool hasTasks = tasks.isNotEmpty;
+    final frequency = _selectionRecurrenceFrequency;
+    final bool showWeekdaySelector = frequency == RecurrenceFrequency.weekly ||
+        frequency == RecurrenceFrequency.weekdays;
+    final bool showAdvanced = frequency != RecurrenceFrequency.none;
+
+    final content = <Widget>[
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: RecurrenceFrequency.values
+            .map(
+              (frequency) => _buildSelectionRecurrenceFrequencyButton(
+                frequency,
+                hasTasks,
+                tasks,
+              ),
+            )
+            .toList(),
+      ),
+    ];
+
+    if (_selectionRecurrenceMixed) {
+      content.insert(
+        0,
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: calendarWarningColor.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border:
+                Border.all(color: calendarWarningColor.withValues(alpha: 0.4)),
+          ),
+          child: const Text(
+            'Tasks have different recurrence settings. Updates will apply to all selected tasks.',
+            style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
+          ),
+        ),
+      );
+    }
+
+    if (showWeekdaySelector) {
+      content.add(const SizedBox(height: 12));
+      content.add(_buildSelectionWeekdaySelector(hasTasks));
+    }
+
+    if (showAdvanced) {
+      content
+        ..add(const SizedBox(height: 12))
+        ..add(_buildSelectionRecurrenceInterval(hasTasks))
+        ..add(const SizedBox(height: 14))
+        ..add(_buildSelectionRecurrenceEndControls(hasTasks));
+    }
+
+    if (content.length == 1 && !hasTasks) {
+      return const Text(
+        'No tasks selected.',
+        style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: content,
+    );
+  }
+
+  Widget _buildSelectionRecurrenceFrequencyButton(
+    RecurrenceFrequency frequency,
+    bool hasTasks,
+    List<CalendarTask> tasks,
+  ) {
+    final isSelected = _selectionRecurrenceFrequency == frequency;
+
+    return ShadButton.raw(
+      variant:
+          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
+      size: ShadButtonSize.sm,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
+      hoverBackgroundColor: isSelected
+          ? calendarPrimaryHoverColor
+          : calendarPrimaryColor.withValues(alpha: 0.08),
+      foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
+      hoverForegroundColor:
+          isSelected ? Colors.white : calendarPrimaryHoverColor,
+      onPressed: hasTasks
+          ? () {
+              setState(() {
+                _selectionRecurrenceFrequency = frequency;
+                _selectionRecurrenceInterval = 1;
+                _selectionRecurrenceUntil = null;
+                _selectionRecurrenceCount = null;
+                _selectionRecurrenceCountController.clear();
+                _selectionRecurrenceMixed = false;
+                if (frequency == RecurrenceFrequency.weekdays) {
+                  _selectionSelectedWeekdays = const {
+                    DateTime.monday,
+                    DateTime.tuesday,
+                    DateTime.wednesday,
+                    DateTime.thursday,
+                    DateTime.friday,
+                  };
+                } else if (frequency == RecurrenceFrequency.weekly) {
+                  if (_selectionSelectedWeekdays.isEmpty) {
+                    _selectionSelectedWeekdays = {
+                      _defaultSelectionWeekday(tasks),
+                    };
+                  }
+                }
+              });
+              _dispatchSelectionRecurrence();
+            }
+          : null,
+      child: Text(
+        _recurrenceLabel(frequency),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectionWeekdaySelector(bool hasTasks) {
+    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const values = [
+      DateTime.monday,
+      DateTime.tuesday,
+      DateTime.wednesday,
+      DateTime.thursday,
+      DateTime.friday,
+      DateTime.saturday,
+      DateTime.sunday,
+    ];
+
+    final chips = <Widget>[];
+    for (var index = 0; index < values.length; index++) {
+      final value = values[index];
+      final isSelected = _selectionSelectedWeekdays.contains(value);
+      chips.add(
+        ShadButton.raw(
+          variant: isSelected
+              ? ShadButtonVariant.primary
+              : ShadButtonVariant.outline,
+          size: ShadButtonSize.sm,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
+          hoverBackgroundColor: isSelected
+              ? calendarPrimaryHoverColor
+              : calendarPrimaryColor.withValues(alpha: 0.08),
+          foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
+          hoverForegroundColor:
+              isSelected ? Colors.white : calendarPrimaryHoverColor,
+          onPressed: hasTasks ? () => _toggleSelectionWeekday(value) : null,
+          child: Text(
+            labels[index],
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: chips,
+    );
+  }
+
+  Widget _buildSelectionRecurrenceInterval(bool hasTasks) {
+    final options = List.generate(12, (index) => index + 1)
+        .map(
+          (value) => ShadOption<int>(
+            value: value,
+            child: Text('$value'),
+          ),
+        )
+        .toList();
+
+    return Row(
+      children: [
+        const Text(
+          'Repeat every',
+          style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 118,
+          child: ShadSelect<int>(
+            enabled: hasTasks,
+            initialValue: _selectionRecurrenceInterval,
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectionRecurrenceInterval = value);
+              _dispatchSelectionRecurrence();
+            },
+            options: options,
+            selectedOptionBuilder: (context, value) => Text('$value'),
+            decoration: ShadDecoration(
+              color: Colors.white,
+              border: ShadBorder.all(
+                color: calendarBorderColor,
+                width: 1,
+                radius: BorderRadius.circular(10),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            trailing: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: calendarSubtitleColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          _recurrenceIntervalUnit(_selectionRecurrenceFrequency),
+          style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionRecurrenceEndControls(bool hasTasks) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'END DATE',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 6),
+        DeadlinePickerField(
+          value: _selectionRecurrenceUntil,
+          placeholder: 'End',
+          showStatusColors: false,
+          showTimeSelectors: false,
+          onChanged: (value) {
+            setState(() {
+              _selectionRecurrenceUntil = value == null
+                  ? null
+                  : DateTime(value.year, value.month, value.day);
+              if (_selectionRecurrenceUntil != null) {
+                _selectionRecurrenceCount = null;
+                _selectionRecurrenceCountController.clear();
+              }
+            });
+            _dispatchSelectionRecurrence();
+          },
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'COUNT',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _selectionRecurrenceCountController,
+          enabled: hasTasks,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Repeat times',
+            hintStyle: TextStyle(
+              color: calendarSubtitleColor.withValues(alpha: 0.55),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: calendarPrimaryColor, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+          ),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+          ],
+          onChanged: (value) {
+            final parsed = int.tryParse(value);
+            setState(() {
+              if (parsed == null || parsed <= 0) {
+                _selectionRecurrenceCount = null;
+              } else {
+                _selectionRecurrenceCount = parsed;
+                _selectionRecurrenceUntil = null;
+              }
+            });
+            _dispatchSelectionRecurrence();
+          },
+        ),
+      ],
+    );
+  }
+
+  void _toggleSelectionWeekday(int weekday) {
+    setState(() {
+      if (_selectionSelectedWeekdays.contains(weekday)) {
+        final updated = {..._selectionSelectedWeekdays}..remove(weekday);
+        if (updated.isEmpty) {
+          return;
+        }
+        _selectionSelectedWeekdays = updated;
+      } else {
+        _selectionSelectedWeekdays = {
+          ..._selectionSelectedWeekdays,
+          weekday,
+        };
+      }
+    });
+    _dispatchSelectionRecurrence();
+  }
+
+  void _dispatchSelectionRecurrence() {
+    final bloc = context.read<BaseCalendarBloc>();
+    if (bloc.state.selectedTaskIds.isEmpty) {
+      return;
+    }
+
+    RecurrenceRule? recurrence;
+    final normalizedFrequency = _selectionRecurrenceFrequency;
+
+    if (normalizedFrequency == RecurrenceFrequency.none) {
+      recurrence = null;
+    } else if (normalizedFrequency == RecurrenceFrequency.weekdays) {
+      recurrence = RecurrenceRule(
+        frequency: RecurrenceFrequency.weekdays,
+        interval: _selectionRecurrenceInterval,
+        byWeekdays: const [
+          DateTime.monday,
+          DateTime.tuesday,
+          DateTime.wednesday,
+          DateTime.thursday,
+          DateTime.friday,
+        ],
+        until: _selectionRecurrenceUntil,
+        count: _selectionRecurrenceCount,
+      );
+    } else {
+      var weekdays = _selectionSelectedWeekdays;
+      if (normalizedFrequency == RecurrenceFrequency.weekly) {
+        if (weekdays.isEmpty) {
+          weekdays = {DateTime.monday};
+        }
+      } else {
+        weekdays = <int>{};
+      }
+      recurrence = RecurrenceRule(
+        frequency: normalizedFrequency,
+        interval: _selectionRecurrenceInterval,
+        byWeekdays: weekdays.isEmpty ? null : (weekdays.toList()..sort()),
+        until: _selectionRecurrenceUntil,
+        count: _selectionRecurrenceCount,
+      );
+    }
+
+    bloc.add(
+      CalendarEvent.selectionRecurrenceChanged(
+        recurrence: recurrence,
+      ),
+    );
+  }
+
+  void _syncSelectionRecurrenceState(List<CalendarTask> tasks) {
+    final signature = tasks
+        .map(
+          (task) => '${task.id}:${_recurrenceSignature(task.recurrence)}',
+        )
+        .join('|');
+
+    if (signature == _selectionRecurrenceSignature) {
+      return;
+    }
+
+    _selectionRecurrenceSignature = signature;
+
+    if (tasks.isEmpty) {
+      _selectionRecurrenceFrequency = RecurrenceFrequency.none;
+      _selectionRecurrenceInterval = 1;
+      _selectionRecurrenceUntil = null;
+      _selectionRecurrenceCount = null;
+      _selectionRecurrenceCountController.clear();
+      _selectionSelectedWeekdays = {DateTime.monday};
+      _selectionRecurrenceMixed = false;
+      return;
+    }
+
+    final firstRule = tasks.first.recurrence ?? RecurrenceRule.none;
+    final bool allSame = tasks.every((task) {
+      final rule = task.recurrence ?? RecurrenceRule.none;
+      return _recurrenceEquals(firstRule, rule);
+    });
+
+    _selectionRecurrenceMixed = !allSame;
+
+    final effectiveRule = allSame ? firstRule : RecurrenceRule.none;
+    _selectionRecurrenceFrequency = effectiveRule.frequency;
+    _selectionRecurrenceInterval = effectiveRule.interval;
+    _selectionRecurrenceUntil = effectiveRule.until;
+    _selectionRecurrenceCount = effectiveRule.count;
+    _selectionRecurrenceCountController.text =
+        _selectionRecurrenceCount?.toString() ?? '';
+
+    if (effectiveRule.frequency == RecurrenceFrequency.weekdays) {
+      _selectionSelectedWeekdays = const {
+        DateTime.monday,
+        DateTime.tuesday,
+        DateTime.wednesday,
+        DateTime.thursday,
+        DateTime.friday,
+      };
+    } else if (effectiveRule.frequency == RecurrenceFrequency.weekly) {
+      final weekdays = effectiveRule.byWeekdays;
+      if (weekdays != null && weekdays.isNotEmpty) {
+        _selectionSelectedWeekdays = weekdays.toSet();
+      } else {
+        _selectionSelectedWeekdays = {
+          _defaultSelectionWeekday(tasks),
+        };
+      }
+    } else {
+      _selectionSelectedWeekdays = {
+        _defaultSelectionWeekday(tasks),
+      };
+    }
+  }
+
+  int _defaultSelectionWeekday(List<CalendarTask> tasks) {
+    for (final task in tasks) {
+      final scheduled = task.scheduledTime;
+      if (scheduled != null) {
+        return scheduled.weekday;
+      }
+    }
+    return DateTime.monday;
+  }
+
+  String _recurrenceSignature(RecurrenceRule? rule) {
+    final effective = rule ?? RecurrenceRule.none;
+    final weekdays = List<int>.from(effective.byWeekdays ?? const []);
+    weekdays.sort();
+    final weekdayString = weekdays.join(',');
+    final until = effective.until?.toIso8601String() ?? '';
+    final count = effective.count?.toString() ?? '';
+    return '${effective.frequency.name}:${effective.interval}:$weekdayString:$until:$count';
+  }
+
+  bool _recurrenceEquals(RecurrenceRule a, RecurrenceRule b) {
+    if (identical(a, b)) return true;
+    if (a.frequency != b.frequency) return false;
+    if (a.interval != b.interval) return false;
+    final aUntil = a.until;
+    final bUntil = b.until;
+    if (aUntil != null && bUntil != null) {
+      if (!aUntil.isAtSameMomentAs(bUntil)) return false;
+    } else if (aUntil != null || bUntil != null) {
+      return false;
+    }
+    if (a.count != b.count) return false;
+    final aWeekdays = List<int>.from(a.byWeekdays ?? const []);
+    final bWeekdays = List<int>.from(b.byWeekdays ?? const []);
+    aWeekdays.sort();
+    bWeekdays.sort();
+    if (aWeekdays.length != bWeekdays.length) return false;
+    for (var index = 0; index < aWeekdays.length; index += 1) {
+      if (aWeekdays[index] != bWeekdays[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Widget _buildSelectedTaskList(List<CalendarTask> tasks) {
+    if (tasks.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: calendarBorderColor),
+        ),
+        child: const Text(
+          'No tasks selected. Use the Select option in the calendar to pick tasks to edit.',
+          style: TextStyle(
+            fontSize: 12,
+            color: calendarSubtitleColor,
+          ),
+        ),
+      );
+    }
+
+    final children = <Widget>[];
+    for (var index = 0; index < tasks.length; index += 1) {
+      if (index > 0) {
+        children.add(const SizedBox(height: 12));
+      }
+      children.add(_buildSelectedTaskTile(tasks[index]));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+
+  Widget _buildSelectedTaskTile(CalendarTask task) {
+    final scheduled = task.scheduledTime;
+    final scheduleText = scheduled == null
+        ? 'Unscheduled'
+        : TimeFormatter.formatFriendlyDateTime(scheduled);
+    final priority = task.priority ?? TaskPriority.none;
+    final Color indicatorColor = priority == TaskPriority.none
+        ? calendarBorderColor
+        : task.priorityColor;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: calendarBorderColor),
+        boxShadow: calendarLightShadow,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            height: 36,
+            decoration: BoxDecoration(
+              color: indicatorColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: calendarTitleColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  scheduleText,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: calendarSubtitleColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (priority != TaskPriority.none)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, top: 2),
+              child: Text(
+                _priorityLabel(priority),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: calendarSubtitleColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<CalendarTask> _selectedTasks(CalendarState state) {
+    final tasks = state.selectedTaskIds
+        .map((id) => state.model.tasks[id])
+        .whereType<CalendarTask>()
+        .toList();
+    tasks.sort((a, b) {
+      final aTime = a.scheduledTime;
+      final bTime = b.scheduledTime;
+      if (aTime == null && bTime == null) {
+        return a.title.compareTo(b.title);
+      }
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      final comparison = aTime.compareTo(bTime);
+      return comparison != 0 ? comparison : a.title.compareTo(b.title);
+    });
+    return tasks;
+  }
+
+  String _priorityLabel(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.none:
+        return 'None';
+      case TaskPriority.important:
+        return 'Important';
+      case TaskPriority.urgent:
+        return 'Urgent';
+      case TaskPriority.critical:
+        return 'Critical';
+    }
+  }
+
+  Widget _selectionActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    ShadButtonVariant variant = ShadButtonVariant.outline,
+    Color? backgroundColor,
+    Color? hoverBackgroundColor,
+    Color? foregroundColor,
+  }) {
+    final defaultForeground = variant == ShadButtonVariant.primary
+        ? Colors.white
+        : calendarTitleColor;
+    final effectiveForeground = foregroundColor ??
+        (onPressed != null ? defaultForeground : calendarSubtitleColor);
+    final effectiveHoverForeground = foregroundColor ?? defaultForeground;
+    final effectiveHoverBackground =
+        hoverBackgroundColor ?? backgroundColor?.withValues(alpha: 0.9);
+
+    return ShadButton.raw(
+      variant: variant,
+      size: ShadButtonSize.sm,
+      onPressed: onPressed,
+      enabled: onPressed != null,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      backgroundColor: backgroundColor,
+      hoverBackgroundColor: effectiveHoverBackground,
+      foregroundColor: effectiveForeground,
+      hoverForegroundColor: foregroundColor ?? effectiveHoverForeground,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: effectiveForeground,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: effectiveForeground,
+            ),
+          ),
         ],
       ),
     );
