@@ -17,13 +17,7 @@ late final bool withForeground;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  Logger.root.level = Level.ALL;
-  Logger.root.onRecord.listen(
-    (record) => kDebugMode
-        ? print('${record.level.name}: ${record.time}: ${record.message}'
-            '${record.stackTrace != null ? 'Exception: ${record.error} ' 'Stack Trace: ${record.stackTrace}' : ''}')
-        : null,
-  );
+  _configureLogging();
 
   HydratedBloc.storage = await HydratedStorage.build(
     storageDirectory: await getApplicationDocumentsDirectory(),
@@ -50,6 +44,31 @@ Future<void> main() async {
           )
         : Axichat(capability: capability),
   );
+}
+
+var _loggerConfigured = false;
+
+void _configureLogging() {
+  if (_loggerConfigured) return;
+  _loggerConfigured = true;
+
+  if (kDebugMode) {
+    Logger.root
+      ..level = Level.ALL
+      ..onRecord.listen((record) {
+        final buffer = StringBuffer()
+          ..write('${record.level.name}: ${record.time}: ${record.message}');
+        if (record.stackTrace != null) {
+          buffer
+            ..write(' Exception: ${record.error}')
+            ..write(' Stack Trace: ${record.stackTrace}');
+        }
+        print(buffer.toString());
+      });
+    return;
+  }
+
+  Logger.root.level = Level.WARNING;
 }
 
 class BlocLogger extends BlocObserver {

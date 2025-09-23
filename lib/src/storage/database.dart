@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_renaming_method_parameters
 
 import 'dart:io';
-import 'dart:math';
 
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:drift/drift.dart';
@@ -675,8 +674,9 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   @override
   Future<void> saveMessage(Message message) async {
-    _log.info('Saving message: ${message.stanzaID} with body: '
-        '${message.body?.substring(0, min(10, message.body!.length))}...');
+    final bodyPreview =
+        message.body == null ? 'no body' : '${message.body!.length} chars';
+    _log.fine('Persisting message ${message.stanzaID}; body=$bodyPreview');
     final hasBody = message.body != null;
     await transaction(() async {
       await into(chats).insert(
@@ -746,8 +746,8 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required String stanzaID,
     required String? body,
   }) async {
-    _log.info('Editing message: $stanzaID with body: '
-        '${body?.substring(0, min(10, body.length))}...');
+    final bodyPreview = body == null ? 'no body' : '${body.length} chars';
+    _log.fine('Editing message $stanzaID; body=$bodyPreview');
     await messagesAccessor.updateOne(MessagesCompanion(
       stanzaID: Value(stanzaID),
       edited: const Value(true),

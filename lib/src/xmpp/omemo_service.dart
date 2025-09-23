@@ -270,7 +270,7 @@ mixin OmemoService on XmppBase {
             chat?.encryptionProtocol == EncryptionProtocol.omemo;
 
         if (shouldEncrypt) {
-          _omemoLogger.info('Encrypting message to $chatJid with OMEMO');
+          _omemoLogger.fine('Encrypting message to $chatJid with OMEMO');
         }
 
         return shouldEncrypt;
