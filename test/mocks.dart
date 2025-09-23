@@ -146,6 +146,12 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
       .thenAnswer((_) async => <OmemoRatchet>[]);
   when(() => mockDatabase.saveOmemoRatchet(any())).thenAnswer((_) async {});
   when(() => mockDatabase.removeOmemoRatchets(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoBundleCache(any(), any()))
+      .thenAnswer((_) async => null);
+  when(() => mockDatabase.saveOmemoBundleCache(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.removeOmemoBundleCache(any(), any()))
+      .thenAnswer((_) async {});
+  when(() => mockDatabase.clearOmemoBundleCache()).thenAnswer((_) async {});
   when(() => mockDatabase.getOmemoDeviceList(any()))
       .thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoDeviceList(any())).thenAnswer((_) async {});
@@ -187,6 +193,12 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
       .thenAnswer((_) async => <OmemoRatchet>[]);
   when(() => mockDatabase.saveOmemoRatchet(any())).thenAnswer((_) async {});
   when(() => mockDatabase.removeOmemoRatchets(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.getOmemoBundleCache(any(), any()))
+      .thenAnswer((_) async => null);
+  when(() => mockDatabase.saveOmemoBundleCache(any())).thenAnswer((_) async {});
+  when(() => mockDatabase.removeOmemoBundleCache(any(), any()))
+      .thenAnswer((_) async {});
+  when(() => mockDatabase.clearOmemoBundleCache()).thenAnswer((_) async {});
   when(() => mockDatabase.getOmemoDeviceList(any()))
       .thenAnswer((_) async => null);
   when(() => mockDatabase.saveOmemoDeviceList(any())).thenAnswer((_) async {});

@@ -13,11 +13,19 @@ final class AuthenticationNone extends AuthenticationState {
   List<Object?> get props => [];
 }
 
-final class AuthenticationInProgress extends AuthenticationState {
+abstract final class AuthenticationInProgress extends AuthenticationState {
   const AuthenticationInProgress();
 
   @override
   List<Object?> get props => [];
+}
+
+final class AuthenticationLogInInProgress extends AuthenticationInProgress {
+  const AuthenticationLogInInProgress();
+}
+
+final class AuthenticationSignUpInProgress extends AuthenticationInProgress {
+  const AuthenticationSignUpInProgress();
 }
 
 final class AuthenticationComplete extends AuthenticationState {

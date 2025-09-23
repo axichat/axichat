@@ -6,6 +6,7 @@
 - UI elements that teammates monitor (operation overlays, notifications) sit in `lib/src/notifications` and are surfaced through `lib/src/app.dart`.
 
 ## Build, Test, and Development Commands
+- USE THE DART MCP, if that is broken then use the following as fallbacks:
 - `flutter run` spins up the app; pass `--flavor dev` if you need the staging config.
 - `dart format .` then `dart analyze` before sending patches to keep lints predictable.
 - `dart test` runs the full suite; scope to a module with `dart test test/xmpp/chats_service_test.dart` for quicker iteration.

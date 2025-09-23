@@ -969,7 +969,7 @@ packages:
     description:
       path: "packages/moxxmpp"
       ref: "v0.6.2"
-      resolved-ref: "9a93f863ba5b3da91f88bf4f89ca7df55e517e93"
+      resolved-ref: eeeeb77d57898e6242a6678e51fef4af0ae26570
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.6.2"
@@ -978,7 +978,7 @@ packages:
     description:
       path: "packages/moxxmpp_socket_tcp"
       ref: HEAD
-      resolved-ref: "9a93f863ba5b3da91f88bf4f89ca7df55e517e93"
+      resolved-ref: eeeeb77d57898e6242a6678e51fef4af0ae26570
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.4.1"
@@ -1019,7 +1019,7 @@ packages:
     description:
       path: "."
       ref: "v0.7.1"
-      resolved-ref: cd43d4dd4b3d50ddb020657e980092aa9120aa7a
+      resolved-ref: af96331658b726367fefc7bdbffa9da2906c6c23
       url: "https://gitlab.com/axichat/omemo_dart.git"
     source: git
     version: "0.7.1"
@@ -1331,10 +1331,10 @@ packages:
     dependency: transitive
     description:
       name: shared_preferences_android
-      sha256: a2608114b1ffdcbc9c120eb71a0e207c71da56202852d4aab8a5e30a82269e74
+      sha256: bd14436108211b0d4ee5038689a56d4ae3620fd72fd6036e113bf1345bc74d9e
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.12"
+    version: "2.4.13"
   shared_preferences_foundation:
     dependency: transitive
     description:

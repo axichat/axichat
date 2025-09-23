@@ -88,7 +88,7 @@ void main() {
         rememberMe: true,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationComplete(),
       ],
       verify: (bloc) {
@@ -111,7 +111,7 @@ void main() {
         password: validPassword,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationComplete(),
       ],
       verify: (bloc) {
@@ -134,7 +134,7 @@ void main() {
         password: invalidPassword,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
@@ -157,7 +157,7 @@ void main() {
         password: validPassword,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
@@ -180,7 +180,7 @@ void main() {
         password: invalidPassword,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
@@ -202,7 +202,7 @@ void main() {
         username: validUsername,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
             'Username and password have different nullness.'),
       ],
@@ -225,7 +225,7 @@ void main() {
         password: validPassword,
       ),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
             'Username and password have different nullness.'),
       ],
@@ -252,7 +252,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationComplete(),
       ],
     );
@@ -268,7 +268,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
@@ -288,7 +288,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => [
-        const AuthenticationInProgress(),
+        const AuthenticationLogInInProgress(),
         const AuthenticationNone(),
       ],
     );
