@@ -11,7 +11,8 @@ class ResizableTaskWidget extends StatefulWidget {
   final ValueChanged<DragUpdateDetails>? onDragUpdate;
   final ValueChanged<double>? onResizeAutoScroll;
   final double hourHeight;
-  final double quarterHeight;
+  final double stepHeight;
+  final int minutesPerStep;
   final double width;
   final double height;
   final bool isDayView;
@@ -28,7 +29,8 @@ class ResizableTaskWidget extends StatefulWidget {
     this.onDragUpdate,
     this.onResizeAutoScroll,
     required this.hourHeight,
-    required this.quarterHeight,
+    required this.stepHeight,
+    required this.minutesPerStep,
     required this.width,
     required this.height,
     required this.isDayView,
@@ -45,6 +47,7 @@ class ResizableTaskWidget extends StatefulWidget {
 class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   bool isHovering = false;
   bool isResizing = false;
+  bool isDragging = false;
   String? activeHandle;
   double _totalDragDeltaY = 0;
   int _lastAppliedQuarterDelta = 0;
@@ -95,7 +98,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
     Widget buildTaskBody() {
       final showHoverEffects = widget.enableInteractions &&
-          (widget.isPopoverOpen || isHovering || isResizing);
+          (widget.isPopoverOpen || isHovering || isResizing || isDragging);
       final decoration = BoxDecoration(
         color: task.isCompleted
             ? taskColor.withValues(alpha: 0.5)
@@ -327,36 +330,39 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     }
 
     Widget buildInteractiveContent() {
-      return MouseRegion(
-        onEnter: (_) {
-          if (!widget.isPopoverOpen && widget.enableInteractions) {
-            setState(() => isHovering = true);
-          }
-        },
-        onExit: (_) {
-          if (!widget.isPopoverOpen && widget.enableInteractions) {
-            setState(() => isHovering = false);
-          }
-        },
-        cursor: widget.enableInteractions && isResizing
-            ? SystemMouseCursors.resizeUpDown
-            : SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            final handler = widget.onTap;
-            if (handler == null) return;
-
-            final renderBox = context.findRenderObject() as RenderBox?;
-            if (renderBox == null) {
-              handler(task, Rect.zero);
-              return;
+      return IgnorePointer(
+        ignoring: isDragging,
+        child: MouseRegion(
+          onEnter: (_) {
+            if (!widget.isPopoverOpen && widget.enableInteractions) {
+              setState(() => isHovering = true);
             }
-
-            final origin = renderBox.localToGlobal(Offset.zero);
-            handler(task, origin & renderBox.size);
           },
-          child: buildTaskBody(),
+          onExit: (_) {
+            if (!widget.isPopoverOpen && widget.enableInteractions) {
+              setState(() => isHovering = false);
+            }
+          },
+          cursor: widget.enableInteractions && isResizing
+              ? SystemMouseCursors.resizeUpDown
+              : SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              final handler = widget.onTap;
+              if (handler == null) return;
+
+              final renderBox = context.findRenderObject() as RenderBox?;
+              if (renderBox == null) {
+                handler(task, Rect.zero);
+                return;
+              }
+
+              final origin = renderBox.localToGlobal(Offset.zero);
+              handler(task, origin & renderBox.size);
+            },
+            child: buildTaskBody(),
+          ),
         ),
       );
     }
@@ -368,23 +374,22 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           ? Draggable<CalendarTask>(
               data: task,
               feedback: buildFeedback(),
-              onDragStarted: widget.onDragStarted,
+              onDragStarted: () {
+                widget.onDragStarted?.call();
+                if (mounted) {
+                  setState(() => isDragging = true);
+                }
+              },
               onDragUpdate: widget.onDragUpdate,
               onDragEnd: (_) {
                 if (mounted) {
-                  setState(() => isHovering = false);
+                  setState(() {
+                    isHovering = false;
+                    isDragging = false;
+                  });
                 }
               },
-              childWhenDragging: IgnorePointer(
-                ignoring: true,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: taskColor.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: taskColor, width: 1),
-                  ),
-                ),
-              ),
+              childWhenDragging: const SizedBox.shrink(),
               child: buildInteractiveContent(),
             )
           : buildInteractiveContent(),
@@ -491,26 +496,27 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     _totalDragDeltaY += details.delta.dy;
 
     if (handleType == 'top' || handleType == 'bottom') {
-      // Calculate quarter-hour changes and snap to discrete cells
-      final rawSteps = _totalDragDeltaY / widget.quarterHeight;
-      final quartersChanged = rawSteps.round();
-      if (quartersChanged == _lastAppliedQuarterDelta) {
+      final rawSteps = _totalDragDeltaY / widget.stepHeight;
+      final stepsChanged = rawSteps.round();
+      if (stepsChanged == _lastAppliedQuarterDelta) {
         return;
       }
-      if (quartersChanged == 0) {
+      if (stepsChanged == 0) {
         _lastAppliedQuarterDelta = 0;
         return;
       }
-      final hoursChanged = quartersChanged * 0.25;
-      _lastAppliedQuarterDelta = quartersChanged;
+      final minutesPerStep = widget.minutesPerStep;
+      final double hoursChanged = (stepsChanged * minutesPerStep) / 60.0;
+      _lastAppliedQuarterDelta = stepsChanged;
 
       if (handleType == 'top') {
         // Adjust start time and duration
         final newStartHour =
             (_originalStartHour + hoursChanged).clamp(0.0, 23.75);
         final startDiff = _originalStartHour - newStartHour;
+        final double minDurationHours = widget.minutesPerStep / 60.0;
         final newDurationHours = (_originalDurationHours + startDiff)
-            .clamp(0.25, 24.0 - newStartHour);
+            .clamp(minDurationHours, 24.0 - newStartHour);
 
         _tempScheduledTime = DateTime(
           widget.task.scheduledTime!.year,
@@ -533,8 +539,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       } else if (handleType == 'bottom') {
         // Adjust duration only
         final maxDuration = 24.0 - _originalStartHour;
-        final newDurationHours =
-            (_originalDurationHours + hoursChanged).clamp(0.25, maxDuration);
+        final double minDurationHours = widget.minutesPerStep / 60.0;
+        final newDurationHours = (_originalDurationHours + hoursChanged)
+            .clamp(minDurationHours, maxDuration);
 
         _tempScheduledTime = widget.task.scheduledTime;
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
