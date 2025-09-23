@@ -282,10 +282,10 @@ class XmppService extends XmppBase
           (ss) => ss.write(key: resourceStorageKey, value: event.resource));
     })
     ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
-      _xmppLogger.info('Saving FAST token...');
+      _xmppLogger.fine('Saving FAST token.');
       await _dbOp<XmppStateStore>((ss) async {
         await ss.write(key: fastTokenStorageKey, value: event.token.token);
-        _xmppLogger.info('Saved FAST token: ${event.token.token}.');
+        _xmppLogger.fine('FAST token persisted.');
       });
     })
     ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {

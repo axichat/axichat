@@ -44,7 +44,7 @@ class ForegroundSocket extends TaskHandler {
 
   static void _sendToMain(List<Object> strings) {
     final data = strings.join(join);
-    _log.info('Sending to main: $data');
+    _log.fine('Sending to main: $data');
     FlutterForegroundTask.sendDataToMain(data);
   }
 
@@ -63,20 +63,9 @@ class ForegroundSocket extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
-      if (!kDebugMode) return;
-      final buffer = StringBuffer()
-        ..write('${record.level.name}: ${record.time}: ${record.message}');
-      if (record.stackTrace != null) {
-        buffer
-          ..write(' Exception: ${record.error}')
-          ..write(' Stack Trace: ${record.stackTrace}');
-      }
-      print(buffer.toString());
-    });
+    _configureLogging();
 
-    _log.info('onStart called.');
+    _log.fine('onStart called.');
     _socket ??= XmppSocketWrapper();
     _dataSubscription = _socket!.getDataStream().listen(_onData);
     _eventSubscription = _socket!.getEventStream().listen(_onEvent);
@@ -84,7 +73,7 @@ class ForegroundSocket extends TaskHandler {
 
   @override
   void onReceiveData(covariant String data) async {
-    _log.info('Received task: $data');
+    _log.fine('Received task: $data');
     _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
       final split = data.split(join);
@@ -129,7 +118,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   Future<void> _onReceiveTaskData(Object data) async {
     if (data is! String) return;
-    _log.info('Received main: $data');
+    _log.fine('Received main: $data');
     if (data.startsWith('$dataPrefix$join')) {
       _dataStream.add(data.substring('$dataPrefix$join'.length));
     } else if (data == socketErrorPrefix) {
@@ -241,6 +230,32 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
     await FlutterForegroundTask.stopService();
   }
+}
+
+var _foregroundLoggerConfigured = false;
+
+void _configureLogging() {
+  if (_foregroundLoggerConfigured) return;
+  _foregroundLoggerConfigured = true;
+
+  if (kDebugMode) {
+    Logger.root
+      ..level = Level.ALL
+      ..onRecord.listen((record) {
+        final buffer = StringBuffer()
+          ..write('${record.level.name}: ${record.time}: ${record.message}');
+        if (record.stackTrace != null) {
+          buffer
+            ..write(' Exception: ${record.error}')
+            ..write(' Stack Trace: ${record.stackTrace}');
+        }
+        // ignore: avoid_print
+        print(buffer.toString());
+      });
+    return;
+  }
+
+  Logger.root.level = Level.WARNING;
 }
 
 void initForegroundService() => FlutterForegroundTask.init(
