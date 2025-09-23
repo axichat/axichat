@@ -9,6 +9,21 @@ import '../utils/smart_parser.dart';
 part 'calendar_task.freezed.dart';
 part 'calendar_task.g.dart';
 
+@freezed
+@HiveType(typeId: 36)
+class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
+  const factory TaskOccurrenceOverride({
+    @HiveField(0) DateTime? scheduledTime,
+    @HiveField(1) Duration? duration,
+    @HiveField(2) DateTime? endDate,
+    @HiveField(3) int? daySpan,
+    @HiveField(4) bool? isCancelled,
+  }) = _TaskOccurrenceOverride;
+
+  factory TaskOccurrenceOverride.fromJson(Map<String, dynamic> json) =>
+      _$TaskOccurrenceOverrideFromJson(json);
+}
+
 @HiveType(typeId: 35)
 enum RecurrenceFrequency {
   @HiveField(0)
@@ -80,6 +95,9 @@ class CalendarTask with _$CalendarTask {
     @HiveField(12) double? startHour,
     @HiveField(13) DateTime? endDate,
     @HiveField(14) RecurrenceRule? recurrence,
+    @HiveField(15)
+    @Default({})
+    Map<String, TaskOccurrenceOverride> occurrenceOverrides,
   }) = _CalendarTask;
 
   factory CalendarTask.fromJson(Map<String, dynamic> json) =>
@@ -112,6 +130,7 @@ class CalendarTask with _$CalendarTask {
       priority: priority == TaskPriority.none ? null : priority,
       startHour: startHour,
       recurrence: recurrence?.isNone == true ? null : recurrence,
+      occurrenceOverrides: const {},
       createdAt: now,
       modifiedAt: now,
     );

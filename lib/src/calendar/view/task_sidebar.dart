@@ -51,16 +51,16 @@ class _TaskSidebarState extends State<TaskSidebar>
   int? _advancedRecurrenceCount;
   final TextEditingController _advancedRecurrenceCountController =
       TextEditingController();
-  Set<int> _advancedSelectedWeekdays = const {
-    DateTime.monday,
-    DateTime.tuesday,
-    DateTime.wednesday,
-    DateTime.thursday,
-    DateTime.friday,
-  };
+  late Set<int> _advancedSelectedWeekdays;
 
   final Map<String, ShadPopoverController> _taskPopoverControllers = {};
   String? _activePopoverTaskId;
+
+  @override
+  void initState() {
+    super.initState();
+    _advancedSelectedWeekdays = {DateTime.now().weekday};
+  }
 
   @override
   void dispose() {
@@ -268,7 +268,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         size: ShadButtonSize.sm,
         foregroundColor: calendarPrimaryColor,
         hoverForegroundColor: calendarPrimaryHoverColor,
-        hoverBackgroundColor: calendarPrimaryColor.withOpacity(0.08),
+        hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
         onPressed: () => setState(() {
           _showAdvancedOptions = !_showAdvancedOptions;
         }),
@@ -448,7 +448,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
       hoverBackgroundColor: isSelected
           ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withOpacity(0.08),
+          : calendarPrimaryColor.withValues(alpha: 0.08),
       foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
       hoverForegroundColor:
           isSelected ? Colors.white : calendarPrimaryHoverColor,
@@ -462,7 +462,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             _advancedRecurrenceCountController.clear();
           }
           if (frequency == RecurrenceFrequency.weekdays) {
-            _advancedSelectedWeekdays = const {
+            _advancedSelectedWeekdays = {
               DateTime.monday,
               DateTime.tuesday,
               DateTime.wednesday,
@@ -685,7 +685,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
           hoverBackgroundColor: isSelected
               ? calendarPrimaryHoverColor
-              : calendarPrimaryColor.withOpacity(0.08),
+              : calendarPrimaryColor.withValues(alpha: 0.08),
           foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
           hoverForegroundColor:
               isSelected ? Colors.white : calendarPrimaryHoverColor,
@@ -722,7 +722,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         size: ShadButtonSize.sm,
         onPressed: isDisabled ? null : _addTask,
         backgroundColor: isDisabled
-            ? calendarPrimaryColor.withOpacity(0.5)
+            ? calendarPrimaryColor.withValues(alpha: 0.5)
             : calendarPrimaryColor,
         hoverBackgroundColor: calendarPrimaryHoverColor,
         foregroundColor: Colors.white,
@@ -915,7 +915,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
             color: isHovering
-                ? calendarPrimaryColor.withOpacity(0.08)
+                ? calendarPrimaryColor.withValues(alpha: 0.08)
                 : sidebarBackgroundColor,
             border: isHovering
                 ? Border.all(color: calendarPrimaryColor, width: 2)
@@ -1002,7 +1002,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       decoration: BoxDecoration(
         color: isExpanded
             ? calendarPrimaryColor
-            : calendarPrimaryColor.withOpacity(0.1),
+            : calendarPrimaryColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -1159,7 +1159,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                         desiredLeft = triggerLeft + preferredHorizontalGap;
                       }
 
-                      final minLeft = margin;
+                      const double minLeft = margin;
                       final maxLeft = screenSize.width - margin - dropdownWidth;
                       final overlayLeft = desiredLeft.clamp(minLeft, maxLeft);
                       final horizontalOffset = overlayLeft - triggerLeft;
@@ -1221,8 +1221,8 @@ class _TaskSidebarState extends State<TaskSidebar>
                         },
                         child: InkWell(
                           borderRadius: BorderRadius.circular(6),
-                          hoverColor:
-                              calendarSidebarBackgroundColor.withOpacity(0.5),
+                          hoverColor: calendarSidebarBackgroundColor.withValues(
+                              alpha: 0.5),
                           onTap: () => _toggleTaskPopover(task.id),
                           child: _buildTaskTileBody(task),
                         ),
@@ -1334,7 +1334,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             duration: const Duration(milliseconds: 150),
             width: 8,
             color: _isResizing
-                ? calendarPrimaryColor.withOpacity(0.2)
+                ? calendarPrimaryColor.withValues(alpha: 0.2)
                 : Colors.transparent,
             child: Center(
               child: AnimatedContainer(
@@ -1400,11 +1400,11 @@ class _TaskSidebarState extends State<TaskSidebar>
   Color _getDeadlineBackgroundColor(DateTime deadline) {
     final now = DateTime.now();
     if (deadline.isBefore(now)) {
-      return calendarDangerColor.withOpacity(0.1);
+      return calendarDangerColor.withValues(alpha: 0.1);
     } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-      return calendarWarningColor.withOpacity(0.1);
+      return calendarWarningColor.withValues(alpha: 0.1);
     }
-    return calendarPrimaryColor.withOpacity(0.08);
+    return calendarPrimaryColor.withValues(alpha: 0.08);
   }
 
   TaskPriority _getPriority() {
@@ -1512,13 +1512,8 @@ class _TaskSidebarState extends State<TaskSidebar>
       _advancedRecurrenceUntil = null;
       _advancedRecurrenceCount = null;
       _advancedRecurrenceCountController.clear();
-      _advancedSelectedWeekdays = const {
-        DateTime.monday,
-        DateTime.tuesday,
-        DateTime.wednesday,
-        DateTime.thursday,
-        DateTime.friday,
-      };
+      final fallbackDay = DateTime.now().weekday;
+      _advancedSelectedWeekdays = {fallbackDay};
     });
   }
 

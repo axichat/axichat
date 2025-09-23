@@ -265,33 +265,110 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   }
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
+    final bloc = context.read<CalendarBloc>();
     final baseId = task.baseId;
-    final originalTask = context.read<CalendarBloc>().state.model.tasks[baseId];
+    final originalTask = bloc.state.model.tasks[baseId];
+    final plannedStart = (task.scheduledTime != null &&
+            originalTask?.scheduledTime != task.scheduledTime)
+        ? task.scheduledTime!
+        : newTime;
+    final scheduled = plannedStart;
+    final duration =
+        task.duration ?? originalTask?.duration ?? const Duration(hours: 1);
+
+    CalendarTask? findCollision() {
+      final proposedStart = scheduled;
+      final proposedEnd = proposedStart.add(duration);
+      for (final candidate in bloc.state.model.tasks.values) {
+        if (candidate.id == task.id || candidate.baseId == task.baseId) {
+          continue;
+        }
+        final otherStart = candidate.scheduledTime;
+        if (otherStart == null) continue;
+        final otherEnd = candidate.effectiveEndDate ??
+            otherStart.add(candidate.duration ?? const Duration(hours: 1));
+        final overlaps =
+            proposedStart.isBefore(otherEnd) && proposedEnd.isAfter(otherStart);
+        if (overlaps) {
+          return candidate;
+        }
+      }
+      return null;
+    }
+
+    void dispatchMove(CalendarTask movingTask, DateTime targetStart) {
+      final targetDuration = movingTask.duration ?? const Duration(hours: 1);
+      final startHour = targetStart.hour + (targetStart.minute / 60.0);
+      final durationHours = targetDuration.inMinutes / 60.0;
+      final stored = bloc.state.model.tasks[movingTask.baseId];
+
+      if (stored != null &&
+          (stored.scheduledTime != targetStart ||
+              stored.duration != targetDuration)) {
+        bloc.add(
+          CalendarEvent.taskResized(
+            taskId: movingTask.baseId,
+            startHour: startHour,
+            duration: durationHours,
+            daySpan: movingTask.effectiveDaySpan,
+          ),
+        );
+      } else {
+        bloc.add(
+          CalendarEvent.taskDropped(
+            taskId: movingTask.baseId,
+            time: targetStart,
+          ),
+        );
+      }
+    }
+
+    final collision = findCollision();
+
+    if (collision != null &&
+        originalTask?.scheduledTime != null &&
+        !collision.isOccurrence) {
+      dispatchMove(collision, originalTask!.scheduledTime!);
+    }
+
+    if (task.isOccurrence) {
+      final scheduled = newTime;
+      bloc.add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: baseId,
+          occurrenceId: task.id,
+          scheduledTime: scheduled,
+          duration: task.duration,
+          endDate: task.endDate,
+          daySpan: task.daySpan,
+        ),
+      );
+      return;
+    }
+
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
       // This handles both resize and time change
-      final startHour =
-          task.scheduledTime!.hour + (task.scheduledTime!.minute / 60.0);
-      final durationHours =
-          (task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
+      final startHour = scheduled.hour + (scheduled.minute / 60.0);
+      final durationHours = duration.inMinutes / 60.0;
 
-      context.read<CalendarBloc>().add(
-            CalendarEvent.taskResized(
-              taskId: baseId,
-              startHour: startHour,
-              duration: durationHours,
-              daySpan: task.effectiveDaySpan,
-            ),
-          );
+      bloc.add(
+        CalendarEvent.taskResized(
+          taskId: baseId,
+          startHour: startHour,
+          duration: durationHours,
+          daySpan: task.effectiveDaySpan,
+        ),
+      );
     } else {
       // Simple time change only
-      context.read<CalendarBloc>().add(
-            CalendarEvent.taskDropped(
-              taskId: baseId,
-              time: newTime,
-            ),
-          );
+      bloc.add(
+        CalendarEvent.taskDropped(
+          taskId: baseId,
+          time: scheduled,
+        ),
+      );
     }
   }
 
@@ -308,6 +385,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                 duration: task.duration,
                 priority: task.priority ?? TaskPriority.none,
                 recurrence: task.recurrence,
+                startHour: task.startHour,
               ),
             ),
       ),

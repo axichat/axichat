@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../common/ui/ui.dart';
@@ -195,7 +194,7 @@ class _DateLabelState extends State<_DateLabel> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.calendar_today_outlined,
                     size: 16,
                     color: calendarSubtitleColor,
@@ -287,7 +286,7 @@ class _DateLabelState extends State<_DateLabel> {
   }
 
   void _removeOverlay() {
-    _overlayEntry?..remove();
+    _overlayEntry?.remove();
     _overlayEntry = null;
   }
 

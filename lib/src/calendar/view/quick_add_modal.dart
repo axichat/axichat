@@ -367,8 +367,7 @@ class _QuickAddModalState extends State<QuickAddModal>
               .map(_buildRecurrenceFrequencyButton)
               .toList(),
         ),
-        if (_recurrenceFrequency == RecurrenceFrequency.weekly ||
-            _recurrenceFrequency == RecurrenceFrequency.weekdays) ...[
+        if (_recurrenceFrequency == RecurrenceFrequency.weekly) ...[
           const SizedBox(height: 10),
           _buildWeekdaySelector(),
         ],
@@ -463,7 +462,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           backgroundColor: selected ? calendarPrimaryColor : Colors.white,
           hoverBackgroundColor: selected
               ? calendarPrimaryHoverColor
-              : calendarPrimaryColor.withOpacity(0.08),
+              : calendarPrimaryColor.withValues(alpha: 0.08),
           foregroundColor: selected ? Colors.white : calendarPrimaryColor,
           hoverForegroundColor:
               selected ? Colors.white : calendarPrimaryHoverColor,
@@ -514,7 +513,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
       hoverBackgroundColor: isSelected
           ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withOpacity(0.08),
+          : calendarPrimaryColor.withValues(alpha: 0.08),
       foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
       hoverForegroundColor:
           isSelected ? Colors.white : calendarPrimaryHoverColor,
@@ -527,20 +526,11 @@ class _QuickAddModalState extends State<QuickAddModal>
             _recurrenceCount = null;
             _recurrenceCountController.clear();
           }
-          if (frequency == RecurrenceFrequency.weekdays) {
-            _selectedWeekdays = const {
-              DateTime.monday,
-              DateTime.tuesday,
-              DateTime.wednesday,
-              DateTime.thursday,
-              DateTime.friday,
-            };
-          } else if (frequency == RecurrenceFrequency.weekly) {
-            if (_selectedWeekdays.isEmpty) {
-              final defaultDay =
-                  widget.prefilledDateTime?.weekday ?? DateTime.monday;
-              _selectedWeekdays = {defaultDay};
-            }
+          if (frequency == RecurrenceFrequency.weekly &&
+              _selectedWeekdays.isEmpty) {
+            final defaultDay =
+                widget.prefilledDateTime?.weekday ?? DateTime.monday;
+            _selectedWeekdays = {defaultDay};
           }
         });
       },
@@ -729,8 +719,9 @@ class _QuickAddModalState extends State<QuickAddModal>
               style: ElevatedButton.styleFrom(
                 backgroundColor: calendarPrimaryColor,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: calendarPrimaryColor.withOpacity(0.4),
-                disabledForegroundColor: Colors.white.withOpacity(0.7),
+                disabledBackgroundColor:
+                    calendarPrimaryColor.withValues(alpha: 0.4),
+                disabledForegroundColor: Colors.white.withValues(alpha: 0.7),
                 padding:
                     const EdgeInsets.symmetric(vertical: calendarSpacing12),
                 shape: RoundedRectangleBorder(
@@ -808,7 +799,13 @@ class _QuickAddModalState extends State<QuickAddModal>
           recurrence = RecurrenceRule(
             frequency: RecurrenceFrequency.weekdays,
             interval: _recurrenceInterval,
-            byWeekdays: normalizedWeekdays,
+            byWeekdays: const [
+              DateTime.monday,
+              DateTime.tuesday,
+              DateTime.wednesday,
+              DateTime.thursday,
+              DateTime.friday,
+            ],
             until: _recurrenceCount != null ? null : _recurrenceUntil,
             count: _recurrenceCount,
           );
@@ -845,6 +842,9 @@ class _QuickAddModalState extends State<QuickAddModal>
       createdAt: DateTime.now(),
       modifiedAt: DateTime.now(),
       recurrence: recurrence,
+      startHour: scheduledTime != null
+          ? scheduledTime.hour + (scheduledTime.minute / 60.0)
+          : null,
     );
 
     widget.onTaskAdded(task);

@@ -111,7 +111,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
 
   Widget _buildMediumTile(BuildContext context) {
     final taskColor = _getTaskColor(widget.task);
-    final textColor = Colors.white;
+    const textColor = Colors.white;
     final eventColor = widget.task.isCompleted ? taskCompletedColor : taskColor;
 
     return Container(

@@ -6,9 +6,9 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -95,18 +95,7 @@ class _AxichatState extends State<Axichat> {
                 if (!Hive.isAdapterRegistered(1)) {
                   Hive.registerAdapter(PresenceAdapter());
                 }
-                if (!Hive.isAdapterRegistered(30)) {
-                  Hive.registerAdapter(CalendarTaskAdapter());
-                }
-                if (!Hive.isAdapterRegistered(34)) {
-                  Hive.registerAdapter(RecurrenceRuleAdapter());
-                }
-                if (!Hive.isAdapterRegistered(35)) {
-                  Hive.registerAdapter(RecurrenceFrequencyAdapter());
-                }
-                if (!Hive.isAdapterRegistered(31)) {
-                  Hive.registerAdapter(CalendarModelAdapter());
-                }
+                registerCalendarHiveAdapters(Hive);
                 await Hive.openBox(
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
