@@ -46,13 +46,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   DateTime? _recurrenceUntil;
   int? _recurrenceCount;
   late final TextEditingController _recurrenceCountController;
-  Set<int> _selectedWeekdays = const {
-    DateTime.monday,
-    DateTime.tuesday,
-    DateTime.wednesday,
-    DateTime.thursday,
-    DateTime.friday,
-  };
+  late Set<int> _selectedWeekdays;
 
   @override
   void initState() {
@@ -74,8 +68,13 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     final recurrence = task.recurrence ?? RecurrenceRule.none;
     _recurrenceFrequency = recurrence.frequency;
     _recurrenceInterval = recurrence.interval;
+
     if (recurrence.byWeekdays != null && recurrence.byWeekdays!.isNotEmpty) {
       _selectedWeekdays = recurrence.byWeekdays!.toSet();
+    } else if (task.scheduledTime != null) {
+      _selectedWeekdays = {task.scheduledTime!.weekday};
+    } else {
+      _selectedWeekdays = {DateTime.monday};
     }
 
     _recurrenceCount = recurrence.count;
@@ -131,6 +130,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                   children: [
                     _buildTitleField(),
                     const SizedBox(height: 10),
+                    _buildPriorityRow(),
+                    _sectionDivider(),
                     _buildDescriptionField(),
                     const SizedBox(height: 10),
                     _buildLocationField(),
@@ -140,8 +141,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                     _buildDeadlineField(),
                     _sectionDivider(),
                     _buildRecurrenceSection(),
-                    _sectionDivider(),
-                    _buildPriorityRow(),
                     _sectionDivider(),
                     _buildCompletedCheckbox(),
                   ],
@@ -308,8 +307,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
               .map(_buildRecurrenceFrequencyButton)
               .toList(),
         ),
-        if (_recurrenceFrequency == RecurrenceFrequency.weekly ||
-            _recurrenceFrequency == RecurrenceFrequency.weekdays) ...[
+        if (_recurrenceFrequency == RecurrenceFrequency.weekly) ...[
           const SizedBox(height: 10),
           _buildWeekdaySelector(),
         ],
@@ -338,7 +336,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
       hoverBackgroundColor: isSelected
           ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withOpacity(0.08),
+          : calendarPrimaryColor.withValues(alpha: 0.08),
       foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
       hoverForegroundColor:
           isSelected ? Colors.white : calendarPrimaryHoverColor,
@@ -351,15 +349,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             _recurrenceCount = null;
             _recurrenceCountController.clear();
           }
-          if (frequency == RecurrenceFrequency.weekdays) {
-            _selectedWeekdays = const {
-              DateTime.monday,
-              DateTime.tuesday,
-              DateTime.wednesday,
-              DateTime.thursday,
-              DateTime.friday,
-            };
-          } else if (frequency == RecurrenceFrequency.weekly &&
+          if (frequency == RecurrenceFrequency.weekly &&
               _selectedWeekdays.isEmpty) {
             final defaultDay = _startTime?.weekday ?? DateTime.now().weekday;
             _selectedWeekdays = {defaultDay};
@@ -545,7 +535,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
           hoverBackgroundColor: isSelected
               ? calendarPrimaryHoverColor
-              : calendarPrimaryColor.withOpacity(0.08),
+              : calendarPrimaryColor.withValues(alpha: 0.08),
           foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
           hoverForegroundColor:
               isSelected ? Colors.white : calendarPrimaryHoverColor,
@@ -651,7 +641,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             size: ShadButtonSize.sm,
             foregroundColor: calendarPrimaryColor,
             hoverForegroundColor: calendarPrimaryHoverColor,
-            hoverBackgroundColor: calendarPrimaryColor.withOpacity(0.08),
+            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
             onPressed: widget.onClose,
             child: const Text('Cancel'),
           ),
@@ -739,7 +729,14 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     RecurrenceRule? recurrence;
     if (_recurrenceFrequency != RecurrenceFrequency.none) {
       List<int>? weekdays;
-      if (_recurrenceFrequency == RecurrenceFrequency.weekdays) {
+      if (_recurrenceFrequency == RecurrenceFrequency.weekly) {
+        final selected = _selectedWeekdays.toList()..sort();
+        weekdays = selected.isEmpty
+            ? [
+                _startTime?.weekday ?? DateTime.now().weekday,
+              ]
+            : selected;
+      } else if (_recurrenceFrequency == RecurrenceFrequency.weekdays) {
         weekdays = const [
           DateTime.monday,
           DateTime.tuesday,
@@ -747,8 +744,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           DateTime.thursday,
           DateTime.friday,
         ];
-      } else if (_recurrenceFrequency == RecurrenceFrequency.weekly) {
-        weekdays = _selectedWeekdays.toList()..sort();
       }
 
       recurrence = RecurrenceRule(

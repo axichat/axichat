@@ -315,34 +315,50 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
+    final bloc = context.read<GuestCalendarBloc>();
     final baseId = task.baseId;
-    final originalTask =
-        context.read<GuestCalendarBloc>().state.model.tasks[baseId];
+    final originalTask = bloc.state.model.tasks[baseId];
+
+    if (task.isOccurrence) {
+      final scheduled = newTime;
+      bloc.add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: baseId,
+          occurrenceId: task.id,
+          scheduledTime: scheduled,
+          duration: task.duration,
+          endDate: task.endDate,
+          daySpan: task.daySpan,
+        ),
+      );
+      return;
+    }
+
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
       // This handles both resize and time change
-      final startHour =
-          task.scheduledTime!.hour + (task.scheduledTime!.minute / 60.0);
+      final scheduled = task.scheduledTime ?? newTime;
+      final startHour = scheduled.hour + (scheduled.minute / 60.0);
       final durationHours =
           (task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
 
-      context.read<GuestCalendarBloc>().add(
-            CalendarEvent.taskResized(
-              taskId: baseId,
-              startHour: startHour,
-              duration: durationHours,
-              daySpan: task.effectiveDaySpan,
-            ),
-          );
+      bloc.add(
+        CalendarEvent.taskResized(
+          taskId: baseId,
+          startHour: startHour,
+          duration: durationHours,
+          daySpan: task.effectiveDaySpan,
+        ),
+      );
     } else {
       // Simple time change only
-      context.read<GuestCalendarBloc>().add(
-            CalendarEvent.taskDropped(
-              taskId: baseId,
-              time: newTime,
-            ),
-          );
+      bloc.add(
+        CalendarEvent.taskDropped(
+          taskId: baseId,
+          time: newTime,
+        ),
+      );
     }
   }
 

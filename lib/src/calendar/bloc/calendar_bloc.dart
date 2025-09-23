@@ -4,7 +4,6 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
-import '../reminders/calendar_reminder_controller.dart';
 import '../storage/storage_builders.dart';
 import '../sync/calendar_sync_manager.dart';
 import 'base_calendar_bloc.dart';
@@ -14,14 +13,12 @@ import 'calendar_state.dart';
 class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
-    required Storage storage,
-    CalendarReminderController? reminderController,
+    required super.storage,
+    super.reminderController,
   })  : _syncManagerBuilder = syncManagerBuilder,
         super(
-          storage: storage,
           storagePrefix: authStoragePrefix,
           storageId: 'state',
-          reminderController: reminderController,
         ) {
     _syncManager = _syncManagerBuilder(this);
     on<CalendarSyncRequested>(_onCalendarSyncRequested);

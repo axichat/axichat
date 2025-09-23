@@ -135,7 +135,8 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     return Draggable<CalendarTask>(
       data: widget.task,
       feedback: _buildEventContainer(isDragging: true),
-      childWhenDragging: _buildEventContainer(isGhost: true, interactive: false),
+      childWhenDragging:
+          _buildEventContainer(isGhost: true, interactive: false),
       onDragStarted: () {
         setState(() => _isDragging = true);
         HapticFeedback.selectionClick();
@@ -478,7 +479,8 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   void _updateResize(dynamic details, ResizeDirection direction) {
-    if (!widget.isDayView || widget.task.isOccurrence ||
+    if (!widget.isDayView ||
+        widget.task.isOccurrence ||
         _resizeStartTime == null ||
         _resizeStartDuration == null) {
       return;

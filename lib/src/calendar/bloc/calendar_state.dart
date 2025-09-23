@@ -46,7 +46,8 @@ extension CalendarStateExtensions on CalendarState {
 
   DateTime get weekEnd {
     final start = weekStart;
-    return start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    return start
+        .add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
   }
 
   List<CalendarTask> get tasksForSelectedWeek =>

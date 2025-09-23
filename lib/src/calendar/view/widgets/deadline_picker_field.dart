@@ -94,6 +94,16 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   DateTime? _minDate;
   DateTime? _maxDate;
 
+  DateTime? _normalizeMinDate(DateTime? value) {
+    if (value == null) return null;
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime? _normalizeMaxDate(DateTime? value) {
+    if (value == null) return null;
+    return DateTime(value.year, value.month, value.day, 23, 59, 59, 999, 999);
+  }
+
   DateTime _monthStart(DateTime date) => DateTime(date.year, date.month);
 
   DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
@@ -129,8 +139,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final base = widget.value ?? DateTime.now();
     _currentValue = widget.value;
     _visibleMonth = _monthStart(base);
-    _minDate = widget.minDate;
-    _maxDate = widget.maxDate;
+    _minDate = _normalizeMinDate(widget.minDate);
+    _maxDate = _normalizeMaxDate(widget.maxDate);
     _hourScrollController = ScrollController(
       initialScrollOffset: _hourOffset(base.hour),
     );
@@ -150,10 +160,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _jumpToCurrent(base);
     }
     if (widget.minDate != oldWidget.minDate) {
-      _minDate = widget.minDate;
+      _minDate = _normalizeMinDate(widget.minDate);
     }
     if (widget.maxDate != oldWidget.maxDate) {
-      _maxDate = widget.maxDate;
+      _maxDate = _normalizeMaxDate(widget.maxDate);
     }
     _ensureVisibleMonthInRange();
   }
@@ -270,10 +280,11 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   bool _isDateWithinBounds(DateTime date) {
-    if (_minDate != null && date.isBefore(_minDate!)) {
+    final candidate = DateTime(date.year, date.month, date.day);
+    if (_minDate != null && candidate.isBefore(_minDate!)) {
       return false;
     }
-    if (_maxDate != null && date.isAfter(_maxDate!)) {
+    if (_maxDate != null && candidate.isAfter(_maxDate!)) {
       return false;
     }
     return true;

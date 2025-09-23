@@ -1,11 +1,10 @@
 // ignore_for_file: avoid_print
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
-import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/models/duration_adapter.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
@@ -42,12 +41,7 @@ Future<void> main() async {
   await Hive.initFlutter();
 
   // Register adapters in consistent order to prevent typeId conflicts
-  Hive.registerAdapter(DurationAdapter()); // typeId: 32
-  Hive.registerAdapter(TaskPriorityAdapter()); // typeId: 31
-  Hive.registerAdapter(CalendarTaskAdapter()); // typeId: 30
-  Hive.registerAdapter(RecurrenceRuleAdapter()); // typeId: 34
-  Hive.registerAdapter(RecurrenceFrequencyAdapter()); // typeId: 35
-  Hive.registerAdapter(CalendarModelAdapter()); // typeId: 33
+  registerCalendarHiveAdapters();
 
   print('Hive adapters registered successfully');
 

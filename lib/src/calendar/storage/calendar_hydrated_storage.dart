@@ -4,6 +4,8 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 
+import 'calendar_hive_adapters.dart';
+
 /// Hive-backed [Storage] implementation that namespaces keys so multiple
 /// hydrated blocs can share the same box without collisions.
 class CalendarHydratedStorage implements Storage {
@@ -19,6 +21,8 @@ class CalendarHydratedStorage implements Storage {
   }) async {
     final logger = Logger('CalendarHydratedStorage');
     final hiveInstance = hive ?? Hive;
+
+    registerCalendarHiveAdapters(hiveInstance);
 
     Future<Box<dynamic>> openBox() {
       return hiveInstance.openBox<dynamic>(

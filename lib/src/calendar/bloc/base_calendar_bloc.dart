@@ -8,6 +8,7 @@ import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../reminders/calendar_reminder_controller.dart';
 import '../storage/calendar_storage_registry.dart';
+import '../utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
@@ -34,6 +35,7 @@ abstract class BaseCalendarBloc
     on<CalendarTaskCompleted>(_onTaskCompleted);
     on<CalendarTaskDropped>(_onTaskDropped);
     on<CalendarTaskResized>(_onTaskResized);
+    on<CalendarTaskOccurrenceUpdated>(_onTaskOccurrenceUpdated);
     on<CalendarTaskPriorityChanged>(_onTaskPriorityChanged);
     on<CalendarQuickTaskAdded>(_onQuickTaskAdded);
     on<CalendarViewChanged>(_onViewChanged);
@@ -159,6 +161,10 @@ abstract class BaseCalendarBloc
       emit(state.copyWith(isLoading: true, error: null));
 
       final now = _now();
+      final double? computedStartHour = event.startHour ??
+          (event.scheduledTime != null
+              ? event.scheduledTime!.hour + (event.scheduledTime!.minute / 60.0)
+              : null);
       final task = CalendarTask.create(
         title: event.title,
         description: event.description,
@@ -169,7 +175,7 @@ abstract class BaseCalendarBloc
         daySpan: event.daySpan,
         endDate: event.endDate,
         priority: event.priority,
-        startHour: event.startHour,
+        startHour: computedStartHour,
         recurrence: event.recurrence,
       ).copyWith(modifiedAt: now);
 
@@ -291,7 +297,7 @@ abstract class BaseCalendarBloc
       }
       final scheduled = task.scheduledTime;
       if (scheduled == null) {
-        throw CalendarValidationException(
+        throw const CalendarValidationException(
           'scheduledTime',
           'Task requires a scheduled time before resizing',
         );
@@ -316,6 +322,56 @@ abstract class BaseCalendarBloc
       await onTaskUpdated(updatedTask);
     } catch (error) {
       logError('Failed to resize task', error);
+      emit(state.copyWith(error: error.toString()));
+    }
+  }
+
+  Future<void> _onTaskOccurrenceUpdated(
+    CalendarTaskOccurrenceUpdated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final task = state.model.tasks[event.taskId];
+      if (task == null) {
+        throw CalendarTaskNotFoundException(event.taskId);
+      }
+
+      final occurrenceKey = occurrenceKeyFrom(event.occurrenceId);
+      if (occurrenceKey == null || occurrenceKey.isEmpty) {
+        throw const CalendarValidationException(
+          'occurrenceId',
+          'Invalid occurrence identifier',
+        );
+      }
+
+      final overrides =
+          Map<String, TaskOccurrenceOverride>.from(task.occurrenceOverrides);
+      final existing = overrides[occurrenceKey];
+
+      final updatedOverride = TaskOccurrenceOverride(
+        scheduledTime: event.scheduledTime ?? existing?.scheduledTime,
+        duration: event.duration ?? existing?.duration,
+        endDate: event.endDate ?? existing?.endDate,
+        daySpan: event.daySpan ?? existing?.daySpan,
+        isCancelled: event.isCancelled ?? existing?.isCancelled,
+      );
+
+      if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
+
+      final updatedTask = task.copyWith(
+        occurrenceOverrides: overrides,
+        modifiedAt: _now(),
+      );
+      final updatedModel = state.model.updateTask(updatedTask);
+      emitModel(updatedModel, emit);
+
+      await onTaskUpdated(updatedTask);
+    } catch (error) {
+      logError('Failed to update occurrence', error);
       emit(state.copyWith(error: error.toString()));
     }
   }
@@ -491,4 +547,13 @@ abstract class BaseCalendarBloc
   Future<void> onTaskDeleted(CalendarTask task);
   Future<void> onTaskCompleted(CalendarTask task);
   void logError(String message, Object error);
+}
+
+bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
+  final isCancelled = override.isCancelled ?? false;
+  return !isCancelled &&
+      override.scheduledTime == null &&
+      override.duration == null &&
+      override.endDate == null &&
+      override.daySpan == null;
 }

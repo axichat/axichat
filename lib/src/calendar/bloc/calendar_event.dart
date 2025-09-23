@@ -83,6 +83,16 @@ class CalendarEvent with _$CalendarEvent {
     int? daySpan,
   }) = CalendarTaskResized;
 
+  const factory CalendarEvent.taskOccurrenceUpdated({
+    required String taskId,
+    required String occurrenceId,
+    DateTime? scheduledTime,
+    Duration? duration,
+    DateTime? endDate,
+    int? daySpan,
+    bool? isCancelled,
+  }) = CalendarTaskOccurrenceUpdated;
+
   const factory CalendarEvent.taskPriorityChanged({
     required String taskId,
     required TaskPriority priority,

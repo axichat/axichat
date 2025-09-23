@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
@@ -29,6 +31,13 @@ _TaskPopoverLayout _defaultTaskPopoverLayout() {
     topLeft: Offset.zero,
     maxHeight: 560,
   );
+}
+
+class _ZoomLevel {
+  const _ZoomLevel({required this.hourHeight, required this.daySubdivisions});
+
+  final double hourHeight;
+  final int daySubdivisions;
 }
 
 class OverlapInfo {
@@ -65,9 +74,22 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     extends State<CalendarGrid<T>> with TickerProviderStateMixin {
   static const int startHour = 0;
   static const int endHour = 24;
+  static const int _defaultZoomIndex = 0;
+  static const int _dayViewSubdivisions = 4;
+  static const List<_ZoomLevel> _zoomLevels = <_ZoomLevel>[
+    _ZoomLevel(hourHeight: 84, daySubdivisions: 1),
+    _ZoomLevel(hourHeight: 132, daySubdivisions: 2),
+    _ZoomLevel(hourHeight: 192, daySubdivisions: 4),
+  ];
+  static const double _autoScrollEdgeThreshold = 80.0;
+  static const double _autoScrollStep = 56.0;
+
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
   late final ScrollController _verticalController;
+  final GlobalKey _scrollableKey =
+      GlobalKey(debugLabel: 'CalendarVerticalScroll');
+  final FocusNode _focusNode = FocusNode(debugLabel: 'CalendarGridFocus');
   Timer? _clockTimer;
   bool _hasAutoScrolled = false;
   final Map<String, _TaskPopoverLayout> _taskPopoverLayouts = {};
@@ -77,7 +99,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   final Map<String, GlobalKey> _taskItemKeys = {};
   static const double _taskPopoverHorizontalGap = 12.0;
 
-  double _resolvedHourHeight = hourSlotHeight;
+  int _zoomIndex = _defaultZoomIndex;
+  double _resolvedHourHeight = _zoomLevels[_defaultZoomIndex].hourHeight;
+  double? _pendingAnchorMinutes;
 
   // Track hovered cell for hover effects
   DateTime? _dragPreviewStart;
@@ -85,6 +109,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   late T _capturedBloc;
   bool _blocInitialized = false;
+  CalendarTask? _copiedTask;
+  final Map<String, CalendarTask> _resizePreviews = {};
 
   @override
   void initState() {
@@ -107,6 +133,183 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
   }
 
+  _ZoomLevel get _currentZoom => _zoomLevels[_zoomIndex];
+  int get _slotSubdivisions => widget.state.viewMode == CalendarView.day
+      ? _dayViewSubdivisions
+      : _currentZoom.daySubdivisions;
+  bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
+  bool get _canZoomOut => _zoomIndex > 0;
+  bool get _isZoomEnabled => widget.state.viewMode != CalendarView.day;
+  Map<LogicalKeySet, Intent> get _zoomShortcuts => {
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
+            const _ZoomIntent(_ZoomAction.zoomIn),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.numpadAdd):
+            const _ZoomIntent(_ZoomAction.zoomIn),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.equal):
+            const _ZoomIntent(_ZoomAction.zoomIn),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadAdd):
+            const _ZoomIntent(_ZoomAction.zoomIn),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus):
+            const _ZoomIntent(_ZoomAction.zoomOut),
+        LogicalKeySet(
+                LogicalKeyboardKey.control, LogicalKeyboardKey.numpadSubtract):
+            const _ZoomIntent(_ZoomAction.zoomOut),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.minus):
+            const _ZoomIntent(_ZoomAction.zoomOut),
+        LogicalKeySet(
+                LogicalKeyboardKey.meta, LogicalKeyboardKey.numpadSubtract):
+            const _ZoomIntent(_ZoomAction.zoomOut),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit0):
+            const _ZoomIntent(_ZoomAction.reset),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.digit0):
+            const _ZoomIntent(_ZoomAction.reset),
+      };
+
+  String get _zoomLabel {
+    if (!_isZoomEnabled) {
+      return '15m';
+    }
+    final subdivisions = _currentZoom.daySubdivisions;
+    if (subdivisions <= 1) {
+      return '1h';
+    }
+    final minutes = (60 / subdivisions).round();
+    return '${minutes}m';
+  }
+
+  void zoomIn() {
+    if (!_isZoomEnabled || !_canZoomIn) return;
+    _setZoomIndex(_zoomIndex + 1);
+  }
+
+  void zoomOut() {
+    if (!_isZoomEnabled || !_canZoomOut) return;
+    _setZoomIndex(_zoomIndex - 1);
+  }
+
+  void zoomReset() {
+    if (!_isZoomEnabled) return;
+    _setZoomIndex(_defaultZoomIndex);
+  }
+
+  bool _setZoomIndex(int index) {
+    if (!_isZoomEnabled) {
+      return false;
+    }
+
+    final clamped = index.clamp(0, _zoomLevels.length - 1);
+    if (clamped == _zoomIndex) {
+      return false;
+    }
+
+    double? anchorMinutes;
+    if (_verticalController.hasClients) {
+      final position = _verticalController.position;
+      if (position.viewportDimension > 0) {
+        final viewportMid =
+            position.pixels + (position.viewportDimension / 2.0);
+        anchorMinutes = _offsetToMinutes(viewportMid, _resolvedHourHeight);
+      }
+    }
+
+    setState(() {
+      _zoomIndex = clamped;
+      _hasAutoScrolled = false;
+    });
+
+    if (anchorMinutes != null) {
+      _pendingAnchorMinutes = anchorMinutes;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _restoreScrollAnchor();
+      });
+    }
+
+    return true;
+  }
+
+  double _offsetToMinutes(double offset, double hourHeight) {
+    final bool isDayView = widget.state.viewMode == CalendarView.day;
+    final int subdivisions =
+        isDayView ? _dayViewSubdivisions : _currentZoom.daySubdivisions;
+    if (subdivisions <= 0 || hourHeight == 0) {
+      return 0;
+    }
+    final double slotHeight = hourHeight / subdivisions;
+    final double slotMinutes = 60 / subdivisions;
+    if (slotHeight == 0) {
+      return 0;
+    }
+    return (offset / slotHeight) * slotMinutes;
+  }
+
+  double _minutesToOffset(double minutes, double hourHeight) {
+    final bool isDayView = widget.state.viewMode == CalendarView.day;
+    final int subdivisions =
+        isDayView ? _dayViewSubdivisions : _currentZoom.daySubdivisions;
+    if (subdivisions <= 0) {
+      return 0;
+    }
+    final double slotHeight = hourHeight / subdivisions;
+    final double slotMinutes = 60 / subdivisions;
+    return (minutes / slotMinutes) * slotHeight;
+  }
+
+  void _restoreScrollAnchor() {
+    if (_pendingAnchorMinutes == null || !_verticalController.hasClients) {
+      _pendingAnchorMinutes = null;
+      return;
+    }
+
+    final position = _verticalController.position;
+    const double maxMinutes = 24 * 60.0;
+    final double anchorMinutes =
+        _pendingAnchorMinutes!.clamp(0.0, maxMinutes).toDouble();
+    final double targetOffset =
+        _minutesToOffset(anchorMinutes, _resolvedHourHeight) -
+            (position.viewportDimension / 2.0);
+    final double clampedTarget =
+        targetOffset.clamp(0.0, position.maxScrollExtent).toDouble();
+
+    if ((position.pixels - clampedTarget).abs() > 0.5) {
+      _verticalController.jumpTo(clampedTarget);
+    }
+
+    _pendingAnchorMinutes = null;
+  }
+
+  void _handleAutoScroll(double globalDy) {
+    if (!_verticalController.hasClients) {
+      return;
+    }
+    final scrollContext = _scrollableKey.currentContext;
+    if (scrollContext == null) {
+      return;
+    }
+    final renderBox = scrollContext.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) {
+      return;
+    }
+
+    final Offset origin = renderBox.localToGlobal(Offset.zero);
+    final double top = origin.dy;
+    final double bottom = top + renderBox.size.height;
+
+    final position = _verticalController.position;
+    final double current = position.pixels;
+    double? target;
+
+    if (globalDy < top + _autoScrollEdgeThreshold && current > 0) {
+      target = (current - _autoScrollStep).clamp(0.0, position.maxScrollExtent);
+    } else if (globalDy > bottom - _autoScrollEdgeThreshold &&
+        current < position.maxScrollExtent) {
+      target = (current + _autoScrollStep).clamp(0.0, position.maxScrollExtent);
+    }
+
+    if (target != null && (target - current).abs() > 0.5) {
+      _verticalController.jumpTo(target);
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -123,6 +326,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _verticalController.dispose();
     _activePopoverEntry?.remove();
     _activePopoverEntry = null;
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -144,6 +348,48 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewStart = null;
       _dragPreviewDuration = null;
     });
+  }
+
+  void _copyTask(CalendarTask task) {
+    setState(() {
+      _copiedTask = task;
+    });
+  }
+
+  void _duplicateTask(CalendarTask task) {
+    if (task.scheduledTime == null) {
+      _copyTask(task);
+      return;
+    }
+    _copyTask(task);
+    _pasteTemplate(task, task.scheduledTime!);
+  }
+
+  void _pasteTask(DateTime slotTime) {
+    final template = _copiedTask;
+    if (template == null) {
+      return;
+    }
+    _pasteTemplate(template, slotTime);
+  }
+
+  void _pasteTemplate(CalendarTask template, DateTime slotTime) {
+    final priority = template.priority ?? TaskPriority.none;
+    _capturedBloc.add(
+      CalendarEvent.taskAdded(
+        title: template.title,
+        description: template.description,
+        scheduledTime: slotTime,
+        duration: template.duration,
+        deadline: template.deadline,
+        location: template.location,
+        daySpan: template.daySpan,
+        endDate: template.endDate,
+        priority: priority,
+        startHour: slotTime.hour + (slotTime.minute / 60.0),
+        recurrence: template.recurrence,
+      ),
+    );
   }
 
   bool _isPreviewAnchor(DateTime slotStart) {
@@ -177,8 +423,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 
-  static const double hourSlotHeight = 40.0;
-  static const double quarterSlotHeight = 10.0; // hourSlotHeight / 4
   static const double timeColumnWidth = 80.0;
   double _getHourHeight(BuildContext context, bool compact) {
     return _resolvedHourHeight;
@@ -213,11 +457,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     // In day view, show only the selected day; in week view, show all 7 days
     final headerDates = isWeekView ? weekDates : [widget.state.selectedDate];
 
-    return Container(
+    final gridBody = Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius
-            .zero, // Remove rounded corners for sharp 90-degree edges
+        borderRadius: BorderRadius.zero,
       ),
       child: Column(
         children: [
@@ -234,9 +477,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 return Container(
                   decoration: const BoxDecoration(
                     color: Color(0xfffafbfc),
-                    borderRadius: BorderRadius.zero, // Remove rounded corners
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: SingleChildScrollView(
+                    key: _scrollableKey,
                     controller: _verticalController,
                     child: AnimatedBuilder(
                       animation: _viewTransitionAnimation,
@@ -256,28 +500,125 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         ],
       ),
     );
+
+    return FocusableActionDetector(
+      focusNode: _focusNode,
+      autofocus: true,
+      shortcuts: _zoomShortcuts,
+      actions: {
+        _ZoomIntent: CallbackAction<_ZoomIntent>(
+          onInvoke: (intent) {
+            switch (intent.action) {
+              case _ZoomAction.zoomIn:
+                zoomIn();
+                break;
+              case _ZoomAction.zoomOut:
+                zoomOut();
+                break;
+              case _ZoomAction.reset:
+                zoomReset();
+                break;
+            }
+            return null;
+          },
+        ),
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTapDown: (_) => _focusNode.requestFocus(),
+        child: Stack(
+          children: [
+            Positioned.fill(child: gridBody),
+            if (_isZoomEnabled)
+              Positioned(
+                top: 8,
+                left: compact ? 8 : 12,
+                child: _buildZoomControls(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZoomControls() {
+    return Material(
+      elevation: 3,
+      color: Colors.white.withValues(alpha: 0.95),
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tooltip(
+              message: 'Zoom out (Ctrl/Cmd + -)',
+              child: IconButton(
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                onPressed: _canZoomOut ? zoomOut : null,
+                icon: const Icon(Icons.remove),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                _zoomLabel,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+            Tooltip(
+              message: 'Zoom in (Ctrl/Cmd + +)',
+              child: IconButton(
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                onPressed: _canZoomIn ? zoomIn : null,
+                icon: const Icon(Icons.add),
+              ),
+            ),
+            Tooltip(
+              message: 'Reset zoom (Ctrl/Cmd + 0)',
+              child: IconButton(
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                onPressed: _zoomIndex == _defaultZoomIndex ? null : zoomReset,
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   double _resolveHourHeight(double availableHeight, {required bool isDayView}) {
+    final zoom = _currentZoom;
+    final double desiredHourHeight = isDayView ? 192.0 : zoom.hourHeight;
+    final int subdivisions =
+        isDayView ? _dayViewSubdivisions : zoom.daySubdivisions;
+    final baseSlotHeight = desiredHourHeight / subdivisions;
+    final totalSlots = (endHour - startHour + 1) * subdivisions;
+
     if (!availableHeight.isFinite || availableHeight <= 0) {
-      return hourSlotHeight;
+      return desiredHourHeight;
     }
 
-    final totalSlots =
-        isDayView ? (endHour - startHour + 1) * 4 : (endHour - startHour + 1);
-    final minSlotHeight = isDayView ? quarterSlotHeight : hourSlotHeight;
-    final minRequiredHeight = totalSlots * minSlotHeight;
-
+    final minRequiredHeight = totalSlots * baseSlotHeight;
     if (availableHeight <= minRequiredHeight) {
-      return hourSlotHeight;
+      return desiredHourHeight;
     }
 
     final slotHeight = availableHeight / totalSlots;
     if (isDayView) {
-      final computedHourHeight = slotHeight * 4;
-      return math.max(hourSlotHeight, computedHourHeight);
+      final double computedHourHeight = slotHeight * subdivisions;
+      return math.max<double>(desiredHourHeight, computedHourHeight);
     }
-    return math.max(hourSlotHeight, slotHeight);
+
+    return math.max<double>(desiredHourHeight, slotHeight);
   }
 
   Widget _buildGridContent(
@@ -401,7 +742,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     const double minimumHeight = 160.0;
     const double margin = 16.0;
 
-    final double usableLeft = margin;
+    const double usableLeft = margin;
     final double usableRight = screenSize.width - margin;
     final double usableTop = safePadding.top + margin;
     final double usableBottom = screenSize.height - safePadding.bottom - margin;
@@ -667,8 +1008,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           color: isToday
               ? calendarPrimaryColor.withValues(alpha: 0.05)
               : Colors.white,
-          border: Border(
-            right: const BorderSide(color: calendarBorderDarkColor),
+          border: const Border(
+            right: BorderSide(color: calendarBorderDarkColor),
           ),
         ),
         child: Center(
@@ -687,12 +1028,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Widget _buildTimeColumn(bool compact) {
-    final isDayView = widget.state.viewMode == CalendarView.day;
     final hourHeight = _getHourHeight(context, compact);
-    final slotHeight =
-        isDayView ? hourHeight / 4 : hourHeight; // 15-minute slots in day view
-    final totalSlots =
-        isDayView ? (endHour - startHour + 1) * 4 : (endHour - startHour + 1);
+    final subdivisions = _slotSubdivisions;
+    final slotHeight = hourHeight / subdivisions;
+    final totalSlots = (endHour - startHour + 1) * subdivisions;
+    final minutesPerSlot = 60 ~/ subdivisions;
 
     return Container(
       width: timeColumnWidth,
@@ -707,91 +1047,68 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
       child: Column(
         children: List.generate(totalSlots, (index) {
-          if (isDayView) {
-            // Day view: 15-minute slots
-            final totalMinutes = (startHour * 60) + (index * 15);
-            final hour = totalMinutes ~/ 60;
-            final minute = totalMinutes % 60;
-            final isCurrentTime = _isCurrentTimeSlot(hour, minute);
-            final label = minute == 0
-                ? _formatHour(hour)
-                : minute == 15
-                    ? ':15'
-                    : minute == 30
-                        ? ':30'
-                        : ':45';
-            final isFirstSlot = index == 0;
+          final totalMinutes = (startHour * 60) + (index * minutesPerSlot);
+          final hour = totalMinutes ~/ 60;
+          final minute = totalMinutes % 60;
+          final isFirstSlot = index == 0;
+          final isHourBoundary = minute == 0;
+          final isCurrentTime =
+              _isCurrentTimeSlot(hour, minute, minutesPerSlot);
 
-            return Container(
-              height: slotHeight,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                border: Border(
-                  top: BorderSide(
-                    color: isFirstSlot
-                        ? Colors.transparent
-                        : minute == 0
-                            ? calendarBorderColor
-                            : calendarBorderColor.withValues(alpha: 0.3),
-                    width: isFirstSlot
-                        ? 0
-                        : minute == 0
-                            ? 1.0
-                            : 0.5,
-                  ),
-                ),
-              ),
-              child: Text(
-                label,
-                style: calendarTimeLabelTextStyle.copyWith(
-                  fontSize: minute == 0 ? (compact ? 10 : 11) : 9,
-                  fontWeight: isCurrentTime ? FontWeight.w600 : FontWeight.w400,
-                  color: isCurrentTime
-                      ? calendarTitleColor
-                      : calendarTimeLabelColor,
-                ),
-              ),
-            );
-          } else {
-            // Week view: hourly slots
-            final hour = startHour + index;
-            final isCurrentHour = DateTime.now().hour == hour;
-            final isFirstSlot = index == 0;
-            return Container(
-              height: hourHeight,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                border: Border(
-                  top: BorderSide(
-                    color: isFirstSlot
-                        ? Colors.transparent
-                        : calendarBorderDarkColor,
-                    width: isFirstSlot ? 0 : 1.0,
-                  ),
-                ),
-              ),
-              child: Text(
-                _formatHour(hour),
-                style: calendarTimeLabelTextStyle.copyWith(
-                  fontSize: compact ? 10 : 11,
-                  fontWeight: isCurrentHour ? FontWeight.w600 : FontWeight.w400,
-                  color: isCurrentHour
-                      ? calendarTitleColor
-                      : calendarTimeLabelColor,
-                ),
-              ),
-            );
+          final borderColor = isFirstSlot
+              ? Colors.transparent
+              : isHourBoundary
+                  ? calendarBorderDarkColor
+                  : calendarBorderColor.withValues(alpha: 0.3);
+          final double borderWidth = isFirstSlot
+              ? 0.0
+              : isHourBoundary
+                  ? 1.0
+                  : 0.5;
+
+          String? label;
+          if (isHourBoundary) {
+            label = _formatHour(hour);
+          } else if (minutesPerSlot <= 30) {
+            label = ':${minute.toString().padLeft(2, '0')}';
           }
+
+          return Container(
+            height: slotHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              border: Border(
+                top: BorderSide(color: borderColor, width: borderWidth),
+              ),
+            ),
+            child: label == null
+                ? const SizedBox.shrink()
+                : Text(
+                    label,
+                    style: calendarTimeLabelTextStyle.copyWith(
+                      fontSize: isHourBoundary ? (compact ? 10 : 11) : 9,
+                      fontWeight:
+                          isCurrentTime ? FontWeight.w600 : FontWeight.w400,
+                      color: isCurrentTime
+                          ? calendarTitleColor
+                          : calendarTimeLabelColor,
+                    ),
+                  ),
+          );
         }),
       ),
     );
   }
 
-  bool _isCurrentTimeSlot(int hour, int minute) {
+  bool _isCurrentTimeSlot(int hour, int minute, int slotMinutes) {
     final now = DateTime.now();
-    return now.hour == hour && (now.minute ~/ 15) == (minute ~/ 15);
+    if (now.hour != hour) {
+      return false;
+    }
+    final slotIndex = minute ~/ slotMinutes;
+    final nowIndex = now.minute ~/ slotMinutes;
+    return slotIndex == nowIndex;
   }
 
   Widget _buildDayColumn(DateTime date, bool compact,
@@ -848,9 +1165,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final hourHeight = _getHourHeight(context, compact);
-    final double slotHeight = isDayView ? hourHeight / 4 : hourHeight;
-    final double rawOffset =
-        (minutesFromStart / (isDayView ? 15 : 60)) * slotHeight - 4;
+    final subdivisions = _slotSubdivisions;
+    final slotHeight = hourHeight / subdivisions;
+    final double slotMinutes = 60 / subdivisions;
+    final double rawOffset = (minutesFromStart / slotMinutes) * slotHeight - 4;
     final double position = rawOffset < 0 ? 0 : rawOffset;
 
     return Positioned(
@@ -888,217 +1206,160 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Widget _buildTimeSlots(bool compact,
       {bool isDayView = false, DateTime? date, bool isToday = false}) {
     final hourHeight = _getHourHeight(context, compact);
-    final slotHeight = isDayView ? hourHeight / 4 : hourHeight;
-    final totalSlots =
-        isDayView ? (endHour - startHour + 1) * 4 : (endHour - startHour + 1);
+    final subdivisions = _slotSubdivisions;
+    final slotHeight = hourHeight / subdivisions;
+    final totalSlots = (endHour - startHour + 1) * subdivisions;
+    final minutesPerSlot = 60 ~/ subdivisions;
 
     return Column(
       children: List.generate(totalSlots, (index) {
-        if (isDayView) {
-          // Day view: 15-minute slots
-          final totalMinutes = (startHour * 60) + (index * 15);
-          final hour = totalMinutes ~/ 60;
-          final minute = totalMinutes % 60;
-          final isFirstSlot = index == 0;
-          final targetDate = date ?? widget.state.selectedDate;
+        final totalMinutes = (startHour * 60) + (index * minutesPerSlot);
+        final hour = totalMinutes ~/ 60;
+        final minute = totalMinutes % 60;
+        final isFirstSlot = index == 0;
+        final targetDate = date ?? widget.state.selectedDate;
 
-          return Container(
-            height: slotHeight,
-            decoration: BoxDecoration(
-              color: isToday
-                  ? (hour % 2 == 0
-                      ? const Color(0xff0969DA).withValues(alpha: 0.01)
-                      : const Color(0xff0969DA).withValues(alpha: 0.02))
-                  : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc)),
-              border: Border(
-                top: BorderSide(
-                  color: isFirstSlot
-                      ? Colors.transparent
-                      : minute == 0
-                          ? calendarBorderColor
-                          : calendarBorderColor.withValues(alpha: 0.3),
-                  width: isFirstSlot
-                      ? 0
-                      : minute == 0
-                          ? 1.0
-                          : 0.5,
-                ),
-              ),
-            ),
-            child: DragTarget<CalendarTask>(
-              onWillAccept: (task) {
-                if (task == null) {
-                  return false;
-                }
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                  minute,
-                );
-                final duration = task.duration ?? const Duration(hours: 1);
-                _updateDragPreview(slotTime, duration);
-                return true;
-              },
-              onLeave: (_) {
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                  minute,
-                );
-                if (_isPreviewAnchor(slotTime)) {
-                  _clearDragPreview();
-                }
-              },
-              onAcceptWithDetails: (details) {
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                  minute,
-                );
-                _clearDragPreview();
-                _handleTaskDrop(details.data, slotTime);
-              },
-              builder: (context, candidateData, rejectedData) {
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                  minute,
-                );
-                const slotDuration = Duration(minutes: 15);
-                final isPreviewSlot = _isPreviewSlot(slotTime, slotDuration);
-                final isPreviewAnchor = _isPreviewAnchor(slotTime);
+        final backgroundColor = isToday
+            ? (hour % 2 == 0
+                ? const Color(0xff0969DA).withValues(alpha: 0.01)
+                : const Color(0xff0969DA).withValues(alpha: 0.02))
+            : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc));
 
-                return _CalendarSlot(
-                  isPreviewSlot: isPreviewSlot,
-                  isPreviewAnchor: isPreviewAnchor,
-                  cursor: SystemMouseCursors.click,
-                  splashColor: Colors.blue.withValues(alpha: 0.2),
-                  highlightColor: Colors.blue.withValues(alpha: 0.1),
-                  onTap: () {
-                    if (!_hasTaskInSlot(date, hour, minute)) {
-                      final slotTime = DateTime(
-                        targetDate.year,
-                        targetDate.month,
-                        targetDate.day,
-                        hour,
-                        minute,
-                      );
-                      _handleTimeSlotTap(slotTime);
-                    }
-                  },
-                  child: const SizedBox.expand(),
-                );
-              },
-            ),
-          );
-        } else {
-          // Week view: hourly slots
-          final hour = startHour + index;
-          final isFirstSlot = index == 0;
-          final targetDate = date ?? widget.state.selectedDate;
-          return Container(
-            height: hourHeight,
-            decoration: BoxDecoration(
-              color: isToday
-                  ? (hour % 2 == 0
-                      ? const Color(0xff0969DA).withValues(alpha: 0.01)
-                      : const Color(0xff0969DA).withValues(alpha: 0.02))
-                  : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc)),
-              border: Border(
-                top: BorderSide(
-                  color: isFirstSlot ? Colors.transparent : calendarBorderColor,
-                  width: isFirstSlot ? 0 : 1.0,
-                ),
-              ),
-            ),
-            child: DragTarget<CalendarTask>(
-              onWillAccept: (task) {
-                if (task == null) {
-                  return false;
-                }
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                );
-                final duration = task.duration ?? const Duration(hours: 1);
-                _updateDragPreview(slotTime, duration);
-                return true;
-              },
-              onLeave: (_) {
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                );
-                if (_isPreviewAnchor(slotTime)) {
-                  _clearDragPreview();
-                }
-              },
-              onAcceptWithDetails: (details) {
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                );
-                _clearDragPreview();
-                _handleTaskDrop(details.data, slotTime);
-              },
-              builder: (context, candidateData, rejectedData) {
-                final slotTime = DateTime(
-                  targetDate.year,
-                  targetDate.month,
-                  targetDate.day,
-                  hour,
-                );
-                const slotDuration = Duration(hours: 1);
-                final isPreviewSlot = _isPreviewSlot(slotTime, slotDuration);
-                final isPreviewAnchor = _isPreviewAnchor(slotTime);
+        final borderColor = isFirstSlot
+            ? Colors.transparent
+            : minute == 0
+                ? calendarBorderColor
+                : calendarBorderColor.withValues(alpha: 0.3);
+        final double borderWidth = isFirstSlot
+            ? 0.0
+            : minute == 0
+                ? 1.0
+                : 0.5;
 
-                return _CalendarSlot(
-                  isPreviewSlot: isPreviewSlot,
-                  isPreviewAnchor: isPreviewAnchor,
-                  cursor: SystemMouseCursors.click,
-                  splashColor: Colors.blue.withValues(alpha: 0.2),
-                  highlightColor: Colors.blue.withValues(alpha: 0.1),
-                  onTap: () {
-                    if (!_hasTaskInSlot(date, hour, 0)) {
-                      final slotTime = DateTime(
-                        targetDate.year,
-                        targetDate.month,
-                        targetDate.day,
-                        hour,
-                      );
-                      _handleTimeSlotTap(slotTime);
-                    }
-                  },
-                  child: const SizedBox.expand(),
-                );
-              },
+        return Container(
+          height: slotHeight,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            border: Border(
+              top: BorderSide(color: borderColor, width: borderWidth),
             ),
-          );
-        }
+          ),
+          child: Builder(
+            builder: (context) {
+              return _buildSlotDragTarget(
+                context: context,
+                targetDate: targetDate,
+                hour: hour,
+                minute: minute,
+                slotMinutes: minutesPerSlot,
+              );
+            },
+          ),
+        );
       }),
     );
   }
 
-  bool _hasTaskInSlot(DateTime? date, int hour, int minute) {
+  Widget _buildSlotDragTarget({
+    required BuildContext context,
+    required DateTime targetDate,
+    required int hour,
+    required int minute,
+    required int slotMinutes,
+  }) {
+    final slotDuration = Duration(minutes: slotMinutes);
+
+    return DragTarget<CalendarTask>(
+      onWillAcceptWithDetails: (details) {
+        final task = details.data;
+        final slotTime = DateTime(
+          targetDate.year,
+          targetDate.month,
+          targetDate.day,
+          hour,
+          minute,
+        );
+        final duration = task.duration ?? const Duration(hours: 1);
+        _updateDragPreview(slotTime, duration);
+        return true;
+      },
+      onLeave: (details) {
+        final slotTime = DateTime(
+          targetDate.year,
+          targetDate.month,
+          targetDate.day,
+          hour,
+          minute,
+        );
+        if (_isPreviewAnchor(slotTime)) {
+          _clearDragPreview();
+        }
+      },
+      onAcceptWithDetails: (details) {
+        final slotTime = DateTime(
+          targetDate.year,
+          targetDate.month,
+          targetDate.day,
+          hour,
+          minute,
+        );
+        _clearDragPreview();
+        _handleTaskDrop(details.data, slotTime);
+      },
+      onMove: (details) {
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox == null || !renderBox.hasSize) {
+          return;
+        }
+        final global = renderBox.localToGlobal(details.offset);
+        _handleAutoScroll(global.dy);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final slotTime = DateTime(
+          targetDate.year,
+          targetDate.month,
+          targetDate.day,
+          hour,
+          minute,
+        );
+        final hasTask = _hasTaskInSlot(targetDate, hour, minute, slotMinutes);
+        final isPreviewSlot = _isPreviewSlot(slotTime, slotDuration);
+        final isPreviewAnchor = _isPreviewAnchor(slotTime);
+
+        Widget slot = _CalendarSlot(
+          isPreviewSlot: isPreviewSlot,
+          isPreviewAnchor: isPreviewAnchor,
+          cursor: SystemMouseCursors.click,
+          splashColor: Colors.blue.withValues(alpha: 0.2),
+          highlightColor: Colors.blue.withValues(alpha: 0.1),
+          onTap: () => _handleSlotTap(slotTime, hasTask: hasTask),
+          child: const SizedBox.expand(),
+        );
+
+        if (_copiedTask != null) {
+          slot = ShadContextMenuRegion(
+            items: [
+              ShadContextMenuItem(
+                leading: const Icon(LucideIcons.clipboardPaste),
+                onPressed: () => _pasteTask(slotTime),
+                child: const Text('Paste Task Here'),
+              ),
+            ],
+            child: slot,
+          );
+        }
+
+        return slot;
+      },
+    );
+  }
+
+  bool _hasTaskInSlot(DateTime? date, int hour, int minute, int slotMinutes) {
     if (date == null) return false;
 
     final tasks = _getTasksForDay(date);
     final slotStart = DateTime(date.year, date.month, date.day, hour, minute);
-    final slotEnd = slotStart.add(const Duration(minutes: 15));
+    final slotEnd = slotStart.add(Duration(minutes: slotMinutes));
 
     return tasks.any((task) {
       if (task.scheduledTime == null) return false;
@@ -1111,8 +1372,81 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
   }
 
-  void _handleTimeSlotTap(DateTime slotTime) {
+  void _handleSlotTap(DateTime slotTime, {required bool hasTask}) {
+    if (hasTask) {
+      _zoomToCell(slotTime);
+      return;
+    }
+    if (widget.state.viewMode == CalendarView.day) {
+      final normalizedDate =
+          DateTime(slotTime.year, slotTime.month, slotTime.day);
+      if (!DateUtils.isSameDay(widget.state.selectedDate, normalizedDate)) {
+        widget.onDateSelected(normalizedDate);
+      }
+    }
     widget.onEmptySlotTapped?.call(slotTime, Offset.zero);
+  }
+
+  void _handleResizePreview(CalendarTask task) {
+    setState(() {
+      _resizePreviews[task.id] = task;
+    });
+  }
+
+  void _handleResizeCommit(CalendarTask task) {
+    setState(() {
+      _resizePreviews.remove(task.id);
+    });
+    if (widget.onTaskDragEnd != null && task.scheduledTime != null) {
+      final original = widget.state.model.tasks[task.baseId];
+      if (original != null &&
+          original.scheduledTime == task.scheduledTime &&
+          original.duration == task.duration) {
+        return;
+      }
+      widget.onTaskDragEnd!(task, task.scheduledTime!);
+    }
+  }
+
+  void _zoomToCell(DateTime slotTime) {
+    if (_isZoomEnabled) {
+      _setZoomIndex(_zoomLevels.length - 1);
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _scrollToSlot(slotTime));
+    } else {
+      _scrollToSlot(slotTime);
+    }
+  }
+
+  void _scrollToSlot(DateTime slotTime) {
+    if (!_verticalController.hasClients) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _scrollToSlot(slotTime));
+      return;
+    }
+
+    final subdivisions = _slotSubdivisions;
+    final double slotMinutes = 60 / subdivisions;
+    final minutesFromStart =
+        (slotTime.hour * 60 + slotTime.minute) - (startHour * 60);
+    if (minutesFromStart < 0) {
+      return;
+    }
+
+    final hourHeight = _resolvedHourHeight;
+    final slotHeight = hourHeight / subdivisions;
+    final double offset = (minutesFromStart / slotMinutes) * slotHeight;
+
+    final position = _verticalController.position;
+    final viewport = position.viewportDimension;
+    final target =
+        (offset - viewport / 2).clamp(0.0, position.maxScrollExtent).toDouble();
+
+    _verticalController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
   }
 
   void _handleTaskDrop(CalendarTask task, DateTime dropTime) {
@@ -1147,9 +1481,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final hourHeight = _getHourHeight(context, compact);
-    final double slotHeight = isDayView ? hourHeight / 4 : hourHeight;
-    final double offset =
-        (minutesFromStart / (isDayView ? 15 : 60)) * slotHeight;
+    final subdivisions = _slotSubdivisions;
+    final slotHeight = hourHeight / subdivisions;
+    final double slotMinutes = 60 / subdivisions;
+    final double offset = (minutesFromStart / slotMinutes) * slotHeight;
 
     final position = _verticalController.position;
     final viewport = position.viewportDimension;
@@ -1288,28 +1623,39 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
           return KeyedSubtree(
             key: globalKey,
-            child: ResizableTaskWidget(
-              key: ValueKey(task.id),
-              task: task,
-              onResize: (updatedTask) {
-                if (widget.onTaskDragEnd != null &&
-                    updatedTask.scheduledTime != null) {
-                  widget.onTaskDragEnd!(
-                    updatedTask,
-                    updatedTask.scheduledTime!,
-                  );
-                }
-              },
-              hourHeight: _resolvedHourHeight,
-              quarterHeight: _resolvedHourHeight / 4,
-              width: eventWidth,
-              height: clampedHeight,
-              isDayView: isDayView,
-              isPopoverOpen: isPopoverOpen,
-              enableInteractions: !task.isOccurrence,
-              onTap: (tappedTask, bounds) {
-                _onScheduledTaskTapped(tappedTask, bounds);
-              },
+            child: ShadContextMenuRegion(
+              items: [
+                ShadContextMenuItem(
+                  leading: const Icon(LucideIcons.copy),
+                  onPressed: () => _copyTask(task),
+                  child: const Text('Copy Task'),
+                ),
+                if (task.scheduledTime != null)
+                  ShadContextMenuItem(
+                    leading: const Icon(LucideIcons.copyPlus),
+                    onPressed: () => _duplicateTask(task),
+                    child: const Text('Duplicate Here'),
+                  ),
+              ],
+              child: ResizableTaskWidget(
+                key: ValueKey(task.id),
+                task: task,
+                onResizePreview: _handleResizePreview,
+                onResizeEnd: _handleResizeCommit,
+                onDragUpdate: (details) =>
+                    _handleAutoScroll(details.globalPosition.dy),
+                onResizeAutoScroll: _handleAutoScroll,
+                hourHeight: _resolvedHourHeight,
+                quarterHeight: _resolvedHourHeight / _slotSubdivisions,
+                width: eventWidth,
+                height: clampedHeight,
+                isDayView: isDayView,
+                isPopoverOpen: isPopoverOpen,
+                enableInteractions: true,
+                onTap: (tappedTask, bounds) {
+                  _onScheduledTaskTapped(tappedTask, bounds);
+                },
+              ),
             ),
           );
         },
@@ -1399,7 +1745,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   List<CalendarTask> _getTasksForDay(DateTime date) {
     final tasks = widget.state.tasksForDate(date);
-    return tasks.where((task) => task.scheduledTime != null).toList()
+    return tasks.where((task) => task.scheduledTime != null).map((task) {
+      final preview = _resizePreviews[task.id];
+      return preview ?? task;
+    }).toList()
       ..sort((a, b) {
         final aTime = a.scheduledTime;
         final bTime = b.scheduledTime;
@@ -1449,6 +1798,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 }
+
+class _ZoomIntent extends Intent {
+  const _ZoomIntent(this.action);
+
+  final _ZoomAction action;
+}
+
+enum _ZoomAction { zoomIn, zoomOut, reset }
 
 class _CalendarSlot extends StatefulWidget {
   const _CalendarSlot({

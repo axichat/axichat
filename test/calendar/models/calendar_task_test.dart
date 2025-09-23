@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -179,6 +180,97 @@ void main() {
           ),
           returnsNormally,
         );
+      });
+    });
+
+    group('occurrencesWithin', () {
+      test('generates weekly occurrences only for selected weekdays', () {
+        final task = CalendarTask.create(
+          title: 'Class',
+          scheduledTime: DateTime(2024, 1, 3, 9), // Wednesday
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+            byWeekdays: [DateTime.wednesday, DateTime.friday],
+          ),
+        );
+
+        final occurrences = task.occurrencesWithin(
+          DateTime(2024, 1, 1),
+          DateTime(2024, 1, 12),
+        );
+
+        final weekdays = occurrences
+            .map((occurrence) => occurrence.scheduledTime!.weekday)
+            .toList();
+
+        expect(weekdays, equals([DateTime.friday, DateTime.wednesday]));
+        expect(
+          weekdays.every((weekday) => weekday != DateTime.thursday),
+          isTrue,
+        );
+      });
+
+      test('applies overrides for individual occurrences', () {
+        final baseTask = CalendarTask.create(
+          title: 'Shift',
+          scheduledTime: DateTime(2024, 1, 1, 9), // Monday
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+            byWeekdays: [DateTime.tuesday],
+          ),
+        );
+
+        final originalOccurrence = DateTime(2024, 1, 2, 9);
+        final overrideKey =
+            originalOccurrence.microsecondsSinceEpoch.toString();
+        final withOverride = baseTask.copyWith(
+          occurrenceOverrides: {
+            overrideKey: TaskOccurrenceOverride(
+              scheduledTime: DateTime(2024, 1, 3, 11),
+              duration: const Duration(hours: 2),
+            ),
+          },
+        );
+
+        final occurrences = withOverride.occurrencesWithin(
+          DateTime(2024, 1, 1),
+          DateTime(2024, 1, 5),
+        );
+
+        expect(occurrences, hasLength(1));
+        final occurrence = occurrences.first;
+        expect(occurrence.scheduledTime, DateTime(2024, 1, 3, 11));
+        expect(occurrence.duration, const Duration(hours: 2));
+      });
+
+      test('omits cancelled occurrences', () {
+        final baseTask = CalendarTask.create(
+          title: 'Gym',
+          scheduledTime: DateTime(2024, 1, 1, 7),
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+            byWeekdays: [DateTime.tuesday],
+          ),
+        );
+
+        final originalOccurrence = DateTime(2024, 1, 2, 7);
+        final overrideKey =
+            originalOccurrence.microsecondsSinceEpoch.toString();
+        final cancelled = baseTask.copyWith(
+          occurrenceOverrides: {
+            overrideKey: const TaskOccurrenceOverride(isCancelled: true),
+          },
+        );
+
+        final occurrences = cancelled.occurrencesWithin(
+          DateTime(2024, 1, 1),
+          DateTime(2024, 1, 3),
+        );
+
+        expect(occurrences, isEmpty);
       });
     });
 

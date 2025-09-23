@@ -14,7 +14,8 @@ void main() {
         home: Scaffold(
           body: ResizableTaskWidget(
             task: task,
-            onResize: (_) {},
+            onResizePreview: (_) {},
+            onResizeEnd: (_) {},
             hourHeight: 40,
             quarterHeight: 10,
             width: 100,
