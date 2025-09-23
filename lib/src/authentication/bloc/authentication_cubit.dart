@@ -108,11 +108,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is AuthenticationComplete) {
       return;
     }
-    if (state is AuthenticationInProgress) {
+    if (state is AuthenticationLogInInProgress) {
       _log.fine('Ignoring login request while another is in progress.');
       return;
     }
-    emit(const AuthenticationInProgress());
+    emit(const AuthenticationLogInInProgress());
 
     if ((username == null) != (password == null)) {
       emit(const AuthenticationFailure(
@@ -200,7 +200,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captcha,
     required bool rememberMe,
   }) async {
-    emit(const AuthenticationInProgress());
+    emit(const AuthenticationSignUpInProgress());
     try {
       final response = await _httpClient.post(
         registrationUrl,
@@ -227,7 +227,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> checkNotPwned({required String password}) async {
-    emit(const AuthenticationInProgress());
+    emit(const AuthenticationSignUpInProgress());
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {

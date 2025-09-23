@@ -89,8 +89,10 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     if (event.error != null) {
       _failOperation(
         operationId,
-        descriptor?.failureMessage(target, event.deviceId) ??
-            event.error.toString(),
+        message: descriptor?.failureMessage(target, event.deviceId),
+        error: event.error,
+        target: target,
+        deviceId: event.deviceId,
       );
       return;
     }
@@ -160,7 +162,12 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     }
 
     if (event.error != null) {
-      _failOperation(tracker.operationId, event.error.toString());
+      _failOperation(
+        tracker.operationId,
+        error: event.error,
+        target: target,
+        deviceId: event.deviceId,
+      );
       _ratchetTrackers.remove(key);
     } else {
       if (tracker.fetchCount == 0 && tracker.persistCount == 0) {
@@ -233,7 +240,12 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     }
 
     if (event.error != null) {
-      _failOperation(tracker.operationId, event.error.toString());
+      _failOperation(
+        tracker.operationId,
+        error: event.error,
+        target: target,
+        deviceId: event.deviceId,
+      );
       _ratchetTrackers.remove(key);
     } else {
       if (!tracker.sawPersistPhase && tracker.fetchCount == 0) {
@@ -283,11 +295,31 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     );
   }
 
-  void _failOperation(String id, String? error) {
+  void _failOperation(
+    String id, {
+    String? message,
+    Object? error,
+    String? target,
+    int? deviceId,
+  }) {
+    final rawError = error?.toString();
+    final friendlyError = _friendlyErrorMessage(
+      error,
+      target: target,
+      deviceId: deviceId,
+    );
+    final resolvedMessage =
+        message ?? friendlyError ?? 'Operation failed${_forTarget(target)}';
+    final detailError = (rawError != null && rawError != resolvedMessage)
+        ? rawError.startsWith('Instance of ')
+            ? null
+            : rawError
+        : null;
     _updateOperation(
       id,
       status: OmemoOperationStatus.failure,
-      error: error,
+      messageOverride: resolvedMessage,
+      error: detailError ?? friendlyError,
     );
   }
 
@@ -596,6 +628,38 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     return ' for $label';
   }
 
+  String? _friendlyErrorMessage(
+    Object? error, {
+    String? target,
+    int? deviceId,
+  }) {
+    if (error == null) return null;
+
+    final suffix =
+        deviceId != null ? _forDevice(target, deviceId) : _forTarget(target);
+
+    switch (error) {
+      case mox.UnknownOmemoError():
+        return 'Encryption metadata was unavailable$suffix. Retrying shortly.';
+      case mox.BundleFetchError(:final reason):
+        return 'Could not fetch encryption bundle$suffix: $reason';
+      case mox.PreKeyExhaustedError(:final deviceId):
+        return 'Device #$deviceId is out of pre-keys. Wait a moment and try again.';
+      case mox.DeviceNotFoundError(:final deviceId):
+        return 'Device #$deviceId is no longer registered${_forTarget(target)}.';
+      case mox.UnknownDeviceError(:final deviceId):
+        return 'Device #$deviceId is no longer recognized${_forTarget(target)}.';
+      case mox.SessionBrokenError(:final jid, :final deviceId):
+        return 'Secure session needs to be rebuilt${_forDevice(jid, deviceId)}.';
+      case mox.UnknownOnetimePrekeyReceivedError(:final jid, :final deviceId):
+        return 'One-time key was stale${_forDevice(jid, deviceId)}. Re-establishing the session.';
+      case mox.DeviceDeletionError(:final message):
+        return 'Failed to remove device$suffix: $message';
+      default:
+        return error.toString();
+    }
+  }
+
   @override
   Future<void> close() async {
     for (final timer in _retentionTimers.values) {
@@ -691,7 +755,7 @@ class OmemoOperation {
         OmemoOperationStatus.success =>
           messageOverride ?? 'Done${_targetSuffix(includeOn: false)}',
         OmemoOperationStatus.failure =>
-          error ?? 'Failed${_targetSuffix(includeOn: false)}',
+          messageOverride ?? 'Failed${_targetSuffix(includeOn: false)}',
       };
 
   String _targetSuffix({bool includeOn = true}) {

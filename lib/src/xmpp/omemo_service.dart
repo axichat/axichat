@@ -26,6 +26,13 @@ mixin OmemoService on XmppBase {
       }
     })
     ..registerHandler<mox.OmemoDeviceListUpdatedEvent>((event) async {
+      final isSelfUpdate =
+          myJid != null && event.jid.toBare().toString() == myJid;
+      _omemoLogger.fine(
+        'Received OMEMO device list update for '
+        '${isSelfUpdate ? 'self' : 'contact'}; '
+        'devices=${event.deviceList.length}.',
+      );
       await _dbOp<XmppDatabase>(
         (db) => db.updateChatAlert(
           chatJid: event.jid.toBare().toString(),
@@ -168,7 +175,53 @@ mixin OmemoService on XmppBase {
       },
     );
 
+    await _persistOwnDeviceId(newDevice.id);
+
     return newDevice;
+  }
+
+  Future<void> _persistOwnDeviceId(int deviceId) async {
+    final jid = myJid;
+    if (jid == null) {
+      return;
+    }
+
+    await _dbOp<XmppDatabase>((db) async {
+      final existing = await db.getOmemoDeviceList(jid);
+      final devicesSet = <int>{
+        deviceId,
+        if (existing != null) ...existing.devices,
+      };
+      final devices = devicesSet.toList()..sort();
+
+      await db.saveOmemoDeviceList(
+        OmemoDeviceList(jid: jid, devices: devices),
+      );
+    });
+  }
+
+  Future<void> _refreshOwnDeviceListCache() async {
+    if (!_omemoManager.isCompleted) return;
+
+    final jid = myJid;
+    if (jid == null) {
+      return;
+    }
+
+    try {
+      final manager = await _getOmemoManager();
+      if (!manager.isInitialized) {
+        return;
+      }
+
+      await manager.fetchDeviceList(jid);
+    } catch (error, stackTrace) {
+      _omemoLogger.fine(
+        'Unable to refresh OMEMO device list cache after publishing device.',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   /// Create the persistence implementation for OMEMO
@@ -277,6 +330,10 @@ mixin OmemoService on XmppBase {
     _omemoLogger.info(
       'OMEMO device bundle published for ${device.jid}:${device.id}.',
     );
+
+    await _persistOwnDeviceId(device.id);
+    await _refreshOwnDeviceListCache();
+
     return null;
   }
 
@@ -342,7 +399,7 @@ mixin OmemoService on XmppBase {
 
       // Generate fingerprint from device's identity key
       final identityKeyBytes = await device.ik.pk.getBytes();
-      final fingerprint = base64.encode(identityKeyBytes);
+      final fingerprint = _hexEncode(identityKeyBytes);
 
       final jid = myJid;
       if (jid == null) return null;
@@ -500,6 +557,14 @@ mixin OmemoService on XmppBase {
   }
 }
 
+String _hexEncode(List<int> bytes) {
+  final buffer = StringBuffer();
+  for (final byte in bytes) {
+    buffer.write(byte.toRadixString(16).padLeft(2, '0'));
+  }
+  return buffer.toString();
+}
+
 // OmemoDeviceData extension removed - moxxmpp v0.5.0 OmemoManager handles
 // device attachment internally. The OmemoDeviceData class in message_models.dart
 // is still used for extracting device info from received messages.
@@ -565,6 +630,8 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
   static final _prekeyRotationKey =
       XmppStateStore.registerKey('omemo_prekey_rotation');
 
+  static const _bundleCacheTtl = Duration(minutes: 30);
+
   bool get _hasDatabase => _service.isDatabaseReady;
 
   bool get _hasStateStore => _service.isStateStoreReady;
@@ -622,7 +689,6 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
             deviceId: ratchetData.id,
           ),
         );
-        // Store the OmemoDoubleRatchet directly as serialized data
         try {
           final ratchet = await OmemoRatchet.fromDoubleRatchet(
             jid: ratchetData.jid,
@@ -681,13 +747,20 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
         final ratchetList = await db.getOmemoRatchets(jid);
         final ratchets = <RatchetMapKey, omemo.OmemoDoubleRatchet>{};
 
-        // During migration, we don't load ratchets from storage
-        // This allows the OMEMO manager to establish new sessions as needed
-        // The stored ratchets are placeholder entries from the migration
-
-        _omemoLogger.info(
-          'Migration mode: Found ${ratchetList.length} placeholder ratchets for $jid, will establish new sessions as needed',
-        );
+        for (final entry in ratchetList) {
+          try {
+            final ratchet = await entry.toDoubleRatchet();
+            if (ratchet != null) {
+              ratchets[RatchetMapKey(entry.jid, entry.device)] = ratchet;
+            }
+          } catch (error, stackTrace) {
+            _omemoLogger.warning(
+              'Failed to restore ratchet for ${entry.jid}:${entry.device}',
+              error,
+              stackTrace,
+            );
+          }
+        }
 
         if (deviceList.isEmpty && ratchets.isEmpty) return null;
 
@@ -807,25 +880,47 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
   @override
   Future<void> cacheBundle(
       String jid, int deviceId, omemo.OmemoBundle bundle) async {
-    // Bundle caching is not implemented in our current database schema
-    // This would require adding a bundles table with TTL
-    // For now, we'll no-op this
+    if (!_hasDatabase) return;
+    final cacheEntry = OmemoBundleCache.fromBundle(
+      jid: jid,
+      bundle: bundle,
+    );
+    await _service._dbOp<XmppDatabase>(
+      (db) => db.saveOmemoBundleCache(cacheEntry),
+    );
   }
 
   @override
   Future<omemo.OmemoBundle?> getCachedBundle(String jid, int deviceId) async {
-    // Bundle caching is not implemented
-    return null;
+    if (!_hasDatabase) return null;
+    return await _service._dbOpReturning<XmppDatabase, omemo.OmemoBundle?>(
+      (db) async {
+        final cache = await db.getOmemoBundleCache(jid, deviceId);
+        if (cache == null) return null;
+        final now = DateTime.timestamp();
+        if (now.difference(cache.updatedAt) > _bundleCacheTtl) {
+          await db.removeOmemoBundleCache(jid, deviceId);
+          return null;
+        }
+        return cache.toBundle();
+      },
+    );
   }
 
   @override
   Future<void> removeCachedBundle(String jid, int deviceId) async {
-    // Bundle caching is not implemented
+    if (!_hasDatabase) return;
+    await _service._dbOp<XmppDatabase>(
+      (db) => db.removeOmemoBundleCache(jid, deviceId),
+    );
   }
 
   @override
   Future<void> clearBundleCache() async {
-    // Bundle caching is not implemented
+    if (!_hasDatabase) return;
+    await _service._dbOp<XmppDatabase>(
+      (db) => db.clearOmemoBundleCache(),
+    );
   }
 
   @override

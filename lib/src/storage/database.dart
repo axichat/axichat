@@ -120,6 +120,14 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> removeOmemoRatchets(List<(String, int)> ratchets);
 
+  Future<OmemoBundleCache?> getOmemoBundleCache(String jid, int device);
+
+  Future<void> saveOmemoBundleCache(OmemoBundleCache cache);
+
+  Future<void> removeOmemoBundleCache(String jid, int device);
+
+  Future<void> clearOmemoBundleCache();
+
   Future<DateTime?> getLastPreKeyRotationTime(String jid);
 
   Future<void> setLastPreKeyRotationTime(String jid, DateTime time);
@@ -403,16 +411,44 @@ class OmemoRatchetsAccessor
   $OmemoRatchetsTable get table => omemoRatchets;
 
   @override
-  Future<OmemoRatchet?> selectOne(String value) =>
-      (select(table)..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+  Future<OmemoRatchet?> selectOne((String, int) key) => (select(table)
+        ..where(
+            (table) => table.jid.equals(key.$1) & table.device.equals(key.$2)))
+      .getSingleOrNull();
 
   Future<List<OmemoRatchet>> selectByJid(String jid) =>
       (select(table)..where((table) => table.jid.equals(jid))).get();
 
   @override
-  Future<void> deleteOne(String value) =>
-      (delete(table)..where((table) => table.jid.equals(value))).go();
+  Future<void> deleteOne((String, int) key) => (delete(table)
+        ..where(
+            (table) => table.jid.equals(key.$1) & table.device.equals(key.$2)))
+      .go();
+}
+
+@DriftAccessor(tables: [OmemoBundleCaches])
+class OmemoBundleCachesAccessor
+    extends BaseAccessor<OmemoBundleCache, $OmemoBundleCachesTable>
+    with _$OmemoBundleCachesAccessorMixin {
+  OmemoBundleCachesAccessor(super.attachedDatabase);
+
+  @override
+  $OmemoBundleCachesTable get table => omemoBundleCaches;
+
+  Future<OmemoBundleCache?> selectByKey(String jid, int device) =>
+      selectOne((jid, device));
+
+  @override
+  Future<OmemoBundleCache?> selectOne((String, int) key) => (select(table)
+        ..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
+      .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne((String, int) key) => (delete(table)
+        ..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
+      .go();
+
+  Future<void> clear() => delete(table).go();
 }
 
 @DriftAccessor(tables: [FileMetadata])
@@ -549,6 +585,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   OmemoTrusts,
   OmemoDeviceLists,
   OmemoRatchets,
+  OmemoBundleCaches,
   Reactions,
   Notifications,
   FileMetadata,
@@ -566,6 +603,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   OmemoTrustsAccessor,
   OmemoDeviceListsAccessor,
   OmemoRatchetsAccessor,
+  OmemoBundleCachesAccessor,
   FileMetadataAccessor,
   ChatsAccessor,
   RosterAccessor,
@@ -909,6 +947,25 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
             .go();
       }
     });
+  }
+
+  @override
+  Future<OmemoBundleCache?> getOmemoBundleCache(String jid, int device) =>
+      omemoBundleCachesAccessor.selectByKey(jid, device);
+
+  @override
+  Future<void> saveOmemoBundleCache(OmemoBundleCache cache) async {
+    await omemoBundleCachesAccessor.insertOrUpdateOne(cache.toDb());
+  }
+
+  @override
+  Future<void> removeOmemoBundleCache(String jid, int device) async {
+    await omemoBundleCachesAccessor.deleteOne((jid, device));
+  }
+
+  @override
+  Future<void> clearOmemoBundleCache() async {
+    await omemoBundleCachesAccessor.clear();
   }
 
   @override
@@ -1296,7 +1353,7 @@ QueryExecutor _openDatabase(File file, String passphrase) {
   return LazyDatabase(() async {
     final token = RootIsolateToken.instance!;
     if (kDebugMode) {
-      await file.delete();
+      // await file.delete();
     }
     return NativeDatabase.createInBackground(
       file,

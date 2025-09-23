@@ -5,14 +5,18 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
-import 'package:cryptography/cryptography.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';
+// ignore: depend_on_referenced_packages
+import 'package:cryptography/cryptography.dart';
+import 'package:logging/logging.dart';
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'omemo_models.freezed.dart';
+
+final _ratchetLogger = Logger('OmemoRatchet');
 
 final keyPairTypes = <String, KeyPairType>{
   KeyPairType.ed25519.name: KeyPairType.ed25519,
@@ -545,64 +549,62 @@ class OmemoFingerprint with _$OmemoFingerprint {
   }) = _OmemoFingerprint;
 }
 
-/// OMEMO Double Ratchet storage adapter for axichat database.
+/// OMEMO Double Ratchet storage adapter for the Axichat database.
 ///
-/// This class temporarily stores ratchet state to allow the migration to complete.
-/// It doesn't attempt to recreate OmemoDoubleRatchet objects from storage since
-/// those objects don't support serialization. Instead, we let OMEMO create new
-/// sessions as needed during the migration period.
 class OmemoRatchet {
   OmemoRatchet({
     required this.jid,
     required this.device,
-    required this.placeholder,
+    required this.serialized,
   });
 
   final String jid;
   final int device;
-  final List<int> placeholder; // Placeholder data for migration
+  final String serialized;
 
-  /// Creates a placeholder OmemoRatchet entry during migration
-  factory OmemoRatchet.placeholder({
-    required String jid,
-    required int device,
-  }) =>
-      OmemoRatchet(
-        jid: jid,
-        device: device,
-        placeholder: [0], // Minimal placeholder data
-      );
-
-  /// Creates an OmemoRatchet entry from ratchet data during migration
-  /// Note: This doesn't store actual ratchet data since OmemoDoubleRatchet
-  /// doesn't support serialization. New sessions will be created as needed.
   static Future<OmemoRatchet> fromDoubleRatchet({
     required String jid,
     required int device,
     required omemo.OmemoDoubleRatchet ratchet,
   }) async {
-    // Store a placeholder to indicate this session existed
-    // The actual ratchet will be recreated by OMEMO when needed
-    return OmemoRatchet.placeholder(jid: jid, device: device);
+    final payload = await ratchet.toSerializable();
+    return OmemoRatchet(
+      jid: jid,
+      device: device,
+      serialized: jsonEncode(payload),
+    );
+  }
+
+  Future<omemo.OmemoDoubleRatchet?> toDoubleRatchet() async {
+    try {
+      final decoded = jsonDecode(serialized) as Map<String, dynamic>;
+      return await omemo.OmemoDoubleRatchet.fromSerializable(decoded);
+    } catch (error, stackTrace) {
+      _ratchetLogger.warning(
+        'Failed to deserialize OMEMO ratchet for $jid:$device',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
   }
 
   factory OmemoRatchet.fromDb({
     required String jid,
     required int device,
-    required List<int> placeholder,
+    required String serialized,
   }) =>
       OmemoRatchet(
         jid: jid,
         device: device,
-        placeholder: placeholder,
+        serialized: serialized,
       );
 
-  /// Converts the ratchet to a database insertable format.
   Insertable<OmemoRatchet> toDb() {
     return OmemoRatchetsCompanion.insert(
       jid: jid,
       device: device,
-      placeholder: placeholder,
+      serialized: serialized,
     );
   }
 }
@@ -613,7 +615,113 @@ class OmemoRatchets extends Table {
 
   IntColumn get device => integer()();
 
-  TextColumn get placeholder => text().map(ListConverter<int>())();
+  TextColumn get serialized => text()();
+
+  @override
+  Set<Column<Object>>? get primaryKey => {jid, device};
+}
+
+class OmemoBundleCache {
+  OmemoBundleCache({
+    required this.jid,
+    required this.device,
+    required this.serializedBundle,
+    required this.updatedAt,
+  });
+
+  final String jid;
+  final int device;
+  final String serializedBundle;
+  final DateTime updatedAt;
+
+  factory OmemoBundleCache.fromBundle({
+    required String jid,
+    required omemo.OmemoBundle bundle,
+    DateTime? timestamp,
+  }) {
+    final payload = _normalizeBundlePayload(bundle.toSerializable());
+
+    return OmemoBundleCache(
+      jid: jid,
+      device: bundle.id,
+      serializedBundle: jsonEncode(payload),
+      updatedAt: timestamp ?? DateTime.timestamp(),
+    );
+  }
+
+  omemo.OmemoBundle toBundle() {
+    final data = jsonDecode(serializedBundle) as Map<String, dynamic>;
+    return omemo.OmemoBundle.fromSerializable(data);
+  }
+
+  factory OmemoBundleCache.fromDb({
+    required String jid,
+    required int device,
+    required String bundleJson,
+    required DateTime updatedAt,
+  }) =>
+      OmemoBundleCache(
+        jid: jid,
+        device: device,
+        serializedBundle: bundleJson,
+        updatedAt: updatedAt,
+      );
+
+  Insertable<OmemoBundleCache> toDb() {
+    return OmemoBundleCachesCompanion.insert(
+      jid: jid,
+      device: device,
+      bundleJson: serializedBundle,
+      updatedAt: updatedAt,
+    );
+  }
+
+  static Map<String, dynamic> _normalizeBundlePayload(
+    Map<String, dynamic> payload,
+  ) {
+    return payload.map(
+      (key, value) => MapEntry(key, _encodeJsonValue(value)),
+    );
+  }
+
+  static dynamic _encodeJsonValue(dynamic value) {
+    if (value is Map) {
+      return value.map(
+        (key, entry) => MapEntry(key.toString(), _encodeJsonValue(entry)),
+      );
+    }
+
+    if (value is Uint8List) {
+      return base64Encode(value);
+    }
+
+    if (value is Iterable<int>) {
+      return value.toList();
+    }
+
+    if (value is Iterable) {
+      return value.map(_encodeJsonValue).toList();
+    }
+
+    if (value is String || value is num || value is bool || value == null) {
+      return value;
+    }
+
+    throw ArgumentError(
+      'Unsupported OMEMO bundle value type: ${value.runtimeType}',
+    );
+  }
+}
+
+@UseRowClass(OmemoBundleCache, constructor: 'fromDb')
+class OmemoBundleCaches extends Table {
+  TextColumn get jid => text()();
+
+  IntColumn get device => integer()();
+
+  TextColumn get bundleJson => text()();
+
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column<Object>>? get primaryKey => {jid, device};
