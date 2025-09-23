@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -32,21 +33,60 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     return BlocConsumer<CalendarBloc, CalendarState>(
       listener: _handleStateChanges,
       builder: (context, state) {
-        return Scaffold(
-          backgroundColor: calendarBackgroundColor,
-          body: Stack(
-            children: [
-              // New structure: Row with sidebar OUTSIDE of navigation column
-              ResponsiveHelper.layoutBuilder(
-                context,
-                mobile: _buildMobileLayout(state),
-                tablet: _buildTabletLayout(state),
-                desktop: _buildDesktopLayout(state),
+        return Shortcuts(
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+                _CalendarUndoIntent(),
+            SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
+                _CalendarUndoIntent(),
+            SingleActivator(LogicalKeyboardKey.keyZ,
+                control: true, shift: true): _CalendarRedoIntent(),
+            SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+                _CalendarRedoIntent(),
+          },
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              _CalendarUndoIntent: CallbackAction<_CalendarUndoIntent>(
+                onInvoke: (_) {
+                  if (state.canUndo) {
+                    context
+                        .read<CalendarBloc>()
+                        .add(const CalendarEvent.undoRequested());
+                  }
+                  return null;
+                },
               ),
+              _CalendarRedoIntent: CallbackAction<_CalendarRedoIntent>(
+                onInvoke: (_) {
+                  if (state.canRedo) {
+                    context
+                        .read<CalendarBloc>()
+                        .add(const CalendarEvent.redoRequested());
+                  }
+                  return null;
+                },
+              ),
+            },
+            child: Focus(
+              autofocus: true,
+              child: Scaffold(
+                backgroundColor: calendarBackgroundColor,
+                body: Stack(
+                  children: [
+                    // New structure: Row with sidebar OUTSIDE of navigation column
+                    ResponsiveHelper.layoutBuilder(
+                      context,
+                      mobile: _buildMobileLayout(state),
+                      tablet: _buildTabletLayout(state),
+                      desktop: _buildDesktopLayout(state),
+                    ),
 
-              // Loading overlay
-              if (state.isLoading) _buildLoadingOverlay(),
-            ],
+                    // Loading overlay
+                    if (state.isLoading) _buildLoadingOverlay(),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       },
@@ -113,6 +153,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           onErrorCleared: () => context.read<CalendarBloc>().add(
                 const CalendarEvent.errorCleared(),
               ),
+          onUndo: () => context
+              .read<CalendarBloc>()
+              .add(const CalendarEvent.undoRequested()),
+          onRedo: () => context
+              .read<CalendarBloc>()
+              .add(const CalendarEvent.redoRequested()),
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
         ),
 
         // Error display
@@ -178,6 +226,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                 onErrorCleared: () => context.read<CalendarBloc>().add(
                       const CalendarEvent.errorCleared(),
                     ),
+                onUndo: () => context
+                    .read<CalendarBloc>()
+                    .add(const CalendarEvent.undoRequested()),
+                onRedo: () => context
+                    .read<CalendarBloc>()
+                    .add(const CalendarEvent.redoRequested()),
+                canUndo: state.canUndo,
+                canRedo: state.canRedo,
               ),
 
               // Error display
@@ -217,6 +273,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                 onErrorCleared: () => context.read<CalendarBloc>().add(
                       const CalendarEvent.errorCleared(),
                     ),
+                onUndo: () => context
+                    .read<CalendarBloc>()
+                    .add(const CalendarEvent.undoRequested()),
+                onRedo: () => context
+                    .read<CalendarBloc>()
+                    .add(const CalendarEvent.redoRequested()),
+                canUndo: state.canUndo,
+                canRedo: state.canRedo,
               ),
 
               // Error display
@@ -391,4 +455,12 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       ),
     );
   }
+}
+
+class _CalendarUndoIntent extends Intent {
+  const _CalendarUndoIntent();
+}
+
+class _CalendarRedoIntent extends Intent {
+  const _CalendarRedoIntent();
 }

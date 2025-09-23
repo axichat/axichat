@@ -78,7 +78,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const int _dayViewSubdivisions = 4;
   static const int _resizeStepMinutes = 15;
   static const List<_ZoomLevel> _zoomLevels = <_ZoomLevel>[
-    _ZoomLevel(hourHeight: 84, daySubdivisions: 1),
+    _ZoomLevel(hourHeight: 78, daySubdivisions: 1),
     _ZoomLevel(hourHeight: 132, daySubdivisions: 2),
     _ZoomLevel(hourHeight: 192, daySubdivisions: 4),
   ];
@@ -115,6 +115,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   String? _draggingTaskId;
   String? _draggingTaskBaseId;
   DateTime? _contextMenuPasteSlot;
+  bool _zoomControlsVisible = false;
+  Timer? _zoomControlsDismissTimer;
+  static const ValueKey<String> _contextMenuGroupId =
+      ValueKey<String>('calendar-grid-context');
 
   @override
   void initState() {
@@ -146,6 +150,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
   bool get _canZoomOut => _zoomIndex > 0;
   bool get _isZoomEnabled => widget.state.viewMode != CalendarView.day;
+  bool get _isSelectionMode => widget.state.isSelectionMode;
+  Set<String> get _selectedTaskIds => widget.state.selectedTaskIds;
+
+  bool _isTaskSelected(CalendarTask task) {
+    return _selectedTaskIds.contains(task.baseId);
+  }
+
   Map<LogicalKeySet, Intent> get _zoomShortcuts => {
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal):
             const _ZoomIntent(_ZoomAction.zoomIn),
@@ -222,6 +233,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _zoomIndex = clamped;
       _hasAutoScrolled = false;
     });
+
+    _showZoomControls();
 
     if (anchorMinutes != null) {
       _pendingAnchorMinutes = anchorMinutes;
@@ -338,6 +351,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _activePopoverEntry?.remove();
     _activePopoverEntry = null;
     _focusNode.dispose();
+    _zoomControlsDismissTimer?.cancel();
     super.dispose();
   }
 
@@ -361,6 +375,27 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
   }
 
+  DateTime _quantizeDropTime(
+    DateTime slotTime,
+    double localDy,
+    double slotHeight,
+    int slotMinutes,
+  ) {
+    final int step = _minutesPerStep;
+    if (slotHeight <= 0 || slotMinutes <= 0 || step <= 0) {
+      return slotTime;
+    }
+
+    final double clampedDy = localDy.clamp(0.0, slotHeight);
+    final double ratio = slotHeight == 0 ? 0.0 : clampedDy / slotHeight;
+    final double minutesWithinSlot = ratio * slotMinutes;
+    final int stepsPerSlot = math.max(1, (slotMinutes / step).round());
+    final int stepIndex =
+        (minutesWithinSlot / step).round().clamp(0, stepsPerSlot - 1);
+    final int snappedMinutes = stepIndex * step;
+    return slotTime.add(Duration(minutes: snappedMinutes));
+  }
+
   void _copyTask(CalendarTask task) {
     setState(() {
       _copiedTask = task;
@@ -368,15 +403,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         _contextMenuPasteSlot = task.scheduledTime;
       }
     });
-  }
-
-  void _duplicateTask(CalendarTask task) {
-    if (task.scheduledTime == null) {
-      _copyTask(task);
-      return;
-    }
-    _copyTask(task);
-    _pasteTemplate(task, task.scheduledTime!);
   }
 
   void _pasteTask(DateTime slotTime) {
@@ -404,6 +430,36 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         recurrence: template.recurrence,
       ),
     );
+  }
+
+  void _showZoomControls() {
+    if (!_isZoomEnabled) {
+      return;
+    }
+    _zoomControlsDismissTimer?.cancel();
+    if (!_zoomControlsVisible) {
+      setState(() {
+        _zoomControlsVisible = true;
+      });
+    }
+    _zoomControlsDismissTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _zoomControlsVisible = false;
+      });
+    });
+  }
+
+  void _enterSelectionMode(String taskId) {
+    _capturedBloc.add(CalendarEvent.selectionModeEntered(taskId: taskId));
+  }
+
+  void _toggleTaskSelection(String taskId) {
+    _capturedBloc.add(CalendarEvent.selectionToggled(taskId: taskId));
+  }
+
+  void _clearSelectionMode() {
+    _capturedBloc.add(const CalendarEvent.selectionCleared());
   }
 
   void _handleTaskDragStarted(CalendarTask task) {
@@ -567,10 +623,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         child: Stack(
           children: [
             Positioned.fill(child: gridBody),
-            if (_isZoomEnabled)
+            if (_isZoomEnabled && _zoomControlsVisible)
               Positioned(
                 top: 8,
-                left: compact ? 8 : 12,
+                right: compact ? 8 : 16,
                 child: _buildZoomControls(),
               ),
           ],
@@ -1208,7 +1264,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             content = ShadContextMenuRegion(
               items: [
                 ShadContextMenuItem(
-                  leading: const Icon(LucideIcons.clipboardPaste),
+                  leading: const Icon(Icons.content_paste_outlined),
                   onPressed: () => _pasteTask(effectivePasteSlot()),
                   child: const Text('Paste Task Here'),
                 ),
@@ -1360,60 +1416,67 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required int slotMinutes,
   }) {
     final slotDuration = Duration(minutes: slotMinutes);
+    final int subdivisions = _slotSubdivisions;
+    final double slotHeight = subdivisions == 0
+        ? _resolvedHourHeight
+        : _resolvedHourHeight / subdivisions;
+    final DateTime slotTime = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      hour,
+      minute,
+    );
 
     return DragTarget<CalendarTask>(
       onWillAcceptWithDetails: (details) {
         final task = details.data;
-        final slotTime = DateTime(
-          targetDate.year,
-          targetDate.month,
-          targetDate.day,
-          hour,
-          minute,
-        );
-        final duration = task.duration ?? const Duration(hours: 1);
-        _updateDragPreview(slotTime, duration);
+        final Duration duration = task.duration ?? const Duration(hours: 1);
+        final renderBox = context.findRenderObject() as RenderBox?;
+        final DateTime previewStart;
+        if (renderBox == null || slotHeight <= 0) {
+          previewStart = slotTime;
+        } else {
+          final local = renderBox.globalToLocal(details.offset);
+          previewStart =
+              _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
+        }
+        _updateDragPreview(previewStart, duration);
         return true;
       },
       onLeave: (details) {
-        final slotTime = DateTime(
-          targetDate.year,
-          targetDate.month,
-          targetDate.day,
-          hour,
-          minute,
-        );
         if (_isPreviewAnchor(slotTime)) {
           _clearDragPreview();
         }
       },
       onAcceptWithDetails: (details) {
-        final slotTime = DateTime(
-          targetDate.year,
-          targetDate.month,
-          targetDate.day,
-          hour,
-          minute,
-        );
+        final renderBox = context.findRenderObject() as RenderBox?;
+        final DateTime dropTime;
+        if (renderBox == null || slotHeight <= 0) {
+          dropTime = slotTime;
+        } else {
+          final local = renderBox.globalToLocal(details.offset);
+          dropTime =
+              _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
+        }
         _clearDragPreview();
-        _handleTaskDrop(details.data, slotTime);
+        _handleTaskDrop(details.data, dropTime);
       },
       onMove: (details) {
         final renderBox = context.findRenderObject() as RenderBox?;
-        if (renderBox == null || !renderBox.hasSize) {
+        if (renderBox == null || !renderBox.hasSize || slotHeight <= 0) {
           return;
         }
+        final local = renderBox.globalToLocal(details.offset);
+        final task = details.data;
+        final DateTime previewStart =
+            _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
+        final Duration duration = task.duration ?? const Duration(hours: 1);
+        _updateDragPreview(previewStart, duration);
         final global = renderBox.localToGlobal(details.offset);
         _handleAutoScroll(global.dy);
       },
       builder: (context, candidateData, rejectedData) {
-        final slotTime = DateTime(
-          targetDate.year,
-          targetDate.month,
-          targetDate.day,
-          hour,
-          minute,
-        );
         final hasTask = _hasTaskInSlot(targetDate, hour, minute, slotMinutes);
         final isPreviewSlot = _isPreviewSlot(slotTime, slotDuration);
         final isPreviewAnchor = _isPreviewAnchor(slotTime);
@@ -1427,6 +1490,44 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           onTap: () => _handleSlotTap(slotTime, hasTask: hasTask),
           child: const SizedBox.expand(),
         );
+
+        final menuItems = <Widget>[];
+        final controller = ShadPopoverController();
+
+        if (_copiedTask != null) {
+          menuItems.add(
+            ShadContextMenuItem(
+              leading: const Icon(Icons.content_paste_outlined),
+              onPressed: () {
+                controller.hide();
+                _pasteTask(slotTime);
+              },
+              child: const Text('Paste Task Here'),
+            ),
+          );
+        }
+
+        if (_isSelectionMode) {
+          menuItems.add(
+            ShadContextMenuItem(
+              leading: const Icon(Icons.highlight_off),
+              onPressed: () {
+                controller.hide();
+                _clearSelectionMode();
+              },
+              child: const Text('Exit Selection Mode'),
+            ),
+          );
+        }
+
+        if (menuItems.isNotEmpty) {
+          slot = ShadContextMenuRegion(
+            controller: controller,
+            groupId: _contextMenuGroupId,
+            items: menuItems,
+            child: slot,
+          );
+        }
 
         return slot;
       },
@@ -1619,6 +1720,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       {bool isDayView = false, required Set<String> visibleTaskIds}) {
     final tasks = _getTasksForDay(date);
     final widgets = <Widget>[];
+    final draggingId = _draggingTaskId;
+    final draggingBaseId = _draggingTaskBaseId;
 
     final weekStartDate = DateTime(
       widget.state.weekStart.year,
@@ -1637,13 +1740,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     for (final task in tasks) {
       if (task.scheduledTime == null) continue;
 
-      if (_draggingTaskId != null && task.id == _draggingTaskId) {
-        continue;
-      }
-
       visibleTaskIds.add(task.id);
       final overlapInfo = overlapMap[task.id] ??
           const OverlapInfo(columnIndex: 0, totalColumns: 1);
+      final bool isDraggingTask =
+          (draggingId != null && task.id == draggingId) ||
+              (draggingBaseId != null && task.baseId == draggingBaseId);
       final widget = _buildTaskWidget(
         task,
         overlapInfo,
@@ -1653,6 +1755,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         currentDate: date, // Pass the current date for multi-day handling
         weekStartDate: weekStartDate,
         weekEndDate: weekEndDate,
+        isPlaceholder: isDraggingTask,
       );
       if (widget != null) {
         widgets.add(widget);
@@ -1667,7 +1770,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       {bool isDayView = false,
       DateTime? currentDate,
       DateTime? weekStartDate,
-      DateTime? weekEndDate}) {
+      DateTime? weekEndDate,
+      bool isPlaceholder = false}) {
     if (task.scheduledTime == null || currentDate == null) return null;
 
     final taskTime = task.scheduledTime!;
@@ -1747,22 +1851,100 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           final double stepHeight =
               (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
 
+          if (isPlaceholder) {
+            return IgnorePointer(
+              ignoring: true,
+              child: Opacity(
+                opacity: 0.45,
+                child: ResizableTaskWidget(
+                  key: ValueKey('${task.id}-ghost'),
+                  task: task,
+                  onResizePreview: _handleResizePreview,
+                  onResizeEnd: _handleResizeCommit,
+                  hourHeight: _resolvedHourHeight,
+                  stepHeight: stepHeight,
+                  minutesPerStep: _minutesPerStep,
+                  width: eventWidth,
+                  height: clampedHeight,
+                  isDayView: isDayView,
+                  enableInteractions: false,
+                  isSelectionMode: _isSelectionMode,
+                  isSelected: _isTaskSelected(task),
+                ),
+              ),
+            );
+          }
+
+          final menuController = ShadPopoverController();
+          final bool isSelected = _isTaskSelected(task);
+          final bool selectionMode = _isSelectionMode;
+          final menuItems = <Widget>[
+            ShadContextMenuItem(
+              leading: const Icon(Icons.copy_outlined),
+              onPressed: () {
+                menuController.hide();
+                _copyTask(task);
+              },
+              child: const Text('Copy Task'),
+            ),
+          ];
+
+          if (_copiedTask != null && task.scheduledTime != null) {
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: const Icon(Icons.content_paste_outlined),
+                onPressed: () {
+                  menuController.hide();
+                  _pasteTask(task.scheduledTime!);
+                },
+                child: const Text('Paste Task Here'),
+              ),
+            );
+          }
+
+          final String selectionLabel;
+          if (selectionMode) {
+            selectionLabel = isSelected ? 'Deselect Task' : 'Add to Selection';
+          } else {
+            selectionLabel = 'Select Task';
+          }
+
+          menuItems.add(
+            ShadContextMenuItem(
+              leading: Icon(
+                isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+              ),
+              onPressed: () {
+                menuController.hide();
+                if (selectionMode) {
+                  _toggleTaskSelection(task.baseId);
+                } else {
+                  _enterSelectionMode(task.baseId);
+                }
+              },
+              child: Text(selectionLabel),
+            ),
+          );
+
+          if (selectionMode) {
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: const Icon(Icons.highlight_off),
+                onPressed: () {
+                  menuController.hide();
+                  _clearSelectionMode();
+                },
+                child: const Text('Exit Selection Mode'),
+              ),
+            );
+          }
+
           return KeyedSubtree(
             key: globalKey,
             child: ShadContextMenuRegion(
-              items: [
-                ShadContextMenuItem(
-                  leading: const Icon(LucideIcons.copy),
-                  onPressed: () => _copyTask(task),
-                  child: const Text('Copy Task'),
-                ),
-                if (task.scheduledTime != null)
-                  ShadContextMenuItem(
-                    leading: const Icon(LucideIcons.copyPlus),
-                    onPressed: () => _duplicateTask(task),
-                    child: const Text('Duplicate Here'),
-                  ),
-              ],
+              controller: menuController,
+              groupId: _contextMenuGroupId,
+              items: menuItems,
               child: ResizableTaskWidget(
                 key: ValueKey(task.id),
                 task: task,
@@ -1779,6 +1961,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 isDayView: isDayView,
                 isPopoverOpen: isPopoverOpen,
                 enableInteractions: true,
+                isSelectionMode: selectionMode,
+                isSelected: isSelected,
+                onToggleSelection: () {
+                  if (selectionMode) {
+                    _toggleTaskSelection(task.baseId);
+                  } else {
+                    _enterSelectionMode(task.baseId);
+                  }
+                },
                 onDragStarted: _handleTaskDragStarted,
                 onDragEnded: _handleTaskDragEnded,
                 onTap: (tappedTask, bounds) {

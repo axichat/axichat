@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import 'package:axichat/src/common/ui/ui.dart';
+
 import '../models/calendar_task.dart';
 
 class ResizableTaskWidget extends StatefulWidget {
@@ -21,6 +24,9 @@ class ResizableTaskWidget extends StatefulWidget {
   final ValueChanged<CalendarTask>? onDragStarted;
   final ValueChanged<CalendarTask>? onDragEnded;
   final bool enableInteractions;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final VoidCallback? onToggleSelection;
 
   const ResizableTaskWidget({
     super.key,
@@ -40,6 +46,9 @@ class ResizableTaskWidget extends StatefulWidget {
     this.onDragStarted,
     this.onDragEnded,
     this.enableInteractions = true,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    this.onToggleSelection,
   });
 
   @override
@@ -54,6 +63,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   double _totalDragDeltaY = 0;
   int _lastAppliedQuarterDelta = 0;
 
+  static const double _accentWidth = 4.0;
+  static const double _accentPadding = 6.0;
+
   late double _currentStartHour;
   late double _currentDurationHours;
   DateTime? _tempScheduledTime;
@@ -67,6 +79,18 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     final taskColor = _taskColor;
 
     Widget buildFeedback() {
+      final bool isCompleted = task.isCompleted;
+      final Color accentColor = taskColor;
+      final double blendAlpha = isCompleted ? 0.08 : 0.18;
+      final Color backgroundColor = Color.alphaBlend(
+        accentColor.withValues(alpha: blendAlpha),
+        calendarContainerColor,
+      );
+      final Color borderColor =
+          accentColor.withValues(alpha: isCompleted ? 0.4 : 0.5);
+      final Color stripeColor =
+          accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
+
       return Material(
         elevation: 8,
         color: Colors.transparent,
@@ -74,53 +98,84 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
-            color: taskColor.withValues(alpha: 0.8),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(4),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: calendarMediumShadow,
+          ),
+          child: Stack(
+            children: [
+              _buildAccentStripe(stripeColor),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  _accentWidth + _accentPadding,
+                  8,
+                  8,
+                  8,
+                ),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    task.title,
+                    style: taskTitleTextStyle.copyWith(
+                      color: calendarTitleColor,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ],
-          ),
-          padding: const EdgeInsets.all(6),
-          child: Text(
-            task.title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-            overflow: TextOverflow.ellipsis,
           ),
         ),
       );
     }
 
     Widget buildTaskBody() {
-      final showHoverEffects = widget.enableInteractions &&
+      final bool showHoverEffects = widget.enableInteractions &&
           (widget.isPopoverOpen || isHovering || isResizing || isDragging);
+      final bool selectionMode = widget.isSelectionMode;
+      final bool highlightSelection = selectionMode && widget.isSelected;
+      final bool isCompleted = task.isCompleted;
+      final Color accentColor = taskColor;
+      final double baseBlendAlpha = isCompleted ? 0.06 : 0.12;
+      final double activeBlendAlpha = isCompleted ? 0.1 : 0.18;
+      final double selectionBlendAlpha = highlightSelection
+          ? (isCompleted ? 0.18 : 0.26)
+          : (showHoverEffects ? activeBlendAlpha : baseBlendAlpha);
+      final Color backgroundColor = Color.alphaBlend(
+        accentColor.withValues(alpha: selectionBlendAlpha),
+        calendarContainerColor,
+      );
+      final Color borderColor = highlightSelection
+          ? accentColor
+          : showHoverEffects
+              ? accentColor.withValues(alpha: 0.45)
+              : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
+      final List<BoxShadow> boxShadows = highlightSelection
+          ? calendarMediumShadow
+          : showHoverEffects
+              ? calendarLightShadow
+              : const [];
+      final Color titleColor =
+          isCompleted ? calendarSubtitleColor : calendarTitleColor;
+      const Color secondaryColor = calendarSubtitleColor;
+      final Color stripeColor = highlightSelection
+          ? accentColor
+          : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
+
       final decoration = BoxDecoration(
-        color: task.isCompleted
-            ? taskColor.withValues(alpha: 0.5)
-            : taskColor.withValues(alpha: isResizing ? 0.7 : 0.9),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
-          color: isResizing
-              ? Colors.white.withValues(alpha: 0.5)
-              : taskColor.withValues(alpha: 0.3),
-          width: isResizing ? 2 : 1,
+          color: borderColor,
+          width: highlightSelection
+              ? 2.4
+              : isResizing
+                  ? 1.8
+                  : 1,
         ),
-        boxShadow: showHoverEffects
-            ? const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ]
-            : const [],
+        boxShadow: boxShadows,
       );
 
       final double availableHeight =
@@ -134,13 +189,14 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           decoration: decoration,
           child: Stack(
             children: [
-              if (showHandles) ..._buildResizeHandles(),
+              _buildAccentStripe(stripeColor),
+              if (showHandles) ..._buildResizeHandles(stripeColor),
             ],
           ),
         );
       }
 
-      final double padding;
+      double padding;
       if (availableHeight >= 96) {
         padding = 8;
       } else if (availableHeight >= 72) {
@@ -158,23 +214,34 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         return Container(
           margin: const EdgeInsets.all(2),
           decoration: decoration,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: padding),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                task.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  decoration:
-                      task.isCompleted ? TextDecoration.lineThrough : null,
+          child: Stack(
+            children: [
+              _buildAccentStripe(stripeColor),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  padding + _accentWidth + _accentPadding,
+                  padding,
+                  padding,
+                  padding,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      decoration:
+                          task.isCompleted ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              if (showHandles) ..._buildResizeHandles(stripeColor),
+            ],
           ),
         );
       }
@@ -207,7 +274,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           maxLines: titleLines,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Colors.white,
+            color: titleColor,
             fontSize: 12,
             fontWeight: FontWeight.w600,
             decoration: task.isCompleted ? TextDecoration.lineThrough : null,
@@ -225,7 +292,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 Icon(
                   Icons.calendar_view_week,
                   size: 12,
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: stripeColor,
                 ),
                 const SizedBox(width: 4),
               ],
@@ -237,8 +304,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
+                  style: const TextStyle(
+                    color: secondaryColor,
                     fontSize: 11,
                     fontWeight: FontWeight.w400,
                   ),
@@ -255,7 +322,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               Icon(
                 Icons.calendar_view_week,
                 size: 12,
-                color: Colors.white.withValues(alpha: 0.9),
+                color: stripeColor,
               ),
               const SizedBox(width: 4),
             ],
@@ -277,8 +344,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 : _formatTimeRange(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
+            style: const TextStyle(
+              color: secondaryColor,
               fontSize: 11,
               fontWeight: FontWeight.w400,
             ),
@@ -296,8 +363,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             maxLines: descriptionLines,
             overflow: descriptionOverflow,
             softWrap: true,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.75),
+            style: const TextStyle(
+              color: secondaryColor,
               fontSize: 10,
               height: 1.2,
             ),
@@ -310,9 +377,15 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         decoration: decoration,
         child: Stack(
           children: [
+            _buildAccentStripe(stripeColor),
             ClipRect(
               child: Padding(
-                padding: EdgeInsets.all(padding),
+                padding: EdgeInsets.fromLTRB(
+                  padding + _accentWidth + _accentPadding,
+                  padding,
+                  padding,
+                  padding,
+                ),
                 child: SingleChildScrollView(
                   physics: const NeverScrollableScrollPhysics(),
                   padding: EdgeInsets.zero,
@@ -325,7 +398,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 ),
               ),
             ),
-            if (showHandles) ..._buildResizeHandles(),
+            if (showHandles) ..._buildResizeHandles(stripeColor),
           ],
         ),
       );
@@ -351,6 +424,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
+              if (widget.isSelectionMode) {
+                widget.onToggleSelection?.call();
+                return;
+              }
+
               final handler = widget.onTap;
               if (handler == null) return;
 
@@ -401,7 +479,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     return content;
   }
 
-  List<Widget> _buildResizeHandles() {
+  List<Widget> _buildResizeHandles(Color accentColor) {
+    final Color activeColor = accentColor.withValues(alpha: 0.85);
+    final Color idleColor = accentColor.withValues(alpha: 0.5);
+
     final handles = <Widget>[
       // Top handle
       Positioned(
@@ -422,9 +503,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   width: 40,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(
-                      alpha: isResizing && activeHandle == 'top' ? 0.8 : 0.4,
-                    ),
+                    color: isResizing && activeHandle == 'top'
+                        ? activeColor
+                        : idleColor,
                     borderRadius: BorderRadius.circular(1.5),
                   ),
                 ),
@@ -452,9 +533,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   width: 40,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(
-                      alpha: isResizing && activeHandle == 'bottom' ? 0.8 : 0.4,
-                    ),
+                    color: isResizing && activeHandle == 'bottom'
+                        ? activeColor
+                        : idleColor,
                     borderRadius: BorderRadius.circular(1.5),
                   ),
                 ),
@@ -466,6 +547,24 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     ];
 
     return handles;
+  }
+
+  Widget _buildAccentStripe(Color color) {
+    return Positioned(
+      left: 0,
+      top: 0,
+      bottom: 0,
+      child: Container(
+        width: _accentWidth,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            bottomLeft: Radius.circular(4),
+          ),
+        ),
+      ),
+    );
   }
 
   void _startResize(String handleType, DragStartDetails details) {

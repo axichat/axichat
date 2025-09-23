@@ -42,6 +42,15 @@ abstract class BaseCalendarBloc
     on<CalendarDayViewSelected>(_onDayViewSelected);
     on<CalendarDateSelected>(_onDateSelected);
     on<CalendarErrorCleared>(_onErrorCleared);
+    on<CalendarSelectionModeEntered>(_onSelectionModeEntered);
+    on<CalendarSelectionToggled>(_onSelectionToggled);
+    on<CalendarSelectionCleared>(_onSelectionCleared);
+    on<CalendarSelectionPriorityChanged>(_onSelectionPriorityChanged);
+    on<CalendarSelectionCompletedToggled>(_onSelectionCompletedToggled);
+    on<CalendarSelectionDeleted>(_onSelectionDeleted);
+    on<CalendarSelectionRecurrenceChanged>(_onSelectionRecurrenceChanged);
+    on<CalendarUndoRequested>(_onUndoRequested);
+    on<CalendarRedoRequested>(_onRedoRequested);
   }
 
   final CalendarReminderController? _reminderController;
@@ -50,6 +59,9 @@ abstract class BaseCalendarBloc
   final String _storageId;
   final Storage _storage;
   Future<void> _pendingReminderSync = Future.value();
+  static const int _undoHistoryLimit = 50;
+  final List<CalendarModel> _undoStack = <CalendarModel>[];
+  final List<CalendarModel> _redoStack = <CalendarModel>[];
 
   @override
   String get id => _storageId;
@@ -121,6 +133,33 @@ abstract class BaseCalendarBloc
     }
   }
 
+  void _recordUndoSnapshot() {
+    _undoStack.add(state.model);
+    if (_undoStack.length > _undoHistoryLimit) {
+      _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+  }
+
+  void _emitSelectionState({
+    required Emitter<CalendarState> emit,
+    required bool isSelectionMode,
+    required Set<String> selectedTaskIds,
+  }) {
+    final sanitizedSelection = selectedTaskIds
+        .where((id) => state.model.tasks.containsKey(id))
+        .toSet();
+    final nextMode = isSelectionMode && sanitizedSelection.isNotEmpty;
+    emit(
+      state.copyWith(
+        isSelectionMode: nextMode,
+        selectedTaskIds: nextMode ? sanitizedSelection : const <String>{},
+        canUndo: _undoStack.isNotEmpty,
+        canRedo: _redoStack.isNotEmpty,
+      ),
+    );
+  }
+
   void _onStarted(CalendarStarted event, Emitter<CalendarState> emit) {
     emitModel(state.model, emit, selectedDate: state.selectedDate);
   }
@@ -159,6 +198,8 @@ abstract class BaseCalendarBloc
       }
 
       emit(state.copyWith(isLoading: true, error: null));
+
+      _recordUndoSnapshot();
 
       final now = _now();
       final double? computedStartHour = event.startHour ??
@@ -206,6 +247,8 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
+      _recordUndoSnapshot();
+
       final updatedTask = event.task.copyWith(modifiedAt: _now());
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit, isLoading: false);
@@ -228,6 +271,8 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
+      _recordUndoSnapshot();
+
       final updatedModel = state.model.deleteTask(event.taskId);
       emitModel(updatedModel, emit, isLoading: false);
 
@@ -248,6 +293,8 @@ abstract class BaseCalendarBloc
       }
 
       emit(state.copyWith(isLoading: true, error: null));
+
+      _recordUndoSnapshot();
 
       final updatedTask = existingTask.copyWith(
         isCompleted: event.completed,
@@ -276,6 +323,7 @@ abstract class BaseCalendarBloc
         scheduledTime: event.time,
         modifiedAt: _now(),
       );
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -316,6 +364,7 @@ abstract class BaseCalendarBloc
         daySpan: event.daySpan ?? task.daySpan,
         modifiedAt: _now(),
       );
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -366,6 +415,7 @@ abstract class BaseCalendarBloc
         occurrenceOverrides: overrides,
         modifiedAt: _now(),
       );
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -390,6 +440,7 @@ abstract class BaseCalendarBloc
         priority: event.priority == TaskPriority.none ? null : event.priority,
         modifiedAt: _now(),
       );
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -414,6 +465,8 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
+      _recordUndoSnapshot();
+
       final parsed = CalendarTask.fromNaturalLanguage(event.text);
       final now = _now();
       final task = parsed.copyWith(
@@ -432,6 +485,250 @@ abstract class BaseCalendarBloc
     } catch (error) {
       await _handleError(error, 'Failed to add quick task', emit);
     }
+  }
+
+  void _onSelectionModeEntered(
+    CalendarSelectionModeEntered event,
+    Emitter<CalendarState> emit,
+  ) {
+    final updatedSelection = <String>{...state.selectedTaskIds};
+    if (event.taskId != null) {
+      updatedSelection.add(event.taskId!);
+    }
+    _emitSelectionState(
+      emit: emit,
+      isSelectionMode: true,
+      selectedTaskIds: updatedSelection,
+    );
+  }
+
+  void _onSelectionToggled(
+    CalendarSelectionToggled event,
+    Emitter<CalendarState> emit,
+  ) {
+    final toggledId = event.taskId;
+    final currentSelection = <String>{...state.selectedTaskIds};
+    final wasSelected = currentSelection.remove(toggledId);
+
+    if (!state.isSelectionMode && !wasSelected) {
+      currentSelection
+        ..clear()
+        ..add(toggledId);
+      _emitSelectionState(
+        emit: emit,
+        isSelectionMode: true,
+        selectedTaskIds: currentSelection,
+      );
+      return;
+    }
+
+    if (!wasSelected) {
+      currentSelection.add(toggledId);
+    }
+
+    final nextMode = currentSelection.isNotEmpty;
+    _emitSelectionState(
+      emit: emit,
+      isSelectionMode: nextMode,
+      selectedTaskIds: nextMode ? currentSelection : <String>{},
+    );
+  }
+
+  void _onSelectionCleared(
+    CalendarSelectionCleared event,
+    Emitter<CalendarState> emit,
+  ) {
+    _emitSelectionState(
+      emit: emit,
+      isSelectionMode: false,
+      selectedTaskIds: const <String>{},
+    );
+  }
+
+  Future<void> _onSelectionPriorityChanged(
+    CalendarSelectionPriorityChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+
+    final updates = <String, CalendarTask>{};
+
+    for (final id in state.selectedTaskIds) {
+      final task = state.model.tasks[id];
+      if (task == null) continue;
+      updates[id] = task.copyWith(
+        priority: event.priority == TaskPriority.none ? null : event.priority,
+        modifiedAt: _now(),
+      );
+    }
+
+    if (updates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+
+    final updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      isSelectionMode: state.isSelectionMode,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
+  Future<void> _onSelectionCompletedToggled(
+    CalendarSelectionCompletedToggled event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+
+    final updates = <String, CalendarTask>{};
+
+    for (final id in state.selectedTaskIds) {
+      final task = state.model.tasks[id];
+      if (task == null) continue;
+      updates[id] = task.copyWith(
+        isCompleted: event.completed,
+        modifiedAt: _now(),
+      );
+    }
+
+    if (updates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+
+    final updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      isSelectionMode: state.isSelectionMode,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
+  Future<void> _onSelectionDeleted(
+    CalendarSelectionDeleted event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+
+    final tasksToDelete = state.selectedTaskIds
+        .map((id) => state.model.tasks[id])
+        .whereType<CalendarTask>()
+        .toList();
+
+    _recordUndoSnapshot();
+
+    final updatedModel = state.model.removeTasks(state.selectedTaskIds);
+    emitModel(
+      updatedModel,
+      emit,
+      isSelectionMode: false,
+      selectedTaskIds: const <String>{},
+    );
+
+    for (final task in tasksToDelete) {
+      await onTaskDeleted(task);
+    }
+  }
+
+  Future<void> _onSelectionRecurrenceChanged(
+    CalendarSelectionRecurrenceChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+
+    final updates = <String, CalendarTask>{};
+    final now = _now();
+
+    for (final id in state.selectedTaskIds) {
+      final task = state.model.tasks[id];
+      if (task == null) continue;
+
+      final recurrence = event.recurrence;
+      updates[id] = task.copyWith(
+        recurrence: recurrence == null || recurrence.isNone ? null : recurrence,
+        occurrenceOverrides: const {},
+        modifiedAt: now,
+      );
+    }
+
+    if (updates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+
+    final updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      isSelectionMode: state.isSelectionMode,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
+  void _onUndoRequested(
+    CalendarUndoRequested event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (_undoStack.isEmpty) {
+      return;
+    }
+
+    final previousModel = _undoStack.removeLast();
+    _redoStack.add(state.model);
+
+    emitModel(
+      previousModel,
+      emit,
+      selectedDate: state.selectedDate,
+      isSelectionMode: false,
+      selectedTaskIds: const <String>{},
+    );
+  }
+
+  void _onRedoRequested(
+    CalendarRedoRequested event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (_redoStack.isEmpty) {
+      return;
+    }
+
+    final nextModel = _redoStack.removeLast();
+    _undoStack.add(state.model);
+
+    emitModel(
+      nextModel,
+      emit,
+      selectedDate: state.selectedDate,
+      isSelectionMode: false,
+      selectedTaskIds: const <String>{},
+    );
   }
 
   void _onViewChanged(
@@ -494,6 +791,8 @@ abstract class BaseCalendarBloc
     DateTime? selectedDate,
     bool? isLoading,
     DateTime? lastSyncTime,
+    bool? isSelectionMode,
+    Set<String>? selectedTaskIds,
   }) {
     final nextState = state.copyWith(
       model: model,
@@ -502,6 +801,10 @@ abstract class BaseCalendarBloc
       selectedDate: selectedDate ?? state.selectedDate,
       isLoading: isLoading ?? state.isLoading,
       lastSyncTime: lastSyncTime ?? state.lastSyncTime,
+      isSelectionMode: isSelectionMode ?? state.isSelectionMode,
+      selectedTaskIds: selectedTaskIds ?? state.selectedTaskIds,
+      canUndo: _undoStack.isNotEmpty,
+      canRedo: _redoStack.isNotEmpty,
     );
     emit(nextState);
     _pendingReminderSync = _pendingReminderSync.then(

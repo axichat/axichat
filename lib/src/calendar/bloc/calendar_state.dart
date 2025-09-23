@@ -21,6 +21,10 @@ class CalendarState with _$CalendarState {
     int? selectedDayIndex,
     List<CalendarTask>? dueReminders,
     CalendarTask? nextTask,
+    @Default(false) bool isSelectionMode,
+    @Default(<String>{}) Set<String> selectedTaskIds,
+    @Default(false) bool canUndo,
+    @Default(false) bool canRedo,
   }) = _CalendarState;
 
   factory CalendarState.initial() => CalendarState(
