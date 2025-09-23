@@ -626,31 +626,37 @@ class _TaskSidebarState extends State<TaskSidebar>
           style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
         ),
         const SizedBox(width: 12),
-        SizedBox(
-          width: 118,
-          child: ShadSelect<int>(
-            enabled: hasTasks,
-            initialValue: _selectionRecurrenceInterval,
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() => _selectionRecurrenceInterval = value);
-              _dispatchSelectionRecurrence();
-            },
-            options: options,
-            selectedOptionBuilder: (context, value) => Text('$value'),
-            decoration: ShadDecoration(
-              color: Colors.white,
-              border: ShadBorder.all(
-                color: calendarBorderColor,
-                width: 1,
-                radius: BorderRadius.circular(10),
+        IgnorePointer(
+          ignoring: !hasTasks,
+          child: Opacity(
+            opacity: hasTasks ? 1 : 0.5,
+            child: SizedBox(
+              width: 118,
+              child: ShadSelect<int>(
+                initialValue: _selectionRecurrenceInterval,
+                onChanged: (value) {
+                  if (!hasTasks || value == null) return;
+                  setState(() => _selectionRecurrenceInterval = value);
+                  _dispatchSelectionRecurrence();
+                },
+                options: options,
+                selectedOptionBuilder: (context, value) => Text('$value'),
+                decoration: ShadDecoration(
+                  color: Colors.white,
+                  border: ShadBorder.all(
+                    color: calendarBorderColor,
+                    width: 1,
+                    radius: BorderRadius.circular(10),
+                  ),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                trailing: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: calendarSubtitleColor,
+                ),
               ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            trailing: const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: calendarSubtitleColor,
             ),
           ),
         ),
@@ -677,23 +683,30 @@ class _TaskSidebarState extends State<TaskSidebar>
           ),
         ),
         const SizedBox(height: 6),
-        DeadlinePickerField(
-          value: _selectionRecurrenceUntil,
-          placeholder: 'End',
-          showStatusColors: false,
-          showTimeSelectors: false,
-          onChanged: (value) {
-            setState(() {
-              _selectionRecurrenceUntil = value == null
-                  ? null
-                  : DateTime(value.year, value.month, value.day);
-              if (_selectionRecurrenceUntil != null) {
-                _selectionRecurrenceCount = null;
-                _selectionRecurrenceCountController.clear();
-              }
-            });
-            _dispatchSelectionRecurrence();
-          },
+        IgnorePointer(
+          ignoring: !hasTasks,
+          child: Opacity(
+            opacity: hasTasks ? 1 : 0.5,
+            child: DeadlinePickerField(
+              value: _selectionRecurrenceUntil,
+              placeholder: 'End',
+              showStatusColors: false,
+              showTimeSelectors: false,
+              onChanged: (value) {
+                if (!hasTasks) return;
+                setState(() {
+                  _selectionRecurrenceUntil = value == null
+                      ? null
+                      : DateTime(value.year, value.month, value.day);
+                  if (_selectionRecurrenceUntil != null) {
+                    _selectionRecurrenceCount = null;
+                    _selectionRecurrenceCountController.clear();
+                  }
+                });
+                _dispatchSelectionRecurrence();
+              },
+            ),
+          ),
         ),
         const SizedBox(height: 16),
         const Text(
@@ -706,50 +719,56 @@ class _TaskSidebarState extends State<TaskSidebar>
           ),
         ),
         const SizedBox(height: 6),
-        TextField(
-          controller: _selectionRecurrenceCountController,
-          enabled: hasTasks,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: 'Repeat times',
-            hintStyle: TextStyle(
-              color: calendarSubtitleColor.withValues(alpha: 0.55),
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
+        Opacity(
+          opacity: hasTasks ? 1 : 0.5,
+          child: TextField(
+            controller: _selectionRecurrenceCountController,
+            enabled: hasTasks,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: 'Repeat times',
+              hintStyle: TextStyle(
+                color: calendarSubtitleColor.withValues(alpha: 0.55),
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: calendarBorderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: calendarBorderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide:
+                    const BorderSide(color: calendarPrimaryColor, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: calendarBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: calendarBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide:
-                  const BorderSide(color: calendarPrimaryColor, width: 2),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-          ],
-          onChanged: (value) {
-            final parsed = int.tryParse(value);
-            setState(() {
-              if (parsed == null || parsed <= 0) {
-                _selectionRecurrenceCount = null;
-              } else {
-                _selectionRecurrenceCount = parsed;
-                _selectionRecurrenceUntil = null;
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+            onChanged: (value) {
+              if (!hasTasks) {
+                return;
               }
-            });
-            _dispatchSelectionRecurrence();
-          },
+              final parsed = int.tryParse(value);
+              setState(() {
+                if (parsed == null || parsed <= 0) {
+                  _selectionRecurrenceCount = null;
+                } else {
+                  _selectionRecurrenceCount = parsed;
+                  _selectionRecurrenceUntil = null;
+                }
+              });
+              _dispatchSelectionRecurrence();
+            },
+          ),
         ),
       ],
     );
@@ -932,6 +951,74 @@ class _TaskSidebarState extends State<TaskSidebar>
     return true;
   }
 
+  Widget _buildRecurrenceChip(RecurrenceRule rule) {
+    final text = _recurrenceSummary(rule);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: calendarPrimaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: calendarPrimaryColor.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.autorenew,
+            size: 14,
+            color: calendarPrimaryColor,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: calendarPrimaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _recurrenceSummary(RecurrenceRule rule) {
+    if (rule.isNone) {
+      return 'Does not repeat';
+    }
+
+    final buffer = StringBuffer(_recurrenceLabel(rule.frequency));
+
+    if (rule.interval > 1) {
+      final unit = _recurrenceIntervalUnit(rule.frequency)
+          .replaceAll('(s)', rule.interval == 1 ? '' : 's');
+      buffer.write(' · every ${rule.interval} $unit');
+    }
+
+    final weekdays = rule.byWeekdays ?? const <int>[];
+    if (weekdays.isNotEmpty) {
+      final labels = weekdays.map(_weekdayShortLabel).join(', ');
+      buffer.write(' · $labels');
+    }
+
+    return buffer.toString();
+  }
+
+  String _weekdayShortLabel(int weekday) {
+    const labels = {
+      DateTime.monday: 'Mon',
+      DateTime.tuesday: 'Tue',
+      DateTime.wednesday: 'Wed',
+      DateTime.thursday: 'Thu',
+      DateTime.friday: 'Fri',
+      DateTime.saturday: 'Sat',
+      DateTime.sunday: 'Sun',
+    };
+    return labels[weekday] ?? 'Day';
+  }
+
   Widget _buildSelectedTaskList(List<CalendarTask> tasks) {
     if (tasks.isEmpty) {
       return Container(
@@ -967,72 +1054,56 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   Widget _buildSelectedTaskTile(CalendarTask task) {
     final scheduled = task.scheduledTime;
+    final duration = task.duration ?? const Duration(hours: 1);
     final scheduleText = scheduled == null
         ? 'Unscheduled'
-        : TimeFormatter.formatFriendlyDateTime(scheduled);
-    final priority = task.priority ?? TaskPriority.none;
-    final Color indicatorColor = priority == TaskPriority.none
-        ? calendarBorderColor
-        : task.priorityColor;
+        : '${TimeFormatter.formatFriendlyDate(scheduled)} · '
+            '${TimeFormatter.formatTime(scheduled)}'
+            ' – ${TimeFormatter.formatTime(scheduled.add(duration))} · '
+            '${TimeFormatter.formatDurationShort(duration)}';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: calendarBorderColor),
-        boxShadow: calendarLightShadow,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
+    final scheduleRow = Row(
+      children: [
+        Icon(
+          Icons.access_time,
+          size: 14,
+          color: scheduled == null
+              ? calendarSubtitleColor.withValues(alpha: 0.8)
+              : calendarPrimaryColor,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            scheduleText,
+            style: TextStyle(
+              fontSize: 12,
+              color: scheduled == null
+                  ? calendarSubtitleColor
+                  : calendarTitleColor,
+              fontWeight: scheduled == null ? FontWeight.w400 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final recurrence = task.recurrence ?? RecurrenceRule.none;
+    final recurrenceChip =
+        recurrence.isNone ? null : _buildRecurrenceChip(recurrence);
+
+    final footerChildren = <Widget>[scheduleRow];
+    if (recurrenceChip != null) {
+      footerChildren
+        ..add(const SizedBox(height: 8))
+        ..add(recurrenceChip);
+    }
+
+    return _buildTaskTile(
+      task,
+      enableInteraction: false,
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 4,
-            height: 36,
-            decoration: BoxDecoration(
-              color: indicatorColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: calendarTitleColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  scheduleText,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: calendarSubtitleColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (priority != TaskPriority.none)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, top: 2),
-              child: Text(
-                _priorityLabel(priority),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: calendarSubtitleColor,
-                ),
-              ),
-            ),
-        ],
+        children: footerChildren,
       ),
     );
   }
@@ -1054,19 +1125,6 @@ class _TaskSidebarState extends State<TaskSidebar>
       return comparison != 0 ? comparison : a.title.compareTo(b.title);
     });
     return tasks;
-  }
-
-  String _priorityLabel(TaskPriority priority) {
-    switch (priority) {
-      case TaskPriority.none:
-        return 'None';
-      case TaskPriority.important:
-        return 'Important';
-      case TaskPriority.urgent:
-        return 'Urgent';
-      case TaskPriority.critical:
-        return 'Critical';
-    }
   }
 
   Widget _selectionActionButton({
@@ -1950,6 +2008,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   Widget _buildTaskTile(
     CalendarTask task, {
     bool enableInteraction = true,
+    Widget? footer,
   }) {
     final borderColor = task.priorityColor;
 
@@ -2120,19 +2179,19 @@ class _TaskSidebarState extends State<TaskSidebar>
                           hoverColor: calendarSidebarBackgroundColor.withValues(
                               alpha: 0.5),
                           onTap: () => _toggleTaskPopover(task.id),
-                          child: _buildTaskTileBody(task),
+                          child: _buildTaskTileBody(task, footer: footer),
                         ),
                       );
                     },
                   )
-                : _buildTaskTileBody(task),
+                : _buildTaskTileBody(task, footer: footer),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTaskTileBody(CalendarTask task) {
+  Widget _buildTaskTileBody(CalendarTask task, {Widget? footer}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
       child: Column(
@@ -2201,6 +2260,10 @@ class _TaskSidebarState extends State<TaskSidebar>
                 ),
               ],
             ),
+          ],
+          if (footer != null) ...[
+            const SizedBox(height: 8),
+            footer,
           ],
         ],
       ),
