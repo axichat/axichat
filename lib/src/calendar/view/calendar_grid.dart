@@ -112,6 +112,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _blocInitialized = false;
   CalendarTask? _copiedTask;
   final Map<String, CalendarTask> _resizePreviews = {};
+  String? _draggingTaskId;
+  String? _draggingTaskBaseId;
+  DateTime? _contextMenuPasteSlot;
 
   @override
   void initState() {
@@ -361,6 +364,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _copyTask(CalendarTask task) {
     setState(() {
       _copiedTask = task;
+      if (task.scheduledTime != null) {
+        _contextMenuPasteSlot = task.scheduledTime;
+      }
     });
   }
 
@@ -398,6 +404,30 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         recurrence: template.recurrence,
       ),
     );
+  }
+
+  void _handleTaskDragStarted(CalendarTask task) {
+    setState(() {
+      _draggingTaskId = task.id;
+      _draggingTaskBaseId = task.baseId;
+      _dragPreviewStart = null;
+      _dragPreviewDuration = null;
+    });
+  }
+
+  void _handleTaskDragEnded(CalendarTask task) {
+    if (_draggingTaskId == null &&
+        _draggingTaskBaseId == null &&
+        _dragPreviewStart == null &&
+        _dragPreviewDuration == null) {
+      return;
+    }
+    setState(() {
+      _draggingTaskId = null;
+      _draggingTaskBaseId = null;
+      _dragPreviewStart = null;
+      _dragPreviewDuration = null;
+    });
   }
 
   bool _isPreviewAnchor(DateTime slotStart) {
@@ -1139,7 +1169,25 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          return Stack(
+          final double hourHeight = _getHourHeight(context, compact);
+          final int subdivisions = _slotSubdivisions;
+          final double slotHeight = hourHeight / subdivisions;
+          final int minutesPerSlot = _minutesPerSlot;
+
+          DateTime effectivePasteSlot() {
+            if (_contextMenuPasteSlot != null) {
+              return _contextMenuPasteSlot!;
+            }
+            return _slotTimeFromOffset(
+              day: date,
+              dy: 0,
+              slotHeight: slotHeight,
+              minutesPerSlot: minutesPerSlot,
+              subdivisions: subdivisions,
+            );
+          }
+
+          Widget content = Stack(
             clipBehavior: Clip.none,
             children: [
               _buildTimeSlots(compact,
@@ -1154,6 +1202,42 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   isDayView,
                 ),
             ],
+          );
+
+          if (_copiedTask != null) {
+            content = ShadContextMenuRegion(
+              items: [
+                ShadContextMenuItem(
+                  leading: const Icon(LucideIcons.clipboardPaste),
+                  onPressed: () => _pasteTask(effectivePasteSlot()),
+                  child: const Text('Paste Task Here'),
+                ),
+              ],
+              child: content,
+            );
+          }
+
+          return Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) {
+              if (_copiedTask == null) {
+                return;
+              }
+              final DateTime slot = _slotTimeFromOffset(
+                day: date,
+                dy: event.localPosition.dy,
+                slotHeight: slotHeight,
+                minutesPerSlot: minutesPerSlot,
+                subdivisions: subdivisions,
+              );
+              final current = _contextMenuPasteSlot;
+              if (current == null || !current.isAtSameMomentAs(slot)) {
+                setState(() {
+                  _contextMenuPasteSlot = slot;
+                });
+              }
+            },
+            child: content,
           );
         },
       ),
@@ -1344,22 +1428,43 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           child: const SizedBox.expand(),
         );
 
-        if (_copiedTask != null) {
-          slot = ShadContextMenuRegion(
-            items: [
-              ShadContextMenuItem(
-                leading: const Icon(LucideIcons.clipboardPaste),
-                onPressed: () => _pasteTask(slotTime),
-                child: const Text('Paste Task Here'),
-              ),
-            ],
-            child: slot,
-          );
-        }
-
         return slot;
       },
     );
+  }
+
+  DateTime _slotTimeFromOffset({
+    required DateTime day,
+    required double dy,
+    required double slotHeight,
+    required int minutesPerSlot,
+    required int subdivisions,
+  }) {
+    if (minutesPerSlot <= 0) {
+      return DateTime(day.year, day.month, day.day, startHour);
+    }
+    final int totalSlotCount = math.max(
+      1,
+      (endHour - startHour + 1) * subdivisions,
+    );
+    final double safeSlotHeight = slotHeight == 0 ? 1 : slotHeight;
+    final int rawIndex = (dy / safeSlotHeight).floor();
+    final int slotIndex = math.min(
+      math.max(rawIndex, 0),
+      totalSlotCount - 1,
+    );
+    final int slotMinutes = slotIndex * minutesPerSlot;
+    final int totalMinutes = math.max(0, (endHour - startHour) * 60);
+    final int maxMinutesFromStart = math.max(0, totalMinutes - minutesPerSlot);
+    final int clampedFromStart = math.min(
+      math.max(slotMinutes, 0),
+      maxMinutesFromStart,
+    );
+    final int absoluteMinutes = (startHour * 60) + clampedFromStart;
+    final int hour = absoluteMinutes ~/ 60;
+    final int minute = absoluteMinutes % 60;
+
+    return DateTime(day.year, day.month, day.day, hour, minute);
   }
 
   bool _hasTaskInSlot(DateTime? date, int hour, int minute, int slotMinutes) {
@@ -1368,9 +1473,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final tasks = _getTasksForDay(date);
     final slotStart = DateTime(date.year, date.month, date.day, hour, minute);
     final slotEnd = slotStart.add(Duration(minutes: slotMinutes));
+    final draggingId = _draggingTaskId;
+    final draggingBaseId = _draggingTaskBaseId;
 
     return tasks.any((task) {
       if (task.scheduledTime == null) return false;
+      if (draggingId != null &&
+          (task.id == draggingId || task.baseId == draggingBaseId)) {
+        return false;
+      }
 
       final taskStart = task.scheduledTime!;
       final taskEnd = taskStart.add(task.duration ?? const Duration(hours: 1));
@@ -1459,6 +1570,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _handleTaskDrop(CalendarTask task, DateTime dropTime) {
     widget.onTaskDragEnd?.call(task, dropTime);
+    _handleTaskDragEnded(task);
   }
 
   void _maybeAutoScroll() {
@@ -1524,6 +1636,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     for (final task in tasks) {
       if (task.scheduledTime == null) continue;
+
+      if (_draggingTaskId != null && task.id == _draggingTaskId) {
+        continue;
+      }
 
       visibleTaskIds.add(task.id);
       final overlapInfo = overlapMap[task.id] ??
@@ -1663,6 +1779,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 isDayView: isDayView,
                 isPopoverOpen: isPopoverOpen,
                 enableInteractions: true,
+                onDragStarted: _handleTaskDragStarted,
+                onDragEnded: _handleTaskDragEnded,
                 onTap: (tappedTask, bounds) {
                   _onScheduledTaskTapped(tappedTask, bounds);
                 },
