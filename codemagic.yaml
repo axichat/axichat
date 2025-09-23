@@ -50,7 +50,7 @@ definitions:
         
         echo $GITHUB_TOKEN | gh auth login --with-token
         
-        sh -c "if gh release view \"$RELEASE_TAG\" &>/dev/null; then echo \"Release exists, skipping.\"; else gh release create $CM_TAG --verify-tag --notes-from-tag --title \"axichat ${CM_TAG}\"; fi"
+        sh -c "if gh release view \"${CM_TAG}\" &>/dev/null; then echo \"Release exists, skipping.\"; else gh release create $CM_TAG --verify-tag --notes-from-tag --title \"axichat ${CM_TAG}\"; fi"
     - &github_release_upload_android
       name: Upload to Android GitHub Releases
       script: |
