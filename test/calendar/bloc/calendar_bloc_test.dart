@@ -343,6 +343,11 @@ void main() {
         verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
       },
       expect: () => [
+        isA<CalendarState>()
+            .having((state) => state.canUndo, 'canUndo', true)
+            .having((state) =>
+                state.model.tasks[seededTask.id]?.occurrenceOverrides.isEmpty ??
+                    true, 'overridesEmpty', true),
         predicate<CalendarState>((state) {
           final task = state.model.tasks[seededTask.id]!;
           final occurrenceStart = DateTime(2024, 1, 2, 9);
