@@ -50,7 +50,18 @@ definitions:
         
         echo $GITHUB_TOKEN | gh auth login --with-token
         
-        sh -c "if gh release view \"${CM_TAG}\" &>/dev/null; then echo \"Release exists, skipping.\"; else gh release create $CM_TAG --verify-tag --notes-from-tag --title \"axichat ${CM_TAG}\"; fi"
+        sh -c '
+          [ -n "$CM_TAG" ] || { echo "CM_TAG is empty"; exit 1; }
+
+          # optional: set this if you want to be explicit about repo
+          # REPO="owner/name"
+
+          if gh release view "$CM_TAG" >/dev/null 2>&1; then
+            echo "Release exists, skipping."
+          else
+            gh release create "$CM_TAG" --verify-tag --notes-from-tag --title "axichat $CM_TAG"
+          fi
+        '
     - &github_release_upload_android
       name: Upload to Android GitHub Releases
       script: |
@@ -70,12 +81,16 @@ definitions:
         
         echo $env:GITHUB_TOKEN | gh auth login --with-token
         
-        $releaseInfo = gh release view $env:CM_TAG --json tagName | ConvertFrom-Json
-        
-        if ($releaseInfo.tagName -eq $env:CM_TAG) {
+        $ErrorActionPreference = 'Stop'
+        if ([string]::IsNullOrWhiteSpace($env:CM_TAG)) { throw "CM_TAG is empty (not a tag build?)" }
+  
+        $json = gh release view $env:CM_TAG --json tagName 2>$null
+        $ghOk = ($LASTEXITCODE -eq 0)
+  
+        if ($ghOk -and ($json | ConvertFrom-Json).tagName -eq $env:CM_TAG) {
           Write-Host "Release exists, skipping."
         } else {
-          gh release create $env:CM_TAG --verify-tag --notes-from-tag --title "axichat ${env:CM_TAG}"
+          gh release create $env:CM_TAG --verify-tag --notes-from-tag --title "axichat $($env:CM_TAG)"
         }
     - &github_release_upload_windows
       name: Upload to Windows GitHub Releases
