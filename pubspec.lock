@@ -969,7 +969,7 @@ packages:
     description:
       path: "packages/moxxmpp"
       ref: "v0.6.2"
-      resolved-ref: eeeeb77d57898e6242a6678e51fef4af0ae26570
+      resolved-ref: "9ed9370f8e6d66204fc40a2d5d6fb76916a3e1bf"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.6.2"
@@ -978,7 +978,7 @@ packages:
     description:
       path: "packages/moxxmpp_socket_tcp"
       ref: HEAD
-      resolved-ref: eeeeb77d57898e6242a6678e51fef4af0ae26570
+      resolved-ref: "9ed9370f8e6d66204fc40a2d5d6fb76916a3e1bf"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.4.1"

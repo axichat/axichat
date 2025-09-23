@@ -110,6 +110,17 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
       return false;
     }
 
+    // Routine encrypt/decrypt operations emit persistRatchets events without a
+    // concrete device identifier. These represent steady-state ratchet saves
+    // and should not surface user-facing progress state.
+    if (event.deviceId == null) {
+      _logger.finest(
+        'Ignoring persistRatchet with no device id for '
+        '${event.jid ?? '(self)'}',
+      );
+      return true;
+    }
+
     final key = _ratchetDeviceKey(event.jid, event.deviceId);
     final target = _formatTarget(event.jid ?? _xmppBase.myJid);
     final labels = _labelsForOperation(
