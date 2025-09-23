@@ -76,13 +76,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const int endHour = 24;
   static const int _defaultZoomIndex = 0;
   static const int _dayViewSubdivisions = 4;
+  static const int _resizeStepMinutes = 15;
   static const List<_ZoomLevel> _zoomLevels = <_ZoomLevel>[
     _ZoomLevel(hourHeight: 84, daySubdivisions: 1),
     _ZoomLevel(hourHeight: 132, daySubdivisions: 2),
     _ZoomLevel(hourHeight: 192, daySubdivisions: 4),
   ];
-  static const double _autoScrollEdgeThreshold = 80.0;
-  static const double _autoScrollStep = 56.0;
+  static const double _autoScrollEdgeThreshold = 24.0;
+  static const double _autoScrollStepMultiplier = 0.75;
 
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
@@ -137,6 +138,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   int get _slotSubdivisions => widget.state.viewMode == CalendarView.day
       ? _dayViewSubdivisions
       : _currentZoom.daySubdivisions;
+  int get _minutesPerSlot => (60 / _slotSubdivisions).round();
+  int get _minutesPerStep => _resizeStepMinutes;
   bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
   bool get _canZoomOut => _zoomIndex > 0;
   bool get _isZoomEnabled => widget.state.viewMode != CalendarView.day;
@@ -296,16 +299,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     final position = _verticalController.position;
     final double current = position.pixels;
+    final double slotHeight = _resolvedHourHeight / _slotSubdivisions;
+    final double stepHeight =
+        (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
+    final double step =
+        (stepHeight * _autoScrollStepMultiplier).clamp(stepHeight, slotHeight);
     double? target;
 
     if (globalDy < top + _autoScrollEdgeThreshold && current > 0) {
-      target = (current - _autoScrollStep).clamp(0.0, position.maxScrollExtent);
+      target = (current - step).clamp(0.0, position.maxScrollExtent);
     } else if (globalDy > bottom - _autoScrollEdgeThreshold &&
         current < position.maxScrollExtent) {
-      target = (current + _autoScrollStep).clamp(0.0, position.maxScrollExtent);
+      target = (current + step).clamp(0.0, position.maxScrollExtent);
     }
 
-    if (target != null && (target - current).abs() > 0.5) {
+    if (target != null && (target - current).abs() > 1) {
       _verticalController.jumpTo(target);
     }
   }
@@ -1032,7 +1040,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final subdivisions = _slotSubdivisions;
     final slotHeight = hourHeight / subdivisions;
     final totalSlots = (endHour - startHour + 1) * subdivisions;
-    final minutesPerSlot = 60 ~/ subdivisions;
+    final minutesPerSlot = _minutesPerSlot;
 
     return Container(
       width: timeColumnWidth,
@@ -1167,7 +1175,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final hourHeight = _getHourHeight(context, compact);
     final subdivisions = _slotSubdivisions;
     final slotHeight = hourHeight / subdivisions;
-    final double slotMinutes = 60 / subdivisions;
+    final double slotMinutes = _minutesPerSlot.toDouble();
     final double rawOffset = (minutesFromStart / slotMinutes) * slotHeight - 4;
     final double position = rawOffset < 0 ? 0 : rawOffset;
 
@@ -1209,7 +1217,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final subdivisions = _slotSubdivisions;
     final slotHeight = hourHeight / subdivisions;
     final totalSlots = (endHour - startHour + 1) * subdivisions;
-    final minutesPerSlot = 60 ~/ subdivisions;
+    final minutesPerSlot = _minutesPerSlot;
 
     return Column(
       children: List.generate(totalSlots, (index) {
@@ -1426,7 +1434,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final subdivisions = _slotSubdivisions;
-    final double slotMinutes = 60 / subdivisions;
+    final double slotMinutes = _minutesPerSlot.toDouble();
     final minutesFromStart =
         (slotTime.hour * 60 + slotTime.minute) - (startHour * 60);
     if (minutesFromStart < 0) {
@@ -1620,6 +1628,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
           final globalKey =
               _taskItemKeys.putIfAbsent(task.id, () => GlobalKey());
+          final double stepHeight =
+              (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
 
           return KeyedSubtree(
             key: globalKey,
@@ -1646,7 +1656,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     _handleAutoScroll(details.globalPosition.dy),
                 onResizeAutoScroll: _handleAutoScroll,
                 hourHeight: _resolvedHourHeight,
-                quarterHeight: _resolvedHourHeight / _slotSubdivisions,
+                stepHeight: stepHeight,
+                minutesPerStep: _minutesPerStep,
                 width: eventWidth,
                 height: clampedHeight,
                 isDayView: isDayView,
