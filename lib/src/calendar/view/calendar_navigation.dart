@@ -43,6 +43,7 @@ class CalendarNavigation extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               _navButton(
                 label: '← Previous',
@@ -71,18 +72,15 @@ class CalendarNavigation extends StatelessWidget {
             ],
           ),
           Expanded(
-            child: Align(
-              alignment: Alignment.center,
+            child: Center(
               child: _DateLabel(
                 state: state,
                 onDateSelected: onDateSelected,
               ),
             ),
           ),
-          if (onUndo != null || onRedo != null) ...[
-            const SizedBox(width: 16),
-            _buildUndoRedoGroup(),
-          ],
+          const SizedBox(width: 16),
+          _buildUndoRedoGroup(),
         ],
       ),
     );
@@ -128,72 +126,71 @@ class CalendarNavigation extends StatelessWidget {
   }
 
   Widget _buildUndoRedoGroup() {
-    final controls = <Widget>[];
-    if (onUndo != null) {
-      controls.add(
-        _iconControl(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _historyButton(
+          label: 'Undo',
           icon: Icons.undo_rounded,
-          tooltip: 'Undo',
-          onPressed: canUndo ? onUndo : null,
+          shortcut: 'Ctrl/Cmd+Z',
+          enabled: onUndo != null && canUndo,
+          onPressed: onUndo,
         ),
-      );
-    }
-    if (onRedo != null) {
-      if (controls.isNotEmpty) {
-        controls.add(const SizedBox(width: 8));
-      }
-      controls.add(
-        _iconControl(
+        const SizedBox(width: 8),
+        _historyButton(
+          label: 'Redo',
           icon: Icons.redo_rounded,
-          tooltip: 'Redo',
-          onPressed: canRedo ? onRedo : null,
+          shortcut: 'Ctrl/Cmd+Shift+Z',
+          enabled: onRedo != null && canRedo,
+          onPressed: onRedo,
         ),
-      );
-    }
-    if (controls.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Row(mainAxisSize: MainAxisSize.min, children: controls);
+      ],
+    );
   }
 
-  Widget _iconControl({
+  Widget _historyButton({
+    required String label,
     required IconData icon,
-    required String tooltip,
+    required String shortcut,
+    required bool enabled,
     required VoidCallback? onPressed,
   }) {
-    final shortcut =
-        icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
     return Tooltip(
-      message: '$tooltip ($shortcut)',
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(
-          icon,
-          size: 16,
-          color: onPressed != null ? calendarTitleColor : calendarSubtitleColor,
-        ),
-        label: Text(
-          tooltip,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color:
-                onPressed != null ? calendarTitleColor : calendarSubtitleColor,
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
+      message: '$label ($shortcut)',
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          side: BorderSide(
-            color:
-                onPressed != null ? calendarPrimaryColor : calendarBorderColor,
+          decoration: BoxDecoration(
+            color: enabled
+                ? Colors.white
+                : calendarSidebarBackgroundColor.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: enabled ? calendarPrimaryColor : calendarBorderColor,
+            ),
+            boxShadow: enabled ? calendarLightShadow : const [],
           ),
-          foregroundColor:
-              onPressed != null ? calendarTitleColor : calendarSubtitleColor,
-          backgroundColor: onPressed != null
-              ? calendarPrimaryColor.withValues(alpha: 0.08)
-              : Colors.white,
-          disabledForegroundColor: calendarSubtitleColor,
-          disabledBackgroundColor: Colors.white,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: enabled ? calendarTitleColor : calendarSubtitleColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: enabled ? calendarTitleColor : calendarSubtitleColor,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
