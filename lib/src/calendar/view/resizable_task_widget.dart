@@ -18,7 +18,8 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isDayView;
   final bool isPopoverOpen;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
-  final VoidCallback? onDragStarted;
+  final ValueChanged<CalendarTask>? onDragStarted;
+  final ValueChanged<CalendarTask>? onDragEnded;
   final bool enableInteractions;
 
   const ResizableTaskWidget({
@@ -37,6 +38,7 @@ class ResizableTaskWidget extends StatefulWidget {
     this.isPopoverOpen = false,
     this.onTap,
     this.onDragStarted,
+    this.onDragEnded,
     this.enableInteractions = true,
   });
 
@@ -52,8 +54,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   double _totalDragDeltaY = 0;
   int _lastAppliedQuarterDelta = 0;
 
-  late double _originalStartHour;
-  late double _originalDurationHours;
+  late double _currentStartHour;
+  late double _currentDurationHours;
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
 
@@ -375,7 +377,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               data: task,
               feedback: buildFeedback(),
               onDragStarted: () {
-                widget.onDragStarted?.call();
+                widget.onDragStarted?.call(task);
                 if (mounted) {
                   setState(() => isDragging = true);
                 }
@@ -388,6 +390,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                     isDragging = false;
                   });
                 }
+                widget.onDragEnded?.call(task);
               },
               childWhenDragging: const SizedBox.shrink(),
               child: buildInteractiveContent(),
@@ -476,8 +479,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
       // Store original values
       final time = widget.task.scheduledTime!;
-      _originalStartHour = time.hour + (time.minute / 60.0);
-      _originalDurationHours =
+      _currentStartHour = time.hour + (time.minute / 60.0);
+      _currentDurationHours =
           (widget.task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
       // Clear temporary values
       _tempScheduledTime = null;
@@ -497,33 +500,46 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
     if (handleType == 'top' || handleType == 'bottom') {
       final rawSteps = _totalDragDeltaY / widget.stepHeight;
-      final stepsChanged = rawSteps.round();
-      if (stepsChanged == _lastAppliedQuarterDelta) {
+      final int stepsToApply =
+          rawSteps > 0 ? rawSteps.floor() : rawSteps.ceil();
+      if (stepsToApply == _lastAppliedQuarterDelta) {
         return;
       }
-      if (stepsChanged == 0) {
-        _lastAppliedQuarterDelta = 0;
+
+      final int stepDelta = stepsToApply - _lastAppliedQuarterDelta;
+      _lastAppliedQuarterDelta = stepsToApply;
+
+      if (stepDelta == 0) {
         return;
       }
+
       final minutesPerStep = widget.minutesPerStep;
-      final double hoursChanged = (stepsChanged * minutesPerStep) / 60.0;
-      _lastAppliedQuarterDelta = stepsChanged;
+      final double hoursDelta = (stepDelta * minutesPerStep) / 60.0;
+      final double minDurationHours = minutesPerStep / 60.0;
 
       if (handleType == 'top') {
-        // Adjust start time and duration
-        final newStartHour =
-            (_originalStartHour + hoursChanged).clamp(0.0, 23.75);
-        final startDiff = _originalStartHour - newStartHour;
-        final double minDurationHours = widget.minutesPerStep / 60.0;
-        final newDurationHours = (_originalDurationHours + startDiff)
+        final scheduled = widget.task.scheduledTime!;
+        final double currentEndHour =
+            (_currentStartHour + _currentDurationHours).clamp(0.0, 24.0);
+
+        double newStartHour = (_currentStartHour + hoursDelta)
+            .clamp(0.0, currentEndHour - minDurationHours);
+        final double newDurationHours = (currentEndHour - newStartHour)
             .clamp(minDurationHours, 24.0 - newStartHour);
 
+        _currentStartHour = newStartHour;
+        _currentDurationHours = newDurationHours;
+
+        final int startMinutes = (newStartHour * 60).round();
+        final int startHour = startMinutes ~/ 60;
+        final int startMinute = startMinutes % 60;
+
         _tempScheduledTime = DateTime(
-          widget.task.scheduledTime!.year,
-          widget.task.scheduledTime!.month,
-          widget.task.scheduledTime!.day,
-          newStartHour.floor(),
-          ((newStartHour % 1) * 60).round(),
+          scheduled.year,
+          scheduled.month,
+          scheduled.day,
+          startHour,
+          startMinute,
         );
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
 
@@ -537,12 +553,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           );
         }
       } else if (handleType == 'bottom') {
-        // Adjust duration only
-        final maxDuration = 24.0 - _originalStartHour;
-        final double minDurationHours = widget.minutesPerStep / 60.0;
-        final newDurationHours = (_originalDurationHours + hoursChanged)
+        final double maxDuration = 24.0 - _currentStartHour;
+        final double newDurationHours = (_currentDurationHours + hoursDelta)
             .clamp(minDurationHours, maxDuration);
 
+        _currentDurationHours = newDurationHours;
         _tempScheduledTime = widget.task.scheduledTime;
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
 
