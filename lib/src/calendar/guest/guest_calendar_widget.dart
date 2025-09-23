@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -27,6 +28,20 @@ class GuestCalendarWidget extends StatefulWidget {
 
 class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   bool _sidebarVisible = true;
+  late final KeyEventCallback _hardwareShortcutHandler;
+
+  @override
+  void initState() {
+    super.initState();
+    _hardwareShortcutHandler = _handleHardwareShortcut;
+    HardwareKeyboard.instance.addHandler(_hardwareShortcutHandler);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_hardwareShortcutHandler);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +181,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
           onErrorCleared: () => context.read<GuestCalendarBloc>().add(
                 const CalendarEvent.errorCleared(),
               ),
+          onUndo: () => context
+              .read<GuestCalendarBloc>()
+              .add(const CalendarEvent.undoRequested()),
+          onRedo: () => context
+              .read<GuestCalendarBloc>()
+              .add(const CalendarEvent.redoRequested()),
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
         ),
 
         // Error display
@@ -229,6 +252,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
                 onErrorCleared: () => context.read<GuestCalendarBloc>().add(
                       const CalendarEvent.errorCleared(),
                     ),
+                onUndo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.undoRequested()),
+                onRedo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.redoRequested()),
+                canUndo: state.canUndo,
+                canRedo: state.canRedo,
               ),
 
               // Error display
@@ -267,6 +298,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
                 onErrorCleared: () => context.read<GuestCalendarBloc>().add(
                       const CalendarEvent.errorCleared(),
                     ),
+                onUndo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.undoRequested()),
+                onRedo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.redoRequested()),
+                canUndo: state.canUndo,
+                canRedo: state.canRedo,
               ),
 
               // Error display
@@ -379,5 +418,52 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
             ),
       ),
     );
+  }
+
+  bool _handleHardwareShortcut(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent || event is KeyRepeatEvent) {
+      return false;
+    }
+
+    final focusedWidget = FocusManager.instance.primaryFocus?.context?.widget;
+    if (focusedWidget is EditableText) {
+      return false;
+    }
+
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final bool metaPressed =
+        pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight);
+    final bool controlPressed =
+        pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight);
+    final bool shiftPressed =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+
+    final bool modifierPressed = metaPressed || controlPressed;
+    final key = event.logicalKey;
+
+    final bool isUndoCombination =
+        key == LogicalKeyboardKey.keyZ && modifierPressed && !shiftPressed;
+    final bool isRedoCombination = (key == LogicalKeyboardKey.keyZ &&
+            modifierPressed &&
+            shiftPressed) ||
+        (key == LogicalKeyboardKey.keyY && modifierPressed);
+
+    final bloc = context.read<GuestCalendarBloc>();
+    final state = bloc.state;
+
+    if (isUndoCombination && state.canUndo) {
+      bloc.add(const CalendarEvent.undoRequested());
+      return true;
+    }
+
+    if (isRedoCombination && state.canRedo) {
+      bloc.add(const CalendarEvent.redoRequested());
+      return true;
+    }
+
+    return false;
   }
 }

@@ -27,6 +27,20 @@ class CalendarWidget extends StatefulWidget {
 
 class _CalendarWidgetState extends State<CalendarWidget> {
   bool _sidebarVisible = true;
+  late final KeyEventCallback _hardwareShortcutHandler;
+
+  @override
+  void initState() {
+    super.initState();
+    _hardwareShortcutHandler = _handleHardwareShortcut;
+    HardwareKeyboard.instance.addHandler(_hardwareShortcutHandler);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_hardwareShortcutHandler);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +56,10 @@ class _CalendarWidgetState extends State<CalendarWidget> {
             SingleActivator(LogicalKeyboardKey.keyZ,
                 control: true, shift: true): _CalendarRedoIntent(),
             SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+                _CalendarRedoIntent(),
+            SingleActivator(LogicalKeyboardKey.keyY, control: true):
+                _CalendarRedoIntent(),
+            SingleActivator(LogicalKeyboardKey.keyY, meta: true):
                 _CalendarRedoIntent(),
           },
           child: Actions(
@@ -454,6 +472,53 @@ class _CalendarWidgetState extends State<CalendarWidget> {
             ),
       ),
     );
+  }
+
+  bool _handleHardwareShortcut(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent || event is KeyRepeatEvent) {
+      return false;
+    }
+
+    final focusedWidget = FocusManager.instance.primaryFocus?.context?.widget;
+    if (focusedWidget is EditableText) {
+      return false;
+    }
+
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final bool metaPressed =
+        pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight);
+    final bool controlPressed =
+        pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight);
+    final bool shiftPressed =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+
+    final bool modifierPressed = metaPressed || controlPressed;
+    final key = event.logicalKey;
+
+    final bool isUndoCombination =
+        key == LogicalKeyboardKey.keyZ && modifierPressed && !shiftPressed;
+    final bool isRedoCombination = (key == LogicalKeyboardKey.keyZ &&
+            modifierPressed &&
+            shiftPressed) ||
+        (key == LogicalKeyboardKey.keyY && modifierPressed);
+
+    final bloc = context.read<CalendarBloc>();
+    final state = bloc.state;
+
+    if (isUndoCombination && state.canUndo) {
+      bloc.add(const CalendarEvent.undoRequested());
+      return true;
+    }
+
+    if (isRedoCombination && state.canRedo) {
+      bloc.add(const CalendarEvent.redoRequested());
+      return true;
+    }
+
+    return false;
   }
 }
 
