@@ -346,11 +346,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     _showQuickAddModal(position, prefilledTime: time);
   }
 
-  void _onTaskDragEnd(
-    CalendarTask task,
-    DateTime newTime,
-    CalendarTask? collision,
-  ) {
+  void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
     final bloc = context.read<CalendarBloc>();
     final baseId = task.baseId;
     final originalTask = bloc.state.model.tasks[baseId];
@@ -362,25 +358,59 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     final duration =
         task.duration ?? originalTask?.duration ?? const Duration(hours: 1);
 
-    if (collision != null &&
-        collision.id != task.id &&
-        collision.scheduledTime != null) {
-      final collisionStart = collision.scheduledTime!;
-      final sameStart = collisionStart.isAtSameMomentAs(scheduled);
-      final sameDuration =
-          (collision.duration ?? const Duration(hours: 1)) == duration;
-      if (!sameStart || !sameDuration) {
+    CalendarTask? findCollision() {
+      final proposedStart = scheduled;
+      final proposedEnd = proposedStart.add(duration);
+      for (final candidate in bloc.state.model.tasks.values) {
+        if (candidate.id == task.id || candidate.baseId == task.baseId) {
+          continue;
+        }
+        final otherStart = candidate.scheduledTime;
+        if (otherStart == null) continue;
+        final otherEnd = candidate.effectiveEndDate ??
+            otherStart.add(candidate.duration ?? const Duration(hours: 1));
+        final overlaps =
+            proposedStart.isBefore(otherEnd) && proposedEnd.isAfter(otherStart);
+        if (overlaps) {
+          return candidate;
+        }
+      }
+      return null;
+    }
+
+    void dispatchMove(CalendarTask movingTask, DateTime targetStart) {
+      final targetDuration = movingTask.duration ?? const Duration(hours: 1);
+      final startHour = targetStart.hour + (targetStart.minute / 60.0);
+      final durationHours = targetDuration.inMinutes / 60.0;
+      final stored = bloc.state.model.tasks[movingTask.baseId];
+
+      if (stored != null &&
+          (stored.scheduledTime != targetStart ||
+              stored.duration != targetDuration)) {
         bloc.add(
           CalendarEvent.taskResized(
-            taskId: collision.baseId,
-            startHour: collisionStart.hour + (collisionStart.minute / 60.0),
-            duration:
-                (collision.duration ?? const Duration(hours: 1)).inMinutes /
-                    60.0,
-            daySpan: collision.effectiveDaySpan,
+            taskId: movingTask.baseId,
+            startHour: startHour,
+            duration: durationHours,
+            daySpan: movingTask.effectiveDaySpan,
+          ),
+        );
+      } else {
+        bloc.add(
+          CalendarEvent.taskDropped(
+            taskId: movingTask.baseId,
+            time: targetStart,
           ),
         );
       }
+    }
+
+    final collision = findCollision();
+
+    if (collision != null &&
+        originalTask?.scheduledTime != null &&
+        !collision.isOccurrence) {
+      dispatchMove(collision, originalTask!.scheduledTime!);
     }
 
     if (task.isOccurrence) {
@@ -455,12 +485,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     }
 
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final bool metaPressed = pressed.contains(LogicalKeyboardKey.metaLeft) ||
+    final bool metaPressed =
+        pressed.contains(LogicalKeyboardKey.metaLeft) ||
         pressed.contains(LogicalKeyboardKey.metaRight);
     final bool controlPressed =
         pressed.contains(LogicalKeyboardKey.controlLeft) ||
-            pressed.contains(LogicalKeyboardKey.controlRight);
-    final bool shiftPressed = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight);
+    final bool shiftPressed =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight);
 
     final bool modifierPressed = metaPressed || controlPressed;
@@ -468,9 +500,10 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
     final bool isUndoCombination =
         key == LogicalKeyboardKey.keyZ && modifierPressed && !shiftPressed;
-    final bool isRedoCombination =
-        (key == LogicalKeyboardKey.keyZ && modifierPressed && shiftPressed) ||
-            (key == LogicalKeyboardKey.keyY && modifierPressed);
+    final bool isRedoCombination = (key == LogicalKeyboardKey.keyZ &&
+            modifierPressed &&
+            shiftPressed) ||
+        (key == LogicalKeyboardKey.keyY && modifierPressed);
 
     final bloc = context.read<CalendarBloc>();
     final state = bloc.state;

@@ -329,7 +329,6 @@ abstract class BaseCalendarBloc
 
       final updatedTask = task.copyWith(
         scheduledTime: event.time,
-        startHour: event.time.hour + (event.time.minute / 60.0),
         modifiedAt: _now(),
       );
       _recordUndoSnapshot(emit);
@@ -371,7 +370,6 @@ abstract class BaseCalendarBloc
         scheduledTime: newStart,
         duration: Duration(minutes: (event.duration * 60).round()),
         daySpan: event.daySpan ?? task.daySpan,
-        startHour: event.startHour,
         modifiedAt: _now(),
       );
       _recordUndoSnapshot(emit);
