@@ -12,7 +12,6 @@ class ResizableTaskWidget extends StatefulWidget {
   final ValueChanged<CalendarTask>? onResizePreview;
   final ValueChanged<CalendarTask>? onResizeEnd;
   final ValueChanged<DragUpdateDetails>? onDragUpdate;
-  final ValueChanged<Offset>? onResizeAutoScroll;
   final double hourHeight;
   final double stepHeight;
   final int minutesPerStep;
@@ -34,7 +33,6 @@ class ResizableTaskWidget extends StatefulWidget {
     this.onResizePreview,
     this.onResizeEnd,
     this.onDragUpdate,
-    this.onResizeAutoScroll,
     required this.hourHeight,
     required this.stepHeight,
     required this.minutesPerStep,
@@ -591,8 +589,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
   void _updateResize(String handleType, DragUpdateDetails details) {
     if (!isResizing || widget.task.scheduledTime == null) return;
-
-    widget.onResizeAutoScroll?.call(details.globalPosition);
 
     // Accumulate total drag distance
     _totalDragDeltaY += details.delta.dy;

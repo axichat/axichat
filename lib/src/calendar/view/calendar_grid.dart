@@ -2077,41 +2077,73 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             );
           }
 
-          return KeyedSubtree(
+          return DragTarget<CalendarTask>(
             key: globalKey,
-            child: ShadContextMenuRegion(
-              controller: menuController,
-              groupId: _contextMenuGroupId,
-              items: menuItems,
-              child: ResizableTaskWidget(
-                key: ValueKey(task.id),
-                task: task,
-                onResizePreview: _handleResizePreview,
-                onResizeEnd: _handleResizeCommit,
-                hourHeight: _resolvedHourHeight,
-                stepHeight: stepHeight,
-                minutesPerStep: _minutesPerStep,
-                width: eventWidth,
-                height: clampedHeight,
-                isDayView: isDayView,
-                isPopoverOpen: isPopoverOpen,
-                enableInteractions: true,
-                isSelectionMode: selectionMode,
-                isSelected: isSelected,
-                onToggleSelection: () {
-                  if (selectionMode) {
-                    _toggleTaskSelection(task.baseId);
-                  } else {
-                    _enterSelectionMode(task.baseId);
-                  }
-                },
-                onDragStarted: _handleTaskDragStarted,
-                onDragEnded: _handleTaskDragEnded,
-                onTap: (tappedTask, bounds) {
-                  _onScheduledTaskTapped(tappedTask, bounds);
-                },
-              ),
-            ),
+            hitTestBehavior: HitTestBehavior.translucent,
+            onWillAcceptWithDetails: (details) {
+              final dragged = details.data;
+              if (dragged.baseId == task.baseId) {
+                return false;
+              }
+              final anchor = task.scheduledTime;
+              if (anchor != null) {
+                final Duration previewDuration =
+                    dragged.duration ?? const Duration(hours: 1);
+                _updateDragPreview(anchor, previewDuration);
+              }
+              _stopEdgeAutoScroll();
+              return true;
+            },
+            onLeave: (details) {
+              final anchor = task.scheduledTime;
+              if (anchor != null && _isPreviewAnchor(anchor)) {
+                _clearDragPreview();
+              }
+              _stopEdgeAutoScroll();
+            },
+            onAcceptWithDetails: (details) {
+              _clearDragPreview();
+              _stopEdgeAutoScroll();
+              final anchor = task.scheduledTime;
+              if (anchor != null) {
+                _handleTaskDrop(details.data, anchor);
+              }
+            },
+            builder: (context, candidateData, rejectedData) {
+              return ShadContextMenuRegion(
+                controller: menuController,
+                groupId: _contextMenuGroupId,
+                items: menuItems,
+                child: ResizableTaskWidget(
+                  key: ValueKey(task.id),
+                  task: task,
+                  onResizePreview: _handleResizePreview,
+                  onResizeEnd: _handleResizeCommit,
+                  hourHeight: _resolvedHourHeight,
+                  stepHeight: stepHeight,
+                  minutesPerStep: _minutesPerStep,
+                  width: eventWidth,
+                  height: clampedHeight,
+                  isDayView: isDayView,
+                  isPopoverOpen: isPopoverOpen,
+                  enableInteractions: true,
+                  isSelectionMode: selectionMode,
+                  isSelected: isSelected,
+                  onToggleSelection: () {
+                    if (selectionMode) {
+                      _toggleTaskSelection(task.baseId);
+                    } else {
+                      _enterSelectionMode(task.baseId);
+                    }
+                  },
+                  onDragStarted: _handleTaskDragStarted,
+                  onDragEnded: _handleTaskDragEnded,
+                  onTap: (tappedTask, bounds) {
+                    _onScheduledTaskTapped(tappedTask, bounds);
+                  },
+                ),
+              );
+            },
           );
         },
       ),
