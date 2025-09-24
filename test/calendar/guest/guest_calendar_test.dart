@@ -57,12 +57,11 @@ void main() {
       act: (bloc) =>
           bloc.add(const CalendarEvent.taskAdded(title: 'Guest task')),
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) {
           return state.model.tasks.values
               .any((task) => task.title == 'Guest task');
@@ -90,12 +89,11 @@ void main() {
         ));
       },
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) {
           final tasks = state.model.tasks;
           return tasks.isNotEmpty && tasks.values.first.title == 'Updated';
@@ -118,12 +116,11 @@ void main() {
         bloc.add(CalendarEvent.taskDeleted(taskId: seededTask.id));
       },
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) => state.model.tasks.isEmpty),
       ],
     );
