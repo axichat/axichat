@@ -200,6 +200,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double? _dragPointerOffsetFromTop;
   double? _dragStartGlobalTop;
   double? _draggingTaskHeight;
+  double? _dragStartGlobalLeft;
+  double? _draggingTaskWidth;
+  double? _dragPointerOffsetFromLeft;
+  double? _activeDragWidth;
+  late final ValueNotifier<DragFeedbackHint> _dragFeedbackHint;
 
   @override
   void initState() {
@@ -214,6 +219,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
     _viewTransitionController.value = 1.0; // Start fully visible
     _verticalController = ScrollController();
+    _dragFeedbackHint = ValueNotifier<DragFeedbackHint>(
+        const DragFeedbackHint(width: 0, pointerOffset: 0));
     _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) {
         setState(() {});
@@ -415,20 +422,69 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 
+  void _setDragFeedbackHint(DragFeedbackHint hint) {
+    if (_dragFeedbackHint.value == hint) {
+      return;
+    }
+
+    void apply() {
+      if (!mounted) return;
+      _dragFeedbackHint.value = hint;
+    }
+
+    final scheduler = SchedulerBinding.instance;
+    switch (scheduler.schedulerPhase) {
+      case SchedulerPhase.idle:
+      case SchedulerPhase.postFrameCallbacks:
+        apply();
+        break;
+      default:
+        scheduler.addPostFrameCallback((_) => apply());
+    }
+  }
+
   double _computePointerTopOffset(Offset pointerGlobal) {
     if (_dragPointerOffsetFromTop != null) {
       return _dragPointerOffsetFromTop!;
     }
 
-    double offset = pointerGlobal.dy - (_dragStartGlobalTop ?? pointerGlobal.dy);
+    double offset =
+        pointerGlobal.dy - (_dragStartGlobalTop ?? pointerGlobal.dy);
     final double height = _draggingTaskHeight ?? 0;
     if (height > 0) {
-      offset = offset.clamp(0.0, height) as double;
+      offset = math.max(0.0, math.min(offset, height));
     } else {
       offset = math.max(0.0, offset);
     }
     _dragPointerOffsetFromTop = offset;
     return offset;
+  }
+
+  DragFeedbackHint _buildDragHint({required double width}) {
+    double baseWidth = width;
+    if (!baseWidth.isFinite || baseWidth <= 0) {
+      baseWidth = _activeDragWidth ?? _draggingTaskWidth ?? 0.0;
+    }
+    if (baseWidth <= 0) {
+      return const DragFeedbackHint(width: 0.0, pointerOffset: 0.0);
+    }
+
+    final double pointerOffset =
+        (baseWidth * _dragPointerNormalized).clamp(0.0, baseWidth);
+
+    _activeDragWidth = baseWidth;
+
+    return DragFeedbackHint(width: baseWidth, pointerOffset: pointerOffset);
+  }
+
+  void _resetDragFeedbackHint() {
+    final double width = _activeDragWidth ?? _draggingTaskWidth ?? 0.0;
+    if (width <= 0) {
+      _setDragFeedbackHint(
+          const DragFeedbackHint(width: 0.0, pointerOffset: 0.0));
+      return;
+    }
+    _setDragFeedbackHint(_buildDragHint(width: width));
   }
 
   @override
@@ -450,6 +506,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _focusNode.dispose();
     _zoomControlsDismissTimer?.cancel();
     _edgeAutoScrollTicker?.dispose();
+    _dragFeedbackHint.dispose();
     super.dispose();
   }
 
@@ -570,7 +627,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
     _dragStartGlobalTop = bounds.top;
     _draggingTaskHeight = bounds.height;
+    _dragStartGlobalLeft = bounds.left;
+    _draggingTaskWidth = bounds.width;
+    _dragPointerOffsetFromLeft = bounds.width / 2;
+    _activeDragWidth = bounds.width;
     _dragPointerOffsetFromTop = null;
+    _setDragFeedbackHint(_buildDragHint(width: bounds.width));
   }
 
   void _handleTaskDragEnded(CalendarTask task) {
@@ -587,9 +649,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewDuration = null;
     });
     _stopEdgeAutoScroll();
+    _setDragFeedbackHint(
+        const DragFeedbackHint(width: 0.0, pointerOffset: 0.0));
     _dragPointerOffsetFromTop = null;
     _dragStartGlobalTop = null;
+    _dragStartGlobalLeft = null;
+    _draggingTaskWidth = null;
     _draggingTaskHeight = null;
+    _dragPointerOffsetFromLeft = null;
+    _activeDragWidth = null;
   }
 
   bool _isPreviewAnchor(DateTime slotStart) {
@@ -1594,6 +1662,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         final Duration duration = task.duration ?? const Duration(hours: 1);
         final renderBox = context.findRenderObject() as RenderBox?;
         final DateTime previewStart;
+        final double slotWidth = renderBox?.size.width ??
+            (_activeDragWidth ?? _draggingTaskWidth ?? 0.0);
+        double targetWidth = slotWidth;
         if (renderBox == null || slotHeight <= 0) {
           previewStart = slotTime;
         } else {
@@ -1603,14 +1674,29 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           final local = renderBox.globalToLocal(adjustedGlobal);
           previewStart =
               _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
+          final bool occupied = _hasTaskInSlot(
+            DateTime(previewStart.year, previewStart.month, previewStart.day),
+            previewStart.hour,
+            previewStart.minute,
+            slotMinutes,
+          );
+          if (occupied) {
+            final double fallback =
+                _activeDragWidth ?? (_draggingTaskWidth ?? slotWidth / 2);
+            targetWidth = math.min(slotWidth, fallback);
+          }
         }
         _updateDragPreview(previewStart, duration);
+        _setDragFeedbackHint(
+          _buildDragHint(width: targetWidth, pointerPosition: details.offset),
+        );
         return true;
       },
       onLeave: (details) {
         if (_isPreviewAnchor(slotTime)) {
           _clearDragPreview();
         }
+        _resetDragFeedbackHint();
       },
       onAcceptWithDetails: (details) {
         final renderBox = context.findRenderObject() as RenderBox?;
@@ -1626,6 +1712,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
         }
         _clearDragPreview();
+        _resetDragFeedbackHint();
         _handleTaskDrop(details.data, dropTime);
       },
       onMove: (details) {
@@ -1641,7 +1728,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         final DateTime previewStart =
             _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
         final Duration duration = task.duration ?? const Duration(hours: 1);
+        final bool occupied = _hasTaskInSlot(
+          DateTime(previewStart.year, previewStart.month, previewStart.day),
+          previewStart.hour,
+          previewStart.minute,
+          slotMinutes,
+        );
+        final double slotWidth = renderBox.size.width;
+        final double fallback =
+            _activeDragWidth ?? (_draggingTaskWidth ?? slotWidth / 2);
+        final double targetWidth =
+            occupied ? math.min(slotWidth, fallback) : slotWidth;
         _updateDragPreview(previewStart, duration);
+        _setDragFeedbackHint(
+          _buildDragHint(width: targetWidth, pointerPosition: details.offset),
+        );
       },
       builder: (context, candidateData, rejectedData) {
         final hasTask = _hasTaskInSlot(targetDate, hour, minute, slotMinutes);
@@ -2126,7 +2227,23 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 _updateDragPreview(anchor, previewDuration);
               }
               _stopEdgeAutoScroll();
+              final double targetWidth = eventWidth / 2;
+              _setDragFeedbackHint(
+                _buildDragHint(
+                  width: targetWidth,
+                  pointerPosition: details.offset,
+                ),
+              );
               return true;
+            },
+            onMove: (details) {
+              final double targetWidth = eventWidth / 2;
+              _setDragFeedbackHint(
+                _buildDragHint(
+                  width: targetWidth,
+                  pointerPosition: details.offset,
+                ),
+              );
             },
             onLeave: (details) {
               final anchor = task.scheduledTime;
@@ -2138,13 +2255,19 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             onAcceptWithDetails: (details) {
               _clearDragPreview();
               _stopEdgeAutoScroll();
+              _resetDragFeedbackHint();
               final anchor = task.scheduledTime;
               if (anchor != null) {
                 _handleTaskDrop(details.data, anchor);
               }
             },
             builder: (context, candidateData, rejectedData) {
+              final bool isDraggingTask =
+                  _draggingTaskId != null && task.id == _draggingTaskId;
               final bool showSplitPreview = candidateData.isNotEmpty;
+              if (isDraggingTask && !showSplitPreview) {
+                _resetDragFeedbackHint();
+              }
               final CalendarTask? previewTask =
                   showSplitPreview ? candidateData.first : null;
 
@@ -2166,6 +2289,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 enableInteractions: true,
                 isSelectionMode: selectionMode,
                 isSelected: isSelected,
+                dragFeedbackHint: _dragFeedbackHint,
                 onToggleSelection: () {
                   if (selectionMode) {
                     _toggleTaskSelection(task.baseId);

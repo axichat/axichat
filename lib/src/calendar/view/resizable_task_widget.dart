@@ -1,11 +1,30 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 
 import '../models/calendar_task.dart';
+
+class DragFeedbackHint {
+  const DragFeedbackHint({required this.width, required this.pointerOffset});
+
+  final double width;
+  final double pointerOffset;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is DragFeedbackHint &&
+        (width - other.width).abs() < 1e-6 &&
+        (pointerOffset - other.pointerOffset).abs() < 1e-3;
+  }
+
+  @override
+  int get hashCode => Object.hash(width, pointerOffset);
+}
 
 class ResizableTaskWidget extends StatefulWidget {
   final CalendarTask task;
@@ -26,6 +45,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback? onToggleSelection;
+  final ValueListenable<DragFeedbackHint>? dragFeedbackHint;
 
   const ResizableTaskWidget({
     super.key,
@@ -47,6 +67,7 @@ class ResizableTaskWidget extends StatefulWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     this.onToggleSelection,
+    this.dragFeedbackHint,
   });
 
   @override
@@ -76,7 +97,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     final task = widget.task;
     final taskColor = _taskColor;
 
-    Widget buildFeedback() {
+    Widget buildFeedbackContent(DragFeedbackHint hint) {
       final bool isCompleted = task.isCompleted;
       final Color accentColor = taskColor;
       final double blendAlpha = isCompleted ? 0.08 : 0.18;
@@ -89,43 +110,70 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final Color stripeColor =
           accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
 
-      return Material(
-        elevation: 8,
-        color: Colors.transparent,
-        child: Container(
-          width: widget.width,
-          height: widget.height,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: borderColor, width: 1.2),
-            boxShadow: calendarMediumShadow,
-          ),
-          child: Stack(
-            children: [
-              _buildAccentStripe(stripeColor),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  _accentWidth + _accentPadding,
-                  8,
-                  8,
-                  8,
-                ),
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: Text(
-                    task.title,
-                    style: taskTitleTextStyle.copyWith(
-                      color: calendarTitleColor,
+      final double fallbackWidth = widget.width;
+      final double effectiveWidth =
+          hint.width.isFinite && hint.width > 0 ? hint.width : fallbackWidth;
+      final double clampedPointer =
+          hint.pointerOffset.clamp(0.0, effectiveWidth);
+      final double translation = clampedPointer - (effectiveWidth / 2);
+
+      return Transform.translate(
+        offset: Offset(-translation, 0),
+        child: Material(
+          elevation: 8,
+          color: Colors.transparent,
+          child: Container(
+            width: effectiveWidth,
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: borderColor, width: 1.2),
+              boxShadow: calendarMediumShadow,
+            ),
+            child: Stack(
+              children: [
+                _buildAccentStripe(stripeColor),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    _accentWidth + _accentPadding,
+                    8,
+                    8,
+                    8,
+                  ),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      task.title,
+                      style: taskTitleTextStyle.copyWith(
+                        color: calendarTitleColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      );
+    }
+
+    Widget buildFeedback() {
+      final ValueListenable<DragFeedbackHint>? listenable =
+          widget.dragFeedbackHint;
+      if (listenable == null) {
+        return buildFeedbackContent(
+          DragFeedbackHint(
+              width: widget.width, pointerOffset: widget.width / 2),
+        );
+      }
+      return ValueListenableBuilder<DragFeedbackHint>(
+        valueListenable: listenable,
+        builder: (context, state, child) {
+          return buildFeedbackContent(state);
+        },
       );
     }
 
@@ -445,10 +493,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       );
     }
 
-    final content = SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: widget.enableInteractions
+    Widget buildSizedContent(DragFeedbackHint hint) {
+      Widget child = widget.enableInteractions
           ? Draggable<CalendarTask>(
               data: task,
               feedback: buildFeedback(),
@@ -475,10 +521,28 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               childWhenDragging: const SizedBox.shrink(),
               child: buildInteractiveContent(),
             )
-          : buildInteractiveContent(),
-    );
+          : buildInteractiveContent();
 
-    return content;
+      return SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: child,
+      );
+    }
+
+    if (widget.dragFeedbackHint == null) {
+      return buildSizedContent(
+        DragFeedbackHint(
+          width: widget.width,
+          pointerOffset: widget.width / 2,
+        ),
+      );
+    }
+
+    return ValueListenableBuilder<DragFeedbackHint>(
+      valueListenable: widget.dragFeedbackHint!,
+      builder: (context, hint, child) => buildSizedContent(hint),
+    );
   }
 
   List<Widget> _buildResizeHandles(Color accentColor) {
