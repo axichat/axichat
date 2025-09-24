@@ -114,10 +114,13 @@ class NotificationService {
     required String title,
     String? body,
     List<FutureOr<bool>> extraConditions = const [],
+    bool allowForeground = false,
   }) async {
     if (mute) return;
     if (!await hasAllNotificationPermissions()) return;
-    if (await FlutterForegroundTask.isAppOnForeground) return;
+    if (!allowForeground && await FlutterForegroundTask.isAppOnForeground) {
+      return;
+    }
     for (final condition in extraConditions) {
       if (!await condition) return;
     }

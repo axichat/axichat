@@ -75,6 +75,10 @@ final class XmppBlocklistException extends XmppException {}
 
 final class XmppBlockUnsupportedException extends XmppException {}
 
+final class ForegroundServiceUnavailableException extends XmppException {
+  ForegroundServiceUnavailableException([super.wrapped]);
+}
+
 final serverLookup = <String, IOEndpoint>{
   'nz.axichat.com': IOEndpoint(
     InternetAddress('167.160.14.12', type: InternetAddressType.IPv4),
@@ -358,6 +362,7 @@ class XmppService extends XmppBase
   final _connectivityStream = StreamController<ConnectionState>.broadcast();
 
   var _synchronousConnection = Completer<void>();
+  var _foregroundServiceNotificationSent = false;
 
   @override
   Future<String?> connect({
@@ -376,61 +381,122 @@ class XmppService extends XmppBase
     return await deferToError(
       defer: _reset,
       operation: () async {
-        _xmppLogger.info('Attempting login...');
-        _connection = await _buildConnection();
-        _omemoActivitySubscription?.cancel();
-        _omemoActivitySubscription = _connection.omemoActivityStream
-            .listen(_omemoActivityController.add);
+        final attemptForeground =
+            withForeground && foregroundServiceActive.value;
+        try {
+          return await _establishConnection(
+            jid: jid,
+            password: password,
+            databasePrefix: databasePrefix,
+            databasePassphrase: databasePassphrase,
+            preHashed: preHashed,
+          );
+        } on ForegroundServiceUnavailableException catch (error, stackTrace) {
+          if (!attemptForeground) {
+            rethrow;
+          }
 
-        if (!_stateStore.isCompleted) {
-          _stateStore.complete(
-              await _buildStateStore(databasePrefix, databasePassphrase));
-        }
+          _xmppLogger.warning(
+            'Foreground service unavailable, switching to direct socket.',
+            error,
+            stackTrace,
+          );
 
-        _myJid = mox.JID.fromString(jid);
+          if (foregroundServiceActive.value) {
+            foregroundServiceActive.value = false;
+          }
 
-        await _initConnection(preHashed: preHashed);
-
-        _eventSubscription = _connection
-            .asBroadcastStream()
-            .listen(_eventManager.executeHandlers);
-
-        _connection.connectionSettings = XmppConnectionSettings(
-          jid: _myJid!.toBare(),
-          password: password,
-        );
-
-        final result = await _connection.connect(
-          shouldReconnect: false,
-          waitForConnection: true,
-          waitUntilLogin: true,
-        );
-
-        if (result.isType<mox.XmppError>() || !result.get<bool>()) {
-          _xmppLogger.info('Login rejected by server.');
-          throw XmppAuthenticationException();
-        }
-
-        _messageSubscription = _messageStream.stream.listen(
-          (message) async {
-            await _notificationService.sendNotification(
-              title: message.senderJid,
-              body: message.body,
-              extraConditions: [
-                message.senderJid != myJid,
-                !await _dbOpReturning<XmppDatabase, bool>((db) async =>
-                    (await db.getChat(message.chatJid))?.muted ?? false),
-              ],
+          if (!_foregroundServiceNotificationSent) {
+            unawaited(
+              _notificationService.sendNotification(
+                title: 'Background connection disabled',
+                body:
+                    'Android blocked Axichat\'s message service. Re-enable overlay and battery optimization permissions to restore background messaging.',
+                allowForeground: true,
+              ),
             );
-          },
-        );
+            _foregroundServiceNotificationSent = true;
+          }
 
-        _xmppLogger.info('Login successful. Initializing databases...');
-        await _initDatabases(databasePrefix, databasePassphrase);
-
-        return _connection.saltedPassword;
+          return await _establishConnection(
+            jid: jid,
+            password: password,
+            databasePrefix: databasePrefix,
+            databasePassphrase: databasePassphrase,
+            preHashed: preHashed,
+          );
+        }
       },
     );
+  }
+
+  Future<String?> _establishConnection({
+    required String jid,
+    required String password,
+    required String databasePrefix,
+    required String databasePassphrase,
+    required bool preHashed,
+  }) async {
+    _xmppLogger.info(
+      foregroundServiceActive.value
+          ? 'Attempting login with foreground service socket...'
+          : 'Attempting login with direct socket...',
+    );
+
+    _connection = await _buildConnection();
+    _omemoActivitySubscription?.cancel();
+    _omemoActivitySubscription =
+        _connection.omemoActivityStream.listen(_omemoActivityController.add);
+
+    if (!_stateStore.isCompleted) {
+      _stateStore.complete(
+        await _buildStateStore(databasePrefix, databasePassphrase),
+      );
+    }
+
+    _myJid = mox.JID.fromString(jid);
+
+    await _initConnection(preHashed: preHashed);
+
+    await _eventSubscription?.cancel();
+    _eventSubscription =
+        _connection.asBroadcastStream().listen(_eventManager.executeHandlers);
+
+    _connection.connectionSettings = XmppConnectionSettings(
+      jid: _myJid!.toBare(),
+      password: password,
+    );
+
+    final result = await _connection.connect(
+      shouldReconnect: false,
+      waitForConnection: true,
+      waitUntilLogin: true,
+    );
+
+    if (result.isType<mox.XmppError>() || !result.get<bool>()) {
+      _xmppLogger.info('Login rejected by server.');
+      throw XmppAuthenticationException();
+    }
+
+    await _messageSubscription?.cancel();
+    _messageSubscription = _messageStream.stream.listen(
+      (message) async {
+        await _notificationService.sendNotification(
+          title: message.senderJid,
+          body: message.body,
+          extraConditions: [
+            message.senderJid != myJid,
+            !await _dbOpReturning<XmppDatabase, bool>((db) async =>
+                (await db.getChat(message.chatJid))?.muted ?? false),
+          ],
+        );
+      },
+    );
+
+    _xmppLogger.info('Login successful. Initializing databases...');
+    await _initDatabases(databasePrefix, databasePassphrase);
+
+    return _connection.saltedPassword;
   }
 
   Future<void> _initConnection({bool preHashed = false}) async {

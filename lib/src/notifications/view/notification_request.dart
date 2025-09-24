@@ -24,35 +24,40 @@ class _NotificationRequestState extends State<NotificationRequest> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      initialData: withForeground,
+      initialData: foregroundServiceActive.value,
       future: _future,
       builder: (context, snapshot) {
-        if (!snapshot.hasData ||
-            withForeground ||
-            !widget.capability.canForegroundService) {
-          return const SizedBox.shrink();
-        }
+        return ValueListenableBuilder<bool>(
+          valueListenable: foregroundServiceActive,
+          builder: (context, serviceActive, _) {
+            if (!snapshot.hasData ||
+                serviceActive ||
+                !widget.capability.canForegroundService) {
+              return const SizedBox.shrink();
+            }
 
-        if (snapshot.requireData) {
-          return const ShadSwitch(
-            enabled: false,
-            value: true,
-            label: Text('Restart app to enable notifications'),
-            sublabel: Text('Required permissions already granted'),
-          );
-        }
+            if (snapshot.requireData) {
+              return const ShadSwitch(
+                enabled: false,
+                value: true,
+                label: Text('Restart app to enable notifications'),
+                sublabel: Text('Required permissions already granted'),
+              );
+            }
 
-        return ShadSwitch(
-          label: const Text('Message notifications'),
-          sublabel: const Text('Requires restart'),
-          value: snapshot.requireData,
-          onChanged: (enabled) async {
-            await widget.notificationService
-                .requestAllNotificationPermissions();
-            setState(() {
-              _future =
-                  widget.notificationService.hasAllNotificationPermissions();
-            });
+            return ShadSwitch(
+              label: const Text('Message notifications'),
+              sublabel: const Text('Requires restart'),
+              value: snapshot.requireData,
+              onChanged: (enabled) async {
+                await widget.notificationService
+                    .requestAllNotificationPermissions();
+                setState(() {
+                  _future = widget.notificationService
+                      .hasAllNotificationPermissions();
+                });
+              },
+            );
           },
         );
       },
