@@ -353,10 +353,42 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     _showQuickAddModal(position, prefilledTime: time);
   }
 
-  void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
+  void _onTaskDragEnd(
+    CalendarTask task,
+    DateTime newTime,
+    CalendarTask? collision,
+  ) {
     final bloc = context.read<GuestCalendarBloc>();
     final baseId = task.baseId;
     final originalTask = bloc.state.model.tasks[baseId];
+    final plannedStart = (task.scheduledTime != null &&
+            originalTask?.scheduledTime != task.scheduledTime)
+        ? task.scheduledTime!
+        : newTime;
+    final scheduled = plannedStart;
+    final duration =
+        task.duration ?? originalTask?.duration ?? const Duration(hours: 1);
+
+    if (collision != null &&
+        collision.id != task.id &&
+        collision.scheduledTime != null) {
+      final collisionStart = collision.scheduledTime!;
+      final sameStart = collisionStart.isAtSameMomentAs(scheduled);
+      final sameDuration =
+          (collision.duration ?? const Duration(hours: 1)) == duration;
+      if (!sameStart || !sameDuration) {
+        bloc.add(
+          CalendarEvent.taskResized(
+            taskId: collision.baseId,
+            startHour: collisionStart.hour + (collisionStart.minute / 60.0),
+            duration:
+                (collision.duration ?? const Duration(hours: 1)).inMinutes /
+                    60.0,
+            daySpan: collision.effectiveDaySpan,
+          ),
+        );
+      }
+    }
 
     if (task.isOccurrence) {
       final scheduled = newTime;
@@ -377,10 +409,8 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
       // This handles both resize and time change
-      final scheduled = task.scheduledTime ?? newTime;
       final startHour = scheduled.hour + (scheduled.minute / 60.0);
-      final durationHours =
-          (task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
+      final durationHours = duration.inMinutes / 60.0;
 
       bloc.add(
         CalendarEvent.taskResized(
@@ -395,7 +425,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
       bloc.add(
         CalendarEvent.taskDropped(
           taskId: baseId,
-          time: newTime,
+          time: scheduled,
         ),
       );
     }
@@ -431,14 +461,12 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     }
 
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final bool metaPressed =
-        pressed.contains(LogicalKeyboardKey.metaLeft) ||
+    final bool metaPressed = pressed.contains(LogicalKeyboardKey.metaLeft) ||
         pressed.contains(LogicalKeyboardKey.metaRight);
     final bool controlPressed =
         pressed.contains(LogicalKeyboardKey.controlLeft) ||
-        pressed.contains(LogicalKeyboardKey.controlRight);
-    final bool shiftPressed =
-        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+            pressed.contains(LogicalKeyboardKey.controlRight);
+    final bool shiftPressed = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight);
 
     final bool modifierPressed = metaPressed || controlPressed;
@@ -446,10 +474,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
     final bool isUndoCombination =
         key == LogicalKeyboardKey.keyZ && modifierPressed && !shiftPressed;
-    final bool isRedoCombination = (key == LogicalKeyboardKey.keyZ &&
-            modifierPressed &&
-            shiftPressed) ||
-        (key == LogicalKeyboardKey.keyY && modifierPressed);
+    final bool isRedoCombination =
+        (key == LogicalKeyboardKey.keyZ && modifierPressed && shiftPressed) ||
+            (key == LogicalKeyboardKey.keyY && modifierPressed);
 
     final bloc = context.read<GuestCalendarBloc>();
     final state = bloc.state;
