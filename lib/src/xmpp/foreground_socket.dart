@@ -179,16 +179,31 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     _log.info('Starting foreground service...');
     FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
     initForegroundService();
-    await FlutterForegroundTask.startService(
-      serviceId: 256,
-      notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
-      notificationText:
-          toBeginningOfSentenceCase(ConnectionState.connecting.name),
-      notificationIcon:
-          const NotificationIcon(metaDataName: 'im.axi.axichat.APP_ICON'),
-      callback: startCallback,
-      notificationInitialRoute: '/',
-    );
+    final ServiceRequestResult startResult;
+    try {
+      startResult = await FlutterForegroundTask.startService(
+        serviceId: 256,
+        notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
+        notificationText:
+            toBeginningOfSentenceCase(ConnectionState.connecting.name),
+        notificationIcon:
+            const NotificationIcon(metaDataName: 'im.axi.axichat.APP_ICON'),
+        callback: startCallback,
+        notificationInitialRoute: '/',
+      );
+    } on Exception catch (error) {
+      FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+      throw ForegroundServiceUnavailableException(error);
+    }
+
+    if (startResult is! ServiceRequestSuccess) {
+      FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
+      final error =
+          startResult is ServiceRequestFailure ? startResult.error : null;
+      throw ForegroundServiceUnavailableException(
+        error is Exception ? error : null,
+      );
+    }
 
     _sendToTask([
       connectPrefix,
