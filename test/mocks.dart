@@ -10,7 +10,6 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
@@ -63,15 +62,8 @@ void registerOmemoFallbacks() {
   registerFallbackValue(FakeOmemoBundleCache());
 }
 
-var _foregroundInitialized = false;
-
 void resetForegroundNotifier({required bool value}) {
-  if (!_foregroundInitialized) {
-    foregroundServiceActive = ValueNotifier(value);
-    _foregroundInitialized = true;
-  } else {
-    foregroundServiceActive.value = value;
-  }
+  foregroundServiceActive.value = value;
 }
 
 extension RoundableDateTime on DateTime {
