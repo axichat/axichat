@@ -197,6 +197,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ValueKey<String>('calendar-grid-context');
   Ticker? _edgeAutoScrollTicker;
   double _edgeAutoScrollOffsetPerFrame = 0;
+  double? _dragPointerOffsetFromTop;
+  double? _dragStartGlobalTop;
+  double? _draggingTaskHeight;
 
   @override
   void initState() {
@@ -412,6 +415,22 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 
+  double _computePointerTopOffset(Offset pointerGlobal) {
+    if (_dragPointerOffsetFromTop != null) {
+      return _dragPointerOffsetFromTop!;
+    }
+
+    double offset = pointerGlobal.dy - (_dragStartGlobalTop ?? pointerGlobal.dy);
+    final double height = _draggingTaskHeight ?? 0;
+    if (height > 0) {
+      offset = offset.clamp(0.0, height) as double;
+    } else {
+      offset = math.max(0.0, offset);
+    }
+    _dragPointerOffsetFromTop = offset;
+    return offset;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -541,7 +560,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _capturedBloc.add(const CalendarEvent.selectionCleared());
   }
 
-  void _handleTaskDragStarted(CalendarTask task) {
+  void _handleTaskDragStarted(CalendarTask task, Rect bounds) {
     _stopEdgeAutoScroll();
     setState(() {
       _draggingTaskId = task.id;
@@ -549,6 +568,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewStart = null;
       _dragPreviewDuration = null;
     });
+    _dragStartGlobalTop = bounds.top;
+    _draggingTaskHeight = bounds.height;
+    _dragPointerOffsetFromTop = null;
   }
 
   void _handleTaskDragEnded(CalendarTask task) {
@@ -565,6 +587,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewDuration = null;
     });
     _stopEdgeAutoScroll();
+    _dragPointerOffsetFromTop = null;
+    _dragStartGlobalTop = null;
+    _draggingTaskHeight = null;
   }
 
   bool _isPreviewAnchor(DateTime slotStart) {
@@ -1572,7 +1597,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         if (renderBox == null || slotHeight <= 0) {
           previewStart = slotTime;
         } else {
-          final local = renderBox.globalToLocal(details.offset);
+          final double pointerOffset = _computePointerTopOffset(details.offset);
+          final Offset adjustedGlobal =
+              details.offset.translate(0, -pointerOffset);
+          final local = renderBox.globalToLocal(adjustedGlobal);
           previewStart =
               _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
         }
@@ -1590,7 +1618,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         if (renderBox == null || slotHeight <= 0) {
           dropTime = slotTime;
         } else {
-          final local = renderBox.globalToLocal(details.offset);
+          final double pointerOffset = _computePointerTopOffset(details.offset);
+          final Offset adjustedGlobal =
+              details.offset.translate(0, -pointerOffset);
+          final local = renderBox.globalToLocal(adjustedGlobal);
           dropTime =
               _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
         }
@@ -1602,7 +1633,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         if (renderBox == null || !renderBox.hasSize || slotHeight <= 0) {
           return;
         }
-        final local = renderBox.globalToLocal(details.offset);
+        final double pointerOffset = _computePointerTopOffset(details.offset);
+        final Offset adjustedGlobal =
+            details.offset.translate(0, -pointerOffset);
+        final local = renderBox.globalToLocal(adjustedGlobal);
         final task = details.data;
         final DateTime previewStart =
             _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
@@ -2110,37 +2144,102 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               }
             },
             builder: (context, candidateData, rejectedData) {
+              final bool showSplitPreview = candidateData.isNotEmpty;
+              final CalendarTask? previewTask =
+                  showSplitPreview ? candidateData.first : null;
+
+              final double primaryWidth =
+                  showSplitPreview ? eventWidth / 2 : eventWidth;
+
+              Widget baseTask = ResizableTaskWidget(
+                key: ValueKey(task.id),
+                task: task,
+                onResizePreview: _handleResizePreview,
+                onResizeEnd: _handleResizeCommit,
+                hourHeight: _resolvedHourHeight,
+                stepHeight: stepHeight,
+                minutesPerStep: _minutesPerStep,
+                width: primaryWidth,
+                height: clampedHeight,
+                isDayView: isDayView,
+                isPopoverOpen: isPopoverOpen,
+                enableInteractions: true,
+                isSelectionMode: selectionMode,
+                isSelected: isSelected,
+                onToggleSelection: () {
+                  if (selectionMode) {
+                    _toggleTaskSelection(task.baseId);
+                  } else {
+                    _enterSelectionMode(task.baseId);
+                  }
+                },
+                onDragStarted: _handleTaskDragStarted,
+                onDragEnded: _handleTaskDragEnded,
+                onTap: (tappedTask, bounds) {
+                  _onScheduledTaskTapped(tappedTask, bounds);
+                },
+              );
+
+              if (showSplitPreview && previewTask != null) {
+                baseTask = SizedBox.expand(
+                  child: Stack(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: 0.5,
+                          alignment: Alignment.centerLeft,
+                          child: baseTask,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FractionallySizedBox(
+                          widthFactor: 0.5,
+                          alignment: Alignment.centerRight,
+                          child: IgnorePointer(
+                            child: Opacity(
+                              opacity: 0.55,
+                              child: ResizableTaskWidget(
+                                key: ValueKey('${task.id}-preview'),
+                                task: previewTask,
+                                onResizePreview: null,
+                                onResizeEnd: null,
+                                hourHeight: _resolvedHourHeight,
+                                stepHeight: stepHeight,
+                                minutesPerStep: _minutesPerStep,
+                                width: eventWidth / 2,
+                                height: clampedHeight,
+                                isDayView: isDayView,
+                                enableInteractions: false,
+                                isSelectionMode: false,
+                                isSelected: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               return ShadContextMenuRegion(
                 controller: menuController,
                 groupId: _contextMenuGroupId,
                 items: menuItems,
-                child: ResizableTaskWidget(
-                  key: ValueKey(task.id),
-                  task: task,
-                  onResizePreview: _handleResizePreview,
-                  onResizeEnd: _handleResizeCommit,
-                  hourHeight: _resolvedHourHeight,
-                  stepHeight: stepHeight,
-                  minutesPerStep: _minutesPerStep,
-                  width: eventWidth,
-                  height: clampedHeight,
-                  isDayView: isDayView,
-                  isPopoverOpen: isPopoverOpen,
-                  enableInteractions: true,
-                  isSelectionMode: selectionMode,
-                  isSelected: isSelected,
-                  onToggleSelection: () {
-                    if (selectionMode) {
-                      _toggleTaskSelection(task.baseId);
-                    } else {
-                      _enterSelectionMode(task.baseId);
-                    }
-                  },
-                  onDragStarted: _handleTaskDragStarted,
-                  onDragEnded: _handleTaskDragEnded,
-                  onTap: (tappedTask, bounds) {
-                    _onScheduledTaskTapped(tappedTask, bounds);
-                  },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    border: showSplitPreview
+                        ? Border.all(
+                            color: calendarPrimaryColor.withValues(alpha: 0.6),
+                            width: 2,
+                          )
+                        : null,
+                  ),
+                  child: baseTask,
                 ),
               );
             },

@@ -20,7 +20,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isDayView;
   final bool isPopoverOpen;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
-  final ValueChanged<CalendarTask>? onDragStarted;
+  final void Function(CalendarTask task, Rect globalBounds)? onDragStarted;
   final ValueChanged<CalendarTask>? onDragEnded;
   final bool enableInteractions;
   final bool isSelectionMode;
@@ -453,7 +453,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               data: task,
               feedback: buildFeedback(),
               onDragStarted: () {
-                widget.onDragStarted?.call(task);
+                final renderBox = context.findRenderObject() as RenderBox?;
+                final Offset origin =
+                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+                final Size size = renderBox?.size ?? Size.zero;
+                widget.onDragStarted?.call(task, origin & size);
                 if (mounted) {
                   setState(() => isDragging = true);
                 }
