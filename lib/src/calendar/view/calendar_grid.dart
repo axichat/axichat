@@ -107,7 +107,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   // Track hovered cell for hover effects
   DateTime? _dragPreviewStart;
   Duration? _dragPreviewDuration;
-  Offset? _lastDragGlobalPosition;
 
   late T _capturedBloc;
   bool _blocInitialized = false;
@@ -118,9 +117,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   DateTime? _contextMenuPasteSlot;
   bool _zoomControlsVisible = false;
   Timer? _zoomControlsDismissTimer;
-  Timer? _autoScrollTimer;
-  int _autoScrollDirection = 0;
-  double _autoScrollStep = 0;
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
 
@@ -140,11 +136,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) {
         setState(() {});
-      }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focusNode.requestFocus();
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
@@ -305,101 +296,42 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _pendingAnchorMinutes = null;
   }
 
-  void _handleDragAutoScroll(Offset globalPosition) {
-    _lastDragGlobalPosition = globalPosition;
-    _evaluateAutoScroll();
-  }
-
-  void _evaluateAutoScroll() {
+  void _handleAutoScroll(double globalDy) {
     if (!_verticalController.hasClients) {
-      _stopAutoScroll();
       return;
     }
-
     final scrollContext = _scrollableKey.currentContext;
     if (scrollContext == null) {
-      _stopAutoScroll();
       return;
     }
-
     final renderBox = scrollContext.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.hasSize) {
-      _stopAutoScroll();
       return;
     }
 
-    final Offset? global = _lastDragGlobalPosition;
-    if (global == null) {
-      _stopAutoScroll();
-      return;
-    }
+    final Offset origin = renderBox.localToGlobal(Offset.zero);
+    final double top = origin.dy;
+    final double bottom = top + renderBox.size.height;
 
-    final Offset local = renderBox.globalToLocal(global);
-    final double viewportHeight = renderBox.size.height;
     final position = _verticalController.position;
-    final double baseStep =
+    final double current = position.pixels;
+    final double slotHeight = _resolvedHourHeight / _slotSubdivisions;
+    final double stepHeight =
         (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
-    final double step = (baseStep * _autoScrollStepMultiplier)
-        .clamp(8.0, math.max(16.0, viewportHeight * 0.12));
+    final double step =
+        (stepHeight * _autoScrollStepMultiplier).clamp(stepHeight, slotHeight);
+    double? target;
 
-    int direction = 0;
-    if (local.dy <= _autoScrollEdgeThreshold && position.pixels > 0) {
-      direction = -1;
-    } else if (local.dy >= viewportHeight - _autoScrollEdgeThreshold &&
-        position.pixels < position.maxScrollExtent) {
-      direction = 1;
+    if (globalDy < top + _autoScrollEdgeThreshold && current > 0) {
+      target = (current - step).clamp(0.0, position.maxScrollExtent);
+    } else if (globalDy > bottom - _autoScrollEdgeThreshold &&
+        current < position.maxScrollExtent) {
+      target = (current + step).clamp(0.0, position.maxScrollExtent);
     }
 
-    if (direction == 0) {
-      _stopAutoScroll();
-    } else {
-      _startAutoScroll(direction, step);
-    }
-  }
-
-  void _startAutoScroll(int direction, double step) {
-    if (direction == 0 || step <= 0) {
-      _stopAutoScroll();
-      return;
-    }
-
-    if (_autoScrollDirection == direction &&
-        _autoScrollTimer != null &&
-        (_autoScrollStep - step).abs() < 0.01) {
-      return;
-    }
-
-    _autoScrollTimer?.cancel();
-    _autoScrollDirection = direction;
-    _autoScrollStep = step;
-
-    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 24), (_) {
-      if (!_verticalController.hasClients) {
-        _stopAutoScroll();
-        return;
-      }
-
-      final position = _verticalController.position;
-      final double current = position.pixels;
-      final double target = (current + (_autoScrollStep * _autoScrollDirection))
-          .clamp(0.0, position.maxScrollExtent);
-
-      if ((target - current).abs() < 0.5) {
-        _stopAutoScroll();
-        return;
-      }
-
+    if (target != null && (target - current).abs() > 1) {
       _verticalController.jumpTo(target);
-      _evaluateAutoScroll();
-    });
-  }
-
-  void _stopAutoScroll() {
-    _autoScrollTimer?.cancel();
-    _autoScrollTimer = null;
-    _autoScrollDirection = 0;
-    _autoScrollStep = 0;
-    _lastDragGlobalPosition = null;
+    }
   }
 
   @override
@@ -420,7 +352,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _activePopoverEntry = null;
     _focusNode.dispose();
     _zoomControlsDismissTimer?.cancel();
-    _stopAutoScroll();
     super.dispose();
   }
 
@@ -442,7 +373,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewStart = null;
       _dragPreviewDuration = null;
     });
-    _stopAutoScroll();
   }
 
   DateTime _quantizeDropTime(
@@ -554,7 +484,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewStart = null;
       _dragPreviewDuration = null;
     });
-    _stopAutoScroll();
   }
 
   bool _isPreviewAnchor(DateTime slotStart) {
@@ -666,55 +595,41 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
     );
 
-    return Listener(
-      onPointerMove: (event) {
-        if (_draggingTaskId != null) {
-          _handleDragAutoScroll(event.position);
-        }
+    return FocusableActionDetector(
+      focusNode: _focusNode,
+      autofocus: true,
+      shortcuts: _zoomShortcuts,
+      actions: {
+        _ZoomIntent: CallbackAction<_ZoomIntent>(
+          onInvoke: (intent) {
+            switch (intent.action) {
+              case _ZoomAction.zoomIn:
+                zoomIn();
+                break;
+              case _ZoomAction.zoomOut:
+                zoomOut();
+                break;
+              case _ZoomAction.reset:
+                zoomReset();
+                break;
+            }
+            return null;
+          },
+        ),
       },
-      onPointerHover: (event) {
-        if (_draggingTaskId != null) {
-          _handleDragAutoScroll(event.position);
-        }
-      },
-      onPointerUp: (_) => _stopAutoScroll(),
-      onPointerCancel: (_) => _stopAutoScroll(),
-      child: FocusableActionDetector(
-        focusNode: _focusNode,
-        autofocus: true,
-        shortcuts: _zoomShortcuts,
-        actions: {
-          _ZoomIntent: CallbackAction<_ZoomIntent>(
-            onInvoke: (intent) {
-              switch (intent.action) {
-                case _ZoomAction.zoomIn:
-                  zoomIn();
-                  break;
-                case _ZoomAction.zoomOut:
-                  zoomOut();
-                  break;
-                case _ZoomAction.reset:
-                  zoomReset();
-                  break;
-              }
-              return null;
-            },
-          ),
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTapDown: (_) => _focusNode.requestFocus(),
-          child: Stack(
-            children: [
-              Positioned.fill(child: gridBody),
-              if (_isZoomEnabled && _zoomControlsVisible)
-                Positioned(
-                  top: 8,
-                  right: compact ? 8 : 16,
-                  child: _buildZoomControls(),
-                ),
-            ],
-          ),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTapDown: (_) => _focusNode.requestFocus(),
+        child: Stack(
+          children: [
+            Positioned.fill(child: gridBody),
+            if (_isZoomEnabled && _zoomControlsVisible)
+              Positioned(
+                top: 8,
+                right: compact ? 8 : 16,
+                child: _buildZoomControls(),
+              ),
+          ],
         ),
       ),
     );
@@ -1559,7 +1474,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         final Duration duration = task.duration ?? const Duration(hours: 1);
         _updateDragPreview(previewStart, duration);
         final global = renderBox.localToGlobal(details.offset);
-        _handleDragAutoScroll(global);
+        _handleAutoScroll(global.dy);
       },
       builder: (context, candidateData, rejectedData) {
         final hasTask = _hasTaskInSlot(targetDate, hour, minute, slotMinutes);
@@ -2035,7 +1950,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 task: task,
                 onResizePreview: _handleResizePreview,
                 onResizeEnd: _handleResizeCommit,
-                onDragAutoScroll: _handleDragAutoScroll,
+                onDragUpdate: (details) =>
+                    _handleAutoScroll(details.globalPosition.dy),
+                onResizeAutoScroll: _handleAutoScroll,
                 hourHeight: _resolvedHourHeight,
                 stepHeight: stepHeight,
                 minutesPerStep: _minutesPerStep,
