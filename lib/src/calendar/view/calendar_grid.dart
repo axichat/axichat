@@ -50,10 +50,31 @@ class OverlapInfo {
   });
 }
 
+class _ActiveEntry {
+  _ActiveEntry({
+    required this.task,
+    required this.end,
+    required this.column,
+  });
+
+  final CalendarTask task;
+  final DateTime end;
+  final int column;
+}
+
+class _OverlapState {
+  _OverlapState(this.column);
+
+  final int column;
+  int totalColumns = 1;
+}
+
 class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarState state;
   final Function(DateTime, Offset)? onEmptySlotTapped;
-  final Function(CalendarTask, DateTime)? onTaskDragEnd;
+  final void Function(
+          CalendarTask task, DateTime dropTime, CalendarTask? collision)?
+      onTaskDragEnd;
   final void Function(DateTime date) onDateSelected;
   final void Function(CalendarView view) onViewChanged;
 
@@ -336,16 +357,25 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     final Offset local = renderBox.globalToLocal(global);
     final double viewportHeight = renderBox.size.height;
+    if (local.dy < -8 || local.dy > viewportHeight + 8) {
+      _stopAutoScroll();
+      return;
+    }
     final position = _verticalController.position;
     final double baseStep =
         (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
     final double step = (baseStep * _autoScrollStepMultiplier)
         .clamp(8.0, math.max(16.0, viewportHeight * 0.12));
 
+    final double dynamicThreshold = math.min(
+      96.0,
+      math.max(_autoScrollEdgeThreshold, viewportHeight * 0.12),
+    );
+
     int direction = 0;
-    if (local.dy <= _autoScrollEdgeThreshold && position.pixels > 0) {
+    if (local.dy <= dynamicThreshold && position.pixels > 0) {
       direction = -1;
-    } else if (local.dy >= viewportHeight - _autoScrollEdgeThreshold &&
+    } else if (local.dy >= viewportHeight - dynamicThreshold &&
         position.pixels < position.maxScrollExtent) {
       direction = 1;
     }
@@ -1545,7 +1575,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
         }
         _clearDragPreview();
-        _handleTaskDrop(details.data, dropTime);
+        final collision =
+            _findCollisionTask(details.data, dropTime, columnDate: targetDate);
+        _handleTaskDrop(details.data, dropTime, collision: collision);
       },
       onMove: (details) {
         final renderBox = context.findRenderObject() as RenderBox?;
@@ -1677,6 +1709,42 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
   }
 
+  CalendarTask? _findCollisionTask(
+    CalendarTask dragging,
+    DateTime dropStart, {
+    DateTime? columnDate,
+  }) {
+    final dropDuration = dragging.duration ?? const Duration(hours: 1);
+    final DateTime dropEnd =
+        dragging.effectiveEndDate != null && dragging.scheduledTime != null
+            ? dropStart.add(
+                dragging.effectiveEndDate!.difference(dragging.scheduledTime!),
+              )
+            : dropStart.add(dropDuration);
+
+    CalendarTask? collision;
+    for (final candidate in widget.state.model.tasks.values) {
+      if (candidate.id == dragging.id || candidate.baseId == dragging.baseId) {
+        continue;
+      }
+      final candidateStart = candidate.scheduledTime;
+      if (candidateStart == null) continue;
+      if (columnDate != null &&
+          !DateUtils.isSameDay(candidateStart, columnDate)) {
+        continue;
+      }
+      final candidateEnd = candidate.effectiveEndDate ??
+          candidateStart.add(candidate.duration ?? const Duration(hours: 1));
+      final bool overlaps =
+          dropStart.isBefore(candidateEnd) && dropEnd.isAfter(candidateStart);
+      if (overlaps) {
+        collision = candidate;
+        break;
+      }
+    }
+    return collision;
+  }
+
   void _handleSlotTap(DateTime slotTime, {required bool hasTask}) {
     if (hasTask) {
       _zoomToCell(slotTime);
@@ -1709,7 +1777,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           original.duration == task.duration) {
         return;
       }
-      widget.onTaskDragEnd!(task, task.scheduledTime!);
+      widget.onTaskDragEnd!(task, task.scheduledTime!, null);
     }
   }
 
@@ -1754,9 +1822,29 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  void _handleTaskDrop(CalendarTask task, DateTime dropTime) {
-    widget.onTaskDragEnd?.call(task, dropTime);
-    _handleTaskDragEnded(task);
+  void _handleTaskDrop(
+    CalendarTask task,
+    DateTime dropTime, {
+    CalendarTask? collision,
+  }) {
+    try {
+      widget.onTaskDragEnd?.call(task, dropTime, collision);
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'calendar_grid',
+          informationCollector: () => [
+            DiagnosticsNode.message(
+              'Failed to complete task drop for ${task.id}',
+            ),
+          ],
+        ),
+      );
+    } finally {
+      _handleTaskDragEnded(task);
+    }
   }
 
   void _maybeAutoScroll() {
@@ -2026,39 +2114,91 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
           return KeyedSubtree(
             key: globalKey,
-            child: ShadContextMenuRegion(
-              controller: menuController,
-              groupId: _contextMenuGroupId,
-              items: menuItems,
-              child: ResizableTaskWidget(
-                key: ValueKey(task.id),
-                task: task,
-                onResizePreview: _handleResizePreview,
-                onResizeEnd: _handleResizeCommit,
-                onDragAutoScroll: _handleDragAutoScroll,
-                hourHeight: _resolvedHourHeight,
-                stepHeight: stepHeight,
-                minutesPerStep: _minutesPerStep,
-                width: eventWidth,
-                height: clampedHeight,
-                isDayView: isDayView,
-                isPopoverOpen: isPopoverOpen,
-                enableInteractions: true,
-                isSelectionMode: selectionMode,
-                isSelected: isSelected,
-                onToggleSelection: () {
-                  if (selectionMode) {
-                    _toggleTaskSelection(task.baseId);
-                  } else {
-                    _enterSelectionMode(task.baseId);
-                  }
-                },
-                onDragStarted: _handleTaskDragStarted,
-                onDragEnded: _handleTaskDragEnded,
-                onTap: (tappedTask, bounds) {
-                  _onScheduledTaskTapped(tappedTask, bounds);
-                },
-              ),
+            child: DragTarget<CalendarTask>(
+              onWillAcceptWithDetails: (details) {
+                final renderBox = context.findRenderObject() as RenderBox?;
+                if (renderBox == null || !renderBox.hasSize) {
+                  return true;
+                }
+                final local = renderBox.globalToLocal(details.offset);
+                final dropTime = _taskDropTimeFromOffset(
+                  target: task,
+                  local: local,
+                  taskRect: renderBox.size,
+                );
+                final dropDuration =
+                    details.data.duration ?? const Duration(hours: 1);
+                _updateDragPreview(dropTime, dropDuration);
+                return true;
+              },
+              onMove: (details) {
+                final renderBox = context.findRenderObject() as RenderBox?;
+                if (renderBox == null || !renderBox.hasSize) {
+                  return;
+                }
+                final local = renderBox.globalToLocal(details.offset);
+                final dropTime = _taskDropTimeFromOffset(
+                  target: task,
+                  local: local,
+                  taskRect: renderBox.size,
+                );
+                final dropDuration =
+                    details.data.duration ?? const Duration(hours: 1);
+                _updateDragPreview(dropTime, dropDuration);
+              },
+              onLeave: (_) => _clearDragPreview(),
+              onAcceptWithDetails: (details) {
+                final renderBox = context.findRenderObject() as RenderBox?;
+                final DateTime dropTime;
+                if (renderBox == null || !renderBox.hasSize) {
+                  dropTime = task.scheduledTime ?? currentDate;
+                } else {
+                  final local = renderBox.globalToLocal(details.offset);
+                  dropTime = _taskDropTimeFromOffset(
+                    target: task,
+                    local: local,
+                    taskRect: renderBox.size,
+                  );
+                }
+                _clearDragPreview();
+                _handleTaskDrop(details.data, dropTime, collision: task);
+              },
+              builder: (context, candidate, rejected) {
+                return ShadContextMenuRegion(
+                  controller: menuController,
+                  groupId: _contextMenuGroupId,
+                  items: menuItems,
+                  child: ResizableTaskWidget(
+                    key: ValueKey(task.id),
+                    task: task,
+                    onResizePreview: _handleResizePreview,
+                    onResizeEnd: _handleResizeCommit,
+                    onDragAutoScroll: _handleDragAutoScroll,
+                    hourHeight: _resolvedHourHeight,
+                    stepHeight: stepHeight,
+                    minutesPerStep: _minutesPerStep,
+                    width: eventWidth,
+                    height: clampedHeight,
+                    isDayView: isDayView,
+                    isPopoverOpen: isPopoverOpen,
+                    enableInteractions: true,
+                    isSelectionMode: selectionMode,
+                    isSelected: isSelected,
+                    onToggleSelection: () {
+                      if (selectionMode) {
+                        _toggleTaskSelection(task.baseId);
+                      } else {
+                        _enterSelectionMode(task.baseId);
+                      }
+                    },
+                    onDragStarted: _handleTaskDragStarted,
+                    onDragEnded: _handleTaskDragEnded,
+                    onTap: (tappedTask, bounds) {
+                      _onScheduledTaskTapped(tappedTask, bounds);
+                    },
+                  ),
+                );
+              },
             ),
           );
         },
@@ -2066,79 +2206,112 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
+  DateTime _taskDropTimeFromOffset({
+    required CalendarTask target,
+    required Offset local,
+    required Size taskRect,
+  }) {
+    final start = target.scheduledTime ?? widget.state.selectedDate;
+    final relative = local.dy.clamp(0, taskRect.height);
+    final candidate =
+        start.add(Duration(milliseconds: (relative * 60).round()));
+    final quantized = _quantizeToStep(candidate);
+    final collisionEnd = target.effectiveEndDate ??
+        start.add(target.duration ?? const Duration(hours: 1));
+    if (!quantized.isBefore(collisionEnd)) {
+      return collisionEnd.subtract(const Duration(minutes: 15));
+    }
+    return quantized;
+  }
+
+  DateTime _quantizeToStep(DateTime candidate) {
+    final minutesFromMidnight =
+        candidate.hour * 60 + candidate.minute - (startHour * 60);
+    final step = _minutesPerStep;
+    final clampedMinutes = math.max(0, minutesFromMidnight);
+    final quantized = (clampedMinutes / step).round() * step;
+    final absoluteMinutes =
+        (startHour * 60) + quantized.clamp(0, (endHour - startHour) * 60);
+    final hour = absoluteMinutes ~/ 60;
+    final minute = absoluteMinutes % 60;
+    return DateTime(
+      candidate.year,
+      candidate.month,
+      candidate.day,
+      hour,
+      minute,
+    );
+  }
+
   Map<String, OverlapInfo> _calculateEventOverlaps(List<CalendarTask> tasks) {
-    // Sort tasks by start time
-    final sortedTasks = List<CalendarTask>.from(tasks);
-    sortedTasks.sort((a, b) {
-      if (a.scheduledTime == null && b.scheduledTime == null) return 0;
-      if (a.scheduledTime == null) return 1;
-      if (b.scheduledTime == null) return -1;
-      return a.scheduledTime!.compareTo(b.scheduledTime!);
-    });
+    final scheduled = tasks.where((task) => task.scheduledTime != null).toList()
+      ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
 
-    final Map<String, OverlapInfo> overlapMap = {};
-    final List<List<CalendarTask>> overlapGroups = [];
+    final states = <String, _OverlapState>{};
+    final active = <_ActiveEntry>[];
+    final freeColumns = <int>[];
 
-    // Group overlapping tasks
-    for (final task in sortedTasks) {
-      if (task.scheduledTime == null) continue;
-
-      final taskStart = task.scheduledTime!;
-      final taskEnd = taskStart.add(task.duration ?? const Duration(hours: 1));
-
-      bool addedToGroup = false;
-
-      // Try to add to existing group
-      for (final group in overlapGroups) {
-        bool overlapsWithGroup = false;
-
-        for (final groupTask in group) {
-          if (groupTask.scheduledTime == null) continue;
-
-          final groupStart = groupTask.scheduledTime!;
-          final groupEnd =
-              groupStart.add(groupTask.duration ?? const Duration(hours: 1));
-
-          // Check if tasks overlap
-          if (taskStart.isBefore(groupEnd) && groupStart.isBefore(taskEnd)) {
-            overlapsWithGroup = true;
-            break;
-          }
-        }
-
-        if (overlapsWithGroup) {
-          group.add(task);
-          addedToGroup = true;
-          break;
-        }
+    DateTime taskEnd(CalendarTask task) {
+      final start = task.scheduledTime!;
+      final endDate = task.effectiveEndDate;
+      if (endDate != null && endDate.isAfter(start)) {
+        return endDate;
       }
+      final duration = task.duration ?? const Duration(hours: 1);
+      return start.add(duration);
+    }
 
-      // Create new group if not added to existing one
-      if (!addedToGroup) {
-        overlapGroups.add([task]);
+    int claimColumn() {
+      if (freeColumns.isEmpty) {
+        return active.length;
+      }
+      freeColumns.sort();
+      return freeColumns.removeAt(0);
+    }
+
+    void releaseFinished(DateTime start) {
+      for (var i = active.length - 1; i >= 0; i--) {
+        final entry = active[i];
+        if (!entry.end.isAfter(start)) {
+          active.removeAt(i);
+          freeColumns.add(entry.column);
+        }
       }
     }
 
-    // Calculate column positions for each group
-    for (final group in overlapGroups) {
-      if (group.length == 1) {
-        // No overlap - single column
-        overlapMap[group.first.id] = const OverlapInfo(
-          columnIndex: 0,
-          totalColumns: 1,
+    for (final task in scheduled) {
+      final start = task.scheduledTime!;
+      final end = taskEnd(task);
+
+      releaseFinished(start);
+
+      final column = claimColumn();
+      final state = states.putIfAbsent(task.id, () => _OverlapState(column));
+      state.totalColumns = math.max(state.totalColumns, active.length + 1);
+
+      active.add(_ActiveEntry(task: task, end: end, column: column));
+
+      final concurrency = active.length;
+      for (final entry in active) {
+        final entryState = states.putIfAbsent(
+          entry.task.id,
+          () => _OverlapState(entry.column),
         );
-      } else {
-        // Multiple overlapping tasks - assign columns
-        for (int i = 0; i < group.length; i++) {
-          overlapMap[group[i].id] = OverlapInfo(
-            columnIndex: i,
-            totalColumns: group.length,
-          );
+        if (entryState.totalColumns < concurrency) {
+          entryState.totalColumns = concurrency;
         }
       }
     }
 
-    return overlapMap;
+    return states.map(
+      (id, state) => MapEntry(
+        id,
+        OverlapInfo(
+          columnIndex: state.column,
+          totalColumns: state.totalColumns,
+        ),
+      ),
+    );
   }
 
   List<DateTime> _getWeekDates(DateTime date) {

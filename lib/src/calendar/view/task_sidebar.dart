@@ -15,7 +15,6 @@ import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'priority_checkbox_tile.dart';
-import 'widgets/calendar_completion_checkbox.dart';
 import 'widgets/schedule_range_fields.dart';
 
 enum _SidebarSection { unscheduled, reminders }
@@ -329,87 +328,31 @@ class _TaskSidebarState extends State<TaskSidebar>
     final bool anyCompleted = tasks.any((task) => task.isCompleted);
     final bool isIndeterminate = hasTasks && anyCompleted && !allCompleted;
 
-    Widget buildCompletionToggle() {
-      final bool isActive = allCompleted || isIndeterminate;
-      final Color activeColor = calendarPrimaryColor;
-      final Color borderColor = hasTasks
-          ? (isActive ? activeColor : calendarBorderColor)
-          : calendarBorderColor.withValues(alpha: 0.6);
-      final Color textColor =
-          hasTasks ? (isActive ? activeColor : calendarTitleColor) : calendarSubtitleColor;
-
-      return InkWell(
-        onTap: hasTasks
-            ? () => bloc.add(
-                  CalendarEvent.selectionCompletedToggled(
-                    completed: !allCompleted,
-                  ),
-                )
-            : null,
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isActive ? activeColor.withValues(alpha: 0.08) : Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: borderColor,
-              width: isIndeterminate ? 2 : (isActive ? 2 : 1.5),
-            ),
-            boxShadow: isActive && hasTasks
-                ? [
-                    BoxShadow(
-                      color: activeColor.withValues(alpha: 0.16),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Row(
-            children: [
-              CalendarCompletionCheckbox(
-                value: allCompleted,
-                isIndeterminate: isIndeterminate,
-                onChanged: hasTasks
-                    ? (completed) => bloc.add(
-                          CalendarEvent.selectionCompletedToggled(
-                            completed: completed,
-                          ),
-                        )
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Mark as completed',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                    color: textColor,
-                  ),
+    final completionToggle = PriorityCheckboxTile(
+      label: 'Mark as completed',
+      value: allCompleted,
+      isIndeterminate: isIndeterminate,
+      color: calendarPrimaryColor,
+      onChanged: hasTasks
+          ? (completed) => bloc.add(
+                CalendarEvent.selectionCompletedToggled(
+                  completed: completed,
                 ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+              )
+          : null,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        buildCompletionToggle(),
+        completionToggle,
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: _selectionActionButton(
             icon: Icons.clear_all,
             label: 'Clear Selection',
-            onPressed: () =>
-                bloc.add(const CalendarEvent.selectionCleared()),
+            onPressed: () => bloc.add(const CalendarEvent.selectionCleared()),
           ),
         ),
         const SizedBox(height: 8),
@@ -422,8 +365,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                 ? () => bloc.add(const CalendarEvent.selectionDeleted())
                 : null,
             backgroundColor: calendarDangerColor,
-            hoverBackgroundColor:
-                calendarDangerColor.withValues(alpha: 0.85),
+            hoverBackgroundColor: calendarDangerColor.withValues(alpha: 0.85),
             foregroundColor: Colors.white,
           ),
         ),
