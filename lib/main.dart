@@ -13,8 +13,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'src/app.dart';
 
-late final bool withForeground;
-late final ValueNotifier<bool> foregroundServiceActive;
+bool withForeground = false;
+final ValueNotifier<bool> foregroundServiceActive = ValueNotifier(false);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +30,7 @@ Future<void> main() async {
 
   withForeground = capability.canForegroundService &&
       await notificationService.hasAllNotificationPermissions();
-  foregroundServiceActive = ValueNotifier<bool>(withForeground);
+  foregroundServiceActive.value = withForeground;
   if (withForeground) {
     initForegroundService();
     await notificationService.init();

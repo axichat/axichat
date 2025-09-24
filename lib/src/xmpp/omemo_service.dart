@@ -288,6 +288,11 @@ mixin OmemoService on XmppBase {
       return null;
     }
 
+    if (!manager.initialized) {
+      _omemoLogger.fine('Skipping OMEMO publish; manager not registered yet.');
+      return null;
+    }
+
     // One-time reset of the bundles node to ensure maxItems='max'
     // if (!_bundlesNodeReset) {
     //   _bundlesNodeReset = true;
@@ -299,19 +304,32 @@ mixin OmemoService on XmppBase {
     //   }
     // }
 
-    final device = await _getOrCreateDevice();
-    final deviceListResult =
-        await manager.getDeviceList(mox.JID.fromString(jid));
+    try {
+      final device = await _getOrCreateDevice();
+      final deviceListResult =
+          await manager.getDeviceList(mox.JID.fromString(jid));
 
-    if (deviceListResult.isType<List<int>>()) {
-      final devices = deviceListResult.get<List<int>>();
-      if (devices.contains(device.id)) {
-        _omemoLogger.fine('Device already published');
+      if (deviceListResult.isType<List<int>>()) {
+        final devices = deviceListResult.get<List<int>>();
+        if (devices.contains(device.id)) {
+          _omemoLogger.fine('Device already published');
+          return null;
+        }
+      }
+
+      return await _publishOwnDeviceBundle(manager, device);
+    } on Error catch (error, stackTrace) {
+      final errorType = error.runtimeType.toString();
+      if (errorType.contains('LateInitializationError')) {
+        _omemoLogger.fine(
+          'Skipping OMEMO publish; manager attributes unavailable yet.',
+          error,
+          stackTrace,
+        );
         return null;
       }
+      rethrow;
     }
-
-    return await _publishOwnDeviceBundle(manager, device);
   }
 
   Future<mox.OmemoError?> _publishOwnDeviceBundle(
