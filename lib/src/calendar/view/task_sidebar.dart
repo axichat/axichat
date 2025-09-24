@@ -14,6 +14,7 @@ import '../utils/recurrence_utils.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'widgets/calendar_completion_checkbox.dart';
 import 'priority_checkbox_tile.dart';
 import 'widgets/schedule_range_fields.dart';
 
@@ -24,6 +25,82 @@ class TaskSidebar extends StatefulWidget {
 
   @override
   State<TaskSidebar> createState() => _TaskSidebarState();
+}
+
+class _SelectionCompletionTile extends StatelessWidget {
+  const _SelectionCompletionTile({
+    required this.enabled,
+    required this.value,
+    required this.isIndeterminate,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final bool value;
+  final bool isIndeterminate;
+  final ValueChanged<bool> onChanged;
+
+  bool get _isActive => value || isIndeterminate;
+
+  void _handleTap() {
+    if (!enabled) {
+      return;
+    }
+    onChanged(!value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color borderColor =
+        _isActive ? calendarPrimaryColor : calendarBorderColor;
+    final Color backgroundColor =
+        _isActive ? calendarPrimaryColor.withValues(alpha: 0.08) : Colors.white;
+    final double borderWidth = isIndeterminate || value ? 2.0 : 1.0;
+    final Color textColor = !enabled
+        ? calendarSubtitleColor
+        : _isActive
+            ? calendarPrimaryColor
+            : calendarTitleColor;
+
+    return InkWell(
+      onTap: enabled ? _handleTap : null,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled ? borderColor : calendarBorderColor,
+            width: borderWidth,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CalendarCompletionCheckbox(
+              value: value,
+              isIndeterminate: isIndeterminate,
+              onChanged: enabled ? onChanged : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Mark as completed',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: _isActive ? FontWeight.w600 : FontWeight.w500,
+                  color: textColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TaskSidebarState extends State<TaskSidebar>
@@ -334,18 +411,13 @@ class _TaskSidebarState extends State<TaskSidebar>
       children: [
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 240),
-          child: PriorityCheckboxTile(
-            label: 'Mark as completed',
+          child: _SelectionCompletionTile(
+            enabled: hasTasks,
             value: allCompleted,
             isIndeterminate: isIndeterminate,
-            color: calendarPrimaryColor,
-            onChanged: hasTasks
-                ? (completed) => bloc.add(
-                      CalendarEvent.selectionCompletedToggled(
-                        completed: completed,
-                      ),
-                    )
-                : null,
+            onChanged: (completed) => bloc.add(
+              CalendarEvent.selectionCompletedToggled(completed: completed),
+            ),
           ),
         ),
         _selectionActionButton(

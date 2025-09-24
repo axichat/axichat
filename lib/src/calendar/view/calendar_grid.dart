@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -50,6 +51,79 @@ class OverlapInfo {
   });
 }
 
+class _MutableOverlapInfo {
+  _MutableOverlapInfo({required this.columnIndex, required this.totalColumns});
+
+  final int columnIndex;
+  int totalColumns;
+}
+
+class _ActiveTask {
+  _ActiveTask({
+    required this.taskId,
+    required this.end,
+    required this.columnIndex,
+  });
+
+  final String taskId;
+  final DateTime end;
+  final int columnIndex;
+}
+
+@visibleForTesting
+Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
+  final sortedTasks = tasks.where((task) => task.scheduledTime != null).toList()
+    ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
+
+  final List<_ActiveTask> active = [];
+  final Map<String, _MutableOverlapInfo> overlapMap = {};
+
+  for (final task in sortedTasks) {
+    final start = task.scheduledTime!;
+    final end = start.add(task.duration ?? const Duration(hours: 1));
+
+    active.removeWhere((entry) => !entry.end.isAfter(start));
+
+    final usedColumns = active.map((entry) => entry.columnIndex).toSet();
+    var columnIndex = 0;
+    while (usedColumns.contains(columnIndex)) {
+      columnIndex++;
+    }
+
+    final newEntry = _ActiveTask(
+      taskId: task.id,
+      end: end,
+      columnIndex: columnIndex,
+    );
+    active.add(newEntry);
+    active.sort((a, b) => a.columnIndex.compareTo(b.columnIndex));
+
+    final totalColumns = active.length;
+    final mutableInfo = _MutableOverlapInfo(
+      columnIndex: columnIndex,
+      totalColumns: totalColumns,
+    );
+    overlapMap[task.id] = mutableInfo;
+
+    for (final entry in active) {
+      final info = overlapMap[entry.taskId];
+      if (info != null && info.totalColumns < totalColumns) {
+        info.totalColumns = totalColumns;
+      }
+    }
+  }
+
+  return overlapMap.map(
+    (key, value) => MapEntry(
+      key,
+      OverlapInfo(
+        columnIndex: value.columnIndex,
+        totalColumns: value.totalColumns,
+      ),
+    ),
+  );
+}
+
 class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarState state;
   final Function(DateTime, Offset)? onEmptySlotTapped;
@@ -82,8 +156,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _ZoomLevel(hourHeight: 132, daySubdivisions: 2),
     _ZoomLevel(hourHeight: 192, daySubdivisions: 4),
   ];
-  static const double _autoScrollEdgeThreshold = 24.0;
-  static const double _autoScrollStepMultiplier = 0.75;
+  static const double _edgeScrollFastBandHeight = 60.0;
+  static const double _edgeScrollSlowBandHeight = 44.0;
+  static const double _edgeScrollFastOffsetPerFrame = 9.0;
+  static const double _edgeScrollSlowOffsetPerFrame = 4.5;
 
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
@@ -119,6 +195,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Timer? _zoomControlsDismissTimer;
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
+  Ticker? _edgeAutoScrollTicker;
+  double _edgeAutoScrollOffsetPerFrame = 0;
 
   @override
   void initState() {
@@ -296,41 +374,41 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _pendingAnchorMinutes = null;
   }
 
-  void _handleAutoScroll(double globalDy) {
+  void _handleEdgeAutoScrollMove(double offsetPerFrame, Offset globalPosition) {
     if (!_verticalController.hasClients) {
       return;
     }
-    final scrollContext = _scrollableKey.currentContext;
-    if (scrollContext == null) {
-      return;
+    _edgeAutoScrollOffsetPerFrame = offsetPerFrame;
+    _edgeAutoScrollTicker ??= createTicker(_onEdgeAutoScrollTick);
+    if (!(_edgeAutoScrollTicker!.isActive)) {
+      _edgeAutoScrollTicker!.start();
     }
-    final renderBox = scrollContext.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.hasSize) {
-      return;
-    }
+  }
 
-    final Offset origin = renderBox.localToGlobal(Offset.zero);
-    final double top = origin.dy;
-    final double bottom = top + renderBox.size.height;
+  void _onEdgeAutoScrollTick(Duration elapsed) {
+    if (_edgeAutoScrollOffsetPerFrame.abs() < 0.01 ||
+        !_verticalController.hasClients) {
+      _stopEdgeAutoScroll();
+      return;
+    }
 
     final position = _verticalController.position;
-    final double current = position.pixels;
-    final double slotHeight = _resolvedHourHeight / _slotSubdivisions;
-    final double stepHeight =
-        (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
-    final double step =
-        (stepHeight * _autoScrollStepMultiplier).clamp(stepHeight, slotHeight);
-    double? target;
+    final double nextOffset =
+        (_verticalController.offset + _edgeAutoScrollOffsetPerFrame)
+            .clamp(position.minScrollExtent, position.maxScrollExtent);
 
-    if (globalDy < top + _autoScrollEdgeThreshold && current > 0) {
-      target = (current - step).clamp(0.0, position.maxScrollExtent);
-    } else if (globalDy > bottom - _autoScrollEdgeThreshold &&
-        current < position.maxScrollExtent) {
-      target = (current + step).clamp(0.0, position.maxScrollExtent);
+    if ((nextOffset - _verticalController.offset).abs() <= 0.1) {
+      _stopEdgeAutoScroll();
+      return;
     }
 
-    if (target != null && (target - current).abs() > 1) {
-      _verticalController.jumpTo(target);
+    _verticalController.jumpTo(nextOffset);
+  }
+
+  void _stopEdgeAutoScroll() {
+    _edgeAutoScrollOffsetPerFrame = 0;
+    if (_edgeAutoScrollTicker?.isActive ?? false) {
+      _edgeAutoScrollTicker!.stop();
     }
   }
 
@@ -352,6 +430,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _activePopoverEntry = null;
     _focusNode.dispose();
     _zoomControlsDismissTimer?.cancel();
+    _edgeAutoScrollTicker?.dispose();
     super.dispose();
   }
 
@@ -463,6 +542,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleTaskDragStarted(CalendarTask task) {
+    _stopEdgeAutoScroll();
     setState(() {
       _draggingTaskId = task.id;
       _draggingTaskBaseId = task.baseId;
@@ -484,6 +564,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _dragPreviewStart = null;
       _dragPreviewDuration = null;
     });
+    _stopEdgeAutoScroll();
   }
 
   bool _isPreviewAnchor(DateTime slotStart) {
@@ -623,6 +704,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         child: Stack(
           children: [
             Positioned.fill(child: gridBody),
+            ..._buildEdgeScrollTargets(),
             if (_isZoomEnabled && _zoomControlsVisible)
               Positioned(
                 top: 8,
@@ -631,6 +713,59 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  List<Widget> _buildEdgeScrollTargets() {
+    return [
+      _buildEdgeScroller(
+        top: 0,
+        height: _edgeScrollFastBandHeight,
+        offsetPerFrame: -_edgeScrollFastOffsetPerFrame,
+      ),
+      _buildEdgeScroller(
+        top: _edgeScrollFastBandHeight,
+        height: _edgeScrollSlowBandHeight,
+        offsetPerFrame: -_edgeScrollSlowOffsetPerFrame,
+      ),
+      _buildEdgeScroller(
+        bottom: _edgeScrollFastBandHeight,
+        height: _edgeScrollSlowBandHeight,
+        offsetPerFrame: _edgeScrollSlowOffsetPerFrame,
+      ),
+      _buildEdgeScroller(
+        bottom: 0,
+        height: _edgeScrollFastBandHeight,
+        offsetPerFrame: _edgeScrollFastOffsetPerFrame,
+      ),
+    ];
+  }
+
+  Widget _buildEdgeScroller({
+    double? top,
+    double? bottom,
+    required double height,
+    required double offsetPerFrame,
+  }) {
+    assert(top != null || bottom != null,
+        'Either top or bottom must be provided for edge scroller positioning');
+
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: 0,
+      right: 0,
+      height: height,
+      child: DragTarget<CalendarTask>(
+        hitTestBehavior: HitTestBehavior.translucent,
+        builder: (context, candidateData, rejectedData) =>
+            const SizedBox.expand(),
+        onWillAcceptWithDetails: (_) => false,
+        onAcceptWithDetails: (_) => _stopEdgeAutoScroll(),
+        onMove: (details) =>
+            _handleEdgeAutoScrollMove(offsetPerFrame, details.offset),
+        onLeave: (_) => _stopEdgeAutoScroll(),
       ),
     );
   }
@@ -1473,8 +1608,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             _quantizeDropTime(slotTime, local.dy, slotHeight, slotMinutes);
         final Duration duration = task.duration ?? const Duration(hours: 1);
         _updateDragPreview(previewStart, duration);
-        final global = renderBox.localToGlobal(details.offset);
-        _handleAutoScroll(global.dy);
       },
       builder: (context, candidateData, rejectedData) {
         final hasTask = _hasTaskInSlot(targetDate, hour, minute, slotMinutes);
@@ -1617,6 +1750,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     setState(() {
       _resizePreviews.remove(task.id);
     });
+    _stopEdgeAutoScroll();
     if (widget.onTaskDragEnd != null && task.scheduledTime != null) {
       final original = widget.state.model.tasks[task.baseId];
       if (original != null &&
@@ -1773,6 +1907,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       DateTime? weekEndDate,
       bool isPlaceholder = false}) {
     if (task.scheduledTime == null || currentDate == null) return null;
+
+    if (isPlaceholder) {
+      return null;
+    }
 
     final taskTime = task.scheduledTime!;
     final dayDate =
@@ -1950,9 +2088,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 task: task,
                 onResizePreview: _handleResizePreview,
                 onResizeEnd: _handleResizeCommit,
-                onDragUpdate: (details) =>
-                    _handleAutoScroll(details.globalPosition.dy),
-                onResizeAutoScroll: _handleAutoScroll,
                 hourHeight: _resolvedHourHeight,
                 stepHeight: stepHeight,
                 minutesPerStep: _minutesPerStep,
@@ -1984,78 +2119,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Map<String, OverlapInfo> _calculateEventOverlaps(List<CalendarTask> tasks) {
-    // Sort tasks by start time
-    final sortedTasks = List<CalendarTask>.from(tasks);
-    sortedTasks.sort((a, b) {
-      if (a.scheduledTime == null && b.scheduledTime == null) return 0;
-      if (a.scheduledTime == null) return 1;
-      if (b.scheduledTime == null) return -1;
-      return a.scheduledTime!.compareTo(b.scheduledTime!);
-    });
-
-    final Map<String, OverlapInfo> overlapMap = {};
-    final List<List<CalendarTask>> overlapGroups = [];
-
-    // Group overlapping tasks
-    for (final task in sortedTasks) {
-      if (task.scheduledTime == null) continue;
-
-      final taskStart = task.scheduledTime!;
-      final taskEnd = taskStart.add(task.duration ?? const Duration(hours: 1));
-
-      bool addedToGroup = false;
-
-      // Try to add to existing group
-      for (final group in overlapGroups) {
-        bool overlapsWithGroup = false;
-
-        for (final groupTask in group) {
-          if (groupTask.scheduledTime == null) continue;
-
-          final groupStart = groupTask.scheduledTime!;
-          final groupEnd =
-              groupStart.add(groupTask.duration ?? const Duration(hours: 1));
-
-          // Check if tasks overlap
-          if (taskStart.isBefore(groupEnd) && groupStart.isBefore(taskEnd)) {
-            overlapsWithGroup = true;
-            break;
-          }
-        }
-
-        if (overlapsWithGroup) {
-          group.add(task);
-          addedToGroup = true;
-          break;
-        }
-      }
-
-      // Create new group if not added to existing one
-      if (!addedToGroup) {
-        overlapGroups.add([task]);
-      }
-    }
-
-    // Calculate column positions for each group
-    for (final group in overlapGroups) {
-      if (group.length == 1) {
-        // No overlap - single column
-        overlapMap[group.first.id] = const OverlapInfo(
-          columnIndex: 0,
-          totalColumns: 1,
-        );
-      } else {
-        // Multiple overlapping tasks - assign columns
-        for (int i = 0; i < group.length; i++) {
-          overlapMap[group[i].id] = OverlapInfo(
-            columnIndex: i,
-            totalColumns: group.length,
-          );
-        }
-      }
-    }
-
-    return overlapMap;
+    return calculateOverlapColumns(tasks);
   }
 
   List<DateTime> _getWeekDates(DateTime date) {
