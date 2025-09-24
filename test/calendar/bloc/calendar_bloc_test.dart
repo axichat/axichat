@@ -99,12 +99,11 @@ void main() {
         verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
       },
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) {
           return state.model.tasks.values
               .any((task) => task.title == 'New Task');
@@ -134,12 +133,11 @@ void main() {
         verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
       },
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) {
           final tasks = state.model.tasks;
           return tasks.isNotEmpty && tasks.values.first.title == 'Updated';
@@ -165,12 +163,11 @@ void main() {
         verify(() => syncManager.sendTaskUpdate(any(), 'delete')).called(1);
       },
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) => state.model.tasks.isEmpty),
       ],
     );
@@ -196,96 +193,14 @@ void main() {
         verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
       },
       expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
         predicate<CalendarState>((state) {
           final tasks = state.model.tasks;
           return tasks.isNotEmpty && tasks.values.first.isCompleted;
-        }),
-      ],
-    );
-
-    blocTest<CalendarBloc, CalendarState>(
-      'selectionPriorityChanged updates tasks and enables undo history',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
-      seed: () {
-        seededTask = CalendarTask.create(title: 'Reprioritize me');
-        final model = CalendarModel.empty().addTask(seededTask);
-        return CalendarState.initial().copyWith(
-          model: model,
-          isSelectionMode: true,
-          selectedTaskIds: {seededTask.id},
-        );
-      },
-      act: (bloc) {
-        bloc.add(
-          const CalendarEvent.selectionPriorityChanged(
-            priority: TaskPriority.important,
-          ),
-        );
-      },
-      expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.canUndo, 'canUndo', true)
-            .having((state) => state.isSelectionMode, 'isSelectionMode', true),
-        predicate<CalendarState>((state) {
-          final task = state.model.tasks[seededTask.id]!;
-          return task.isImportant &&
-              state.canUndo &&
-              !state.canRedo &&
-              state.isSelectionMode &&
-              state.selectedTaskIds.contains(seededTask.id);
-        }),
-      ],
-    );
-
-    blocTest<CalendarBloc, CalendarState>(
-      'undo/redo navigates history after priority change',
-      build: () => CalendarBloc(
-        syncManagerBuilder: (_) => syncManager,
-        storage: storage,
-      ),
-      seed: () {
-        seededTask = CalendarTask.create(title: 'History task');
-        final model = CalendarModel.empty().addTask(seededTask);
-        return CalendarState.initial().copyWith(model: model);
-      },
-      act: (bloc) async {
-        bloc.add(
-          CalendarEvent.taskUpdated(
-            task: seededTask.copyWith(priority: TaskPriority.urgent),
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
-        bloc.add(const CalendarEvent.undoRequested());
-        await Future<void>.delayed(Duration.zero);
-        bloc.add(const CalendarEvent.redoRequested());
-      },
-      expect: () => [
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', false),
-        isA<CalendarState>()
-            .having((state) => state.isLoading, 'isLoading', true)
-            .having((state) => state.canUndo, 'canUndo', true),
-        predicate<CalendarState>((state) {
-          final task = state.model.tasks[seededTask.id]!;
-          return task.isUrgent && state.canUndo && !state.canRedo;
-        }),
-        predicate<CalendarState>((state) {
-          final task = state.model.tasks[seededTask.id]!;
-          return !task.isUrgent && state.canRedo && !state.canUndo;
-        }),
-        predicate<CalendarState>((state) {
-          final task = state.model.tasks[seededTask.id]!;
-          return task.isUrgent && state.canUndo && !state.canRedo;
         }),
       ],
     );

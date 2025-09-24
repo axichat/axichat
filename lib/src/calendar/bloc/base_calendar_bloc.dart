@@ -133,20 +133,12 @@ abstract class BaseCalendarBloc
     }
   }
 
-  void _recordUndoSnapshot([Emitter<CalendarState>? emit]) {
-    _undoStack.add(state.model.clone());
+  void _recordUndoSnapshot() {
+    _undoStack.add(state.model);
     if (_undoStack.length > _undoHistoryLimit) {
       _undoStack.removeAt(0);
     }
     _redoStack.clear();
-    if (emit != null) {
-      emit(
-        state.copyWith(
-          canUndo: _undoStack.isNotEmpty,
-          canRedo: _redoStack.isNotEmpty,
-        ),
-      );
-    }
   }
 
   void _emitSelectionState({
@@ -207,7 +199,7 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
 
       final now = _now();
       final double? computedStartHour = event.startHour ??
@@ -255,7 +247,7 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
 
       final updatedTask = event.task.copyWith(modifiedAt: _now());
       final updatedModel = state.model.updateTask(updatedTask);
@@ -279,7 +271,7 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
 
       final updatedModel = state.model.deleteTask(event.taskId);
       emitModel(updatedModel, emit, isLoading: false);
@@ -302,7 +294,7 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
 
       final updatedTask = existingTask.copyWith(
         isCompleted: event.completed,
@@ -331,7 +323,7 @@ abstract class BaseCalendarBloc
         scheduledTime: event.time,
         modifiedAt: _now(),
       );
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -372,7 +364,7 @@ abstract class BaseCalendarBloc
         daySpan: event.daySpan ?? task.daySpan,
         modifiedAt: _now(),
       );
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -423,7 +415,7 @@ abstract class BaseCalendarBloc
         occurrenceOverrides: overrides,
         modifiedAt: _now(),
       );
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -448,7 +440,7 @@ abstract class BaseCalendarBloc
         priority: event.priority == TaskPriority.none ? null : event.priority,
         modifiedAt: _now(),
       );
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
 
@@ -473,7 +465,7 @@ abstract class BaseCalendarBloc
 
       emit(state.copyWith(isLoading: true, error: null));
 
-      _recordUndoSnapshot(emit);
+      _recordUndoSnapshot();
 
       final parsed = CalendarTask.fromNaturalLanguage(event.text);
       final now = _now();
@@ -576,7 +568,7 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    _recordUndoSnapshot(emit);
+    _recordUndoSnapshot();
 
     final updatedModel = state.model.replaceTasks(updates);
     emitModel(
@@ -614,7 +606,7 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    _recordUndoSnapshot(emit);
+    _recordUndoSnapshot();
 
     final updatedModel = state.model.replaceTasks(updates);
     emitModel(
@@ -642,7 +634,7 @@ abstract class BaseCalendarBloc
         .whereType<CalendarTask>()
         .toList();
 
-    _recordUndoSnapshot(emit);
+    _recordUndoSnapshot();
 
     final updatedModel = state.model.removeTasks(state.selectedTaskIds);
     emitModel(
@@ -684,7 +676,7 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    _recordUndoSnapshot(emit);
+    _recordUndoSnapshot();
 
     final updatedModel = state.model.replaceTasks(updates);
     emitModel(
@@ -708,7 +700,7 @@ abstract class BaseCalendarBloc
     }
 
     final previousModel = _undoStack.removeLast();
-    _redoStack.add(state.model.clone());
+    _redoStack.add(state.model);
 
     emitModel(
       previousModel,
@@ -728,7 +720,7 @@ abstract class BaseCalendarBloc
     }
 
     final nextModel = _redoStack.removeLast();
-    _undoStack.add(state.model.clone());
+    _undoStack.add(state.model);
 
     emitModel(
       nextModel,
