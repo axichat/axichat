@@ -100,19 +100,3 @@ class CalendarModel with _$CalendarModel {
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
 }
-
-extension CalendarModelSnapshotX on CalendarModel {
-  CalendarModel clone() {
-    final clonedTasks = Map<String, CalendarTask>.fromEntries(
-      tasks.entries.map(
-        (entry) => MapEntry(entry.key, entry.value.clone()),
-      ),
-    );
-
-    return CalendarModel(
-      tasks: clonedTasks,
-      lastModified: lastModified,
-      checksum: checksum,
-    );
-  }
-}
