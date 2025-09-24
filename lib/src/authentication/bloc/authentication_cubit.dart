@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -140,20 +138,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     String? databasePrefix =
         await _credentialStore.read(key: databasePrefixStorageKey);
-
-    (String prefix, String passphrase)? legacyCredentials;
-    if (databasePrefix == null) {
-      legacyCredentials = await _recoverLegacyDatabaseCredentials();
-      databasePrefix = legacyCredentials?.$1;
-    }
     databasePrefix ??= generateRandomString(length: 8);
 
     final databasePassphraseStorageKey = CredentialStore.registerKey(
       '${databasePrefix}_database_passphrase',
     );
+
     String? databasePassphrase =
         await _credentialStore.read(key: databasePassphraseStorageKey);
-    databasePassphrase ??= legacyCredentials?.$2 ?? generateRandomString();
+    databasePassphrase ??= generateRandomString();
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
     final preHashed = savedPassword != null;
@@ -324,46 +317,5 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } else {
       emit(AuthenticationUnregisterFailure(response.body));
     }
-  }
-
-  Future<(String prefix, String passphrase)?>
-      _recoverLegacyDatabaseCredentials() async {
-    const legacyPrefix = 'axichat_dev';
-
-    final legacyPrefixKey =
-        CredentialStore.registerKey('${legacyPrefix}_database_passphrase');
-    final legacyPassphrase =
-        await _credentialStore.read(key: legacyPrefixKey) ??
-            await _credentialStore.read(
-              key: CredentialStore.registerKey('database_passphrase'),
-            );
-
-    final legacyTarget = await dbFileFor(legacyPrefix);
-    final legacyDbCandidate =
-        File('${legacyTarget.parent.path}/$legacyPrefix.db');
-
-    final hasLegacyDb = await legacyDbCandidate.exists();
-    final hasLegacyDrift = await legacyTarget.exists();
-
-    if (!hasLegacyDb && !hasLegacyDrift) {
-      return null;
-    }
-
-    if (hasLegacyDb && !hasLegacyDrift) {
-      await legacyDbCandidate.copy(legacyTarget.path);
-    }
-
-    if (legacyPassphrase == null) {
-      return null;
-    }
-
-    _log.fine('Legacy database detected; migrating existing data.');
-
-    await _credentialStore.write(
-      key: legacyPrefixKey,
-      value: legacyPassphrase,
-    );
-
-    return (legacyPrefix, legacyPassphrase);
   }
 }
