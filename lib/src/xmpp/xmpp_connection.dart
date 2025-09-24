@@ -127,11 +127,18 @@ class XmppConnection extends mox.XmppConnection {
     return false;
   }
 
-  Future<void> sendPresence({Presence? presence, String? status}) async {
+  Future<void> sendPresence({
+    Presence? presence,
+    String? status,
+    String? to,
+    bool trackDirected = false,
+  }) async {
     if (getManager<XmppPresenceManager>() case final pm?) {
       await pm.sendPresence(
         show: presence?.name,
         status: status,
+        to: to != null ? mox.JID.fromString(to) : null,
+        trackDirected: trackDirected,
       );
       return;
     }

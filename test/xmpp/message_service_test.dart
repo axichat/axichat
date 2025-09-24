@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
@@ -7,6 +8,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 import '../mocks.dart';
@@ -35,6 +37,8 @@ main() {
     registerFallbackValue(FakeMessageEvent());
     registerFallbackValue(FakeUserAgent());
     registerOmemoFallbacks();
+    registerFallbackValue(mox.ChatMarker.received);
+    resetForegroundNotifier(value: false);
   });
 
   late XmppService xmppService;
@@ -46,6 +50,14 @@ main() {
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
+    when(
+      () => mockNotificationService.sendNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+      ),
+    ).thenAnswer((_) async {});
     database = XmppDrift(
       file: File(''),
       passphrase: '',
@@ -257,6 +269,88 @@ main() {
               .having((m) => m.body, 'body', text)
               .having((m) => m.error, 'error', MessageError.unknown),
         );
+      },
+    );
+  });
+
+  group('_acknowledgeMessage', () {
+    test(
+      'Caches disco capabilities per peer',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(() => mockConnection.asBroadcastStream())
+            .thenAnswer((_) => controller.stream);
+        when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+            mox.ServiceUnavailableError(),
+          ),
+        );
+        when(
+          () => mockConnection.sendChatMarker(
+            to: any(named: 'to'),
+            stanzaID: any(named: 'stanzaID'),
+            marker: any(named: 'marker'),
+          ),
+        ).thenAnswer((_) async => true);
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => true);
+
+        await connectSuccessfully(xmppService);
+
+        final event = generateRandomMessageEvent();
+        controller.add(event);
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        controller.add(
+          generateRandomMessageEvent(senderJid: event.from.toString()),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        verify(
+          () => mockConnection.discoInfoQuery(event.from.toBare().toString()),
+        ).called(1);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Skips carbon echoes',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(() => mockConnection.asBroadcastStream())
+            .thenAnswer((_) => controller.stream);
+        when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+            mox.ServiceUnavailableError(),
+          ),
+        );
+        when(() => mockConnection.sendMessage(any()))
+            .thenAnswer((_) async => true);
+
+        await connectSuccessfully(xmppService);
+
+        final carbonEvent = mox.MessageEvent(
+          mox.JID.fromString(jid),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.CarbonsData(true),
+            const mox.MarkableData(true),
+            mox.MessageIdData(uuid.v4()),
+          ]),
+          id: uuid.v4(),
+        );
+
+        controller.add(carbonEvent);
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        verifyNever(() => mockConnection.discoInfoQuery(any()));
+
+        await controller.close();
       },
     );
   });

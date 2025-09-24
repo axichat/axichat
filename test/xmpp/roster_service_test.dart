@@ -48,6 +48,7 @@ main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
     registerOmemoFallbacks();
+    resetForegroundNotifier(value: false);
   });
 
   late XmppService xmppService;
@@ -59,6 +60,14 @@ main() {
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
+    when(
+      () => mockNotificationService.sendNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+      ),
+    ).thenAnswer((_) async {});
     database = XmppDrift(
       file: File(''),
       passphrase: '',
@@ -176,6 +185,35 @@ main() {
 
       final afterRequest = await database.getRoster();
       expect(afterRequest, RosterMatcher(contacts));
+    },
+  );
+
+  test(
+    'requestRoster persists the roster version',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      when(() => mockConnection.requestRoster()).thenAnswer(
+        (_) async => moxlib.Result(
+          mox.RosterRequestResult(const [], 'v42'),
+        ),
+      );
+
+      when(
+        () => mockStateStore.write(
+          key: XmppRosterStateManager.versionStateKey,
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async => true);
+
+      await xmppService.requestRoster();
+
+      verify(
+        () => mockStateStore.write(
+          key: XmppRosterStateManager.versionStateKey,
+          value: 'v42',
+        ),
+      ).called(1);
     },
   );
 

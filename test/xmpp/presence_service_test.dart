@@ -19,6 +19,7 @@ main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
     registerOmemoFallbacks();
+    resetForegroundNotifier(value: false);
   });
 
   late XmppService xmppService;
@@ -29,6 +30,14 @@ main() {
     mockCredentialStore = MockCredentialStore();
     mockDatabase = MockXmppDatabase();
     mockNotificationService = MockNotificationService();
+    when(
+      () => mockNotificationService.sendNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+      ),
+    ).thenAnswer((_) async {});
 
     Hive.init('temporaryPath');
     if (!Hive.isAdapterRegistered(1)) {
@@ -83,18 +92,60 @@ main() {
     () async {
       await connectSuccessfully(xmppService);
 
-      when(() => mockDatabase.updatePresence(
+      when(
+        () => mockDatabase.updatePresence(
           jid: any(named: 'jid'),
-          presence: any(named: 'presence'))).thenAnswer((_) async {});
+          presence: any(named: 'presence'),
+          status: any(named: 'status'),
+        ),
+      ).thenAnswer((_) async {});
 
       final jid = generateRandomJid();
 
       for (final presence in Presence.values) {
         await xmppService.receivePresence(jid, presence);
 
-        verify(() => mockDatabase.updatePresence(jid: jid, presence: presence))
-            .called(1);
+        verify(
+          () => mockDatabase.updatePresence(
+            jid: jid,
+            presence: presence,
+            status: any(named: 'status'),
+          ),
+        ).called(1);
       }
+    },
+  );
+
+  test(
+    'receivePresence prefers english status strings when available',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      const jid = 'alice@axi.im';
+      when(
+        () => mockDatabase.updatePresence(
+          jid: jid,
+          presence: Presence.chat,
+          status: any(named: 'status'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await xmppService.receivePresence(
+        jid,
+        Presence.chat,
+        statuses: {
+          'es': 'Conectada',
+          'en': 'Online now',
+        },
+      );
+
+      verify(
+        () => mockDatabase.updatePresence(
+          jid: jid,
+          presence: Presence.chat,
+          status: 'Online now',
+        ),
+      ).called(1);
     },
   );
 }

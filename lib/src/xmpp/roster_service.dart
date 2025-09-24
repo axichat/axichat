@@ -29,7 +29,7 @@ mixin RosterService on XmppBase, BaseStreamService {
       await requestRoster();
     })
     ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
-      final requester = event.from.toBare().toString().toLowerCase();
+      final requester = event.from.toBare().toString();
       _log.info('Subscription request received from $requester');
       await _dbOp<XmppDatabase>(
         (db) async {
@@ -38,7 +38,13 @@ mixin RosterService on XmppBase, BaseStreamService {
             _log.info('Accepting subscription request from $requester...');
             try {
               await _acceptSubscriptionRequest(item);
-            } on XmppRosterException catch (_) {}
+            } on XmppRosterException catch (error, stackTrace) {
+              _log.severe(
+                'Failed to auto-accept subscription for $requester',
+                error,
+                stackTrace,
+              );
+            }
             return;
           }
           await db.saveInvite(Invite(
@@ -56,17 +62,27 @@ mixin RosterService on XmppBase, BaseStreamService {
     ]);
 
   Future<void> requestRoster() async {
-    if (await _connection.requestRoster() case final result?) {
-      if (result.isType<mox.RosterRequestResult>()) {
-        final items = result
-            .get<mox.RosterRequestResult>()
-            .items
-            .map((e) => RosterItem.fromMox(e))
-            .toList();
-        await _dbOp<XmppDatabase>(
-          (db) => db.saveRosterItems(items),
-        );
-      }
+    final result = await _connection.requestRoster();
+    if (result == null || !result.isType<mox.RosterRequestResult>()) {
+      return;
+    }
+
+    final rosterResult = result.get<mox.RosterRequestResult>();
+    final items = rosterResult.items.map(RosterItem.fromMox).toList();
+
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveRosterItems(items),
+    );
+
+    final version = rosterResult.ver;
+    if (version != null && version.isNotEmpty) {
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.write(
+          key: XmppRosterStateManager.versionStateKey,
+          value: version,
+        ),
+        awaitDatabase: true,
+      );
     }
   }
 
@@ -101,28 +117,70 @@ mixin RosterService on XmppBase, BaseStreamService {
   //To simplify the end user experience, allow either bidirectional presence
   // subscription or none at all.
   Future<void> _acceptSubscriptionRequest(RosterItem item) async {
-    final accepted = await _connection.acceptSubscriptionRequest(item.jid);
-    final requested = await _connection.requestSubscription(item.jid);
+    try {
+      final accepted = await _connection.acceptSubscriptionRequest(item.jid);
+      if (!accepted) {
+        throw XmppRosterException();
+      }
 
-    if (accepted && requested) return;
+      await _dbOp<XmppDatabase>((db) async {
+        final subscription = switch (item.subscription) {
+          Subscription.both => Subscription.both,
+          Subscription.to => Subscription.both,
+          Subscription.from => Subscription.from,
+          Subscription.none => Subscription.from,
+        };
 
-    _log.severe('Failed to accept subscription to ${item.jid}.', e);
-    throw XmppRosterException();
+        await db.updateRosterSubscription(
+          jid: item.jid,
+          subscription: subscription,
+        );
+        await db.updateRosterAsk(jid: item.jid, ask: null);
+        await db.deleteInvite(item.jid);
+      });
+
+      final requested = await _connection.requestSubscription(item.jid);
+      if (!requested) {
+        _log.warning(
+          'Subscription request to ${item.jid} failed; roster remains ${item.subscription.name}.',
+        );
+        return;
+      }
+
+      await _dbOp<XmppDatabase>(
+        (db) => db.updateRosterAsk(jid: item.jid, ask: Ask.subscribe),
+      );
+    } catch (error, stackTrace) {
+      _log.severe(
+        'Failed to accept subscription to ${item.jid}.',
+        error,
+        stackTrace,
+      );
+      throw XmppRosterException();
+    }
   }
 
   Future<void> rejectSubscriptionRequest(String jid) async {
     _log.info('Requesting to reject subscription from $jid...');
-    final rejected = await _connection.rejectSubscriptionRequest(jid);
+    try {
+      final rejected = await _connection.rejectSubscriptionRequest(jid);
 
-    if (rejected) {
-      await _dbOp<XmppDatabase>(
-        (db) => db.deleteInvite(jid),
+      if (rejected) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.deleteInvite(jid),
+        );
+        return;
+      }
+
+      throw XmppRosterException();
+    } catch (error, stackTrace) {
+      _log.severe(
+        'Failed to reject subscription from $jid.',
+        error,
+        stackTrace,
       );
-      return;
+      throw XmppRosterException();
     }
-
-    _log.severe('Failed to reject subscription from $jid.', e);
-    throw XmppRosterException();
   }
 }
 
@@ -134,7 +192,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   final XmppBase owner;
 
   static const keyPrefix = 'roster_state';
-  final rosterVersionKey =
+  static final versionStateKey =
       XmppStateStore.registerKey('${keyPrefix}_last_version');
 
   @override
@@ -163,7 +221,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     if (version != null) {
       _log.info('Saving roster version: $version...');
       await owner._dbOp<XmppStateStore>(
-        (ss) => ss.write(key: rosterVersionKey, value: version),
+        (ss) => ss.write(key: versionStateKey, value: version),
         awaitDatabase: true,
       );
     }
@@ -173,7 +231,7 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
   Future<mox.RosterCacheLoadResult> loadRosterCache() async {
     String? version;
     version = await owner._dbOpReturning<XmppStateStore, String?>(
-      (ss) => ss.read(key: rosterVersionKey) as String?,
+      (ss) => ss.read(key: versionStateKey) as String?,
     );
     _log.info('Loaded roster version: $version.');
 
