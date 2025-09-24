@@ -626,11 +626,19 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
+      onCreate: (m) async {
+        await m.createAll();
+      },
+      onUpgrade: (m, from, to) async {
+        if (from < 2) {
+          await m.createTable(omemoBundleCaches);
+        }
+      },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
       },
