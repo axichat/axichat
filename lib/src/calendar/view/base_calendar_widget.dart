@@ -298,21 +298,13 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       onEmptySlotTapped: (time, position) {
         // TODO: Handle empty slot tap in base implementation
       },
-      onTaskDragEnd: (task, newTime, _) {
-        final bloc = context.read<T>();
-        final baseId = task.baseId;
-        final originalTask = bloc.state.model.tasks[baseId];
-        final plannedStart = (task.scheduledTime != null &&
-                originalTask?.scheduledTime != task.scheduledTime)
-            ? task.scheduledTime!
-            : newTime;
-
-        bloc.add(
-          CalendarEvent.taskDropped(
-            taskId: baseId,
-            time: plannedStart,
-          ),
-        );
+      onTaskDragEnd: (task, newTime) {
+        context.read<T>().add(
+              CalendarEvent.taskDropped(
+                taskId: task.baseId,
+                time: newTime,
+              ),
+            );
       },
       onDateSelected: (date) => context.read<T>().add(
             CalendarEvent.dateSelected(date: date),
