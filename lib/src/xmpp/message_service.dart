@@ -16,6 +16,35 @@ extension MessageEvent on mox.MessageEvent {
   }
 }
 
+final _capabilityCacheKey =
+    XmppStateStore.registerKey('message_peer_capabilities');
+
+class _PeerCapabilities {
+  const _PeerCapabilities({
+    required this.supportsMarkers,
+    required this.supportsReceipts,
+  });
+
+  final bool supportsMarkers;
+  final bool supportsReceipts;
+
+  Map<String, Object> toJson() => {
+        'markers': supportsMarkers,
+        'receipts': supportsReceipts,
+      };
+
+  static _PeerCapabilities fromJson(Map<dynamic, dynamic> json) =>
+      _PeerCapabilities(
+        supportsMarkers: json['markers'] as bool? ?? false,
+        supportsReceipts: json['receipts'] as bool? ?? false,
+      );
+
+  static const empty = _PeerCapabilities(
+    supportsMarkers: false,
+    supportsReceipts: false,
+  );
+}
+
 mixin MessageService on XmppBase, BaseStreamService {
   Stream<List<Message>> messageStreamForChat(
     String jid, {
@@ -43,6 +72,9 @@ mixin MessageService on XmppBase, BaseStreamService {
 
   var _messageStream = StreamController<Message>.broadcast();
 
+  final Map<String, _PeerCapabilities> _capabilityCache = {};
+  var _capabilityCacheLoaded = false;
+
   @override
   bool get needsReset => super.needsReset || _messageStream.hasListener;
 
@@ -67,9 +99,7 @@ mixin MessageService on XmppBase, BaseStreamService {
         if (data.metadata.name == null) return;
       }
 
-      if (await _canSendChatMarkers(to: message.chatJid)) {
-        _acknowledgeMessage(event);
-      }
+      unawaited(_acknowledgeMessage(event));
 
       await _handleFile(event, message.senderJid);
 
@@ -186,39 +216,34 @@ mixin MessageService on XmppBase, BaseStreamService {
       body: text,
       encryptionProtocol: encryptionProtocol,
     );
-    _log.info('Sending message: ${message.stanzaID} '
-        'with body: ${text.substring(0, min(10, text.length))}...');
+    _log.info(
+      'Sending message ${message.stanzaID} (length=${text.length} chars)',
+    );
     await _dbOp<XmppDatabase>(
       (db) => db.saveMessage(message),
     );
 
-    if (!await _connection.sendMessage(message.toMox())) {
-      _log.info(
-        'Failed to send message: ${message.stanzaID}. '
-        'Storing with error to allow resend...',
-        e,
+    try {
+      final sent = await _connection.sendMessage(message.toMox());
+      if (!sent) {
+        await _handleMessageSendFailure(message.stanzaID);
+        throw XmppMessageException();
+      }
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send message ${message.stanzaID}',
+        error,
+        stackTrace,
       );
-
-      await _dbOp<XmppDatabase>(
-        (db) => db.saveMessageError(
-          error: MessageError.unknown,
-          stanzaID: message.stanzaID,
-        ),
-      );
-
+      await _handleMessageSendFailure(message.stanzaID);
       throw XmppMessageException();
     }
   }
 
   Future<bool> _canSendChatMarkers({required String to}) async {
     if (to == myJid) return false;
-
-    return await _dbOpReturning<XmppDatabase, bool>(
-      (db) async {
-        final chat = await db.getChat(to);
-        return chat?.markerResponsive ?? false;
-      },
-    );
+    final capabilities = await _capabilitiesFor(to);
+    return capabilities.supportsMarkers;
   }
 
   Future<void> sendReadMarker(String to, String stanzaID) async {
@@ -261,25 +286,106 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
   }
 
-  Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
-    final to = event.from.toBare().toString();
-    final result = await _connection.discoInfoQuery(to);
-    if (result == null || result.isType<mox.StanzaError>()) return;
+  Future<void> _handleMessageSendFailure(String stanzaID) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessageError(
+        error: MessageError.unknown,
+        stanzaID: stanzaID,
+      ),
+    );
+  }
+
+  Future<void> _ensureCapabilityCacheLoaded() async {
+    if (_capabilityCacheLoaded) return;
+    await _dbOp<XmppStateStore>((ss) {
+      final stored =
+          (ss.read(key: _capabilityCacheKey) as Map<dynamic, dynamic>?) ?? {};
+      _capabilityCache
+        ..clear()
+        ..addAll(stored.map(
+          (key, value) => MapEntry(
+            key as String,
+            _PeerCapabilities.fromJson(value as Map<dynamic, dynamic>),
+          ),
+        ));
+    }, awaitDatabase: true);
+    _capabilityCacheLoaded = true;
+  }
+
+  Future<void> _persistCapabilityCache() async {
+    if (!_capabilityCacheLoaded) return;
+    await _dbOp<XmppStateStore>(
+      (ss) => ss.write(
+        key: _capabilityCacheKey,
+        value: _capabilityCache.map(
+          (key, value) => MapEntry(key, value.toJson()),
+        ),
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<_PeerCapabilities> _capabilitiesFor(String jid) async {
+    await _ensureCapabilityCacheLoaded();
+    if (_capabilityCache[jid] case final _PeerCapabilities cached) {
+      return cached;
+    }
+
+    final result = await _connection.discoInfoQuery(jid);
+    if (result == null || result.isType<mox.StanzaError>()) {
+      const fallback = _PeerCapabilities.empty;
+      _capabilityCache[jid] = fallback;
+      await _persistCapabilityCache();
+      await _dbOp<XmppDatabase>(
+        (db) => db.markChatMarkerResponsive(
+          jid: jid,
+          responsive: fallback.supportsMarkers,
+        ),
+      );
+      return fallback;
+    }
 
     final info = result.get<mox.DiscoInfo>();
+    final features = info.features;
+    final capabilities = _PeerCapabilities(
+      supportsMarkers: features.contains(mox.chatMarkersXmlns),
+      supportsReceipts: features.contains(mox.deliveryXmlns),
+    );
+
+    _capabilityCache[jid] = capabilities;
+    await _persistCapabilityCache();
+
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatMarkerResponsive(
+        jid: jid,
+        responsive: capabilities.supportsMarkers,
+      ),
+    );
+
+    return capabilities;
+  }
+
+  Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
+    if (event.isCarbon) return;
+
     final markable =
         event.extensions.get<mox.MarkableData>()?.isMarkable ?? false;
     final deliveryReceiptRequested = event.extensions
             .get<mox.MessageDeliveryReceiptData>()
             ?.receiptRequested ??
         false;
-    final id = event.extensions.get<mox.StableIdData>()?.originId ?? event.id;
 
+    if (!markable && !deliveryReceiptRequested) return;
+
+    final id = event.extensions.get<mox.StableIdData>()?.originId ?? event.id;
     if (id == null) return;
 
-    if (markable && info.features.contains(mox.chatMarkersXmlns)) {
+    final peer = event.from.toBare().toString();
+    final capabilities = await _capabilitiesFor(peer);
+
+    if (markable && capabilities.supportsMarkers) {
       await _connection.sendChatMarker(
-        to: to,
+        to: peer,
         stanzaID: id,
         marker: mox.ChatMarker.received,
       );
@@ -290,8 +396,9 @@ mixin MessageService on XmppBase, BaseStreamService {
           db.markMessageAcked(id);
         },
       );
-    } else if (deliveryReceiptRequested &&
-        info.features.contains(mox.deliveryXmlns)) {
+    }
+
+    if (deliveryReceiptRequested && capabilities.supportsReceipts) {
       await _connection.sendMessage(
         mox.MessageEvent(
           _myJid!,
@@ -318,6 +425,8 @@ mixin MessageService on XmppBase, BaseStreamService {
 
     await _messageStream.close();
     _messageStream = StreamController<Message>.broadcast();
+    _capabilityCache.clear();
+    _capabilityCacheLoaded = false;
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {

@@ -207,6 +207,16 @@ abstract interface class XmppDatabase implements Database {
     String? status,
   });
 
+  Future<void> updateRosterSubscription({
+    required String jid,
+    required Subscription subscription,
+  });
+
+  Future<void> updateRosterAsk({
+    required String jid,
+    Ask? ask,
+  });
+
   Future<void> markSubscriptionBoth(String jid);
 
   Stream<List<Invite>> watchInvites({required int start, required int end});
@@ -1230,6 +1240,34 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       presence: Value(presence),
       status: Value(status),
     ));
+  }
+
+  @override
+  Future<void> updateRosterSubscription({
+    required String jid,
+    required Subscription subscription,
+  }) async {
+    _log.info('Updating $jid subscription state to ${subscription.name}');
+    await rosterAccessor.updateOne(
+      RosterCompanion(
+        jid: Value(jid),
+        subscription: Value(subscription),
+      ),
+    );
+  }
+
+  @override
+  Future<void> updateRosterAsk({
+    required String jid,
+    Ask? ask,
+  }) async {
+    _log.info('Updating $jid ask state to ${ask?.name ?? 'none'}');
+    await rosterAccessor.updateOne(
+      RosterCompanion(
+        jid: Value(jid),
+        ask: Value(ask),
+      ),
+    );
   }
 
   @override

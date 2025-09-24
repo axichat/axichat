@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Table, Column;
@@ -31,6 +32,7 @@ Future<void> main() async {
       await notificationService.hasAllNotificationPermissions();
   foregroundServiceActive = ValueNotifier<bool>(withForeground);
   if (withForeground) {
+    initForegroundService();
     await notificationService.init();
   }
 

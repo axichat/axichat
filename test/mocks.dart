@@ -3,12 +3,14 @@ import 'dart:isolate';
 
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/main.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
@@ -51,11 +53,25 @@ class FakeOmemoDeviceList extends Fake implements OmemoDeviceList {}
 
 class FakeOmemoTrust extends Fake implements OmemoTrust {}
 
+class FakeOmemoBundleCache extends Fake implements OmemoBundleCache {}
+
 void registerOmemoFallbacks() {
   registerFallbackValue(FakeOmemoDevice());
   registerFallbackValue(FakeOmemoRatchet());
   registerFallbackValue(FakeOmemoDeviceList());
   registerFallbackValue(FakeOmemoTrust());
+  registerFallbackValue(FakeOmemoBundleCache());
+}
+
+var _foregroundInitialized = false;
+
+void resetForegroundNotifier({required bool value}) {
+  if (!_foregroundInitialized) {
+    foregroundServiceActive = ValueNotifier(value);
+    _foregroundInitialized = true;
+  } else {
+    foregroundServiceActive.value = value;
+  }
 }
 
 extension RoundableDateTime on DateTime {
