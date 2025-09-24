@@ -17,6 +17,7 @@ import '../view/loading_indicator.dart';
 import '../view/quick_add_modal.dart';
 import '../view/task_sidebar.dart';
 import 'guest_calendar_bloc.dart';
+import '../view/widgets/calendar_keyboard_scope.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({super.key});
@@ -33,30 +34,45 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     return BlocConsumer<GuestCalendarBloc, CalendarState>(
       listener: _handleStateChanges,
       builder: (context, state) {
-        return Scaffold(
-          backgroundColor: calendarBackgroundColor,
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  // Guest banner at very top
-                  _buildGuestBanner(),
+        return CalendarKeyboardScope(
+          autofocus: true,
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
+          onUndo: () {
+            context
+                .read<GuestCalendarBloc>()
+                .add(const CalendarEvent.undoRequested());
+          },
+          onRedo: () {
+            context
+                .read<GuestCalendarBloc>()
+                .add(const CalendarEvent.redoRequested());
+          },
+          child: Scaffold(
+            backgroundColor: calendarBackgroundColor,
+            body: Stack(
+              children: [
+                Column(
+                  children: [
+                    // Guest banner at very top
+                    _buildGuestBanner(),
 
-                  // New structure: Row with sidebar OUTSIDE of navigation column
-                  Expanded(
-                    child: ResponsiveHelper.layoutBuilder(
-                      context,
-                      mobile: _buildMobileLayout(state),
-                      tablet: _buildTabletLayout(state),
-                      desktop: _buildDesktopLayout(state),
+                    // New structure: Row with sidebar OUTSIDE of navigation column
+                    Expanded(
+                      child: ResponsiveHelper.layoutBuilder(
+                        context,
+                        mobile: _buildMobileLayout(state),
+                        tablet: _buildTabletLayout(state),
+                        desktop: _buildDesktopLayout(state),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              // Loading overlay
-              if (state.isLoading) _buildLoadingOverlay(),
-            ],
+                // Loading overlay
+                if (state.isLoading) _buildLoadingOverlay(),
+              ],
+            ),
           ),
         );
       },
@@ -166,6 +182,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
           onErrorCleared: () => context.read<GuestCalendarBloc>().add(
                 const CalendarEvent.errorCleared(),
               ),
+          onUndo: () => context
+              .read<GuestCalendarBloc>()
+              .add(const CalendarEvent.undoRequested()),
+          onRedo: () => context
+              .read<GuestCalendarBloc>()
+              .add(const CalendarEvent.redoRequested()),
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
         ),
 
         // Error display
@@ -229,6 +253,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
                 onErrorCleared: () => context.read<GuestCalendarBloc>().add(
                       const CalendarEvent.errorCleared(),
                     ),
+                onUndo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.undoRequested()),
+                onRedo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.redoRequested()),
+                canUndo: state.canUndo,
+                canRedo: state.canRedo,
               ),
 
               // Error display
@@ -267,6 +299,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
                 onErrorCleared: () => context.read<GuestCalendarBloc>().add(
                       const CalendarEvent.errorCleared(),
                     ),
+                onUndo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.undoRequested()),
+                onRedo: () => context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.redoRequested()),
+                canUndo: state.canUndo,
+                canRedo: state.canRedo,
               ),
 
               // Error display

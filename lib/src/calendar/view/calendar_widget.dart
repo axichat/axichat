@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -17,6 +16,7 @@ import 'feedback_system.dart';
 import 'loading_indicator.dart';
 import 'quick_add_modal.dart';
 import 'task_sidebar.dart';
+import 'widgets/calendar_keyboard_scope.dart';
 
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});
@@ -33,59 +33,35 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     return BlocConsumer<CalendarBloc, CalendarState>(
       listener: _handleStateChanges,
       builder: (context, state) {
-        return Shortcuts(
-          shortcuts: const <ShortcutActivator, Intent>{
-            SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-                _CalendarUndoIntent(),
-            SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
-                _CalendarUndoIntent(),
-            SingleActivator(LogicalKeyboardKey.keyZ,
-                control: true, shift: true): _CalendarRedoIntent(),
-            SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
-                _CalendarRedoIntent(),
+        return CalendarKeyboardScope(
+          autofocus: true,
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
+          onUndo: () {
+            context
+                .read<CalendarBloc>()
+                .add(const CalendarEvent.undoRequested());
           },
-          child: Actions(
-            actions: <Type, Action<Intent>>{
-              _CalendarUndoIntent: CallbackAction<_CalendarUndoIntent>(
-                onInvoke: (_) {
-                  if (state.canUndo) {
-                    context
-                        .read<CalendarBloc>()
-                        .add(const CalendarEvent.undoRequested());
-                  }
-                  return null;
-                },
-              ),
-              _CalendarRedoIntent: CallbackAction<_CalendarRedoIntent>(
-                onInvoke: (_) {
-                  if (state.canRedo) {
-                    context
-                        .read<CalendarBloc>()
-                        .add(const CalendarEvent.redoRequested());
-                  }
-                  return null;
-                },
-              ),
-            },
-            child: Focus(
-              autofocus: true,
-              child: Scaffold(
-                backgroundColor: calendarBackgroundColor,
-                body: Stack(
-                  children: [
-                    // New structure: Row with sidebar OUTSIDE of navigation column
-                    ResponsiveHelper.layoutBuilder(
-                      context,
-                      mobile: _buildMobileLayout(state),
-                      tablet: _buildTabletLayout(state),
-                      desktop: _buildDesktopLayout(state),
-                    ),
-
-                    // Loading overlay
-                    if (state.isLoading) _buildLoadingOverlay(),
-                  ],
+          onRedo: () {
+            context
+                .read<CalendarBloc>()
+                .add(const CalendarEvent.redoRequested());
+          },
+          child: Scaffold(
+            backgroundColor: calendarBackgroundColor,
+            body: Stack(
+              children: [
+                // New structure: Row with sidebar OUTSIDE of navigation column
+                ResponsiveHelper.layoutBuilder(
+                  context,
+                  mobile: _buildMobileLayout(state),
+                  tablet: _buildTabletLayout(state),
+                  desktop: _buildDesktopLayout(state),
                 ),
-              ),
+
+                // Loading overlay
+                if (state.isLoading) _buildLoadingOverlay(),
+              ],
             ),
           ),
         );
@@ -340,61 +316,6 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     final duration =
         task.duration ?? originalTask?.duration ?? const Duration(hours: 1);
 
-    CalendarTask? findCollision() {
-      final proposedStart = scheduled;
-      final proposedEnd = proposedStart.add(duration);
-      for (final candidate in bloc.state.model.tasks.values) {
-        if (candidate.id == task.id || candidate.baseId == task.baseId) {
-          continue;
-        }
-        final otherStart = candidate.scheduledTime;
-        if (otherStart == null) continue;
-        final otherEnd = candidate.effectiveEndDate ??
-            otherStart.add(candidate.duration ?? const Duration(hours: 1));
-        final overlaps =
-            proposedStart.isBefore(otherEnd) && proposedEnd.isAfter(otherStart);
-        if (overlaps) {
-          return candidate;
-        }
-      }
-      return null;
-    }
-
-    void dispatchMove(CalendarTask movingTask, DateTime targetStart) {
-      final targetDuration = movingTask.duration ?? const Duration(hours: 1);
-      final startHour = targetStart.hour + (targetStart.minute / 60.0);
-      final durationHours = targetDuration.inMinutes / 60.0;
-      final stored = bloc.state.model.tasks[movingTask.baseId];
-
-      if (stored != null &&
-          (stored.scheduledTime != targetStart ||
-              stored.duration != targetDuration)) {
-        bloc.add(
-          CalendarEvent.taskResized(
-            taskId: movingTask.baseId,
-            startHour: startHour,
-            duration: durationHours,
-            daySpan: movingTask.effectiveDaySpan,
-          ),
-        );
-      } else {
-        bloc.add(
-          CalendarEvent.taskDropped(
-            taskId: movingTask.baseId,
-            time: targetStart,
-          ),
-        );
-      }
-    }
-
-    final collision = findCollision();
-
-    if (collision != null &&
-        originalTask?.scheduledTime != null &&
-        !collision.isOccurrence) {
-      dispatchMove(collision, originalTask!.scheduledTime!);
-    }
-
     if (task.isOccurrence) {
       final scheduled = newTime;
       bloc.add(
@@ -455,12 +376,4 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       ),
     );
   }
-}
-
-class _CalendarUndoIntent extends Intent {
-  const _CalendarUndoIntent();
-}
-
-class _CalendarRedoIntent extends Intent {
-  const _CalendarRedoIntent();
 }
