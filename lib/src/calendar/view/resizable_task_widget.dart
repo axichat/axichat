@@ -46,6 +46,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isSelected;
   final VoidCallback? onToggleSelection;
   final ValueListenable<DragFeedbackHint>? dragFeedbackHint;
+  final ValueChanged<double>? onDragPointerDown;
 
   const ResizableTaskWidget({
     super.key,
@@ -68,6 +69,7 @@ class ResizableTaskWidget extends StatefulWidget {
     this.isSelected = false,
     this.onToggleSelection,
     this.dragFeedbackHint,
+    this.onDragPointerDown,
   });
 
   @override
@@ -494,7 +496,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     }
 
     Widget buildSizedContent(DragFeedbackHint hint) {
-      Widget child = widget.enableInteractions
+      Widget interactiveChild = widget.enableInteractions
           ? Draggable<CalendarTask>(
               data: task,
               feedback: buildFeedback(),
@@ -523,10 +525,20 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             )
           : buildInteractiveContent();
 
+      final listenerWrapped = Listener(
+        onPointerDown: (event) {
+          if (!widget.enableInteractions) return;
+          final double normalized =
+              (event.localPosition.dx / widget.width).clamp(0.0, 1.0);
+          widget.onDragPointerDown?.call(normalized);
+        },
+        child: interactiveChild,
+      );
+
       return SizedBox(
         width: widget.width,
         height: widget.height,
-        child: child,
+        child: listenerWrapped,
       );
     }
 
