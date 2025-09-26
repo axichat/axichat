@@ -205,6 +205,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double? _activeDragWidth;
   double? _dragInitialWidth;
   DateTime? _dragOriginSlot;
+  double? _dragAnchorDx;
   double _dragPointerNormalized = 0.5;
   double? _dragPointerGlobalX;
   bool _dragHasMoved = false;
@@ -232,7 +233,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _viewTransitionController.value = 1.0; // Start fully visible
     _verticalController = ScrollController();
     _dragFeedbackHint = ValueNotifier<DragFeedbackHint>(
-        const DragFeedbackHint(width: 0, pointerOffset: 0));
+      const DragFeedbackHint(width: 0, pointerOffset: 0, anchorDx: 0),
+    );
     _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) {
         setState(() {});
@@ -536,8 +538,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _buildDragHint(
         width: width,
         pointerFraction: shouldCenter ? 0.5 : null,
+        anchorDx: _dragAnchorDx,
       ),
     );
+    if (shouldCenter) {
+      _dragPointerNormalized = 0.5;
+    }
     _dragStartGlobalLeft = pointerGlobalX - (width / 2);
     if (width > 0) {
       _draggingTaskWidth = width;
@@ -564,13 +570,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   DragFeedbackHint _buildDragHint({
     required double width,
     double? pointerFraction,
+    double? anchorDx,
   }) {
     double baseWidth = width;
     if (!baseWidth.isFinite || baseWidth <= 0) {
       baseWidth = _activeDragWidth ?? _draggingTaskWidth ?? 0.0;
     }
     if (baseWidth <= 0) {
-      return const DragFeedbackHint(width: 0.0, pointerOffset: 0.0);
+      final double anchor = _dragAnchorDx ?? 0.0;
+      return DragFeedbackHint(width: 0.0, pointerOffset: 0.0, anchorDx: anchor);
     }
 
     final double normalized = pointerFraction != null
@@ -582,17 +590,27 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final double pointerOffset = (baseWidth * normalized).clamp(0.0, baseWidth);
+    final double anchor = anchorDx ?? _dragAnchorDx ?? pointerOffset;
 
     _activeDragWidth = baseWidth;
 
-    return DragFeedbackHint(width: baseWidth, pointerOffset: pointerOffset);
+    return DragFeedbackHint(
+      width: baseWidth,
+      pointerOffset: pointerOffset,
+      anchorDx: anchor,
+    );
   }
 
   void _resetDragFeedbackHint() {
     final double width = _activeDragWidth ?? _draggingTaskWidth ?? 0.0;
     if (width <= 0) {
       _setDragFeedbackHint(
-          const DragFeedbackHint(width: 0.0, pointerOffset: 0.0));
+        DragFeedbackHint(
+          width: 0.0,
+          pointerOffset: 0.0,
+          anchorDx: _dragAnchorDx ?? 0.0,
+        ),
+      );
       return;
     }
     _updateDragFeedbackWidth(width);
@@ -744,6 +762,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final double pickupNormalized = _dragPointerNormalized.clamp(0.0, 1.0);
     final double pickupGlobalX =
         bounds.left + (bounds.width * pickupNormalized);
+    _dragAnchorDx = pickupNormalized * bounds.width;
     _draggingTaskWidth = bounds.width;
     _activeDragWidth = bounds.width;
     _dragInitialWidth = bounds.width;
@@ -756,7 +775,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _dragStartGlobalLeft = pickupGlobalX - (bounds.width / 2.0);
     _dragPointerOffsetFromTop = null;
     _setDragFeedbackHint(
-      _buildDragHint(width: bounds.width, pointerFraction: 0.5),
+      _buildDragHint(
+        width: bounds.width,
+        pointerFraction: 0.5,
+        anchorDx: _dragAnchorDx,
+      ),
       deferWhenBuilding: false,
     );
   }
@@ -807,7 +830,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
     _stopEdgeAutoScroll();
     _setDragFeedbackHint(
-        const DragFeedbackHint(width: 0.0, pointerOffset: 0.0));
+      const DragFeedbackHint(width: 0.0, pointerOffset: 0.0, anchorDx: 0.0),
+    );
     _dragPointerOffsetFromTop = null;
     _dragStartGlobalTop = null;
     _dragStartGlobalLeft = null;
@@ -816,6 +840,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _activeDragWidth = null;
     _dragInitialWidth = null;
     _dragOriginSlot = null;
+    _dragAnchorDx = null;
     _dragPointerGlobalX = null;
     _dragPointerNormalized = 0.5;
     _dragHasMoved = false;
