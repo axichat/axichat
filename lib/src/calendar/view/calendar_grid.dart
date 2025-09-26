@@ -244,9 +244,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   _ZoomLevel get _currentZoom => _zoomLevels[_zoomIndex];
-  int get _slotSubdivisions => widget.state.viewMode == CalendarView.day
-      ? _dayViewSubdivisions
-      : _currentZoom.daySubdivisions;
+  int get _slotSubdivisions => _dayViewSubdivisions;
   int get _minutesPerSlot => (60 / _slotSubdivisions).round();
   int get _minutesPerStep => _resizeStepMinutes;
   bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
@@ -349,9 +347,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   double _offsetToMinutes(double offset, double hourHeight) {
-    final bool isDayView = widget.state.viewMode == CalendarView.day;
-    final int subdivisions =
-        isDayView ? _dayViewSubdivisions : _currentZoom.daySubdivisions;
+    final int subdivisions = _slotSubdivisions;
     if (subdivisions <= 0 || hourHeight == 0) {
       return 0;
     }
@@ -364,9 +360,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   double _minutesToOffset(double minutes, double hourHeight) {
-    final bool isDayView = widget.state.viewMode == CalendarView.day;
-    final int subdivisions =
-        isDayView ? _dayViewSubdivisions : _currentZoom.daySubdivisions;
+    final int subdivisions = _slotSubdivisions;
     if (subdivisions <= 0) {
       return 0;
     }
@@ -547,6 +541,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _dragStartGlobalLeft = pointerGlobalX - (width / 2);
     if (width > 0) {
       _draggingTaskWidth = width;
+      _dragAnchorDx = width * _dragPointerNormalized;
     }
   }
 
@@ -728,7 +723,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         _zoomControlsVisible = true;
       });
     }
-    _zoomControlsDismissTimer = Timer(const Duration(seconds: 3), () {
+    _zoomControlsDismissTimer = Timer(const Duration(seconds: 6), () {
       if (!mounted) return;
       setState(() {
         _zoomControlsVisible = false;
@@ -770,10 +765,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _dragHasMoved = false;
     _dragWidthDebounce?.cancel();
     _dragWidthDebounce = Timer(const Duration(milliseconds: 200), () {});
-    _dragPointerNormalized = 0.5;
     _dragPointerGlobalX = pickupGlobalX;
+    _dragAnchorDx = (_draggingTaskWidth ?? 0.0) * _dragPointerNormalized;
     _dragStartGlobalLeft = pickupGlobalX - (bounds.width / 2.0);
-    _dragPointerOffsetFromTop = null;
+    final double halfHeight = (_draggingTaskHeight ?? 0.0) / 2.0;
+    _dragPointerOffsetFromTop = halfHeight;
+    _dragPointerNormalized = 0.5;
+    if (_draggingTaskWidth != null) {
+      _dragAnchorDx = _draggingTaskWidth! * _dragPointerNormalized;
+    }
     _setDragFeedbackHint(
       _buildDragHint(
         width: bounds.width,
@@ -784,8 +784,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  void _handleDragPointerDown(double normalized) {
-    _dragPointerNormalized = normalized.clamp(0.0, 1.0);
+  void _handleDragPointerDown(Offset normalizedOffset) {
+    _dragPointerNormalized = normalizedOffset.dx.clamp(0.0, 1.0);
+    _dragPointerOffsetFromTop = null;
     _dragHasMoved = false;
   }
 
@@ -812,6 +813,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final double effectiveWidth =
         _activeDragWidth ?? _draggingTaskWidth ?? baseWidth;
     _updateDragFeedbackWidth(effectiveWidth);
+    if (effectiveWidth > 0) {
+      _dragAnchorDx = effectiveWidth * _dragPointerNormalized;
+    }
   }
 
   void _handleTaskDragEnded(CalendarTask task) {

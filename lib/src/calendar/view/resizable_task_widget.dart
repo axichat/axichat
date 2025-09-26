@@ -52,7 +52,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isSelected;
   final VoidCallback? onToggleSelection;
   final ValueListenable<DragFeedbackHint>? dragFeedbackHint;
-  final ValueChanged<double>? onDragPointerDown;
+  final ValueChanged<Offset>? onDragPointerDown;
 
   const ResizableTaskWidget({
     super.key,
@@ -121,7 +121,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final double fallbackWidth = widget.width;
       final double effectiveWidth =
           hint.width.isFinite && hint.width > 0 ? hint.width : fallbackWidth;
-      final double translation = (effectiveWidth / 2) - hint.anchorDx;
+      final double anchor = hint.anchorDx.clamp(0.0, effectiveWidth);
+      final double translation = (effectiveWidth / 2) - anchor;
 
       return Transform.translate(
         offset: Offset(-translation, 0),
@@ -535,9 +536,13 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final listenerWrapped = Listener(
         onPointerDown: (event) {
           if (!widget.enableInteractions) return;
-          final double normalized =
+          final double normalizedX =
               (event.localPosition.dx / widget.width).clamp(0.0, 1.0);
-          widget.onDragPointerDown?.call(normalized);
+          final double normalizedY = widget.height <= 0
+              ? 0.0
+              : (event.localPosition.dy / widget.height).clamp(0.0, 1.0);
+          widget.onDragPointerDown
+              ?.call(Offset(normalizedX, normalizedY));
         },
         child: interactiveChild,
       );
