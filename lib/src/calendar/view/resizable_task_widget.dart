@@ -9,21 +9,27 @@ import 'package:axichat/src/common/ui/ui.dart';
 import '../models/calendar_task.dart';
 
 class DragFeedbackHint {
-  const DragFeedbackHint({required this.width, required this.pointerOffset});
+  const DragFeedbackHint({
+    required this.width,
+    required this.pointerOffset,
+    required this.anchorDx,
+  });
 
   final double width;
   final double pointerOffset;
+  final double anchorDx;
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is DragFeedbackHint &&
         (width - other.width).abs() < 1e-6 &&
-        (pointerOffset - other.pointerOffset).abs() < 1e-3;
+        (pointerOffset - other.pointerOffset).abs() < 1e-3 &&
+        (anchorDx - other.anchorDx).abs() < 1e-3;
   }
 
   @override
-  int get hashCode => Object.hash(width, pointerOffset);
+  int get hashCode => Object.hash(width, pointerOffset, anchorDx);
 }
 
 class ResizableTaskWidget extends StatefulWidget {
@@ -115,9 +121,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final double fallbackWidth = widget.width;
       final double effectiveWidth =
           hint.width.isFinite && hint.width > 0 ? hint.width : fallbackWidth;
-      final double clampedPointer =
-          hint.pointerOffset.clamp(0.0, effectiveWidth);
-      final double translation = clampedPointer - (effectiveWidth / 2);
+      final double translation = (effectiveWidth / 2) - hint.anchorDx;
 
       return Transform.translate(
         offset: Offset(-translation, 0),
@@ -168,7 +172,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       if (listenable == null) {
         return buildFeedbackContent(
           DragFeedbackHint(
-              width: widget.width, pointerOffset: widget.width / 2),
+            width: widget.width,
+            pointerOffset: widget.width / 2,
+            anchorDx: widget.width / 2,
+          ),
         );
       }
       return ValueListenableBuilder<DragFeedbackHint>(
@@ -547,6 +554,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         DragFeedbackHint(
           width: widget.width,
           pointerOffset: widget.width / 2,
+          anchorDx: widget.width / 2,
         ),
       );
     }
