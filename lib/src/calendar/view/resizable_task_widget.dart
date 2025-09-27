@@ -13,11 +13,13 @@ class DragFeedbackHint {
     required this.width,
     required this.pointerOffset,
     required this.anchorDx,
+    required this.anchorDy,
   });
 
   final double width;
   final double pointerOffset;
   final double anchorDx;
+  final double anchorDy;
 
   @override
   bool operator ==(Object other) {
@@ -25,11 +27,12 @@ class DragFeedbackHint {
     return other is DragFeedbackHint &&
         (width - other.width).abs() < 1e-6 &&
         (pointerOffset - other.pointerOffset).abs() < 1e-3 &&
-        (anchorDx - other.anchorDx).abs() < 1e-3;
+        (anchorDx - other.anchorDx).abs() < 1e-3 &&
+        (anchorDy - other.anchorDy).abs() < 1e-3;
   }
 
   @override
-  int get hashCode => Object.hash(width, pointerOffset, anchorDx);
+  int get hashCode => Object.hash(width, pointerOffset, anchorDx, anchorDy);
 }
 
 class ResizableTaskWidget extends StatefulWidget {
@@ -121,11 +124,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final double fallbackWidth = widget.width;
       final double effectiveWidth =
           hint.width.isFinite && hint.width > 0 ? hint.width : fallbackWidth;
-      final double anchor = hint.anchorDx.clamp(0.0, effectiveWidth);
-      final double translation = (effectiveWidth / 2) - anchor;
+      final double anchorX = hint.anchorDx.clamp(0.0, effectiveWidth);
+      final double translationX = anchorX - (effectiveWidth / 2);
 
       return Transform.translate(
-        offset: Offset(-translation, 0),
+        offset: Offset(-translationX, 0),
         child: Material(
           elevation: 8,
           color: Colors.transparent,
@@ -176,6 +179,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             width: widget.width,
             pointerOffset: widget.width / 2,
             anchorDx: widget.width / 2,
+            anchorDy: widget.height / 2,
           ),
         );
       }
@@ -541,8 +545,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           final double normalizedY = widget.height <= 0
               ? 0.0
               : (event.localPosition.dy / widget.height).clamp(0.0, 1.0);
-          widget.onDragPointerDown
-              ?.call(Offset(normalizedX, normalizedY));
+          widget.onDragPointerDown?.call(Offset(normalizedX, normalizedY));
         },
         child: interactiveChild,
       );
@@ -560,6 +563,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           width: widget.width,
           pointerOffset: widget.width / 2,
           anchorDx: widget.width / 2,
+          anchorDy: widget.height / 2,
         ),
       );
     }
