@@ -2160,9 +2160,12 @@ class _TaskSidebarState extends State<TaskSidebar>
                               final baseId = task.baseId;
                               final latestTask =
                                   state.model.tasks[baseId] ?? task;
+                              final displayTask = task.isOccurrence
+                                  ? latestTask.occurrenceForId(task.id) ?? task
+                                  : latestTask;
 
                               return EditTaskDropdown(
-                                task: latestTask,
+                                task: displayTask,
                                 maxHeight: effectiveMaxHeight,
                                 onClose: () => _closeTaskPopover(task.id),
                                 onTaskUpdated: (updatedTask) {

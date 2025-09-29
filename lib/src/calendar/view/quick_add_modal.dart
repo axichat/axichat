@@ -6,6 +6,7 @@ import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
 import 'priority_checkbox_tile.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'widgets/schedule_range_fields.dart';
 
 class QuickAddModal extends StatefulWidget {
   final DateTime? prefilledDateTime;
@@ -31,11 +32,15 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   final _taskNameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _locationController = TextEditingController();
   final _taskNameFocusNode = FocusNode();
 
   bool _isImportant = false;
   bool _isUrgent = false;
   bool _isSubmitting = false;
+  DateTime? _startTime;
+  DateTime? _endTime;
+  DateTime? _deadline;
   RecurrenceFrequency _recurrenceFrequency = RecurrenceFrequency.none;
   int _recurrenceInterval = 1;
   late Set<int> _selectedWeekdays;
@@ -71,7 +76,13 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     _animationController.forward();
 
-    final defaultWeekday = widget.prefilledDateTime?.weekday ?? DateTime.monday;
+    final prefilled = widget.prefilledDateTime;
+    final defaultStart = prefilled;
+    _startTime = defaultStart;
+    _endTime = defaultStart?.add(const Duration(hours: 1));
+
+    final defaultWeekday =
+        (defaultStart ?? DateTime.now()).weekday;
     _selectedWeekdays = {defaultWeekday};
 
     // Auto-focus the task name input
@@ -85,6 +96,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _animationController.dispose();
     _taskNameController.dispose();
     _descriptionController.dispose();
+    _locationController.dispose();
     _taskNameFocusNode.dispose();
     _recurrenceCountController.dispose();
     super.dispose();
@@ -161,13 +173,15 @@ class _QuickAddModalState extends State<QuickAddModal>
                     const SizedBox(height: calendarSpacing12),
                     _buildDescriptionInput(),
                     const SizedBox(height: calendarSpacing12),
+                    _buildLocationField(),
+                    const SizedBox(height: calendarSpacing12),
                     _buildPriorityToggles(),
-                    if (widget.prefilledDateTime != null) ...[
-                      _modalDivider(),
-                      _buildRecurrenceSection(),
-                      _modalDivider(),
-                      _buildTimeInfo(),
-                    ],
+                    _modalDivider(),
+                    _buildScheduleSection(),
+                    const SizedBox(height: calendarSpacing12),
+                    _buildDeadlineField(),
+                    _modalDivider(),
+                    _buildRecurrenceSection(),
                   ],
                 ),
               ),
@@ -345,6 +359,111 @@ class _QuickAddModalState extends State<QuickAddModal>
           borderRadius: BorderRadius.circular(999),
         ),
       ),
+    );
+  }
+
+  Widget _buildLocationField() {
+    return TextField(
+      controller: _locationController,
+      textCapitalization: TextCapitalization.words,
+      decoration: InputDecoration(
+        labelText: 'Location (optional)',
+        labelStyle: const TextStyle(
+          color: calendarSubtitleColor,
+          fontSize: 14,
+        ),
+        hintText: 'Add a location...',
+        hintStyle: const TextStyle(
+          color: calendarTimeLabelColor,
+          fontSize: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+          borderSide: const BorderSide(color: calendarBorderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+          borderSide: const BorderSide(color: Color(0xff007AFF), width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: calendarSpacing12,
+          vertical: calendarSpacing12,
+        ),
+      ),
+      style: const TextStyle(
+        color: calendarTitleColor,
+        fontSize: 14,
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+  }
+
+  Widget _buildScheduleSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Schedule',
+          style: calendarSubtitleTextStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: calendarSpacing8),
+        ScheduleRangeFields(
+          start: _startTime,
+          end: _endTime,
+          onStartChanged: (value) {
+            setState(() {
+              _startTime = value;
+              if (value == null) {
+                _endTime = null;
+              } else {
+                if (_endTime == null || !_endTime!.isAfter(value)) {
+                  _endTime = value.add(const Duration(hours: 1));
+                }
+                if (_recurrenceFrequency == RecurrenceFrequency.weekly &&
+                    (_selectedWeekdays.isEmpty || _selectedWeekdays.length == 1)) {
+                  _selectedWeekdays = {value.weekday};
+                }
+              }
+            });
+          },
+          onEndChanged: (value) {
+            setState(() {
+              if (value == null) {
+                _endTime = null;
+                return;
+              }
+              if (_startTime != null && !value.isAfter(_startTime!)) {
+                _endTime = _startTime!.add(const Duration(minutes: 15));
+              } else {
+                _endTime = value;
+              }
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeadlineField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Deadline',
+          style: calendarSubtitleTextStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: calendarSpacing8),
+        DeadlinePickerField(
+          value: _deadline,
+          onChanged: (value) => setState(() => _deadline = value),
+        ),
+      ],
     );
   }
 
@@ -526,11 +645,13 @@ class _QuickAddModalState extends State<QuickAddModal>
             _recurrenceCount = null;
             _recurrenceCountController.clear();
           }
-          if (frequency == RecurrenceFrequency.weekly &&
-              _selectedWeekdays.isEmpty) {
-            final defaultDay =
-                widget.prefilledDateTime?.weekday ?? DateTime.monday;
-            _selectedWeekdays = {defaultDay};
+          if (frequency == RecurrenceFrequency.weekly) {
+            if (_selectedWeekdays.isEmpty) {
+              final fallbackDay = _startTime?.weekday ??
+                  widget.prefilledDateTime?.weekday ??
+                  DateTime.now().weekday;
+              _selectedWeekdays = {fallbackDay};
+            }
           }
         });
       },
@@ -648,36 +769,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
   }
 
-  Widget _buildTimeInfo() {
-    final dateTime = widget.prefilledDateTime!;
-    final timeFormat = TimeOfDay.fromDateTime(dateTime).format(context);
-    final dateFormat =
-        '${_getDayName(dateTime.weekday)}, ${_getMonthName(dateTime.month)} ${dateTime.day}';
-
-    return Container(
-      padding: calendarPadding12,
-      decoration: BoxDecoration(
-        color: calendarSelectedDayColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: calendarBorderColor),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.schedule,
-            color: calendarSubtitleColor,
-            size: 16,
-          ),
-          const SizedBox(width: calendarSpacing8),
-          Text(
-            '$dateFormat at $timeFormat',
-            style: calendarSubtitleTextStyle.copyWith(fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildActions() {
     return Container(
       padding: calendarPadding16,
@@ -772,12 +863,12 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     final taskName = _taskNameController.text.trim();
     final description = _descriptionController.text.trim();
-    final scheduledTime = widget.prefilledDateTime;
+    final scheduledTime = _startTime;
 
     RecurrenceRule? recurrence;
-    if (_recurrenceFrequency != RecurrenceFrequency.none) {
-      final defaultWeekday =
-          widget.prefilledDateTime?.weekday ?? DateTime.monday;
+    if (scheduledTime != null &&
+        _recurrenceFrequency != RecurrenceFrequency.none) {
+      final defaultWeekday = scheduledTime.weekday;
       final normalizedWeekdays = (_selectedWeekdays.isEmpty
               ? {defaultWeekday}
               : _selectedWeekdays)
@@ -836,11 +927,19 @@ class _QuickAddModalState extends State<QuickAddModal>
       title: taskName,
       description: description.isNotEmpty ? description : null,
       scheduledTime: scheduledTime,
-      duration: scheduledTime != null ? const Duration(hours: 1) : null,
+      duration: scheduledTime != null
+          ? (_endTime != null && _endTime!.isAfter(scheduledTime)
+              ? _endTime!.difference(scheduledTime)
+              : const Duration(hours: 1))
+          : null,
       priority: _selectedPriority,
       isCompleted: false,
       createdAt: DateTime.now(),
       modifiedAt: DateTime.now(),
+      location: _locationController.text.trim().isEmpty
+          ? null
+          : _locationController.text.trim(),
+      deadline: _deadline,
       recurrence: recurrence,
       startHour: scheduledTime != null
           ? scheduledTime.hour + (scheduledTime.minute / 60.0)
@@ -860,38 +959,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
   }
 
-  String _getMonthName(int month) {
-    const months = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return months[month];
-  }
-
-  String _getDayName(int weekday) {
-    const days = [
-      '',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday'
-    ];
-    return days[weekday];
-  }
 }
 
 // Helper function to show the modal
