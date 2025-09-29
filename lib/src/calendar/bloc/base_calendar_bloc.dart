@@ -264,16 +264,47 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     try {
-      final taskToDelete = state.model.tasks[event.taskId];
+      final occurrenceKey = occurrenceKeyFrom(event.taskId);
+      final targetTaskId = occurrenceKey == null
+          ? event.taskId
+          : baseTaskIdFrom(event.taskId);
+      final taskToDelete = state.model.tasks[targetTaskId];
       if (taskToDelete == null) {
         throw CalendarTaskNotFoundException(event.taskId);
+      }
+
+      if (occurrenceKey != null && !taskToDelete.effectiveRecurrence.isNone) {
+        emit(state.copyWith(isLoading: true, error: null));
+        _recordUndoSnapshot();
+
+        final overrides =
+            Map<String, TaskOccurrenceOverride>.from(
+                taskToDelete.occurrenceOverrides);
+        final existing = overrides[occurrenceKey];
+        overrides[occurrenceKey] = TaskOccurrenceOverride(
+          scheduledTime: existing?.scheduledTime,
+          duration: existing?.duration,
+          endDate: existing?.endDate,
+          daySpan: existing?.daySpan,
+          isCancelled: true,
+        );
+
+        final updatedTask = taskToDelete.copyWith(
+          occurrenceOverrides: overrides,
+          modifiedAt: _now(),
+        );
+        final updatedModel = state.model.updateTask(updatedTask);
+        emitModel(updatedModel, emit, isLoading: false);
+
+        await onTaskUpdated(updatedTask);
+        return;
       }
 
       emit(state.copyWith(isLoading: true, error: null));
 
       _recordUndoSnapshot();
 
-      final updatedModel = state.model.deleteTask(event.taskId);
+      final updatedModel = state.model.deleteTask(targetTaskId);
       emitModel(updatedModel, emit, isLoading: false);
 
       await onTaskDeleted(taskToDelete);

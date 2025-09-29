@@ -99,12 +99,17 @@ extension CalendarStateExtensions on CalendarState {
     final results = <CalendarTask>[];
 
     for (final task in model.tasks.values) {
-      final scheduled = task.scheduledTime;
-      if (scheduled == null) continue;
+      final baseInstance = task.baseOccurrenceInstance();
+      if (baseInstance != null && baseInstance.scheduledTime != null) {
+        final baseStart = baseInstance.scheduledTime!;
+        final baseEnd = baseInstance.effectiveEndDate ?? baseStart;
+        if (_overlapsRange(baseStart, baseEnd, normalizedStart, normalizedEnd)) {
+          results.add(baseInstance);
+        }
+      }
 
-      final taskEnd = task.effectiveEndDate ?? scheduled;
-      if (_overlapsRange(scheduled, taskEnd, normalizedStart, normalizedEnd)) {
-        results.add(task);
+      if (task.effectiveRecurrence.isNone) {
+        continue;
       }
 
       final generated = task.occurrencesWithin(normalizedStart, normalizedEnd);

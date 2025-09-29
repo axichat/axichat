@@ -1473,8 +1473,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           return const SizedBox.shrink();
                         }
 
+                        final displayTask = () {
+                          final occurrenceKey = occurrenceKeyFrom(taskId);
+                          if (occurrenceKey == null) {
+                            return latestTask;
+                          }
+                          return latestTask.occurrenceForId(taskId) ?? latestTask;
+                        }();
+
                         return EditTaskDropdown(
-                          task: latestTask,
+                          task: displayTask,
                           maxHeight: layout.maxHeight,
                           onClose: () => _closeTaskPopover(taskId,
                               reason: 'dropdown-close'),
@@ -2430,29 +2438,57 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             );
           }
 
-          final String selectionLabel;
-          if (selectionMode) {
-            selectionLabel = isSelected ? 'Deselect Task' : 'Add to Selection';
-          } else {
-            selectionLabel = 'Select Task';
-          }
+          final bool isRecurring = !task.effectiveRecurrence.isNone;
 
-          menuItems.add(
-            ShadContextMenuItem(
-              leading: Icon(
-                isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+          if (isRecurring) {
+            final bool isSeriesSelected = _selectedTaskIds.contains(task.baseId);
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: Icon(
+                  isSeriesSelected
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                ),
+                onPressed: () {
+                  menuController.hide();
+                  if (selectionMode) {
+                    _toggleTaskSelection(task.baseId);
+                  } else {
+                    _enterSelectionMode(task.baseId);
+                  }
+                },
+                child: Text(
+                  isSeriesSelected
+                      ? 'Deselect All Repeats'
+                      : 'Select All Repeats',
+                ),
               ),
-              onPressed: () {
-                menuController.hide();
-                if (selectionMode) {
-                  _toggleTaskSelection(task.baseId);
-                } else {
-                  _enterSelectionMode(task.baseId);
-                }
-              },
-              child: Text(selectionLabel),
-            ),
-          );
+            );
+          } else {
+            final String selectionLabel;
+            if (selectionMode) {
+              selectionLabel = isSelected ? 'Deselect Task' : 'Add to Selection';
+            } else {
+              selectionLabel = 'Select Task';
+            }
+
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: Icon(
+                  isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                ),
+                onPressed: () {
+                  menuController.hide();
+                  if (selectionMode) {
+                    _toggleTaskSelection(task.baseId);
+                  } else {
+                    _enterSelectionMode(task.baseId);
+                  }
+                },
+                child: Text(selectionLabel),
+              ),
+            );
+          }
 
           if (selectionMode) {
             menuItems.add(

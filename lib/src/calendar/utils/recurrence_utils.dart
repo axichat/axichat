@@ -37,6 +37,73 @@ extension CalendarTaskInstanceX on CalendarTask {
   /// Identifier suffix for this occurrence, if applicable.
   String? get occurrenceKey => occurrenceKeyFrom(id);
 
+  /// Unique key for the base (template) occurrence when this task repeats.
+  String? get baseOccurrenceKey =>
+      scheduledTime?.microsecondsSinceEpoch.toString();
+
+  /// Returns the base occurrence (the first scheduled instance) for recurring
+  /// tasks, applying any overrides. Returns `null` if the base occurrence has
+  /// been cancelled or the task is unscheduled.
+  CalendarTask? baseOccurrenceInstance() {
+    final scheduled = scheduledTime;
+    if (scheduled == null) return null;
+    if (effectiveRecurrence.isNone) return this;
+
+    final key = baseOccurrenceKey;
+    if (key == null) return null;
+
+    final override = occurrenceOverrides[key];
+    if (override?.isCancelled == true) {
+      return null;
+    }
+
+    return createOccurrenceInstance(
+      originalStart: scheduled,
+      occurrenceKey: key,
+      override: override,
+    );
+  }
+
+  /// Resolves a specific occurrence instance, applying overrides when present.
+  CalendarTask? occurrenceForId(String occurrenceId) {
+    final key = occurrenceKeyFrom(occurrenceId);
+    if (key == null) {
+      return null;
+    }
+
+    final originalStart = _originalStartForKey(key);
+    if (originalStart == null) {
+      return null;
+    }
+
+    final override = occurrenceOverrides[key];
+    if (override?.isCancelled == true) {
+      return null;
+    }
+
+    return createOccurrenceInstance(
+      originalStart: originalStart,
+      occurrenceKey: key,
+      override: override,
+    );
+  }
+
+  /// Creates a concrete occurrence instance for UI/state consumption.
+  CalendarTask createOccurrenceInstance({
+    required DateTime originalStart,
+    required String occurrenceKey,
+    TaskOccurrenceOverride? override,
+  }) {
+    return _copyForOccurrence(
+      originalStart: originalStart,
+      occurrenceKey: occurrenceKey,
+      scheduledOverride: override?.scheduledTime,
+      durationOverride: override?.duration,
+      endDateOverride: override?.endDate,
+      daySpanOverride: override?.daySpan,
+    );
+  }
+
   /// Produces additional instances of this task within the requested range
   /// based on its recurrence rule.
   List<CalendarTask> occurrencesWithin(DateTime rangeStart, DateTime rangeEnd) {
@@ -114,6 +181,17 @@ extension CalendarTaskInstanceX on CalendarTask {
     }
 
     return results;
+  }
+
+  DateTime? _originalStartForKey(String key) {
+    final micros = int.tryParse(key);
+    if (micros != null) {
+      return DateTime.fromMicrosecondsSinceEpoch(micros);
+    }
+    if (baseOccurrenceKey != null && key == baseOccurrenceKey) {
+      return scheduledTime;
+    }
+    return null;
   }
 
   CalendarTask _copyForOccurrence({

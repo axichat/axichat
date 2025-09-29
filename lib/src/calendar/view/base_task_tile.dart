@@ -493,9 +493,9 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           ),
           TextButton(
             onPressed: () {
-              context.read<T>().add(
-                    CalendarEvent.taskDeleted(taskId: widget.task.baseId),
-                  );
+              context
+                  .read<T>()
+                  .add(CalendarEvent.taskDeleted(taskId: widget.task.id));
               Navigator.of(context).pop();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
