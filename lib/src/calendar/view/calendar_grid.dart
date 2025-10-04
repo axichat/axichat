@@ -1015,6 +1015,37 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return _clampPreviewStart(candidate, targetDate);
   }
 
+  DateTime _taskTargetDate(CalendarTask task) {
+    final DateTime? scheduled = task.scheduledTime;
+    if (scheduled != null) {
+      return DateTime(scheduled.year, scheduled.month, scheduled.day);
+    }
+    final DateTime selected = widget.state.selectedDate;
+    return DateTime(selected.year, selected.month, selected.day);
+  }
+
+  DateTime _defaultPreviewStartForTask(CalendarTask task) {
+    final DateTime targetDate = _taskTargetDate(task);
+    if (task.scheduledTime != null) {
+      return task.scheduledTime!;
+    }
+    return DateTime(
+        targetDate.year, targetDate.month, targetDate.day, startHour);
+  }
+
+  DateTime? _computePreviewStartForTaskHover(
+    CalendarTask targetTask,
+    Offset pointerGlobal,
+  ) {
+    final DateTime targetDate = _taskTargetDate(targetTask);
+    final DateTime? computed =
+        _computePreviewStartFromGlobalOffset(pointerGlobal, targetDate);
+    if (computed != null) {
+      return computed;
+    }
+    return _defaultPreviewStartForTask(targetTask);
+  }
+
   bool _doesPreviewOverlap(CalendarTask task) {
     if (_dragPreviewStart == null || _dragPreviewDuration == null) {
       return false;
@@ -2636,12 +2667,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               if (dragged.baseId == task.baseId) {
                 return false;
               }
-              final anchor = task.scheduledTime;
-              if (anchor != null) {
-                final Duration previewDuration =
-                    dragged.duration ?? const Duration(hours: 1);
-                _updateDragPreview(anchor, previewDuration);
-              }
+              final DateTime previewStart =
+                  _computePreviewStartForTaskHover(task, details.offset) ??
+                      _defaultPreviewStartForTask(task);
+              final Duration previewDuration =
+                  dragged.duration ?? const Duration(hours: 1);
+              _updateDragPreview(previewStart, previewDuration);
               _stopEdgeAutoScroll();
               final bool allowNarrowing =
                   _dragHasMoved && !_isWidthDebounceActive;
@@ -2656,6 +2687,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               final double targetWidth =
                   allowNarrowing ? eventWidth / 2 : eventWidth;
               _updateDragFeedbackWidth(targetWidth);
+              final DateTime previewStart =
+                  _computePreviewStartForTaskHover(task, details.offset) ??
+                      _defaultPreviewStartForTask(task);
+              final Duration previewDuration =
+                  details.data.duration ?? const Duration(hours: 1);
+              _updateDragPreview(previewStart, previewDuration);
             },
             onLeave: (details) {
               final anchor = task.scheduledTime;
@@ -2670,10 +2707,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               _stopEdgeAutoScroll();
               _cancelPendingDragWidth();
               _resetDragFeedbackHint();
-              final anchor = task.scheduledTime;
-              if (anchor != null) {
-                _handleTaskDrop(details.data, anchor);
-              }
+              final DateTime dropTime =
+                  _computePreviewStartForTaskHover(task, details.offset) ??
+                      _defaultPreviewStartForTask(task);
+              _handleTaskDrop(details.data, dropTime);
             },
             builder: (context, candidateData, rejectedData) {
               final bool isDraggingTask =
