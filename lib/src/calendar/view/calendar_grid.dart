@@ -469,6 +469,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _updateDragFeedbackWidth(
     double width, {
     bool forceCenterPointer = false,
+    bool forceApply = false,
   }) {
     if (width <= 0) {
       return;
@@ -476,6 +477,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     final double currentWidth = _activeDragWidth ?? _draggingTaskWidth ?? width;
     final double diff = width - currentWidth;
+
+    if (forceApply) {
+      _cancelPendingDragWidth();
+      _applyDragFeedbackWidthNow(
+        width,
+        forceCenterPointer: forceCenterPointer && width < currentWidth,
+      );
+      return;
+    }
 
     bool applyImmediately = forceCenterPointer;
     if (!applyImmediately) {
@@ -656,13 +666,23 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _updateDragPreview(DateTime start, Duration duration) {
-    if (_dragPreviewStart == start && _dragPreviewDuration == duration) {
+    final bool startChanged = _dragPreviewStart == null ||
+        !_dragPreviewStart!.isAtSameMomentAs(start);
+    final bool durationChanged = _dragPreviewDuration != duration;
+    if (!startChanged && !durationChanged) {
       return;
     }
+
     setState(() {
       _dragPreviewStart = start;
       _dragPreviewDuration = duration;
     });
+
+    if (!_dragHasMoved && !_isWidthDebounceActive && _dragOriginSlot != null) {
+      if (!start.isAtSameMomentAs(_dragOriginSlot!)) {
+        _dragHasMoved = true;
+      }
+    }
   }
 
   void _clearDragPreview() {
@@ -2076,23 +2096,30 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             ) ??
             slotTime;
 
-        final bool occupied = _hasTaskInSlot(
-          DateTime(previewStart.year, previewStart.month, previewStart.day),
-          previewStart.hour,
-          previewStart.minute,
-          slotMinutes,
-        );
-        final bool effectiveOccupied =
-            occupied || (_pendingDragWidthTimer?.isActive ?? false);
-        if (!(_shouldFreezeWidth || isOriginCell)) {
-          targetWidth = effectiveOccupied
-              ? math.min(slotWidth, baselineWidth)
-              : slotWidth;
+        final bool hasOverlap =
+            _previewOverlapsScheduled(previewStart, duration);
+        final bool pendingNarrow =
+            hasOverlap || (_pendingDragWidthTimer?.isActive ?? false);
+        final bool canAdjustWidth =
+            !isOriginCell && (!_shouldFreezeWidth || hasOverlap);
+        bool forceApply = false;
+        if (canAdjustWidth) {
+          final double narrowedWidth =
+              _computeNarrowedWidth(slotWidth, baselineWidth);
+          if (pendingNarrow) {
+            targetWidth = narrowedWidth;
+          } else {
+            targetWidth = slotWidth;
+            forceApply = true;
+          }
         }
 
         _updateDragPreview(previewStart, duration);
-        _updateDragFeedbackWidth(targetWidth,
-            forceCenterPointer: targetWidth < currentWidth);
+        _updateDragFeedbackWidth(
+          targetWidth,
+          forceCenterPointer: targetWidth < currentWidth,
+          forceApply: forceApply,
+        );
         return true;
       },
       onLeave: (details) {
@@ -2134,29 +2161,37 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             ) ??
             slotTime;
         final Duration duration = task.duration ?? const Duration(hours: 1);
-        final bool occupied = _hasTaskInSlot(
-          DateTime(previewStart.year, previewStart.month, previewStart.day),
-          previewStart.hour,
-          previewStart.minute,
-          slotMinutes,
-        );
+        final bool hasOverlap =
+            _previewOverlapsScheduled(previewStart, duration);
         final double slotWidth = renderBox.size.width;
         final double baselineWidth = _dragInitialWidth ?? slotWidth;
-        final bool allowNarrowing = _dragHasMoved && !_isWidthDebounceActive;
+        final bool allowNarrowing =
+            hasOverlap || (_dragHasMoved && !_isWidthDebounceActive);
         final bool isOriginCell = _dragOriginSlot != null &&
             slotTime.isAtSameMomentAs(_dragOriginSlot!);
-        final bool effectiveOccupied =
-            occupied || (_pendingDragWidthTimer?.isActive ?? false);
+        final bool pendingNarrow =
+            hasOverlap || (_pendingDragWidthTimer?.isActive ?? false);
+        final bool canAdjustWidth =
+            !isOriginCell && (!_shouldFreezeWidth || hasOverlap);
         final double currentWidth =
             _activeDragWidth ?? _draggingTaskWidth ?? baselineWidth;
-        final double targetWidth = (isOriginCell || _shouldFreezeWidth)
-            ? baselineWidth
-            : effectiveOccupied && allowNarrowing
-                ? math.min(slotWidth, baselineWidth)
-                : slotWidth;
+        double targetWidth = baselineWidth;
+        bool forceApply = false;
+        if (canAdjustWidth) {
+          if (pendingNarrow && allowNarrowing) {
+            targetWidth = _computeNarrowedWidth(slotWidth, baselineWidth);
+          } else {
+            targetWidth = slotWidth;
+            forceApply = true;
+          }
+        }
+
         _updateDragPreview(previewStart, duration);
-        _updateDragFeedbackWidth(targetWidth,
-            forceCenterPointer: targetWidth < currentWidth);
+        _updateDragFeedbackWidth(
+          targetWidth,
+          forceCenterPointer: targetWidth < currentWidth,
+          forceApply: forceApply,
+        );
 
         if (!wasFrozen) {
           _dragHasMoved = true;
@@ -2278,6 +2313,40 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       // Check if task overlaps with this time slot
       return taskStart.isBefore(slotEnd) && taskEnd.isAfter(slotStart);
     });
+  }
+
+  bool _previewOverlapsScheduled(DateTime previewStart, Duration duration) {
+    final DateTime day = DateTime(
+      previewStart.year,
+      previewStart.month,
+      previewStart.day,
+    );
+    final tasks = _getTasksForDay(day);
+    final DateTime previewEnd = previewStart.add(duration);
+    final String? draggingId = _draggingTaskId;
+
+    return tasks.any((task) {
+      final DateTime? taskStart = task.scheduledTime;
+      if (taskStart == null) {
+        return false;
+      }
+      if (draggingId != null && task.id == draggingId) {
+        return false;
+      }
+      final DateTime taskEnd =
+          taskStart.add(task.duration ?? const Duration(hours: 1));
+      return previewStart.isBefore(taskEnd) && previewEnd.isAfter(taskStart);
+    });
+  }
+
+  double _computeNarrowedWidth(double slotWidth, double baselineWidth) {
+    final double effectiveSlotWidth = math.max(slotWidth - 4.0, 0.0);
+    if (baselineWidth <= effectiveSlotWidth * 0.55) {
+      return baselineWidth;
+    }
+    final double narrowed = effectiveSlotWidth / 2;
+    final double minWidth = math.min(32.0, baselineWidth);
+    return narrowed.clamp(minWidth, baselineWidth);
   }
 
   void _handleSlotTap(DateTime slotTime, {required bool hasTask}) {
@@ -2672,26 +2741,32 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                       _defaultPreviewStartForTask(task);
               final Duration previewDuration =
                   dragged.duration ?? const Duration(hours: 1);
+              final bool hasOverlap =
+                  _previewOverlapsScheduled(previewStart, previewDuration);
+              final bool allowNarrowing =
+                  hasOverlap || (_dragHasMoved && !_isWidthDebounceActive);
               _updateDragPreview(previewStart, previewDuration);
               _stopEdgeAutoScroll();
-              final bool allowNarrowing =
-                  _dragHasMoved && !_isWidthDebounceActive;
               final double targetWidth =
-                  allowNarrowing ? eventWidth / 2 : eventWidth;
-              _updateDragFeedbackWidth(targetWidth);
+                  allowNarrowing && hasOverlap ? eventWidth / 2 : eventWidth;
+              final bool forceApply = !hasOverlap;
+              _updateDragFeedbackWidth(targetWidth, forceApply: forceApply);
               return true;
             },
             onMove: (details) {
-              final bool allowNarrowing =
-                  _dragHasMoved && !_isWidthDebounceActive;
-              final double targetWidth =
-                  allowNarrowing ? eventWidth / 2 : eventWidth;
-              _updateDragFeedbackWidth(targetWidth);
               final DateTime previewStart =
                   _computePreviewStartForTaskHover(task, details.offset) ??
                       _defaultPreviewStartForTask(task);
               final Duration previewDuration =
                   details.data.duration ?? const Duration(hours: 1);
+              final bool hasOverlap =
+                  _previewOverlapsScheduled(previewStart, previewDuration);
+              final bool allowNarrowing =
+                  hasOverlap || (_dragHasMoved && !_isWidthDebounceActive);
+              final double targetWidth =
+                  allowNarrowing && hasOverlap ? eventWidth / 2 : eventWidth;
+              final bool forceApply = !hasOverlap;
+              _updateDragFeedbackWidth(targetWidth, forceApply: forceApply);
               _updateDragPreview(previewStart, previewDuration);
             },
             onLeave: (details) {
