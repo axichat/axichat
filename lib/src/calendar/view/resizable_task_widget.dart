@@ -36,6 +36,8 @@ class DragFeedbackHint {
 }
 
 class ResizableTaskWidget extends StatefulWidget {
+  static bool debugAlwaysShowHandles = false;
+
   final CalendarTask task;
   final ValueChanged<CalendarTask>? onResizePreview;
   final ValueChanged<CalendarTask>? onResizeEnd;
@@ -241,7 +243,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final double availableHeight =
           (widget.height - 4).clamp(0.0, double.infinity);
       final bool showHandles =
-          showHoverEffects && !task.isCompleted && availableHeight >= 14;
+          (ResizableTaskWidget.debugAlwaysShowHandles || showHoverEffects) &&
+              !task.isCompleted &&
+              availableHeight >= 14;
 
       if (availableHeight <= 6) {
         return Container(
@@ -588,6 +592,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         child: MouseRegion(
           cursor: SystemMouseCursors.resizeUpDown,
           child: GestureDetector(
+            key: ValueKey('${widget.task.id}-resize-top'),
             onPanStart: (details) => _startResize('top', details),
             onPanUpdate: (details) => _updateResize('top', details),
             onPanEnd: (_) => _endResize(),
@@ -618,6 +623,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         child: MouseRegion(
           cursor: SystemMouseCursors.resizeUpDown,
           child: GestureDetector(
+            key: ValueKey('${widget.task.id}-resize-bottom'),
             onPanStart: (details) => _startResize('bottom', details),
             onPanUpdate: (details) => _updateResize('bottom', details),
             onPanEnd: (_) => _endResize(),
