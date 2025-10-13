@@ -705,10 +705,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   DateTime? _computeSplitTime(CalendarTask task) {
-    final double? fraction = _taskContextMenuPointerFractions[task.id];
+    final double fraction =
+        (_taskContextMenuPointerFractions[task.id] ?? 0.5).clamp(0.0, 1.0);
     final DateTime? start = task.scheduledTime;
     final DateTime? end = _effectiveTaskEnd(task);
-    if (fraction == null || start == null || end == null) {
+    if (start == null || end == null) {
       return null;
     }
     final int totalMinutes = end.difference(start).inMinutes;
@@ -716,8 +717,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (totalMinutes <= 0 || totalMinutes < minimumStep * 2) {
       return null;
     }
-    final double clamped = fraction.clamp(0.0, 1.0);
-    int splitMinutes = (totalMinutes * clamped).round();
+    int splitMinutes = (totalMinutes * fraction).round();
     if (minimumStep > 0) {
       splitMinutes = (splitMinutes / minimumStep).round() * minimumStep;
     }

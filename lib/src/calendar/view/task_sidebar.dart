@@ -826,10 +826,27 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   List<CalendarTask> _selectedTasks(CalendarState state) {
-    final tasks = state.selectedTaskIds
-        .map((id) => state.model.tasks[id])
-        .whereType<CalendarTask>()
-        .toList();
+    final tasks = <CalendarTask>[];
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? directTask = state.model.tasks[id];
+      if (directTask != null) {
+        tasks.add(directTask);
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+
+      final CalendarTask? occurrence = baseTask.occurrenceForId(id);
+      if (occurrence != null) {
+        tasks.add(occurrence);
+      }
+    }
+
     tasks.sort((a, b) {
       final aTime = a.scheduledTime;
       final bTime = b.scheduledTime;
