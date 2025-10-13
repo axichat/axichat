@@ -505,6 +505,32 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               final origin = renderBox.localToGlobal(Offset.zero);
               handler(task, origin & renderBox.size);
             },
+            onSecondaryTapDown: (details) {
+              if (!widget.enableInteractions) return;
+              final double normalizedX =
+                  (details.localPosition.dx / widget.width).clamp(0.0, 1.0);
+              final double normalizedY = widget.height <= 0
+                  ? 0.0
+                  : (details.localPosition.dy / widget.height).clamp(0.0, 1.0);
+              widget.onDragPointerDown?.call(Offset(normalizedX, normalizedY));
+            },
+            onLongPressStart: (details) {
+              if (!widget.enableInteractions) return;
+              final RenderBox? renderBox =
+                  context.findRenderObject() as RenderBox?;
+              if (renderBox == null) {
+                widget.onDragPointerDown?.call(const Offset(0.5, 0.5));
+                return;
+              }
+              final Offset localPosition =
+                  renderBox.globalToLocal(details.globalPosition);
+              final double normalizedX =
+                  (localPosition.dx / widget.width).clamp(0.0, 1.0);
+              final double normalizedY = widget.height <= 0
+                  ? 0.0
+                  : (localPosition.dy / widget.height).clamp(0.0, 1.0);
+              widget.onDragPointerDown?.call(Offset(normalizedX, normalizedY));
+            },
             child: buildTaskBody(),
           ),
         ),
