@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
@@ -249,10 +248,9 @@ class _QuickAddModalState extends State<QuickAddModal>
       child: TaskTextField(
         controller: _taskNameController,
         focusNode: _taskNameFocusNode,
-        labelText: 'Task name *',
-        hintText: 'Enter task name...',
+        hintText: 'Task name',
         borderRadius: calendarBorderRadius,
-        focusBorderColor: const Color(0xff007AFF),
+        focusBorderColor: calendarPrimaryColor,
         textCapitalization: TextCapitalization.sentences,
         onChanged: (_) => setState(() {}),
       ),
@@ -260,14 +258,11 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Widget _buildDescriptionInput() {
-    return TaskTextField(
+    return TaskDescriptionField(
       controller: _descriptionController,
-      labelText: 'Description (optional)',
-      hintText: 'Add details...',
+      hintText: 'Description (optional)',
       borderRadius: calendarBorderRadius,
-      focusBorderColor: const Color(0xff007AFF),
-      minLines: 3,
-      maxLines: 3,
+      focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.sentences,
       onChanged: (_) => setState(() {}),
     );
@@ -284,12 +279,11 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Widget _buildLocationField() {
-    return TaskTextField(
+    return TaskLocationField(
       controller: _locationController,
-      labelText: 'Location (optional)',
-      hintText: 'Add a location...',
+      hintText: 'Location (optional)',
       borderRadius: calendarBorderRadius,
-      focusBorderColor: const Color(0xff007AFF),
+      focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
       onChanged: (_) => setState(() {}),
     );

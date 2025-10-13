@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/utils/smart_parser.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
@@ -114,34 +116,30 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
         // Optional controls (shown when focused)
         if (_isExpanded) ...[
           const SizedBox(height: 8),
-          Row(
+          TaskFormActionsRow(
+            padding: EdgeInsets.zero,
+            gap: calendarSpacing8,
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: TaskToolbarButton(
+                  icon: Icons.calendar_today,
+                  label: _selectedDate != null
+                      ? DateFormat.yMMMd().format(_selectedDate!)
+                      : 'Pick date',
                   onPressed: _selectDate,
-                  icon: const Icon(Icons.calendar_today, size: 16),
-                  label: Text(
-                    _selectedDate != null
-                        ? DateFormat.yMMMd().format(_selectedDate!)
-                        : 'Pick date',
-                  ),
                 ),
               ),
-              const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
+                child: TaskToolbarButton(
+                  icon: Icons.schedule,
+                  label: _selectedTime != null
+                      ? _selectedTime!.format(context)
+                      : 'Pick time',
                   onPressed: _selectTime,
-                  icon: const Icon(Icons.schedule, size: 16),
-                  label: Text(
-                    _selectedTime != null
-                        ? _selectedTime!.format(context)
-                        : 'Pick time',
-                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close, size: 16),
+              TaskGhostIconButton(
+                icon: Icons.close,
                 onPressed: () {
                   setState(() {
                     _isExpanded = false;
@@ -153,19 +151,20 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: calendarSpacing8),
           TaskFormActionsRow(
             padding: EdgeInsets.zero,
-            gap: 8,
+            gap: calendarSpacing8,
             children: [
               Expanded(
-                child: OutlinedButton(
+                child: TaskPrimaryButton(
+                  label: 'Add task',
                   onPressed: _handleSubmit,
-                  child: const Text('Add task'),
                 ),
               ),
               Expanded(
-                child: OutlinedButton(
+                child: TaskToolbarButton(
+                  label: 'Clear',
                   onPressed: () {
                     _controller.clear();
                     setState(() {
@@ -175,7 +174,6 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
                     });
                     _focusNode.unfocus();
                   },
-                  child: const Text('Clear'),
                 ),
               ),
             ],
