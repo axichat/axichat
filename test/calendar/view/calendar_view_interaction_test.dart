@@ -89,10 +89,10 @@ void main() {
     gridState.zoomIn();
     await tester.pump();
 
-    expect(find.text('30m'), findsOneWidget);
+    expect(find.text('Comfort'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 6));
     await tester.pump(const Duration(milliseconds: 200));
-    expect(find.text('30m'), findsNothing);
+    expect(find.text('Comfort'), findsNothing);
   });
 }

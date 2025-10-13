@@ -26,7 +26,19 @@ class CalendarWidget extends StatefulWidget {
 }
 
 class _CalendarWidgetState extends State<CalendarWidget> {
-  bool _sidebarVisible = true;
+  late final ValueNotifier<bool> _sidebarVisible;
+
+  @override
+  void initState() {
+    super.initState();
+    _sidebarVisible = ValueNotifier<bool>(true);
+  }
+
+  @override
+  void dispose() {
+    _sidebarVisible.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,22 +59,24 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                 .read<CalendarBloc>()
                 .add(const CalendarEvent.redoRequested());
           },
-          child: Scaffold(
-            backgroundColor: calendarBackgroundColor,
-            body: Stack(
-              children: [
-                // New structure: Row with sidebar OUTSIDE of navigation column
-                ResponsiveHelper.layoutBuilder(
-                  context,
-                  mobile: _buildMobileLayout(state),
-                  tablet: _buildTabletLayout(state),
-                  desktop: _buildDesktopLayout(state),
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _sidebarVisible,
+            builder: (context, sidebarVisible, _) {
+              return Scaffold(
+                backgroundColor: calendarBackgroundColor,
+                body: Stack(
+                  children: [
+                    ResponsiveHelper.layoutBuilder(
+                      context,
+                      mobile: _buildMobileLayout(state, sidebarVisible),
+                      tablet: _buildTabletLayout(state),
+                      desktop: _buildDesktopLayout(state),
+                    ),
+                    if (state.isLoading) _buildLoadingOverlay(),
+                  ],
                 ),
-
-                // Loading overlay
-                if (state.isLoading) _buildLoadingOverlay(),
-              ],
-            ),
+              );
+            },
           ),
         );
       },
@@ -114,7 +128,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     );
   }
 
-  Widget _buildMobileLayout(CalendarState state) {
+  Widget _buildMobileLayout(CalendarState state, bool sidebarVisible) {
     return Column(
       children: [
         // Navigation bar at the top
@@ -143,7 +157,8 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         if (state.error != null) _buildErrorBanner(state),
 
         // Collapsible sidebar drawer or overlay
-        if (_sidebarVisible) _buildSidebarWithProvider(height: 200),
+        if (sidebarVisible)
+          _buildSidebarWithProvider(height: calendarMobileSidebarHeight),
 
         // Toggle button
         Container(
@@ -151,17 +166,16 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           child: Row(
             children: [
               IconButton(
-                onPressed: () =>
-                    setState(() => _sidebarVisible = !_sidebarVisible),
+                onPressed: () => _sidebarVisible.value = !sidebarVisible,
                 icon: Icon(
-                    _sidebarVisible ? Icons.expand_less : Icons.expand_more),
+                    sidebarVisible ? Icons.expand_less : Icons.expand_more),
                 style: IconButton.styleFrom(
                   backgroundColor: calendarContainerColor,
                   foregroundColor: calendarTitleColor,
                 ),
               ),
               Text(
-                _sidebarVisible ? 'Hide Tasks' : 'Show Tasks',
+                sidebarVisible ? 'Hide Tasks' : 'Show Tasks',
                 style: const TextStyle(
                   fontSize: 14,
                   color: calendarSubtitleColor,

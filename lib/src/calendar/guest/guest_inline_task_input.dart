@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:intl/intl.dart';
 
-import '../bloc/calendar_event.dart';
-import '../utils/smart_parser.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/utils/smart_parser.dart';
+import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
+import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
+
 import 'guest_calendar_bloc.dart';
 
 /// Simple inline text field for quick task creation with smart parsing for guest mode
@@ -95,23 +98,17 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Main input field
-        GestureDetector(
-          onTap: () {
+        TaskTextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
+          textInputAction: TextInputAction.send,
+          onSubmitted: (_) => _handleSubmit(),
+          onChanged: (_) {
             if (!_isExpanded) {
-              setState(() {
-                _isExpanded = true;
-              });
+              setState(() => _isExpanded = true);
             }
-            _focusNode.requestFocus();
           },
-          child: ShadInput(
-            controller: _controller,
-            focusNode: _focusNode,
-            placeholder:
-                const Text('Add task... (e.g., "Meeting tomorrow at 3pm")'),
-            onSubmitted: (_) => _handleSubmit(),
-          ),
         ),
 
         // Optional controls (shown when focused)
@@ -120,47 +117,31 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
           Row(
             children: [
               Expanded(
-                child: ShadButton.outline(
-                  size: ShadButtonSize.sm,
+                child: OutlinedButton.icon(
                   onPressed: _selectDate,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.calendar_today, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        _selectedDate != null
-                            ? '${_selectedDate!.day}/${_selectedDate!.month}'
-                            : 'Date',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
+                  icon: const Icon(Icons.calendar_today, size: 16),
+                  label: Text(
+                    _selectedDate != null
+                        ? DateFormat.yMMMd().format(_selectedDate!)
+                        : 'Pick date',
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: ShadButton.outline(
-                  size: ShadButtonSize.sm,
+                child: OutlinedButton.icon(
                   onPressed: _selectTime,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.access_time, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        _selectedTime != null
-                            ? _selectedTime!.format(context)
-                            : 'Time',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
+                  icon: const Icon(Icons.schedule, size: 16),
+                  label: Text(
+                    _selectedTime != null
+                        ? _selectedTime!.format(context)
+                        : 'Pick time',
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              ShadButton.ghost(
-                size: ShadButtonSize.sm,
+              IconButton(
+                icon: const Icon(Icons.close, size: 16),
                 onPressed: () {
                   setState(() {
                     _isExpanded = false;
@@ -169,7 +150,33 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
                   });
                   _focusNode.unfocus();
                 },
-                child: const Icon(Icons.close, size: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TaskFormActionsRow(
+            padding: EdgeInsets.zero,
+            gap: 8,
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _handleSubmit,
+                  child: const Text('Add task'),
+                ),
+              ),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    _controller.clear();
+                    setState(() {
+                      _selectedDate = null;
+                      _selectedTime = null;
+                      _isExpanded = false;
+                    });
+                    _focusNode.unfocus();
+                  },
+                  child: const Text('Clear'),
+                ),
               ),
             ],
           ),
