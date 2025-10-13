@@ -54,9 +54,11 @@ void main() {
       size: const Size(1600, 900),
     );
 
-    expect(find.descendant(of: harness.gridFinder, matching: find.text('MON 15')),
+    expect(
+        find.descendant(of: harness.gridFinder, matching: find.text('MON 15')),
         findsOneWidget);
-    expect(find.descendant(of: harness.gridFinder, matching: find.text('TUE 16')),
+    expect(
+        find.descendant(of: harness.gridFinder, matching: find.text('TUE 16')),
         findsOneWidget);
   });
 

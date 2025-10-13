@@ -21,6 +21,19 @@ class CalendarLayoutTheme {
     this.eventMinWidth = calendarEventMinWidth,
     this.narrowedWidthFactor = 0.5,
     this.narrowedWidthThresholdFactor = 0.55,
+    this.sidebarMinWidth = calendarSidebarMinWidth,
+    this.sidebarMinWidthFraction = calendarSidebarWidthMinFraction,
+    this.sidebarDefaultWidthFraction = calendarSidebarWidthDefaultFraction,
+    this.sidebarMaxWidthFraction = calendarSidebarWidthMaxFraction,
+    this.sidebarScrollbarThickness = calendarSidebarScrollbarThickness,
+    this.sidebarScrollbarRadius = calendarSidebarScrollbarRadius,
+    this.zoomControlsElevation = calendarZoomControlsElevation,
+    this.zoomControlsBorderRadius = calendarZoomControlsBorderRadius,
+    this.zoomControlsPaddingHorizontal = calendarZoomControlsPaddingHorizontal,
+    this.zoomControlsPaddingVertical = calendarZoomControlsPaddingVertical,
+    this.zoomControlsLabelPaddingHorizontal =
+        calendarZoomControlsLabelPaddingHorizontal,
+    this.zoomControlsIconSize = calendarZoomControlsIconSize,
   });
 
   final double timeColumnWidth;
@@ -35,6 +48,18 @@ class CalendarLayoutTheme {
   final double eventMinWidth;
   final double narrowedWidthFactor;
   final double narrowedWidthThresholdFactor;
+  final double sidebarMinWidth;
+  final double sidebarMinWidthFraction;
+  final double sidebarDefaultWidthFraction;
+  final double sidebarMaxWidthFraction;
+  final double sidebarScrollbarThickness;
+  final double sidebarScrollbarRadius;
+  final double zoomControlsElevation;
+  final double zoomControlsBorderRadius;
+  final double zoomControlsPaddingHorizontal;
+  final double zoomControlsPaddingVertical;
+  final double zoomControlsLabelPaddingHorizontal;
+  final double zoomControlsIconSize;
 
   static const CalendarLayoutTheme material = CalendarLayoutTheme();
 }

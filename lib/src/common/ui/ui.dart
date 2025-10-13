@@ -121,6 +121,7 @@ const calendarEventMinWidth = 32.0;
 // Structural layout metrics
 const calendarWeekHeaderHeight = 40.0;
 const calendarBorderStroke = 1.0;
+const calendarSubSlotBorderStroke = 0.5;
 
 // Popover and overlay geometry
 /// Fixed width for task popovers so layout matches legacy design.
@@ -167,6 +168,36 @@ const calendarPadding16 = EdgeInsets.all(16.0);
 const calendarMarginSmall = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const calendarMarginMedium = EdgeInsets.symmetric(horizontal: 12, vertical: 6);
 const calendarMarginLarge = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+
+// Sidebar layout metrics
+const calendarSidebarMinWidth = 220.0;
+const calendarSidebarWidthMinFraction = 0.25;
+const calendarSidebarWidthDefaultFraction = 0.33;
+const calendarSidebarWidthMaxFraction = 0.5;
+const calendarSidebarScrollbarThickness = 6.0;
+const calendarSidebarScrollbarRadius = 8.0;
+
+// Sidebar completion tile metrics
+const calendarCompletionTileBorderRadius = 10.0;
+const calendarCompletionTilePaddingHorizontal = 12.0;
+const calendarCompletionTilePaddingVertical = 10.0;
+const calendarCompletionTileActiveBorderWidth = 2.0;
+const calendarCompletionTileInactiveBorderWidth = 1.0;
+const calendarCompletionTileGap = 10.0;
+const calendarSidebarToggleDuration = Duration(milliseconds: 180);
+
+// Zoom control metrics
+const calendarZoomControlsElevation = 3.0;
+const calendarZoomControlsBorderRadius = 24.0;
+const calendarZoomControlsPaddingHorizontal = 6.0;
+const calendarZoomControlsPaddingVertical = 2.0;
+const calendarZoomControlsLabelPaddingHorizontal = 8.0;
+const calendarZoomControlsIconSize = 18.0;
+const calendarZoomLabelTextStyle = TextStyle(
+  fontSize: 12,
+  fontWeight: FontWeight.w600,
+  letterSpacing: 0.4,
+);
 
 // Typography constants - Complete hierarchy system
 const calendarTitleTextStyle = TextStyle(

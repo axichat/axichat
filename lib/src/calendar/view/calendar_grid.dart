@@ -14,6 +14,7 @@ import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart'
     show
@@ -67,6 +68,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double get _edgeScrollSlowOffsetPerFrame =>
       _layoutTheme.edgeScrollSlowOffsetPerFrame;
   double get _taskPopoverHorizontalGap => _layoutTheme.popoverGap;
+  double get _zoomControlsElevation => _layoutTheme.zoomControlsElevation;
+  double get _zoomControlsBorderRadius => _layoutTheme.zoomControlsBorderRadius;
+  double get _zoomControlsPaddingHorizontal =>
+      _layoutTheme.zoomControlsPaddingHorizontal;
+  double get _zoomControlsPaddingVertical =>
+      _layoutTheme.zoomControlsPaddingVertical;
+  double get _zoomControlsLabelPaddingHorizontal =>
+      _layoutTheme.zoomControlsLabelPaddingHorizontal;
+  double get _zoomControlsIconSize => _layoutTheme.zoomControlsIconSize;
 
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
@@ -98,6 +108,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
   Ticker? _edgeAutoScrollTicker;
+  final Map<String, double> _taskContextMenuPointerFractions =
+      <String, double>{};
+  final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   double _edgeAutoScrollOffsetPerFrame = 0;
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
@@ -140,7 +153,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Set<String> get _selectedTaskIds => widget.state.selectedTaskIds;
 
   bool _isTaskSelected(CalendarTask task) {
-    return _selectedTaskIds.contains(task.baseId);
+    if (_selectedTaskIds.contains(task.id)) {
+      return true;
+    }
+    final String baseId = task.baseId;
+    if (baseId != task.id && _selectedTaskIds.contains(baseId)) {
+      return true;
+    }
+    return _selectedTaskIds.contains(baseId);
   }
 
   Map<LogicalKeySet, Intent> get _zoomShortcuts => {
@@ -591,20 +611,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _pasteTemplate(CalendarTask template, DateTime slotTime) {
-    final priority = template.priority ?? TaskPriority.none;
     _capturedBloc.add(
-      CalendarEvent.taskAdded(
-        title: template.title,
-        description: template.description,
+      CalendarEvent.taskRepeated(
+        template: template,
         scheduledTime: slotTime,
-        duration: template.duration,
-        deadline: template.deadline,
-        location: template.location,
-        daySpan: template.daySpan,
-        endDate: template.endDate,
-        priority: priority,
-        startHour: slotTime.hour + (slotTime.minute / 60.0),
-        recurrence: template.recurrence,
       ),
     );
   }
@@ -670,6 +680,62 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         .setDragPointerNormalized(normalizedOffset.dx.clamp(0.0, 1.0));
     _taskInteractionController.dragPointerOffsetFromTop = null;
     _taskInteractionController.dragHasMoved = false;
+  }
+
+  void _handleTaskPointerDown(CalendarTask task, Offset normalizedOffset) {
+    _handleDragPointerDown(normalizedOffset);
+    _taskContextMenuPointerFractions[task.id] =
+        normalizedOffset.dy.clamp(0.0, 1.0);
+  }
+
+  DateTime? _effectiveTaskEnd(CalendarTask task) {
+    final DateTime? start = task.scheduledTime;
+    if (start == null) {
+      return null;
+    }
+    final Duration? duration = task.duration;
+    if (duration != null && duration.inMinutes > 0) {
+      return start.add(duration);
+    }
+    final DateTime? end = task.effectiveEndDate;
+    if (end == null || !end.isAfter(start)) {
+      return null;
+    }
+    return end;
+  }
+
+  DateTime? _computeSplitTime(CalendarTask task) {
+    final double? fraction = _taskContextMenuPointerFractions[task.id];
+    final DateTime? start = task.scheduledTime;
+    final DateTime? end = _effectiveTaskEnd(task);
+    if (fraction == null || start == null || end == null) {
+      return null;
+    }
+    final int totalMinutes = end.difference(start).inMinutes;
+    final int minimumStep = _minutesPerStep;
+    if (totalMinutes <= 0 || totalMinutes < minimumStep * 2) {
+      return null;
+    }
+    final double clamped = fraction.clamp(0.0, 1.0);
+    int splitMinutes = (totalMinutes * clamped).round();
+    if (minimumStep > 0) {
+      splitMinutes = (splitMinutes / minimumStep).round() * minimumStep;
+    }
+    final int maxSplit = totalMinutes - minimumStep;
+    splitMinutes = math.max(minimumStep, math.min(splitMinutes, maxSplit));
+    if (splitMinutes <= 0 || splitMinutes >= totalMinutes) {
+      return null;
+    }
+    return start.add(Duration(minutes: splitMinutes));
+  }
+
+  void _splitTask(CalendarTask task, DateTime splitTime) {
+    _capturedBloc.add(
+      CalendarEvent.taskSplit(
+        target: task,
+        splitTime: splitTime,
+      ),
+    );
   }
 
   void _handleTaskDragUpdate(DragUpdateDetails details) {
@@ -1148,38 +1214,39 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   Widget _buildZoomControls() {
     return Material(
-      elevation: 3,
+      elevation: _zoomControlsElevation,
       color: Colors.white.withValues(alpha: 0.95),
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(_zoomControlsBorderRadius),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: EdgeInsets.symmetric(
+          horizontal: _zoomControlsPaddingHorizontal,
+          vertical: _zoomControlsPaddingVertical,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Tooltip(
               message: 'Zoom out (Ctrl/Cmd + -)',
               child: IconButton(
-                iconSize: 18,
+                iconSize: _zoomControlsIconSize,
                 visualDensity: VisualDensity.compact,
                 onPressed: _canZoomOut ? zoomOut : null,
                 icon: const Icon(Icons.remove),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: EdgeInsets.symmetric(
+                horizontal: _zoomControlsLabelPaddingHorizontal,
+              ),
               child: Text(
                 _zoomLabel,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                ),
+                style: calendarZoomLabelTextStyle,
               ),
             ),
             Tooltip(
               message: 'Zoom in (Ctrl/Cmd + +)',
               child: IconButton(
-                iconSize: 18,
+                iconSize: _zoomControlsIconSize,
                 visualDensity: VisualDensity.compact,
                 onPressed: _canZoomIn ? zoomIn : null,
                 icon: const Icon(Icons.add),
@@ -1188,7 +1255,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             Tooltip(
               message: 'Reset zoom (Ctrl/Cmd + 0)',
               child: IconButton(
-                iconSize: 18,
+                iconSize: _zoomControlsIconSize,
                 visualDensity: VisualDensity.compact,
                 onPressed: _zoomIndex == _defaultZoomIndex ? null : zoomReset,
                 icon: const Icon(Icons.refresh),
@@ -1214,6 +1281,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       bool isWeekView, List<DateTime> weekDates, bool compact) {
     final isMobile = ResponsiveHelper.isMobile(context);
     final visibleTaskIds = <String>{};
+    _visibleTasks.clear();
     late final Widget content;
 
     if (isWeekView && isMobile) {
@@ -1574,7 +1642,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: calendarBorderStroke),
+          bottom: BorderSide(
+              color: calendarBorderColor, width: calendarBorderStroke),
         ),
         borderRadius: BorderRadius.zero, // Remove rounded corners
       ),
@@ -1585,8 +1654,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             decoration: const BoxDecoration(
               color: calendarSidebarBackgroundColor,
               border: Border(
-                top: BorderSide(color: calendarBorderColor, width: calendarBorderStroke),
-                right: BorderSide(color: calendarBorderColor, width: calendarBorderStroke),
+                top: BorderSide(
+                    color: calendarBorderColor, width: calendarBorderStroke),
+                right: BorderSide(
+                    color: calendarBorderColor, width: calendarBorderStroke),
               ),
             ),
           ),
@@ -1648,7 +1719,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         border: Border(
           right: BorderSide(
             color: calendarBorderDarkColor,
-            width: 1,
+            width: calendarBorderStroke,
           ),
         ),
       ),
@@ -1670,8 +1741,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           final double borderWidth = isFirstSlot
               ? 0.0
               : isHourBoundary
-                  ? 1.0
-                  : 0.5;
+                  ? calendarBorderStroke
+                  : calendarSubSlotBorderStroke;
 
           String? label;
           if (isHourBoundary) {
@@ -1732,7 +1803,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         border: const Border(
           right: BorderSide(
             color: calendarBorderDarkColor,
-            width: 1,
+            width: calendarBorderStroke,
           ),
         ),
       ),
@@ -2058,8 +2129,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         bool forceApply = false;
         if (canAdjustWidth) {
           if (pendingNarrow && allowNarrowing) {
-            targetWidth =
-                _layoutCalculator.computeNarrowedWidth(slotWidth, baselineWidth);
+            targetWidth = _layoutCalculator.computeNarrowedWidth(
+                slotWidth, baselineWidth);
           } else {
             targetWidth = slotWidth;
             forceApply = true;
@@ -2289,8 +2360,120 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
+  CalendarTask? _resolveTaskForId(String id, CalendarState state) {
+    final CalendarTask? visibleTask = _visibleTasks[id];
+    if (visibleTask != null) {
+      return visibleTask;
+    }
+    final CalendarTask? directTask = state.model.tasks[id];
+    if (directTask != null) {
+      return directTask;
+    }
+    final String baseId = baseTaskIdFrom(id);
+    final CalendarTask? baseTask = state.model.tasks[baseId];
+    if (baseTask == null) {
+      return null;
+    }
+    if (id == baseId) {
+      return baseTask;
+    }
+    return baseTask.occurrenceForId(id);
+  }
+
+  void _emitTaskTimeShift(CalendarTask taskInstance, DateTime targetStart) {
+    final String taskId = taskInstance.id;
+    final CalendarTask? directTask = widget.state.model.tasks[taskId];
+    if (directTask != null) {
+      _capturedBloc.add(
+        CalendarEvent.taskDropped(
+          taskId: taskId,
+          time: targetStart,
+        ),
+      );
+      return;
+    }
+
+    final String baseId = taskInstance.baseId;
+    final CalendarTask? baseTask = widget.state.model.tasks[baseId];
+
+    if (taskInstance.isOccurrence && baseTask != null) {
+      _capturedBloc.add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: baseId,
+          occurrenceId: taskInstance.id,
+          scheduledTime: targetStart,
+          duration: taskInstance.duration,
+          endDate: taskInstance.endDate,
+          daySpan: taskInstance.daySpan,
+        ),
+      );
+      return;
+    }
+
+    if (baseTask != null) {
+      _capturedBloc.add(
+        CalendarEvent.taskDropped(
+          taskId: baseId,
+          time: targetStart,
+        ),
+      );
+      return;
+    }
+
+    widget.onTaskDragEnd?.call(taskInstance, targetStart);
+  }
+
+  bool _applySelectionDrag(CalendarTask anchorTask, DateTime dropTime) {
+    if (!_isSelectionMode || _selectedTaskIds.isEmpty) {
+      return false;
+    }
+
+    final bool anchorSelected = _selectedTaskIds.contains(anchorTask.id) ||
+        _selectedTaskIds.contains(anchorTask.baseId);
+    if (!anchorSelected) {
+      return false;
+    }
+
+    final DateTime? origin =
+        _visibleTasks[anchorTask.id]?.scheduledTime ?? anchorTask.scheduledTime;
+    if (origin == null) {
+      return false;
+    }
+
+    final Duration delta = dropTime.difference(origin);
+    final CalendarState state = widget.state;
+
+    if (delta.inMinutes == 0) {
+      return true;
+    }
+
+    final visited = <String>{};
+    for (final id in _selectedTaskIds) {
+      final CalendarTask? taskInstance = _resolveTaskForId(id, state);
+      if (taskInstance == null || taskInstance.scheduledTime == null) {
+        continue;
+      }
+      final DateTime targetStart = taskInstance.scheduledTime!.add(delta);
+      _emitTaskTimeShift(taskInstance, targetStart);
+      visited.add(taskInstance.id);
+    }
+
+    if (!visited.contains(anchorTask.id)) {
+      final CalendarTask resolved = _visibleTasks[anchorTask.id] ?? anchorTask;
+      if (resolved.scheduledTime != null) {
+        final DateTime targetStart = resolved.scheduledTime!.add(delta);
+        _emitTaskTimeShift(resolved, targetStart);
+      }
+    }
+
+    return true;
+  }
+
   void _handleTaskDrop(CalendarTask task, DateTime dropTime) {
-    widget.onTaskDragEnd?.call(task, dropTime);
+    final bool handled = _applySelectionDrag(task, dropTime);
+    if (!handled) {
+      widget.onTaskDragEnd?.call(task, dropTime);
+    }
     _handleTaskDragEnded(task);
   }
 
@@ -2359,6 +2542,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     for (final task in tasks) {
       if (task.scheduledTime == null) continue;
 
+      _visibleTasks[task.id] = task;
       visibleTaskIds.add(task.id);
       final overlapInfo = overlapMap[task.id] ??
           const OverlapInfo(columnIndex: 0, totalColumns: 1);
@@ -2527,10 +2711,46 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           }
 
           final bool isRecurring = !task.effectiveRecurrence.isNone;
+          final bool isOccurrenceSelected = _selectedTaskIds.contains(task.id);
+          final bool isSeriesSelected = _selectedTaskIds.contains(task.baseId);
 
           if (isRecurring) {
-            final bool isSeriesSelected =
-                _selectedTaskIds.contains(task.baseId);
+            final String occurrenceLabel;
+            if (selectionMode) {
+              occurrenceLabel = isOccurrenceSelected
+                  ? 'Deselect Occurrence'
+                  : 'Add Occurrence to Selection';
+            } else {
+              occurrenceLabel = 'Select Occurrence';
+            }
+
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: Icon(
+                  isOccurrenceSelected
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                ),
+                onPressed: () {
+                  menuController.hide();
+                  if (selectionMode) {
+                    _toggleTaskSelection(task.id);
+                  } else {
+                    _enterSelectionMode(task.id);
+                  }
+                },
+                child: Text(occurrenceLabel),
+              ),
+            );
+
+            final String seriesLabel;
+            if (selectionMode) {
+              seriesLabel =
+                  isSeriesSelected ? 'Deselect All Repeats' : 'Add All Repeats';
+            } else {
+              seriesLabel = 'Select All Repeats';
+            }
+
             menuItems.add(
               ShadContextMenuItem(
                 leading: Icon(
@@ -2546,11 +2766,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     _enterSelectionMode(task.baseId);
                   }
                 },
-                child: Text(
-                  isSeriesSelected
-                      ? 'Deselect All Repeats'
-                      : 'Select All Repeats',
-                ),
+                child: Text(seriesLabel),
               ),
             );
           } else {
@@ -2576,6 +2792,22 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   }
                 },
                 child: Text(selectionLabel),
+              ),
+            );
+          }
+
+          final DateTime? splitTime = _computeSplitTime(task);
+          if (splitTime != null) {
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: const Icon(Icons.call_split),
+                onPressed: () {
+                  menuController.hide();
+                  _splitTask(task, splitTime);
+                },
+                child: Text(
+                  'Split at ${TimeFormatter.formatTime(splitTime)}',
+                ),
               ),
             );
           }
@@ -2698,12 +2930,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 isSelectionMode: selectionMode,
                 isSelected: isSelected,
                 dragFeedbackHint: _taskInteractionController.feedbackHint,
-                onDragPointerDown: _handleDragPointerDown,
+                onDragPointerDown: (offset) =>
+                    _handleTaskPointerDown(task, offset),
                 onToggleSelection: () {
+                  final String targetId =
+                      task.isOccurrence ? task.id : task.baseId;
                   if (selectionMode) {
-                    _toggleTaskSelection(task.baseId);
+                    _toggleTaskSelection(targetId);
                   } else {
-                    _enterSelectionMode(task.baseId);
+                    _enterSelectionMode(targetId);
                   }
                 },
                 onDragStarted: _handleTaskDragStarted,

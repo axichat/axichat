@@ -12,6 +12,8 @@ import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
+import 'layout/calendar_layout.dart';
+import 'controllers/calendar_sidebar_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/calendar_completion_checkbox.dart';
 import 'priority_checkbox_tile.dart';
@@ -19,8 +21,6 @@ import 'widgets/schedule_range_fields.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
-
-enum _SidebarSection { unscheduled, reminders }
 
 class TaskSidebar extends StatefulWidget {
   const TaskSidebar({super.key});
@@ -57,7 +57,9 @@ class _SelectionCompletionTile extends StatelessWidget {
         _isActive ? calendarPrimaryColor : calendarBorderColor;
     final Color backgroundColor =
         _isActive ? calendarPrimaryColor.withValues(alpha: 0.08) : Colors.white;
-    final double borderWidth = isIndeterminate || value ? 2.0 : 1.0;
+    final double borderWidth = isIndeterminate || value
+        ? calendarCompletionTileActiveBorderWidth
+        : calendarCompletionTileInactiveBorderWidth;
     final Color textColor = !enabled
         ? calendarSubtitleColor
         : _isActive
@@ -66,14 +68,18 @@ class _SelectionCompletionTile extends StatelessWidget {
 
     return InkWell(
       onTap: enabled ? _handleTap : null,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(calendarCompletionTileBorderRadius),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: calendarSidebarToggleDuration,
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+          horizontal: calendarCompletionTilePaddingHorizontal,
+          vertical: calendarCompletionTilePaddingVertical,
+        ),
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius:
+              BorderRadius.circular(calendarCompletionTileBorderRadius),
           border: Border.all(
             color: enabled ? borderColor : calendarBorderColor,
             width: borderWidth,
@@ -87,7 +93,7 @@ class _SelectionCompletionTile extends StatelessWidget {
               isIndeterminate: isIndeterminate,
               onChanged: enabled ? onChanged : null,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: calendarCompletionTileGap),
             Expanded(
               child: Text(
                 'Mark as completed',
@@ -107,23 +113,12 @@ class _SelectionCompletionTile extends StatelessWidget {
 
 class _TaskSidebarState extends State<TaskSidebar>
     with TickerProviderStateMixin {
-  late double _width;
-  bool _widthInitialized = false;
-
+  static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
+  late final CalendarSidebarController _sidebarController;
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-
-  DateTime? _selectedDeadline;
-  bool _isImportant = false;
-  bool _isUrgent = false;
-  bool _isResizing = false;
-
-  _SidebarSection? _expandedSection = _SidebarSection.unscheduled;
-  bool _showAdvancedOptions = false;
-  DateTime? _advancedStartTime;
-  DateTime? _advancedEndTime;
   late final ValueNotifier<RecurrenceFormValue> _advancedRecurrenceNotifier;
 
   String _selectionRecurrenceSignature = '';
@@ -134,14 +129,16 @@ class _TaskSidebarState extends State<TaskSidebar>
       _advancedRecurrenceNotifier.value;
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
-  bool get _selectionRecurrenceMixed => _selectionRecurrenceMixedNotifier.value;
-
   final Map<String, ShadPopoverController> _taskPopoverControllers = {};
-  String? _activePopoverTaskId;
 
   @override
   void initState() {
     super.initState();
+    _sidebarController = CalendarSidebarController(
+      width: _layoutTheme.sidebarMinWidth,
+      minWidth: _layoutTheme.sidebarMinWidth,
+      maxWidth: _layoutTheme.sidebarMinWidth,
+    );
     _advancedRecurrenceNotifier =
         ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
     _selectionRecurrenceNotifier =
@@ -161,69 +158,89 @@ class _TaskSidebarState extends State<TaskSidebar>
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
     }
+    _sidebarController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final minWidth = (screenWidth * 0.25).clamp(220.0, screenWidth);
-    final maxWidth = (screenWidth * 0.5).clamp(minWidth, screenWidth);
-    final defaultWidth = (screenWidth * 0.33).clamp(minWidth, maxWidth);
+    final double minWidth = (screenWidth * _layoutTheme.sidebarMinWidthFraction)
+        .clamp(_layoutTheme.sidebarMinWidth, screenWidth)
+        .toDouble();
+    final double maxWidth = (screenWidth * _layoutTheme.sidebarMaxWidthFraction)
+        .clamp(minWidth, screenWidth)
+        .toDouble();
+    final double defaultWidth =
+        (screenWidth * _layoutTheme.sidebarDefaultWidthFraction)
+            .clamp(minWidth, maxWidth)
+            .toDouble();
 
-    if (!_widthInitialized) {
-      _width = defaultWidth.toDouble();
-      _widthInitialized = true;
-    }
-    _width = _width.clamp(minWidth, maxWidth).toDouble();
+    _sidebarController.syncBounds(
+      minWidth: minWidth,
+      maxWidth: maxWidth,
+      defaultWidth: defaultWidth,
+    );
 
-    return Container(
-      width: _width,
-      decoration: const BoxDecoration(
-        color: sidebarBackgroundColor,
-        border: Border(
-          right: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: BlocBuilder<BaseCalendarBloc, CalendarState>(
-              builder: (context, state) {
-                final content = state.isSelectionMode
-                    ? _buildSelectionPanel(state)
-                    : _buildUnscheduledContent(state);
-
-                return Scrollbar(
-                  controller: _scrollController,
-                  radius: const Radius.circular(8),
-                  thickness: 6,
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(bottom: 24),
-                    physics: const ClampingScrollPhysics(),
-                    child: content,
-                  ),
-                );
-              },
+    return AnimatedBuilder(
+      animation: _sidebarController,
+      builder: (context, _) {
+        final CalendarSidebarState uiState = _sidebarController.state;
+        final BaseCalendarBloc calendarBloc = context.read<BaseCalendarBloc>();
+        return Container(
+          width: uiState.width,
+          decoration: const BoxDecoration(
+            color: sidebarBackgroundColor,
+            border: Border(
+              right: BorderSide(
+                color: calendarBorderColor,
+                width: calendarBorderStroke,
+              ),
             ),
           ),
-          _buildResizeHandle(
-            minWidth: minWidth.toDouble(),
-            maxWidth: maxWidth.toDouble(),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: BlocBuilder<BaseCalendarBloc, CalendarState>(
+                  bloc: calendarBloc,
+                  builder: (context, state) {
+                    final content = state.isSelectionMode
+                        ? _buildSelectionPanel(state)
+                        : _buildUnscheduledContent(state, uiState);
+
+                    return Scrollbar(
+                      controller: _scrollController,
+                      radius:
+                          const Radius.circular(calendarSidebarScrollbarRadius),
+                      thickness: _layoutTheme.sidebarScrollbarThickness,
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(bottom: 24),
+                        physics: const ClampingScrollPhysics(),
+                        child: content,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              _buildResizeHandle(uiState),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildAddTaskSection() {
+  Widget _buildAddTaskSection(CalendarSidebarState uiState) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
+          bottom: BorderSide(
+            color: calendarBorderColor,
+            width: calendarBorderStroke,
+          ),
         ),
       ),
       child: Column(
@@ -241,9 +258,9 @@ class _TaskSidebarState extends State<TaskSidebar>
           const SizedBox(height: 16),
           _buildQuickTaskInput(),
           const SizedBox(height: 16),
-          _buildPriorityToggles(),
+          _buildPriorityToggles(uiState),
           const SizedBox(height: 12),
-          _buildAdvancedToggle(),
+          _buildAdvancedToggle(uiState),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
             transitionBuilder: (child, animation) {
@@ -260,8 +277,11 @@ class _TaskSidebarState extends State<TaskSidebar>
                 ),
               );
             },
-            child: _showAdvancedOptions
-                ? _buildAdvancedOptions(key: const ValueKey('advanced'))
+            child: uiState.showAdvancedOptions
+                ? _buildAdvancedOptions(
+                    uiState,
+                    key: const ValueKey('advanced'),
+                  )
                 : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
           ),
           const SizedBox(height: 16),
@@ -271,7 +291,10 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildUnscheduledContent(CalendarState state) {
+  Widget _buildUnscheduledContent(
+    CalendarState state,
+    CalendarSidebarState uiState,
+  ) {
     final unscheduledTasks = _sortTasksByDeadline(
       state.unscheduledTasks.where((task) => task.deadline == null).toList(),
     );
@@ -282,10 +305,11 @@ class _TaskSidebarState extends State<TaskSidebar>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildAddTaskSection(),
+        _buildAddTaskSection(uiState),
         _buildTaskSections(
           unscheduledTasks,
           reminderTasks,
+          uiState,
         ),
       ],
     );
@@ -303,7 +327,10 @@ class _TaskSidebarState extends State<TaskSidebar>
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
-              bottom: BorderSide(color: calendarBorderColor, width: 1),
+              bottom: BorderSide(
+                color: calendarBorderColor,
+                width: calendarBorderStroke,
+              ),
             ),
           ),
           child: Column(
@@ -887,21 +914,20 @@ class _TaskSidebarState extends State<TaskSidebar>
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => _addTask(),
-      onChanged: (_) => setState(() {}),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 
-  Widget _buildPriorityToggles() {
+  Widget _buildPriorityToggles(CalendarSidebarState uiState) {
     return TaskPriorityToggles(
-      isImportant: _isImportant,
-      isUrgent: _isUrgent,
-      onImportantChanged: (value) => setState(() => _isImportant = value),
-      onUrgentChanged: (value) => setState(() => _isUrgent = value),
+      isImportant: uiState.isImportant,
+      isUrgent: uiState.isUrgent,
+      onImportantChanged: _sidebarController.setImportant,
+      onUrgentChanged: _sidebarController.setUrgent,
     );
   }
 
-  Widget _buildAdvancedToggle() {
+  Widget _buildAdvancedToggle(CalendarSidebarState uiState) {
     return Align(
       alignment: Alignment.centerLeft,
       child: ShadButton.ghost(
@@ -909,16 +935,14 @@ class _TaskSidebarState extends State<TaskSidebar>
         foregroundColor: calendarPrimaryColor,
         hoverForegroundColor: calendarPrimaryHoverColor,
         hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
-        onPressed: () => setState(() {
-          _showAdvancedOptions = !_showAdvancedOptions;
-        }),
+        onPressed: _sidebarController.toggleAdvancedOptions,
         leading: Icon(
-          _showAdvancedOptions ? Icons.expand_less : Icons.expand_more,
+          uiState.showAdvancedOptions ? Icons.expand_less : Icons.expand_more,
           size: 18,
           color: calendarPrimaryColor,
         ),
         child: Text(
-          _showAdvancedOptions
+          uiState.showAdvancedOptions
               ? 'Hide advanced options'
               : 'Show advanced options',
         ),
@@ -926,7 +950,10 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedOptions({Key? key}) {
+  Widget _buildAdvancedOptions(
+    CalendarSidebarState uiState, {
+    Key? key,
+  }) {
     return Padding(
       key: key,
       padding: const EdgeInsets.only(top: 12),
@@ -948,13 +975,13 @@ class _TaskSidebarState extends State<TaskSidebar>
           const TaskSectionHeader(title: 'Deadline'),
           const SizedBox(height: 6),
           DeadlinePickerField(
-            value: _selectedDeadline,
-            onChanged: (value) => setState(() => _selectedDeadline = value),
+            value: uiState.selectedDeadline,
+            onChanged: _sidebarController.setSelectedDeadline,
           ),
           const TaskSectionDivider(),
           const TaskSectionHeader(title: 'Schedule'),
           const SizedBox(height: 6),
-          _buildAdvancedScheduleFields(),
+          _buildAdvancedScheduleFields(uiState),
           const TaskSectionDivider(),
           _buildAdvancedRecurrenceSection(),
         ],
@@ -979,41 +1006,18 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedScheduleFields() {
+  Widget _buildAdvancedScheduleFields(CalendarSidebarState uiState) {
     return ScheduleRangeFields(
-      start: _advancedStartTime,
-      end: _advancedEndTime,
-      onStartChanged: (value) {
-        setState(() {
-          _advancedStartTime = value;
-          if (value == null) {
-            _advancedEndTime = null;
-            return;
-          }
-          if (_advancedEndTime == null || _advancedEndTime!.isBefore(value)) {
-            _advancedEndTime = value.add(const Duration(hours: 1));
-          }
-        });
-      },
-      onEndChanged: (value) {
-        setState(() {
-          _advancedEndTime = value;
-          if (value == null) {
-            return;
-          }
-          if (_advancedStartTime != null &&
-              value.isBefore(_advancedStartTime!)) {
-            _advancedEndTime =
-                _advancedStartTime!.add(const Duration(minutes: 15));
-          }
-        });
-      },
+      start: uiState.advancedStartTime,
+      end: uiState.advancedEndTime,
+      onStartChanged: _sidebarController.setAdvancedStart,
+      onEndChanged: _sidebarController.setAdvancedEnd,
     );
   }
 
   Widget _buildAdvancedRecurrenceSection() {
-    final fallbackWeekday =
-        _advancedStartTime?.weekday ?? DateTime.now().weekday;
+    final referenceStart = _sidebarController.state.advancedStartTime;
+    final fallbackWeekday = referenceStart?.weekday ?? DateTime.now().weekday;
 
     return ValueListenableBuilder<RecurrenceFormValue>(
       valueListenable: _advancedRecurrenceNotifier,
@@ -1046,32 +1050,39 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildAddButton() {
-    final isDisabled = _titleController.text.trim().isEmpty;
-    return SizedBox(
-      width: double.infinity,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
-        onPressed: isDisabled ? null : _addTask,
-        backgroundColor: isDisabled
-            ? calendarPrimaryColor.withValues(alpha: 0.5)
-            : calendarPrimaryColor,
-        hoverBackgroundColor: calendarPrimaryHoverColor,
-        foregroundColor: Colors.white,
-        child: const Text('Add Task'),
-      ),
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _titleController,
+      builder: (context, value, _) {
+        final isDisabled = value.text.trim().isEmpty;
+        return SizedBox(
+          width: double.infinity,
+          child: ShadButton(
+            size: ShadButtonSize.sm,
+            onPressed: isDisabled ? null : _addTask,
+            backgroundColor: isDisabled
+                ? calendarPrimaryColor.withValues(alpha: 0.5)
+                : calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryHoverColor,
+            foregroundColor: Colors.white,
+            child: const Text('Add Task'),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildTaskSections(
     List<CalendarTask> unscheduledTasks,
     List<CalendarTask> reminderTasks,
+    CalendarSidebarState uiState,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildAccordionSection(
           title: 'UNSCHEDULED TASKS',
-          section: _SidebarSection.unscheduled,
+          section: CalendarSidebarSection.unscheduled,
+          uiState: uiState,
           itemCount: unscheduledTasks.length,
           expandedChild: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1079,6 +1090,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               unscheduledTasks,
               emptyLabel: 'No unscheduled tasks',
               emptyHint: 'Tasks you add will appear here',
+              uiState: uiState,
             ),
           ),
           collapsedChild: _buildCollapsedPreview(unscheduledTasks),
@@ -1086,11 +1098,12 @@ class _TaskSidebarState extends State<TaskSidebar>
         const SizedBox(height: 4),
         _buildAccordionSection(
           title: 'REMINDERS',
-          section: _SidebarSection.reminders,
+          section: CalendarSidebarSection.reminders,
+          uiState: uiState,
           itemCount: reminderTasks.length,
           expandedChild: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: _buildReminderList(reminderTasks),
+            child: _buildReminderList(reminderTasks, uiState),
           ),
           collapsedChild: _buildCollapsedPreview(reminderTasks),
         ),
@@ -1100,12 +1113,13 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   Widget _buildAccordionSection({
     required String title,
-    required _SidebarSection section,
+    required CalendarSidebarSection section,
     required int itemCount,
     required Widget expandedChild,
     required Widget collapsedChild,
+    required CalendarSidebarState uiState,
   }) {
-    final isExpanded = _expandedSection == section;
+    final isExpanded = uiState.expandedSection == section;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1115,8 +1129,11 @@ class _TaskSidebarState extends State<TaskSidebar>
           decoration: BoxDecoration(
             color: sidebarBackgroundColor,
             border: Border(
-              bottom: section == _SidebarSection.unscheduled
-                  ? const BorderSide(color: calendarBorderColor, width: 1)
+              bottom: section == CalendarSidebarSection.unscheduled
+                  ? const BorderSide(
+                      color: calendarBorderColor,
+                      width: calendarBorderStroke,
+                    )
                   : BorderSide.none,
             ),
           ),
@@ -1124,15 +1141,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               InkWell(
-                onTap: () => setState(() {
-                  if (isExpanded) {
-                    _expandedSection = section == _SidebarSection.unscheduled
-                        ? _SidebarSection.reminders
-                        : _SidebarSection.unscheduled;
-                  } else {
-                    _expandedSection = section;
-                  }
-                }),
+                onTap: () => _sidebarController.toggleSection(section),
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1231,6 +1240,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     List<CalendarTask> tasks, {
     required String emptyLabel,
     String? emptyHint,
+    required CalendarSidebarState uiState,
   }) {
     return DragTarget<CalendarTask>(
       onAcceptWithDetails: (details) {
@@ -1266,7 +1276,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
-                    return _buildDraggableTaskTile(task);
+                    return _buildDraggableTaskTile(task, uiState);
                   },
                 ),
         );
@@ -1274,11 +1284,15 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildReminderList(List<CalendarTask> tasks) {
+  Widget _buildReminderList(
+    List<CalendarTask> tasks,
+    CalendarSidebarState uiState,
+  ) {
     return _buildTaskList(
       tasks,
       emptyLabel: 'No reminders yet',
       emptyHint: 'Add a deadline to create a reminder',
+      uiState: uiState,
     );
   }
 
@@ -1355,7 +1369,10 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildDraggableTaskTile(CalendarTask task) {
+  Widget _buildDraggableTaskTile(
+    CalendarTask task,
+    CalendarSidebarState uiState,
+  ) {
     return Draggable<CalendarTask>(
       data: task,
       feedback: Material(
@@ -1363,9 +1380,10 @@ class _TaskSidebarState extends State<TaskSidebar>
         child: Opacity(
           opacity: 0.7,
           child: SizedBox(
-            width: _width - 32,
+            width: uiState.width - 32,
             child: _buildTaskTile(
               task,
+              uiState: uiState,
               enableInteraction: false,
             ),
           ),
@@ -1375,18 +1393,21 @@ class _TaskSidebarState extends State<TaskSidebar>
         opacity: 0.3,
         child: _buildTaskTile(
           task,
+          uiState: uiState,
           enableInteraction: false,
         ),
       ),
-      child: _buildTaskTile(task),
+      child: _buildTaskTile(task, uiState: uiState),
     );
   }
 
   Widget _buildTaskTile(
     CalendarTask task, {
+    required CalendarSidebarState uiState,
     bool enableInteraction = true,
   }) {
     final borderColor = task.priorityColor;
+    final bool isActive = uiState.activePopoverTaskId == task.id;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1394,7 +1415,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isActive ? calendarSidebarBackgroundColor : Colors.white,
             border: Border(
               left: BorderSide(color: borderColor, width: 3),
               top: const BorderSide(color: calendarBorderColor),
@@ -1648,39 +1669,33 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildResizeHandle(
-      {required double minWidth, required double maxWidth}) {
+  Widget _buildResizeHandle(CalendarSidebarState uiState) {
     return Positioned(
       right: 0,
       top: 0,
       bottom: 0,
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeColumn,
-        onEnter: (_) => setState(() {}),
-        onExit: (_) => setState(() {}),
         child: GestureDetector(
-          onPanStart: (details) => setState(() => _isResizing = true),
-          onPanUpdate: (details) {
-            setState(() {
-              final newWidth = _width + details.delta.dx;
-              _width = newWidth.clamp(minWidth, maxWidth);
-            });
-          },
-          onPanEnd: (details) => setState(() => _isResizing = false),
+          onPanStart: (_) => _sidebarController.beginResize(),
+          onPanUpdate: (details) =>
+              _sidebarController.adjustWidth(details.delta.dx),
+          onPanEnd: (_) => _sidebarController.endResize(),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             width: 8,
-            color: _isResizing
+            color: uiState.isResizing
                 ? calendarPrimaryColor.withValues(alpha: 0.2)
                 : Colors.transparent,
             child: Center(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                width: _isResizing ? 3 : 2,
-                height: _isResizing ? 60 : 50,
+                width: uiState.isResizing ? 3 : 2,
+                height: uiState.isResizing ? 60 : 50,
                 decoration: BoxDecoration(
-                  color:
-                      _isResizing ? calendarPrimaryColor : calendarBorderColor,
+                  color: uiState.isResizing
+                      ? calendarPrimaryColor
+                      : calendarBorderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1744,24 +1759,27 @@ class _TaskSidebarState extends State<TaskSidebar>
     return calendarPrimaryColor.withValues(alpha: 0.08);
   }
 
-  TaskPriority _getPriority() {
-    if (_isImportant && _isUrgent) {
+  TaskPriority _currentPriority() {
+    final uiState = _sidebarController.state;
+    if (uiState.isImportant && uiState.isUrgent) {
       return TaskPriority.critical;
-    } else if (_isImportant) {
+    } else if (uiState.isImportant) {
       return TaskPriority.important;
-    } else if (_isUrgent) {
+    } else if (uiState.isUrgent) {
       return TaskPriority.urgent;
     }
     return TaskPriority.none;
   }
 
   void _addTask() {
+    final uiState = _sidebarController.state;
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
 
-    final priority = _getPriority();
+    final priority = _currentPriority();
     final hasLocation = _locationController.text.trim().isNotEmpty;
-    final hasSchedule = _advancedStartTime != null && _advancedEndTime != null;
+    final hasSchedule =
+        uiState.advancedStartTime != null && uiState.advancedEndTime != null;
     final hasRecurrence = _advancedRecurrence.isActive;
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
@@ -1771,7 +1789,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               description: _descriptionController.text.trim().isNotEmpty
                   ? _descriptionController.text.trim()
                   : null,
-              deadline: _selectedDeadline,
+              deadline: uiState.selectedDeadline,
               priority: priority,
             ),
           );
@@ -1779,17 +1797,19 @@ class _TaskSidebarState extends State<TaskSidebar>
       Duration? duration;
       DateTime? scheduledTime;
       if (hasSchedule) {
-        duration = _advancedEndTime!.difference(_advancedStartTime!);
+        final DateTime start = uiState.advancedStartTime!;
+        DateTime end = uiState.advancedEndTime!;
+        duration = end.difference(start);
         if (duration.inMinutes < 15) {
+          end = start.add(const Duration(minutes: 15));
           duration = const Duration(minutes: 15);
-          _advancedEndTime = _advancedStartTime!.add(duration);
         }
-        scheduledTime = _advancedStartTime;
+        scheduledTime = start;
       }
 
       RecurrenceRule? recurrence;
       if (hasRecurrence) {
-        final reference = _advancedStartTime ?? DateTime.now();
+        final reference = uiState.advancedStartTime ?? DateTime.now();
         recurrence = _advancedRecurrence.toRule(start: reference);
       }
 
@@ -1801,7 +1821,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   : null,
               scheduledTime: scheduledTime,
               duration: duration,
-              deadline: _selectedDeadline,
+              deadline: uiState.selectedDeadline,
               location: hasLocation ? _locationController.text.trim() : null,
               priority: priority,
               recurrence: recurrence,
@@ -1817,14 +1837,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _descriptionController.clear();
     _locationController.clear();
     _advancedRecurrenceNotifier.value = const RecurrenceFormValue();
-    setState(() {
-      _selectedDeadline = null;
-      _isImportant = false;
-      _isUrgent = false;
-      _showAdvancedOptions = false;
-      _advancedStartTime = null;
-      _advancedEndTime = null;
-    });
+    _sidebarController.resetForm();
   }
 
   ShadPopoverController _popoverControllerFor(String taskId) {
@@ -1834,8 +1847,9 @@ class _TaskSidebarState extends State<TaskSidebar>
     final controller = ShadPopoverController();
     controller.addListener(() {
       if (!mounted) return;
-      if (!controller.isOpen && _activePopoverTaskId == taskId) {
-        setState(() => _activePopoverTaskId = null);
+      if (!controller.isOpen &&
+          _sidebarController.state.activePopoverTaskId == taskId) {
+        _sidebarController.setActivePopoverTaskId(null);
       }
     });
     _taskPopoverControllers[taskId] = controller;
@@ -1853,25 +1867,26 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   void _openTaskPopover(String taskId) {
     final controller = _popoverControllerFor(taskId);
-    if (_activePopoverTaskId != null && _activePopoverTaskId != taskId) {
-      final activeController = _taskPopoverControllers[_activePopoverTaskId!];
+    final String? activeId = _sidebarController.state.activePopoverTaskId;
+    if (activeId != null && activeId != taskId) {
+      final activeController = _taskPopoverControllers[activeId];
       activeController?.hide();
     }
     controller.show();
-    if (_activePopoverTaskId != taskId) {
-      setState(() => _activePopoverTaskId = taskId);
+    if (activeId != taskId) {
+      _sidebarController.setActivePopoverTaskId(taskId);
     }
   }
 
   void _closeTaskPopover([String? taskId]) {
-    final id = taskId ?? _activePopoverTaskId;
+    final String? id = taskId ?? _sidebarController.state.activePopoverTaskId;
     if (id == null) {
       return;
     }
     final controller = _taskPopoverControllers[id];
     controller?.hide();
-    if (_activePopoverTaskId == id && mounted) {
-      setState(() => _activePopoverTaskId = null);
+    if (_sidebarController.state.activePopoverTaskId == id && mounted) {
+      _sidebarController.setActivePopoverTaskId(null);
     }
   }
 }

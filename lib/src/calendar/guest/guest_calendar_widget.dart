@@ -356,16 +356,47 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
     final bloc = context.read<GuestCalendarBloc>();
+    final currentState = bloc.state;
+    final CalendarTask? directTask = currentState.model.tasks[task.id];
+    if (directTask != null) {
+      final DateTime plannedStart = newTime;
+      final Duration duration =
+          task.duration ?? directTask.duration ?? const Duration(hours: 1);
+
+      if (directTask.duration != task.duration ||
+          directTask.scheduledTime != task.scheduledTime) {
+        final double startHour =
+            plannedStart.hour + (plannedStart.minute / 60.0);
+        final double durationHours = duration.inMinutes / 60.0;
+
+        bloc.add(
+          CalendarEvent.taskResized(
+            taskId: directTask.id,
+            startHour: startHour,
+            duration: durationHours,
+            daySpan: task.effectiveDaySpan,
+          ),
+        );
+      } else {
+        bloc.add(
+          CalendarEvent.taskDropped(
+            taskId: directTask.id,
+            time: plannedStart,
+          ),
+        );
+      }
+      return;
+    }
+
     final baseId = task.baseId;
-    final originalTask = bloc.state.model.tasks[baseId];
+    final originalTask = currentState.model.tasks[baseId];
 
     if (task.isOccurrence) {
-      final scheduled = newTime;
       bloc.add(
         CalendarEvent.taskOccurrenceUpdated(
           taskId: baseId,
           occurrenceId: task.id,
-          scheduledTime: scheduled,
+          scheduledTime: newTime,
           duration: task.duration,
           endDate: task.endDate,
           daySpan: task.daySpan,
@@ -377,7 +408,6 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
-      // This handles both resize and time change
       final scheduled = task.scheduledTime ?? newTime;
       final startHour = scheduled.hour + (scheduled.minute / 60.0);
       final durationHours =
@@ -392,7 +422,6 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
         ),
       );
     } else {
-      // Simple time change only
       bloc.add(
         CalendarEvent.taskDropped(
           taskId: baseId,

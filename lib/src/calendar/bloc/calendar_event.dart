@@ -98,6 +98,16 @@ class CalendarEvent with _$CalendarEvent {
     required TaskPriority priority,
   }) = CalendarTaskPriorityChanged;
 
+  const factory CalendarEvent.taskSplit({
+    required CalendarTask target,
+    required DateTime splitTime,
+  }) = CalendarTaskSplit;
+
+  const factory CalendarEvent.taskRepeated({
+    required CalendarTask template,
+    required DateTime scheduledTime,
+  }) = CalendarTaskRepeated;
+
   const factory CalendarEvent.quickTaskAdded({
     required String text,
     String? description,
