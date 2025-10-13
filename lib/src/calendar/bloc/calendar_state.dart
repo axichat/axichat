@@ -103,7 +103,8 @@ extension CalendarStateExtensions on CalendarState {
       if (baseInstance != null && baseInstance.scheduledTime != null) {
         final baseStart = baseInstance.scheduledTime!;
         final baseEnd = baseInstance.effectiveEndDate ?? baseStart;
-        if (_overlapsRange(baseStart, baseEnd, normalizedStart, normalizedEnd)) {
+        if (_overlapsRange(
+            baseStart, baseEnd, normalizedStart, normalizedEnd)) {
           results.add(baseInstance);
         }
       }

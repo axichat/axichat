@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/calendar_exceptions.dart';
 import '../models/calendar_model.dart';
@@ -37,6 +38,8 @@ abstract class BaseCalendarBloc
     on<CalendarTaskResized>(_onTaskResized);
     on<CalendarTaskOccurrenceUpdated>(_onTaskOccurrenceUpdated);
     on<CalendarTaskPriorityChanged>(_onTaskPriorityChanged);
+    on<CalendarTaskSplit>(_onTaskSplit);
+    on<CalendarTaskRepeated>(_onTaskRepeated);
     on<CalendarQuickTaskAdded>(_onQuickTaskAdded);
     on<CalendarViewChanged>(_onViewChanged);
     on<CalendarDayViewSelected>(_onDayViewSelected);
@@ -146,9 +149,17 @@ abstract class BaseCalendarBloc
     required bool isSelectionMode,
     required Set<String> selectedTaskIds,
   }) {
-    final sanitizedSelection = selectedTaskIds
-        .where((id) => state.model.tasks.containsKey(id))
-        .toSet();
+    final sanitizedSelection = <String>{};
+    for (final id in selectedTaskIds) {
+      if (state.model.tasks.containsKey(id)) {
+        sanitizedSelection.add(id);
+        continue;
+      }
+      final String baseId = baseTaskIdFrom(id);
+      if (baseId != id && state.model.tasks.containsKey(baseId)) {
+        sanitizedSelection.add(id);
+      }
+    }
     final nextMode = isSelectionMode && sanitizedSelection.isNotEmpty;
     emit(
       state.copyWith(
@@ -264,10 +275,33 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     try {
+      final CalendarTask? directTaskEntry = state.model.tasks[event.taskId];
+      if (directTaskEntry != null && event.taskId.contains('::')) {
+        final CalendarTask task = directTaskEntry;
+        emit(state.copyWith(isLoading: true, error: null));
+        _recordUndoSnapshot();
+
+        final updatedModel = state.model.deleteTask(event.taskId);
+        final remainingSelection =
+            state.selectedTaskIds.where((id) => id != event.taskId).toSet();
+        final bool nextSelectionMode =
+            state.isSelectionMode && remainingSelection.isNotEmpty;
+
+        emitModel(
+          updatedModel,
+          emit,
+          isLoading: false,
+          isSelectionMode: nextSelectionMode,
+          selectedTaskIds: remainingSelection,
+        );
+
+        await onTaskDeleted(task);
+        return;
+      }
+
       final occurrenceKey = occurrenceKeyFrom(event.taskId);
-      final targetTaskId = occurrenceKey == null
-          ? event.taskId
-          : baseTaskIdFrom(event.taskId);
+      final targetTaskId =
+          occurrenceKey == null ? event.taskId : baseTaskIdFrom(event.taskId);
       final taskToDelete = state.model.tasks[targetTaskId];
       if (taskToDelete == null) {
         throw CalendarTaskNotFoundException(event.taskId);
@@ -277,9 +311,8 @@ abstract class BaseCalendarBloc
         emit(state.copyWith(isLoading: true, error: null));
         _recordUndoSnapshot();
 
-        final overrides =
-            Map<String, TaskOccurrenceOverride>.from(
-                taskToDelete.occurrenceOverrides);
+        final overrides = Map<String, TaskOccurrenceOverride>.from(
+            taskToDelete.occurrenceOverrides);
         final existing = overrides[occurrenceKey];
         overrides[occurrenceKey] = TaskOccurrenceOverride(
           scheduledTime: existing?.scheduledTime,
@@ -287,6 +320,8 @@ abstract class BaseCalendarBloc
           endDate: existing?.endDate,
           daySpan: existing?.daySpan,
           isCancelled: true,
+          priority: existing?.priority,
+          isCompleted: existing?.isCompleted,
         );
 
         final updatedTask = taskToDelete.copyWith(
@@ -304,8 +339,19 @@ abstract class BaseCalendarBloc
 
       _recordUndoSnapshot();
 
-      final updatedModel = state.model.deleteTask(targetTaskId);
-      emitModel(updatedModel, emit, isLoading: false);
+      final CalendarModel updatedModel = state.model.deleteTask(targetTaskId);
+      final remainingSelection =
+          state.selectedTaskIds.where((id) => id != targetTaskId).toSet();
+      final bool nextSelectionMode =
+          state.isSelectionMode && remainingSelection.isNotEmpty;
+
+      emitModel(
+        updatedModel,
+        emit,
+        isLoading: false,
+        isSelectionMode: nextSelectionMode,
+        selectedTaskIds: remainingSelection,
+      );
 
       await onTaskDeleted(taskToDelete);
     } catch (error) {
@@ -482,6 +528,188 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onTaskSplit(
+    CalendarTaskSplit event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final CalendarTask target = event.target;
+      final CalendarTask? baseTask = state.model.tasks[target.baseId];
+      if (baseTask == null) {
+        throw CalendarTaskNotFoundException(target.baseId);
+      }
+
+      final DateTime? start = target.scheduledTime;
+      DateTime? end = target.effectiveEndDate;
+      final Duration? duration = target.duration;
+      if (end == null && duration != null && duration.inMinutes > 0) {
+        end = start?.add(duration);
+      }
+
+      if (start == null || end == null || !end.isAfter(start)) {
+        return;
+      }
+
+      final DateTime splitTime = event.splitTime;
+      if (!splitTime.isAfter(start) || !splitTime.isBefore(end)) {
+        return;
+      }
+
+      final int leftMinutes = splitTime.difference(start).inMinutes;
+      final int rightMinutes = end.difference(splitTime).inMinutes;
+      if (leftMinutes <= 0 || rightMinutes <= 0) {
+        return;
+      }
+
+      final Duration leftDuration = Duration(minutes: leftMinutes);
+      final Duration rightDuration = Duration(minutes: rightMinutes);
+      final now = _now();
+
+      _recordUndoSnapshot();
+
+      CalendarModel model = state.model;
+      final updates = <String, CalendarTask>{};
+      CalendarTask? createdTask;
+
+      if (!baseTask.effectiveRecurrence.isNone && target.id.contains('::')) {
+        final String? occurrenceKey = occurrenceKeyFrom(target.id);
+        if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
+          final overrides = Map<String, TaskOccurrenceOverride>.from(
+            baseTask.occurrenceOverrides,
+          );
+          final TaskOccurrenceOverride? existing = overrides[occurrenceKey];
+          overrides[occurrenceKey] = TaskOccurrenceOverride(
+            scheduledTime: start,
+            duration: leftDuration,
+            endDate: start.add(leftDuration),
+            daySpan: existing?.daySpan,
+            isCancelled: existing?.isCancelled,
+            priority: existing?.priority,
+            isCompleted: existing?.isCompleted,
+          );
+
+          final CalendarTask updatedBase = baseTask.copyWith(
+            occurrenceOverrides: overrides,
+            modifiedAt: now,
+          );
+          updates[baseTask.id] = updatedBase;
+
+          createdTask = baseTask.copyWith(
+            id: const Uuid().v4(),
+            scheduledTime: splitTime,
+            duration: rightDuration,
+            startHour: splitTime.hour + (splitTime.minute / 60.0),
+            recurrence: null,
+            occurrenceOverrides: const {},
+            daySpan: null,
+            endDate: null,
+            createdAt: now,
+            modifiedAt: now,
+          );
+
+          model = model.replaceTasks(updates);
+          model = model.addTask(createdTask);
+
+          emitModel(
+            model,
+            emit,
+            selectedTaskIds: state.selectedTaskIds,
+          );
+
+          await onTaskUpdated(updatedBase);
+          await onTaskAdded(createdTask);
+          return;
+        }
+      }
+
+      final DateTime originalStart = baseTask.scheduledTime ?? start;
+      final CalendarTask updatedBaseTask = baseTask.copyWith(
+        scheduledTime: originalStart,
+        duration: leftDuration,
+        daySpan: null,
+        endDate: null,
+        startHour: originalStart.hour + (originalStart.minute / 60.0),
+        modifiedAt: now,
+      );
+      updates[baseTask.id] = updatedBaseTask;
+
+      createdTask = baseTask.copyWith(
+        id: const Uuid().v4(),
+        scheduledTime: splitTime,
+        duration: rightDuration,
+        daySpan: null,
+        endDate: null,
+        recurrence: null,
+        occurrenceOverrides: const {},
+        startHour: splitTime.hour + (splitTime.minute / 60.0),
+        createdAt: now,
+        modifiedAt: now,
+      );
+
+      model = model.replaceTasks(updates);
+      model = model.addTask(createdTask);
+
+      emitModel(
+        model,
+        emit,
+        selectedTaskIds: state.selectedTaskIds,
+      );
+
+      await onTaskUpdated(updatedBaseTask);
+      await onTaskAdded(createdTask);
+    } catch (error) {
+      logError('Failed to split task', error);
+      emit(state.copyWith(error: error.toString()));
+    }
+  }
+
+  Future<void> _onTaskRepeated(
+    CalendarTaskRepeated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final CalendarTask template = event.template;
+      final String baseId = template.baseId;
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      final CalendarTask source = baseTask ?? template;
+
+      final now = _now();
+      final String newId = '$baseId::${const Uuid().v4()}';
+      final Duration? duration =
+          template.duration ?? baseTask?.duration ?? source.duration;
+
+      final CalendarTask newTask = source.copyWith(
+        id: newId,
+        scheduledTime: event.scheduledTime,
+        startHour:
+            event.scheduledTime.hour + (event.scheduledTime.minute / 60.0),
+        duration: duration,
+        occurrenceOverrides: const {},
+        createdAt: now,
+        modifiedAt: now,
+      );
+
+      _recordUndoSnapshot();
+
+      final updatedModel = state.model.addTask(newTask);
+      final selectedIds = state.selectedTaskIds.contains(template.id)
+          ? <String>{...state.selectedTaskIds, newTask.id}
+          : state.selectedTaskIds;
+
+      emitModel(
+        updatedModel,
+        emit,
+        isSelectionMode: state.isSelectionMode,
+        selectedTaskIds: selectedIds,
+      );
+
+      await onTaskAdded(newTask);
+    } catch (error) {
+      logError('Failed to repeat task', error);
+      emit(state.copyWith(error: error.toString()));
+    }
+  }
+
   Future<void> _onQuickTaskAdded(
     CalendarQuickTaskAdded event,
     Emitter<CalendarState> emit,
@@ -585,23 +813,71 @@ abstract class BaseCalendarBloc
     }
 
     final updates = <String, CalendarTask>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
+    final now = _now();
+    final TaskPriority? targetPriority =
+        event.priority == TaskPriority.none ? null : event.priority;
 
     for (final id in state.selectedTaskIds) {
       final task = state.model.tasks[id];
-      if (task == null) continue;
-      updates[id] = task.copyWith(
-        priority: event.priority == TaskPriority.none ? null : event.priority,
-        modifiedAt: _now(),
+      if (task != null) {
+        updates[id] = task.copyWith(
+          priority: targetPriority,
+          modifiedAt: now,
+        );
+        continue;
+      }
+
+      final baseId = baseTaskIdFrom(id);
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (baseTask == null || occurrenceKey == null) {
+        continue;
+      }
+
+      final TaskPriority? basePriority = baseTask.priority;
+      final TaskPriority? overridePriority =
+          targetPriority == basePriority ? null : targetPriority;
+      final overrides = baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseTask.occurrenceOverrides,
+        ),
       );
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ?? const TaskOccurrenceOverride();
+      final TaskOccurrenceOverride updatedOverride =
+          existing.copyWith(priority: overridePriority);
+
+      if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
     }
 
-    if (updates.isEmpty) {
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
       return;
     }
 
     _recordUndoSnapshot();
 
-    final updatedModel = state.model.replaceTasks(updates);
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseSource =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseSource == null) {
+        continue;
+      }
+      final CalendarTask updatedBase = baseSource.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+      mergedUpdates[baseId] = updatedBase;
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
     emitModel(
       updatedModel,
       emit,
@@ -609,7 +885,7 @@ abstract class BaseCalendarBloc
       selectedTaskIds: state.selectedTaskIds,
     );
 
-    for (final task in updates.values) {
+    for (final task in mergedUpdates.values) {
       await onTaskUpdated(task);
     }
   }
@@ -623,23 +899,69 @@ abstract class BaseCalendarBloc
     }
 
     final updates = <String, CalendarTask>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
+    final now = _now();
 
     for (final id in state.selectedTaskIds) {
       final task = state.model.tasks[id];
-      if (task == null) continue;
-      updates[id] = task.copyWith(
-        isCompleted: event.completed,
-        modifiedAt: _now(),
+      if (task != null) {
+        updates[id] = task.copyWith(
+          isCompleted: event.completed,
+          modifiedAt: now,
+        );
+        continue;
+      }
+
+      final baseId = baseTaskIdFrom(id);
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (baseTask == null || occurrenceKey == null) {
+        continue;
+      }
+
+      final bool baseCompleted = baseTask.isCompleted;
+      final bool? overrideCompleted =
+          event.completed == baseCompleted ? null : event.completed;
+      final overrides = baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseTask.occurrenceOverrides,
+        ),
       );
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ?? const TaskOccurrenceOverride();
+      final TaskOccurrenceOverride updatedOverride =
+          existing.copyWith(isCompleted: overrideCompleted);
+
+      if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
     }
 
-    if (updates.isEmpty) {
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
       return;
     }
 
     _recordUndoSnapshot();
 
-    final updatedModel = state.model.replaceTasks(updates);
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseSource =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseSource == null) {
+        continue;
+      }
+      final CalendarTask updatedBase = baseSource.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+      mergedUpdates[baseId] = updatedBase;
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
     emitModel(
       updatedModel,
       emit,
@@ -647,7 +969,7 @@ abstract class BaseCalendarBloc
       selectedTaskIds: state.selectedTaskIds,
     );
 
-    for (final task in updates.values) {
+    for (final task in mergedUpdates.values) {
       await onTaskUpdated(task);
     }
   }
@@ -660,22 +982,90 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    final tasksToDelete = state.selectedTaskIds
+    final baseIds = <String>{};
+    final occurrencesByBase = <String, Set<String>>{};
+
+    for (final id in state.selectedTaskIds) {
+      if (state.model.tasks.containsKey(id)) {
+        baseIds.add(id);
+        continue;
+      }
+      final String baseId = baseTaskIdFrom(id);
+      if (baseId == id) {
+        continue;
+      }
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null || baseTask.effectiveRecurrence.isNone) {
+        continue;
+      }
+      occurrencesByBase.putIfAbsent(baseId, () => <String>{}).add(id);
+    }
+
+    final baseTasksToDelete = baseIds
         .map((id) => state.model.tasks[id])
         .whereType<CalendarTask>()
         .toList();
 
+    final updatedBases = <String, CalendarTask>{};
+    for (final entry in occurrencesByBase.entries) {
+      final CalendarTask? baseTask = state.model.tasks[entry.key];
+      if (baseTask == null) {
+        continue;
+      }
+      final overrides = Map<String, TaskOccurrenceOverride>.from(
+        baseTask.occurrenceOverrides,
+      );
+      var modified = false;
+      for (final occurrenceId in entry.value) {
+        final occurrenceKey = occurrenceKeyFrom(occurrenceId);
+        if (occurrenceKey == null) {
+          continue;
+        }
+        final existing = overrides[occurrenceKey];
+        overrides[occurrenceKey] = TaskOccurrenceOverride(
+          scheduledTime: existing?.scheduledTime,
+          duration: existing?.duration,
+          endDate: existing?.endDate,
+          daySpan: existing?.daySpan,
+          isCancelled: true,
+          priority: existing?.priority,
+          isCompleted: existing?.isCompleted,
+        );
+        modified = true;
+      }
+      if (!modified) {
+        continue;
+      }
+      updatedBases[entry.key] = baseTask.copyWith(
+        occurrenceOverrides: overrides,
+        modifiedAt: _now(),
+      );
+    }
+
     _recordUndoSnapshot();
 
-    final updatedModel = state.model.removeTasks(state.selectedTaskIds);
+    CalendarModel model = state.model;
+
+    if (updatedBases.isNotEmpty) {
+      model = model.replaceTasks(updatedBases);
+    }
+
+    if (baseIds.isNotEmpty) {
+      model = model.removeTasks(baseIds);
+    }
+
     emitModel(
-      updatedModel,
+      model,
       emit,
       isSelectionMode: false,
       selectedTaskIds: const <String>{},
     );
 
-    for (final task in tasksToDelete) {
+    for (final task in updatedBases.values) {
+      await onTaskUpdated(task);
+    }
+
+    for (final task in baseTasksToDelete) {
       await onTaskDeleted(task);
     }
   }
@@ -889,5 +1279,7 @@ bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
       override.scheduledTime == null &&
       override.duration == null &&
       override.endDate == null &&
-      override.daySpan == null;
+      override.daySpan == null &&
+      override.priority == null &&
+      override.isCompleted == null;
 }
