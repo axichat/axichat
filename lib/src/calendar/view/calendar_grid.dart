@@ -15,7 +15,19 @@ import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import 'edit_task_dropdown.dart';
+import 'layout/calendar_layout.dart'
+    show
+        CalendarLayoutCalculator,
+        CalendarLayoutMetrics,
+        CalendarLayoutTheme,
+        CalendarZoomLevel,
+        OverlapInfo,
+        calculateOverlapColumns,
+        kCalendarZoomLevels;
 import 'resizable_task_widget.dart';
+import 'controllers/zoom_controls_controller.dart';
+
+export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
 class _TaskPopoverLayout {
   const _TaskPopoverLayout({
@@ -30,97 +42,7 @@ class _TaskPopoverLayout {
 _TaskPopoverLayout _defaultTaskPopoverLayout() {
   return const _TaskPopoverLayout(
     topLeft: Offset.zero,
-    maxHeight: 560,
-  );
-}
-
-class _ZoomLevel {
-  const _ZoomLevel({required this.hourHeight, required this.daySubdivisions});
-
-  final double hourHeight;
-  final int daySubdivisions;
-}
-
-class OverlapInfo {
-  final int columnIndex;
-  final int totalColumns;
-
-  const OverlapInfo({
-    required this.columnIndex,
-    required this.totalColumns,
-  });
-}
-
-class _MutableOverlapInfo {
-  _MutableOverlapInfo({required this.columnIndex, required this.totalColumns});
-
-  final int columnIndex;
-  int totalColumns;
-}
-
-class _ActiveTask {
-  _ActiveTask({
-    required this.taskId,
-    required this.end,
-    required this.columnIndex,
-  });
-
-  final String taskId;
-  final DateTime end;
-  final int columnIndex;
-}
-
-@visibleForTesting
-Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
-  final sortedTasks = tasks.where((task) => task.scheduledTime != null).toList()
-    ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
-
-  final List<_ActiveTask> active = [];
-  final Map<String, _MutableOverlapInfo> overlapMap = {};
-
-  for (final task in sortedTasks) {
-    final start = task.scheduledTime!;
-    final end = start.add(task.duration ?? const Duration(hours: 1));
-
-    active.removeWhere((entry) => !entry.end.isAfter(start));
-
-    final usedColumns = active.map((entry) => entry.columnIndex).toSet();
-    var columnIndex = 0;
-    while (usedColumns.contains(columnIndex)) {
-      columnIndex++;
-    }
-
-    final newEntry = _ActiveTask(
-      taskId: task.id,
-      end: end,
-      columnIndex: columnIndex,
-    );
-    active.add(newEntry);
-    active.sort((a, b) => a.columnIndex.compareTo(b.columnIndex));
-
-    final totalColumns = active.length;
-    final mutableInfo = _MutableOverlapInfo(
-      columnIndex: columnIndex,
-      totalColumns: totalColumns,
-    );
-    overlapMap[task.id] = mutableInfo;
-
-    for (final entry in active) {
-      final info = overlapMap[entry.taskId];
-      if (info != null && info.totalColumns < totalColumns) {
-        info.totalColumns = totalColumns;
-      }
-    }
-  }
-
-  return overlapMap.map(
-    (key, value) => MapEntry(
-      key,
-      OverlapInfo(
-        columnIndex: value.columnIndex,
-        totalColumns: value.totalColumns,
-      ),
-    ),
+    maxHeight: calendarTaskPopoverFallbackHeight,
   );
 }
 
@@ -149,17 +71,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const int startHour = 0;
   static const int endHour = 24;
   static const int _defaultZoomIndex = 0;
-  static const int _dayViewSubdivisions = 4;
   static const int _resizeStepMinutes = 15;
-  static const List<_ZoomLevel> _zoomLevels = <_ZoomLevel>[
-    _ZoomLevel(hourHeight: 78, daySubdivisions: 1),
-    _ZoomLevel(hourHeight: 132, daySubdivisions: 2),
-    _ZoomLevel(hourHeight: 192, daySubdivisions: 4),
-  ];
-  static const double _edgeScrollFastBandHeight = 60.0;
-  static const double _edgeScrollSlowBandHeight = 44.0;
-  static const double _edgeScrollFastOffsetPerFrame = 9.0;
-  static const double _edgeScrollSlowOffsetPerFrame = 4.5;
+  static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
+  static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
+
+  double get _edgeScrollFastBandHeight => _layoutTheme.edgeScrollFastBandHeight;
+  double get _edgeScrollSlowBandHeight => _layoutTheme.edgeScrollSlowBandHeight;
+  double get _edgeScrollFastOffsetPerFrame =>
+      _layoutTheme.edgeScrollFastOffsetPerFrame;
+  double get _edgeScrollSlowOffsetPerFrame =>
+      _layoutTheme.edgeScrollSlowOffsetPerFrame;
+  double get _taskPopoverHorizontalGap => _layoutTheme.popoverGap;
 
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
@@ -174,10 +96,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   String? _activeTaskPopoverId;
   bool _popoverDismissArmed = false;
   final Map<String, GlobalKey> _taskItemKeys = {};
-  static const double _taskPopoverHorizontalGap = 12.0;
+  final CalendarLayoutCalculator _layoutCalculator =
+      const CalendarLayoutCalculator();
+  CalendarLayoutMetrics _currentLayoutMetrics = const CalendarLayoutMetrics(
+    hourHeight: 78,
+    slotHeight: 78,
+    minutesPerSlot: 60,
+    slotsPerHour: 1,
+  );
 
   int _zoomIndex = _defaultZoomIndex;
-  double _resolvedHourHeight = _zoomLevels[_defaultZoomIndex].hourHeight;
+  double _resolvedHourHeight = 78;
   double? _pendingAnchorMinutes;
 
   // Track hovered cell for hover effects
@@ -192,8 +121,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   String? _draggingTaskBaseId;
   CalendarTask? _draggingTaskSnapshot;
   DateTime? _contextMenuPasteSlot;
-  bool _zoomControlsVisible = false;
-  Timer? _zoomControlsDismissTimer;
+  late final ZoomControlsController _zoomControlsController;
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
   Ticker? _edgeAutoScrollTicker;
@@ -225,7 +153,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void initState() {
     super.initState();
     _viewTransitionController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: calendarViewTransitionDuration,
       vsync: this,
     );
     _viewTransitionAnimation = CurvedAnimation(
@@ -242,6 +170,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         anchorDy: 0,
       ),
     );
+    _zoomControlsController = ZoomControlsController();
     _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) {
         setState(() {});
@@ -250,9 +179,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
   }
 
-  _ZoomLevel get _currentZoom => _zoomLevels[_zoomIndex];
-  int get _slotSubdivisions => _dayViewSubdivisions;
-  int get _minutesPerSlot => (60 / _slotSubdivisions).round();
+  CalendarZoomLevel get _currentZoom => _zoomLevels[_zoomIndex];
+  int get _slotSubdivisions => _currentLayoutMetrics.slotsPerHour;
+  int get _minutesPerSlot => _currentLayoutMetrics.minutesPerSlot;
   int get _minutesPerStep => _resizeStepMinutes;
   bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
   bool get _canZoomOut => _zoomIndex > 0;
@@ -293,12 +222,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_isZoomEnabled) {
       return '15m';
     }
-    final subdivisions = _currentZoom.daySubdivisions;
-    if (subdivisions <= 1) {
-      return '1h';
-    }
-    final minutes = (60 / subdivisions).round();
-    return '${minutes}m';
+    return _currentZoom.label;
   }
 
   void zoomIn() {
@@ -657,7 +581,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _activePopoverEntry?.remove();
     _activePopoverEntry = null;
     _focusNode.dispose();
-    _zoomControlsDismissTimer?.cancel();
+    _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
     _dragFeedbackHint.dispose();
     _dragWidthDebounce?.cancel();
@@ -735,18 +659,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_isZoomEnabled) {
       return;
     }
-    _zoomControlsDismissTimer?.cancel();
-    if (!_zoomControlsVisible) {
-      setState(() {
-        _zoomControlsVisible = true;
-      });
-    }
-    _zoomControlsDismissTimer = Timer(const Duration(seconds: 6), () {
-      if (!mounted) return;
-      setState(() {
-        _zoomControlsVisible = false;
-      });
-    });
+    _zoomControlsController.show();
   }
 
   void _enterSelectionMode(String taskId) {
@@ -1100,7 +1013,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 
-  static const double timeColumnWidth = 80.0;
+  double get _timeColumnWidth => _layoutTheme.timeColumnWidth;
   double _getHourHeight(BuildContext context, bool compact) {
     return _resolvedHourHeight;
   }
@@ -1207,12 +1120,19 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           children: [
             Positioned.fill(child: gridBody),
             ..._buildEdgeScrollTargets(),
-            if (_isZoomEnabled && _zoomControlsVisible)
-              Positioned(
-                top: 8,
-                right: compact ? 8 : 16,
-                child: _buildZoomControls(),
-              ),
+            AnimatedBuilder(
+              animation: _zoomControlsController,
+              builder: (context, _) {
+                if (!_isZoomEnabled || !_zoomControlsController.isVisible) {
+                  return const SizedBox.shrink();
+                }
+                return Positioned(
+                  top: 8,
+                  right: compact ? 8 : 16,
+                  child: _buildZoomControls(),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -1327,29 +1247,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   double _resolveHourHeight(double availableHeight, {required bool isDayView}) {
-    final zoom = _currentZoom;
-    final double desiredHourHeight = isDayView ? 192.0 : zoom.hourHeight;
-    final int subdivisions =
-        isDayView ? _dayViewSubdivisions : zoom.daySubdivisions;
-    final baseSlotHeight = desiredHourHeight / subdivisions;
-    final totalSlots = (endHour - startHour + 1) * subdivisions;
-
-    if (!availableHeight.isFinite || availableHeight <= 0) {
-      return desiredHourHeight;
-    }
-
-    final minRequiredHeight = totalSlots * baseSlotHeight;
-    if (availableHeight <= minRequiredHeight) {
-      return desiredHourHeight;
-    }
-
-    final slotHeight = availableHeight / totalSlots;
-    if (isDayView) {
-      final double computedHourHeight = slotHeight * subdivisions;
-      return math.max<double>(desiredHourHeight, computedHourHeight);
-    }
-
-    return math.max<double>(desiredHourHeight, slotHeight);
+    final metrics = _layoutCalculator.resolveMetrics(
+      zoomIndex: _zoomIndex,
+      isDayView: isDayView,
+      availableHeight: availableHeight,
+    );
+    _currentLayoutMetrics = metrics;
+    return metrics.hourHeight;
   }
 
   Widget _buildGridContent(
@@ -1468,15 +1372,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final mediaQuery = MediaQuery.of(context);
     final Size screenSize = mediaQuery.size;
     final EdgeInsets safePadding = mediaQuery.padding;
-    const double dropdownWidth = 360.0;
-    const double dropdownMaxHeight = 728.0;
-    const double minimumHeight = 160.0;
-    const double margin = 16.0;
-
-    const double usableLeft = margin;
-    final double usableRight = screenSize.width - margin;
-    final double usableTop = safePadding.top + margin;
-    final double usableBottom = screenSize.height - safePadding.bottom - margin;
+    const double dropdownWidth = calendarTaskPopoverWidth;
+    const double dropdownMaxHeight = calendarGridPopoverMaxHeight;
+    const double minimumHeight = calendarTaskPopoverMinHeight;
+    const double usableLeft = calendarPopoverScreenMargin;
+    final double usableRight = screenSize.width - calendarPopoverScreenMargin;
+    final double usableTop = safePadding.top + calendarPopoverScreenMargin;
+    final double usableBottom =
+        screenSize.height - safePadding.bottom - calendarPopoverScreenMargin;
     final double usableHeight = math.max(0, usableBottom - usableTop);
 
     final double leftSpace = bounds.left - usableLeft;
@@ -1594,7 +1497,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             ? layout.topLeft
             : renderBox.globalToLocal(layout.topLeft);
 
-        const double popoverWidth = 360.0;
+        const double popoverWidth = calendarTaskPopoverWidth;
 
         return Stack(
           children: [
@@ -1620,7 +1523,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   final Rect popoverRect = Rect.fromLTWH(
                     topLeft.dx,
                     topLeft.dy,
-                    popoverWidth,
+                    calendarTaskPopoverWidth,
                     layout.maxHeight,
                   );
 
@@ -1675,6 +1578,35 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                   ),
                                 );
                           },
+                          onOccurrenceUpdated: (updatedTask) {
+                            context.read<T>().add(
+                                  CalendarEvent.taskOccurrenceUpdated(
+                                    taskId: baseId,
+                                    occurrenceId: taskId,
+                                    scheduledTime: updatedTask.scheduledTime,
+                                    duration: updatedTask.duration,
+                                    endDate: updatedTask.endDate,
+                                    daySpan: updatedTask.daySpan,
+                                  ),
+                                );
+
+                            final seriesUpdate = latestTask.copyWith(
+                              title: updatedTask.title,
+                              description: updatedTask.description,
+                              location: updatedTask.location,
+                              deadline: updatedTask.deadline,
+                              priority: updatedTask.priority,
+                              isCompleted: updatedTask.isCompleted,
+                            );
+
+                            if (seriesUpdate != latestTask) {
+                              context.read<T>().add(
+                                    CalendarEvent.taskUpdated(
+                                      task: seriesUpdate,
+                                    ),
+                                  );
+                            }
+                          },
                           onTaskDeleted: (deletedTaskId) {
                             context.read<T>().add(
                                   CalendarEvent.taskDeleted(
@@ -1714,7 +1646,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       child: Row(
         children: [
           Container(
-            width: timeColumnWidth,
+            width: _timeColumnWidth,
             decoration: const BoxDecoration(
               color: calendarSidebarBackgroundColor,
               border: Border(
@@ -1775,7 +1707,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final minutesPerSlot = _minutesPerSlot;
 
     return Container(
-      width: timeColumnWidth,
+      width: _timeColumnWidth,
       decoration: const BoxDecoration(
         color: calendarSidebarBackgroundColor,
         border: Border(

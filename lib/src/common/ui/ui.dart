@@ -35,6 +35,9 @@ const mediumScreen = 900.0;
 const largeScreen = 1200.0;
 
 const baseAnimationDuration = Duration(milliseconds: 300);
+
+/// Duration for cross-fading calendar view transitions.
+const calendarViewTransitionDuration = Duration(milliseconds: 400);
 const basePageItemLimit = 15;
 
 const axiGreen = Color(0xff80ffa0);
@@ -110,6 +113,42 @@ const calendarSpacing6 = 6.0;
 const calendarSpacing8 = 8.0;
 const calendarSpacing12 = 12.0;
 const calendarSpacing16 = 16.0;
+
+// Popover and overlay geometry
+/// Fixed width for task popovers so layout matches legacy design.
+const calendarTaskPopoverWidth = 360.0;
+
+/// Maximum height before scrollbars appear for calendar grid popovers.
+const calendarGridPopoverMaxHeight = 728.0;
+
+/// Maximum height for sidebar popovers which have a slightly smaller viewport.
+const calendarSidebarPopoverMaxHeight = 644.0;
+
+/// Fallback height while popover size is measured asynchronously.
+const calendarTaskPopoverFallbackHeight = 560.0;
+
+/// Minimum usable height for popovers to prevent truncated controls.
+const calendarTaskPopoverMinHeight = 160.0;
+
+/// Safe margin between popovers and the screen edge for pointer affordances.
+const calendarPopoverScreenMargin = 16.0;
+
+/// Desired vertical gap between a task tile and its overlay content.
+const calendarPopoverPreferredVerticalGap = 8.0;
+
+/// Desired horizontal gap between a task tile and its overlay content.
+const calendarPopoverPreferredHorizontalGap = 12.0;
+
+// Quick add modal sizing
+/// Maximum width the quick add modal can occupy on desktop breakpoints.
+const calendarQuickAddModalMaxWidth = 400.0;
+
+/// Maximum height the quick add modal can occupy before scrolling.
+const calendarQuickAddModalMaxHeight = 540.0;
+
+// Device-specific layout tokens
+/// Collapsed task sidebar height when rendered on phones.
+const calendarMobileSidebarHeight = 200.0;
 
 // Standard EdgeInsets
 const calendarPadding4 = EdgeInsets.all(4.0);
