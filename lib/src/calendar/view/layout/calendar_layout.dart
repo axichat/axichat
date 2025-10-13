@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:axichat/src/common/ui/ui.dart';
+
 import '../../models/calendar_task.dart';
 
 /// Centralized layout constants for the calendar grid. Keeping these values in
@@ -13,6 +15,12 @@ class CalendarLayoutTheme {
     this.edgeScrollSlowBandHeight = 44.0,
     this.edgeScrollFastOffsetPerFrame = 9.0,
     this.edgeScrollSlowOffsetPerFrame = 4.5,
+    this.eventHorizontalInset = calendarSpacing2,
+    this.eventColumnGap = calendarSpacing2,
+    this.eventMinHeight = calendarEventMinHeight,
+    this.eventMinWidth = calendarEventMinWidth,
+    this.narrowedWidthFactor = 0.5,
+    this.narrowedWidthThresholdFactor = 0.55,
   });
 
   final double timeColumnWidth;
@@ -21,6 +29,12 @@ class CalendarLayoutTheme {
   final double edgeScrollSlowBandHeight;
   final double edgeScrollFastOffsetPerFrame;
   final double edgeScrollSlowOffsetPerFrame;
+  final double eventHorizontalInset;
+  final double eventColumnGap;
+  final double eventMinHeight;
+  final double eventMinWidth;
+  final double narrowedWidthFactor;
+  final double narrowedWidthThresholdFactor;
 
   static const CalendarLayoutTheme material = CalendarLayoutTheme();
 }
@@ -121,6 +135,54 @@ class CalendarLayoutCalculator {
       minutesPerSlot: (60 / subdivisions).round(),
       slotsPerHour: subdivisions,
     );
+  }
+
+  double eventLeftOffset({
+    required double dayWidth,
+    required OverlapInfo overlap,
+  }) {
+    final totalColumns = math.max(1, overlap.totalColumns);
+    final columnWidth = dayWidth / totalColumns;
+    return (columnWidth * overlap.columnIndex) + theme.eventHorizontalInset;
+  }
+
+  double eventWidth({
+    required double dayWidth,
+    required OverlapInfo overlap,
+    required bool isDayView,
+    required int spanDays,
+  }) {
+    final totalColumns = math.max(1, overlap.totalColumns);
+    final columnWidth = dayWidth / totalColumns;
+    final double baseWidth = columnWidth - (theme.eventHorizontalInset * 2);
+
+    if (isDayView) {
+      return math.max(baseWidth, theme.eventMinWidth);
+    }
+
+    final effectiveSpan = math.max(1, spanDays);
+    final double multiWidth =
+        (columnWidth * effectiveSpan) - (theme.eventColumnGap * 2);
+    return math.max(multiWidth, theme.eventMinWidth);
+  }
+
+  double clampEventHeight(double rawHeight) {
+    return math.max(theme.eventMinHeight, rawHeight);
+  }
+
+  double computeNarrowedWidth(double slotWidth, double baselineWidth) {
+    final double effectiveSlotWidth =
+        math.max(slotWidth - (theme.eventColumnGap * 2), 0.0);
+    final double thresholdWidth =
+        effectiveSlotWidth * theme.narrowedWidthThresholdFactor;
+
+    if (baselineWidth <= thresholdWidth) {
+      return baselineWidth;
+    }
+
+    final double narrowed = effectiveSlotWidth * theme.narrowedWidthFactor;
+    final double minimumAllowed = math.min(theme.eventMinWidth, baselineWidth);
+    return narrowed.clamp(minimumAllowed, baselineWidth);
   }
 }
 
