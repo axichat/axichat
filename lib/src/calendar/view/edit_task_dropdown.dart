@@ -3,7 +3,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
-import 'priority_checkbox_tile.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/schedule_range_fields.dart';
@@ -298,10 +297,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   Widget _buildCompletedCheckbox() {
-    return PriorityCheckboxTile(
-      label: 'Mark as completed',
+    return TaskCompletionToggle(
       value: _isCompleted,
-      color: calendarPrimaryColor,
       onChanged: (value) => setState(() => _isCompleted = value),
     );
   }

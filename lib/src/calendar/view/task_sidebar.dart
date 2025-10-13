@@ -15,8 +15,6 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'widgets/deadline_picker_field.dart';
-import 'widgets/calendar_completion_checkbox.dart';
-import 'priority_checkbox_tile.dart';
 import 'widgets/schedule_range_fields.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
@@ -27,88 +25,6 @@ class TaskSidebar extends StatefulWidget {
 
   @override
   State<TaskSidebar> createState() => _TaskSidebarState();
-}
-
-class _SelectionCompletionTile extends StatelessWidget {
-  const _SelectionCompletionTile({
-    required this.enabled,
-    required this.value,
-    required this.isIndeterminate,
-    required this.onChanged,
-  });
-
-  final bool enabled;
-  final bool value;
-  final bool isIndeterminate;
-  final ValueChanged<bool> onChanged;
-
-  bool get _isActive => value || isIndeterminate;
-
-  void _handleTap() {
-    if (!enabled) {
-      return;
-    }
-    onChanged(!value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Color borderColor =
-        _isActive ? calendarPrimaryColor : calendarBorderColor;
-    final Color backgroundColor =
-        _isActive ? calendarPrimaryColor.withValues(alpha: 0.08) : Colors.white;
-    final double borderWidth = isIndeterminate || value
-        ? calendarCompletionTileActiveBorderWidth
-        : calendarCompletionTileInactiveBorderWidth;
-    final Color textColor = !enabled
-        ? calendarSubtitleColor
-        : _isActive
-            ? calendarPrimaryColor
-            : calendarTitleColor;
-
-    return InkWell(
-      onTap: enabled ? _handleTap : null,
-      borderRadius: BorderRadius.circular(calendarCompletionTileBorderRadius),
-      child: AnimatedContainer(
-        duration: calendarSidebarToggleDuration,
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(
-          horizontal: calendarCompletionTilePaddingHorizontal,
-          vertical: calendarCompletionTilePaddingVertical,
-        ),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius:
-              BorderRadius.circular(calendarCompletionTileBorderRadius),
-          border: Border.all(
-            color: enabled ? borderColor : calendarBorderColor,
-            width: borderWidth,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CalendarCompletionCheckbox(
-              value: value,
-              isIndeterminate: isIndeterminate,
-              onChanged: enabled ? onChanged : null,
-            ),
-            const SizedBox(width: calendarCompletionTileGap),
-            Expanded(
-              child: Text(
-                'Mark as completed',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: _isActive ? FontWeight.w600 : FontWeight.w500,
-                  color: textColor,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _TaskSidebarState extends State<TaskSidebar>
@@ -205,7 +121,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   bloc: calendarBloc,
                   builder: (context, state) {
                     final content = state.isSelectionMode
-                        ? _buildSelectionPanel(state)
+                        ? _buildSelectionPanel(state, uiState)
                         : _buildUnscheduledContent(state, uiState);
 
                     return Scrollbar(
@@ -315,15 +231,27 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildSelectionPanel(CalendarState state) {
+  Widget _buildSelectionPanel(
+    CalendarState state,
+    CalendarSidebarState uiState,
+  ) {
     final tasks = _selectedTasks(state);
     _syncSelectionRecurrenceState(tasks);
     final total = tasks.length;
+    final hasTasks = tasks.isNotEmpty;
+    final bool allCompleted =
+        hasTasks && tasks.every((task) => task.isCompleted);
+    final bool anyCompleted = tasks.any((task) => task.isCompleted);
+    final bool completionIndeterminate =
+        hasTasks && anyCompleted && !allCompleted;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(
+            horizontal: calendarSpacing16,
+            vertical: calendarSpacing16,
+          ),
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
@@ -334,110 +262,78 @@ class _TaskSidebarState extends State<TaskSidebar>
             ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'SELECTION MODE',
-                      style: calendarHeaderTextStyle.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.6,
-                        color: calendarTimeLabelColor,
-                      ),
-                    ),
-                  ),
-                  ShadButton.outline(
-                    size: ShadButtonSize.sm,
-                    onPressed: () => context
-                        .read<BaseCalendarBloc>()
-                        .add(const CalendarEvent.selectionCleared()),
-                    child: const Text('Exit'),
-                  ),
-                ],
+              TaskSectionHeader(
+                title: 'Selection mode',
+                padding: const EdgeInsets.only(bottom: calendarSpacing8),
+                trailing: ShadButton.outline(
+                  size: ShadButtonSize.sm,
+                  onPressed: () => context
+                      .read<BaseCalendarBloc>()
+                      .add(const CalendarEvent.selectionCleared()),
+                  child: const Text('Exit'),
+                ),
               ),
-              const SizedBox(height: 8),
               Text(
                 '$total task${total == 1 ? '' : 's'} selected',
                 style: calendarSubtitleTextStyle,
               ),
-              const SizedBox(height: 16),
-              _buildSelectionActions(tasks),
-              const SizedBox(height: 16),
-              Text(
-                'Set Priority',
-                style: calendarHeaderTextStyle.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                ),
+              const TaskSectionDivider(
+                verticalPadding: calendarSpacing12,
               ),
-              const SizedBox(height: 8),
+              const TaskSectionHeader(title: 'Actions'),
+              const SizedBox(height: calendarSpacing8),
+              _buildSelectionActions(tasks, hasTasks),
+              const TaskSectionDivider(
+                verticalPadding: calendarSpacing12,
+              ),
+              const TaskSectionHeader(title: 'Set priority'),
+              const SizedBox(height: calendarSpacing8),
               _buildPriorityControls(tasks),
-              const SizedBox(height: 16),
-              Text(
-                'Repeat',
-                style: calendarHeaderTextStyle.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                ),
+              const SizedBox(height: calendarSpacing12),
+              _buildSelectionCompletionToggle(
+                hasTasks: hasTasks,
+                allCompleted: allCompleted,
+                isIndeterminate: completionIndeterminate,
               ),
-              const SizedBox(height: 8),
+              const TaskSectionDivider(
+                verticalPadding: calendarSpacing12,
+              ),
+              const TaskSectionHeader(title: 'Repeat'),
+              const SizedBox(height: calendarSpacing8),
               _buildSelectionRecurrenceSection(tasks),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: calendarSpacing16),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: _buildSelectedTaskList(tasks),
+          padding: const EdgeInsets.symmetric(horizontal: calendarSpacing16),
+          child: _buildSelectedTaskList(tasks, uiState),
         ),
       ],
     );
   }
 
-  Widget _buildSelectionActions(List<CalendarTask> tasks) {
+  Widget _buildSelectionActions(List<CalendarTask> tasks, bool hasTasks) {
     final bloc = context.read<BaseCalendarBloc>();
-    final hasTasks = tasks.isNotEmpty;
-    final bool allCompleted =
-        hasTasks && tasks.every((task) => task.isCompleted);
-    final bool anyCompleted = tasks.any((task) => task.isCompleted);
-    final bool isIndeterminate = hasTasks && anyCompleted && !allCompleted;
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+    return TaskFormActionsRow(
+      padding: EdgeInsets.zero,
+      gap: calendarSpacing8,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 240),
-          child: _SelectionCompletionTile(
-            enabled: hasTasks,
-            value: allCompleted,
-            isIndeterminate: isIndeterminate,
-            onChanged: (completed) => bloc.add(
-              CalendarEvent.selectionCompletedToggled(completed: completed),
-            ),
-          ),
+        ShadButton.outline(
+          size: ShadButtonSize.sm,
+          onPressed: hasTasks
+              ? () => bloc.add(const CalendarEvent.selectionCleared())
+              : null,
+          child: const Text('Clear selection'),
         ),
-        _selectionActionButton(
-          icon: Icons.clear_all,
-          label: 'Clear Selection',
-          onPressed: () => bloc.add(
-            const CalendarEvent.selectionCleared(),
-          ),
-        ),
-        _selectionActionButton(
-          icon: Icons.delete_outline,
-          label: 'Delete Selected',
+        ShadButton.destructive(
+          size: ShadButtonSize.sm,
           onPressed: hasTasks
               ? () => bloc.add(const CalendarEvent.selectionDeleted())
               : null,
-          backgroundColor: calendarDangerColor,
-          hoverBackgroundColor: calendarDangerColor.withValues(alpha: 0.85),
-          foregroundColor: Colors.white,
+          child: const Text('Delete selected'),
         ),
       ],
     );
@@ -473,38 +369,42 @@ class _TaskSidebarState extends State<TaskSidebar>
       );
     }
 
-    return Row(
-      children: [
-        Expanded(
-          child: PriorityCheckboxTile(
-            label: 'Important',
-            value: allImportant,
-            isIndeterminate: anyImportant && !allImportant,
-            color: calendarSuccessColor,
-            onChanged: hasTasks
-                ? (selected) => updatePriority(
-                      important: selected,
-                      urgent: allUrgent,
-                    )
-                : null,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: PriorityCheckboxTile(
-            label: 'Urgent',
-            value: allUrgent,
-            isIndeterminate: anyUrgent && !allUrgent,
-            color: calendarWarningColor,
-            onChanged: hasTasks
-                ? (selected) => updatePriority(
-                      important: allImportant,
-                      urgent: selected,
-                    )
-                : null,
-          ),
-        ),
-      ],
+    return TaskPriorityToggles(
+      isImportant: allImportant,
+      isUrgent: allUrgent,
+      isImportantIndeterminate: anyImportant && !allImportant,
+      isUrgentIndeterminate: anyUrgent && !allUrgent,
+      onImportantChanged: hasTasks
+          ? (selected) => updatePriority(
+                important: selected,
+                urgent: allUrgent,
+              )
+          : null,
+      onUrgentChanged: hasTasks
+          ? (selected) => updatePriority(
+                important: allImportant,
+                urgent: selected,
+              )
+          : null,
+    );
+  }
+
+  Widget _buildSelectionCompletionToggle({
+    required bool hasTasks,
+    required bool allCompleted,
+    required bool isIndeterminate,
+  }) {
+    return TaskCompletionToggle(
+      value: allCompleted,
+      isIndeterminate: isIndeterminate,
+      enabled: hasTasks,
+      onChanged: hasTasks
+          ? (completed) => context.read<BaseCalendarBloc>().add(
+                CalendarEvent.selectionCompletedToggled(
+                  completed: completed,
+                ),
+              )
+          : null,
     );
   }
 
@@ -720,13 +620,16 @@ class _TaskSidebarState extends State<TaskSidebar>
     return true;
   }
 
-  Widget _buildSelectedTaskList(List<CalendarTask> tasks) {
+  Widget _buildSelectedTaskList(
+    List<CalendarTask> tasks,
+    CalendarSidebarState uiState,
+  ) {
     if (tasks.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(calendarSpacing16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(calendarBorderRadius + 2),
           border: Border.all(color: calendarBorderColor),
         ),
         child: const Text(
@@ -739,89 +642,16 @@ class _TaskSidebarState extends State<TaskSidebar>
       );
     }
 
-    final children = <Widget>[];
-    for (var index = 0; index < tasks.length; index += 1) {
-      if (index > 0) {
-        children.add(const SizedBox(height: 12));
-      }
-      children.add(_buildSelectedTaskTile(tasks[index]));
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
-    );
-  }
-
-  Widget _buildSelectedTaskTile(CalendarTask task) {
-    final scheduled = task.scheduledTime;
-    final scheduleText = scheduled == null
-        ? 'Unscheduled'
-        : TimeFormatter.formatFriendlyDateTime(scheduled);
-    final priority = task.priority ?? TaskPriority.none;
-    final Color indicatorColor = priority == TaskPriority.none
-        ? calendarBorderColor
-        : task.priorityColor;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: calendarBorderColor),
-        boxShadow: calendarLightShadow,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 4,
-            height: 36,
-            decoration: BoxDecoration(
-              color: indicatorColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
+      children: [
+        for (final task in tasks)
+          _buildTaskTile(
+            task,
+            uiState: uiState,
+            enableInteraction: false,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: calendarTitleColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  scheduleText,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: calendarSubtitleColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (priority != TaskPriority.none)
-            Padding(
-              padding: const EdgeInsets.only(left: 12, top: 2),
-              child: Text(
-                _priorityLabel(priority),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: calendarSubtitleColor,
-                ),
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -859,69 +689,6 @@ class _TaskSidebarState extends State<TaskSidebar>
       return comparison != 0 ? comparison : a.title.compareTo(b.title);
     });
     return tasks;
-  }
-
-  String _priorityLabel(TaskPriority priority) {
-    switch (priority) {
-      case TaskPriority.none:
-        return 'None';
-      case TaskPriority.important:
-        return 'Important';
-      case TaskPriority.urgent:
-        return 'Urgent';
-      case TaskPriority.critical:
-        return 'Critical';
-    }
-  }
-
-  Widget _selectionActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
-    ShadButtonVariant variant = ShadButtonVariant.outline,
-    Color? backgroundColor,
-    Color? hoverBackgroundColor,
-    Color? foregroundColor,
-  }) {
-    final defaultForeground = variant == ShadButtonVariant.primary
-        ? Colors.white
-        : calendarTitleColor;
-    final effectiveForeground = foregroundColor ??
-        (onPressed != null ? defaultForeground : calendarSubtitleColor);
-    final effectiveHoverForeground = foregroundColor ?? defaultForeground;
-    final effectiveHoverBackground =
-        hoverBackgroundColor ?? backgroundColor?.withValues(alpha: 0.9);
-
-    return ShadButton.raw(
-      variant: variant,
-      size: ShadButtonSize.sm,
-      onPressed: onPressed,
-      enabled: onPressed != null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      backgroundColor: backgroundColor,
-      hoverBackgroundColor: effectiveHoverBackground,
-      foregroundColor: effectiveForeground,
-      hoverForegroundColor: foregroundColor ?? effectiveHoverForeground,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: effectiveForeground,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: effectiveForeground,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildQuickTaskInput() {
@@ -977,16 +744,24 @@ class _TaskSidebarState extends State<TaskSidebar>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildLinedTextField(
+          TaskDescriptionField(
             controller: _descriptionController,
-            hint: 'Description (optional)',
+            hintText: 'Description (optional)',
             minLines: 2,
             maxLines: 4,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: calendarSpacing16,
+              vertical: calendarSpacing12,
+            ),
           ),
           const SizedBox(height: 10),
-          _buildLinedTextField(
+          TaskLocationField(
             controller: _locationController,
-            hint: 'Location (optional)',
+            hintText: 'Location (optional)',
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: calendarSpacing16,
+              vertical: calendarSpacing12,
+            ),
           ),
           const SizedBox(height: 12),
           const TaskSectionHeader(title: 'Deadline'),
@@ -1003,23 +778,6 @@ class _TaskSidebarState extends State<TaskSidebar>
           _buildAdvancedRecurrenceSection(),
         ],
       ),
-    );
-  }
-
-  Widget _buildLinedTextField({
-    required TextEditingController controller,
-    required String hint,
-    int minLines = 1,
-    int maxLines = 1,
-  }) {
-    return TaskTextField(
-      controller: controller,
-      hintText: hint,
-      minLines: minLines,
-      maxLines: maxLines,
-      textInputAction:
-          maxLines == 1 ? TextInputAction.done : TextInputAction.newline,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 

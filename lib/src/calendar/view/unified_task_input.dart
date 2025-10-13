@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
@@ -9,6 +10,7 @@ import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'error_display.dart';
+import 'widgets/task_form_section.dart';
 
 class UnifiedTaskInput<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask? editingTask;
@@ -183,23 +185,31 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   }
 
   Widget _buildTitleField() {
-    return ShadInputFormField(
+    return TaskTextFormField(
       controller: _titleController,
-      placeholder: const Text('Task title'),
+      hintText: 'Task title',
+      textCapitalization: TextCapitalization.sentences,
+      focusBorderColor: calendarPrimaryColor,
+      borderRadius: calendarBorderRadius,
       validator: (value) {
-        if (value.trim().isEmpty) {
+        if (value == null || value.trim().isEmpty) {
           return 'Title is required';
         }
         return null;
       },
+      autovalidateMode: AutovalidateMode.onUserInteraction,
     );
   }
 
   Widget _buildDescriptionField() {
-    return ShadInputFormField(
+    return TaskDescriptionField(
       controller: _descriptionController,
-      placeholder: const Text('Description (optional)'),
+      hintText: 'Description (optional)',
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
+      minLines: 3,
       maxLines: 3,
+      textCapitalization: TextCapitalization.sentences,
     );
   }
 
@@ -279,9 +289,18 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   }
 
   Widget _buildSaveButton() {
-    return TextButton(
-      onPressed: _saveTask,
-      child: const Text('Save'),
+    return BlocBuilder<T, CalendarState>(
+      builder: (context, state) {
+        final bool disabled = state.isLoading || _isSubmitting;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: TaskPrimaryButton(
+            label: 'Save',
+            onPressed: disabled ? null : _saveTask,
+            isBusy: disabled,
+          ),
+        );
+      },
     );
   }
 
@@ -318,26 +337,22 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
                         ),
                   ),
                 ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              TaskFormActionsRow(
+                padding: EdgeInsets.zero,
+                gap: calendarSpacing12,
                 children: [
+                  const Spacer(),
                   ShadButton.outline(
                     onPressed: state.isLoading
                         ? null
                         : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
-                  const SizedBox(width: 12),
-                  ShadButton(
+                  TaskPrimaryButton(
+                    label: 'Save',
                     onPressed:
                         (state.isLoading || _isSubmitting) ? null : _saveTask,
-                    child: (state.isLoading || _isSubmitting)
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save'),
+                    isBusy: state.isLoading || _isSubmitting,
                   ),
                 ],
               ),
