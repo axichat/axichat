@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/calendar_task.dart';
 
@@ -35,6 +36,25 @@ class DragFeedbackHint {
   int get hashCode => Object.hash(width, pointerOffset, anchorDx, anchorDy);
 }
 
+typedef TaskContextMenuBuilder = List<Widget> Function(
+  BuildContext context,
+  TaskContextMenuRequest request,
+);
+
+class TaskContextMenuRequest {
+  const TaskContextMenuRequest({
+    required this.task,
+    required this.localPosition,
+    required this.normalizedPosition,
+    required this.splitTime,
+  });
+
+  final CalendarTask task;
+  final Offset localPosition;
+  final Offset normalizedPosition;
+  final DateTime? splitTime;
+}
+
 class ResizableTaskWidget extends StatefulWidget {
   static bool debugAlwaysShowHandles = false;
 
@@ -58,6 +78,9 @@ class ResizableTaskWidget extends StatefulWidget {
   final VoidCallback? onToggleSelection;
   final ValueListenable<DragFeedbackHint>? dragFeedbackHint;
   final ValueChanged<Offset>? onDragPointerDown;
+  final ShadPopoverController? contextMenuController;
+  final ValueKey<String>? contextMenuGroupId;
+  final TaskContextMenuBuilder? contextMenuBuilder;
 
   const ResizableTaskWidget({
     super.key,
@@ -81,6 +104,9 @@ class ResizableTaskWidget extends StatefulWidget {
     this.onToggleSelection,
     this.dragFeedbackHint,
     this.onDragPointerDown,
+    this.contextMenuController,
+    this.contextMenuGroupId,
+    this.contextMenuBuilder,
   });
 
   @override
@@ -94,6 +120,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   String? activeHandle;
   double _totalDragDeltaY = 0;
   int _lastAppliedQuarterDelta = 0;
+  Offset _contextMenuLocalPosition = Offset.zero;
+  Offset _contextMenuNormalizedPosition = const Offset(0.5, 0.5);
+  DateTime? _contextMenuSplitTime;
 
   static const double _accentWidth = 4.0;
   static const double _accentPadding = 6.0;
@@ -104,6 +133,77 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   Duration? _tempDuration;
 
   Color get _taskColor => widget.task.priorityColor;
+
+  Offset _normalizedFromLocal(Offset local) {
+    final double width = widget.width;
+    final double height = widget.height;
+    final double normalizedX =
+        width <= 0 ? 0.5 : (local.dx / width).clamp(0.0, 1.0);
+    final double normalizedY =
+        height <= 0 ? 0.0 : (local.dy / height).clamp(0.0, 1.0);
+    return Offset(normalizedX, normalizedY);
+  }
+
+  void _updateContextMenuState({
+    required Offset localPosition,
+    required Offset normalizedPosition,
+  }) {
+    final DateTime? nextSplit = widget.task.splitTimeForFraction(
+      fraction: normalizedPosition.dy,
+      minutesPerStep: widget.minutesPerStep,
+    );
+    if (_contextMenuLocalPosition == localPosition &&
+        _contextMenuNormalizedPosition == normalizedPosition &&
+        _contextMenuSplitTime == nextSplit) {
+      return;
+    }
+    setState(() {
+      _contextMenuLocalPosition = localPosition;
+      _contextMenuNormalizedPosition = normalizedPosition;
+      _contextMenuSplitTime = nextSplit;
+    });
+  }
+
+  void _captureContextMenuOffsets({
+    required Offset localPosition,
+    required Offset normalizedPosition,
+  }) {
+    if (widget.contextMenuBuilder == null ||
+        widget.contextMenuController == null ||
+        widget.contextMenuGroupId == null) {
+      return;
+    }
+    _updateContextMenuState(
+      localPosition: localPosition,
+      normalizedPosition: normalizedPosition,
+    );
+  }
+
+  Widget _wrapWithContextMenu(Widget child) {
+    final TaskContextMenuBuilder? builder = widget.contextMenuBuilder;
+    final ShadPopoverController? controller = widget.contextMenuController;
+    final ValueKey<String>? groupId = widget.contextMenuGroupId;
+    if (builder == null || controller == null || groupId == null) {
+      return child;
+    }
+
+    final items = builder(
+      context,
+      TaskContextMenuRequest(
+        task: widget.task,
+        localPosition: _contextMenuLocalPosition,
+        normalizedPosition: _contextMenuNormalizedPosition,
+        splitTime: _contextMenuSplitTime,
+      ),
+    );
+
+    return ShadContextMenuRegion(
+      controller: controller,
+      groupId: groupId,
+      items: items,
+      child: child,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -507,29 +607,38 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             },
             onSecondaryTapDown: (details) {
               if (!widget.enableInteractions) return;
-              final double normalizedX =
-                  (details.localPosition.dx / widget.width).clamp(0.0, 1.0);
-              final double normalizedY = widget.height <= 0
-                  ? 0.0
-                  : (details.localPosition.dy / widget.height).clamp(0.0, 1.0);
-              widget.onDragPointerDown?.call(Offset(normalizedX, normalizedY));
+              final Offset local = details.localPosition;
+              final Offset normalized = _normalizedFromLocal(local);
+              _captureContextMenuOffsets(
+                localPosition: local,
+                normalizedPosition: normalized,
+              );
+              widget.onDragPointerDown?.call(normalized);
             },
             onLongPressStart: (details) {
               if (!widget.enableInteractions) return;
               final RenderBox? renderBox =
                   context.findRenderObject() as RenderBox?;
               if (renderBox == null) {
-                widget.onDragPointerDown?.call(const Offset(0.5, 0.5));
+                const Offset fallback = Offset(0.5, 0.5);
+                _captureContextMenuOffsets(
+                  localPosition: Offset(
+                    widget.width * fallback.dx,
+                    widget.height * fallback.dy,
+                  ),
+                  normalizedPosition: fallback,
+                );
+                widget.onDragPointerDown?.call(fallback);
                 return;
               }
               final Offset localPosition =
                   renderBox.globalToLocal(details.globalPosition);
-              final double normalizedX =
-                  (localPosition.dx / widget.width).clamp(0.0, 1.0);
-              final double normalizedY = widget.height <= 0
-                  ? 0.0
-                  : (localPosition.dy / widget.height).clamp(0.0, 1.0);
-              widget.onDragPointerDown?.call(Offset(normalizedX, normalizedY));
+              final Offset normalized = _normalizedFromLocal(localPosition);
+              _captureContextMenuOffsets(
+                localPosition: localPosition,
+                normalizedPosition: normalized,
+              );
+              widget.onDragPointerDown?.call(normalized);
             },
             child: buildTaskBody(),
           ),
@@ -570,12 +679,13 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       final listenerWrapped = Listener(
         onPointerDown: (event) {
           if (!widget.enableInteractions) return;
-          final double normalizedX =
-              (event.localPosition.dx / widget.width).clamp(0.0, 1.0);
-          final double normalizedY = widget.height <= 0
-              ? 0.0
-              : (event.localPosition.dy / widget.height).clamp(0.0, 1.0);
-          widget.onDragPointerDown?.call(Offset(normalizedX, normalizedY));
+          final Offset local = event.localPosition;
+          final Offset normalized = _normalizedFromLocal(local);
+          _captureContextMenuOffsets(
+            localPosition: local,
+            normalizedPosition: normalized,
+          );
+          widget.onDragPointerDown?.call(normalized);
         },
         child: interactiveChild,
       );
@@ -588,7 +698,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     }
 
     if (widget.dragFeedbackHint == null) {
-      return buildSizedContent(
+      final defaultContent = buildSizedContent(
         DragFeedbackHint(
           width: widget.width,
           pointerOffset: widget.width / 2,
@@ -596,12 +706,15 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           anchorDy: widget.height / 2,
         ),
       );
+      return _wrapWithContextMenu(defaultContent);
     }
 
-    return ValueListenableBuilder<DragFeedbackHint>(
+    final listenableBuilder = ValueListenableBuilder<DragFeedbackHint>(
       valueListenable: widget.dragFeedbackHint!,
       builder: (context, hint, child) => buildSizedContent(hint),
     );
+
+    return _wrapWithContextMenu(listenableBuilder);
   }
 
   List<Widget> _buildResizeHandles(Color accentColor) {
