@@ -108,8 +108,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
   Ticker? _edgeAutoScrollTicker;
-  final Map<String, double> _taskContextMenuPointerFractions =
-      <String, double>{};
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   double _edgeAutoScrollOffsetPerFrame = 0;
   bool get _isWidthDebounceActive =>
@@ -684,49 +682,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _handleTaskPointerDown(CalendarTask task, Offset normalizedOffset) {
     _handleDragPointerDown(normalizedOffset);
-    _taskContextMenuPointerFractions[task.id] =
-        normalizedOffset.dy.clamp(0.0, 1.0);
-  }
-
-  DateTime? _effectiveTaskEnd(CalendarTask task) {
-    final DateTime? start = task.scheduledTime;
-    if (start == null) {
-      return null;
-    }
-    final Duration? duration = task.duration;
-    if (duration != null && duration.inMinutes > 0) {
-      return start.add(duration);
-    }
-    final DateTime? end = task.effectiveEndDate;
-    if (end == null || !end.isAfter(start)) {
-      return null;
-    }
-    return end;
-  }
-
-  DateTime? _computeSplitTime(CalendarTask task) {
-    final double fraction =
-        (_taskContextMenuPointerFractions[task.id] ?? 0.5).clamp(0.0, 1.0);
-    final DateTime? start = task.scheduledTime;
-    final DateTime? end = _effectiveTaskEnd(task);
-    if (start == null || end == null) {
-      return null;
-    }
-    final int totalMinutes = end.difference(start).inMinutes;
-    final int minimumStep = _minutesPerStep;
-    if (totalMinutes <= 0 || totalMinutes < minimumStep * 2) {
-      return null;
-    }
-    int splitMinutes = (totalMinutes * fraction).round();
-    if (minimumStep > 0) {
-      splitMinutes = (splitMinutes / minimumStep).round() * minimumStep;
-    }
-    final int maxSplit = totalMinutes - minimumStep;
-    splitMinutes = math.max(minimumStep, math.min(splitMinutes, maxSplit));
-    if (splitMinutes <= 0 || splitMinutes >= totalMinutes) {
-      return null;
-    }
-    return start.add(Duration(minutes: splitMinutes));
   }
 
   void _splitTask(CalendarTask task, DateTime splitTime) {
@@ -2683,146 +2638,160 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           }
 
           final menuController = ShadPopoverController();
-          final bool isSelected = _isTaskSelected(task);
           final bool selectionMode = _isSelectionMode;
-          final menuItems = <Widget>[
-            ShadContextMenuItem(
-              leading: const Icon(Icons.copy_outlined),
-              onPressed: () {
-                menuController.hide();
-                _copyTask(task);
-              },
-              child: const Text('Copy Task'),
-            ),
-          ];
-
-          if (_taskInteractionController.clipboardTemplate != null &&
-              task.scheduledTime != null) {
-            menuItems.add(
+          final bool isSelected = _isTaskSelected(task);
+          List<Widget> buildTaskContextMenu(
+            BuildContext context,
+            TaskContextMenuRequest request,
+          ) {
+            final menuItems = <Widget>[
               ShadContextMenuItem(
-                leading: const Icon(Icons.content_paste_outlined),
+                leading: const Icon(Icons.copy_outlined),
                 onPressed: () {
                   menuController.hide();
-                  _pasteTask(task.scheduledTime!);
+                  _copyTask(task);
                 },
-                child: const Text('Paste Task Here'),
+                child: const Text('Copy Task'),
               ),
-            );
-          }
+            ];
 
-          final bool isRecurring = !task.effectiveRecurrence.isNone;
-          final bool isOccurrenceSelected = _selectedTaskIds.contains(task.id);
-          final bool isSeriesSelected = _selectedTaskIds.contains(task.baseId);
-
-          if (isRecurring) {
-            final String occurrenceLabel;
-            if (selectionMode) {
-              occurrenceLabel = isOccurrenceSelected
-                  ? 'Deselect Occurrence'
-                  : 'Add Occurrence to Selection';
-            } else {
-              occurrenceLabel = 'Select Occurrence';
+            if (_taskInteractionController.clipboardTemplate != null &&
+                task.scheduledTime != null) {
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: const Icon(Icons.content_paste_outlined),
+                  onPressed: () {
+                    menuController.hide();
+                    _pasteTask(task.scheduledTime!);
+                  },
+                  child: const Text('Paste Task Here'),
+                ),
+              );
             }
 
-            menuItems.add(
-              ShadContextMenuItem(
-                leading: Icon(
-                  isOccurrenceSelected
-                      ? Icons.check_box
-                      : Icons.check_box_outline_blank,
-                ),
-                onPressed: () {
-                  menuController.hide();
-                  if (selectionMode) {
-                    _toggleTaskSelection(task.id);
-                  } else {
-                    _enterSelectionMode(task.id);
-                  }
-                },
-                child: Text(occurrenceLabel),
-              ),
-            );
+            final bool selectionModeActive = _isSelectionMode;
+            final bool isRecurring = !task.effectiveRecurrence.isNone;
+            final bool isOccurrenceSelected =
+                _selectedTaskIds.contains(task.id);
+            final bool isSeriesSelected =
+                _selectedTaskIds.contains(task.baseId);
+            final bool isSelected = _isTaskSelected(task);
 
-            final String seriesLabel;
-            if (selectionMode) {
-              seriesLabel =
-                  isSeriesSelected ? 'Deselect All Repeats' : 'Add All Repeats';
+            if (isRecurring) {
+              final String occurrenceLabel;
+              if (selectionModeActive) {
+                occurrenceLabel = isOccurrenceSelected
+                    ? 'Deselect Occurrence'
+                    : 'Add Occurrence to Selection';
+              } else {
+                occurrenceLabel = 'Select Occurrence';
+              }
+
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: Icon(
+                    isOccurrenceSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                  ),
+                  onPressed: () {
+                    menuController.hide();
+                    if (selectionModeActive) {
+                      _toggleTaskSelection(task.id);
+                    } else {
+                      _enterSelectionMode(task.id);
+                    }
+                  },
+                  child: Text(occurrenceLabel),
+                ),
+              );
+
+              final String seriesLabel;
+              if (selectionModeActive) {
+                seriesLabel = isSeriesSelected
+                    ? 'Deselect All Repeats'
+                    : 'Add All Repeats';
+              } else {
+                seriesLabel = 'Select All Repeats';
+              }
+
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: Icon(
+                    isSeriesSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                  ),
+                  onPressed: () {
+                    menuController.hide();
+                    if (selectionModeActive) {
+                      _toggleTaskSelection(task.baseId);
+                    } else {
+                      _enterSelectionMode(task.baseId);
+                    }
+                  },
+                  child: Text(seriesLabel),
+                ),
+              );
             } else {
-              seriesLabel = 'Select All Repeats';
+              final String selectionLabel;
+              if (selectionModeActive) {
+                selectionLabel =
+                    isSelected ? 'Deselect Task' : 'Add to Selection';
+              } else {
+                selectionLabel = 'Select Task';
+              }
+
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: Icon(
+                    isSelected
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                  ),
+                  onPressed: () {
+                    menuController.hide();
+                    if (selectionModeActive) {
+                      _toggleTaskSelection(task.baseId);
+                    } else {
+                      _enterSelectionMode(task.baseId);
+                    }
+                  },
+                  child: Text(selectionLabel),
+                ),
+              );
             }
 
-            menuItems.add(
-              ShadContextMenuItem(
-                leading: Icon(
-                  isSeriesSelected
-                      ? Icons.check_box
-                      : Icons.check_box_outline_blank,
+            final DateTime? splitTime = request.splitTime;
+            if (splitTime != null) {
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: const Icon(Icons.call_split),
+                  onPressed: () {
+                    menuController.hide();
+                    _splitTask(task, splitTime);
+                  },
+                  child: Text(
+                    'Split at ${TimeFormatter.formatTime(splitTime)}',
+                  ),
                 ),
-                onPressed: () {
-                  menuController.hide();
-                  if (selectionMode) {
-                    _toggleTaskSelection(task.baseId);
-                  } else {
-                    _enterSelectionMode(task.baseId);
-                  }
-                },
-                child: Text(seriesLabel),
-              ),
-            );
-          } else {
-            final String selectionLabel;
-            if (selectionMode) {
-              selectionLabel =
-                  isSelected ? 'Deselect Task' : 'Add to Selection';
-            } else {
-              selectionLabel = 'Select Task';
+              );
             }
 
-            menuItems.add(
-              ShadContextMenuItem(
-                leading: Icon(
-                  isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+            if (selectionModeActive) {
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: const Icon(Icons.highlight_off),
+                  onPressed: () {
+                    menuController.hide();
+                    _clearSelectionMode();
+                  },
+                  child: const Text('Exit Selection Mode'),
                 ),
-                onPressed: () {
-                  menuController.hide();
-                  if (selectionMode) {
-                    _toggleTaskSelection(task.baseId);
-                  } else {
-                    _enterSelectionMode(task.baseId);
-                  }
-                },
-                child: Text(selectionLabel),
-              ),
-            );
-          }
+              );
+            }
 
-          final DateTime? splitTime = _computeSplitTime(task);
-          if (splitTime != null) {
-            menuItems.add(
-              ShadContextMenuItem(
-                leading: const Icon(Icons.call_split),
-                onPressed: () {
-                  menuController.hide();
-                  _splitTask(task, splitTime);
-                },
-                child: Text(
-                  'Split at ${TimeFormatter.formatTime(splitTime)}',
-                ),
-              ),
-            );
-          }
-
-          if (selectionMode) {
-            menuItems.add(
-              ShadContextMenuItem(
-                leading: const Icon(Icons.highlight_off),
-                onPressed: () {
-                  menuController.hide();
-                  _clearSelectionMode();
-                },
-                child: const Text('Exit Selection Mode'),
-              ),
-            );
+            return menuItems;
           }
 
           return DragTarget<CalendarTask>(
@@ -2930,6 +2899,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 isSelectionMode: selectionMode,
                 isSelected: isSelected,
                 dragFeedbackHint: _taskInteractionController.feedbackHint,
+                contextMenuController: menuController,
+                contextMenuGroupId: _contextMenuGroupId,
+                contextMenuBuilder: buildTaskContextMenu,
                 onDragPointerDown: (offset) =>
                     _handleTaskPointerDown(task, offset),
                 onToggleSelection: () {
@@ -2993,23 +2965,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 );
               }
 
-              return ShadContextMenuRegion(
-                controller: menuController,
-                groupId: _contextMenuGroupId,
-                items: menuItems,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
-                    border: showSplitPreview
-                        ? Border.all(
-                            color: calendarPrimaryColor.withValues(alpha: 0.6),
-                            width: 2,
-                          )
-                        : null,
-                  ),
-                  child: baseTask,
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: showSplitPreview
+                      ? Border.all(
+                          color: calendarPrimaryColor.withValues(alpha: 0.6),
+                          width: 2,
+                        )
+                      : null,
                 ),
+                child: baseTask,
               );
             },
           );

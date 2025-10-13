@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
@@ -194,5 +196,43 @@ extension CalendarTaskExtensions on CalendarTask {
       case TaskPriority.none:
         return const Color(0xFF9CA3AF);
     }
+  }
+
+  DateTime? splitTimeForFraction({
+    required double fraction,
+    required int minutesPerStep,
+  }) {
+    final DateTime? start = scheduledTime;
+    final DateTime? end = effectiveEndDate;
+    if (start == null || end == null) {
+      return null;
+    }
+
+    final int totalMinutes = end.difference(start).inMinutes;
+    if (totalMinutes <= 0) {
+      return null;
+    }
+
+    final double normalized = fraction.clamp(0.0, 1.0);
+    final int minimumStep = math.max(0, minutesPerStep);
+    if (minimumStep > 0 && totalMinutes < minimumStep * 2) {
+      return null;
+    }
+
+    int splitMinutes = (totalMinutes * normalized).round();
+    if (minimumStep > 0) {
+      splitMinutes = (splitMinutes / minimumStep).round() * minimumStep;
+      final int maxSplit = totalMinutes - minimumStep;
+      if (maxSplit <= 0) {
+        return null;
+      }
+      splitMinutes = math.max(minimumStep, math.min(splitMinutes, maxSplit));
+    }
+
+    if (splitMinutes <= 0 || splitMinutes >= totalMinutes) {
+      return null;
+    }
+
+    return start.add(Duration(minutes: splitMinutes));
   }
 }
