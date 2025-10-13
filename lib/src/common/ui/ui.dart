@@ -114,6 +114,14 @@ const calendarSpacing8 = 8.0;
 const calendarSpacing12 = 12.0;
 const calendarSpacing16 = 16.0;
 
+// Event layout constraints
+const calendarEventMinHeight = 20.0;
+const calendarEventMinWidth = 32.0;
+
+// Structural layout metrics
+const calendarWeekHeaderHeight = 40.0;
+const calendarBorderStroke = 1.0;
+
 // Popover and overlay geometry
 /// Fixed width for task popovers so layout matches legacy design.
 const calendarTaskPopoverWidth = 360.0;
