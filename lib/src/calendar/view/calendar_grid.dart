@@ -2929,7 +2929,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             hitTestBehavior: HitTestBehavior.translucent,
             onWillAcceptWithDetails: (details) {
               final dragged = details.data;
-              if (dragged.baseId == task.baseId) {
+              if (dragged.id == task.id) {
                 return false;
               }
               final DateTime previewStart =
