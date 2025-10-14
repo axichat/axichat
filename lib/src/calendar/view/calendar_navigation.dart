@@ -66,20 +66,16 @@ class CalendarNavigation extends StatelessWidget {
         ],
       ),
     );
+    const double verticalPadding = calendarSpacing6;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
         spec.contentPadding.left,
-        spec.contentPadding.top,
+        verticalPadding,
         spec.contentPadding.right,
-        spec.contentPadding.top,
+        verticalPadding,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
+      color: Colors.white,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

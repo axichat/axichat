@@ -164,10 +164,11 @@ class CalendarSidebarController extends ChangeNotifier {
     }
   }
 
-  void resetForm() {
+  void resetForm({bool preserveAdvancedVisibility = true}) {
     _updateState(
       _state.copyWith(
-        showAdvancedOptions: false,
+        showAdvancedOptions:
+            preserveAdvancedVisibility ? _state.showAdvancedOptions : false,
         isImportant: false,
         isUrgent: false,
         selectedDeadline: null,
