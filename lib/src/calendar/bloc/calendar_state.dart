@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../models/calendar_model.dart';
@@ -6,6 +7,19 @@ import '../utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 
 part 'calendar_state.freezed.dart';
+
+@immutable
+class TaskFocusRequest {
+  const TaskFocusRequest({
+    required this.taskId,
+    required this.anchor,
+    required this.token,
+  });
+
+  final String taskId;
+  final DateTime anchor;
+  final int token;
+}
 
 @freezed
 class CalendarState with _$CalendarState {
@@ -25,6 +39,7 @@ class CalendarState with _$CalendarState {
     @Default(<String>{}) Set<String> selectedTaskIds,
     @Default(false) bool canUndo,
     @Default(false) bool canRedo,
+    TaskFocusRequest? pendingFocus,
   }) = _CalendarState;
 
   factory CalendarState.initial() => CalendarState(

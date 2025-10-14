@@ -38,6 +38,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final Function(CalendarTask, DateTime)? onTaskDragEnd;
   final void Function(DateTime date) onDateSelected;
   final void Function(CalendarView view) onViewChanged;
+  final TaskFocusRequest? focusRequest;
 
   const CalendarGrid({
     super.key,
@@ -46,6 +47,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
     this.onTaskDragEnd,
     required this.onDateSelected,
     required this.onViewChanged,
+    this.focusRequest,
   });
 
   @override
@@ -113,6 +115,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double _edgeAutoScrollOffsetPerFrame = 0;
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
+  int? _lastHandledFocusToken;
 
   bool get _shouldFreezeWidth =>
       !_taskInteractionController.dragHasMoved && _isWidthDebounceActive;
@@ -551,6 +554,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _capturedBloc = context.read<T>();
       _blocInitialized = true;
     }
+    _processFocusRequest(widget.focusRequest);
   }
 
   @override
@@ -967,6 +971,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         oldWidget.state.selectedDate, widget.state.selectedDate)) {
       _hasAutoScrolled = false;
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
+    }
+
+    if (widget.focusRequest != null &&
+        (oldWidget.focusRequest == null ||
+            oldWidget.focusRequest!.token != widget.focusRequest!.token)) {
+      _processFocusRequest(widget.focusRequest);
     }
   }
 
@@ -2803,8 +2813,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 task.isOccurrence || !task.effectiveRecurrence.isNone;
             final bool isOccurrenceSelected =
                 _selectedTaskIds.contains(task.id);
-            final bool isSeriesSelected =
-                _selectedTaskIds.contains(task.baseId);
+            final Set<String> seriesIds = _seriesIdsForTask(task);
+            final bool isSeriesSelected = seriesIds.isNotEmpty &&
+                seriesIds.every(_selectedTaskIds.contains);
             final bool isSelected = _isTaskSelected(task);
 
             if (isSeriesTask) {
@@ -2854,10 +2865,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   ),
                   onPressed: () {
                     menuController.hide();
-                    if (selectionModeActive) {
-                      _toggleTaskSelection(task.baseId);
+                    if (isSeriesSelected) {
+                      _capturedBloc.add(
+                        CalendarEvent.selectionIdsRemoved(taskIds: seriesIds),
+                      );
                     } else {
-                      _enterSelectionMode(task.baseId);
+                      _capturedBloc.add(
+                        CalendarEvent.selectionIdsAdded(taskIds: seriesIds),
+                      );
                     }
                   },
                   child: Text(seriesLabel),
@@ -3131,6 +3146,34 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return calculateOverlapColumns(tasks);
   }
 
+  Set<String> _seriesIdsForTask(CalendarTask task) {
+    final String baseId = task.baseId;
+    final ids = <String>{baseId};
+
+    for (final entry in widget.state.model.tasks.values) {
+      if (entry.baseId == baseId) {
+        ids.add(entry.id);
+      }
+    }
+
+    for (final selected in _selectedTaskIds) {
+      if (baseTaskIdFrom(selected) == baseId) {
+        ids.add(selected);
+      }
+    }
+
+    if (task.isOccurrence) {
+      ids.add(task.id);
+    } else {
+      final String? occurrenceKey = task.baseOccurrenceKey;
+      if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
+        ids.add('$baseId::$occurrenceKey');
+      }
+    }
+
+    return ids;
+  }
+
   List<DateTime> _getWeekDates(DateTime date) {
     final startOfWeek = date.subtract(Duration(days: date.weekday - 1));
     return List.generate(7, (index) => startOfWeek.add(Duration(days: index)));
@@ -3191,6 +3234,23 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (widget.state.viewMode == CalendarView.week) {
       widget.onViewChanged(CalendarView.day);
     }
+  }
+
+  void _processFocusRequest(TaskFocusRequest? request) {
+    if (!_blocInitialized || request == null) {
+      return;
+    }
+    if (_lastHandledFocusToken == request.token) {
+      return;
+    }
+    _lastHandledFocusToken = request.token;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _scrollToSlot(request.anchor);
+      _capturedBloc.add(const CalendarEvent.taskFocusCleared());
+    });
   }
 }
 

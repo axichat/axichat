@@ -652,29 +652,35 @@ class _TaskSidebarState extends State<TaskSidebar>
       margin: const EdgeInsets.only(bottom: 8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Container(
-          decoration: BoxDecoration(
-            color: isActive ? calendarSidebarBackgroundColor : Colors.white,
-            border: Border(
-              left: BorderSide(color: borderColor, width: 3),
-              top: const BorderSide(color: calendarBorderColor),
-              right: const BorderSide(color: calendarBorderColor),
-              bottom: const BorderSide(color: calendarBorderColor),
-            ),
-          ),
-          child: _buildTaskTileBody(
-            task,
-            scheduleLabel: scheduleLabel,
-            trailing: Tooltip(
-              message: 'Remove from selection',
-              child: ShadIconButton.ghost(
-                onPressed: () => bloc.add(
-                  CalendarEvent.selectionToggled(taskId: task.id),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _focusTask(task),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isActive ? calendarSidebarBackgroundColor : Colors.white,
+                border: Border(
+                  left: BorderSide(color: borderColor, width: 3),
+                  top: const BorderSide(color: calendarBorderColor),
+                  right: const BorderSide(color: calendarBorderColor),
+                  bottom: const BorderSide(color: calendarBorderColor),
                 ),
-                icon: const Icon(
-                  Icons.close,
-                  size: 16,
-                  color: calendarSubtitleColor,
+              ),
+              child: _buildTaskTileBody(
+                task,
+                scheduleLabel: scheduleLabel,
+                trailing: Tooltip(
+                  message: 'Remove from selection',
+                  child: ShadIconButton.ghost(
+                    onPressed: () => bloc.add(
+                      CalendarEvent.selectionIdsRemoved(taskIds: {task.id}),
+                    ),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: calendarSubtitleColor,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -682,6 +688,12 @@ class _TaskSidebarState extends State<TaskSidebar>
         ),
       ),
     );
+  }
+
+  void _focusTask(CalendarTask task) {
+    context.read<BaseCalendarBloc>().add(
+          CalendarEvent.taskFocusRequested(taskId: task.id),
+        );
   }
 
   String _selectionScheduleLabel(CalendarTask task) {
@@ -1437,7 +1449,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             ],
           ),
           if (scheduleLabel != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               scheduleLabel,
               style: const TextStyle(

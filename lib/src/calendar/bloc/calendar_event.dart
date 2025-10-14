@@ -139,9 +139,23 @@ class CalendarEvent with _$CalendarEvent {
     RecurrenceRule? recurrence,
   }) = CalendarSelectionRecurrenceChanged;
 
+  const factory CalendarEvent.selectionIdsAdded({
+    required Set<String> taskIds,
+  }) = CalendarSelectionIdsAdded;
+
+  const factory CalendarEvent.selectionIdsRemoved({
+    required Set<String> taskIds,
+  }) = CalendarSelectionIdsRemoved;
+
   const factory CalendarEvent.undoRequested() = CalendarUndoRequested;
 
   const factory CalendarEvent.redoRequested() = CalendarRedoRequested;
+
+  const factory CalendarEvent.taskFocusRequested({
+    required String taskId,
+  }) = CalendarTaskFocusRequested;
+
+  const factory CalendarEvent.taskFocusCleared() = CalendarTaskFocusCleared;
 }
 
 enum CalendarView { week, day, month }

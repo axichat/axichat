@@ -52,8 +52,12 @@ abstract class BaseCalendarBloc
     on<CalendarSelectionCompletedToggled>(_onSelectionCompletedToggled);
     on<CalendarSelectionDeleted>(_onSelectionDeleted);
     on<CalendarSelectionRecurrenceChanged>(_onSelectionRecurrenceChanged);
+    on<CalendarSelectionIdsAdded>(_onSelectionIdsAdded);
+    on<CalendarSelectionIdsRemoved>(_onSelectionIdsRemoved);
     on<CalendarUndoRequested>(_onUndoRequested);
     on<CalendarRedoRequested>(_onRedoRequested);
+    on<CalendarTaskFocusRequested>(_onTaskFocusRequested);
+    on<CalendarTaskFocusCleared>(_onTaskFocusCleared);
   }
 
   final CalendarReminderController? _reminderController;
@@ -65,6 +69,7 @@ abstract class BaseCalendarBloc
   static const int _undoHistoryLimit = 50;
   final List<CalendarModel> _undoStack = <CalendarModel>[];
   final List<CalendarModel> _redoStack = <CalendarModel>[];
+  int _focusSequence = 0;
 
   @override
   String get id => _storageId;
@@ -849,6 +854,38 @@ abstract class BaseCalendarBloc
     );
   }
 
+  void _onSelectionIdsAdded(
+    CalendarSelectionIdsAdded event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (event.taskIds.isEmpty) {
+      return;
+    }
+    final updated = <String>{...state.selectedTaskIds, ...event.taskIds};
+    _emitSelectionState(
+      emit: emit,
+      isSelectionMode: true,
+      selectedTaskIds: updated,
+    );
+  }
+
+  void _onSelectionIdsRemoved(
+    CalendarSelectionIdsRemoved event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (event.taskIds.isEmpty) {
+      return;
+    }
+    final updated = <String>{...state.selectedTaskIds}
+      ..removeAll(event.taskIds);
+    final bool nextMode = updated.isNotEmpty;
+    _emitSelectionState(
+      emit: emit,
+      isSelectionMode: nextMode,
+      selectedTaskIds: updated,
+    );
+  }
+
   Set<String> _selectionGroupFor(String id) {
     final baseId = baseTaskIdFrom(id);
     final CalendarTask? baseTask = state.model.tasks[baseId];
@@ -858,17 +895,14 @@ abstract class BaseCalendarBloc
     if (id != baseId) {
       return {id};
     }
-    if (!baseTask.effectiveRecurrence.isNone) {
-      return {baseId};
+
+    final group = <String>{baseId};
+    for (final task in state.model.tasks.values) {
+      if (task.baseId == baseId && task.id != baseId) {
+        group.add(task.id);
+      }
     }
-    final group = state.model.tasks.values
-        .where((task) => task.baseId == baseId)
-        .map((task) => task.id)
-        .toSet();
-    if (group.isEmpty) {
-      return {id};
-    }
-    group.add(baseId);
+
     return group;
   }
 
@@ -956,6 +990,95 @@ abstract class BaseCalendarBloc
     for (final task in mergedUpdates.values) {
       await onTaskUpdated(task);
     }
+  }
+
+  void _onTaskFocusRequested(
+    CalendarTaskFocusRequested event,
+    Emitter<CalendarState> emit,
+  ) {
+    final DateTime? anchor = _focusAnchorFor(event.taskId);
+    if (anchor == null) {
+      return;
+    }
+
+    _focusSequence += 1;
+
+    final DateTime anchorDate = DateTime(anchor.year, anchor.month, anchor.day);
+    final int weekday = anchorDate.weekday;
+    final DateTime weekStart = anchorDate.subtract(
+      Duration(days: weekday - DateTime.monday),
+    );
+    final int dayIndex = anchorDate.difference(weekStart).inDays;
+
+    emit(
+      state.copyWith(
+        selectedDate: anchorDate,
+        selectedDayIndex: dayIndex,
+        pendingFocus: TaskFocusRequest(
+          taskId: event.taskId,
+          anchor: anchor,
+          token: _focusSequence,
+        ),
+      ),
+    );
+  }
+
+  void _onTaskFocusCleared(
+    CalendarTaskFocusCleared event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (state.pendingFocus == null) {
+      return;
+    }
+    emit(state.copyWith(pendingFocus: null));
+  }
+
+  DateTime? _focusAnchorFor(String taskId) {
+    final CalendarTask? direct = state.model.tasks[taskId];
+    if (direct != null) {
+      return direct.scheduledTime ?? direct.deadline;
+    }
+
+    final String baseId = baseTaskIdFrom(taskId);
+    final CalendarTask? baseTask = state.model.tasks[baseId];
+    if (baseTask == null) {
+      return null;
+    }
+
+    final String? occurrenceKey = occurrenceKeyFrom(taskId);
+    if (occurrenceKey == null || occurrenceKey.isEmpty) {
+      return baseTask.scheduledTime ?? baseTask.deadline;
+    }
+
+    final TaskOccurrenceOverride? override =
+        baseTask.occurrenceOverrides[occurrenceKey];
+    if (override?.scheduledTime != null) {
+      return override!.scheduledTime;
+    }
+
+    final CalendarTask? occurrence = baseTask.occurrenceForId(taskId);
+    if (occurrence?.scheduledTime != null) {
+      return occurrence!.scheduledTime;
+    }
+
+    DateTime? anchor;
+    if (occurrenceKey == baseTask.baseOccurrenceKey) {
+      anchor = baseTask.scheduledTime;
+    } else {
+      final int? micros = int.tryParse(occurrenceKey);
+      if (micros != null) {
+        anchor = DateTime.fromMicrosecondsSinceEpoch(micros);
+      }
+    }
+
+    if (anchor == null) {
+      final DateTime? parsed = DateTime.tryParse(occurrenceKey);
+      if (parsed != null) {
+        anchor = parsed;
+      }
+    }
+
+    return anchor ?? baseTask.scheduledTime ?? baseTask.deadline;
   }
 
   Future<void> _onSelectionCompletedToggled(

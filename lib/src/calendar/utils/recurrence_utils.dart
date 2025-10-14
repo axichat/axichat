@@ -38,8 +38,19 @@ extension CalendarTaskInstanceX on CalendarTask {
   String? get occurrenceKey => occurrenceKeyFrom(id);
 
   /// Unique key for the base (template) occurrence when this task repeats.
-  String? get baseOccurrenceKey =>
-      scheduledTime?.microsecondsSinceEpoch.toString();
+  String? get baseOccurrenceKey {
+    final scheduled = scheduledTime;
+    if (scheduled == null) {
+      return null;
+    }
+
+    final String? existingKey = occurrenceKey;
+    if (existingKey != null && existingKey.isNotEmpty) {
+      return existingKey;
+    }
+
+    return scheduled.microsecondsSinceEpoch.toString();
+  }
 
   /// Returns the base occurrence (the first scheduled instance) for recurring
   /// tasks, applying any overrides. Returns `null` if the base occurrence has
