@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
-import 'widgets/schedule_range_fields.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 import '../utils/recurrence_utils.dart';
@@ -206,39 +203,33 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   Widget _buildScheduleSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const TaskSectionHeader(title: 'Schedule'),
-        const SizedBox(height: 6),
-        ScheduleRangeFields(
-          start: _startTime,
-          end: _endTime,
-          onStartChanged: (value) {
-            setState(() {
-              _startTime = value;
-              if (value == null) {
-                _endTime = null;
-                return;
-              }
-              if (_endTime == null || _endTime!.isBefore(value)) {
-                _endTime = value.add(const Duration(hours: 1));
-              }
-            });
-          },
-          onEndChanged: (value) {
-            setState(() {
-              _endTime = value;
-              if (value == null) {
-                return;
-              }
-              if (_startTime != null && value.isBefore(_startTime!)) {
-                _endTime = _startTime!.add(const Duration(minutes: 15));
-              }
-            });
-          },
-        ),
-      ],
+    return TaskScheduleSection(
+      spacing: calendarSpacing6,
+      start: _startTime,
+      end: _endTime,
+      onStartChanged: (value) {
+        setState(() {
+          _startTime = value;
+          if (value == null) {
+            _endTime = null;
+            return;
+          }
+          if (_endTime == null || _endTime!.isBefore(value)) {
+            _endTime = value.add(const Duration(hours: 1));
+          }
+        });
+      },
+      onEndChanged: (value) {
+        setState(() {
+          _endTime = value;
+          if (value == null) {
+            return;
+          }
+          if (_startTime != null && value.isBefore(_startTime!)) {
+            _endTime = _startTime!.add(const Duration(minutes: 15));
+          }
+        });
+      },
     );
   }
 
@@ -261,29 +252,23 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         widget.task.scheduledTime?.weekday ??
         DateTime.now().weekday;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const TaskSectionHeader(title: 'Repeat'),
-        const SizedBox(height: 4),
-        RecurrenceEditor(
-          value: _recurrence,
-          fallbackWeekday: fallbackWeekday,
-          spacing: const RecurrenceEditorSpacing(
-            chipSpacing: 6,
-            chipRunSpacing: 6,
-            weekdaySpacing: 10,
-            advancedSectionSpacing: 12,
-            endSpacing: 14,
-            fieldGap: 12,
-          ),
-          onChanged: (next) {
-            setState(() {
-              _recurrence = next;
-            });
-          },
-        ),
-      ],
+    return TaskRecurrenceSection(
+      spacing: calendarSpacing4,
+      value: _recurrence,
+      fallbackWeekday: fallbackWeekday,
+      spacingConfig: const RecurrenceEditorSpacing(
+        chipSpacing: 6,
+        chipRunSpacing: 6,
+        weekdaySpacing: 10,
+        advancedSectionSpacing: 12,
+        endSpacing: 14,
+        fieldGap: 12,
+      ),
+      onChanged: (next) {
+        setState(() {
+          _recurrence = next;
+        });
+      },
     );
   }
 
@@ -308,31 +293,24 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       padding: const EdgeInsets.all(12),
       gap: 8,
       children: [
-        ShadButton.destructive(
-          size: ShadButtonSize.sm,
+        TaskDestructiveButton(
+          label: 'Delete',
           onPressed: () {
             widget.onTaskDeleted(widget.task.id);
             widget.onClose();
           },
-          child: const Text('Delete'),
         ),
         const Spacer(),
-        ShadButton.outline(
-          size: ShadButtonSize.sm,
+        TaskSecondaryButton(
+          label: 'Cancel',
+          onPressed: widget.onClose,
           foregroundColor: calendarPrimaryColor,
           hoverForegroundColor: calendarPrimaryHoverColor,
           hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
-          onPressed: widget.onClose,
-          child: const Text('Cancel'),
         ),
-        ShadButton(
-          size: ShadButtonSize.sm,
-          backgroundColor: calendarPrimaryColor,
-          hoverBackgroundColor: calendarPrimaryHoverColor,
-          foregroundColor: Colors.white,
-          hoverForegroundColor: Colors.white,
+        TaskPrimaryButton(
+          label: 'Save',
           onPressed: _handleSave,
-          child: const Text('Save'),
         ),
       ],
     );

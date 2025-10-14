@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -116,40 +114,19 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
         // Optional controls (shown when focused)
         if (_isExpanded) ...[
           const SizedBox(height: 8),
-          TaskFormActionsRow(
-            padding: EdgeInsets.zero,
-            gap: calendarSpacing8,
-            children: [
-              Expanded(
-                child: TaskToolbarButton(
-                  icon: Icons.calendar_today,
-                  label: _selectedDate != null
-                      ? DateFormat.yMMMd().format(_selectedDate!)
-                      : 'Pick date',
-                  onPressed: _selectDate,
-                ),
-              ),
-              Expanded(
-                child: TaskToolbarButton(
-                  icon: Icons.schedule,
-                  label: _selectedTime != null
-                      ? _selectedTime!.format(context)
-                      : 'Pick time',
-                  onPressed: _selectTime,
-                ),
-              ),
-              TaskGhostIconButton(
-                icon: Icons.close,
-                onPressed: () {
-                  setState(() {
-                    _isExpanded = false;
-                    _selectedDate = null;
-                    _selectedTime = null;
-                  });
-                  _focusNode.unfocus();
-                },
-              ),
-            ],
+          TaskDateTimePickerRow(
+            selectedDate: _selectedDate,
+            selectedTime: _selectedTime,
+            onSelectDate: _selectDate,
+            onSelectTime: _selectTime,
+            onClear: () {
+              setState(() {
+                _isExpanded = false;
+                _selectedDate = null;
+                _selectedTime = null;
+              });
+              _focusNode.unfocus();
+            },
           ),
           const SizedBox(height: calendarSpacing8),
           TaskFormActionsRow(

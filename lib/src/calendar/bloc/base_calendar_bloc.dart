@@ -571,6 +571,8 @@ abstract class BaseCalendarBloc
       final updates = <String, CalendarTask>{};
       CalendarTask? createdTask;
 
+      final bool targetIsOccurrence = target.id != baseTask.id;
+
       if (!baseTask.effectiveRecurrence.isNone && target.id.contains('::')) {
         final String? occurrenceKey = occurrenceKeyFrom(target.id);
         if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
@@ -594,8 +596,8 @@ abstract class BaseCalendarBloc
           );
           updates[baseTask.id] = updatedBase;
 
-          createdTask = baseTask.copyWith(
-            id: const Uuid().v4(),
+          createdTask = target.copyWith(
+            id: '${target.baseId}::${const Uuid().v4()}',
             scheduledTime: splitTime,
             duration: rightDuration,
             startHour: splitTime.hour + (splitTime.minute / 60.0),
@@ -622,6 +624,46 @@ abstract class BaseCalendarBloc
         }
       }
 
+      if (targetIsOccurrence && baseTask.effectiveRecurrence.isNone) {
+        final CalendarTask storedTarget =
+            state.model.tasks[target.id] ?? target;
+
+        final CalendarTask updatedOccurrence = storedTarget.copyWith(
+          duration: leftDuration,
+          daySpan: null,
+          endDate: null,
+          startHour: start.hour + (start.minute / 60.0),
+          modifiedAt: now,
+        );
+        updates[updatedOccurrence.id] = updatedOccurrence;
+
+        createdTask = storedTarget.copyWith(
+          id: '${storedTarget.baseId}::${const Uuid().v4()}',
+          scheduledTime: splitTime,
+          duration: rightDuration,
+          daySpan: null,
+          endDate: null,
+          recurrence: null,
+          occurrenceOverrides: const {},
+          startHour: splitTime.hour + (splitTime.minute / 60.0),
+          createdAt: now,
+          modifiedAt: now,
+        );
+
+        model = model.replaceTasks(updates);
+        model = model.addTask(createdTask);
+
+        emitModel(
+          model,
+          emit,
+          selectedTaskIds: state.selectedTaskIds,
+        );
+
+        await onTaskUpdated(updatedOccurrence);
+        await onTaskAdded(createdTask);
+        return;
+      }
+
       final DateTime originalStart = baseTask.scheduledTime ?? start;
       final CalendarTask updatedBaseTask = baseTask.copyWith(
         scheduledTime: originalStart,
@@ -634,7 +676,7 @@ abstract class BaseCalendarBloc
       updates[baseTask.id] = updatedBaseTask;
 
       createdTask = baseTask.copyWith(
-        id: const Uuid().v4(),
+        id: '${baseTask.baseId}::${const Uuid().v4()}',
         scheduledTime: splitTime,
         duration: rightDuration,
         daySpan: null,
@@ -752,7 +794,7 @@ abstract class BaseCalendarBloc
   ) {
     final updatedSelection = <String>{...state.selectedTaskIds};
     if (event.taskId != null) {
-      updatedSelection.add(event.taskId!);
+      updatedSelection.addAll(_selectionGroupFor(event.taskId!));
     }
     _emitSelectionState(
       emit: emit,
@@ -767,22 +809,25 @@ abstract class BaseCalendarBloc
   ) {
     final toggledId = event.taskId;
     final currentSelection = <String>{...state.selectedTaskIds};
-    final wasSelected = currentSelection.remove(toggledId);
+    final group = _selectionGroupFor(toggledId);
+    final bool groupSelected =
+        group.isNotEmpty && group.every((id) => currentSelection.contains(id));
+    if (groupSelected) {
+      currentSelection.removeAll(group);
+    } else {
+      currentSelection.addAll(group);
+    }
 
-    if (!state.isSelectionMode && !wasSelected) {
+    if (!state.isSelectionMode && !groupSelected) {
       currentSelection
         ..clear()
-        ..add(toggledId);
+        ..addAll(group);
       _emitSelectionState(
         emit: emit,
         isSelectionMode: true,
         selectedTaskIds: currentSelection,
       );
       return;
-    }
-
-    if (!wasSelected) {
-      currentSelection.add(toggledId);
     }
 
     final nextMode = currentSelection.isNotEmpty;
@@ -802,6 +847,29 @@ abstract class BaseCalendarBloc
       isSelectionMode: false,
       selectedTaskIds: const <String>{},
     );
+  }
+
+  Set<String> _selectionGroupFor(String id) {
+    final baseId = baseTaskIdFrom(id);
+    final CalendarTask? baseTask = state.model.tasks[baseId];
+    if (baseTask == null) {
+      return {id};
+    }
+    if (id != baseId) {
+      return {id};
+    }
+    if (!baseTask.effectiveRecurrence.isNone) {
+      return {baseId};
+    }
+    final group = state.model.tasks.values
+        .where((task) => task.baseId == baseId)
+        .map((task) => task.id)
+        .toSet();
+    if (group.isEmpty) {
+      return {id};
+    }
+    group.add(baseId);
+    return group;
   }
 
   Future<void> _onSelectionPriorityChanged(

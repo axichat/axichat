@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:intl/intl.dart';
 
 import '../../common/ui/ui.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
+import '../utils/responsive_helper.dart';
+import 'widgets/task_form_section.dart';
 
 class CalendarNavigation extends StatelessWidget {
   const CalendarNavigation({
@@ -31,8 +33,14 @@ class CalendarNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: EdgeInsets.fromLTRB(
+        spec.contentPadding.left,
+        spec.contentPadding.top,
+        spec.contentPadding.right,
+        spec.contentPadding.top,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -48,7 +56,7 @@ class CalendarNavigation extends StatelessWidget {
                 label: '← Previous',
                 onPressed: () => _jumpBy(const Duration(days: -7)),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: calendarSpacing12),
               _navButton(
                 label: 'Today',
                 highlighted: _isToday(state.selectedDate),
@@ -56,13 +64,13 @@ class CalendarNavigation extends StatelessWidget {
                     ? null
                     : () => onDateSelected(DateTime.now()),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: calendarSpacing12),
               _navButton(
                 label: 'Next →',
                 onPressed: () => _jumpBy(const Duration(days: 7)),
               ),
               if (state.viewMode == CalendarView.day) ...[
-                const SizedBox(width: 12),
+                const SizedBox(width: calendarSpacing12),
                 _navButton(
                   label: 'Back to week',
                   onPressed: () => onViewChanged(CalendarView.week),
@@ -80,7 +88,7 @@ class CalendarNavigation extends StatelessWidget {
             ),
           ),
           if (onUndo != null || onRedo != null) ...[
-            const SizedBox(width: 16),
+            const SizedBox(width: calendarSpacing16),
             _buildUndoRedoGroup(),
           ],
         ],
@@ -104,26 +112,19 @@ class CalendarNavigation extends StatelessWidget {
     required VoidCallback? onPressed,
     bool highlighted = false,
   }) {
-    final background = highlighted ? calendarPrimaryColor : Colors.white;
-    final foreground = highlighted ? Colors.white : calendarTitleColor;
-    final borderColor =
-        highlighted ? calendarPrimaryColor : calendarBorderColor;
-
-    return TextButton(
+    if (highlighted) {
+      return TaskPrimaryButton(
+        label: label,
+        onPressed: onPressed,
+        isBusy: false,
+      );
+    }
+    return TaskSecondaryButton(
+      label: label,
       onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: foreground,
-        backgroundColor: background,
-        disabledForegroundColor: foreground,
-        disabledBackgroundColor: background,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(color: borderColor),
-        ),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-      child: Text(label),
+      foregroundColor: calendarTitleColor,
+      hoverForegroundColor: calendarPrimaryColor,
+      hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
     );
   }
 
@@ -165,36 +166,13 @@ class CalendarNavigation extends StatelessWidget {
         icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
     return Tooltip(
       message: '$tooltip ($shortcut)',
-      child: OutlinedButton.icon(
+      child: TaskSecondaryButton(
+        label: tooltip,
+        icon: icon,
         onPressed: onPressed,
-        icon: Icon(
-          icon,
-          size: 16,
-          color: onPressed != null ? calendarTitleColor : calendarSubtitleColor,
-        ),
-        label: Text(
-          tooltip,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color:
-                onPressed != null ? calendarTitleColor : calendarSubtitleColor,
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          side: BorderSide(
-            color:
-                onPressed != null ? calendarPrimaryColor : calendarBorderColor,
-          ),
-          foregroundColor:
-              onPressed != null ? calendarTitleColor : calendarSubtitleColor,
-          backgroundColor: onPressed != null
-              ? calendarPrimaryColor.withValues(alpha: 0.08)
-              : Colors.white,
-          disabledForegroundColor: calendarSubtitleColor,
-          disabledBackgroundColor: Colors.white,
-        ),
+        foregroundColor: calendarTitleColor,
+        hoverForegroundColor: calendarPrimaryColor,
+        hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
       ),
     );
   }
@@ -254,7 +232,6 @@ class _DateLabelState extends State<_DateLabel> {
       CalendarView.month =>
         DateFormat.yMMMM().format(widget.state.selectedDate),
     };
-
     return CompositedTransformTarget(
       link: _link,
       child: MouseRegion(
@@ -268,7 +245,10 @@ class _DateLabelState extends State<_DateLabel> {
             onTap: _toggleOverlay,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarSpacing8 + calendarSpacing2,
+                vertical: calendarSpacing6,
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
@@ -328,8 +308,11 @@ class _DateLabelState extends State<_DateLabel> {
 
     final renderBox = context.findRenderObject() as RenderBox?;
     final buttonWidth = renderBox?.size.width ?? 0;
-    const dropdownWidth = 340.0;
+    final spec = ResponsiveHelper.spec(context);
+    final dropdownWidth = spec.quickAddMaxWidth ?? 340.0;
     final horizontalOffset = buttonWidth - dropdownWidth;
+    final buttonHeight = renderBox?.size.height ?? 0;
+    final verticalOffset = buttonHeight + spec.contentPadding.vertical / 2;
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
@@ -341,7 +324,7 @@ class _DateLabelState extends State<_DateLabel> {
               Positioned.fill(child: Container()),
               CompositedTransformFollower(
                 link: _link,
-                offset: Offset(horizontalOffset, 44),
+                offset: Offset(horizontalOffset, verticalOffset),
                 showWhenUnlinked: false,
                 child: GestureDetector(
                   onTap: () {},
@@ -401,24 +384,21 @@ class _CalendarDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
     final days = _buildDays(month);
     final now = DateTime.now();
+    final dropdownWidth =
+        spec.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
 
     return Container(
-      width: 340,
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(top: 8),
+      width: dropdownWidth,
+      padding: spec.contentPadding,
+      margin: const EdgeInsets.only(top: calendarSpacing8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
         border: Border.all(color: calendarBorderColor),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1F000000),
-            blurRadius: 24,
-            offset: Offset(0, 8),
-          ),
-        ],
+        boxShadow: calendarMediumShadow,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -435,23 +415,23 @@ class _CalendarDropdown extends StatelessWidget {
                 icon: Icons.chevron_left,
                 onPressed: () => onMonthChanged(_addMonths(month, -1)),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: calendarSpacing8),
               _navIconButton(
                 icon: Icons.chevron_right,
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: calendarSpacing12),
           const _DayHeaders(),
-          const SizedBox(height: 6),
+          const SizedBox(height: calendarSpacing6),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
+              mainAxisSpacing: calendarSpacing4,
+              crossAxisSpacing: calendarSpacing4,
             ),
             itemCount: days.length,
             itemBuilder: (context, index) {
@@ -485,18 +465,20 @@ class _CalendarDropdown extends StatelessWidget {
               }
 
               return InkWell(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(calendarBorderRadius / 1.5),
                 onTap: () => onDateSelected(date),
                 child: Container(
                   decoration: BoxDecoration(
                     color: backgroundColor,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius:
+                        BorderRadius.circular(calendarBorderRadius / 1.5),
                     border: border == BorderSide.none
                         ? null
                         : Border.fromBorderSide(border),
                   ),
                   alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: calendarSpacing6),
                   child: Text(
                     '${date.day}',
                     style: calendarBodyTextStyle.copyWith(
@@ -508,15 +490,16 @@ class _CalendarDropdown extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: calendarSpacing12),
           SizedBox(
             width: double.infinity,
-            child: TextButton(
+            child: TaskSecondaryButton(
+              label: 'Close',
               onPressed: onClose,
-              style: TextButton.styleFrom(
-                foregroundColor: calendarSubtitleColor,
-              ),
-              child: const Text('Close'),
+              foregroundColor: calendarSubtitleColor,
+              hoverForegroundColor: calendarPrimaryColor,
+              hoverBackgroundColor:
+                  calendarPrimaryColor.withValues(alpha: 0.08),
             ),
           ),
         ],

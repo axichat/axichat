@@ -21,6 +21,9 @@ class CalendarLayoutTheme {
     this.eventMinWidth = calendarEventMinWidth,
     this.narrowedWidthFactor = 0.5,
     this.narrowedWidthThresholdFactor = 0.55,
+    this.dayViewHourHeight = calendarDayViewDefaultHourHeight,
+    this.dayViewSubdivisions = calendarDayViewDefaultSubdivisions,
+    this.visibleHourRows = calendarVisibleHourRows,
     this.sidebarMinWidth = calendarSidebarMinWidth,
     this.sidebarMinWidthFraction = calendarSidebarWidthMinFraction,
     this.sidebarDefaultWidthFraction = calendarSidebarWidthDefaultFraction,
@@ -48,6 +51,9 @@ class CalendarLayoutTheme {
   final double eventMinWidth;
   final double narrowedWidthFactor;
   final double narrowedWidthThresholdFactor;
+  final double dayViewHourHeight;
+  final int dayViewSubdivisions;
+  final int visibleHourRows;
   final double sidebarMinWidth;
   final double sidebarMinWidthFraction;
   final double sidebarDefaultWidthFraction;
@@ -123,12 +129,14 @@ class CalendarLayoutCalculator {
     required double availableHeight,
   }) {
     final CalendarZoomLevel zoom = zoomLevels[zoomIndex];
-    final double desiredHourHeight = isDayView ? 192.0 : zoom.hourHeight;
-    final int subdivisions = isDayView ? 4 : zoom.daySubdivisions;
+    final double desiredHourHeight =
+        isDayView ? theme.dayViewHourHeight : zoom.hourHeight;
+    final int subdivisions =
+        isDayView ? theme.dayViewSubdivisions : zoom.daySubdivisions;
     final double baseSlotHeight = desiredHourHeight / subdivisions;
     // Legacy grid renders from 00:00 through 24:00 inclusive, resulting in 25
     // visible hour rows.
-    final int totalSlots = 25 * subdivisions;
+    final int totalSlots = theme.visibleHourRows * subdivisions;
 
     if (!availableHeight.isFinite || availableHeight <= 0) {
       return CalendarLayoutMetrics(

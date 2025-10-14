@@ -117,6 +117,9 @@ const calendarSpacing16 = 16.0;
 // Event layout constraints
 const calendarEventMinHeight = 20.0;
 const calendarEventMinWidth = 32.0;
+const calendarDayViewDefaultHourHeight = 192.0;
+const calendarDayViewDefaultSubdivisions = 4;
+const calendarVisibleHourRows = 25;
 
 // Structural layout metrics
 const calendarWeekHeaderHeight = 40.0;
@@ -154,6 +157,9 @@ const calendarQuickAddModalMaxWidth = 400.0;
 
 /// Maximum height the quick add modal can occupy before scrolling.
 const calendarQuickAddModalMaxHeight = 540.0;
+
+/// Maximum width for the quick add modal on compact layouts.
+const calendarQuickAddModalCompactMaxWidth = 360.0;
 
 // Device-specific layout tokens
 /// Collapsed task sidebar height when rendered on phones.

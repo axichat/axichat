@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:shadcn_ui/shadcn_ui.dart';
-
+import '../../common/ui/ui.dart';
 import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'feedback_system.dart';
+import 'widgets/task_form_section.dart';
 
 class SyncControls extends StatelessWidget {
   final CalendarState state;
@@ -66,46 +66,35 @@ class SyncControls extends StatelessWidget {
   }
 
   Widget _buildTabletControls(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: spec.contentPadding,
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSyncStatus(context),
-          const SizedBox(height: 12),
+          const SizedBox(height: calendarSpacing12),
           Row(
             children: [
               Expanded(
-                child: ShadButton.outline(
+                child: TaskSecondaryButton(
+                  label: 'Request',
+                  icon: Icons.cloud_download,
                   onPressed:
                       state.isSyncing ? null : () => _requestSync(context),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.cloud_download, size: 16),
-                      SizedBox(width: 4),
-                      Text('Request'),
-                    ],
-                  ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: calendarSpacing8),
               Expanded(
-                child: ShadButton.outline(
+                child: TaskSecondaryButton(
+                  label: 'Push',
+                  icon: Icons.cloud_upload,
                   onPressed: state.isSyncing ? null : () => _pushSync(context),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.cloud_upload, size: 16),
-                      SizedBox(width: 4),
-                      Text('Push'),
-                    ],
-                  ),
                 ),
               ),
             ],
@@ -116,11 +105,12 @@ class SyncControls extends StatelessWidget {
   }
 
   Widget _buildDesktopControls(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: spec.contentPadding,
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
@@ -132,46 +122,29 @@ class SyncControls extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: calendarSpacing12),
           _buildSyncStatus(context),
-          const SizedBox(height: 16),
-          ShadButton(
+          const SizedBox(height: calendarSpacing16),
+          TaskPrimaryButton(
+            label: 'Request Update',
+            icon: Icons.cloud_download,
             onPressed: state.isSyncing ? null : () => _requestSync(context),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.cloud_download, size: 18),
-                SizedBox(width: 8),
-                Text('Request Update'),
-              ],
-            ),
+            isBusy: state.isSyncing,
           ),
-          const SizedBox(height: 8),
-          ShadButton.outline(
+          const SizedBox(height: calendarSpacing8),
+          TaskSecondaryButton(
+            label: 'Push Update',
+            icon: Icons.cloud_upload,
             onPressed: state.isSyncing ? null : () => _pushSync(context),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.cloud_upload, size: 18),
-                SizedBox(width: 8),
-                Text('Push Update'),
-              ],
-            ),
           ),
           if (state.syncError != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: calendarSpacing12),
             _buildErrorDisplay(context),
-            const SizedBox(height: 8),
-            ShadButton.outline(
+            const SizedBox(height: calendarSpacing8),
+            TaskSecondaryButton(
+              label: 'Retry',
+              icon: Icons.refresh,
               onPressed: () => _retrySync(context),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.refresh, size: 18),
-                  SizedBox(width: 8),
-                  Text('Retry'),
-                ],
-              ),
             ),
           ],
         ],

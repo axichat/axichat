@@ -173,9 +173,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
             const SizedBox(height: 16),
             _buildDescriptionField(),
             const SizedBox(height: 16),
-            _buildDateField(),
-            const SizedBox(height: 16),
-            _buildTimeField(),
+            _buildDateTimeSection(),
             const SizedBox(height: 16),
             _buildDurationField(),
           ],
@@ -213,51 +211,25 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
     );
   }
 
-  Widget _buildDateField() {
+  Widget _buildDateTimeSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Date',
+          'Date & Time',
           style: Theme.of(context).textTheme.labelMedium,
         ),
         const SizedBox(height: 8),
-        ShadButton.outline(
-          onPressed: _selectDate,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.calendar_today, size: 16),
-              const SizedBox(width: 8),
-              Text(_formatDate(_selectedDate)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimeField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Time',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-        const SizedBox(height: 8),
-        ShadButton.outline(
-          onPressed: _selectTime,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.access_time, size: 16),
-              const SizedBox(width: 8),
-              Text(_selectedTime == null
-                  ? 'Select time'
-                  : TimeFormatter.formatTimeOfDay(context, _selectedTime!)),
-            ],
-          ),
+        TaskDateTimePickerRow(
+          selectedDate: _selectedDate,
+          selectedTime: _selectedTime,
+          onSelectDate: _selectDate,
+          onSelectTime: _selectTime,
+          pickDateLabel: 'Select date',
+          pickTimeLabel: 'Select time',
+          dateLabelBuilder: (context, date) => _formatDate(date),
+          timeLabelBuilder: (context, time) =>
+              TimeFormatter.formatTimeOfDay(context, time),
         ),
       ],
     );
@@ -342,11 +314,11 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
                 gap: calendarSpacing12,
                 children: [
                   const Spacer(),
-                  ShadButton.outline(
+                  TaskSecondaryButton(
+                    label: 'Cancel',
                     onPressed: state.isLoading
                         ? null
                         : () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
                   ),
                   TaskPrimaryButton(
                     label: 'Save',
@@ -452,7 +424,7 @@ void showUnifiedTaskInput<T extends BaseCalendarBloc>(
   DateTime? initialDate,
   TimeOfDay? initialTime,
 }) {
-  if (ResponsiveHelper.isMobile(context)) {
+  if (ResponsiveHelper.isCompact(context)) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => UnifiedTaskInput<T>(

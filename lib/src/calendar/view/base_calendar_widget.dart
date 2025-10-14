@@ -352,7 +352,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       );
     }
 
-    final isMobile = ResponsiveHelper.isMobile(context);
+    final isMobile = ResponsiveHelper.isCompact(context);
     return RefreshIndicator(
       onRefresh: () async {
         context.read<T>().add(const CalendarEvent.dataChanged());
