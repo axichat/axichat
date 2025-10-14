@@ -34,6 +34,7 @@ class CalendarNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
+    final double horizontalPadding = spec.gridHorizontalPadding;
     final Widget navButtonStrip = SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: EdgeInsets.zero,
@@ -66,33 +67,41 @@ class CalendarNavigation extends StatelessWidget {
         ],
       ),
     );
-    const double verticalPadding = calendarSpacing6;
+    const double verticalPadding = calendarSpacing4;
+    final Widget undoRedoGroup = _buildUndoRedoGroup();
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-        spec.contentPadding.left,
+        horizontalPadding,
         verticalPadding,
-        spec.contentPadding.right,
+        horizontalPadding,
         verticalPadding,
       ),
       color: Colors.white,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Flexible(child: navButtonStrip),
-          Expanded(
+          Flexible(
             child: Align(
-              alignment: Alignment.center,
+              alignment: Alignment.centerLeft,
+              child: navButtonStrip,
+            ),
+          ),
+          Flexible(
+            child: Center(
               child: _DateLabel(
                 state: state,
                 onDateSelected: onDateSelected,
               ),
             ),
           ),
-          if (onUndo != null || onRedo != null) ...[
-            const SizedBox(width: calendarSpacing16),
-            _buildUndoRedoGroup(),
-          ],
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: undoRedoGroup,
+            ),
+          ),
         ],
       ),
     );

@@ -631,13 +631,79 @@ class _TaskSidebarState extends State<TaskSidebar>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final task in tasks)
-          _buildTaskTile(
+          _buildSelectionTaskTile(
             task,
             uiState: uiState,
-            enableInteraction: false,
           ),
       ],
     );
+  }
+
+  Widget _buildSelectionTaskTile(
+    CalendarTask task, {
+    required CalendarSidebarState uiState,
+  }) {
+    final borderColor = task.priorityColor;
+    final bool isActive = uiState.activePopoverTaskId == task.id;
+    final bloc = context.read<BaseCalendarBloc>();
+    final String scheduleLabel = _selectionScheduleLabel(task);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isActive ? calendarSidebarBackgroundColor : Colors.white,
+            border: Border(
+              left: BorderSide(color: borderColor, width: 3),
+              top: const BorderSide(color: calendarBorderColor),
+              right: const BorderSide(color: calendarBorderColor),
+              bottom: const BorderSide(color: calendarBorderColor),
+            ),
+          ),
+          child: _buildTaskTileBody(
+            task,
+            scheduleLabel: scheduleLabel,
+            trailing: Tooltip(
+              message: 'Remove from selection',
+              child: ShadIconButton.ghost(
+                onPressed: () => bloc.add(
+                  CalendarEvent.selectionToggled(taskId: task.id),
+                ),
+                icon: const Icon(
+                  Icons.close,
+                  size: 16,
+                  color: calendarSubtitleColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _selectionScheduleLabel(CalendarTask task) {
+    final DateTime? start = task.scheduledTime;
+    if (start == null) {
+      return 'No scheduled time';
+    }
+
+    final DateTime? end = task.effectiveEndDate;
+    if (end != null && end.isAfter(start)) {
+      if (DateUtils.isSameDay(start, end)) {
+        final String dateLabel = TimeFormatter.formatFriendlyDate(start);
+        final String startTime = TimeFormatter.formatTime(start);
+        final String endTime = TimeFormatter.formatTime(end);
+        return '$dateLabel · $startTime – $endTime';
+      }
+      final String startLabel = TimeFormatter.formatFriendlyDate(start);
+      final String endLabel = TimeFormatter.formatFriendlyDate(end);
+      return '$startLabel → $endLabel';
+    }
+
+    return TimeFormatter.formatFriendlyDateTime(start);
   }
 
   List<CalendarTask> _selectedTasks(CalendarState state) {
@@ -1342,16 +1408,45 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildTaskTileBody(CalendarTask task) {
+  Widget _buildTaskTileBody(
+    CalendarTask task, {
+    Widget? trailing,
+    String? scheduleLabel,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            task.title,
-            style: const TextStyle(fontSize: 13, color: calendarTitleColor),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  task.title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: calendarTitleColor,
+                  ),
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 4),
+                trailing,
+              ],
+            ],
           ),
+          if (scheduleLabel != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              scheduleLabel,
+              style: const TextStyle(
+                fontSize: 11,
+                color: calendarSubtitleColor,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
           if (task.description?.isNotEmpty == true) ...[
             const SizedBox(height: 4),
             Text(
