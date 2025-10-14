@@ -7,8 +7,9 @@ import 'package:flutter/foundation.dart';
 class ZoomControlsController extends ChangeNotifier {
   ZoomControlsController({
     Duration autoHideDuration = const Duration(seconds: 6),
+    bool initiallyVisible = false,
   })  : _autoHideDuration = autoHideDuration,
-        _isVisible = false;
+        _isVisible = initiallyVisible;
 
   final Duration _autoHideDuration;
   bool _isVisible;
@@ -18,7 +19,11 @@ class ZoomControlsController extends ChangeNotifier {
   bool get isVisible => _isVisible;
 
   void show() {
-    _startTimer();
+    if (_autoHideDuration <= Duration.zero) {
+      _autoHideTimer?.cancel();
+    } else {
+      _startTimer();
+    }
     _setVisible(true);
   }
 

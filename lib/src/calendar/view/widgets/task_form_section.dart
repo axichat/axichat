@@ -396,6 +396,28 @@ class TaskScheduleSection extends StatelessWidget {
               onEndChanged(null);
             }
         : null;
+    final trailingChildren = <Widget>[];
+    if (headerTrailing != null) {
+      trailingChildren.add(headerTrailing!);
+    }
+    if (clearHandler != null) {
+      if (trailingChildren.isNotEmpty) {
+        trailingChildren.add(const SizedBox(width: calendarSpacing4));
+      }
+      trailingChildren.add(
+        TaskGhostIconButton(
+          icon: Icons.close,
+          tooltip: 'Clear schedule',
+          onPressed: clearHandler,
+        ),
+      );
+    }
+    final Widget? effectiveTrailing = trailingChildren.isEmpty
+        ? null
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: trailingChildren,
+          );
 
     return Padding(
       padding: padding,
@@ -405,19 +427,8 @@ class TaskScheduleSection extends StatelessWidget {
           TaskSectionHeader(
             title: title,
             textStyle: headerStyle,
-            trailing: headerTrailing,
+            trailing: effectiveTrailing,
           ),
-          if (clearHandler != null) ...[
-            SizedBox(height: spacing / 2),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TaskGhostIconButton(
-                icon: Icons.close,
-                tooltip: 'Clear schedule',
-                onPressed: clearHandler,
-              ),
-            ),
-          ],
           SizedBox(height: spacing),
           ScheduleRangeFields(
             start: start,

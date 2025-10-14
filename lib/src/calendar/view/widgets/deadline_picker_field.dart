@@ -88,6 +88,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   Object? _tapRegionGroupId;
 
   DateTime? _currentValue;
+  DateTime? _initialValue;
   late DateTime _visibleMonth;
   late ScrollController _hourScrollController;
   late ScrollController _minuteScrollController;
@@ -209,6 +210,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   void _showOverlay(BuildContext context) {
     if (_isOpen) return;
+    _initialValue = _currentValue;
     setState(() {
       _isOpen = true;
     });
@@ -220,6 +222,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     _portalController.hide();
     setState(() {
       _isOpen = false;
+      _initialValue = null;
     });
   }
 
@@ -351,6 +354,25 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _animateHour(fallback.hour);
       _animateMinute(_roundToFive(fallback.minute));
     }
+  }
+
+  void _handleCancel() {
+    final DateTime? target = _initialValue;
+    setState(() => _currentValue = target);
+    if (!_sameMoment(widget.value, target)) {
+      widget.onChanged(target);
+    }
+    final DateTime reference = target ?? DateTime.now();
+    _jumpToCurrent(reference);
+    _markOverlayNeedsBuild();
+    _hideOverlay();
+  }
+
+  bool _sameMoment(DateTime? a, DateTime? b) {
+    if (a == null || b == null) {
+      return a == b;
+    }
+    return a.isAtSameMomentAs(b);
   }
 
   Color _borderColor(DateTime? value) {
@@ -1012,6 +1034,38 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final verticalPadding = widget.showTimeSelectors ? 10.0 : 8.0;
     final horizontalPadding = widget.showTimeSelectors ? 12.0 : 16.0;
 
+    final actionChildren = <Widget>[
+      ShadButton.outline(
+        size: ShadButtonSize.sm,
+        onPressed: _handleCancel,
+        child: const Text('Cancel'),
+      ),
+    ];
+
+    if (_currentValue != null) {
+      actionChildren.add(const SizedBox(width: 8));
+      actionChildren.add(
+        ShadButton.outline(
+          size: ShadButtonSize.sm,
+          onPressed: _clearDeadline,
+          child: const Text('Clear'),
+        ),
+      );
+    }
+
+    actionChildren.add(const Spacer());
+    actionChildren.add(
+      ShadButton(
+        size: ShadButtonSize.sm,
+        backgroundColor: calendarPrimaryColor,
+        hoverBackgroundColor: calendarPrimaryHoverColor,
+        foregroundColor: Colors.white,
+        hoverForegroundColor: Colors.white,
+        onPressed: _hideOverlay,
+        child: const Text('Done'),
+      ),
+    );
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
@@ -1022,28 +1076,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           top: BorderSide(color: calendarBorderColor, width: 1),
         ),
       ),
-      child: Row(
-        children: [
-          if (_currentValue != null)
-            ShadButton.outline(
-              size: ShadButtonSize.sm,
-              onPressed: _clearDeadline,
-              child: const Text('Clear'),
-            )
-          else
-            const SizedBox(width: 0),
-          const Spacer(),
-          ShadButton(
-            size: ShadButtonSize.sm,
-            backgroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryHoverColor,
-            foregroundColor: Colors.white,
-            hoverForegroundColor: Colors.white,
-            onPressed: _hideOverlay,
-            child: const Text('Done'),
-          ),
-        ],
-      ),
+      child: Row(children: actionChildren),
     );
   }
 
