@@ -3,6 +3,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../common/ui/ui.dart';
 import '../priority_checkbox_tile.dart';
+import 'recurrence_editor.dart';
+import 'schedule_range_fields.dart';
 import 'task_text_field.dart';
 
 /// Standard section title used across the calendar task forms. Keeps typography
@@ -342,6 +344,259 @@ class TaskGhostIconButton extends StatelessWidget {
   }
 }
 
+/// Standard header + range picker wrapper so schedule sections render
+/// consistently across sidebars, dialogs, and popovers.
+class TaskScheduleSection extends StatelessWidget {
+  const TaskScheduleSection({
+    super.key,
+    required this.start,
+    required this.end,
+    required this.onStartChanged,
+    required this.onEndChanged,
+    this.title = 'Schedule',
+    this.spacing = calendarSpacing8,
+    this.padding = EdgeInsets.zero,
+    this.headerStyle,
+    this.headerTrailing,
+    this.startLabel,
+    this.endLabel,
+    this.startPlaceholder,
+    this.endPlaceholder,
+    this.showTimeSelectors = true,
+    this.minDate,
+    this.maxDate,
+  });
+
+  final DateTime? start;
+  final DateTime? end;
+  final ValueChanged<DateTime?> onStartChanged;
+  final ValueChanged<DateTime?> onEndChanged;
+  final String title;
+  final double spacing;
+  final EdgeInsetsGeometry padding;
+  final TextStyle? headerStyle;
+  final Widget? headerTrailing;
+  final String? startLabel;
+  final String? endLabel;
+  final String? startPlaceholder;
+  final String? endPlaceholder;
+  final bool showTimeSelectors;
+  final DateTime? minDate;
+  final DateTime? maxDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TaskSectionHeader(
+            title: title,
+            textStyle: headerStyle,
+            trailing: headerTrailing,
+          ),
+          SizedBox(height: spacing),
+          ScheduleRangeFields(
+            start: start,
+            end: end,
+            onStartChanged: onStartChanged,
+            onEndChanged: onEndChanged,
+            startLabel: startLabel ?? 'START',
+            endLabel: endLabel ?? 'END',
+            startPlaceholder: startPlaceholder ?? 'Select start',
+            endPlaceholder: endPlaceholder ?? 'Select end',
+            showTimeSelectors: showTimeSelectors,
+            minDate: minDate,
+            maxDate: maxDate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shared recurrence editor section with standardized spacing and header.
+class TaskRecurrenceSection extends StatelessWidget {
+  const TaskRecurrenceSection({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.title = 'Repeat',
+    this.spacing = calendarSpacing8,
+    this.padding = EdgeInsets.zero,
+    this.headerStyle,
+    this.headerTrailing,
+    this.enabled = true,
+    this.fallbackWeekday,
+    this.spacingConfig = const RecurrenceEditorSpacing(
+      chipSpacing: 6,
+      chipRunSpacing: 6,
+      weekdaySpacing: 10,
+      advancedSectionSpacing: 12,
+      endSpacing: 14,
+      fieldGap: 12,
+    ),
+    this.chipPadding,
+    this.weekdayChipPadding,
+    this.intervalSelectWidth,
+  });
+
+  final RecurrenceFormValue value;
+  final ValueChanged<RecurrenceFormValue> onChanged;
+  final String title;
+  final double spacing;
+  final EdgeInsetsGeometry padding;
+  final TextStyle? headerStyle;
+  final Widget? headerTrailing;
+  final bool enabled;
+  final int? fallbackWeekday;
+  final RecurrenceEditorSpacing spacingConfig;
+  final EdgeInsets? chipPadding;
+  final EdgeInsets? weekdayChipPadding;
+  final double? intervalSelectWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TaskSectionHeader(
+            title: title,
+            textStyle: headerStyle,
+            trailing: headerTrailing,
+          ),
+          SizedBox(height: spacing),
+          RecurrenceEditor(
+            value: value,
+            onChanged: onChanged,
+            enabled: enabled,
+            fallbackWeekday: fallbackWeekday,
+            spacing: spacingConfig,
+            chipPadding: chipPadding ??
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            weekdayChipPadding: weekdayChipPadding ??
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            intervalSelectWidth: intervalSelectWidth ?? 120,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Standardised row for inline date/time selectors used across inline editors
+/// and guest inputs. Keeps layout, spacing, and formatting consistent while
+/// allowing callers to hook into the same callbacks.
+class TaskDateTimePickerRow extends StatelessWidget {
+  const TaskDateTimePickerRow({
+    super.key,
+    required this.selectedDate,
+    required this.selectedTime,
+    required this.onSelectDate,
+    required this.onSelectTime,
+    this.onClear,
+    this.padding = EdgeInsets.zero,
+    this.gap = calendarSpacing8,
+    this.pickDateLabel = 'Pick date',
+    this.pickTimeLabel = 'Pick time',
+    this.clearIcon = Icons.close,
+    this.clearTooltip,
+    this.dateLabelBuilder,
+    this.timeLabelBuilder,
+  });
+
+  final DateTime? selectedDate;
+  final TimeOfDay? selectedTime;
+  final VoidCallback onSelectDate;
+  final VoidCallback onSelectTime;
+  final VoidCallback? onClear;
+  final EdgeInsetsGeometry padding;
+  final double gap;
+  final String pickDateLabel;
+  final String pickTimeLabel;
+  final IconData clearIcon;
+  final String? clearTooltip;
+  final String Function(BuildContext context, DateTime date)? dateLabelBuilder;
+  final String Function(BuildContext context, TimeOfDay time)? timeLabelBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final String dateLabel = selectedDate != null
+        ? _formatDate(context, selectedDate!)
+        : pickDateLabel;
+    final String timeLabel = selectedTime != null
+        ? _formatTime(context, selectedTime!)
+        : pickTimeLabel;
+
+    final children = <Widget>[
+      Expanded(
+        child: TaskToolbarButton(
+          icon: Icons.calendar_today,
+          label: dateLabel,
+          onPressed: onSelectDate,
+        ),
+      ),
+      Expanded(
+        child: TaskToolbarButton(
+          icon: Icons.schedule,
+          label: timeLabel,
+          onPressed: onSelectTime,
+        ),
+      ),
+      if (onClear != null)
+        TaskGhostIconButton(
+          icon: clearIcon,
+          tooltip: clearTooltip,
+          onPressed: onClear!,
+        ),
+    ];
+
+    return TaskFormActionsRow(
+      padding: padding,
+      gap: gap,
+      children: children,
+    );
+  }
+
+  String _formatDate(BuildContext context, DateTime date) {
+    if (dateLabelBuilder != null) {
+      return dateLabelBuilder!(context, date);
+    }
+    final localizations = Localizations.of<MaterialLocalizations>(
+      context,
+      MaterialLocalizations,
+    );
+    if (localizations != null) {
+      return localizations.formatMediumDate(date);
+    }
+    final twoDigitMonth = date.month.toString().padLeft(2, '0');
+    final twoDigitDay = date.day.toString().padLeft(2, '0');
+    return '$twoDigitMonth/$twoDigitDay/${date.year}';
+  }
+
+  String _formatTime(BuildContext context, TimeOfDay time) {
+    if (timeLabelBuilder != null) {
+      return timeLabelBuilder!(context, time);
+    }
+    final localizations = Localizations.of<MaterialLocalizations>(
+      context,
+      MaterialLocalizations,
+    );
+    final bool use24Hour =
+        MediaQuery.maybeOf(context)?.alwaysUse24HourFormat ?? false;
+    if (localizations != null) {
+      return localizations.formatTimeOfDay(
+        time,
+        alwaysUse24HourFormat: use24Hour,
+      );
+    }
+    return time.format(context);
+  }
+}
+
 /// Primary calendar action button (e.g., Add/Save) with consistent sizing and
 /// hover behaviour.
 class TaskPrimaryButton extends StatelessWidget {
@@ -350,16 +605,20 @@ class TaskPrimaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.isBusy = false,
+    this.icon,
+    this.size = ShadButtonSize.sm,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool isBusy;
+  final IconData? icon;
+  final ShadButtonSize size;
 
   @override
   Widget build(BuildContext context) {
     return ShadButton(
-      size: ShadButtonSize.sm,
+      size: size,
       onPressed: isBusy ? null : onPressed,
       backgroundColor: calendarPrimaryColor,
       hoverBackgroundColor: calendarPrimaryHoverColor,
@@ -370,7 +629,113 @@ class TaskPrimaryButton extends StatelessWidget {
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Text(label),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16),
+                  const SizedBox(width: calendarSpacing4),
+                ],
+                Text(label),
+              ],
+            ),
+    );
+  }
+}
+
+/// Secondary outline-styled button for calendar forms. Provides consistent
+/// hover colours and optional busy state handling.
+class TaskSecondaryButton extends StatelessWidget {
+  const TaskSecondaryButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.isBusy = false,
+    this.icon,
+    this.size = ShadButtonSize.sm,
+    this.foregroundColor = calendarSubtitleColor,
+    this.hoverForegroundColor = calendarPrimaryColor,
+    this.hoverBackgroundColor,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isBusy;
+  final IconData? icon;
+  final ShadButtonSize size;
+  final Color foregroundColor;
+  final Color hoverForegroundColor;
+  final Color? hoverBackgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool disabled = isBusy || onPressed == null;
+    return ShadButton.outline(
+      size: size,
+      onPressed: disabled ? null : onPressed,
+      foregroundColor: foregroundColor,
+      hoverForegroundColor: hoverForegroundColor,
+      hoverBackgroundColor:
+          hoverBackgroundColor ?? calendarPrimaryColor.withValues(alpha: 0.08),
+      child: isBusy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16),
+                  const SizedBox(width: calendarSpacing4),
+                ],
+                Text(label),
+              ],
+            ),
+    );
+  }
+}
+
+/// Destructive-styled button for delete flows in calendar forms.
+class TaskDestructiveButton extends StatelessWidget {
+  const TaskDestructiveButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.isBusy = false,
+    this.icon,
+    this.size = ShadButtonSize.sm,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isBusy;
+  final IconData? icon;
+  final ShadButtonSize size;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool disabled = isBusy || onPressed == null;
+    return ShadButton.destructive(
+      size: size,
+      onPressed: disabled ? null : onPressed,
+      child: isBusy
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16),
+                  const SizedBox(width: calendarSpacing4),
+                ],
+                Text(label),
+              ],
+            ),
     );
   }
 }

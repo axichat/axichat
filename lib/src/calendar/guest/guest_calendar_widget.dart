@@ -18,6 +18,7 @@ import '../view/quick_add_modal.dart';
 import '../view/task_sidebar.dart';
 import 'guest_calendar_bloc.dart';
 import '../view/widgets/calendar_keyboard_scope.dart';
+import '../view/widgets/task_form_section.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({super.key});
@@ -80,6 +81,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildGuestBanner() {
+    final responsive = ResponsiveHelper.spec(context);
+    final EdgeInsets basePadding = responsive.contentPadding;
+    final EdgeInsets bannerPadding = EdgeInsets.fromLTRB(
+      basePadding.left,
+      calendarSpacing12,
+      basePadding.right,
+      calendarSpacing12,
+    );
     return Container(
       decoration: BoxDecoration(
         color: Colors.blue.withValues(alpha: 0.04),
@@ -87,7 +96,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
           bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: bannerPadding,
       child: Row(
         children: [
           Icon(
@@ -105,27 +114,10 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
               ),
             ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              context.go('/login');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: axiGreen,
-              foregroundColor: Colors.black87,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            child: Text(
-              'Sign Up to Sync',
-              style: calendarBodyTextStyle.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: Colors.black87,
-              ),
-            ),
+          TaskPrimaryButton(
+            label: 'Sign Up to Sync',
+            onPressed: () => context.go('/login'),
+            icon: Icons.login,
           ),
         ],
       ),
@@ -144,8 +136,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildErrorBanner(CalendarState state) {
+    final responsive = ResponsiveHelper.spec(context);
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: responsive.modalMargin,
       child: ErrorDisplay(
         error: state.error!,
         onRetry: () => context.read<GuestCalendarBloc>().add(
@@ -168,28 +161,33 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildMobileLayout(CalendarState state) {
+    final responsive = ResponsiveHelper.spec(context);
+    final EdgeInsets contentPadding = responsive.contentPadding;
     return Column(
       children: [
         // Navigation bar at the top
-        CalendarNavigation(
-          state: state,
-          onDateSelected: (date) => context.read<GuestCalendarBloc>().add(
-                CalendarEvent.dateSelected(date: date),
-              ),
-          onViewChanged: (view) => context.read<GuestCalendarBloc>().add(
-                CalendarEvent.viewChanged(view: view),
-              ),
-          onErrorCleared: () => context.read<GuestCalendarBloc>().add(
-                const CalendarEvent.errorCleared(),
-              ),
-          onUndo: () => context
-              .read<GuestCalendarBloc>()
-              .add(const CalendarEvent.undoRequested()),
-          onRedo: () => context
-              .read<GuestCalendarBloc>()
-              .add(const CalendarEvent.redoRequested()),
-          canUndo: state.canUndo,
-          canRedo: state.canRedo,
+        Padding(
+          padding: contentPadding,
+          child: CalendarNavigation(
+            state: state,
+            onDateSelected: (date) => context.read<GuestCalendarBloc>().add(
+                  CalendarEvent.dateSelected(date: date),
+                ),
+            onViewChanged: (view) => context.read<GuestCalendarBloc>().add(
+                  CalendarEvent.viewChanged(view: view),
+                ),
+            onErrorCleared: () => context.read<GuestCalendarBloc>().add(
+                  const CalendarEvent.errorCleared(),
+                ),
+            onUndo: () => context
+                .read<GuestCalendarBloc>()
+                .add(const CalendarEvent.undoRequested()),
+            onRedo: () => context
+                .read<GuestCalendarBloc>()
+                .add(const CalendarEvent.redoRequested()),
+            canUndo: state.canUndo,
+            canRedo: state.canRedo,
+          ),
         ),
 
         // Error display
@@ -200,7 +198,10 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
         // Toggle button
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: contentPadding.left,
+            vertical: contentPadding.top / 1.5,
+          ),
           child: Row(
             children: [
               IconButton(
@@ -232,35 +233,44 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildTabletLayout(CalendarState state) {
+    final responsive = ResponsiveHelper.spec(context);
+    final EdgeInsets contentPadding = responsive.contentPadding;
+    final double sidebarWidth =
+        MediaQuery.of(context).size.width * responsive.sidebarWidthFraction;
     return Row(
       children: [
         // Resizable sidebar - extends full height
-        _buildSidebarWithProvider(),
+        _buildSidebarWithProvider(width: sidebarWidth),
 
         // Main content area with navigation and calendar
         Expanded(
           child: Column(
             children: [
               // Navigation bar - only spans over calendar area
-              CalendarNavigation(
-                state: state,
-                onDateSelected: (date) => context.read<GuestCalendarBloc>().add(
-                      CalendarEvent.dateSelected(date: date),
-                    ),
-                onViewChanged: (view) => context.read<GuestCalendarBloc>().add(
-                      CalendarEvent.viewChanged(view: view),
-                    ),
-                onErrorCleared: () => context.read<GuestCalendarBloc>().add(
-                      const CalendarEvent.errorCleared(),
-                    ),
-                onUndo: () => context
-                    .read<GuestCalendarBloc>()
-                    .add(const CalendarEvent.undoRequested()),
-                onRedo: () => context
-                    .read<GuestCalendarBloc>()
-                    .add(const CalendarEvent.redoRequested()),
-                canUndo: state.canUndo,
-                canRedo: state.canRedo,
+              Padding(
+                padding: contentPadding,
+                child: CalendarNavigation(
+                  state: state,
+                  onDateSelected: (date) =>
+                      context.read<GuestCalendarBloc>().add(
+                            CalendarEvent.dateSelected(date: date),
+                          ),
+                  onViewChanged: (view) =>
+                      context.read<GuestCalendarBloc>().add(
+                            CalendarEvent.viewChanged(view: view),
+                          ),
+                  onErrorCleared: () => context.read<GuestCalendarBloc>().add(
+                        const CalendarEvent.errorCleared(),
+                      ),
+                  onUndo: () => context
+                      .read<GuestCalendarBloc>()
+                      .add(const CalendarEvent.undoRequested()),
+                  onRedo: () => context
+                      .read<GuestCalendarBloc>()
+                      .add(const CalendarEvent.redoRequested()),
+                  canUndo: state.canUndo,
+                  canRedo: state.canRedo,
+                ),
               ),
 
               // Error display
@@ -278,35 +288,44 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   Widget _buildDesktopLayout(CalendarState state) {
+    final responsive = ResponsiveHelper.spec(context);
+    final EdgeInsets contentPadding = responsive.contentPadding;
+    final double sidebarWidth =
+        MediaQuery.of(context).size.width * responsive.sidebarWidthFraction;
     return Row(
       children: [
         // Full sidebar always visible - extends full height
-        _buildSidebarWithProvider(),
+        _buildSidebarWithProvider(width: sidebarWidth),
 
         // Main content area with navigation and calendar
         Expanded(
           child: Column(
             children: [
               // Navigation bar - only spans over calendar area
-              CalendarNavigation(
-                state: state,
-                onDateSelected: (date) => context.read<GuestCalendarBloc>().add(
-                      CalendarEvent.dateSelected(date: date),
-                    ),
-                onViewChanged: (view) => context.read<GuestCalendarBloc>().add(
-                      CalendarEvent.viewChanged(view: view),
-                    ),
-                onErrorCleared: () => context.read<GuestCalendarBloc>().add(
-                      const CalendarEvent.errorCleared(),
-                    ),
-                onUndo: () => context
-                    .read<GuestCalendarBloc>()
-                    .add(const CalendarEvent.undoRequested()),
-                onRedo: () => context
-                    .read<GuestCalendarBloc>()
-                    .add(const CalendarEvent.redoRequested()),
-                canUndo: state.canUndo,
-                canRedo: state.canRedo,
+              Padding(
+                padding: contentPadding,
+                child: CalendarNavigation(
+                  state: state,
+                  onDateSelected: (date) =>
+                      context.read<GuestCalendarBloc>().add(
+                            CalendarEvent.dateSelected(date: date),
+                          ),
+                  onViewChanged: (view) =>
+                      context.read<GuestCalendarBloc>().add(
+                            CalendarEvent.viewChanged(view: view),
+                          ),
+                  onErrorCleared: () => context.read<GuestCalendarBloc>().add(
+                        const CalendarEvent.errorCleared(),
+                      ),
+                  onUndo: () => context
+                      .read<GuestCalendarBloc>()
+                      .add(const CalendarEvent.undoRequested()),
+                  onRedo: () => context
+                      .read<GuestCalendarBloc>()
+                      .add(const CalendarEvent.redoRequested()),
+                  canUndo: state.canUndo,
+                  canRedo: state.canRedo,
+                ),
               ),
 
               // Error display
@@ -323,14 +342,18 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     );
   }
 
-  Widget _buildSidebarWithProvider({double? height}) {
+  Widget _buildSidebarWithProvider({double? height, double? width}) {
     final sidebar = BlocProvider<BaseCalendarBloc>.value(
       value: context.read<GuestCalendarBloc>(),
       child: const TaskSidebar(),
     );
 
-    if (height != null) {
-      return SizedBox(height: height, child: sidebar);
+    if (height != null || width != null) {
+      return SizedBox(
+        height: height,
+        width: width,
+        child: sidebar,
+      );
     }
 
     return sidebar;

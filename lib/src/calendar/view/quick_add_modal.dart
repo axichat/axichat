@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
+import '../utils/responsive_helper.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
-import 'widgets/schedule_range_fields.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -129,11 +129,15 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Widget _buildModalContent() {
+    final responsive = ResponsiveHelper.spec(context);
+    final double maxWidth =
+        responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
+    final double maxHeight = responsive.quickAddMaxHeight;
     return Container(
-      margin: calendarPadding16,
-      constraints: const BoxConstraints(
-        maxWidth: calendarQuickAddModalMaxWidth,
-        maxHeight: calendarQuickAddModalMaxHeight,
+      margin: responsive.modalMargin,
+      constraints: BoxConstraints(
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -152,10 +156,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             // Form content
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarSpacing16,
-                  vertical: calendarSpacing12,
-                ),
+                padding: responsive.contentPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -290,52 +291,45 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Widget _buildScheduleSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TaskSectionHeader(
-          title: 'Schedule',
-          textStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: calendarSpacing8),
-        ScheduleRangeFields(
-          start: _startTime,
-          end: _endTime,
-          onStartChanged: (value) {
-            setState(() {
-              _startTime = value;
-              if (value == null) {
-                _endTime = null;
-              } else {
-                if (_endTime == null || !_endTime!.isAfter(value)) {
-                  _endTime = value.add(const Duration(hours: 1));
-                }
-                if (_recurrence.frequency == RecurrenceFrequency.weekly &&
-                    (_recurrence.weekdays.isEmpty ||
-                        _recurrence.weekdays.length == 1)) {
-                  _recurrence = _recurrence.copyWith(weekdays: {value.weekday});
-                }
-              }
-            });
-          },
-          onEndChanged: (value) {
-            setState(() {
-              if (value == null) {
-                _endTime = null;
-                return;
-              }
-              if (_startTime != null && !value.isAfter(_startTime!)) {
-                _endTime = _startTime!.add(const Duration(minutes: 15));
-              } else {
-                _endTime = value;
-              }
-            });
-          },
-        ),
-      ],
+    return TaskScheduleSection(
+      title: 'Schedule',
+      headerStyle: calendarSubtitleTextStyle.copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 13,
+      ),
+      spacing: calendarSpacing8,
+      start: _startTime,
+      end: _endTime,
+      onStartChanged: (value) {
+        setState(() {
+          _startTime = value;
+          if (value == null) {
+            _endTime = null;
+          } else {
+            if (_endTime == null || !_endTime!.isAfter(value)) {
+              _endTime = value.add(const Duration(hours: 1));
+            }
+            if (_recurrence.frequency == RecurrenceFrequency.weekly &&
+                (_recurrence.weekdays.isEmpty ||
+                    _recurrence.weekdays.length == 1)) {
+              _recurrence = _recurrence.copyWith(weekdays: {value.weekday});
+            }
+          }
+        });
+      },
+      onEndChanged: (value) {
+        setState(() {
+          if (value == null) {
+            _endTime = null;
+            return;
+          }
+          if (_startTime != null && !value.isAfter(_startTime!)) {
+            _endTime = _startTime!.add(const Duration(minutes: 15));
+          } else {
+            _endTime = value;
+          }
+        });
+      },
     );
   }
 
@@ -364,33 +358,26 @@ class _QuickAddModalState extends State<QuickAddModal>
         widget.prefilledDateTime?.weekday ??
         DateTime.now().weekday;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TaskSectionHeader(
-          title: 'Repeat',
-          textStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: calendarSpacing8),
-        RecurrenceEditor(
-          value: _recurrence,
-          fallbackWeekday: fallbackWeekday,
-          spacing: const RecurrenceEditorSpacing(
-            chipSpacing: 6,
-            chipRunSpacing: 6,
-            weekdaySpacing: 10,
-            advancedSectionSpacing: 12,
-            endSpacing: 14,
-            fieldGap: 14,
-          ),
-          onChanged: (next) {
-            setState(() => _recurrence = next);
-          },
-        ),
-      ],
+    return TaskRecurrenceSection(
+      title: 'Repeat',
+      headerStyle: calendarSubtitleTextStyle.copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 13,
+      ),
+      spacing: calendarSpacing8,
+      value: _recurrence,
+      fallbackWeekday: fallbackWeekday,
+      spacingConfig: const RecurrenceEditorSpacing(
+        chipSpacing: 6,
+        chipRunSpacing: 6,
+        weekdaySpacing: 10,
+        advancedSectionSpacing: 12,
+        endSpacing: 14,
+        fieldGap: 14,
+      ),
+      onChanged: (next) {
+        setState(() => _recurrence = next);
+      },
     );
   }
 
@@ -401,55 +388,19 @@ class _QuickAddModalState extends State<QuickAddModal>
       gap: calendarSpacing12,
       children: [
         Expanded(
-          child: TextButton(
+          child: TaskSecondaryButton(
+            label: 'Cancel',
             onPressed: _isSubmitting ? null : _dismissModal,
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: calendarSpacing12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(calendarBorderRadius),
-              ),
-            ),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(
-                color: calendarSubtitleColor,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            foregroundColor: calendarSubtitleColor,
+            hoverForegroundColor: calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.06),
           ),
         ),
         Expanded(
-          child: ElevatedButton(
+          child: TaskPrimaryButton(
+            label: 'Add Task',
             onPressed: _canSubmit && !_isSubmitting ? _submitTask : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: calendarPrimaryColor,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor:
-                  calendarPrimaryColor.withValues(alpha: 0.4),
-              disabledForegroundColor: Colors.white.withValues(alpha: 0.7),
-              padding: const EdgeInsets.symmetric(vertical: calendarSpacing12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(calendarBorderRadius),
-              ),
-              elevation: 0,
-            ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Text(
-                    'Add Task',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+            isBusy: _isSubmitting,
           ),
         ),
       ],

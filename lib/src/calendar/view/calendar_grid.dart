@@ -151,14 +151,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Set<String> get _selectedTaskIds => widget.state.selectedTaskIds;
 
   bool _isTaskSelected(CalendarTask task) {
-    if (_selectedTaskIds.contains(task.id)) {
-      return true;
-    }
-    final String baseId = task.baseId;
-    if (baseId != task.id && _selectedTaskIds.contains(baseId)) {
-      return true;
-    }
-    return _selectedTaskIds.contains(baseId);
+    return _selectedTaskIds.contains(task.id);
   }
 
   Map<LogicalKeySet, Intent> get _zoomShortcuts => {
@@ -1234,12 +1227,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   Widget _buildGridContent(
       bool isWeekView, List<DateTime> weekDates, bool compact) {
-    final isMobile = ResponsiveHelper.isMobile(context);
+    final responsive = ResponsiveHelper.spec(context);
+    final bool isCompact = responsive.sizeClass == CalendarSizeClass.compact;
     final visibleTaskIds = <String>{};
     _visibleTasks.clear();
     late final Widget content;
 
-    if (isWeekView && isMobile) {
+    if (isWeekView && isCompact) {
       // Mobile week view: horizontal scroll for day columns
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1303,7 +1297,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     _cleanupTaskPopovers(visibleTaskIds);
-    return content;
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.gridHorizontalPadding,
+      ),
+      child: content,
+    );
   }
 
   void _cleanupTaskPopovers(Set<String> activeIds) {
@@ -2442,7 +2441,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final now = DateTime.now();
     final bool isDayView = widget.state.viewMode == CalendarView.day;
     final List<DateTime> weekDates = _getWeekDates(widget.state.selectedDate);
-    final bool compact = ResponsiveHelper.isMobile(context);
+    final bool compact = ResponsiveHelper.isCompact(context);
 
     final bool shouldScroll = isDayView
         ? _isSameDay(widget.state.selectedDate, now)
@@ -2670,21 +2669,22 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             }
 
             final bool selectionModeActive = _isSelectionMode;
-            final bool isRecurring = !task.effectiveRecurrence.isNone;
+            final bool isSeriesTask =
+                task.isOccurrence || !task.effectiveRecurrence.isNone;
             final bool isOccurrenceSelected =
                 _selectedTaskIds.contains(task.id);
             final bool isSeriesSelected =
                 _selectedTaskIds.contains(task.baseId);
             final bool isSelected = _isTaskSelected(task);
 
-            if (isRecurring) {
+            if (isSeriesTask) {
               final String occurrenceLabel;
               if (selectionModeActive) {
                 occurrenceLabel = isOccurrenceSelected
-                    ? 'Deselect Occurrence'
-                    : 'Add Occurrence to Selection';
+                    ? 'Deselect Task'
+                    : 'Add Task to Selection';
               } else {
-                occurrenceLabel = 'Select Occurrence';
+                occurrenceLabel = 'Select Task';
               }
 
               menuItems.add(

@@ -15,7 +15,6 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'widgets/deadline_picker_field.dart';
-import 'widgets/schedule_range_fields.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
@@ -300,8 +299,6 @@ class _TaskSidebarState extends State<TaskSidebar>
               const TaskSectionDivider(
                 verticalPadding: calendarSpacing12,
               ),
-              const TaskSectionHeader(title: 'Repeat'),
-              const SizedBox(height: calendarSpacing8),
               _buildSelectionRecurrenceSection(tasks),
             ],
           ),
@@ -321,19 +318,17 @@ class _TaskSidebarState extends State<TaskSidebar>
       padding: EdgeInsets.zero,
       gap: calendarSpacing8,
       children: [
-        ShadButton.outline(
-          size: ShadButtonSize.sm,
+        TaskSecondaryButton(
+          label: 'Clear selection',
           onPressed: hasTasks
               ? () => bloc.add(const CalendarEvent.selectionCleared())
               : null,
-          child: const Text('Clear selection'),
         ),
-        ShadButton.destructive(
-          size: ShadButtonSize.sm,
+        TaskDestructiveButton(
+          label: 'Delete selected',
           onPressed: hasTasks
               ? () => bloc.add(const CalendarEvent.selectionDeleted())
               : null,
-          child: const Text('Delete selected'),
         ),
       ],
     );
@@ -449,11 +444,11 @@ class _TaskSidebarState extends State<TaskSidebar>
             }
 
             children.add(
-              RecurrenceEditor(
+              TaskRecurrenceSection(
                 value: recurrence,
                 enabled: hasTasks,
                 fallbackWeekday: fallbackWeekday,
-                spacing: const RecurrenceEditorSpacing(
+                spacingConfig: const RecurrenceEditorSpacing(
                   chipSpacing: 8,
                   chipRunSpacing: 8,
                   weekdaySpacing: 12,
@@ -771,9 +766,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             onChanged: _sidebarController.setSelectedDeadline,
           ),
           const TaskSectionDivider(),
-          const TaskSectionHeader(title: 'Schedule'),
-          const SizedBox(height: 6),
-          _buildAdvancedScheduleFields(uiState),
+          _buildAdvancedScheduleSection(uiState),
           const TaskSectionDivider(),
           _buildAdvancedRecurrenceSection(),
         ],
@@ -781,8 +774,9 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedScheduleFields(CalendarSidebarState uiState) {
-    return ScheduleRangeFields(
+  Widget _buildAdvancedScheduleSection(CalendarSidebarState uiState) {
+    return TaskScheduleSection(
+      spacing: calendarSpacing6,
       start: uiState.advancedStartTime,
       end: uiState.advancedEndTime,
       onStartChanged: _sidebarController.setAdvancedStart,
@@ -797,28 +791,22 @@ class _TaskSidebarState extends State<TaskSidebar>
     return ValueListenableBuilder<RecurrenceFormValue>(
       valueListenable: _advancedRecurrenceNotifier,
       builder: (context, recurrence, _) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const TaskSectionHeader(title: 'Repeat'),
-            const SizedBox(height: 6),
-            RecurrenceEditor(
-              value: recurrence,
-              fallbackWeekday: fallbackWeekday,
-              spacing: const RecurrenceEditorSpacing(
-                chipSpacing: 8,
-                chipRunSpacing: 8,
-                weekdaySpacing: 12,
-                advancedSectionSpacing: 12,
-                endSpacing: 14,
-                fieldGap: 12,
-              ),
-              intervalSelectWidth: 118,
-              onChanged: (next) {
-                _advancedRecurrenceNotifier.value = next;
-              },
-            ),
-          ],
+        return TaskRecurrenceSection(
+          spacing: calendarSpacing6,
+          value: recurrence,
+          fallbackWeekday: fallbackWeekday,
+          spacingConfig: const RecurrenceEditorSpacing(
+            chipSpacing: 8,
+            chipRunSpacing: 8,
+            weekdaySpacing: 12,
+            advancedSectionSpacing: 12,
+            endSpacing: 14,
+            fieldGap: 12,
+          ),
+          intervalSelectWidth: 118,
+          onChanged: (next) {
+            _advancedRecurrenceNotifier.value = next;
+          },
         );
       },
     );
@@ -831,15 +819,9 @@ class _TaskSidebarState extends State<TaskSidebar>
         final isDisabled = value.text.trim().isEmpty;
         return SizedBox(
           width: double.infinity,
-          child: ShadButton(
-            size: ShadButtonSize.sm,
+          child: TaskPrimaryButton(
+            label: 'Add Task',
             onPressed: isDisabled ? null : _addTask,
-            backgroundColor: isDisabled
-                ? calendarPrimaryColor.withValues(alpha: 0.5)
-                : calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryHoverColor,
-            foregroundColor: Colors.white,
-            child: const Text('Add Task'),
           ),
         );
       },
