@@ -151,6 +151,71 @@ extension CalendarTaskExtensions on CalendarTask {
     return null;
   }
 
+  Duration? get effectiveDuration {
+    if (duration != null) {
+      return duration;
+    }
+    final DateTime? start = scheduledTime;
+    final DateTime? end = endDate;
+    if (start == null || end == null) {
+      return null;
+    }
+    final Duration span = end.difference(start);
+    if (span.inMinutes <= 0) {
+      return null;
+    }
+    return span;
+  }
+
+  bool get hasExplicitDuration => duration != null;
+
+  DateTime? get displayEnd {
+    final DateTime? effective = effectiveEndDate;
+    if (effective != null) {
+      return effective;
+    }
+    final DateTime? start = scheduledTime;
+    final Duration? span = effectiveDuration;
+    if (start != null && span != null) {
+      return start.add(span);
+    }
+    return start;
+  }
+
+  CalendarTask withScheduled({
+    required DateTime scheduledTime,
+    Duration? duration,
+    DateTime? endDate,
+  }) {
+    final Duration? resolvedDuration = duration ??
+        (endDate != null
+            ? endDate.difference(scheduledTime)
+            : effectiveDuration);
+    final Duration normalizedDuration;
+    if (resolvedDuration == null || resolvedDuration.inMinutes <= 0) {
+      normalizedDuration = const Duration(hours: 1);
+    } else {
+      normalizedDuration = resolvedDuration;
+    }
+    final DateTime resolvedEnd =
+        endDate ?? scheduledTime.add(normalizedDuration);
+
+    return copyWith(
+      scheduledTime: scheduledTime,
+      duration: normalizedDuration,
+      endDate: resolvedEnd,
+      startHour: scheduledTime.hour + (scheduledTime.minute / 60.0),
+    );
+  }
+
+  CalendarTask normalizedForInteraction(DateTime targetStart) {
+    return withScheduled(
+      scheduledTime: targetStart,
+      duration: effectiveDuration,
+      endDate: endDate,
+    );
+  }
+
   TaskPriority get effectivePriority => priority ?? TaskPriority.none;
 
   RecurrenceRule get effectiveRecurrence => recurrence ?? RecurrenceRule.none;

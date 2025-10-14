@@ -11,6 +11,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
+import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
@@ -2475,19 +2476,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (visibleTask != null) {
       return visibleTask;
     }
-    final CalendarTask? directTask = state.model.tasks[id];
-    if (directTask != null) {
-      return directTask;
-    }
-    final String baseId = baseTaskIdFrom(id);
-    final CalendarTask? baseTask = state.model.tasks[baseId];
-    if (baseTask == null) {
-      return null;
-    }
-    if (id == baseId) {
-      return baseTask;
-    }
-    return baseTask.occurrenceForId(id);
+    return state.model.resolveTaskInstance(id);
   }
 
   void _emitTaskTimeShift(CalendarTask taskInstance, DateTime targetStart) {
@@ -2579,11 +2568,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleTaskDrop(CalendarTask task, DateTime dropTime) {
+    _handleTaskDragEnded(task);
     final bool handled = _applySelectionDrag(task, dropTime);
     if (!handled) {
       widget.onTaskDragEnd?.call(task, dropTime);
     }
-    _handleTaskDragEnded(task);
   }
 
   void _maybeAutoScroll() {

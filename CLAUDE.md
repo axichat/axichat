@@ -255,4 +255,6 @@ Examples:
 - ❌ `AxiCalendarWidget` - Wrong! Calendar is a new widget, use `CalendarWidget`
 - ❌ `AxiTaskTile` - Wrong! TaskTile is a new widget, use `TaskTile`
 
+- Calendar screens stay declarative—wire interactions into bloc helpers (for example `commitTaskInteraction`) and never mutate calendar models from widgets or controllers.
+
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`
