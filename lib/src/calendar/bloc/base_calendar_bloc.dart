@@ -145,6 +145,108 @@ abstract class BaseCalendarBloc
     }
   }
 
+  void commitTaskInteraction(CalendarTask snapshot) {
+    final DateTime? scheduled = snapshot.scheduledTime;
+    if (scheduled == null) {
+      logError(
+        'commitTaskInteraction requires a scheduledTime',
+        ArgumentError.notNull('scheduledTime'),
+      );
+      return;
+    }
+
+    final CalendarTask normalized =
+        snapshot.withScheduled(scheduledTime: scheduled);
+    final CalendarTask? directTask = state.model.tasks[normalized.id];
+    if (directTask != null) {
+      if (directTask.scheduledTime == null) {
+        add(
+          CalendarEvent.taskDropped(
+            taskId: directTask.id,
+            time: scheduled,
+          ),
+        );
+        return;
+      }
+
+      final Duration? previousDuration = directTask.effectiveDuration;
+      final Duration? nextDuration = normalized.effectiveDuration;
+      final bool startChanged =
+          !(directTask.scheduledTime?.isAtSameMomentAs(scheduled) ?? false);
+      final bool durationChanged = previousDuration != null &&
+          nextDuration != null &&
+          previousDuration.inMinutes != nextDuration.inMinutes;
+      final bool endChanged =
+          directTask.effectiveEndDate != normalized.effectiveEndDate;
+
+      if (durationChanged || endChanged) {
+        add(
+          CalendarEvent.taskResized(
+            taskId: directTask.id,
+            scheduledTime: scheduled,
+            duration: normalized.duration,
+            endDate: normalized.effectiveEndDate,
+          ),
+        );
+      } else if (startChanged) {
+        add(
+          CalendarEvent.taskDropped(
+            taskId: directTask.id,
+            time: scheduled,
+          ),
+        );
+      }
+      return;
+    }
+
+    final String baseId = normalized.baseId;
+    final CalendarTask? baseTask = state.model.tasks[baseId];
+
+    if (normalized.isOccurrence && baseTask != null) {
+      add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: baseId,
+          occurrenceId: normalized.id,
+          scheduledTime: scheduled,
+          duration: normalized.duration,
+          endDate: normalized.effectiveEndDate,
+        ),
+      );
+      return;
+    }
+
+    if (baseTask != null) {
+      final Duration? previousDuration = baseTask.effectiveDuration;
+      final Duration? nextDuration = normalized.effectiveDuration;
+      final bool startChanged =
+          !(baseTask.scheduledTime?.isAtSameMomentAs(scheduled) ?? false);
+      final bool durationChanged = previousDuration != null &&
+          nextDuration != null &&
+          previousDuration.inMinutes != nextDuration.inMinutes;
+      final bool endChanged =
+          baseTask.effectiveEndDate != normalized.effectiveEndDate;
+
+      if (durationChanged || endChanged || startChanged) {
+        add(
+          CalendarEvent.taskResized(
+            taskId: baseId,
+            scheduledTime: scheduled,
+            duration: normalized.duration,
+            endDate: normalized.effectiveEndDate,
+          ),
+        );
+      }
+      return;
+    }
+
+    add(
+      CalendarEvent.taskDropped(
+        taskId: normalized.id,
+        time: scheduled,
+      ),
+    );
+  }
+
   void _recordUndoSnapshot() {
     _undoStack.add(state.model);
     if (_undoStack.length > _undoHistoryLimit) {

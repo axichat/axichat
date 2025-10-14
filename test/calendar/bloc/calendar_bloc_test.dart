@@ -113,6 +113,8 @@ void main() {
     );
 
     late CalendarTask seededTask;
+    late CalendarTask selectionTaskA;
+    late CalendarTask selectionTaskB;
 
     blocTest<CalendarBloc, CalendarState>(
       'taskUpdated replaces existing task and syncs',
@@ -142,6 +144,32 @@ void main() {
         predicate<CalendarState>((state) {
           final tasks = state.model.tasks;
           return tasks.isNotEmpty && tasks.values.first.title == 'Updated';
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'quickTaskAdded creates task from text input',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      act: (bloc) {
+        bloc.add(const CalendarEvent.quickTaskAdded(text: 'Draft report'));
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
+      },
+      expect: () => [
+        isA<CalendarState>().having(
+          (state) => state.isLoading,
+          'isLoading',
+          true,
+        ),
+        predicate<CalendarState>((state) {
+          return state.model.tasks.isNotEmpty &&
+              state.model.tasks.values.first.title.isNotEmpty &&
+              !state.isLoading;
         }),
       ],
     );
@@ -260,6 +288,222 @@ void main() {
               updated.endDate == newStart.add(duration) &&
               updated.startHour != null &&
               (updated.startHour! - expectedStartHour).abs() < 1e-6;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskRepeated clones template for copy/paste',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        seededTask = CalendarTask.create(
+          title: 'Template',
+          scheduledTime: DateTime(2024, 1, 1, 8),
+          duration: const Duration(hours: 1),
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime newStart =
+            seededTask.scheduledTime!.add(const Duration(hours: 2));
+        bloc.add(
+          CalendarEvent.taskRepeated(
+            template: seededTask,
+            scheduledTime: newStart,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final tasks = state.model.tasks.values;
+          final clones = tasks.where((task) => task.id != seededTask.id);
+          return clones.length == 1 &&
+              clones.first.scheduledTime ==
+                  seededTask.scheduledTime!.add(
+                    const Duration(hours: 2),
+                  );
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'commitTaskInteraction schedules unscheduled task',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        seededTask = CalendarTask.create(title: 'Unschedule me');
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime newStart = DateTime(2024, 1, 1, 9);
+        bloc.commitTaskInteraction(
+          seededTask.normalizedForInteraction(newStart),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final updated = state.model.tasks[seededTask.id];
+          return updated?.scheduledTime == DateTime(2024, 1, 1, 9) &&
+              updated?.duration?.inMinutes == 60;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'commitTaskInteraction resizes scheduled task when duration changes',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        seededTask = CalendarTask.create(
+          title: 'Resize me',
+          scheduledTime: DateTime(2024, 1, 1, 8),
+          duration: const Duration(hours: 1),
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime newStart = seededTask.scheduledTime!.add(
+          const Duration(hours: 1),
+        );
+        final CalendarTask normalized = seededTask.withScheduled(
+          scheduledTime: newStart,
+          duration: const Duration(hours: 2),
+        );
+        bloc.commitTaskInteraction(normalized);
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final updated = state.model.tasks[seededTask.id];
+          return updated?.scheduledTime ==
+                  seededTask.scheduledTime!.add(
+                    const Duration(hours: 1),
+                  ) &&
+              updated?.duration?.inHours == 2;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'commitTaskInteraction updates occurrence overrides',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        seededTask = CalendarTask.create(
+          title: 'Recurring task',
+          scheduledTime: DateTime(2024, 1, 1, 9),
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime occurrenceStart =
+            seededTask.scheduledTime!.add(const Duration(days: 1));
+        final String occurrenceId =
+            '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}';
+        final CalendarTask occurrence = seededTask.copyWith(
+          id: occurrenceId,
+          scheduledTime: occurrenceStart,
+        );
+        final DateTime newStart = occurrenceStart.add(const Duration(hours: 1));
+        final CalendarTask normalized =
+            occurrence.normalizedForInteraction(newStart);
+        bloc.commitTaskInteraction(normalized);
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final CalendarTask? base = state.model.tasks[seededTask.id];
+          if (base == null) {
+            return false;
+          }
+          final DateTime occurrenceStart =
+              seededTask.scheduledTime!.add(const Duration(days: 1));
+          final String occurrenceKey = occurrenceKeyFrom(
+                  '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}') ??
+              '';
+          final TaskOccurrenceOverride? override =
+              base.occurrenceOverrides[occurrenceKey];
+          if (override == null) {
+            return false;
+          }
+          return override.scheduledTime ==
+                  occurrenceStart.add(const Duration(hours: 1)) &&
+              override.duration?.inHours == 1;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'selectionTimeShifted moves selected tasks forward',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        selectionTaskA = CalendarTask.create(
+          title: 'A',
+          scheduledTime: DateTime(2024, 1, 1, 8),
+          duration: const Duration(hours: 1),
+        );
+        selectionTaskB = CalendarTask.create(
+          title: 'B',
+          scheduledTime: DateTime(2024, 1, 1, 10),
+          duration: const Duration(hours: 1),
+        );
+        var model = CalendarModel.empty();
+        model = model.addTask(selectionTaskA);
+        model = model.addTask(selectionTaskB);
+        return CalendarState.initial().copyWith(
+          model: model,
+          isSelectionMode: true,
+          selectedTaskIds: {selectionTaskA.id, selectionTaskB.id},
+        );
+      },
+      act: (bloc) {
+        bloc.add(
+          const CalendarEvent.selectionTimeShifted(
+            startDelta: Duration(hours: 1),
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(2);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final updatedA = state.model.tasks[selectionTaskA.id];
+          final updatedB = state.model.tasks[selectionTaskB.id];
+          return updatedA?.scheduledTime ==
+                  selectionTaskA.scheduledTime!.add(const Duration(hours: 1)) &&
+              updatedB?.scheduledTime ==
+                  selectionTaskB.scheduledTime!.add(const Duration(hours: 1));
         }),
       ],
     );

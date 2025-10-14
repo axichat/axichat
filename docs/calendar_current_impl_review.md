@@ -100,6 +100,24 @@ notes beneath each heading to mark whether to keep, modify, or discard it.
 
 ## UI & Interaction
 
+### Action → Bloc → Model Flow
+
+- Location: `lib/src/calendar/view/calendar_widget.dart:307-333`,
+  `lib/src/calendar/bloc/base_calendar_bloc.dart:117-205`
+- Summary: Widgets now route drag/resize commits through
+  `BaseCalendarBloc.commitTaskInteraction`, which normalizes payloads and
+  dispatches the appropriate bloc events before the UI rebuilds.
+- Notes: keep; reinforces the action→bloc→model contract.
+
+### UI Mutation Anti-Patterns
+
+- Location: legacy `_onTaskDragEnd` branches in
+  `calendar_widget.dart`/`guest_calendar_widget.dart`
+- Summary: Direct duration math and state mutation in widgets has been removed
+  in favour of bloc helpers; reintroducing inline recalculation will desync the
+  persisted model.
+- Notes: do not add business logic to view files—delegate to blocs/models.
+
 ### Multi-Day Overlay & Horizontal Resize
 
 - Location: `lib/src/calendar/view/calendar_grid.dart:180-210`, `605-648`;

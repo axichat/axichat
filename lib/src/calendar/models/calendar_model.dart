@@ -1,9 +1,11 @@
 import 'dart:convert';
 
-import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:crypto/crypto.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
+
+import '../utils/recurrence_utils.dart';
+import 'calendar_task.dart';
 
 part 'calendar_model.freezed.dart';
 part 'calendar_model.g.dart';
@@ -98,5 +100,23 @@ class CalendarModel with _$CalendarModel {
       lastModified: now,
     );
     return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+}
+
+extension CalendarModelX on CalendarModel {
+  CalendarTask? resolveTaskInstance(String taskId) {
+    final CalendarTask? direct = tasks[taskId];
+    if (direct != null) {
+      return direct;
+    }
+    final String baseId = baseTaskIdFrom(taskId);
+    final CalendarTask? baseTask = tasks[baseId];
+    if (baseTask == null) {
+      return null;
+    }
+    if (taskId == baseId) {
+      return baseTask;
+    }
+    return baseTask.occurrenceForId(taskId);
   }
 }
