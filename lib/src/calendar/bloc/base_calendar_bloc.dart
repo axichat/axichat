@@ -1339,26 +1339,11 @@ abstract class BaseCalendarBloc
   }
 
   Set<String> _selectionGroupFor(String id) {
-    final baseId = baseTaskIdFrom(id);
-    final CalendarTask? baseTask = state.model.tasks[baseId];
-    if (baseTask == null) {
+    final CalendarTask? resolved = state.model.resolveTaskInstance(id);
+    if (resolved == null) {
       return {id};
     }
-    if (id != baseId) {
-      return {id};
-    }
-    if (baseTask.effectiveRecurrence.isNone) {
-      return {id};
-    }
-
-    final group = <String>{baseId};
-    for (final task in state.model.tasks.values) {
-      if (task.baseId == baseId && task.id != baseId) {
-        group.add(task.id);
-      }
-    }
-
-    return group;
+    return {resolved.id};
   }
 
   Duration _taskDuration(CalendarTask task) {
