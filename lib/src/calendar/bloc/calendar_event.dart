@@ -18,7 +18,6 @@ class CalendarEvent with _$CalendarEvent {
     Duration? duration,
     DateTime? deadline,
     String? location,
-    int? daySpan,
     DateTime? endDate,
     @Default(TaskPriority.none) TaskPriority priority,
     double? startHour,
@@ -78,9 +77,9 @@ class CalendarEvent with _$CalendarEvent {
 
   const factory CalendarEvent.taskResized({
     required String taskId,
-    required double startHour,
-    required double duration,
-    int? daySpan,
+    DateTime? scheduledTime,
+    Duration? duration,
+    DateTime? endDate,
   }) = CalendarTaskResized;
 
   const factory CalendarEvent.taskOccurrenceUpdated({
@@ -89,7 +88,6 @@ class CalendarEvent with _$CalendarEvent {
     DateTime? scheduledTime,
     Duration? duration,
     DateTime? endDate,
-    int? daySpan,
     bool? isCancelled,
   }) = CalendarTaskOccurrenceUpdated;
 

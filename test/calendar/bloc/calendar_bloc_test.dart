@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -224,7 +225,6 @@ void main() {
           modifiedAt: start,
           location: null,
           deadline: null,
-          daySpan: 1,
           priority: null,
           startHour: start.hour + (start.minute / 60.0),
           endDate: start.add(const Duration(hours: 2)),
@@ -260,6 +260,351 @@ void main() {
               updated.endDate == newStart.add(duration) &&
               updated.startHour != null &&
               (updated.startHour! - expectedStartHour).abs() < 1e-6;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskDropped schedules unscheduled task',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final created = DateTime(2024, 6, 1, 8);
+        seededTask = CalendarTask(
+          id: 'unscheduled-task',
+          title: 'Inbox item',
+          description: null,
+          scheduledTime: null,
+          duration: const Duration(minutes: 45),
+          isCompleted: false,
+          createdAt: created,
+          modifiedAt: created,
+          location: null,
+          deadline: null,
+          priority: null,
+          startHour: null,
+          endDate: null,
+          recurrence: null,
+          occurrenceOverrides: const {},
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime target = DateTime(2024, 6, 12, 10, 15);
+        bloc.add(
+          CalendarEvent.taskDropped(
+            taskId: seededTask.id,
+            time: target,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final scheduled = state.model.tasks[seededTask.id]!;
+          final double expectedHour = scheduled.scheduledTime!.hour +
+              (scheduled.scheduledTime!.minute / 60.0);
+          return scheduled.scheduledTime == DateTime(2024, 6, 12, 10, 15) &&
+              scheduled.duration == const Duration(minutes: 45) &&
+              scheduled.startHour != null &&
+              (scheduled.startHour! - expectedHour).abs() < 1e-6;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskSplit divides task without explicit duration using fallback window',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final start = DateTime(2024, 4, 12, 9, 0);
+        seededTask = CalendarTask(
+          id: 'split-base-task',
+          title: 'Split target',
+          description: null,
+          scheduledTime: start,
+          duration: null,
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: null,
+          deadline: null,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: null,
+          recurrence: null,
+          occurrenceOverrides: const {},
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime splitTime =
+            seededTask.scheduledTime!.add(const Duration(minutes: 30));
+        bloc.add(
+          CalendarEvent.taskSplit(
+            target: seededTask,
+            splitTime: splitTime,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+        verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final CalendarTask base = state.model.tasks['split-base-task']!;
+          final List<CalendarTask> additions = state.model.tasks.values
+              .where((task) => task.id != 'split-base-task')
+              .toList();
+          if (additions.length != 1) {
+            return false;
+          }
+          final CalendarTask clone = additions.first;
+          final DateTime splitMoment =
+              seededTask.scheduledTime!.add(const Duration(minutes: 30));
+          return base.duration == const Duration(minutes: 30) &&
+              clone.duration == const Duration(minutes: 30) &&
+              clone.scheduledTime == splitMoment &&
+              clone.recurrence == null;
+        }),
+      ],
+    );
+
+    late CalendarTask splitOccurrence;
+    late DateTime splitMoment;
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskSplit on recurring occurrence stores override and follow-up segment',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final start = DateTime(2024, 5, 1, 14, 0);
+        seededTask = CalendarTask(
+          id: 'series-task',
+          title: 'Series',
+          description: null,
+          scheduledTime: start,
+          duration: const Duration(hours: 2),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: null,
+          deadline: null,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: null,
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
+          occurrenceOverrides: const {},
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime rangeStart =
+            seededTask.scheduledTime!.add(const Duration(days: 1));
+        final DateTime rangeEnd = rangeStart.add(const Duration(hours: 4));
+        final List<CalendarTask> occurrences =
+            seededTask.occurrencesWithin(rangeStart, rangeEnd);
+        splitOccurrence = occurrences.first;
+        splitMoment =
+            splitOccurrence.scheduledTime!.add(const Duration(hours: 1));
+
+        bloc.add(
+          CalendarEvent.taskSplit(
+            target: splitOccurrence,
+            splitTime: splitMoment,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+        verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final CalendarTask base = state.model.tasks['series-task']!;
+          final String overrideKey = occurrenceKeyFrom(splitOccurrence.id)!;
+          final TaskOccurrenceOverride? override =
+              base.occurrenceOverrides[overrideKey];
+          if (override == null) {
+            return false;
+          }
+          final Iterable<CalendarTask> extras = state.model.tasks.values
+              .where((task) => task.id != 'series-task');
+          if (extras.length != 1) {
+            return false;
+          }
+          final CalendarTask clone = extras.first;
+          final DateTime expectedLeftEnd =
+              override.scheduledTime!.add(const Duration(hours: 1));
+          final DateTime expectedRightEnd =
+              clone.scheduledTime!.add(const Duration(hours: 1));
+          return override.duration == const Duration(hours: 1) &&
+              clone.duration == const Duration(hours: 1) &&
+              clone.scheduledTime == splitMoment &&
+              clone.recurrence == null &&
+              (override.endDate == null ||
+                  override.endDate == expectedLeftEnd) &&
+              (clone.endDate == null || clone.endDate == expectedRightEnd);
+        }),
+      ],
+    );
+
+    late DateTime pasteStart;
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskRepeated maintains duration window when pasted to new slot',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final start = DateTime(2024, 6, 10, 9);
+        seededTask = CalendarTask(
+          id: 'multi-day-task',
+          title: 'Multi Day',
+          description: null,
+          scheduledTime: start,
+          duration: null,
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: null,
+          deadline: null,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: start.add(const Duration(days: 2)),
+          recurrence: null,
+          occurrenceOverrides: const {},
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        pasteStart =
+            seededTask.scheduledTime!.add(const Duration(days: 5, hours: 2));
+        bloc.add(
+          CalendarEvent.taskRepeated(
+            template: seededTask,
+            scheduledTime: pasteStart,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final Iterable<CalendarTask> extras = state.model.tasks.values
+              .where((task) => task.id != 'multi-day-task');
+          if (extras.length != 1) {
+            return false;
+          }
+          final CalendarTask clone = extras.first;
+          final DateTime pasteStart =
+              seededTask.scheduledTime!.add(const Duration(days: 5, hours: 2));
+          final Duration offset = seededTask.endDate!
+              .difference(seededTask.scheduledTime!);
+          final DateTime expectedEnd = pasteStart.add(offset);
+          return clone.scheduledTime == pasteStart &&
+              clone.duration == offset &&
+              clone.endDate == expectedEnd;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskResized updates end date when duration changes',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final start = DateTime(2024, 7, 2, 11, 0);
+        seededTask = CalendarTask(
+          id: 'resize-target',
+          title: 'Resize me',
+          scheduledTime: start,
+          duration: const Duration(hours: 1),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime newEnd = seededTask.scheduledTime!.add(const Duration(hours: 2));
+        bloc.add(
+          CalendarEvent.taskResized(
+            taskId: seededTask.id,
+            scheduledTime: seededTask.scheduledTime,
+            duration: const Duration(hours: 2),
+            endDate: newEnd,
+          ),
+        );
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final updated = state.model.tasks[seededTask.id]!;
+          return updated.duration == const Duration(hours: 2) &&
+              updated.endDate == seededTask.scheduledTime!.add(const Duration(hours: 2));
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskResized recomputes end when only start changes',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final start = DateTime(2024, 7, 2, 11, 0);
+        seededTask = CalendarTask(
+          id: 'resize-move',
+          title: 'Move & keep span',
+          scheduledTime: start,
+          duration: const Duration(hours: 1, minutes: 30),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime shifted = seededTask.scheduledTime!.add(const Duration(minutes: 45));
+        bloc.add(
+          CalendarEvent.taskResized(
+            taskId: seededTask.id,
+            scheduledTime: shifted,
+          ),
+        );
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final updated = state.model.tasks[seededTask.id]!;
+          return updated.scheduledTime ==
+                  seededTask.scheduledTime!.add(const Duration(minutes: 45)) &&
+              updated.duration == seededTask.duration &&
+              updated.endDate ==
+                  seededTask.scheduledTime!
+                      .add(const Duration(minutes: 45))
+                      .add(seededTask.duration!);
         }),
       ],
     );

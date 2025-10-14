@@ -388,16 +388,16 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
       if (directTask.duration != task.duration ||
           directTask.scheduledTime != task.scheduledTime) {
-        final double startHour =
-            plannedStart.hour + (plannedStart.minute / 60.0);
-        final double durationHours = duration.inMinutes / 60.0;
-
+        final Duration endOffset =
+            directTask.endDate != null && directTask.scheduledTime != null
+                ? directTask.endDate!.difference(directTask.scheduledTime!)
+                : duration;
         bloc.add(
           CalendarEvent.taskResized(
             taskId: directTask.id,
-            startHour: startHour,
-            duration: durationHours,
-            daySpan: task.effectiveDaySpan,
+            scheduledTime: plannedStart,
+            duration: duration,
+            endDate: plannedStart.add(endOffset),
           ),
         );
       } else {
@@ -413,6 +413,12 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
     final baseId = task.baseId;
     final originalTask = currentState.model.tasks[baseId];
+    final plannedStart = (task.scheduledTime != null &&
+            originalTask?.scheduledTime != task.scheduledTime)
+        ? task.scheduledTime!
+        : newTime;
+    final Duration duration =
+        task.duration ?? originalTask?.duration ?? const Duration(hours: 1);
 
     if (task.isOccurrence) {
       bloc.add(
@@ -422,7 +428,6 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
           scheduledTime: newTime,
           duration: task.duration,
           endDate: task.endDate,
-          daySpan: task.daySpan,
         ),
       );
       return;
@@ -431,17 +436,16 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
-      final scheduled = task.scheduledTime ?? newTime;
-      final startHour = scheduled.hour + (scheduled.minute / 60.0);
-      final durationHours =
-          (task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
-
+      final Duration endOffset =
+          originalTask.endDate != null && originalTask.scheduledTime != null
+              ? originalTask.endDate!.difference(originalTask.scheduledTime!)
+              : duration;
       bloc.add(
         CalendarEvent.taskResized(
           taskId: baseId,
-          startHour: startHour,
-          duration: durationHours,
-          daySpan: task.effectiveDaySpan,
+          scheduledTime: plannedStart,
+          duration: duration,
+          endDate: plannedStart.add(endOffset),
         ),
       );
     } else {

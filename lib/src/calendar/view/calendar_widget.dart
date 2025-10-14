@@ -330,16 +330,17 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
       if (directTask.duration != task.duration ||
           directTask.scheduledTime != task.scheduledTime) {
-        final double startHour =
-            plannedStart.hour + (plannedStart.minute / 60.0);
-        final double durationHours = duration.inMinutes / 60.0;
+        final Duration endOffset =
+            directTask.endDate != null && directTask.scheduledTime != null
+                ? directTask.endDate!.difference(directTask.scheduledTime!)
+                : duration;
 
         bloc.add(
           CalendarEvent.taskResized(
             taskId: directTask.id,
-            startHour: startHour,
-            duration: durationHours,
-            daySpan: task.effectiveDaySpan,
+            scheduledTime: plannedStart,
+            duration: duration,
+            endDate: plannedStart.add(endOffset),
           ),
         );
       } else {
@@ -370,7 +371,6 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           scheduledTime: newTime,
           duration: task.duration,
           endDate: task.endDate,
-          daySpan: task.daySpan,
         ),
       );
       return;
@@ -379,15 +379,17 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
             originalTask.scheduledTime != task.scheduledTime)) {
-      final startHour = plannedStart.hour + (plannedStart.minute / 60.0);
-      final durationHours = duration.inMinutes / 60.0;
+      final Duration endOffset =
+          originalTask.endDate != null && originalTask.scheduledTime != null
+              ? originalTask.endDate!.difference(originalTask.scheduledTime!)
+              : duration;
 
       bloc.add(
         CalendarEvent.taskResized(
           taskId: baseId,
-          startHour: startHour,
-          duration: durationHours,
-          daySpan: task.effectiveDaySpan,
+          scheduledTime: plannedStart,
+          duration: duration,
+          endDate: plannedStart.add(endOffset),
         ),
       );
     } else {

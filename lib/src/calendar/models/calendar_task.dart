@@ -18,10 +18,9 @@ class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
     @HiveField(0) DateTime? scheduledTime,
     @HiveField(1) Duration? duration,
     @HiveField(2) DateTime? endDate,
-    @HiveField(3) int? daySpan,
-    @HiveField(4) bool? isCancelled,
-    @HiveField(5) TaskPriority? priority,
-    @HiveField(6) bool? isCompleted,
+    @HiveField(3) bool? isCancelled,
+    @HiveField(4) TaskPriority? priority,
+    @HiveField(5) bool? isCompleted,
   }) = _TaskOccurrenceOverride;
 
   factory TaskOccurrenceOverride.fromJson(Map<String, dynamic> json) =>
@@ -94,12 +93,11 @@ class CalendarTask with _$CalendarTask {
     @HiveField(7) required DateTime modifiedAt,
     @HiveField(8) String? location,
     @HiveField(9) DateTime? deadline,
-    @HiveField(10) int? daySpan,
-    @HiveField(11) TaskPriority? priority,
-    @HiveField(12) double? startHour,
-    @HiveField(13) DateTime? endDate,
-    @HiveField(14) RecurrenceRule? recurrence,
-    @HiveField(15)
+    @HiveField(10) TaskPriority? priority,
+    @HiveField(11) double? startHour,
+    @HiveField(12) DateTime? endDate,
+    @HiveField(13) RecurrenceRule? recurrence,
+    @HiveField(14)
     @Default({})
     Map<String, TaskOccurrenceOverride> occurrenceOverrides,
   }) = _CalendarTask;
@@ -114,7 +112,6 @@ class CalendarTask with _$CalendarTask {
     Duration? duration,
     String? location,
     DateTime? deadline,
-    int? daySpan,
     DateTime? endDate,
     TaskPriority priority = TaskPriority.none,
     double? startHour,
@@ -129,7 +126,6 @@ class CalendarTask with _$CalendarTask {
       duration: duration,
       location: location,
       deadline: deadline,
-      daySpan: daySpan,
       endDate: endDate,
       priority: priority == TaskPriority.none ? null : priority,
       startHour: startHour,
@@ -157,16 +153,13 @@ extension CalendarTaskExtensions on CalendarTask {
       final endDay = DateTime(endDate!.year, endDate!.month, endDate!.day);
       return endDay.difference(startDay).inDays + 1;
     }
-    return daySpan ?? 1;
+    return 1;
   }
 
   DateTime? get effectiveEndDate {
     if (endDate != null) return endDate;
     if (scheduledTime != null && duration != null) {
       return scheduledTime!.add(duration!);
-    }
-    if (scheduledTime != null && daySpan != null && daySpan! > 1) {
-      return scheduledTime!.add(Duration(days: daySpan! - 1));
     }
     return null;
   }
@@ -203,9 +196,16 @@ extension CalendarTaskExtensions on CalendarTask {
     required int minutesPerStep,
   }) {
     final DateTime? start = scheduledTime;
-    final DateTime? end = effectiveEndDate;
-    if (start == null || end == null) {
+    if (start == null) {
       return null;
+    }
+
+    DateTime? end = effectiveEndDate;
+    if (end == null || !end.isAfter(start)) {
+      final Duration fallback = duration ?? const Duration(hours: 1);
+      final Duration normalized =
+          fallback.inMinutes <= 0 ? const Duration(minutes: 15) : fallback;
+      end = start.add(normalized);
     }
 
     final int totalMinutes = end.difference(start).inMinutes;

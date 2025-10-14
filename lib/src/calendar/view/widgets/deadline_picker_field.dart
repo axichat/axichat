@@ -354,6 +354,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _animateHour(fallback.hour);
       _animateMinute(_roundToFive(fallback.minute));
     }
+    _hideOverlay();
   }
 
   void _handleCancel() {

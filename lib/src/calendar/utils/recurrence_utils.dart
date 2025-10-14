@@ -115,7 +115,6 @@ extension CalendarTaskInstanceX on CalendarTask {
       scheduledOverride: override?.scheduledTime,
       durationOverride: override?.duration,
       endDateOverride: override?.endDate,
-      daySpanOverride: override?.daySpan,
       priorityOverride: override?.priority,
       completedOverride: override?.isCompleted,
     );
@@ -192,7 +191,6 @@ extension CalendarTaskInstanceX on CalendarTask {
           scheduledOverride: override?.scheduledTime,
           durationOverride: override?.duration,
           endDateOverride: override?.endDate,
-          daySpanOverride: override?.daySpan,
           priorityOverride: override?.priority,
           completedOverride: override?.isCompleted,
         ),
@@ -219,13 +217,11 @@ extension CalendarTaskInstanceX on CalendarTask {
     DateTime? scheduledOverride,
     Duration? durationOverride,
     DateTime? endDateOverride,
-    int? daySpanOverride,
     TaskPriority? priorityOverride,
     bool? completedOverride,
   }) {
     final actualStart = scheduledOverride ?? originalStart;
     final adjustedDuration = durationOverride ?? duration;
-    final adjustedDaySpan = daySpanOverride ?? daySpan;
     final TaskPriority? resolvedPriority = priorityOverride ?? priority;
     final bool resolvedCompletion = completedOverride ?? isCompleted;
 
@@ -251,8 +247,6 @@ extension CalendarTaskInstanceX on CalendarTask {
       ).add(span);
     } else if (adjustedDuration != null) {
       shiftedEndDate = actualStart.add(adjustedDuration);
-    } else if (adjustedDaySpan != null && adjustedDaySpan > 1) {
-      shiftedEndDate = actualStart.add(Duration(days: adjustedDaySpan - 1));
     } else if (endDate != null) {
       shiftedEndDate = endDate;
     }
@@ -261,7 +255,6 @@ extension CalendarTaskInstanceX on CalendarTask {
       id: '$baseId$_occurrenceSeparator$occurrenceKey',
       scheduledTime: actualStart,
       duration: adjustedDuration,
-      daySpan: adjustedDaySpan,
       priority: resolvedPriority,
       isCompleted: resolvedCompletion,
       endDate: shiftedEndDate,

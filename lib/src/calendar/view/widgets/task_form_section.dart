@@ -690,12 +690,20 @@ class TaskPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton(
-      size: size,
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        backgroundColor: calendarPrimaryColor,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+      ),
       onPressed: isBusy ? null : onPressed,
-      backgroundColor: calendarPrimaryColor,
-      hoverBackgroundColor: calendarPrimaryHoverColor,
-      foregroundColor: Colors.white,
       child: isBusy
           ? const SizedBox(
               width: 16,
@@ -704,6 +712,7 @@ class TaskPrimaryButton extends StatelessWidget {
             )
           : Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (icon != null) ...[
                   Icon(icon, size: 16),

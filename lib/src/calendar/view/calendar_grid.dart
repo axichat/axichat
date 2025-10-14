@@ -618,12 +618,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  void _showZoomControls() {
-    if (!_isZoomEnabled) {
-      return;
-    }
-    _zoomControlsController.show();
-  }
+  void _showZoomControls() {}
 
   void _enterSelectionMode(String taskId) {
     _capturedBloc.add(CalendarEvent.selectionModeEntered(taskId: taskId));
@@ -1109,20 +1104,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   children: [
                     SizedBox.expand(child: gridBody),
                     ..._buildEdgeScrollTargets(),
-                    AnimatedBuilder(
-                      animation: _zoomControlsController,
-                      builder: (context, _) {
-                        if (!_isZoomEnabled ||
-                            !_zoomControlsController.isVisible) {
-                          return const SizedBox.shrink();
-                        }
-                        return Positioned(
-                          bottom: compact ? 12 : 24,
-                          right: compact ? 8 : 16,
-                          child: _buildZoomControls(),
-                        );
-                      },
-                    ),
+                    if (_isZoomEnabled)
+                      Positioned(
+                        bottom: compact ? 12 : 24,
+                        right: compact ? 8 : 16,
+                        child: _buildZoomControls(),
+                      ),
                   ],
                 ),
               ),
@@ -1547,8 +1534,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
                         final CalendarTask? storedTask =
                             state.model.tasks[taskId];
-                        final String? occurrenceKey =
-                            occurrenceKeyFrom(taskId);
+                        final String? occurrenceKey = occurrenceKeyFrom(taskId);
                         final CalendarTask? occurrenceTask =
                             storedTask == null && occurrenceKey != null
                                 ? latestTask.occurrenceForId(taskId)
@@ -1580,7 +1566,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                               updatedTask.scheduledTime,
                                           duration: updatedTask.duration,
                                           endDate: updatedTask.endDate,
-                                          daySpan: updatedTask.daySpan,
                                         ),
                                       );
 
@@ -2505,7 +2490,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           scheduledTime: targetStart,
           duration: taskInstance.duration,
           endDate: taskInstance.endDate,
-          daySpan: taskInstance.daySpan,
         ),
       );
       return;
@@ -2815,14 +2799,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               );
             }
 
+            final Set<String> seriesIds = _seriesIdsForTask(task);
+            final bool hasSeriesGroup = seriesIds.length > 1;
             final bool selectionModeActive = _isSelectionMode;
-            final bool isSeriesTask =
-                task.isOccurrence || !task.effectiveRecurrence.isNone;
+            final bool isSeriesTask = hasSeriesGroup ||
+                task.isOccurrence ||
+                !task.effectiveRecurrence.isNone;
             final bool isOccurrenceSelected =
                 _selectedTaskIds.contains(task.id);
-            final Set<String> seriesIds = _seriesIdsForTask(task);
-            final bool isSeriesSelected = seriesIds.isNotEmpty &&
-                seriesIds.every(_selectedTaskIds.contains);
+            final bool isSeriesSelected =
+                hasSeriesGroup && seriesIds.every(_selectedTaskIds.contains);
             final bool isSelected = _isTaskSelected(task);
 
             if (isSeriesTask) {
@@ -3157,18 +3143,38 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Set<String> _seriesIdsForTask(CalendarTask task) {
     final String baseId = task.baseId;
     final CalendarTask? baseTask = widget.state.model.tasks[baseId];
-    if (baseTask == null || !baseTask.isSeries) {
+    final bool hasModelSibling = widget.state.model.tasks.values.any(
+      (entry) => entry.baseId == baseId && entry.id != baseId,
+    );
+    final bool hasVisibleSibling = _visibleTasks.keys.any(
+      (key) => baseTaskIdFrom(key) == baseId && key != task.id,
+    );
+    final bool hasSelectedSibling = _selectedTaskIds.any(
+      (id) => baseTaskIdFrom(id) == baseId && id != task.id,
+    );
+    final bool treatAsSeries = (baseTask?.isSeries ?? false) ||
+        hasModelSibling ||
+        hasVisibleSibling ||
+        hasSelectedSibling;
+
+    if (baseTask == null || !treatAsSeries) {
       return {task.id};
     }
 
     final ids = <String>{baseId};
 
-    if (task.isOccurrence) {
+    if (task.id != baseId) {
       ids.add(task.id);
-    } else {
-      final String? occurrenceKey = baseTask.baseOccurrenceKey;
-      if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
-        ids.add('$baseId::$occurrenceKey');
+    }
+
+    if (baseTask.isSeries) {
+      if (task.isOccurrence) {
+        ids.add(task.id);
+      } else {
+        final String? occurrenceKey = baseTask.baseOccurrenceKey;
+        if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
+          ids.add('$baseId::$occurrenceKey');
+        }
       }
     }
 

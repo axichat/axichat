@@ -323,7 +323,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       gap: calendarSpacing8,
       children: [
         TaskSecondaryButton(
-          label: 'Clear selection',
+          label: 'Clear Selection',
           onPressed: hasTasks
               ? () => bloc.add(const CalendarEvent.selectionCleared())
               : null,
@@ -1285,9 +1285,17 @@ class _TaskSidebarState extends State<TaskSidebar>
   }) {
     return DragTarget<CalendarTask>(
       onAcceptWithDetails: (details) {
+        final CalendarTask dropped = details.data;
+        final CalendarTask unscheduled = dropped.copyWith(
+          scheduledTime: null,
+          duration: null,
+          endDate: null,
+          startHour: null,
+          modifiedAt: DateTime.now(),
+        );
         context.read<BaseCalendarBloc>().add(
               CalendarEvent.taskUpdated(
-                task: details.data.copyWith(scheduledTime: null),
+                task: unscheduled,
               ),
             );
       },
@@ -1611,36 +1619,30 @@ class _TaskSidebarState extends State<TaskSidebar>
                                 },
                                 onOccurrenceUpdated: shouldUpdateOccurrence
                                     ? (updatedTask) {
-                                        context
-                                            .read<BaseCalendarBloc>()
-                                            .add(
+                                        context.read<BaseCalendarBloc>().add(
                                               CalendarEvent
                                                   .taskOccurrenceUpdated(
                                                 taskId: baseId,
                                                 occurrenceId: task.id,
-                                                scheduledTime: updatedTask
-                                                    .scheduledTime,
+                                                scheduledTime:
+                                                    updatedTask.scheduledTime,
                                                 duration: updatedTask.duration,
                                                 endDate: updatedTask.endDate,
-                                                daySpan: updatedTask.daySpan,
                                               ),
                                             );
 
-                                        final seriesUpdate = latestTask.copyWith(
+                                        final seriesUpdate =
+                                            latestTask.copyWith(
                                           title: updatedTask.title,
-                                          description:
-                                              updatedTask.description,
+                                          description: updatedTask.description,
                                           location: updatedTask.location,
                                           deadline: updatedTask.deadline,
                                           priority: updatedTask.priority,
-                                          isCompleted:
-                                              updatedTask.isCompleted,
+                                          isCompleted: updatedTask.isCompleted,
                                         );
 
                                         if (seriesUpdate != latestTask) {
-                                          context
-                                              .read<BaseCalendarBloc>()
-                                              .add(
+                                          context.read<BaseCalendarBloc>().add(
                                                 CalendarEvent.taskUpdated(
                                                   task: seriesUpdate,
                                                 ),

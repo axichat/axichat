@@ -376,15 +376,29 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       return TaskPriority.none;
     }();
 
-    Duration? duration;
     DateTime? scheduledTime;
+    Duration? duration;
+    DateTime? endDate;
+    double? startHour;
     if (_startTime != null && _endTime != null) {
-      duration = _endTime!.difference(_startTime!);
-      if (duration.inMinutes < 15) {
-        duration = const Duration(minutes: 15);
-        _endTime = _startTime!.add(duration);
+      final DateTime start = _startTime!;
+      DateTime end = _endTime!;
+      Duration computed = end.difference(start);
+      if (computed.inMinutes < 15) {
+        computed = const Duration(minutes: 15);
+        end = start.add(computed);
+        _endTime = end;
       }
-      scheduledTime = _startTime;
+      scheduledTime = start;
+      duration = computed;
+      endDate = end;
+      startHour = start.hour + (start.minute / 60.0);
+    }
+
+    if (scheduledTime == null) {
+      duration = null;
+      endDate = null;
+      startHour = null;
     }
 
     final recurrenceAnchor =
@@ -402,7 +416,9 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           ? null
           : _locationController.text.trim(),
       scheduledTime: scheduledTime,
-      duration: scheduledTime == null ? null : duration,
+      duration: duration,
+      endDate: endDate,
+      startHour: startHour,
       deadline: _deadline,
       priority: priority == TaskPriority.none ? null : priority,
       isCompleted: _isCompleted,

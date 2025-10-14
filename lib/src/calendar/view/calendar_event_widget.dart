@@ -466,14 +466,23 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   void _startResize(ResizeDirection direction) {
-    if (widget.task.isOccurrence) {
+    if (widget.task.isOccurrence || widget.task.scheduledTime == null) {
       return;
     }
+    final DateTime startTime = widget.task.scheduledTime!;
+    final Duration baseDuration = widget.task.duration ??
+        (widget.task.effectiveEndDate != null
+            ? widget.task.effectiveEndDate!.difference(startTime)
+            : const Duration(hours: 1));
+    final Duration normalizedDuration =
+        baseDuration.inMinutes <= 0 ? const Duration(hours: 1) : baseDuration;
     setState(() {
       _isResizing = true;
       _resizeAccumulatedDelta = 0;
-      _resizeStartTime = widget.task.scheduledTime;
-      _resizeStartDuration = widget.task.duration ?? const Duration(hours: 1);
+      _resizeStartTime = startTime;
+      _resizeStartDuration = normalizedDuration;
+      _resizeStartEnd =
+          widget.task.effectiveEndDate ?? startTime.add(normalizedDuration);
     });
     HapticFeedback.selectionClick();
   }
@@ -486,108 +495,93 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
       return;
     }
 
-    const quarterHeight = 15.0; // Height per 15 minutes (60px hour / 4)
+    const double quarterHeight = 15.0; // Height per 15 minutes
 
-    late DateTime newStartTime;
-    late Duration newDuration;
-    late int newDaySpan;
+    if (direction == ResizeDirection.left ||
+        direction == ResizeDirection.right) {
+      _resizeAccumulatedDelta += details.delta.dx;
+    } else {
+      _resizeAccumulatedDelta += details.delta.dy;
+    }
+
+    DateTime newStartTime = _resizeStartTime!;
+    Duration newDuration = _resizeStartDuration!;
+    final DateTime? initialEnd = _resizeStartEnd;
 
     switch (direction) {
       case ResizeDirection.top:
-        // Accumulate vertical drag
-        _resizeAccumulatedDelta += details.delta.dy;
-
-        // Snap to quarter-hour intervals
-        final quarterChange = (_resizeAccumulatedDelta / quarterHeight).round();
-        final deltaMinutes = quarterChange * 15;
-
-        // Resize from top: adjust start time and duration
-        final adjustedStartTime =
-            _resizeStartTime!.add(Duration(minutes: deltaMinutes));
-        final adjustedDuration = Duration(
-          minutes: _resizeStartDuration!.inMinutes - deltaMinutes.toInt(),
-        );
-
-        // Constrain to minimum 15 minutes (1 quarter)
-        if (adjustedDuration.inMinutes >= 15) {
-          newStartTime = adjustedStartTime;
-          newDuration = adjustedDuration;
-          newDaySpan = widget.task.effectiveDaySpan;
+        final int quarterChange =
+            (_resizeAccumulatedDelta / quarterHeight).round();
+        final int deltaMinutes = quarterChange * 15;
+        final Duration candidateDuration =
+            _resizeStartDuration! - Duration(minutes: deltaMinutes);
+        if (candidateDuration.inMinutes >= 15) {
+          newStartTime = _resizeStartTime!.add(Duration(minutes: deltaMinutes));
+          newDuration = candidateDuration;
         } else {
           return;
         }
         break;
-
       case ResizeDirection.bottom:
-        // Accumulate vertical drag
-        _resizeAccumulatedDelta += details.delta.dy;
-
-        // Snap to quarter-hour intervals
-        final quarterChange = (_resizeAccumulatedDelta / quarterHeight).round();
-        final deltaMinutes = quarterChange * 15;
-
-        // Resize from bottom: adjust duration only
-        final adjustedDuration = Duration(
-          minutes: _resizeStartDuration!.inMinutes + deltaMinutes.toInt(),
-        );
-
-        // Constrain to minimum 15 minutes and maximum 24 hours
-        if (adjustedDuration.inMinutes >= 15 &&
-            adjustedDuration.inMinutes <= 1440) {
+        final int quarterChange =
+            (_resizeAccumulatedDelta / quarterHeight).round();
+        final int deltaMinutes = quarterChange * 15;
+        final Duration candidateDuration =
+            _resizeStartDuration! + Duration(minutes: deltaMinutes);
+        if (candidateDuration.inMinutes >= 15 &&
+            candidateDuration.inMinutes <= const Duration(days: 7).inMinutes) {
           newStartTime = _resizeStartTime!;
-          newDuration = adjustedDuration;
-          newDaySpan = widget.task.effectiveDaySpan;
+          newDuration = candidateDuration;
         } else {
           return;
         }
         break;
-
       case ResizeDirection.left:
-        // Accumulate horizontal drag
-        _resizeAccumulatedDelta += details.delta.dx;
-
-        // Horizontal drag for left handle - adjust start date and daySpan
-        final deltaDays = -(_resizeAccumulatedDelta / widget.width).round();
-
-        final adjustedStartTime =
-            _resizeStartTime!.add(Duration(days: deltaDays));
-        final adjustedDaySpan =
-            (widget.task.effectiveDaySpan - deltaDays).toInt();
-
-        if (adjustedDaySpan >= 1 && adjustedDaySpan <= 7) {
-          newStartTime = adjustedStartTime;
-          newDuration = _resizeStartDuration!;
-          newDaySpan = adjustedDaySpan;
-        } else {
-          return;
+        final int deltaDays = (-_resizeAccumulatedDelta / widget.width).round();
+        if (deltaDays != 0) {
+          final DateTime candidateStart =
+              _resizeStartTime!.add(Duration(days: deltaDays));
+          final DateTime? end = initialEnd;
+          if (end != null && candidateStart.isBefore(end)) {
+            newStartTime = candidateStart;
+            newDuration = end.difference(candidateStart);
+          } else {
+            return;
+          }
         }
         break;
-
       case ResizeDirection.right:
-        // Accumulate horizontal drag
-        _resizeAccumulatedDelta += details.delta.dx;
-
-        // Horizontal drag for right handle - adjust daySpan only
-        final deltaDays = (_resizeAccumulatedDelta / widget.width).round();
-
-        final adjustedDaySpan =
-            (widget.task.effectiveDaySpan + deltaDays).toInt();
-
-        // Constrain to maximum 7 days
-        final maxSpan = 7 - _resizeStartTime!.weekday + 1;
-
-        if (adjustedDaySpan >= 1 && adjustedDaySpan <= maxSpan) {
-          newStartTime = _resizeStartTime!;
-          newDuration = _resizeStartDuration!;
-          newDaySpan = adjustedDaySpan;
+        final int deltaDays = (_resizeAccumulatedDelta / widget.width).round();
+        final DateTime? end = initialEnd;
+        if (end != null) {
+          final DateTime candidateEnd = end.add(Duration(days: deltaDays));
+          if (candidateEnd.isAfter(_resizeStartTime!)) {
+            newStartTime = _resizeStartTime!;
+            newDuration = candidateEnd.difference(_resizeStartTime!);
+          } else {
+            return;
+          }
         } else {
-          return;
+          final Duration candidateDuration =
+              _resizeStartDuration! + Duration(days: deltaDays);
+          if (candidateDuration.inMinutes >= 15) {
+            newStartTime = _resizeStartTime!;
+            newDuration = candidateDuration;
+          } else {
+            return;
+          }
         }
         break;
     }
 
-    // Round to nearest quarter hour for clean snapping
-    final roundedMinutes = (newStartTime.minute / 15).round() * 15;
+    if (newDuration.inMinutes > const Duration(days: 7).inMinutes) {
+      newDuration = const Duration(days: 7);
+      if (initialEnd != null && direction == ResizeDirection.left) {
+        newStartTime = initialEnd.subtract(newDuration);
+      }
+    }
+
+    final int roundedMinutes = (newStartTime.minute / 15).round() * 15;
     newStartTime = DateTime(
       newStartTime.year,
       newStartTime.month,
@@ -599,15 +593,30 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
       newStartTime = newStartTime.add(const Duration(hours: 1));
     }
 
-    // Store the temporary values for final resize
+    if (initialEnd != null) {
+      newDuration = initialEnd.difference(newStartTime);
+    }
+
+    if (newDuration.inMinutes < 15) {
+      return;
+    }
+
+    DateTime? endDate;
+    if (initialEnd != null || widget.task.endDate != null) {
+      endDate = newStartTime.add(newDuration);
+    } else if (widget.task.duration != null) {
+      endDate = newStartTime.add(newDuration);
+    }
+
     _tempStartTime = newStartTime;
     _tempDuration = newDuration;
-    _tempDaySpan = newDaySpan;
+    _tempEndDate = endDate;
   }
 
   DateTime? _tempStartTime;
   Duration? _tempDuration;
-  int? _tempDaySpan;
+  DateTime? _tempEndDate;
+  DateTime? _resizeStartEnd;
 
   void _endResize() {
     if (widget.task.isOccurrence) {
@@ -616,26 +625,25 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     setState(() => _isResizing = false);
 
     if (_tempStartTime != null && _tempDuration != null) {
-      final startHour = _tempStartTime!.hour + (_tempStartTime!.minute / 60.0);
-
       context.read<CalendarBloc>().add(
             CalendarEvent.taskResized(
               taskId: widget.task.baseId,
-              startHour: startHour,
-              duration: _tempDuration!.inMinutes / 60.0,
-              daySpan: _tempDaySpan ?? widget.task.effectiveDaySpan,
+              scheduledTime: _tempStartTime,
+              duration: _tempDuration,
+              endDate: _tempEndDate,
             ),
           );
 
       _tempStartTime = null;
       _tempDuration = null;
-      _tempDaySpan = null;
+      _tempEndDate = null;
     }
 
     // Clean up tracking variables
     _resizeAccumulatedDelta = 0;
     _resizeStartTime = null;
     _resizeStartDuration = null;
+    _resizeStartEnd = null;
   }
 }
 
