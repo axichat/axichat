@@ -139,6 +139,23 @@ class CalendarEvent with _$CalendarEvent {
     RecurrenceRule? recurrence,
   }) = CalendarSelectionRecurrenceChanged;
 
+  const factory CalendarEvent.selectionTitleChanged({
+    required String title,
+  }) = CalendarSelectionTitleChanged;
+
+  const factory CalendarEvent.selectionDescriptionChanged({
+    String? description,
+  }) = CalendarSelectionDescriptionChanged;
+
+  const factory CalendarEvent.selectionLocationChanged({
+    String? location,
+  }) = CalendarSelectionLocationChanged;
+
+  const factory CalendarEvent.selectionTimeShifted({
+    Duration? startDelta,
+    Duration? endDelta,
+  }) = CalendarSelectionTimeShifted;
+
   const factory CalendarEvent.selectionIdsAdded({
     required Set<String> taskIds,
   }) = CalendarSelectionIdsAdded;

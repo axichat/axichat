@@ -1545,14 +1545,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           return const SizedBox.shrink();
                         }
 
-                        final displayTask = () {
-                          final occurrenceKey = occurrenceKeyFrom(taskId);
-                          if (occurrenceKey == null) {
-                            return latestTask;
-                          }
-                          return latestTask.occurrenceForId(taskId) ??
-                              latestTask;
-                        }();
+                        final CalendarTask? storedTask =
+                            state.model.tasks[taskId];
+                        final String? occurrenceKey =
+                            occurrenceKeyFrom(taskId);
+                        final CalendarTask? occurrenceTask =
+                            storedTask == null && occurrenceKey != null
+                                ? latestTask.occurrenceForId(taskId)
+                                : null;
+                        final CalendarTask displayTask =
+                            storedTask ?? occurrenceTask ?? latestTask;
+                        final bool shouldUpdateOccurrence =
+                            storedTask == null && occurrenceTask != null;
 
                         return EditTaskDropdown(
                           task: displayTask,
@@ -1566,35 +1570,38 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                   ),
                                 );
                           },
-                          onOccurrenceUpdated: (updatedTask) {
-                            context.read<T>().add(
-                                  CalendarEvent.taskOccurrenceUpdated(
-                                    taskId: baseId,
-                                    occurrenceId: taskId,
-                                    scheduledTime: updatedTask.scheduledTime,
-                                    duration: updatedTask.duration,
-                                    endDate: updatedTask.endDate,
-                                    daySpan: updatedTask.daySpan,
-                                  ),
-                                );
+                          onOccurrenceUpdated: shouldUpdateOccurrence
+                              ? (updatedTask) {
+                                  context.read<T>().add(
+                                        CalendarEvent.taskOccurrenceUpdated(
+                                          taskId: baseId,
+                                          occurrenceId: taskId,
+                                          scheduledTime:
+                                              updatedTask.scheduledTime,
+                                          duration: updatedTask.duration,
+                                          endDate: updatedTask.endDate,
+                                          daySpan: updatedTask.daySpan,
+                                        ),
+                                      );
 
-                            final seriesUpdate = latestTask.copyWith(
-                              title: updatedTask.title,
-                              description: updatedTask.description,
-                              location: updatedTask.location,
-                              deadline: updatedTask.deadline,
-                              priority: updatedTask.priority,
-                              isCompleted: updatedTask.isCompleted,
-                            );
-
-                            if (seriesUpdate != latestTask) {
-                              context.read<T>().add(
-                                    CalendarEvent.taskUpdated(
-                                      task: seriesUpdate,
-                                    ),
+                                  final seriesUpdate = latestTask.copyWith(
+                                    title: updatedTask.title,
+                                    description: updatedTask.description,
+                                    location: updatedTask.location,
+                                    deadline: updatedTask.deadline,
+                                    priority: updatedTask.priority,
+                                    isCompleted: updatedTask.isCompleted,
                                   );
-                            }
-                          },
+
+                                  if (seriesUpdate != latestTask) {
+                                    context.read<T>().add(
+                                          CalendarEvent.taskUpdated(
+                                            task: seriesUpdate,
+                                          ),
+                                        );
+                                  }
+                                }
+                              : null,
                           onTaskDeleted: (deletedTaskId) {
                             context.read<T>().add(
                                   CalendarEvent.taskDeleted(
@@ -2896,10 +2903,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   ),
                   onPressed: () {
                     menuController.hide();
+                    final String targetId = task.id;
                     if (selectionModeActive) {
-                      _toggleTaskSelection(task.baseId);
+                      _toggleTaskSelection(targetId);
                     } else {
-                      _enterSelectionMode(task.baseId);
+                      _enterSelectionMode(targetId);
                     }
                   },
                   child: Text(selectionLabel),
@@ -3148,7 +3156,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   Set<String> _seriesIdsForTask(CalendarTask task) {
     final String baseId = task.baseId;
+    final CalendarTask? baseTask = widget.state.model.tasks[baseId];
+    if (baseTask == null || !baseTask.isSeries) {
+      return {task.id};
+    }
+
     final ids = <String>{baseId};
+
+    if (task.isOccurrence) {
+      ids.add(task.id);
+    } else {
+      final String? occurrenceKey = baseTask.baseOccurrenceKey;
+      if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
+        ids.add('$baseId::$occurrenceKey');
+      }
+    }
 
     for (final entry in widget.state.model.tasks.values) {
       if (entry.baseId == baseId) {
@@ -3156,18 +3178,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       }
     }
 
-    for (final selected in _selectedTaskIds) {
-      if (baseTaskIdFrom(selected) == baseId) {
-        ids.add(selected);
+    for (final entry in _visibleTasks.entries) {
+      if (baseTaskIdFrom(entry.key) == baseId) {
+        ids.add(entry.key);
       }
     }
 
-    if (task.isOccurrence) {
-      ids.add(task.id);
-    } else {
-      final String? occurrenceKey = task.baseOccurrenceKey;
-      if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
-        ids.add('$baseId::$occurrenceKey');
+    for (final selected in _selectedTaskIds) {
+      if (baseTaskIdFrom(selected) == baseId) {
+        ids.add(selected);
       }
     }
 

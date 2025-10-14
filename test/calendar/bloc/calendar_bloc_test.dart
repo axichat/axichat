@@ -206,6 +206,65 @@ void main() {
     );
 
     blocTest<CalendarBloc, CalendarState>(
+      'taskDropped repositions task and preserves duration',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final start = DateTime(2024, 2, 3, 9, 15);
+        seededTask = CalendarTask(
+          id: 'drop-task',
+          title: 'Move me',
+          description: null,
+          scheduledTime: start,
+          duration: const Duration(hours: 2),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: null,
+          deadline: null,
+          daySpan: 1,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: start.add(const Duration(hours: 2)),
+          recurrence: null,
+          occurrenceOverrides: const {},
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime newStart = seededTask.scheduledTime!
+            .add(const Duration(days: 1, hours: 1, minutes: 30));
+        bloc.add(
+          CalendarEvent.taskDropped(
+            taskId: seededTask.id,
+            time: newStart,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final updated = state.model.tasks[seededTask.id]!;
+          final DateTime newStart = seededTask.scheduledTime!
+              .add(const Duration(days: 1, hours: 1, minutes: 30));
+          final Duration duration = seededTask.duration!;
+          final double expectedStartHour =
+              newStart.hour + (newStart.minute / 60.0);
+          return updated.scheduledTime == newStart &&
+              updated.duration == duration &&
+              updated.endDate == newStart.add(duration) &&
+              updated.startHour != null &&
+              (updated.startHour! - expectedStartHour).abs() < 1e-6;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
       'remoteModelApplied replaces local model',
       build: () => bloc,
       act: (bloc) {
