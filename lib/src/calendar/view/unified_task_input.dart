@@ -220,16 +220,18 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           style: Theme.of(context).textTheme.labelMedium,
         ),
         const SizedBox(height: 8),
-        TaskDateTimePickerRow(
-          selectedDate: _selectedDate,
-          selectedTime: _selectedTime,
-          onSelectDate: _selectDate,
-          onSelectTime: _selectTime,
-          pickDateLabel: 'Select date',
-          pickTimeLabel: 'Select time',
-          dateLabelBuilder: (context, date) => _formatDate(date),
-          timeLabelBuilder: (context, time) =>
-              TimeFormatter.formatTimeOfDay(context, time),
+        TaskDateTimeToolbar(
+          primaryField: TaskDateTimeToolbarField(
+            selectedDate: _selectedDate,
+            selectedTime: _selectedTime,
+            onSelectDate: _selectDate,
+            onSelectTime: _selectTime,
+            emptyDateLabel: 'Select date',
+            emptyTimeLabel: 'Select time',
+            dateLabelBuilder: (context, date) => _formatDate(date),
+            timeLabelBuilder: (context, time) =>
+                TimeFormatter.formatTimeOfDay(context, time),
+          ),
         ),
       ],
     );

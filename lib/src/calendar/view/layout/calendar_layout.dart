@@ -37,6 +37,12 @@ class CalendarLayoutTheme {
     this.zoomControlsLabelPaddingHorizontal =
         calendarZoomControlsLabelPaddingHorizontal,
     this.zoomControlsIconSize = calendarZoomControlsIconSize,
+    this.clockTickInterval = calendarClockTickInterval,
+    this.dragWidthDebounceDelay = calendarDragWidthDebounceDelay,
+    this.splitPreviewAnimationDuration =
+        calendarTaskSplitPreviewAnimationDuration,
+    this.scrollAnimationDuration = calendarScrollAnimationDuration,
+    this.slotHoverAnimationDuration = calendarSlotHoverAnimationDuration,
   });
 
   final double timeColumnWidth;
@@ -66,6 +72,11 @@ class CalendarLayoutTheme {
   final double zoomControlsPaddingVertical;
   final double zoomControlsLabelPaddingHorizontal;
   final double zoomControlsIconSize;
+  final Duration clockTickInterval;
+  final Duration dragWidthDebounceDelay;
+  final Duration splitPreviewAnimationDuration;
+  final Duration scrollAnimationDuration;
+  final Duration slotHoverAnimationDuration;
 
   static const CalendarLayoutTheme material = CalendarLayoutTheme();
 }

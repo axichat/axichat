@@ -34,6 +34,39 @@ class CalendarNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
+    final Widget navButtonStrip = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.zero,
+      child: Row(
+        children: [
+          _navButton(
+            label: '← Previous',
+            onPressed: () => _jumpBy(const Duration(days: -7)),
+          ),
+          const SizedBox(width: calendarSpacing12),
+          _navButton(
+            label: 'Today',
+            highlighted: _isToday(state.selectedDate),
+            onPressed: _isToday(state.selectedDate)
+                ? null
+                : () => onDateSelected(DateTime.now()),
+          ),
+          const SizedBox(width: calendarSpacing12),
+          _navButton(
+            label: 'Next →',
+            onPressed: () => _jumpBy(const Duration(days: 7)),
+          ),
+          if (state.viewMode == CalendarView.day) ...[
+            const SizedBox(width: calendarSpacing12),
+            _navButton(
+              label: 'Back to week',
+              onPressed: () => onViewChanged(CalendarView.week),
+            ),
+          ],
+        ],
+      ),
+    );
+
     return Container(
       padding: EdgeInsets.fromLTRB(
         spec.contentPadding.left,
@@ -50,34 +83,7 @@ class CalendarNavigation extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              _navButton(
-                label: '← Previous',
-                onPressed: () => _jumpBy(const Duration(days: -7)),
-              ),
-              const SizedBox(width: calendarSpacing12),
-              _navButton(
-                label: 'Today',
-                highlighted: _isToday(state.selectedDate),
-                onPressed: _isToday(state.selectedDate)
-                    ? null
-                    : () => onDateSelected(DateTime.now()),
-              ),
-              const SizedBox(width: calendarSpacing12),
-              _navButton(
-                label: 'Next →',
-                onPressed: () => _jumpBy(const Duration(days: 7)),
-              ),
-              if (state.viewMode == CalendarView.day) ...[
-                const SizedBox(width: calendarSpacing12),
-                _navButton(
-                  label: 'Back to week',
-                  onPressed: () => onViewChanged(CalendarView.week),
-                ),
-              ],
-            ],
-          ),
+          Flexible(child: navButtonStrip),
           Expanded(
             child: Align(
               alignment: Alignment.center,

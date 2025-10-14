@@ -236,7 +236,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets contentPadding = responsive.contentPadding;
     final double sidebarWidth =
-        MediaQuery.of(context).size.width * responsive.sidebarWidthFraction;
+        ResponsiveHelper.sidebarDimensions(context).defaultWidth;
     return Row(
       children: [
         // Resizable sidebar - extends full height
@@ -291,7 +291,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets contentPadding = responsive.contentPadding;
     final double sidebarWidth =
-        MediaQuery.of(context).size.width * responsive.sidebarWidthFraction;
+        ResponsiveHelper.sidebarDimensions(context).defaultWidth;
     return Row(
       children: [
         // Full sidebar always visible - extends full height

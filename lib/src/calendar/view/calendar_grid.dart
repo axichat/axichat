@@ -132,7 +132,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController = TaskInteractionController();
     _taskPopoverController = TaskPopoverController();
     _zoomControlsController = ZoomControlsController();
-    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+    _clockTimer = Timer.periodic(_layoutTheme.clockTickInterval, (_) {
       if (mounted) {
         setState(() {});
       }
@@ -404,7 +404,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.schedulePendingWidth(
       width: width,
       forceCenter: forceCenterPointer,
-      delay: const Duration(milliseconds: 120),
+      delay: _layoutTheme.dragWidthDebounceDelay,
       onApply: () {
         if (!mounted) {
           return;
@@ -1234,6 +1234,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     late final Widget content;
 
     if (isWeekView && isCompact) {
+      final double compactDayColumnWidth = ResponsiveHelper.dayColumnWidth(
+        context,
+        fallback: calendarCompactDayColumnWidth,
+      );
       // Mobile week view: horizontal scroll for day columns
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1245,7 +1249,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               child: Row(
                 children: weekDates.asMap().entries.map((entry) {
                   return SizedBox(
-                    width: 120, // Fixed width for mobile day columns
+                    width: compactDayColumnWidth,
                     child: _buildDayColumn(
                       entry.value,
                       compact,
@@ -2110,9 +2114,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         Widget slot = _CalendarSlot(
           isPreviewSlot: isPreviewSlot,
           isPreviewAnchor: isPreviewAnchor,
+          animationDuration: _layoutTheme.slotHoverAnimationDuration,
           cursor: SystemMouseCursors.click,
-          splashColor: Colors.blue.withValues(alpha: 0.2),
-          highlightColor: Colors.blue.withValues(alpha: 0.1),
+          splashColor: calendarPrimaryColor.withValues(
+            alpha: calendarSlotSplashOpacity,
+          ),
+          highlightColor: calendarPrimaryColor.withValues(
+            alpha: calendarSlotHighlightOpacity,
+          ),
           onTap: () => _handleSlotTap(slotTime, hasTask: hasTask),
           child: const SizedBox.expand(),
         );
@@ -2309,7 +2318,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     _verticalController.animateTo(
       target,
-      duration: const Duration(milliseconds: 250),
+      duration: _layoutTheme.scrollAnimationDuration,
       curve: Curves.easeOut,
     );
   }
@@ -2966,13 +2975,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               }
 
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
+                duration: _layoutTheme.splitPreviewAnimationDuration,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(calendarEventRadius),
                   border: showSplitPreview
                       ? Border.all(
-                          color: calendarPrimaryColor.withValues(alpha: 0.6),
-                          width: 2,
+                          color: calendarPrimaryColor.withValues(
+                            alpha: calendarSplitPreviewBorderOpacity,
+                          ),
+                          width: calendarBorderStroke * 2,
                         )
                       : null,
                 ),
@@ -3065,6 +3076,7 @@ class _CalendarSlot extends StatefulWidget {
     required this.isPreviewSlot,
     required this.isPreviewAnchor,
     required this.child,
+    required this.animationDuration,
     this.onTap,
     this.cursor = SystemMouseCursors.click,
     this.splashColor,
@@ -3074,6 +3086,7 @@ class _CalendarSlot extends StatefulWidget {
   final bool isPreviewSlot;
   final bool isPreviewAnchor;
   final Widget child;
+  final Duration animationDuration;
   final VoidCallback? onTap;
   final MouseCursor cursor;
   final Color? splashColor;
@@ -3086,11 +3099,12 @@ class _CalendarSlot extends StatefulWidget {
 class _CalendarSlotState extends State<_CalendarSlot> {
   bool _hovering = false;
 
-  static const _baseColor = Color(0xff0969DA);
-
-  Color get _hoverColor => _baseColor.withValues(alpha: 0.05);
-  Color get _previewColor => _baseColor.withValues(alpha: 0.12);
-  Color get _previewAnchorColor => _baseColor.withValues(alpha: 0.2);
+  Color get _hoverColor =>
+      calendarPrimaryColor.withValues(alpha: calendarSlotHoverOpacity);
+  Color get _previewColor =>
+      calendarPrimaryColor.withValues(alpha: calendarSlotPreviewOpacity);
+  Color get _previewAnchorColor =>
+      calendarPrimaryColor.withValues(alpha: calendarSlotPreviewAnchorOpacity);
 
   @override
   Widget build(BuildContext context) {
@@ -3108,7 +3122,7 @@ class _CalendarSlotState extends State<_CalendarSlot> {
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: widget.animationDuration,
         color: color,
         child: Material(
           color: Colors.transparent,
