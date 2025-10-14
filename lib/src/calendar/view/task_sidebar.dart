@@ -963,7 +963,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       );
     }
 
-    final previewTitles = tasks.take(2).map((task) => task.title).toList();
+    final previewTitles = tasks.map((task) => task.title).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

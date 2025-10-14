@@ -81,6 +81,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final ShadPopoverController? contextMenuController;
   final ValueKey<String>? contextMenuGroupId;
   final TaskContextMenuBuilder? contextMenuBuilder;
+  final ValueChanged<Offset>? onResizePointerMove;
 
   const ResizableTaskWidget({
     super.key,
@@ -107,6 +108,7 @@ class ResizableTaskWidget extends StatefulWidget {
     this.contextMenuController,
     this.contextMenuGroupId,
     this.contextMenuBuilder,
+    this.onResizePointerMove,
   });
 
   @override
@@ -831,6 +833,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
   void _updateResize(String handleType, DragUpdateDetails details) {
     if (!isResizing || widget.task.scheduledTime == null) return;
+
+    widget.onResizePointerMove?.call(details.globalPosition);
 
     // Accumulate total drag distance
     _totalDragDeltaY += details.delta.dy;
