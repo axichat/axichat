@@ -52,6 +52,10 @@ abstract class BaseCalendarBloc
     on<CalendarSelectionCompletedToggled>(_onSelectionCompletedToggled);
     on<CalendarSelectionDeleted>(_onSelectionDeleted);
     on<CalendarSelectionRecurrenceChanged>(_onSelectionRecurrenceChanged);
+    on<CalendarSelectionTitleChanged>(_onSelectionTitleChanged);
+    on<CalendarSelectionDescriptionChanged>(_onSelectionDescriptionChanged);
+    on<CalendarSelectionLocationChanged>(_onSelectionLocationChanged);
+    on<CalendarSelectionTimeShifted>(_onSelectionTimeShifted);
     on<CalendarSelectionIdsAdded>(_onSelectionIdsAdded);
     on<CalendarSelectionIdsRemoved>(_onSelectionIdsRemoved);
     on<CalendarUndoRequested>(_onUndoRequested);
@@ -401,10 +405,22 @@ abstract class BaseCalendarBloc
         throw CalendarTaskNotFoundException(event.taskId);
       }
 
-      final updatedTask = task.copyWith(
-        scheduledTime: event.time,
-        modifiedAt: _now(),
-      );
+      final DateTime? scheduled = task.scheduledTime;
+      if (scheduled == null) {
+        throw const CalendarValidationException(
+          'scheduledTime',
+          'Task requires a scheduled time before it can be moved',
+        );
+      }
+
+      final Duration startDelta = event.time.difference(scheduled);
+      final CalendarTask? shifted =
+          _shiftTaskTiming(task, startDelta, Duration.zero);
+      if (shifted == null || identical(shifted, task)) {
+        return;
+      }
+
+      final updatedTask = shifted.copyWith(modifiedAt: _now());
       _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
       emitModel(updatedModel, emit);
@@ -560,14 +576,14 @@ abstract class BaseCalendarBloc
         return;
       }
 
-      final int leftMinutes = splitTime.difference(start).inMinutes;
-      final int rightMinutes = end.difference(splitTime).inMinutes;
-      if (leftMinutes <= 0 || rightMinutes <= 0) {
+      final DateTime endTime = end;
+      final Duration leftDuration = splitTime.difference(start);
+      final Duration rightDuration = endTime.difference(splitTime);
+      if (leftDuration.inMicroseconds <= 0 ||
+          rightDuration.inMicroseconds <= 0) {
         return;
       }
 
-      final Duration leftDuration = Duration(minutes: leftMinutes);
-      final Duration rightDuration = Duration(minutes: rightMinutes);
       final now = _now();
 
       _recordUndoSnapshot();
@@ -588,7 +604,7 @@ abstract class BaseCalendarBloc
           overrides[occurrenceKey] = TaskOccurrenceOverride(
             scheduledTime: start,
             duration: leftDuration,
-            endDate: start.add(leftDuration),
+            endDate: splitTime,
             daySpan: existing?.daySpan,
             isCancelled: existing?.isCancelled,
             priority: existing?.priority,
@@ -609,7 +625,7 @@ abstract class BaseCalendarBloc
             recurrence: null,
             occurrenceOverrides: const {},
             daySpan: null,
-            endDate: null,
+            endDate: splitTime.add(rightDuration),
             createdAt: now,
             modifiedAt: now,
           );
@@ -636,7 +652,7 @@ abstract class BaseCalendarBloc
         final CalendarTask updatedOccurrence = storedTarget.copyWith(
           duration: leftDuration,
           daySpan: null,
-          endDate: null,
+          endDate: splitTime,
           startHour: start.hour + (start.minute / 60.0),
           modifiedAt: now,
         );
@@ -647,7 +663,7 @@ abstract class BaseCalendarBloc
           scheduledTime: splitTime,
           duration: rightDuration,
           daySpan: null,
-          endDate: null,
+          endDate: splitTime.add(rightDuration),
           recurrence: null,
           occurrenceOverrides: const {},
           startHour: splitTime.hour + (splitTime.minute / 60.0),
@@ -674,7 +690,7 @@ abstract class BaseCalendarBloc
         scheduledTime: originalStart,
         duration: leftDuration,
         daySpan: null,
-        endDate: null,
+        endDate: splitTime,
         startHour: originalStart.hour + (originalStart.minute / 60.0),
         modifiedAt: now,
       );
@@ -685,7 +701,7 @@ abstract class BaseCalendarBloc
         scheduledTime: splitTime,
         duration: rightDuration,
         daySpan: null,
-        endDate: null,
+        endDate: splitTime.add(rightDuration),
         recurrence: null,
         occurrenceOverrides: const {},
         startHour: splitTime.hour + (splitTime.minute / 60.0),
@@ -886,6 +902,276 @@ abstract class BaseCalendarBloc
     );
   }
 
+  Future<void> _onSelectionTitleChanged(
+    CalendarSelectionTitleChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    final title = event.title.trim();
+    if (title.isEmpty || state.selectedTaskIds.isEmpty) {
+      return;
+    }
+
+    final now = _now();
+    final updates = <String, CalendarTask>{};
+    final processedBases = <String>{};
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? direct = state.model.tasks[id];
+      if (direct != null) {
+        if (direct.title != title) {
+          updates[id] = direct.copyWith(title: title, modifiedAt: now);
+        }
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      if (!processedBases.add(baseId)) {
+        continue;
+      }
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null || baseTask.title == title) {
+        continue;
+      }
+      updates[baseId] = baseTask.copyWith(title: title, modifiedAt: now);
+    }
+
+    if (updates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+    final updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
+  Future<void> _onSelectionDescriptionChanged(
+    CalendarSelectionDescriptionChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+    final String? normalized = event.description?.trim();
+    final String? description =
+        normalized == null || normalized.isEmpty ? null : normalized;
+
+    final now = _now();
+    final updates = <String, CalendarTask>{};
+    final processedBases = <String>{};
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? direct = state.model.tasks[id];
+      if (direct != null) {
+        if (direct.description != description) {
+          updates[id] = direct.copyWith(
+            description: description,
+            modifiedAt: now,
+          );
+        }
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      if (!processedBases.add(baseId)) {
+        continue;
+      }
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null || baseTask.description == description) {
+        continue;
+      }
+      updates[baseId] = baseTask.copyWith(
+        description: description,
+        modifiedAt: now,
+      );
+    }
+
+    if (updates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+    final updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
+  Future<void> _onSelectionLocationChanged(
+    CalendarSelectionLocationChanged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    if (state.selectedTaskIds.isEmpty) {
+      return;
+    }
+    final String? normalized = event.location?.trim();
+    final String? location =
+        normalized == null || normalized.isEmpty ? null : normalized;
+
+    final now = _now();
+    final updates = <String, CalendarTask>{};
+    final processedBases = <String>{};
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? direct = state.model.tasks[id];
+      if (direct != null) {
+        if (direct.location != location) {
+          updates[id] = direct.copyWith(
+            location: location,
+            modifiedAt: now,
+          );
+        }
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      if (!processedBases.add(baseId)) {
+        continue;
+      }
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null || baseTask.location == location) {
+        continue;
+      }
+      updates[baseId] = baseTask.copyWith(
+        location: location,
+        modifiedAt: now,
+      );
+    }
+
+    if (updates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+    final updatedModel = state.model.replaceTasks(updates);
+    emitModel(
+      updatedModel,
+      emit,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in updates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
+  Future<void> _onSelectionTimeShifted(
+    CalendarSelectionTimeShifted event,
+    Emitter<CalendarState> emit,
+  ) async {
+    final Duration startDelta = event.startDelta ?? Duration.zero;
+    final Duration endDelta = event.endDelta ?? Duration.zero;
+    if (state.selectedTaskIds.isEmpty ||
+        (startDelta == Duration.zero && endDelta == Duration.zero)) {
+      return;
+    }
+
+    final now = _now();
+    final updates = <String, CalendarTask>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? direct = state.model.tasks[id];
+      if (direct != null) {
+        final CalendarTask? shifted =
+            _shiftTaskTiming(direct, startDelta, endDelta);
+        if (shifted != null && shifted != direct) {
+          updates[id] = shifted.copyWith(modifiedAt: now);
+        }
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+
+      if (id == baseId) {
+        final CalendarTask? shifted =
+            _shiftTaskTiming(baseTask, startDelta, endDelta);
+        if (shifted != null && shifted != baseTask) {
+          updates[baseId] = shifted.copyWith(modifiedAt: now);
+        }
+        continue;
+      }
+
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (occurrenceKey == null || occurrenceKey.isEmpty) {
+        continue;
+      }
+
+      final CalendarTask? occurrence = baseTask.occurrenceForId(id);
+      if (occurrence?.scheduledTime == null) {
+        continue;
+      }
+      final CalendarTask? shiftedOccurrence =
+          _shiftTaskTiming(occurrence!, startDelta, endDelta);
+      if (shiftedOccurrence == null) {
+        continue;
+      }
+
+      final overrides = baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseTask.occurrenceOverrides,
+        ),
+      );
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ?? const TaskOccurrenceOverride();
+      overrides[occurrenceKey] = existing.copyWith(
+        scheduledTime: shiftedOccurrence.scheduledTime,
+        duration: shiftedOccurrence.duration,
+        endDate: shiftedOccurrence.effectiveEndDate,
+        daySpan: shiftedOccurrence.daySpan,
+      );
+    }
+
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
+      return;
+    }
+
+    _recordUndoSnapshot();
+
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseTask =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+      mergedUpdates[baseId] = baseTask.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
+    emitModel(
+      updatedModel,
+      emit,
+      selectedTaskIds: state.selectedTaskIds,
+    );
+
+    for (final task in mergedUpdates.values) {
+      await onTaskUpdated(task);
+    }
+  }
+
   Set<String> _selectionGroupFor(String id) {
     final baseId = baseTaskIdFrom(id);
     final CalendarTask? baseTask = state.model.tasks[baseId];
@@ -893,6 +1179,9 @@ abstract class BaseCalendarBloc
       return {id};
     }
     if (id != baseId) {
+      return {id};
+    }
+    if (baseTask.effectiveRecurrence.isNone) {
       return {id};
     }
 
@@ -904,6 +1193,76 @@ abstract class BaseCalendarBloc
     }
 
     return group;
+  }
+
+  Duration _taskDuration(CalendarTask task) {
+    final DateTime? start = task.scheduledTime;
+    if (start == null) {
+      return const Duration(hours: 1);
+    }
+    final Duration? explicit = task.duration;
+    if (explicit != null && explicit.inMinutes > 0) {
+      return explicit;
+    }
+    final DateTime? end = task.effectiveEndDate;
+    if (end != null && end.isAfter(start)) {
+      return end.difference(start);
+    }
+    return const Duration(hours: 1);
+  }
+
+  CalendarTask? _shiftTaskTiming(
+    CalendarTask task,
+    Duration startDelta,
+    Duration endDelta,
+  ) {
+    if (startDelta == Duration.zero && endDelta == Duration.zero) {
+      return task;
+    }
+    final DateTime? start = task.scheduledTime;
+    if (start == null) {
+      return null;
+    }
+
+    final Duration originalDuration = _taskDuration(task);
+    Duration newDuration = originalDuration + endDelta;
+    if (newDuration.inMinutes < 15) {
+      newDuration = const Duration(minutes: 15);
+    }
+
+    final DateTime newStart = start.add(startDelta);
+    final DateTime newEnd = newStart.add(newDuration);
+
+    int? newDaySpan;
+    if (task.daySpan != null && task.daySpan! > 1) {
+      final startDate = DateTime(newStart.year, newStart.month, newStart.day);
+      final endDate = DateTime(newEnd.year, newEnd.month, newEnd.day);
+      newDaySpan = endDate.difference(startDate).inDays + 1;
+    }
+
+    if (newDuration.inDays >= 1 && newDaySpan == null) {
+      final startDate = DateTime(newStart.year, newStart.month, newStart.day);
+      final endDate = DateTime(newEnd.year, newEnd.month, newEnd.day);
+      final span = endDate.difference(startDate).inDays + 1;
+      if (span > 1) {
+        newDaySpan = span;
+      }
+    }
+
+    DateTime? newEndDate;
+    if (task.endDate != null || newDaySpan != null) {
+      newEndDate = newEnd;
+    }
+
+    final double newStartHour = newStart.hour + (newStart.minute / 60.0);
+
+    return task.copyWith(
+      scheduledTime: newStart,
+      duration: newDuration,
+      daySpan: newDaySpan,
+      endDate: newEndDate,
+      startHour: newStartHour,
+    );
   }
 
   Future<void> _onSelectionPriorityChanged(

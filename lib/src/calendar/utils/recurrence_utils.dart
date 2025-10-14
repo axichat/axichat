@@ -29,7 +29,11 @@ extension RecurrenceEndUnitX on RecurrenceEndUnit {
 extension CalendarTaskInstanceX on CalendarTask {
   /// True if this task represents a generated occurrence rather than the
   /// persisted base record.
-  bool get isOccurrence => id.contains(_occurrenceSeparator);
+  bool get isOccurrence =>
+      id.contains(_occurrenceSeparator) && !effectiveRecurrence.isNone;
+
+  /// True when the task participates in a recurring series.
+  bool get isSeries => !effectiveRecurrence.isNone;
 
   /// The persistent task identifier associated with this instance.
   String get baseId => isOccurrence ? id.split(_occurrenceSeparator).first : id;

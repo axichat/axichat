@@ -302,4 +302,54 @@ void main() {
       });
     });
   });
+
+  group('occurrence helpers', () {
+    final baseStart = DateTime(2024, 3, 10, 14);
+
+    test('split standalone task is not treated as occurrence', () {
+      final parent = CalendarTask(
+        id: 'standalone-task',
+        title: 'Parent',
+        scheduledTime: baseStart,
+        duration: const Duration(hours: 1),
+        isCompleted: false,
+        createdAt: baseStart,
+        modifiedAt: baseStart,
+      );
+
+      final split = parent.copyWith(
+        id: '${parent.id}::split',
+        scheduledTime: baseStart.add(const Duration(minutes: 30)),
+        recurrence: null,
+      );
+
+      expect(split.isOccurrence, isFalse);
+      expect(split.isSeries, isFalse);
+    });
+
+    test('generated recurring instance is treated as occurrence', () {
+      final recurring = CalendarTask(
+        id: 'series',
+        title: 'Recurring',
+        scheduledTime: baseStart,
+        duration: const Duration(hours: 1),
+        isCompleted: false,
+        createdAt: baseStart,
+        modifiedAt: baseStart,
+        recurrence: const RecurrenceRule(
+          frequency: RecurrenceFrequency.weekly,
+        ),
+      );
+
+      final occurrences = recurring.occurrencesWithin(
+        baseStart,
+        baseStart.add(const Duration(days: 14)),
+      );
+
+      expect(occurrences, isNotEmpty);
+      final instance = occurrences.first;
+      expect(instance.isOccurrence, isTrue);
+      expect(instance.isSeries, isTrue);
+    });
+  });
 }

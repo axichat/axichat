@@ -34,6 +34,13 @@ class _TaskSidebarState extends State<TaskSidebar>
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  final TextEditingController _selectionTitleController =
+      TextEditingController();
+  final TextEditingController _selectionDescriptionController =
+      TextEditingController();
+  final TextEditingController _selectionLocationController =
+      TextEditingController();
+  static const Duration _selectionTimeStep = Duration(minutes: 15);
   final ScrollController _scrollController = ScrollController();
   late final ValueNotifier<RecurrenceFormValue> _advancedRecurrenceNotifier;
 
@@ -67,6 +74,9 @@ class _TaskSidebarState extends State<TaskSidebar>
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _selectionTitleController.dispose();
+    _selectionDescriptionController.dispose();
+    _selectionLocationController.dispose();
     _scrollController.dispose();
     _advancedRecurrenceNotifier.dispose();
     _selectionRecurrenceNotifier.dispose();
@@ -274,6 +284,10 @@ class _TaskSidebarState extends State<TaskSidebar>
               const TaskSectionHeader(title: 'Actions'),
               const SizedBox(height: calendarSpacing8),
               _buildSelectionActions(tasks, hasTasks),
+              const TaskSectionDivider(
+                verticalPadding: calendarSpacing12,
+              ),
+              _buildSelectionBatchEditSection(hasTasks),
               const TaskSectionDivider(
                 verticalPadding: calendarSpacing12,
               ),
@@ -531,6 +545,207 @@ class _TaskSidebarState extends State<TaskSidebar>
     if (_selectionRecurrenceMixedNotifier.value != shouldFlagMixed) {
       _selectionRecurrenceMixedNotifier.value = shouldFlagMixed;
     }
+  }
+
+  Widget _buildSelectionBatchEditSection(bool hasTasks) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const TaskSectionHeader(title: 'Batch edit'),
+        const SizedBox(height: calendarSpacing8),
+        _buildSelectionTextField(
+          label: 'Title',
+          controller: _selectionTitleController,
+          hint: 'Set title for selected tasks',
+          enabled: hasTasks,
+          onApply: _applySelectionTitle,
+        ),
+        const SizedBox(height: calendarSpacing8),
+        _buildSelectionTextField(
+          label: 'Description',
+          controller: _selectionDescriptionController,
+          hint: 'Set description (leave blank to clear)',
+          enabled: hasTasks,
+          minLines: 2,
+          maxLines: 3,
+          onApply: _applySelectionDescription,
+        ),
+        const SizedBox(height: calendarSpacing8),
+        _buildSelectionTextField(
+          label: 'Location',
+          controller: _selectionLocationController,
+          hint: 'Set location (leave blank to clear)',
+          enabled: hasTasks,
+          onApply: _applySelectionLocation,
+        ),
+        const SizedBox(height: calendarSpacing12),
+        const TaskSectionHeader(title: 'Adjust time'),
+        const SizedBox(height: calendarSpacing8),
+        _buildSelectionTimeAdjustRow(hasTasks),
+      ],
+    );
+  }
+
+  Widget _buildSelectionTextField({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    required bool enabled,
+    required VoidCallback onApply,
+    int minLines = 1,
+    int? maxLines,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: calendarSpacing4),
+        Row(
+          crossAxisAlignment: maxLines != null && maxLines > 1
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: TaskTextField(
+                controller: controller,
+                hintText: hint,
+                enabled: enabled,
+                minLines: minLines,
+                maxLines: maxLines ?? minLines,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: calendarSpacing12,
+                  vertical: calendarSpacing8,
+                ),
+              ),
+            ),
+            const SizedBox(width: calendarSpacing8),
+            TaskSecondaryButton(
+              label: 'Apply',
+              onPressed: enabled ? onApply : null,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionTimeAdjustRow(bool enabled) {
+    final buttons = [
+      _SelectionAdjustButton(
+        label: 'Start -15m',
+        onPressed: enabled
+            ? () => _shiftSelectionTime(
+                  startDelta: -_selectionTimeStep,
+                )
+            : null,
+      ),
+      _SelectionAdjustButton(
+        label: 'Start +15m',
+        onPressed: enabled
+            ? () => _shiftSelectionTime(
+                  startDelta: _selectionTimeStep,
+                )
+            : null,
+      ),
+      _SelectionAdjustButton(
+        label: 'End -15m',
+        onPressed: enabled
+            ? () => _shiftSelectionTime(
+                  endDelta: -_selectionTimeStep,
+                )
+            : null,
+      ),
+      _SelectionAdjustButton(
+        label: 'End +15m',
+        onPressed: enabled
+            ? () => _shiftSelectionTime(
+                  endDelta: _selectionTimeStep,
+                )
+            : null,
+      ),
+    ];
+
+    return Wrap(
+      spacing: calendarSpacing8,
+      runSpacing: calendarSpacing8,
+      children: buttons,
+    );
+  }
+
+  void _applySelectionTitle() {
+    final bloc = context.read<BaseCalendarBloc>();
+    if (bloc.state.selectedTaskIds.isEmpty) {
+      _showSelectionMessage('Select tasks before applying changes.');
+      return;
+    }
+    final title = _selectionTitleController.text.trim();
+    if (title.isEmpty) {
+      _showSelectionMessage('Title cannot be blank.');
+      return;
+    }
+    bloc.add(CalendarEvent.selectionTitleChanged(title: title));
+    _selectionTitleController.clear();
+  }
+
+  void _applySelectionDescription() {
+    final bloc = context.read<BaseCalendarBloc>();
+    if (bloc.state.selectedTaskIds.isEmpty) {
+      _showSelectionMessage('Select tasks before applying changes.');
+      return;
+    }
+    final raw = _selectionDescriptionController.text.trim();
+    final description = raw.isEmpty ? null : raw;
+    bloc.add(
+      CalendarEvent.selectionDescriptionChanged(description: description),
+    );
+    _selectionDescriptionController.clear();
+  }
+
+  void _applySelectionLocation() {
+    final bloc = context.read<BaseCalendarBloc>();
+    if (bloc.state.selectedTaskIds.isEmpty) {
+      _showSelectionMessage('Select tasks before applying changes.');
+      return;
+    }
+    final raw = _selectionLocationController.text.trim();
+    final location = raw.isEmpty ? null : raw;
+    bloc.add(
+      CalendarEvent.selectionLocationChanged(location: location),
+    );
+    _selectionLocationController.clear();
+  }
+
+  void _shiftSelectionTime({
+    Duration startDelta = Duration.zero,
+    Duration endDelta = Duration.zero,
+  }) {
+    if (startDelta == Duration.zero && endDelta == Duration.zero) {
+      return;
+    }
+    final bloc = context.read<BaseCalendarBloc>();
+    if (bloc.state.selectedTaskIds.isEmpty) {
+      _showSelectionMessage('Select tasks before adjusting time.');
+      return;
+    }
+    bloc.add(
+      CalendarEvent.selectionTimeShifted(
+        startDelta: startDelta,
+        endDelta: endDelta,
+      ),
+    );
+  }
+
+  void _showSelectionMessage(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   bool _formValuesEqual(
@@ -1372,9 +1587,16 @@ class _TaskSidebarState extends State<TaskSidebar>
                               final baseId = task.baseId;
                               final latestTask =
                                   state.model.tasks[baseId] ?? task;
-                              final displayTask = task.isOccurrence
-                                  ? latestTask.occurrenceForId(task.id) ?? task
-                                  : latestTask;
+                              final CalendarTask? storedTask =
+                                  state.model.tasks[task.id];
+                              final CalendarTask? occurrenceTask =
+                                  storedTask == null && task.isOccurrence
+                                      ? latestTask.occurrenceForId(task.id)
+                                      : null;
+                              final CalendarTask displayTask =
+                                  storedTask ?? occurrenceTask ?? latestTask;
+                              final bool shouldUpdateOccurrence =
+                                  storedTask == null && occurrenceTask != null;
 
                               return EditTaskDropdown(
                                 task: displayTask,
@@ -1387,6 +1609,45 @@ class _TaskSidebarState extends State<TaskSidebar>
                                         ),
                                       );
                                 },
+                                onOccurrenceUpdated: shouldUpdateOccurrence
+                                    ? (updatedTask) {
+                                        context
+                                            .read<BaseCalendarBloc>()
+                                            .add(
+                                              CalendarEvent
+                                                  .taskOccurrenceUpdated(
+                                                taskId: baseId,
+                                                occurrenceId: task.id,
+                                                scheduledTime: updatedTask
+                                                    .scheduledTime,
+                                                duration: updatedTask.duration,
+                                                endDate: updatedTask.endDate,
+                                                daySpan: updatedTask.daySpan,
+                                              ),
+                                            );
+
+                                        final seriesUpdate = latestTask.copyWith(
+                                          title: updatedTask.title,
+                                          description:
+                                              updatedTask.description,
+                                          location: updatedTask.location,
+                                          deadline: updatedTask.deadline,
+                                          priority: updatedTask.priority,
+                                          isCompleted:
+                                              updatedTask.isCompleted,
+                                        );
+
+                                        if (seriesUpdate != latestTask) {
+                                          context
+                                              .read<BaseCalendarBloc>()
+                                              .add(
+                                                CalendarEvent.taskUpdated(
+                                                  task: seriesUpdate,
+                                                ),
+                                              );
+                                        }
+                                      }
+                                    : null,
                                 onTaskDeleted: (taskId) {
                                   context.read<BaseCalendarBloc>().add(
                                         CalendarEvent.taskDeleted(
@@ -1449,7 +1710,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             ],
           ),
           if (scheduleLabel != null) ...[
-            const SizedBox(height: 2),
+            const SizedBox(height: 1),
             Text(
               scheduleLabel,
               style: const TextStyle(
@@ -1743,5 +2004,23 @@ class _TaskSidebarState extends State<TaskSidebar>
     if (_sidebarController.state.activePopoverTaskId == id && mounted) {
       _sidebarController.setActivePopoverTaskId(null);
     }
+  }
+}
+
+class _SelectionAdjustButton extends StatelessWidget {
+  const _SelectionAdjustButton({
+    required this.label,
+    this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskSecondaryButton(
+      label: label,
+      onPressed: onPressed,
+    );
   }
 }

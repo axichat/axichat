@@ -47,21 +47,11 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   @override
   void initState() {
     super.initState();
-    final task = widget.task;
-    _titleController = TextEditingController(text: task.title);
-    _descriptionController =
-        TextEditingController(text: task.description ?? '');
-    _locationController = TextEditingController(text: task.location ?? '');
+    _titleController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _locationController = TextEditingController();
 
-    _isImportant = task.isImportant || task.isCritical;
-    _isUrgent = task.isUrgent || task.isCritical;
-    _isCompleted = task.isCompleted;
-    _startTime = task.scheduledTime;
-    _endTime =
-        task.scheduledTime?.add(task.duration ?? const Duration(hours: 1));
-    _deadline = task.deadline;
-
-    _recurrence = RecurrenceFormValue.fromRule(task.recurrence);
+    _hydrateFromTask(widget.task, rebuild: false);
   }
 
   @override
@@ -70,6 +60,62 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     _descriptionController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(EditTaskDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.task.id != widget.task.id ||
+        oldWidget.task.modifiedAt != widget.task.modifiedAt) {
+      _hydrateFromTask(widget.task, rebuild: true);
+    }
+  }
+
+  void _hydrateFromTask(
+    CalendarTask task, {
+    required bool rebuild,
+  }) {
+    void apply() {
+      if (_titleController.text != task.title) {
+        _titleController.value = TextEditingValue(
+          text: task.title,
+          selection: TextSelection.collapsed(offset: task.title.length),
+        );
+      }
+
+      final String descriptionText = task.description ?? '';
+      if (_descriptionController.text != descriptionText) {
+        _descriptionController.value = TextEditingValue(
+          text: descriptionText,
+          selection: TextSelection.collapsed(offset: descriptionText.length),
+        );
+      }
+
+      final String locationText = task.location ?? '';
+      if (_locationController.text != locationText) {
+        _locationController.value = TextEditingValue(
+          text: locationText,
+          selection: TextSelection.collapsed(offset: locationText.length),
+        );
+      }
+
+      _isImportant = task.isImportant || task.isCritical;
+      _isUrgent = task.isUrgent || task.isCritical;
+      _isCompleted = task.isCompleted;
+      _startTime = task.scheduledTime;
+      _endTime = task.effectiveEndDate ??
+          task.scheduledTime?.add(
+            task.duration ?? const Duration(hours: 1),
+          );
+      _deadline = task.deadline;
+      _recurrence = RecurrenceFormValue.fromRule(task.recurrence);
+    }
+
+    if (rebuild && mounted) {
+      setState(apply);
+    } else {
+      apply();
+    }
   }
 
   @override
@@ -319,9 +365,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   void _handleSave() {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title cannot be blank.')),
-      );
+      _showSnackBar('Title cannot be blank.');
       return;
     }
 
@@ -371,5 +415,10 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       widget.onTaskUpdated(updatedTask);
     }
     widget.onClose();
+  }
+
+  void _showSnackBar(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 }
