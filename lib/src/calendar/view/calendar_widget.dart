@@ -311,6 +311,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       onViewChanged: (view) => context.read<CalendarBloc>().add(
             CalendarEvent.viewChanged(view: view),
           ),
+      focusRequest: state.pendingFocus,
     );
   }
 
