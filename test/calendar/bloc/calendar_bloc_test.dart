@@ -516,8 +516,8 @@ void main() {
           final CalendarTask clone = extras.first;
           final DateTime pasteStart =
               seededTask.scheduledTime!.add(const Duration(days: 5, hours: 2));
-          final Duration offset = seededTask.endDate!
-              .difference(seededTask.scheduledTime!);
+          final Duration offset =
+              seededTask.endDate!.difference(seededTask.scheduledTime!);
           final DateTime expectedEnd = pasteStart.add(offset);
           return clone.scheduledTime == pasteStart &&
               clone.duration == offset &&
@@ -547,7 +547,8 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime newEnd = seededTask.scheduledTime!.add(const Duration(hours: 2));
+        final DateTime newEnd =
+            seededTask.scheduledTime!.add(const Duration(hours: 2));
         bloc.add(
           CalendarEvent.taskResized(
             taskId: seededTask.id,
@@ -561,7 +562,8 @@ void main() {
         predicate<CalendarState>((state) {
           final updated = state.model.tasks[seededTask.id]!;
           return updated.duration == const Duration(hours: 2) &&
-              updated.endDate == seededTask.scheduledTime!.add(const Duration(hours: 2));
+              updated.endDate ==
+                  seededTask.scheduledTime!.add(const Duration(hours: 2));
         }),
       ],
     );
@@ -587,7 +589,8 @@ void main() {
         return CalendarState.initial().copyWith(model: model);
       },
       act: (bloc) {
-        final DateTime shifted = seededTask.scheduledTime!.add(const Duration(minutes: 45));
+        final DateTime shifted =
+            seededTask.scheduledTime!.add(const Duration(minutes: 45));
         bloc.add(
           CalendarEvent.taskResized(
             taskId: seededTask.id,

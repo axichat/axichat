@@ -1104,12 +1104,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   children: [
                     SizedBox.expand(child: gridBody),
                     ..._buildEdgeScrollTargets(),
-                    if (_isZoomEnabled)
-                      Positioned(
-                        bottom: compact ? 12 : 24,
-                        right: compact ? 8 : 16,
-                        child: _buildZoomControls(),
-                      ),
+                    Positioned(
+                      bottom: compact ? 12 : 24,
+                      right: compact ? 8 : 16,
+                      child: _buildZoomControls(),
+                    ),
                   ],
                 ),
               ),
@@ -1191,7 +1190,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               child: IconButton(
                 iconSize: _zoomControlsIconSize,
                 visualDensity: VisualDensity.compact,
-                onPressed: _canZoomOut ? zoomOut : null,
+                onPressed: _isZoomEnabled && _canZoomOut ? zoomOut : null,
                 icon: const Icon(Icons.remove),
               ),
             ),
@@ -1209,7 +1208,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               child: IconButton(
                 iconSize: _zoomControlsIconSize,
                 visualDensity: VisualDensity.compact,
-                onPressed: _canZoomIn ? zoomIn : null,
+                onPressed: _isZoomEnabled && _canZoomIn ? zoomIn : null,
                 icon: const Icon(Icons.add),
               ),
             ),
@@ -1218,7 +1217,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               child: IconButton(
                 iconSize: _zoomControlsIconSize,
                 visualDensity: VisualDensity.compact,
-                onPressed: _zoomIndex == _defaultZoomIndex ? null : zoomReset,
+                onPressed: (_isZoomEnabled && _zoomIndex != _defaultZoomIndex)
+                    ? zoomReset
+                    : null,
                 icon: const Icon(Icons.refresh),
               ),
             ),
@@ -1456,6 +1457,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final overlayState = Overlay.of(context, rootOverlay: true);
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
 
     _activePopoverEntry = OverlayEntry(
       builder: (overlayContext) {
@@ -1549,6 +1551,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           maxHeight: layout.maxHeight,
                           onClose: () => _closeTaskPopover(taskId,
                               reason: 'dropdown-close'),
+                          scaffoldMessenger: scaffoldMessenger,
                           onTaskUpdated: (updatedTask) {
                             context.read<T>().add(
                                   CalendarEvent.taskUpdated(
@@ -2354,14 +2357,35 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _handleResizeCommit(CalendarTask task) {
     _taskInteractionController.clearResizePreview(task.id);
     _stopEdgeAutoScroll();
-    if (widget.onTaskDragEnd != null && task.scheduledTime != null) {
-      final original = widget.state.model.tasks[task.baseId];
-      if (original != null &&
-          original.scheduledTime == task.scheduledTime &&
-          original.duration == task.duration) {
-        return;
+    final DateTime? scheduled = task.scheduledTime;
+    if (widget.onTaskDragEnd != null && scheduled != null) {
+      final CalendarTask? original = widget.state.model.tasks[task.baseId];
+      final Duration? taskDuration = task.duration ??
+          (task.effectiveEndDate != null
+              ? task.effectiveEndDate!.difference(scheduled)
+              : null);
+      final DateTime? taskEnd = task.effectiveEndDate;
+
+      if (original != null) {
+        final DateTime? originalEnd = original.effectiveEndDate;
+        final Duration? originalDuration = original.duration ??
+            (originalEnd != null && original.scheduledTime != null
+                ? originalEnd.difference(original.scheduledTime!)
+                : null);
+
+        if (original.scheduledTime == scheduled &&
+            originalDuration == taskDuration &&
+            originalEnd == taskEnd) {
+          return;
+        }
       }
-      widget.onTaskDragEnd!(task, task.scheduledTime!);
+
+      final CalendarTask normalized = task.copyWith(
+        duration: taskDuration,
+        endDate: taskEnd,
+      );
+
+      widget.onTaskDragEnd!(normalized, scheduled);
     }
   }
 

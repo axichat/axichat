@@ -418,15 +418,7 @@ abstract class BaseCalendarBloc
         final Duration ensuredDuration = preservedDuration.inMinutes > 0
             ? preservedDuration
             : const Duration(hours: 1);
-        DateTime? newEndDate;
-        if (task.endDate != null && task.scheduledTime != null) {
-          final Duration offset = task.endDate!.difference(task.scheduledTime!);
-          newEndDate = newStart.add(offset);
-        } else if (task.endDate != null) {
-          newEndDate = task.endDate;
-        } else {
-          newEndDate = newStart.add(ensuredDuration);
-        }
+        final DateTime newEndDate = newStart.add(ensuredDuration);
 
         final CalendarTask scheduledTask = task.copyWith(
           scheduledTime: newStart,
@@ -790,15 +782,25 @@ abstract class BaseCalendarBloc
       final now = _now();
       final String newId = '$baseId::${const Uuid().v4()}';
       final DateTime newStart = event.scheduledTime;
-      final Duration fallbackDuration =
+
+      Duration appliedDuration =
           template.duration ?? baseTask?.duration ?? _taskDuration(source);
-      Duration? offsetDuration;
-      if (template.endDate != null && template.scheduledTime != null) {
-        offsetDuration = template.endDate!.difference(template.scheduledTime!);
-      } else if (baseTask?.endDate != null && baseTask?.scheduledTime != null) {
-        offsetDuration = baseTask!.endDate!.difference(baseTask.scheduledTime!);
+
+      if (template.scheduledTime != null && template.effectiveEndDate != null) {
+        final Duration derived =
+            template.effectiveEndDate!.difference(template.scheduledTime!);
+        if (derived.inMinutes > 0) {
+          appliedDuration = derived;
+        }
+      } else if (baseTask?.scheduledTime != null &&
+          baseTask?.effectiveEndDate != null) {
+        final Duration derived =
+            baseTask!.effectiveEndDate!.difference(baseTask.scheduledTime!);
+        if (derived.inMinutes > 0) {
+          appliedDuration = derived;
+        }
       }
-      Duration appliedDuration = (offsetDuration ?? fallbackDuration);
+
       if (appliedDuration.inMinutes <= 0) {
         appliedDuration = const Duration(hours: 1);
       }

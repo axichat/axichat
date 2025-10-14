@@ -392,8 +392,8 @@ class _QuickAddModalState extends State<QuickAddModal>
                   ),
                 ),
                 Expanded(
-          child: TaskPrimaryButton(
-            label: 'Add Task',
+                  child: TaskPrimaryButton(
+                    label: 'Add Task',
                     onPressed: canSubmit && !_formController.isSubmitting
                         ? _submitTask
                         : null,

@@ -1584,6 +1584,9 @@ class _TaskSidebarState extends State<TaskSidebar>
                         ),
                       );
 
+                      final scaffoldMessenger =
+                          ScaffoldMessenger.maybeOf(this.context);
+
                       return ShadPopover(
                         controller: controller,
                         closeOnTapOutside: true,
@@ -1610,6 +1613,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                                 task: displayTask,
                                 maxHeight: effectiveMaxHeight,
                                 onClose: () => _closeTaskPopover(task.id),
+                                scaffoldMessenger: scaffoldMessenger,
                                 onTaskUpdated: (updatedTask) {
                                   context.read<BaseCalendarBloc>().add(
                                         CalendarEvent.taskUpdated(
@@ -1697,12 +1701,28 @@ class _TaskSidebarState extends State<TaskSidebar>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  task.title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: calendarTitleColor,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: calendarTitleColor,
+                      ),
+                    ),
+                    if (scheduleLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        scheduleLabel,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: calendarSubtitleColor,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (trailing != null) ...[
@@ -1711,17 +1731,6 @@ class _TaskSidebarState extends State<TaskSidebar>
               ],
             ],
           ),
-          if (scheduleLabel != null) ...[
-            const SizedBox(height: 1),
-            Text(
-              scheduleLabel,
-              style: const TextStyle(
-                fontSize: 11,
-                color: calendarSubtitleColor,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ],
           if (task.description?.isNotEmpty == true) ...[
             const SizedBox(height: 4),
             Text(

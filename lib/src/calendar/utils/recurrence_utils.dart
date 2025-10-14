@@ -32,14 +32,27 @@ extension CalendarTaskInstanceX on CalendarTask {
   bool get isOccurrence =>
       id.contains(_occurrenceSeparator) && !effectiveRecurrence.isNone;
 
+  /// True for any task whose identifier encodes a derived instance (recurrence
+  /// occurrence or split segment).
+  bool get hasDerivedInstance => id.contains(_occurrenceSeparator);
+
   /// True when the task participates in a recurring series.
   bool get isSeries => !effectiveRecurrence.isNone;
 
   /// The persistent task identifier associated with this instance.
-  String get baseId => isOccurrence ? id.split(_occurrenceSeparator).first : id;
+  String get baseId {
+    if (!hasDerivedInstance) {
+      return id;
+    }
+    final separatorIndex = id.indexOf(_occurrenceSeparator);
+    if (separatorIndex == -1) {
+      return id;
+    }
+    return id.substring(0, separatorIndex);
+  }
 
   /// Identifier suffix for this occurrence, if applicable.
-  String? get occurrenceKey => occurrenceKeyFrom(id);
+  String? get occurrenceKey => isOccurrence ? occurrenceKeyFrom(id) : null;
 
   /// Unique key for the base (template) occurrence when this task repeats.
   String? get baseOccurrenceKey {

@@ -143,19 +143,6 @@ class CalendarTask with _$CalendarTask {
 }
 
 extension CalendarTaskExtensions on CalendarTask {
-  int get effectiveDaySpan {
-    if (endDate != null && scheduledTime != null) {
-      final startDay = DateTime(
-        scheduledTime!.year,
-        scheduledTime!.month,
-        scheduledTime!.day,
-      );
-      final endDay = DateTime(endDate!.year, endDate!.month, endDate!.day);
-      return endDay.difference(startDay).inDays + 1;
-    }
-    return 1;
-  }
-
   DateTime? get effectiveEndDate {
     if (endDate != null) return endDate;
     if (scheduledTime != null && duration != null) {
