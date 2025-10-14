@@ -129,6 +129,8 @@ const calendarCompactDayColumnWidth = 120.0;
 // Event layout constraints
 const calendarEventMinHeight = 20.0;
 const calendarEventMinWidth = 32.0;
+const calendarTaskColumnInset = 6.0;
+const calendarTaskColumnGap = 0.0;
 const calendarDayViewDefaultHourHeight = 192.0;
 const calendarDayViewDefaultSubdivisions = 4;
 const calendarVisibleHourRows = 25;

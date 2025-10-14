@@ -15,8 +15,8 @@ class CalendarLayoutTheme {
     this.edgeScrollSlowBandHeight = 44.0,
     this.edgeScrollFastOffsetPerFrame = 9.0,
     this.edgeScrollSlowOffsetPerFrame = 4.5,
-    this.eventHorizontalInset = calendarSpacing2,
-    this.eventColumnGap = calendarSpacing2,
+    this.eventHorizontalInset = calendarTaskColumnInset,
+    this.eventColumnGap = calendarTaskColumnGap,
     this.eventMinHeight = calendarEventMinHeight,
     this.eventMinWidth = calendarEventMinWidth,
     this.narrowedWidthFactor = 0.5,
@@ -187,7 +187,13 @@ class CalendarLayoutCalculator {
   }) {
     final totalColumns = math.max(1, overlap.totalColumns);
     final columnWidth = dayWidth / totalColumns;
-    return (columnWidth * overlap.columnIndex) + theme.eventHorizontalInset;
+    final double inset = theme.eventHorizontalInset;
+
+    double offset = columnWidth * overlap.columnIndex;
+    if (totalColumns == 1 || overlap.columnIndex == 0) {
+      offset += inset;
+    }
+    return offset;
   }
 
   double eventWidth({
@@ -198,16 +204,33 @@ class CalendarLayoutCalculator {
   }) {
     final totalColumns = math.max(1, overlap.totalColumns);
     final columnWidth = dayWidth / totalColumns;
-    final double baseWidth = columnWidth - (theme.eventHorizontalInset * 2);
+    final double inset = theme.eventHorizontalInset;
+    final int effectiveSpan = math.max(1, spanDays);
 
-    if (isDayView) {
-      return math.max(baseWidth, theme.eventMinWidth);
+    double width = columnWidth * effectiveSpan;
+
+    if (totalColumns == 1) {
+      width -= inset * 2;
+    } else {
+      final bool touchesLeftEdge = overlap.columnIndex == 0;
+      final bool touchesRightEdge =
+          overlap.columnIndex + effectiveSpan >= totalColumns;
+      if (touchesLeftEdge) {
+        width -= inset;
+      }
+      if (touchesRightEdge) {
+        width -= inset;
+      }
     }
 
-    final effectiveSpan = math.max(1, spanDays);
-    final double multiWidth =
-        (columnWidth * effectiveSpan) - (theme.eventColumnGap * 2);
-    return math.max(multiWidth, theme.eventMinWidth);
+    width = math.max(width, theme.eventMinWidth);
+
+    if (isDayView) {
+      return width;
+    }
+
+    final double adjustedWidth = width - (theme.eventColumnGap * 2);
+    return math.max(adjustedWidth, theme.eventMinWidth);
   }
 
   double clampEventHeight(double rawHeight) {

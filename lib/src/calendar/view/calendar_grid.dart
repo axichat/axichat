@@ -109,6 +109,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ValueKey<String>('calendar-grid-context');
   Ticker? _edgeAutoScrollTicker;
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
+  final Map<String, Rect> _visibleTaskRects = <String, Rect>{};
   double _edgeAutoScrollOffsetPerFrame = 0;
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
@@ -131,7 +132,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _verticalController = ScrollController();
     _taskInteractionController = TaskInteractionController();
     _taskPopoverController = TaskPopoverController();
-    _zoomControlsController = ZoomControlsController();
+    _zoomControlsController = ZoomControlsController(
+      autoHideDuration: Duration.zero,
+      initiallyVisible: true,
+    );
     _clockTimer = Timer.periodic(_layoutTheme.clockTickInterval, (_) {
       if (mounted) {
         setState(() {});
@@ -1004,15 +1008,27 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             final isWeekView = widget.state.viewMode == CalendarView.week;
             final headerDates =
                 isWeekView ? weekDates : [widget.state.selectedDate];
+            final responsive = ResponsiveHelper.spec(context);
 
             final gridBody = Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.zero,
+                border: Border(
+                  top: BorderSide(
+                    color: calendarBorderColor,
+                    width: calendarBorderStroke,
+                  ),
+                ),
               ),
               child: Column(
                 children: [
-                  _buildDayHeaders(headerDates, compact),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsive.gridHorizontalPadding,
+                    ),
+                    child: _buildDayHeaders(headerDates, compact),
+                  ),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -1091,7 +1107,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           return const SizedBox.shrink();
                         }
                         return Positioned(
-                          top: 8,
+                          bottom: compact ? 12 : 24,
                           right: compact ? 8 : 16,
                           child: _buildZoomControls(),
                         );
@@ -1231,6 +1247,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final bool isCompact = responsive.sizeClass == CalendarSizeClass.compact;
     final visibleTaskIds = <String>{};
     _visibleTasks.clear();
+    _visibleTaskRects.clear();
     late final Widget content;
 
     if (isWeekView && isCompact) {
@@ -1613,7 +1630,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               color: calendarSidebarBackgroundColor,
               border: Border(
                 top: BorderSide(
-                    color: calendarBorderColor, width: calendarBorderStroke),
+                  color: calendarBorderColor,
+                  width: calendarBorderStroke,
+                ),
                 right: BorderSide(
                     color: calendarBorderColor, width: calendarBorderStroke),
               ),
@@ -2122,7 +2141,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           highlightColor: calendarPrimaryColor.withValues(
             alpha: calendarSlotHighlightOpacity,
           ),
-          onTap: () => _handleSlotTap(slotTime, hasTask: hasTask),
+          onTap: (localPosition) {
+            final renderBox = context.findRenderObject() as RenderBox?;
+            final double? extent = renderBox != null && renderBox.hasSize
+                ? renderBox.size.height
+                : slotHeight > 0
+                    ? slotHeight
+                    : null;
+            _handleSlotTap(
+              slotTime,
+              hasTask: hasTask,
+              tapPosition: localPosition,
+              slotExtent: extent,
+            );
+          },
           child: const SizedBox.expand(),
         );
 
@@ -2249,11 +2281,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
   }
 
-  void _handleSlotTap(DateTime slotTime, {required bool hasTask}) {
-    if (hasTask) {
+  void _handleSlotTap(
+    DateTime slotTime, {
+    required bool hasTask,
+    Offset? tapPosition,
+    double? slotExtent,
+  }) {
+    final bool tappedTask = hasTask &&
+        tapPosition != null &&
+        slotExtent != null &&
+        _tapHitsTask(slotTime, tapPosition, slotExtent);
+    if (tappedTask) {
       _zoomToCell(slotTime);
       return;
     }
+
     if (widget.state.viewMode == CalendarView.day) {
       final normalizedDate =
           DateTime(slotTime.year, slotTime.month, slotTime.day);
@@ -2262,6 +2304,45 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       }
     }
     widget.onEmptySlotTapped?.call(slotTime, Offset.zero);
+  }
+
+  bool _tapHitsTask(
+      DateTime slotTime, Offset localPosition, double slotExtent) {
+    if (slotExtent <= 0 || _minutesPerSlot <= 0) {
+      return true;
+    }
+
+    final DateTime day = DateTime(slotTime.year, slotTime.month, slotTime.day);
+    final tasks = _getTasksForDay(day);
+    if (tasks.isEmpty) {
+      return false;
+    }
+
+    final int slotMinutes = _minutesPerSlot;
+    final DateTime slotEnd = slotTime.add(Duration(minutes: slotMinutes));
+    final int minutesFromStart =
+        (slotTime.hour * 60 + slotTime.minute) - (startHour * 60);
+    final double slotsFromStart = minutesFromStart / slotMinutes;
+    final double slotTopOffset = slotsFromStart * slotExtent;
+    final Offset targetPoint =
+        Offset(localPosition.dx, slotTopOffset + localPosition.dy);
+
+    for (final task in tasks) {
+      final DateTime? scheduled = task.scheduledTime;
+      if (scheduled == null) {
+        continue;
+      }
+      final DateTime taskEnd =
+          scheduled.add(task.duration ?? const Duration(hours: 1));
+      if (!slotTime.isBefore(taskEnd) || !slotEnd.isAfter(scheduled)) {
+        continue;
+      }
+      final Rect? bounds = _visibleTaskRects[task.id];
+      if (bounds != null && bounds.contains(targetPoint)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void _handleResizePreview(CalendarTask task) {
@@ -2279,6 +2360,46 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         return;
       }
       widget.onTaskDragEnd!(task, task.scheduledTime!);
+    }
+  }
+
+  void _handleResizeAutoScroll(Offset globalPosition) {
+    if (!_verticalController.hasClients) {
+      return;
+    }
+    final BuildContext? scrollContext = _scrollableKey.currentContext;
+    if (scrollContext == null) {
+      return;
+    }
+
+    final RenderObject? renderObject = scrollContext.findRenderObject();
+    if (renderObject is! RenderBox) {
+      return;
+    }
+
+    final Offset localPosition = renderObject.globalToLocal(globalPosition);
+    final double y = localPosition.dy;
+    final double height = renderObject.size.height;
+    if (!height.isFinite || height <= 0) {
+      return;
+    }
+
+    double? offsetPerFrame;
+    if (y <= _edgeScrollFastBandHeight || y < 0) {
+      offsetPerFrame = -_edgeScrollFastOffsetPerFrame;
+    } else if (y <= _edgeScrollFastBandHeight + _edgeScrollSlowBandHeight) {
+      offsetPerFrame = -_edgeScrollSlowOffsetPerFrame;
+    } else if (y >= height - _edgeScrollFastBandHeight || y > height) {
+      offsetPerFrame = _edgeScrollFastOffsetPerFrame;
+    } else if (y >=
+        height - (_edgeScrollFastBandHeight + _edgeScrollSlowBandHeight)) {
+      offsetPerFrame = _edgeScrollSlowOffsetPerFrame;
+    }
+
+    if (offsetPerFrame != null) {
+      _handleEdgeAutoScrollMove(offsetPerFrame, globalPosition);
+    } else {
+      _stopEdgeAutoScroll();
     }
   }
 
@@ -2892,11 +3013,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   ? eventWidth / 2
                   : eventWidth;
 
+              if (!isPlaceholder) {
+                _visibleTaskRects[task.id] = Rect.fromLTWH(
+                  leftOffset,
+                  topOffset,
+                  primaryWidth,
+                  clampedHeight,
+                );
+              }
+
               Widget baseTask = ResizableTaskWidget(
                 key: ValueKey(task.id),
                 task: task,
                 onResizePreview: _handleResizePreview,
                 onResizeEnd: _handleResizeCommit,
+                onResizePointerMove: _handleResizeAutoScroll,
                 hourHeight: _resolvedHourHeight,
                 stepHeight: stepHeight,
                 minutesPerStep: _minutesPerStep,
@@ -3087,7 +3218,7 @@ class _CalendarSlot extends StatefulWidget {
   final bool isPreviewAnchor;
   final Widget child;
   final Duration animationDuration;
-  final VoidCallback? onTap;
+  final ValueChanged<Offset>? onTap;
   final MouseCursor cursor;
   final Color? splashColor;
   final Color? highlightColor;
@@ -3098,6 +3229,7 @@ class _CalendarSlot extends StatefulWidget {
 
 class _CalendarSlotState extends State<_CalendarSlot> {
   bool _hovering = false;
+  Offset? _lastTapPosition;
 
   Color get _hoverColor =>
       calendarPrimaryColor.withValues(alpha: calendarSlotHoverOpacity);
@@ -3127,7 +3259,15 @@ class _CalendarSlotState extends State<_CalendarSlot> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: widget.onTap,
+            onTapDown: widget.onTap != null
+                ? (details) => _lastTapPosition = details.localPosition
+                : null,
+            onTap: widget.onTap != null
+                ? () {
+                    final Offset position = _lastTapPosition ?? Offset.zero;
+                    widget.onTap!(position);
+                  }
+                : null,
             hoverColor: Colors.transparent,
             splashColor: widget.splashColor,
             highlightColor: widget.highlightColor,
