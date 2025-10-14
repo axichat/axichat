@@ -352,4 +352,29 @@ void main() {
       expect(instance.isSeries, isTrue);
     });
   });
+
+  group('splitTimeForFraction', () {
+    test('falls back to default window when duration missing', () {
+      final start = DateTime(2024, 6, 2, 8);
+      final task = CalendarTask(
+        id: 'fallback-split',
+        title: 'Meeting',
+        scheduledTime: start,
+        duration: null,
+        isCompleted: false,
+        createdAt: start,
+        modifiedAt: start,
+      );
+
+      final DateTime? split = task.splitTimeForFraction(
+        fraction: 0.5,
+        minutesPerStep: 15,
+      );
+
+      expect(
+        split,
+        equals(start.add(const Duration(minutes: 30))),
+      );
+    });
+  });
 }

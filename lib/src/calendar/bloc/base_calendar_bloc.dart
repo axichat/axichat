@@ -226,6 +226,11 @@ abstract class BaseCalendarBloc
           (event.scheduledTime != null
               ? event.scheduledTime!.hour + (event.scheduledTime!.minute / 60.0)
               : null);
+      final DateTime? computedEndDate = event.endDate ??
+          (event.scheduledTime != null && event.duration != null
+              ? event.scheduledTime!.add(event.duration!)
+              : null);
+
       final task = CalendarTask.create(
         title: event.title,
         description: event.description,
@@ -233,8 +238,7 @@ abstract class BaseCalendarBloc
         duration: event.duration,
         location: event.location,
         deadline: event.deadline,
-        daySpan: event.daySpan,
-        endDate: event.endDate,
+        endDate: computedEndDate,
         priority: event.priority,
         startHour: computedStartHour,
         recurrence: event.recurrence,
@@ -327,7 +331,6 @@ abstract class BaseCalendarBloc
           scheduledTime: existing?.scheduledTime,
           duration: existing?.duration,
           endDate: existing?.endDate,
-          daySpan: existing?.daySpan,
           isCancelled: true,
           priority: existing?.priority,
           isCompleted: existing?.isCompleted,
@@ -407,10 +410,39 @@ abstract class BaseCalendarBloc
 
       final DateTime? scheduled = task.scheduledTime;
       if (scheduled == null) {
-        throw const CalendarValidationException(
-          'scheduledTime',
-          'Task requires a scheduled time before it can be moved',
+        final DateTime newStart = event.time;
+        final Duration preservedDuration = task.duration ??
+            (task.endDate != null && task.scheduledTime != null
+                ? task.endDate!.difference(task.scheduledTime!)
+                : _taskDuration(task));
+        final Duration ensuredDuration = preservedDuration.inMinutes > 0
+            ? preservedDuration
+            : const Duration(hours: 1);
+        DateTime? newEndDate;
+        if (task.endDate != null && task.scheduledTime != null) {
+          final Duration offset = task.endDate!.difference(task.scheduledTime!);
+          newEndDate = newStart.add(offset);
+        } else if (task.endDate != null) {
+          newEndDate = task.endDate;
+        } else {
+          newEndDate = newStart.add(ensuredDuration);
+        }
+
+        final CalendarTask scheduledTask = task.copyWith(
+          scheduledTime: newStart,
+          startHour: newStart.hour + (newStart.minute / 60.0),
+          duration: ensuredDuration,
+          endDate: newEndDate,
+          modifiedAt: _now(),
         );
+
+        _recordUndoSnapshot();
+        final CalendarModel updatedModel =
+            state.model.updateTask(scheduledTask);
+        emitModel(updatedModel, emit);
+
+        await onTaskUpdated(scheduledTask);
+        return;
       }
 
       final Duration startDelta = event.time.difference(scheduled);
@@ -441,7 +473,7 @@ abstract class BaseCalendarBloc
       if (task == null) {
         throw CalendarTaskNotFoundException(event.taskId);
       }
-      final scheduled = task.scheduledTime;
+      final DateTime? scheduled = task.scheduledTime;
       if (scheduled == null) {
         throw const CalendarValidationException(
           'scheduledTime',
@@ -449,17 +481,31 @@ abstract class BaseCalendarBloc
         );
       }
 
-      final minutesFromStart = (event.startHour * 60).round();
-      final newStart = DateTime(
-        scheduled.year,
-        scheduled.month,
-        scheduled.day,
-      ).add(Duration(minutes: minutesFromStart));
+      final DateTime newStart = event.scheduledTime ?? scheduled;
+      Duration? newDuration = event.duration ?? task.duration;
+      DateTime? newEndDate = event.endDate ?? task.endDate;
+
+      if (newDuration == null && newEndDate == null) {
+        newDuration = _taskDuration(task);
+        newEndDate = newStart.add(newDuration);
+      } else {
+        if (newDuration == null && newEndDate != null) {
+          newDuration = newEndDate.difference(newStart);
+        } else if (newEndDate == null && newDuration != null) {
+          newEndDate = newStart.add(newDuration);
+        }
+      }
+
+      if (newDuration != null && newDuration.inMinutes < 15) {
+        newDuration = const Duration(minutes: 15);
+        newEndDate = newStart.add(newDuration);
+      }
 
       final updatedTask = task.copyWith(
         scheduledTime: newStart,
-        duration: Duration(minutes: (event.duration * 60).round()),
-        daySpan: event.daySpan ?? task.daySpan,
+        duration: newDuration,
+        endDate: newEndDate,
+        startHour: newStart.hour + (newStart.minute / 60.0),
         modifiedAt: _now(),
       );
       _recordUndoSnapshot();
@@ -499,7 +545,6 @@ abstract class BaseCalendarBloc
         scheduledTime: event.scheduledTime ?? existing?.scheduledTime,
         duration: event.duration ?? existing?.duration,
         endDate: event.endDate ?? existing?.endDate,
-        daySpan: event.daySpan ?? existing?.daySpan,
         isCancelled: event.isCancelled ?? existing?.isCancelled,
       );
 
@@ -554,31 +599,33 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     try {
-      final CalendarTask target = event.target;
-      final CalendarTask? baseTask = state.model.tasks[target.baseId];
+      final CalendarTask requestedTarget = event.target;
+      final CalendarTask? baseTask = state.model.tasks[requestedTarget.baseId];
       if (baseTask == null) {
-        throw CalendarTaskNotFoundException(target.baseId);
+        throw CalendarTaskNotFoundException(requestedTarget.baseId);
       }
 
-      final DateTime? start = target.scheduledTime;
-      DateTime? end = target.effectiveEndDate;
-      final Duration? duration = target.duration;
-      if (end == null && duration != null && duration.inMinutes > 0) {
-        end = start?.add(duration);
-      }
+      final CalendarTask effectiveTarget =
+          _resolveSplitTarget(requestedTarget, baseTask);
 
-      if (start == null || end == null || !end.isAfter(start)) {
+      final DateTime? start = effectiveTarget.scheduledTime;
+      if (start == null) {
         return;
       }
 
+      final Duration totalDuration = _taskDuration(effectiveTarget);
+      if (totalDuration.inMinutes <= 0) {
+        return;
+      }
+
+      final DateTime end = start.add(totalDuration);
       final DateTime splitTime = event.splitTime;
       if (!splitTime.isAfter(start) || !splitTime.isBefore(end)) {
         return;
       }
 
-      final DateTime endTime = end;
       final Duration leftDuration = splitTime.difference(start);
-      final Duration rightDuration = endTime.difference(splitTime);
+      final Duration rightDuration = end.difference(splitTime);
       if (leftDuration.inMicroseconds <= 0 ||
           rightDuration.inMicroseconds <= 0) {
         return;
@@ -592,24 +639,34 @@ abstract class BaseCalendarBloc
       final updates = <String, CalendarTask>{};
       CalendarTask? createdTask;
 
-      final bool targetIsOccurrence = target.id != baseTask.id;
+      final bool targetIsOccurrence = effectiveTarget.id != baseTask.id;
+      final String targetId = requestedTarget.id;
+      final DateTime leftEnd = splitTime;
+      final DateTime rightEnd = end;
+      final startHourLeft = start.hour + (start.minute / 60.0);
+      final startHourRight = splitTime.hour + (splitTime.minute / 60.0);
 
-      if (!baseTask.effectiveRecurrence.isNone && target.id.contains('::')) {
-        final String? occurrenceKey = occurrenceKeyFrom(target.id);
+      if (!baseTask.effectiveRecurrence.isNone && targetId.contains('::')) {
+        final String? occurrenceKey = occurrenceKeyFrom(targetId);
         if (occurrenceKey != null && occurrenceKey.isNotEmpty) {
           final overrides = Map<String, TaskOccurrenceOverride>.from(
             baseTask.occurrenceOverrides,
           );
           final TaskOccurrenceOverride? existing = overrides[occurrenceKey];
-          overrides[occurrenceKey] = TaskOccurrenceOverride(
+          final TaskOccurrenceOverride updatedOverride = TaskOccurrenceOverride(
             scheduledTime: start,
             duration: leftDuration,
-            endDate: splitTime,
-            daySpan: existing?.daySpan,
+            endDate: leftEnd,
             isCancelled: existing?.isCancelled,
             priority: existing?.priority,
             isCompleted: existing?.isCompleted,
           );
+
+          if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+            overrides.remove(occurrenceKey);
+          } else {
+            overrides[occurrenceKey] = updatedOverride;
+          }
 
           final CalendarTask updatedBase = baseTask.copyWith(
             occurrenceOverrides: overrides,
@@ -617,15 +674,14 @@ abstract class BaseCalendarBloc
           );
           updates[baseTask.id] = updatedBase;
 
-          createdTask = target.copyWith(
-            id: '${target.baseId}::${const Uuid().v4()}',
+          createdTask = effectiveTarget.copyWith(
+            id: '${effectiveTarget.baseId}::${const Uuid().v4()}',
             scheduledTime: splitTime,
             duration: rightDuration,
-            startHour: splitTime.hour + (splitTime.minute / 60.0),
+            endDate: rightEnd,
             recurrence: null,
             occurrenceOverrides: const {},
-            daySpan: null,
-            endDate: splitTime.add(rightDuration),
+            startHour: startHourRight,
             createdAt: now,
             modifiedAt: now,
           );
@@ -646,27 +702,22 @@ abstract class BaseCalendarBloc
       }
 
       if (targetIsOccurrence && baseTask.effectiveRecurrence.isNone) {
-        final CalendarTask storedTarget =
-            state.model.tasks[target.id] ?? target;
-
-        final CalendarTask updatedOccurrence = storedTarget.copyWith(
+        final CalendarTask updatedOccurrence = effectiveTarget.copyWith(
           duration: leftDuration,
-          daySpan: null,
-          endDate: splitTime,
-          startHour: start.hour + (start.minute / 60.0),
+          endDate: leftEnd,
+          startHour: startHourLeft,
           modifiedAt: now,
         );
         updates[updatedOccurrence.id] = updatedOccurrence;
 
-        createdTask = storedTarget.copyWith(
-          id: '${storedTarget.baseId}::${const Uuid().v4()}',
+        createdTask = effectiveTarget.copyWith(
+          id: '${effectiveTarget.baseId}::${const Uuid().v4()}',
           scheduledTime: splitTime,
           duration: rightDuration,
-          daySpan: null,
-          endDate: splitTime.add(rightDuration),
+          endDate: rightEnd,
           recurrence: null,
           occurrenceOverrides: const {},
-          startHour: splitTime.hour + (splitTime.minute / 60.0),
+          startHour: startHourRight,
           createdAt: now,
           modifiedAt: now,
         );
@@ -686,11 +737,12 @@ abstract class BaseCalendarBloc
       }
 
       final DateTime originalStart = baseTask.scheduledTime ?? start;
+      final DateTime baseEnd = leftEnd;
+
       final CalendarTask updatedBaseTask = baseTask.copyWith(
         scheduledTime: originalStart,
         duration: leftDuration,
-        daySpan: null,
-        endDate: splitTime,
+        endDate: baseEnd,
         startHour: originalStart.hour + (originalStart.minute / 60.0),
         modifiedAt: now,
       );
@@ -700,11 +752,10 @@ abstract class BaseCalendarBloc
         id: '${baseTask.baseId}::${const Uuid().v4()}',
         scheduledTime: splitTime,
         duration: rightDuration,
-        daySpan: null,
-        endDate: splitTime.add(rightDuration),
+        endDate: rightEnd,
         recurrence: null,
         occurrenceOverrides: const {},
-        startHour: splitTime.hour + (splitTime.minute / 60.0),
+        startHour: startHourRight,
         createdAt: now,
         modifiedAt: now,
       );
@@ -734,19 +785,31 @@ abstract class BaseCalendarBloc
       final CalendarTask template = event.template;
       final String baseId = template.baseId;
       final CalendarTask? baseTask = state.model.tasks[baseId];
-      final CalendarTask source = baseTask ?? template;
+      final CalendarTask source = template;
 
       final now = _now();
       final String newId = '$baseId::${const Uuid().v4()}';
-      final Duration? duration =
-          template.duration ?? baseTask?.duration ?? source.duration;
+      final DateTime newStart = event.scheduledTime;
+      final Duration fallbackDuration =
+          template.duration ?? baseTask?.duration ?? _taskDuration(source);
+      Duration? offsetDuration;
+      if (template.endDate != null && template.scheduledTime != null) {
+        offsetDuration = template.endDate!.difference(template.scheduledTime!);
+      } else if (baseTask?.endDate != null && baseTask?.scheduledTime != null) {
+        offsetDuration = baseTask!.endDate!.difference(baseTask.scheduledTime!);
+      }
+      Duration appliedDuration = (offsetDuration ?? fallbackDuration);
+      if (appliedDuration.inMinutes <= 0) {
+        appliedDuration = const Duration(hours: 1);
+      }
+      final DateTime newEndDate = newStart.add(appliedDuration);
 
       final CalendarTask newTask = source.copyWith(
         id: newId,
-        scheduledTime: event.scheduledTime,
-        startHour:
-            event.scheduledTime.hour + (event.scheduledTime.minute / 60.0),
-        duration: duration,
+        scheduledTime: newStart,
+        startHour: newStart.hour + (newStart.minute / 60.0),
+        duration: appliedDuration,
+        endDate: newEndDate,
         occurrenceOverrides: const {},
         createdAt: now,
         modifiedAt: now,
@@ -1136,7 +1199,6 @@ abstract class BaseCalendarBloc
         scheduledTime: shiftedOccurrence.scheduledTime,
         duration: shiftedOccurrence.duration,
         endDate: shiftedOccurrence.effectiveEndDate,
-        daySpan: shiftedOccurrence.daySpan,
       );
     }
 
@@ -1211,6 +1273,20 @@ abstract class BaseCalendarBloc
     return const Duration(hours: 1);
   }
 
+  CalendarTask _resolveSplitTarget(
+    CalendarTask request,
+    CalendarTask baseTask,
+  ) {
+    final CalendarTask? direct = state.model.tasks[request.id];
+    if (direct != null) {
+      return direct;
+    }
+    if (request.id == baseTask.id) {
+      return baseTask;
+    }
+    return baseTask.occurrenceForId(request.id) ?? request;
+  }
+
   CalendarTask? _shiftTaskTiming(
     CalendarTask task,
     Duration startDelta,
@@ -1233,33 +1309,15 @@ abstract class BaseCalendarBloc
     final DateTime newStart = start.add(startDelta);
     final DateTime newEnd = newStart.add(newDuration);
 
-    int? newDaySpan;
-    if (task.daySpan != null && task.daySpan! > 1) {
-      final startDate = DateTime(newStart.year, newStart.month, newStart.day);
-      final endDate = DateTime(newEnd.year, newEnd.month, newEnd.day);
-      newDaySpan = endDate.difference(startDate).inDays + 1;
+    DateTime? newEndDate = newEnd;
+    if (task.endDate == null && task.duration == null) {
+      newEndDate = null;
     }
-
-    if (newDuration.inDays >= 1 && newDaySpan == null) {
-      final startDate = DateTime(newStart.year, newStart.month, newStart.day);
-      final endDate = DateTime(newEnd.year, newEnd.month, newEnd.day);
-      final span = endDate.difference(startDate).inDays + 1;
-      if (span > 1) {
-        newDaySpan = span;
-      }
-    }
-
-    DateTime? newEndDate;
-    if (task.endDate != null || newDaySpan != null) {
-      newEndDate = newEnd;
-    }
-
     final double newStartHour = newStart.hour + (newStart.minute / 60.0);
 
     return task.copyWith(
       scheduledTime: newStart,
       duration: newDuration,
-      daySpan: newDaySpan,
       endDate: newEndDate,
       startHour: newStartHour,
     );
@@ -1576,7 +1634,6 @@ abstract class BaseCalendarBloc
           scheduledTime: existing?.scheduledTime,
           duration: existing?.duration,
           endDate: existing?.endDate,
-          daySpan: existing?.daySpan,
           isCancelled: true,
           priority: existing?.priority,
           isCompleted: existing?.isCompleted,
@@ -1829,7 +1886,6 @@ bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
       override.scheduledTime == null &&
       override.duration == null &&
       override.endDate == null &&
-      override.daySpan == null &&
       override.priority == null &&
       override.isCompleted == null;
 }

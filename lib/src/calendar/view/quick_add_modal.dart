@@ -247,6 +247,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       child: TaskTextField(
         controller: _taskNameController,
         focusNode: _taskNameFocusNode,
+        labelText: 'Task name *',
         hintText: 'Task name',
         borderRadius: calendarBorderRadius,
         focusBorderColor: calendarPrimaryColor,
@@ -391,8 +392,8 @@ class _QuickAddModalState extends State<QuickAddModal>
                   ),
                 ),
                 Expanded(
-                  child: TaskPrimaryButton(
-                    label: 'Add Task',
+          child: TaskPrimaryButton(
+            label: 'Add Task',
                     onPressed: canSubmit && !_formController.isSubmitting
                         ? _submitTask
                         : null,

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 /// remain declarative.
 class ZoomControlsController extends ChangeNotifier {
   ZoomControlsController({
-    Duration autoHideDuration = const Duration(seconds: 6),
+    Duration autoHideDuration = const Duration(seconds: 5),
     bool initiallyVisible = false,
   })  : _autoHideDuration = autoHideDuration,
         _isVisible = initiallyVisible;

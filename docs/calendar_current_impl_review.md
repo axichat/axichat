@@ -23,9 +23,8 @@ notes beneath each heading to mark whether to keep, modify, or discard it.
 ### Multi-Day Task Support
 
 - Location: `lib/src/calendar/models/calendar_task.dart:37-104`
-- Summary: Tasks track `endDate`/`daySpan`; helper methods compute effective spans for backwards
-  compatibility.
-- Notes: daySpan is stupid
+- Summary: Tasks track `endDate` values; helper methods derive spans for backwards compatibility.
+- Notes: keep relying on endDate, no separate span fields
 
 ### Duration Hive Adapter
 
@@ -172,4 +171,3 @@ notes beneath each heading to mark whether to keep, modify, or discard it.
   `lib/src/calendar/guest/guest_calendar_widget.dart`
 - Summary: `/guest-calendar` route with guest banner and “Sign Up to Sync” button.
 - Notes: yes
-
