@@ -115,6 +115,7 @@ void main() {
     late CalendarTask seededTask;
     late CalendarTask selectionTaskA;
     late CalendarTask selectionTaskB;
+    late String occurrenceId;
 
     blocTest<CalendarBloc, CalendarState>(
       'taskUpdated replaces existing task and syncs',
@@ -505,6 +506,86 @@ void main() {
               updatedB?.scheduledTime ==
                   selectionTaskB.scheduledTime!.add(const Duration(hours: 1));
         }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'selectionModeEntered selects only requested recurring base task',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        seededTask = CalendarTask.create(
+          title: 'Recurring base',
+          scheduledTime: DateTime(2024, 1, 1, 8),
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        bloc.add(
+          CalendarEvent.selectionModeEntered(taskId: seededTask.id),
+        );
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          return state.isSelectionMode &&
+              state.selectedTaskIds.length == 1 &&
+              state.selectedTaskIds.contains(seededTask.id);
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'selectionToggled adds only the chosen occurrence',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        seededTask = CalendarTask.create(
+          title: 'Recurring task',
+          scheduledTime: DateTime(2024, 1, 1, 9),
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final DateTime occurrenceStart =
+            seededTask.scheduledTime!.add(const Duration(days: 1));
+        occurrenceId =
+            '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}';
+        bloc
+          ..add(
+            CalendarEvent.selectionModeEntered(taskId: seededTask.id),
+          )
+          ..add(
+            CalendarEvent.selectionToggled(taskId: occurrenceId),
+          );
+      },
+      expect: () => [
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 1 &&
+              state.selectedTaskIds.contains(seededTask.id),
+        ),
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 2 &&
+              state.selectedTaskIds.contains(seededTask.id) &&
+              state.selectedTaskIds.contains(occurrenceId),
+        ),
       ],
     );
 
