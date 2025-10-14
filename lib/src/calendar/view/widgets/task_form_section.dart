@@ -365,6 +365,7 @@ class TaskScheduleSection extends StatelessWidget {
     this.showTimeSelectors = true,
     this.minDate,
     this.maxDate,
+    this.onClear,
   });
 
   final DateTime? start;
@@ -383,9 +384,19 @@ class TaskScheduleSection extends StatelessWidget {
   final bool showTimeSelectors;
   final DateTime? minDate;
   final DateTime? maxDate;
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
+    final bool hasSelection = start != null || end != null;
+    final VoidCallback? clearHandler = hasSelection
+        ? onClear ??
+            () {
+              onStartChanged(null);
+              onEndChanged(null);
+            }
+        : null;
+
     return Padding(
       padding: padding,
       child: Column(
@@ -396,6 +407,17 @@ class TaskScheduleSection extends StatelessWidget {
             textStyle: headerStyle,
             trailing: headerTrailing,
           ),
+          if (clearHandler != null) ...[
+            SizedBox(height: spacing / 2),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TaskGhostIconButton(
+                icon: Icons.close,
+                tooltip: 'Clear schedule',
+                onPressed: clearHandler,
+              ),
+            ),
+          ],
           SizedBox(height: spacing),
           ScheduleRangeFields(
             start: start,
@@ -487,81 +509,44 @@ class TaskRecurrenceSection extends StatelessWidget {
   }
 }
 
-/// Standardised row for inline date/time selectors used across inline editors
-/// and guest inputs. Keeps layout, spacing, and formatting consistent while
-/// allowing callers to hook into the same callbacks.
-class TaskDateTimePickerRow extends StatelessWidget {
-  const TaskDateTimePickerRow({
-    super.key,
-    required this.selectedDate,
-    required this.selectedTime,
+/// Configuration for a single date/time control rendered by
+/// [TaskDateTimeToolbar]. Allows callers to customise the empty-state labels,
+/// formatting, icons, and whether a time selector should be shown.
+@immutable
+class TaskDateTimeToolbarField {
+  const TaskDateTimeToolbarField({
     required this.onSelectDate,
     required this.onSelectTime,
-    this.onClear,
-    this.padding = EdgeInsets.zero,
-    this.gap = calendarSpacing8,
-    this.pickDateLabel = 'Pick date',
-    this.pickTimeLabel = 'Pick time',
-    this.clearIcon = Icons.close,
-    this.clearTooltip,
+    this.selectedDate,
+    this.selectedTime,
+    this.emptyDateLabel = 'Pick date',
+    this.emptyTimeLabel = 'Pick time',
+    this.dateIcon = Icons.calendar_today,
+    this.timeIcon = Icons.schedule,
     this.dateLabelBuilder,
     this.timeLabelBuilder,
+    this.enabled = true,
+    this.showTimeButton = true,
   });
 
   final DateTime? selectedDate;
   final TimeOfDay? selectedTime;
   final VoidCallback onSelectDate;
   final VoidCallback onSelectTime;
-  final VoidCallback? onClear;
-  final EdgeInsetsGeometry padding;
-  final double gap;
-  final String pickDateLabel;
-  final String pickTimeLabel;
-  final IconData clearIcon;
-  final String? clearTooltip;
+  final String emptyDateLabel;
+  final String emptyTimeLabel;
+  final IconData dateIcon;
+  final IconData timeIcon;
   final String Function(BuildContext context, DateTime date)? dateLabelBuilder;
   final String Function(BuildContext context, TimeOfDay time)? timeLabelBuilder;
+  final bool enabled;
+  final bool showTimeButton;
 
-  @override
-  Widget build(BuildContext context) {
-    final String dateLabel = selectedDate != null
-        ? _formatDate(context, selectedDate!)
-        : pickDateLabel;
-    final String timeLabel = selectedTime != null
-        ? _formatTime(context, selectedTime!)
-        : pickTimeLabel;
-
-    final children = <Widget>[
-      Expanded(
-        child: TaskToolbarButton(
-          icon: Icons.calendar_today,
-          label: dateLabel,
-          onPressed: onSelectDate,
-        ),
-      ),
-      Expanded(
-        child: TaskToolbarButton(
-          icon: Icons.schedule,
-          label: timeLabel,
-          onPressed: onSelectTime,
-        ),
-      ),
-      if (onClear != null)
-        TaskGhostIconButton(
-          icon: clearIcon,
-          tooltip: clearTooltip,
-          onPressed: onClear!,
-        ),
-    ];
-
-    return TaskFormActionsRow(
-      padding: padding,
-      gap: gap,
-      children: children,
-    );
-  }
-
-  String _formatDate(BuildContext context, DateTime date) {
+  String dateLabel(BuildContext context) {
+    final DateTime? date = selectedDate;
+    if (date == null) {
+      return emptyDateLabel;
+    }
     if (dateLabelBuilder != null) {
       return dateLabelBuilder!(context, date);
     }
@@ -577,7 +562,11 @@ class TaskDateTimePickerRow extends StatelessWidget {
     return '$twoDigitMonth/$twoDigitDay/${date.year}';
   }
 
-  String _formatTime(BuildContext context, TimeOfDay time) {
+  String timeLabel(BuildContext context) {
+    final TimeOfDay? time = selectedTime;
+    if (time == null) {
+      return emptyTimeLabel;
+    }
     if (timeLabelBuilder != null) {
       return timeLabelBuilder!(context, time);
     }
@@ -594,6 +583,79 @@ class TaskDateTimePickerRow extends StatelessWidget {
       );
     }
     return time.format(context);
+  }
+}
+
+/// Standardised toolbar that renders one or two [TaskDateTimeToolbarField]
+/// configurations side-by-side. Used by inline, quick add, sidebar, and dialog
+/// editors to keep date/time affordances consistent across the calendar.
+class TaskDateTimeToolbar extends StatelessWidget {
+  const TaskDateTimeToolbar({
+    super.key,
+    required this.primaryField,
+    this.secondaryField,
+    this.onClear,
+    this.padding = EdgeInsets.zero,
+    this.gap = calendarSpacing8,
+    this.clearIcon = Icons.close,
+    this.clearTooltip,
+  });
+
+  final TaskDateTimeToolbarField primaryField;
+  final TaskDateTimeToolbarField? secondaryField;
+  final VoidCallback? onClear;
+  final EdgeInsetsGeometry padding;
+  final double gap;
+  final IconData clearIcon;
+  final String? clearTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[
+      ..._buildField(context, primaryField),
+      if (secondaryField != null) ..._buildField(context, secondaryField!),
+      if (onClear != null)
+        TaskGhostIconButton(
+          icon: clearIcon,
+          tooltip: clearTooltip,
+          onPressed: onClear!,
+        ),
+    ];
+
+    return TaskFormActionsRow(
+      padding: padding,
+      gap: gap,
+      children: children,
+    );
+  }
+
+  List<Widget> _buildField(
+    BuildContext context,
+    TaskDateTimeToolbarField field,
+  ) {
+    final widgets = <Widget>[
+      Expanded(
+        child: TaskToolbarButton(
+          icon: field.dateIcon,
+          label: field.dateLabel(context),
+          onPressed: field.enabled ? field.onSelectDate : null,
+          enabled: field.enabled,
+        ),
+      ),
+    ];
+    if (field.showTimeButton) {
+      widgets.add(
+        Expanded(
+          child: TaskToolbarButton(
+            icon: field.timeIcon,
+            label: field.timeLabel(context),
+            onPressed: field.enabled ? field.onSelectTime : null,
+            enabled: field.enabled,
+          ),
+        ),
+      );
+    }
+    return widgets;
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../common/ui/ui.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
+import 'controllers/quick_add_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
@@ -36,13 +37,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   final _locationController = TextEditingController();
   final _taskNameFocusNode = FocusNode();
 
-  bool _isImportant = false;
-  bool _isUrgent = false;
-  bool _isSubmitting = false;
-  DateTime? _startTime;
-  DateTime? _endTime;
-  DateTime? _deadline;
-  RecurrenceFormValue _recurrence = const RecurrenceFormValue();
+  late final QuickAddController _formController;
 
   @override
   void initState() {
@@ -72,9 +67,11 @@ class _QuickAddModalState extends State<QuickAddModal>
     _animationController.forward();
 
     final prefilled = widget.prefilledDateTime;
-    final defaultStart = prefilled;
-    _startTime = defaultStart;
-    _endTime = defaultStart?.add(const Duration(hours: 1));
+
+    _formController = QuickAddController(
+      initialStart: prefilled,
+      initialEnd: prefilled?.add(const Duration(hours: 1)),
+    );
 
     // Auto-focus the task name input
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -89,6 +86,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _descriptionController.dispose();
     _locationController.dispose();
     _taskNameFocusNode.dispose();
+    _formController.dispose();
     super.dispose();
   }
 
@@ -253,7 +251,6 @@ class _QuickAddModalState extends State<QuickAddModal>
         borderRadius: calendarBorderRadius,
         focusBorderColor: calendarPrimaryColor,
         textCapitalization: TextCapitalization.sentences,
-        onChanged: (_) => setState(() {}),
       ),
     );
   }
@@ -265,17 +262,21 @@ class _QuickAddModalState extends State<QuickAddModal>
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.sentences,
-      onChanged: (_) => setState(() {}),
     );
   }
 
   Widget _buildPriorityToggles() {
-    return TaskPriorityToggles(
-      isImportant: _isImportant,
-      isUrgent: _isUrgent,
-      spacing: 10,
-      onImportantChanged: (value) => setState(() => _isImportant = value),
-      onUrgentChanged: (value) => setState(() => _isUrgent = value),
+    return AnimatedBuilder(
+      animation: _formController,
+      builder: (context, _) {
+        return TaskPriorityToggles(
+          isImportant: _formController.isImportant,
+          isUrgent: _formController.isUrgent,
+          spacing: 10,
+          onImportantChanged: (value) => _formController.setImportant(value),
+          onUrgentChanged: (value) => _formController.setUrgent(value),
+        );
+      },
     );
   }
 
@@ -286,151 +287,143 @@ class _QuickAddModalState extends State<QuickAddModal>
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
-      onChanged: (_) => setState(() {}),
     );
   }
 
   Widget _buildScheduleSection() {
-    return TaskScheduleSection(
-      title: 'Schedule',
-      headerStyle: calendarSubtitleTextStyle.copyWith(
-        fontWeight: FontWeight.w600,
-        fontSize: 13,
-      ),
-      spacing: calendarSpacing8,
-      start: _startTime,
-      end: _endTime,
-      onStartChanged: (value) {
-        setState(() {
-          _startTime = value;
-          if (value == null) {
-            _endTime = null;
-          } else {
-            if (_endTime == null || !_endTime!.isAfter(value)) {
-              _endTime = value.add(const Duration(hours: 1));
-            }
-            if (_recurrence.frequency == RecurrenceFrequency.weekly &&
-                (_recurrence.weekdays.isEmpty ||
-                    _recurrence.weekdays.length == 1)) {
-              _recurrence = _recurrence.copyWith(weekdays: {value.weekday});
-            }
-          }
-        });
-      },
-      onEndChanged: (value) {
-        setState(() {
-          if (value == null) {
-            _endTime = null;
-            return;
-          }
-          if (_startTime != null && !value.isAfter(_startTime!)) {
-            _endTime = _startTime!.add(const Duration(minutes: 15));
-          } else {
-            _endTime = value;
-          }
-        });
+    return AnimatedBuilder(
+      animation: _formController,
+      builder: (context, _) {
+        return TaskScheduleSection(
+          title: 'Schedule',
+          headerStyle: calendarSubtitleTextStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          spacing: calendarSpacing8,
+          start: _formController.startTime,
+          end: _formController.endTime,
+          onStartChanged: _formController.updateStart,
+          onEndChanged: _formController.updateEnd,
+          onClear: _formController.clearSchedule,
+        );
       },
     );
   }
 
   Widget _buildDeadlineField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TaskSectionHeader(
-          title: 'Deadline',
-          textStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: calendarSpacing8),
-        DeadlinePickerField(
-          value: _deadline,
-          onChanged: (value) => setState(() => _deadline = value),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: _formController,
+      builder: (context, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TaskSectionHeader(
+              title: 'Deadline',
+              textStyle: calendarSubtitleTextStyle.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: calendarSpacing8),
+            DeadlinePickerField(
+              value: _formController.deadline,
+              onChanged: _formController.setDeadline,
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildRecurrenceSection() {
-    final fallbackWeekday = _startTime?.weekday ??
-        widget.prefilledDateTime?.weekday ??
-        DateTime.now().weekday;
-
-    return TaskRecurrenceSection(
-      title: 'Repeat',
-      headerStyle: calendarSubtitleTextStyle.copyWith(
-        fontWeight: FontWeight.w600,
-        fontSize: 13,
-      ),
-      spacing: calendarSpacing8,
-      value: _recurrence,
-      fallbackWeekday: fallbackWeekday,
-      spacingConfig: const RecurrenceEditorSpacing(
-        chipSpacing: 6,
-        chipRunSpacing: 6,
-        weekdaySpacing: 10,
-        advancedSectionSpacing: 12,
-        endSpacing: 14,
-        fieldGap: 14,
-      ),
-      onChanged: (next) {
-        setState(() => _recurrence = next);
+    return AnimatedBuilder(
+      animation: _formController,
+      builder: (context, _) {
+        final fallbackWeekday = _formController.startTime?.weekday ??
+            widget.prefilledDateTime?.weekday ??
+            DateTime.now().weekday;
+        return TaskRecurrenceSection(
+          title: 'Repeat',
+          headerStyle: calendarSubtitleTextStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          spacing: calendarSpacing8,
+          value: _formController.recurrence,
+          fallbackWeekday: fallbackWeekday,
+          spacingConfig: const RecurrenceEditorSpacing(
+            chipSpacing: 6,
+            chipRunSpacing: 6,
+            weekdaySpacing: 10,
+            advancedSectionSpacing: 12,
+            endSpacing: 14,
+            fieldGap: 14,
+          ),
+          onChanged: _formController.setRecurrence,
+        );
       },
     );
   }
 
   Widget _buildActions() {
-    return TaskFormActionsRow(
-      includeTopBorder: true,
-      padding: calendarPadding16,
-      gap: calendarSpacing12,
-      children: [
-        Expanded(
-          child: TaskSecondaryButton(
-            label: 'Cancel',
-            onPressed: _isSubmitting ? null : _dismissModal,
-            foregroundColor: calendarSubtitleColor,
-            hoverForegroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.06),
-          ),
-        ),
-        Expanded(
-          child: TaskPrimaryButton(
-            label: 'Add Task',
-            onPressed: _canSubmit && !_isSubmitting ? _submitTask : null,
-            isBusy: _isSubmitting,
-          ),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: _formController,
+      builder: (context, _) {
+        return ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _taskNameController,
+          builder: (context, value, __) {
+            final bool canSubmit = value.text.trim().isNotEmpty;
+            return TaskFormActionsRow(
+              includeTopBorder: true,
+              padding: calendarPadding16,
+              gap: calendarSpacing12,
+              children: [
+                Expanded(
+                  child: TaskSecondaryButton(
+                    label: 'Cancel',
+                    onPressed:
+                        _formController.isSubmitting ? null : _dismissModal,
+                    foregroundColor: calendarSubtitleColor,
+                    hoverForegroundColor: calendarPrimaryColor,
+                    hoverBackgroundColor:
+                        calendarPrimaryColor.withValues(alpha: 0.06),
+                  ),
+                ),
+                Expanded(
+                  child: TaskPrimaryButton(
+                    label: 'Add Task',
+                    onPressed: canSubmit && !_formController.isSubmitting
+                        ? _submitTask
+                        : null,
+                    isBusy: _formController.isSubmitting,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  bool get _canSubmit => _taskNameController.text.trim().isNotEmpty;
-
-  TaskPriority get _selectedPriority {
-    if (_isImportant && _isUrgent) {
-      return TaskPriority.critical;
-    } else if (_isImportant) {
-      return TaskPriority.important;
-    } else if (_isUrgent) {
-      return TaskPriority.urgent;
-    }
-    return TaskPriority.none;
-  }
-
   void _submitTask() {
-    if (!_canSubmit || _isSubmitting) return;
+    if (_formController.isSubmitting ||
+        _taskNameController.text.trim().isEmpty) {
+      return;
+    }
 
-    setState(() => _isSubmitting = true);
+    _formController.setSubmitting(true);
 
     final taskName = _taskNameController.text.trim();
     final description = _descriptionController.text.trim();
-    final scheduledTime = _startTime;
+    final scheduledTime = _formController.startTime;
 
     final recurrence =
-        scheduledTime != null ? _recurrence.toRule(start: scheduledTime) : null;
+        scheduledTime != null ? _formController.buildRecurrence() : null;
+
+    final duration = _formController.effectiveDuration ??
+        (scheduledTime != null ? const Duration(hours: 1) : null);
 
     // Create the task
     final task = CalendarTask(
@@ -438,19 +431,15 @@ class _QuickAddModalState extends State<QuickAddModal>
       title: taskName,
       description: description.isNotEmpty ? description : null,
       scheduledTime: scheduledTime,
-      duration: scheduledTime != null
-          ? (_endTime != null && _endTime!.isAfter(scheduledTime)
-              ? _endTime!.difference(scheduledTime)
-              : const Duration(hours: 1))
-          : null,
-      priority: _selectedPriority,
+      duration: duration,
+      priority: _formController.selectedPriority,
       isCompleted: false,
       createdAt: DateTime.now(),
       modifiedAt: DateTime.now(),
       location: _locationController.text.trim().isEmpty
           ? null
           : _locationController.text.trim(),
-      deadline: _deadline,
+      deadline: _formController.deadline,
       recurrence: recurrence,
       startHour: scheduledTime != null
           ? scheduledTime.hour + (scheduledTime.minute / 60.0)

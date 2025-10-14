@@ -10,6 +10,7 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
+import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
@@ -79,22 +80,11 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final double minWidth = (screenWidth * _layoutTheme.sidebarMinWidthFraction)
-        .clamp(_layoutTheme.sidebarMinWidth, screenWidth)
-        .toDouble();
-    final double maxWidth = (screenWidth * _layoutTheme.sidebarMaxWidthFraction)
-        .clamp(minWidth, screenWidth)
-        .toDouble();
-    final double defaultWidth =
-        (screenWidth * _layoutTheme.sidebarDefaultWidthFraction)
-            .clamp(minWidth, maxWidth)
-            .toDouble();
-
+    final sidebarDimensions = ResponsiveHelper.sidebarDimensions(context);
     _sidebarController.syncBounds(
-      minWidth: minWidth,
-      maxWidth: maxWidth,
-      defaultWidth: defaultWidth,
+      minWidth: sidebarDimensions.minWidth,
+      maxWidth: sidebarDimensions.maxWidth,
+      defaultWidth: sidebarDimensions.defaultWidth,
     );
 
     return AnimatedBuilder(
@@ -130,7 +120,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                       thickness: _layoutTheme.sidebarScrollbarThickness,
                       child: SingleChildScrollView(
                         controller: _scrollController,
-                        padding: const EdgeInsets.only(bottom: 24),
+                        padding: calendarSidebarScrollPadding,
                         physics: const ClampingScrollPhysics(),
                         child: content,
                       ),
@@ -148,7 +138,7 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   Widget _buildAddTaskSection(CalendarSidebarState uiState) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: calendarSidebarSectionPadding,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -170,14 +160,14 @@ class _TaskSidebarState extends State<TaskSidebar>
               color: calendarTimeLabelColor,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: calendarSidebarSectionSpacing),
           _buildQuickTaskInput(),
-          const SizedBox(height: 16),
+          const SizedBox(height: calendarSidebarSectionSpacing),
           _buildPriorityToggles(uiState),
-          const SizedBox(height: 12),
+          const SizedBox(height: calendarSidebarToggleSpacing),
           _buildAdvancedToggle(uiState),
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
+            duration: calendarSidebarAdvancedAnimationDuration,
             transitionBuilder: (child, animation) {
               final fade = CurvedAnimation(
                 parent: animation,
@@ -199,7 +189,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   )
                 : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: calendarSidebarSectionSpacing),
           _buildAddButton(),
         ],
       ),
@@ -781,6 +771,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       end: uiState.advancedEndTime,
       onStartChanged: _sidebarController.setAdvancedStart,
       onEndChanged: _sidebarController.setAdvancedEnd,
+      onClear: () => _sidebarController.setAdvancedStart(null),
     );
   }
 

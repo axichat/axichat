@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/utils/smart_parser.dart';
+import 'package:axichat/src/calendar/view/controllers/inline_task_composer_controller.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/view/widgets/task_text_field.dart';
 
@@ -20,14 +21,19 @@ class GuestInlineTaskInput extends StatefulWidget {
 class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  bool _isExpanded = false;
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
+  late final InlineTaskComposerController _composerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _composerController = InlineTaskComposerController();
+  }
 
   @override
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
+    _composerController.dispose();
     super.dispose();
   }
 
@@ -40,9 +46,11 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
 
     // If user manually selected date/time, use those instead
     DateTime? scheduledTime = parseResult.scheduledTime;
-    if (_selectedDate != null || _selectedTime != null) {
-      final date = _selectedDate ?? DateTime.now();
-      final time = _selectedTime ?? const TimeOfDay(hour: 9, minute: 0);
+    final DateTime? selectedDate = _composerController.selectedDate;
+    final TimeOfDay? selectedTime = _composerController.selectedTime;
+    if (selectedDate != null || selectedTime != null) {
+      final date = selectedDate ?? DateTime.now();
+      final time = selectedTime ?? const TimeOfDay(hour: 9, minute: 0);
       scheduledTime = DateTime(
         date.year,
         date.month,
@@ -60,103 +68,96 @@ class _GuestInlineTaskInputState extends State<GuestInlineTaskInput> {
 
     // Clear input
     _controller.clear();
-    _selectedDate = null;
-    _selectedTime = null;
-    setState(() {
-      _isExpanded = false;
-    });
+    _composerController.resetSchedule();
   }
 
   Future<void> _selectDate() async {
     final date = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
+      initialDate: _composerController.selectedDate ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
     if (date != null) {
-      setState(() {
-        _selectedDate = date;
-      });
+      _composerController
+        ..setDate(date)
+        ..expand();
     }
   }
 
   Future<void> _selectTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
+      initialTime: _composerController.selectedTime ?? TimeOfDay.now(),
     );
     if (time != null) {
-      setState(() {
-        _selectedTime = time;
-      });
+      _composerController
+        ..setTime(time)
+        ..expand();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TaskTextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
-          textInputAction: TextInputAction.send,
-          onSubmitted: (_) => _handleSubmit(),
-          onChanged: (_) {
-            if (!_isExpanded) {
-              setState(() => _isExpanded = true);
-            }
-          },
-        ),
-
-        // Optional controls (shown when focused)
-        if (_isExpanded) ...[
-          const SizedBox(height: 8),
-          TaskDateTimePickerRow(
-            selectedDate: _selectedDate,
-            selectedTime: _selectedTime,
-            onSelectDate: _selectDate,
-            onSelectTime: _selectTime,
-            onClear: () {
-              setState(() {
-                _isExpanded = false;
-                _selectedDate = null;
-                _selectedTime = null;
-              });
-              _focusNode.unfocus();
-            },
-          ),
-          const SizedBox(height: calendarSpacing8),
-          TaskFormActionsRow(
-            padding: EdgeInsets.zero,
-            gap: calendarSpacing8,
-            children: [
-              Expanded(
-                child: TaskPrimaryButton(
-                  label: 'Add task',
-                  onPressed: _handleSubmit,
+    return AnimatedBuilder(
+      animation: _composerController,
+      builder: (context, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TaskTextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _handleSubmit(),
+              onChanged: (_) => _composerController.expand(),
+            ),
+            if (_composerController.isExpanded) ...[
+              const SizedBox(height: 8),
+              TaskDateTimeToolbar(
+                padding: EdgeInsets.zero,
+                gap: calendarSpacing8,
+                primaryField: TaskDateTimeToolbarField(
+                  selectedDate: _composerController.selectedDate,
+                  selectedTime: _composerController.selectedTime,
+                  onSelectDate: _selectDate,
+                  onSelectTime: _selectTime,
+                  emptyDateLabel: 'Pick date',
+                  emptyTimeLabel: 'Pick time',
                 ),
+                onClear: () {
+                  _composerController.resetSchedule();
+                  _focusNode.unfocus();
+                },
               ),
-              Expanded(
-                child: TaskToolbarButton(
-                  label: 'Clear',
-                  onPressed: () {
-                    _controller.clear();
-                    setState(() {
-                      _selectedDate = null;
-                      _selectedTime = null;
-                      _isExpanded = false;
-                    });
-                    _focusNode.unfocus();
-                  },
-                ),
+              const SizedBox(height: calendarSpacing8),
+              TaskFormActionsRow(
+                padding: EdgeInsets.zero,
+                gap: calendarSpacing8,
+                children: [
+                  Expanded(
+                    child: TaskPrimaryButton(
+                      label: 'Add task',
+                      onPressed: _handleSubmit,
+                    ),
+                  ),
+                  Expanded(
+                    child: TaskToolbarButton(
+                      label: 'Clear',
+                      onPressed: () {
+                        _controller.clear();
+                        _composerController.resetSchedule();
+                        _focusNode.unfocus();
+                      },
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
-      ],
+          ],
+        );
+      },
     );
   }
 }

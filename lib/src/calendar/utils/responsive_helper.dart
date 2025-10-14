@@ -14,9 +14,12 @@ class CalendarResponsiveSpec {
     required this.contentPadding,
     required this.modalMargin,
     required this.gridHorizontalPadding,
+    required this.sidebarMinWidthFraction,
     required this.sidebarWidthFraction,
+    required this.sidebarMaxWidthFraction,
     this.quickAddMaxWidth,
     this.quickAddMaxHeight = calendarQuickAddModalMaxHeight,
+    this.dayColumnWidth,
   });
 
   final CalendarSizeClass sizeClass;
@@ -25,15 +28,49 @@ class CalendarResponsiveSpec {
   final EdgeInsets contentPadding;
   final EdgeInsets modalMargin;
   final double gridHorizontalPadding;
+  final double sidebarMinWidthFraction;
   final double sidebarWidthFraction;
+  final double sidebarMaxWidthFraction;
   final double? quickAddMaxWidth;
   final double quickAddMaxHeight;
+  final double? dayColumnWidth;
 
   bool containsWidth(double width) {
     final withinMin = width >= minWidth;
     final withinMax = maxWidth == null || width < maxWidth!;
     return withinMin && withinMax;
   }
+
+  CalendarSidebarDimensions resolveSidebarDimensions(double screenWidth) {
+    final double minWidth = (screenWidth * sidebarMinWidthFraction)
+        .clamp(calendarSidebarMinWidth, screenWidth)
+        .toDouble();
+    final double maxWidth = (screenWidth * sidebarMaxWidthFraction)
+        .clamp(minWidth, screenWidth)
+        .toDouble();
+    final double defaultWidth = (screenWidth * sidebarWidthFraction)
+        .clamp(minWidth, maxWidth)
+        .toDouble();
+    return CalendarSidebarDimensions(
+      minWidth: minWidth,
+      maxWidth: maxWidth,
+      defaultWidth: defaultWidth,
+    );
+  }
+
+  double resolveDayColumnWidth(double fallback) => dayColumnWidth ?? fallback;
+}
+
+class CalendarSidebarDimensions {
+  const CalendarSidebarDimensions({
+    required this.minWidth,
+    required this.maxWidth,
+    required this.defaultWidth,
+  });
+
+  final double minWidth;
+  final double maxWidth;
+  final double defaultWidth;
 }
 
 /// Helper class for responsive layout decisions based on shared descriptors.
@@ -49,8 +86,11 @@ class ResponsiveHelper {
       ),
       modalMargin: calendarPadding12,
       gridHorizontalPadding: calendarSpacing8,
+      sidebarMinWidthFraction: 1.0,
       sidebarWidthFraction: 1.0,
+      sidebarMaxWidthFraction: 1.0,
       quickAddMaxWidth: calendarQuickAddModalCompactMaxWidth,
+      dayColumnWidth: calendarCompactDayColumnWidth,
     ),
     CalendarResponsiveSpec(
       sizeClass: CalendarSizeClass.medium,
@@ -62,7 +102,9 @@ class ResponsiveHelper {
       ),
       modalMargin: calendarPadding16,
       gridHorizontalPadding: calendarSpacing12,
+      sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
       sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
+      sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
       quickAddMaxWidth: calendarQuickAddModalMaxWidth,
     ),
     CalendarResponsiveSpec(
@@ -74,7 +116,9 @@ class ResponsiveHelper {
       ),
       modalMargin: calendarPadding16,
       gridHorizontalPadding: calendarSpacing16,
+      sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
       sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
+      sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
       quickAddMaxWidth: calendarQuickAddModalMaxWidth,
     ),
   ];
@@ -141,4 +185,25 @@ class ResponsiveHelper {
         return desktop;
     }
   }
+
+  static CalendarSidebarDimensions sidebarDimensions(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
+    final double width = MediaQuery.of(context).size.width;
+    return spec.resolveSidebarDimensions(width);
+  }
+
+  static CalendarSidebarDimensions sidebarDimensionsForWidth(double width) =>
+      specForWidth(width).resolveSidebarDimensions(width);
+
+  static double dayColumnWidth(
+    BuildContext context, {
+    double fallback = calendarCompactDayColumnWidth,
+  }) =>
+      spec(context).resolveDayColumnWidth(fallback);
+
+  static double dayColumnWidthForWidth(
+    double width, {
+    double fallback = calendarCompactDayColumnWidth,
+  }) =>
+      specForWidth(width).resolveDayColumnWidth(fallback);
 }

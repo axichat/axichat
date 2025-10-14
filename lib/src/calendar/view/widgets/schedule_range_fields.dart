@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../common/ui/ui.dart';
 import 'deadline_picker_field.dart';
 
+/// Displays paired date/time inputs for start and end selections, matching the
+/// original calendar styling. Stacks vertically on narrow layouts.
 class ScheduleRangeFields extends StatelessWidget {
   const ScheduleRangeFields({
     super.key,
@@ -35,24 +37,24 @@ class ScheduleRangeFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final shouldStack = constraints.maxWidth < 420;
-        final startField = _ScheduleField(
+        final bool shouldStack = constraints.maxWidth < 420;
+        final Widget startField = _ScheduleField(
           label: startLabel,
           placeholder: startPlaceholder,
           value: start,
+          onChanged: onStartChanged,
           showTimeSelectors: showTimeSelectors,
           minDate: minDate,
           maxDate: end ?? maxDate,
-          onChanged: onStartChanged,
         );
-        final endField = _ScheduleField(
+        final Widget endField = _ScheduleField(
           label: endLabel,
           placeholder: endPlaceholder,
           value: end,
+          onChanged: onEndChanged,
           showTimeSelectors: showTimeSelectors,
           minDate: start ?? minDate,
           maxDate: maxDate,
-          onChanged: onEndChanged,
         );
 
         if (shouldStack) {
@@ -60,7 +62,7 @@ class ScheduleRangeFields extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               startField,
-              const SizedBox(height: 12),
+              const SizedBox(height: calendarSpacing12),
               endField,
             ],
           );
@@ -69,7 +71,7 @@ class ScheduleRangeFields extends StatelessWidget {
         return Row(
           children: [
             Expanded(child: startField),
-            const SizedBox(width: 12),
+            const SizedBox(width: calendarSpacing12),
             Expanded(child: endField),
           ],
         );
@@ -111,7 +113,7 @@ class _ScheduleField extends StatelessWidget {
             letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: calendarSpacing6),
         DeadlinePickerField(
           value: value,
           placeholder: placeholder,

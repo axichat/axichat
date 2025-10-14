@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
+import '../utils/responsive_helper.dart';
+
 class LoadingIndicator extends StatelessWidget {
   const LoadingIndicator({
     super.key,
@@ -141,43 +143,56 @@ class TaskSkeletonTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: calendarPadding16,
-      margin: calendarMarginSmall,
-      decoration: BoxDecoration(
-        color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: calendarBorderColor,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          const SkeletonLoader(width: 20, height: 20, borderRadius: 10),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SkeletonLoader(width: double.infinity, height: 16),
-                const SizedBox(height: 8),
-                SkeletonLoader(
-                  width: MediaQuery.of(context).size.width * 0.6,
-                  height: 12,
-                ),
-                const SizedBox(height: 4),
-                SkeletonLoader(
-                  width: MediaQuery.of(context).size.width * 0.3,
-                  height: 12,
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spec = ResponsiveHelper.spec(context);
+        final double availableWidth =
+            constraints.maxWidth.isFinite && constraints.maxWidth > 0
+                ? constraints.maxWidth
+                : spec.quickAddMaxWidth ??
+                    ResponsiveHelper.sidebarDimensions(context).defaultWidth;
+        final double primaryLineWidth = availableWidth * 0.6;
+        final double secondaryLineWidth = availableWidth * 0.3;
+
+        return Container(
+          padding: calendarPadding16,
+          margin: calendarMarginSmall,
+          decoration: BoxDecoration(
+            color: calendarContainerColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: calendarBorderColor,
+              width: 1,
             ),
           ),
-          const SizedBox(width: 12),
-          const SkeletonLoader(width: 24, height: 24, borderRadius: 4),
-        ],
-      ),
+          child: Row(
+            children: [
+              const SkeletonLoader(width: 20, height: 20, borderRadius: 10),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SkeletonLoader(width: double.infinity, height: 16),
+                    const SizedBox(height: 8),
+                    SkeletonLoader(
+                      width: primaryLineWidth,
+                      height: 12,
+                    ),
+                    const SizedBox(height: 4),
+                    SkeletonLoader(
+                      width: secondaryLineWidth,
+                      height: 12,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              const SkeletonLoader(width: 24, height: 24, borderRadius: 4),
+            ],
+          ),
+        );
+      },
     );
   }
 }

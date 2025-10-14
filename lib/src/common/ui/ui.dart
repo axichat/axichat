@@ -38,6 +38,11 @@ const baseAnimationDuration = Duration(milliseconds: 300);
 
 /// Duration for cross-fading calendar view transitions.
 const calendarViewTransitionDuration = Duration(milliseconds: 400);
+const calendarClockTickInterval = Duration(minutes: 1);
+const calendarDragWidthDebounceDelay = Duration(milliseconds: 120);
+const calendarTaskSplitPreviewAnimationDuration = Duration(milliseconds: 120);
+const calendarScrollAnimationDuration = Duration(milliseconds: 250);
+const calendarSlotHoverAnimationDuration = Duration(milliseconds: 200);
 const basePageItemLimit = 15;
 
 const axiGreen = Color(0xff80ffa0);
@@ -105,6 +110,12 @@ const calendarEventRadius = 4.0;
 const calendarHeaderHeight = 44.0;
 const calendarDayHeaderHeight = 20.0;
 const calendarTimeSlotHeight = 60.0;
+const calendarSlotHoverOpacity = 0.05;
+const calendarSlotPreviewOpacity = 0.12;
+const calendarSlotPreviewAnchorOpacity = 0.2;
+const calendarSplitPreviewBorderOpacity = 0.6;
+const calendarSlotSplashOpacity = 0.2;
+const calendarSlotHighlightOpacity = 0.1;
 
 // Standard spacing values
 const calendarSpacing2 = 2.0;
@@ -113,6 +124,7 @@ const calendarSpacing6 = 6.0;
 const calendarSpacing8 = 8.0;
 const calendarSpacing12 = 12.0;
 const calendarSpacing16 = 16.0;
+const calendarCompactDayColumnWidth = 120.0;
 
 // Event layout constraints
 const calendarEventMinHeight = 20.0;
@@ -182,6 +194,11 @@ const calendarSidebarWidthDefaultFraction = 0.33;
 const calendarSidebarWidthMaxFraction = 0.5;
 const calendarSidebarScrollbarThickness = 6.0;
 const calendarSidebarScrollbarRadius = 8.0;
+const calendarSidebarSectionPadding = EdgeInsets.all(20.0);
+const calendarSidebarSectionSpacing = 16.0;
+const calendarSidebarToggleSpacing = 12.0;
+const calendarSidebarScrollPadding = EdgeInsets.only(bottom: 24.0);
+const calendarSidebarAdvancedAnimationDuration = Duration(milliseconds: 220);
 
 // Sidebar completion tile metrics
 const calendarCompletionTileBorderRadius = 10.0;
