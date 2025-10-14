@@ -16,6 +16,7 @@ class EditTaskDropdown extends StatefulWidget {
     required this.onTaskDeleted,
     this.maxHeight = 520,
     this.onOccurrenceUpdated,
+    this.scaffoldMessenger,
   });
 
   final CalendarTask task;
@@ -24,6 +25,7 @@ class EditTaskDropdown extends StatefulWidget {
   final void Function(String taskId) onTaskDeleted;
   final double maxHeight;
   final void Function(CalendarTask task)? onOccurrenceUpdated;
+  final ScaffoldMessengerState? scaffoldMessenger;
 
   @override
   State<EditTaskDropdown> createState() => _EditTaskDropdownState();
@@ -434,7 +436,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   void _showSnackBar(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger =
+        widget.scaffoldMessenger ?? ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 }

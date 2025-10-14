@@ -134,6 +134,31 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
 
+  CalendarTask? _buildUpdatedTask() {
+    final DateTime? scheduled = _tempScheduledTime ?? widget.task.scheduledTime;
+    final Duration? duration = _tempDuration ?? widget.task.duration;
+    DateTime? endDate = widget.task.endDate;
+
+    if (scheduled != null && duration != null) {
+      endDate = scheduled.add(duration);
+    } else if (duration != null && widget.task.scheduledTime != null) {
+      endDate = widget.task.scheduledTime!.add(duration);
+    }
+
+    if (scheduled == widget.task.scheduledTime &&
+        duration == widget.task.duration &&
+        endDate == widget.task.endDate) {
+      return null;
+    }
+
+    return widget.task.copyWith(
+      scheduledTime: scheduled,
+      duration: duration,
+      endDate: endDate,
+      startHour: _computeStartHour(scheduled),
+    );
+  }
+
   Color get _taskColor => widget.task.priorityColor;
 
   Offset _normalizedFromLocal(Offset local) {
@@ -448,20 +473,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         );
 
         if (showTime && inlineTime) {
-          final timeText = task.effectiveDaySpan > 1
-              ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
-              : _formatTimeRange();
+          final timeText = _formatTimeRange();
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (task.effectiveDaySpan > 1) ...[
-                Icon(
-                  Icons.calendar_view_week,
-                  size: 12,
-                  color: stripeColor,
-                ),
-                const SizedBox(width: 4),
-              ],
               Expanded(child: title),
               const SizedBox(width: 6),
               Flexible(
@@ -484,14 +499,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (task.effectiveDaySpan > 1) ...[
-              Icon(
-                Icons.calendar_view_week,
-                size: 12,
-                color: stripeColor,
-              ),
-              const SizedBox(width: 4),
-            ],
             Expanded(child: title),
           ],
         );
@@ -505,9 +512,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         }
         children.add(
           Text(
-            task.effectiveDaySpan > 1
-                ? '${_formatTimeRange()} (${task.effectiveDaySpan} days)'
-                : _formatTimeRange(),
+            _formatTimeRange(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -885,13 +890,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
 
         if (widget.onResizePreview != null) {
-          widget.onResizePreview!(
-            widget.task.copyWith(
-              scheduledTime: _tempScheduledTime,
-              duration: _tempDuration,
-              startHour: _computeStartHour(_tempScheduledTime),
-            ),
-          );
+          final preview = _buildUpdatedTask();
+          if (preview != null) {
+            widget.onResizePreview!(preview);
+          }
         }
       } else if (handleType == 'bottom') {
         final double maxDuration = 24.0 - _currentStartHour;
@@ -903,28 +905,17 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         _tempDuration = Duration(minutes: (newDurationHours * 60).round());
 
         if (widget.onResizePreview != null) {
-          widget.onResizePreview!(
-            widget.task.copyWith(
-              duration: _tempDuration,
-              startHour: _computeStartHour(_tempScheduledTime),
-            ),
-          );
+          final preview = _buildUpdatedTask();
+          if (preview != null) {
+            widget.onResizePreview!(preview);
+          }
         }
       }
     }
   }
 
   void _endResize() {
-    CalendarTask? result;
-    if (_tempScheduledTime != null || _tempDuration != null) {
-      result = widget.task.copyWith(
-        scheduledTime: _tempScheduledTime ?? widget.task.scheduledTime,
-        duration: _tempDuration ?? widget.task.duration,
-        startHour: _computeStartHour(
-          _tempScheduledTime ?? widget.task.scheduledTime,
-        ),
-      );
-    }
+    final CalendarTask? result = _buildUpdatedTask();
 
     setState(() {
       isResizing = false;

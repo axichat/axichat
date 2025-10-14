@@ -383,21 +383,36 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     final CalendarTask? directTask = currentState.model.tasks[task.id];
     if (directTask != null) {
       final DateTime plannedStart = newTime;
-      final Duration duration =
-          task.duration ?? directTask.duration ?? const Duration(hours: 1);
+      final DateTime? taskEnd = task.effectiveEndDate;
+      final Duration? taskDuration = task.duration ??
+          (taskEnd != null && task.scheduledTime != null
+              ? taskEnd.difference(task.scheduledTime!)
+              : null);
 
-      if (directTask.duration != task.duration ||
-          directTask.scheduledTime != task.scheduledTime) {
-        final Duration endOffset =
-            directTask.endDate != null && directTask.scheduledTime != null
-                ? directTask.endDate!.difference(directTask.scheduledTime!)
-                : duration;
+      final Duration duration = taskDuration ??
+          directTask.duration ??
+          (directTask.effectiveEndDate != null &&
+                  directTask.scheduledTime != null
+              ? directTask.effectiveEndDate!
+                  .difference(directTask.scheduledTime!)
+              : const Duration(hours: 1));
+      final DateTime? plannedEnd = taskEnd ?? plannedStart.add(duration);
+
+      final DateTime? originalEnd = directTask.effectiveEndDate;
+      final Duration? originalDuration = directTask.duration ??
+          (originalEnd != null && directTask.scheduledTime != null
+              ? originalEnd.difference(directTask.scheduledTime!)
+              : null);
+
+      if (directTask.scheduledTime != plannedStart ||
+          originalDuration != duration ||
+          originalEnd != plannedEnd) {
         bloc.add(
           CalendarEvent.taskResized(
             taskId: directTask.id,
             scheduledTime: plannedStart,
             duration: duration,
-            endDate: plannedStart.add(endOffset),
+            endDate: plannedEnd,
           ),
         );
       } else {
@@ -417,8 +432,20 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
             originalTask?.scheduledTime != task.scheduledTime)
         ? task.scheduledTime!
         : newTime;
-    final Duration duration =
-        task.duration ?? originalTask?.duration ?? const Duration(hours: 1);
+    final DateTime? taskEnd = task.effectiveEndDate;
+    final Duration? taskDuration = task.duration ??
+        (taskEnd != null && task.scheduledTime != null
+            ? taskEnd.difference(task.scheduledTime!)
+            : null);
+
+    final Duration duration = taskDuration ??
+        originalTask?.duration ??
+        (originalTask?.effectiveEndDate != null &&
+                originalTask?.scheduledTime != null
+            ? originalTask!.effectiveEndDate!
+                .difference(originalTask.scheduledTime!)
+            : const Duration(hours: 1));
+    final DateTime? plannedEnd = taskEnd ?? plannedStart.add(duration);
 
     if (task.isOccurrence) {
       bloc.add(
@@ -426,8 +453,8 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
           taskId: baseId,
           occurrenceId: task.id,
           scheduledTime: newTime,
-          duration: task.duration,
-          endDate: task.endDate,
+          duration: duration,
+          endDate: plannedEnd,
         ),
       );
       return;
@@ -435,17 +462,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
 
     if (originalTask != null &&
         (originalTask.duration != task.duration ||
-            originalTask.scheduledTime != task.scheduledTime)) {
-      final Duration endOffset =
-          originalTask.endDate != null && originalTask.scheduledTime != null
-              ? originalTask.endDate!.difference(originalTask.scheduledTime!)
-              : duration;
+            originalTask.scheduledTime != task.scheduledTime ||
+            originalTask.effectiveEndDate != plannedEnd)) {
       bloc.add(
         CalendarEvent.taskResized(
           taskId: baseId,
           scheduledTime: plannedStart,
           duration: duration,
-          endDate: plannedStart.add(endOffset),
+          endDate: plannedEnd,
         ),
       );
     } else {

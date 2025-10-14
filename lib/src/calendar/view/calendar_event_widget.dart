@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../common/ui/ui.dart';
 import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
+import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/time_formatter.dart';
@@ -373,70 +374,6 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
             ),
           ),
         ),
-
-        // Left resize handle for multi-day events
-        if (widget.task.effectiveDaySpan > 1)
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 8,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeLeftRight,
-              child: GestureDetector(
-                onHorizontalDragStart: (_) =>
-                    _startResize(ResizeDirection.left),
-                onHorizontalDragUpdate: (details) =>
-                    _updateResize(details, ResizeDirection.left),
-                onHorizontalDragEnd: (_) => _endResize(),
-                child: Container(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      width: 3,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(1.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-        // Right resize handle for multi-day events
-        if (widget.task.effectiveDaySpan > 1)
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: 8,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeLeftRight,
-              child: GestureDetector(
-                onHorizontalDragStart: (_) =>
-                    _startResize(ResizeDirection.right),
-                onHorizontalDragUpdate: (details) =>
-                    _updateResize(details, ResizeDirection.right),
-                onHorizontalDragEnd: (_) => _endResize(),
-                child: Container(
-                  color: Colors.transparent,
-                  child: Center(
-                    child: Container(
-                      width: 3,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(1.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -625,14 +562,26 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     setState(() => _isResizing = false);
 
     if (_tempStartTime != null && _tempDuration != null) {
-      context.read<CalendarBloc>().add(
-            CalendarEvent.taskResized(
-              taskId: widget.task.baseId,
-              scheduledTime: _tempStartTime,
-              duration: _tempDuration,
-              endDate: _tempEndDate,
-            ),
-          );
+      final bloc = context.read<CalendarBloc>();
+      final CalendarState currentState = bloc.state;
+      String targetId = widget.task.id;
+      CalendarTask? targetTask = currentState.model.tasks[targetId];
+      if (targetTask == null) {
+        final String baseId = widget.task.baseId;
+        targetTask = currentState.model.tasks[baseId];
+        if (targetTask != null) {
+          targetId = baseId;
+        }
+      }
+
+      bloc.add(
+        CalendarEvent.taskResized(
+          taskId: targetId,
+          scheduledTime: _tempStartTime,
+          duration: _tempDuration,
+          endDate: _tempEndDate,
+        ),
+      );
 
       _tempStartTime = null;
       _tempDuration = null;
