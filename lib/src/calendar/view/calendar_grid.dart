@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -1022,6 +1023,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 borderRadius: BorderRadius.zero,
                 border: Border(
                   top: BorderSide(
+                    color: calendarBorderColor,
+                    width: calendarBorderStroke,
+                  ),
+                  left: BorderSide(
                     color: calendarBorderColor,
                     width: calendarBorderStroke,
                   ),
@@ -2944,214 +2949,86 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               );
             }
 
+            final bool canCopy = !task.isOccurrence;
+            if (canCopy) {
+              menuItems.add(
+                ShadContextMenuItem(
+                  leading: const Icon(Icons.content_copy),
+                  onPressed: () {
+                    menuController.hide();
+                    _copyTask(task);
+                  },
+                  child: const Text('Copy Template'),
+                ),
+              );
+            }
+
+            menuItems.add(
+              ShadContextMenuItem(
+                leading: const Icon(Icons.delete_outline),
+                onPressed: () {
+                  menuController.hide();
+                  _capturedBloc.add(
+                    CalendarEvent.taskDeleted(taskId: task.baseId),
+                  );
+                },
+                child: const Text('Delete Task'),
+              ),
+            );
+
             return menuItems;
           }
 
-          return DragTarget<CalendarTask>(
-            key: globalKey,
-            hitTestBehavior: HitTestBehavior.translucent,
-            onWillAcceptWithDetails: (details) {
-              final dragged = details.data;
-              if (dragged.id == task.id) {
-                return false;
-              }
-              final DateTime previewStart =
-                  _computePreviewStartForTaskHover(task, details.offset) ??
-                      _defaultPreviewStartForTask(task);
-              final Duration previewDuration =
-                  dragged.duration ?? const Duration(hours: 1);
-              final bool hasOverlap =
-                  _previewOverlapsScheduled(previewStart, previewDuration);
-              final bool allowNarrowing = hasOverlap ||
-                  (_taskInteractionController.dragHasMoved &&
-                      !_isWidthDebounceActive);
-              _updateDragPreview(previewStart, previewDuration);
-              _stopEdgeAutoScroll();
-              final double targetWidth =
-                  allowNarrowing && hasOverlap ? eventWidth / 2 : eventWidth;
-              final bool forceApply = !hasOverlap;
-              _updateDragFeedbackWidth(targetWidth, forceApply: forceApply);
-              return true;
-            },
-            onMove: (details) {
-              final DateTime previewStart =
-                  _computePreviewStartForTaskHover(task, details.offset) ??
-                      _defaultPreviewStartForTask(task);
-              final Duration previewDuration =
-                  details.data.duration ?? const Duration(hours: 1);
-              final bool hasOverlap =
-                  _previewOverlapsScheduled(previewStart, previewDuration);
-              final bool allowNarrowing = hasOverlap ||
-                  (_taskInteractionController.dragHasMoved &&
-                      !_isWidthDebounceActive);
-              final double targetWidth =
-                  allowNarrowing && hasOverlap ? eventWidth / 2 : eventWidth;
-              final bool forceApply = !hasOverlap;
-              _updateDragFeedbackWidth(targetWidth, forceApply: forceApply);
-              _updateDragPreview(previewStart, previewDuration);
-            },
-            onLeave: (details) {
-              final anchor = task.scheduledTime;
-              if (anchor != null && _isPreviewAnchor(anchor)) {
-                _clearDragPreview();
-              }
-              _stopEdgeAutoScroll();
-              _cancelPendingDragWidth();
-            },
-            onAcceptWithDetails: (details) {
-              _clearDragPreview();
-              _stopEdgeAutoScroll();
-              _cancelPendingDragWidth();
-              _resetDragFeedbackHint();
-              final DateTime dropTime =
-                  _computePreviewStartForTaskHover(task, details.offset) ??
-                      _defaultPreviewStartForTask(task);
-              _handleTaskDrop(details.data, dropTime);
-            },
-            builder: (context, candidateData, rejectedData) {
-              final bool isDraggingTask =
-                  _taskInteractionController.draggingTaskId != null &&
-                      task.id == _taskInteractionController.draggingTaskId;
-              final bool previewOverlap = _doesPreviewOverlap(task);
-              final CalendarTask? previewTaskCandidate =
-                  candidateData.isNotEmpty
-                      ? candidateData.first
-                      : previewOverlap
-                          ? _taskInteractionController.draggingTaskSnapshot
-                          : null;
-              final bool showSplitPreview = previewTaskCandidate != null;
-              final bool allowNarrowing =
-                  _taskInteractionController.dragHasMoved &&
-                      !_isWidthDebounceActive;
-              if (showSplitPreview && !allowNarrowing) {
-                _updateDragFeedbackWidth(eventWidth, forceCenterPointer: false);
-              }
-              if (isDraggingTask && !showSplitPreview) {
-                _cancelPendingDragWidth();
-                _resetDragFeedbackHint();
-              }
-              final CalendarTask? previewTask = previewTaskCandidate;
+          final _TaskTileCallbacks callbacks = _TaskTileCallbacks(
+            onResizePreview: _handleResizePreview,
+            onResizeEnd: _handleResizeCommit,
+            onResizePointerMove: _handleResizeAutoScroll,
+            onDragStarted: _handleTaskDragStarted,
+            onDragUpdate: _handleTaskDragUpdate,
+            onDragEnded: _handleTaskDragEnded,
+            onDragPointerDown: (offset) => _handleTaskPointerDown(task, offset),
+            onEnterSelectionMode: () => _enterSelectionMode(task.id),
+            onToggleSelection: () => _toggleTaskSelection(task.id),
+            onTap: _onScheduledTaskTapped,
+            computePreviewStartForHover: (offset) =>
+                _computePreviewStartForTaskHover(task, offset),
+            defaultPreviewStart: () => _defaultPreviewStartForTask(task),
+            previewOverlapsScheduled: _previewOverlapsScheduled,
+            updateDragPreview: _updateDragPreview,
+            stopEdgeAutoScroll: _stopEdgeAutoScroll,
+            updateDragFeedbackWidth: _updateDragFeedbackWidth,
+            clearDragPreview: _clearDragPreview,
+            cancelPendingDragWidth: _cancelPendingDragWidth,
+            resetDragFeedbackHint: _resetDragFeedbackHint,
+            doesPreviewOverlap: () => _doesPreviewOverlap(task),
+            onTaskDrop: _handleTaskDrop,
+            isWidthDebounceActive: () => _isWidthDebounceActive,
+            isPreviewAnchor: _isPreviewAnchor,
+          );
 
-              final double primaryWidth = showSplitPreview && allowNarrowing
-                  ? eventWidth / 2
-                  : eventWidth;
-
-              if (!isPlaceholder) {
-                _visibleTaskRects[task.id] = Rect.fromLTWH(
-                  leftOffset,
-                  topOffset,
-                  primaryWidth,
-                  clampedHeight,
-                );
-              }
-
-              Widget baseTask = ResizableTaskWidget(
-                key: ValueKey(task.id),
-                interactionController: _taskInteractionController,
-                task: task,
-                onResizePreview: _handleResizePreview,
-                onResizeEnd: _handleResizeCommit,
-                onResizePointerMove: _handleResizeAutoScroll,
-                hourHeight: _resolvedHourHeight,
-                stepHeight: stepHeight,
-                minutesPerStep: _minutesPerStep,
-                width: primaryWidth,
-                height: clampedHeight,
-                isDayView: isDayView,
-                isPopoverOpen: isPopoverOpen,
-                enableInteractions: true,
-                isSelectionMode: selectionMode,
-                isSelected: isSelected,
-                dragFeedbackHint: _taskInteractionController.feedbackHint,
-                contextMenuController: menuController,
-                contextMenuGroupId: _contextMenuGroupId,
-                contextMenuBuilder: buildTaskContextMenu,
-                onDragPointerDown: (offset) =>
-                    _handleTaskPointerDown(task, offset),
-                onToggleSelection: () {
-                  final String targetId = task.id;
-                  final bool isTappedSelected =
-                      selectionMode && _selectedTaskIds.contains(targetId);
-                  if (isTappedSelected &&
-                      _taskInteractionController.draggingTaskId == targetId) {
-                    _handleTaskDragEnded(task);
-                  }
-                  if (selectionMode) {
-                    _toggleTaskSelection(targetId);
-                  } else {
-                    _enterSelectionMode(targetId);
-                  }
-                },
-                onDragStarted: _handleTaskDragStarted,
-                onDragUpdate: _handleTaskDragUpdate,
-                onDragEnded: _handleTaskDragEnded,
-                onTap: (tappedTask, bounds) {
-                  _onScheduledTaskTapped(tappedTask, bounds);
-                },
-              );
-
-              if (showSplitPreview && previewTask != null) {
-                baseTask = SizedBox.expand(
-                  child: Stack(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: FractionallySizedBox(
-                          widthFactor: 0.5,
-                          alignment: Alignment.centerLeft,
-                          child: baseTask,
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FractionallySizedBox(
-                          widthFactor: 0.5,
-                          alignment: Alignment.centerRight,
-                          child: IgnorePointer(
-                            child: Opacity(
-                              opacity: 0.55,
-                              child: ResizableTaskWidget(
-                                key: ValueKey('${task.id}-preview'),
-                                interactionController:
-                                    _taskInteractionController,
-                                task: previewTask,
-                                onResizePreview: null,
-                                onResizeEnd: null,
-                                hourHeight: _resolvedHourHeight,
-                                stepHeight: stepHeight,
-                                minutesPerStep: _minutesPerStep,
-                                width: eventWidth / 2,
-                                height: clampedHeight,
-                                isDayView: isDayView,
-                                enableInteractions: false,
-                                isSelectionMode: false,
-                                isSelected: false,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return AnimatedContainer(
-                duration: _layoutTheme.splitPreviewAnimationDuration,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(calendarEventRadius),
-                  border: showSplitPreview
-                      ? Border.all(
-                          color: calendarPrimaryColor.withValues(
-                            alpha: calendarSplitPreviewBorderOpacity,
-                          ),
-                          width: calendarBorderStroke * 2,
-                        )
-                      : null,
-                ),
-                child: baseTask,
-              );
-            },
+          return _CalendarTaskSurface(
+            task: task,
+            left: leftOffset,
+            top: topOffset,
+            width: eventWidth,
+            height: clampedHeight,
+            isDayView: isDayView,
+            isPopoverOpen: isPopoverOpen,
+            selectionMode: _isSelectionMode,
+            isSelected: _isTaskSelected(task),
+            menuController: menuController,
+            contextMenuGroupId: _contextMenuGroupId,
+            buildContextMenu: buildTaskContextMenu,
+            interactionController: _taskInteractionController,
+            dragFeedbackHint: _taskInteractionController.feedbackHint,
+            callbacks: callbacks,
+            updateBounds: (rect) => _visibleTaskRects[task.id] = rect,
+            stepHeight: stepHeight,
+            minutesPerStep: _minutesPerStep,
+            hourHeight: _resolvedHourHeight,
+            dragTargetKey: globalKey,
+            splitPreviewAnimationDuration:
+                _layoutTheme.splitPreviewAnimationDuration,
           );
         },
       ),
@@ -3298,6 +3175,314 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _scrollToSlot(request.anchor);
       _capturedBloc.add(const CalendarEvent.taskFocusCleared());
     });
+  }
+}
+
+class _TaskTileCallbacks {
+  const _TaskTileCallbacks({
+    required this.onResizePreview,
+    required this.onResizeEnd,
+    required this.onResizePointerMove,
+    required this.onDragStarted,
+    required this.onDragUpdate,
+    required this.onDragEnded,
+    required this.onDragPointerDown,
+    required this.onEnterSelectionMode,
+    required this.onToggleSelection,
+    required this.onTap,
+    required this.computePreviewStartForHover,
+    required this.defaultPreviewStart,
+    required this.previewOverlapsScheduled,
+    required this.updateDragPreview,
+    required this.stopEdgeAutoScroll,
+    required this.updateDragFeedbackWidth,
+    required this.clearDragPreview,
+    required this.cancelPendingDragWidth,
+    required this.resetDragFeedbackHint,
+    required this.doesPreviewOverlap,
+    required this.onTaskDrop,
+    required this.isWidthDebounceActive,
+    required this.isPreviewAnchor,
+  });
+
+  final ValueChanged<CalendarTask> onResizePreview;
+  final ValueChanged<CalendarTask> onResizeEnd;
+  final ValueChanged<Offset> onResizePointerMove;
+  final void Function(CalendarTask task, Rect bounds) onDragStarted;
+  final ValueChanged<DragUpdateDetails> onDragUpdate;
+  final ValueChanged<CalendarTask> onDragEnded;
+  final ValueChanged<Offset> onDragPointerDown;
+  final VoidCallback onEnterSelectionMode;
+  final VoidCallback onToggleSelection;
+  final void Function(CalendarTask task, Rect bounds) onTap;
+  final DateTime? Function(Offset offset) computePreviewStartForHover;
+  final DateTime Function() defaultPreviewStart;
+  final bool Function(DateTime previewStart, Duration previewDuration)
+      previewOverlapsScheduled;
+  final void Function(DateTime previewStart, Duration previewDuration)
+      updateDragPreview;
+  final VoidCallback stopEdgeAutoScroll;
+  final void Function(
+    double width, {
+    bool forceApply,
+    bool forceCenterPointer,
+  }) updateDragFeedbackWidth;
+  final VoidCallback clearDragPreview;
+  final VoidCallback cancelPendingDragWidth;
+  final VoidCallback resetDragFeedbackHint;
+  final bool Function() doesPreviewOverlap;
+  final void Function(CalendarTask task, DateTime dropTime) onTaskDrop;
+  final bool Function() isWidthDebounceActive;
+  final bool Function(DateTime anchor) isPreviewAnchor;
+}
+
+class _CalendarTaskSurface extends StatelessWidget {
+  const _CalendarTaskSurface({
+    required this.task,
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+    required this.isDayView,
+    required this.isPopoverOpen,
+    required this.selectionMode,
+    required this.isSelected,
+    required this.menuController,
+    required this.contextMenuGroupId,
+    required this.buildContextMenu,
+    required this.interactionController,
+    required this.dragFeedbackHint,
+    required this.callbacks,
+    required this.updateBounds,
+    required this.stepHeight,
+    required this.minutesPerStep,
+    required this.hourHeight,
+    required this.dragTargetKey,
+    required this.splitPreviewAnimationDuration,
+  });
+
+  final CalendarTask task;
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+  final bool isDayView;
+  final bool isPopoverOpen;
+  final bool selectionMode;
+  final bool isSelected;
+  final ShadPopoverController menuController;
+  final ValueKey<String> contextMenuGroupId;
+  final TaskContextMenuBuilder buildContextMenu;
+  final TaskInteractionController interactionController;
+  final ValueListenable<DragFeedbackHint> dragFeedbackHint;
+  final _TaskTileCallbacks callbacks;
+  final void Function(Rect bounds) updateBounds;
+  final double stepHeight;
+  final int minutesPerStep;
+  final double hourHeight;
+  final GlobalKey dragTargetKey;
+  final Duration splitPreviewAnimationDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<CalendarTask>(
+      key: dragTargetKey,
+      hitTestBehavior: HitTestBehavior.translucent,
+      onWillAcceptWithDetails: (details) {
+        final CalendarTask dragged = details.data;
+        if (dragged.id == task.id) {
+          return false;
+        }
+        final DateTime previewStart =
+            callbacks.computePreviewStartForHover(details.offset) ??
+                callbacks.defaultPreviewStart();
+        final Duration previewDuration =
+            dragged.duration ?? const Duration(hours: 1);
+        final bool hasOverlap =
+            callbacks.previewOverlapsScheduled(previewStart, previewDuration);
+        final bool allowNarrowing = hasOverlap ||
+            (interactionController.dragHasMoved &&
+                !callbacks.isWidthDebounceActive());
+        callbacks.updateDragPreview(previewStart, previewDuration);
+        callbacks.stopEdgeAutoScroll();
+        final double targetWidth =
+            allowNarrowing && hasOverlap ? width / 2 : width;
+        callbacks.updateDragFeedbackWidth(
+          targetWidth,
+          forceApply: !hasOverlap,
+          forceCenterPointer: false,
+        );
+        return true;
+      },
+      onMove: (details) {
+        final DateTime previewStart =
+            callbacks.computePreviewStartForHover(details.offset) ??
+                callbacks.defaultPreviewStart();
+        final Duration previewDuration =
+            details.data.duration ?? const Duration(hours: 1);
+        final bool hasOverlap =
+            callbacks.previewOverlapsScheduled(previewStart, previewDuration);
+        final bool allowNarrowing = hasOverlap ||
+            (interactionController.dragHasMoved &&
+                !callbacks.isWidthDebounceActive());
+        final double targetWidth =
+            allowNarrowing && hasOverlap ? width / 2 : width;
+        callbacks.updateDragFeedbackWidth(
+          targetWidth,
+          forceApply: !hasOverlap,
+          forceCenterPointer: false,
+        );
+        callbacks.updateDragPreview(previewStart, previewDuration);
+      },
+      onLeave: (details) {
+        final DateTime? anchor = task.scheduledTime;
+        if (anchor != null && callbacks.isPreviewAnchor(anchor)) {
+          callbacks.clearDragPreview();
+        }
+        callbacks.stopEdgeAutoScroll();
+        callbacks.cancelPendingDragWidth();
+      },
+      onAcceptWithDetails: (details) {
+        callbacks.clearDragPreview();
+        callbacks.stopEdgeAutoScroll();
+        callbacks.cancelPendingDragWidth();
+        callbacks.resetDragFeedbackHint();
+        final DateTime dropTime =
+            callbacks.computePreviewStartForHover(details.offset) ??
+                callbacks.defaultPreviewStart();
+        callbacks.onTaskDrop(details.data, dropTime);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final bool isDraggingTask =
+            interactionController.draggingTaskId != null &&
+                task.id == interactionController.draggingTaskId;
+        final bool previewOverlap = callbacks.doesPreviewOverlap();
+        final CalendarTask? previewTaskCandidate = candidateData.isNotEmpty
+            ? candidateData.first
+            : (previewOverlap
+                ? interactionController.draggingTaskSnapshot
+                : null);
+        final bool showSplitPreview = previewTaskCandidate != null;
+        final bool allowNarrowing = interactionController.dragHasMoved &&
+            !callbacks.isWidthDebounceActive();
+        if (showSplitPreview && !allowNarrowing) {
+          callbacks.updateDragFeedbackWidth(
+            width,
+            forceApply: false,
+            forceCenterPointer: false,
+          );
+        }
+        if (isDraggingTask && !showSplitPreview) {
+          callbacks.cancelPendingDragWidth();
+          callbacks.resetDragFeedbackHint();
+        }
+
+        final double primaryWidth =
+            showSplitPreview && allowNarrowing ? width / 2 : width;
+        updateBounds(Rect.fromLTWH(left, top, primaryWidth, height));
+
+        Widget baseTask = ResizableTaskWidget(
+          key: ValueKey(task.id),
+          interactionController: interactionController,
+          task: task,
+          onResizePreview: callbacks.onResizePreview,
+          onResizeEnd: callbacks.onResizeEnd,
+          onResizePointerMove: callbacks.onResizePointerMove,
+          hourHeight: hourHeight,
+          stepHeight: stepHeight,
+          minutesPerStep: minutesPerStep,
+          width: primaryWidth,
+          height: height,
+          isDayView: isDayView,
+          isPopoverOpen: isPopoverOpen,
+          enableInteractions: true,
+          isSelectionMode: selectionMode,
+          isSelected: isSelected,
+          dragFeedbackHint: dragFeedbackHint,
+          contextMenuController: menuController,
+          contextMenuGroupId: contextMenuGroupId,
+          contextMenuBuilder: buildContextMenu,
+          onDragPointerDown: callbacks.onDragPointerDown,
+          onToggleSelection: () {
+            if (selectionMode &&
+                isSelected &&
+                interactionController.draggingTaskId == task.id) {
+              callbacks.onDragEnded(task);
+            }
+            if (selectionMode) {
+              callbacks.onToggleSelection();
+            } else {
+              callbacks.onEnterSelectionMode();
+            }
+          },
+          onDragStarted: callbacks.onDragStarted,
+          onDragUpdate: callbacks.onDragUpdate,
+          onDragEnded: callbacks.onDragEnded,
+          onTap: callbacks.onTap,
+        );
+
+        if (showSplitPreview && previewTaskCandidate != null) {
+          baseTask = SizedBox.expand(
+            child: Stack(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.5,
+                    alignment: Alignment.centerLeft,
+                    child: baseTask,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.5,
+                    alignment: Alignment.centerRight,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.55,
+                        child: ResizableTaskWidget(
+                          key: ValueKey('${task.id}-preview'),
+                          interactionController: interactionController,
+                          task: previewTaskCandidate,
+                          onResizePreview: null,
+                          onResizeEnd: null,
+                          hourHeight: hourHeight,
+                          stepHeight: stepHeight,
+                          minutesPerStep: minutesPerStep,
+                          width: width / 2,
+                          height: height,
+                          isDayView: isDayView,
+                          enableInteractions: false,
+                          isSelectionMode: false,
+                          isSelected: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return AnimatedContainer(
+          duration: splitPreviewAnimationDuration,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(calendarEventRadius),
+            border: showSplitPreview
+                ? Border.all(
+                    color: calendarPrimaryColor.withValues(
+                      alpha: calendarSplitPreviewBorderOpacity,
+                    ),
+                    width: calendarBorderStroke * 2,
+                  )
+                : null,
+          ),
+          child: baseTask,
+        );
+      },
+    );
   }
 }
 
