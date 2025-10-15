@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:flutter/material.dart';
 
 import '../../models/calendar_task.dart';
 
@@ -123,6 +124,28 @@ class CalendarLayoutMetrics {
     final double slots = minutesFromStart / minutesPerSlot;
     return slots * slotHeight;
   }
+}
+
+/// Immutable geometry describing how a calendar task should be rendered within
+/// a day column.
+class CalendarTaskLayout {
+  const CalendarTaskLayout({
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+    required this.clampedStart,
+    required this.clampedEnd,
+    required this.spanDays,
+  });
+
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+  final DateTime clampedStart;
+  final DateTime clampedEnd;
+  final int spanDays;
 }
 
 class CalendarLayoutCalculator {
@@ -250,6 +273,96 @@ class CalendarLayoutCalculator {
     final double narrowed = effectiveSlotWidth * theme.narrowedWidthFactor;
     final double minimumAllowed = math.min(theme.eventMinWidth, baselineWidth);
     return narrowed.clamp(minimumAllowed, baselineWidth);
+  }
+
+  CalendarTaskLayout? resolveTaskLayout({
+    required CalendarTask task,
+    required DateTime dayDate,
+    required DateTime weekStartDate,
+    required DateTime weekEndDate,
+    required bool isDayView,
+    required int startHour,
+    required int endHour,
+    required double dayWidth,
+    required CalendarLayoutMetrics metrics,
+    required OverlapInfo overlap,
+  }) {
+    final DateTime? scheduledTime = task.scheduledTime;
+    if (scheduledTime == null) {
+      return null;
+    }
+
+    final DateTime eventStartDate = DateTime(
+      scheduledTime.year,
+      scheduledTime.month,
+      scheduledTime.day,
+    );
+    DateTime? effectiveEnd = task.effectiveEndDate;
+    effectiveEnd ??=
+        task.duration != null ? scheduledTime.add(task.duration!) : null;
+    final DateTime eventEndDate = DateTime(
+      (effectiveEnd ?? scheduledTime).year,
+      (effectiveEnd ?? scheduledTime).month,
+      (effectiveEnd ?? scheduledTime).day,
+    );
+
+    final DateTime clampedWeekStart =
+        eventStartDate.isBefore(weekStartDate) ? weekStartDate : eventStartDate;
+    final DateTime clampedWeekEnd =
+        eventEndDate.isAfter(weekEndDate) ? weekEndDate : eventEndDate;
+
+    if (dayDate.isAfter(clampedWeekEnd) || dayDate.isBefore(clampedWeekStart)) {
+      return null;
+    }
+
+    if (!isDayView && !DateUtils.isSameDay(dayDate, clampedWeekStart)) {
+      return null;
+    }
+
+    final int minutesFromStart =
+        (scheduledTime.hour * 60 + scheduledTime.minute) - (startHour * 60);
+    if (minutesFromStart < 0) {
+      return null;
+    }
+
+    if (scheduledTime.hour > endHour) {
+      return null;
+    }
+
+    final double topOffset = metrics.verticalOffsetForMinutes(
+      minutesFromStart,
+    );
+    final Duration duration = task.duration ?? const Duration(hours: 1);
+    final double height = clampEventHeight(
+      metrics.heightForDuration(duration),
+    );
+
+    final int spanDays = isDayView
+        ? 1
+        : ((clampedWeekEnd.difference(clampedWeekStart).inDays + 1)
+            .clamp(1, 7));
+
+    final double left = eventLeftOffset(
+      dayWidth: dayWidth,
+      overlap: overlap,
+    );
+
+    final double width = eventWidth(
+      dayWidth: dayWidth,
+      overlap: overlap,
+      isDayView: isDayView,
+      spanDays: spanDays,
+    );
+
+    return CalendarTaskLayout(
+      left: left,
+      top: topOffset,
+      width: width,
+      height: height,
+      clampedStart: clampedWeekStart,
+      clampedEnd: clampedWeekEnd,
+      spanDays: spanDays,
+    );
   }
 }
 

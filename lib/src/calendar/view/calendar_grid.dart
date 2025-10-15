@@ -21,6 +21,7 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart'
     show
         CalendarLayoutCalculator,
+        CalendarTaskLayout,
         CalendarLayoutMetrics,
         CalendarLayoutTheme,
         CalendarZoomLevel,
@@ -2682,72 +2683,43 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return null;
     }
 
-    final taskTime = task.scheduledTime!;
-    final dayDate =
-        DateTime(currentDate.year, currentDate.month, currentDate.day);
-    final eventStartDate =
-        DateTime(taskTime.year, taskTime.month, taskTime.day);
-
-    DateTime? effectiveEndDateTime = task.effectiveEndDate;
-    effectiveEndDateTime ??=
-        task.duration != null ? taskTime.add(task.duration!) : taskTime;
-    final eventEndDate = DateTime(effectiveEndDateTime.year,
-        effectiveEndDateTime.month, effectiveEndDateTime.day);
-
-    final clampedWeekStart = weekStartDate ?? eventStartDate;
-    final clampedWeekEnd = weekEndDate ?? eventEndDate;
-
-    final clampedStart = eventStartDate.isBefore(clampedWeekStart)
-        ? clampedWeekStart
-        : eventStartDate;
-    final clampedEnd =
-        eventEndDate.isAfter(clampedWeekEnd) ? clampedWeekEnd : eventEndDate;
-
-    if (dayDate.isAfter(clampedEnd) || dayDate.isBefore(clampedStart)) {
-      return null;
-    }
-
-    if (!isDayView && !DateUtils.isSameDay(dayDate, clampedStart)) {
-      return null;
-    }
-
-    final hour = taskTime.hour.toDouble();
-    final minute = taskTime.minute.toDouble();
-
-    // Check if task's scheduled time is outside visible hours
-    if (hour < startHour || hour > endHour) return null;
-
-    // Calculate pixel-perfect positioning
-    final startTimeHours = hour + (minute / 60.0);
-    final topOffset = (startTimeHours - startHour) * _resolvedHourHeight;
-
-    // Height is always based on task duration, not day span
-    final duration = task.duration ?? const Duration(hours: 1);
-    final height = (duration.inMinutes / 60.0) * _resolvedHourHeight;
-
-    // Calculate width and position based on overlap
-    final leftOffset = _layoutCalculator.eventLeftOffset(
-      dayWidth: dayWidth,
-      overlap: overlapInfo,
+    final DateTime dayDate = DateTime(
+      currentDate.year,
+      currentDate.month,
+      currentDate.day,
     );
+    final DateTime resolvedWeekStart = weekStartDate ?? dayDate;
+    final DateTime resolvedWeekEnd = weekEndDate ?? dayDate;
 
-    final clampedHeight = _layoutCalculator.clampEventHeight(height);
-
-    final spanDays = !isDayView
-        ? ((clampedEnd.difference(dayDate).inDays + 1).clamp(1, 7)).toInt()
-        : 1;
-    final eventWidth = _layoutCalculator.eventWidth(
-      dayWidth: dayWidth,
-      overlap: overlapInfo,
+    final CalendarTaskLayout? layout = _layoutCalculator.resolveTaskLayout(
+      task: task,
+      dayDate: dayDate,
+      weekStartDate: resolvedWeekStart,
+      weekEndDate: resolvedWeekEnd,
       isDayView: isDayView,
-      spanDays: spanDays,
+      startHour: startHour,
+      endHour: endHour,
+      dayWidth: dayWidth,
+      metrics: _currentLayoutMetrics,
+      overlap: overlapInfo,
     );
+
+    if (layout == null) {
+      return null;
+    }
+    final double narrowedWidth = _layoutCalculator.computeNarrowedWidth(
+      dayWidth,
+      layout.width,
+    );
+    final double splitWidthFactor = layout.width == 0
+        ? 0.0
+        : math.max(0.0, math.min(1.0, narrowedWidth / layout.width));
 
     return Positioned(
-      left: leftOffset,
-      top: topOffset,
-      width: eventWidth,
-      height: clampedHeight,
+      left: layout.left,
+      top: layout.top,
+      width: layout.width,
+      height: layout.height,
       child: Builder(
         builder: (context) {
           final isPopoverOpen = _taskPopoverController.isPopoverOpen(task.id);
@@ -2765,7 +2737,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             return IgnorePointer(
               ignoring: true,
               child: Opacity(
-                opacity: 0.45,
+                opacity: calendarTaskGhostOpacity,
                 child: ResizableTaskWidget(
                   key: ValueKey('${task.id}-ghost'),
                   interactionController: _taskInteractionController,
@@ -2775,8 +2747,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   hourHeight: _resolvedHourHeight,
                   stepHeight: stepHeight,
                   minutesPerStep: _minutesPerStep,
-                  width: eventWidth,
-                  height: clampedHeight,
+                  width: layout.width,
+                  height: layout.height,
                   isDayView: isDayView,
                   enableInteractions: false,
                   isSelectionMode: _isSelectionMode,
@@ -3008,10 +2980,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
           return _CalendarTaskSurface(
             task: task,
-            left: leftOffset,
-            top: topOffset,
-            width: eventWidth,
-            height: clampedHeight,
+            left: layout.left,
+            top: layout.top,
+            width: layout.width,
+            height: layout.height,
             isDayView: isDayView,
             isPopoverOpen: isPopoverOpen,
             selectionMode: _isSelectionMode,
@@ -3029,6 +3001,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             dragTargetKey: globalKey,
             splitPreviewAnimationDuration:
                 _layoutTheme.splitPreviewAnimationDuration,
+            narrowedWidth: narrowedWidth,
+            splitWidthFactor: splitWidthFactor,
           );
         },
       ),
@@ -3259,6 +3233,8 @@ class _CalendarTaskSurface extends StatelessWidget {
     required this.hourHeight,
     required this.dragTargetKey,
     required this.splitPreviewAnimationDuration,
+    required this.narrowedWidth,
+    required this.splitWidthFactor,
   });
 
   final CalendarTask task;
@@ -3282,6 +3258,8 @@ class _CalendarTaskSurface extends StatelessWidget {
   final double hourHeight;
   final GlobalKey dragTargetKey;
   final Duration splitPreviewAnimationDuration;
+  final double narrowedWidth;
+  final double splitWidthFactor;
 
   @override
   Widget build(BuildContext context) {
@@ -3306,7 +3284,7 @@ class _CalendarTaskSurface extends StatelessWidget {
         callbacks.updateDragPreview(previewStart, previewDuration);
         callbacks.stopEdgeAutoScroll();
         final double targetWidth =
-            allowNarrowing && hasOverlap ? width / 2 : width;
+            allowNarrowing && hasOverlap ? narrowedWidth : width;
         callbacks.updateDragFeedbackWidth(
           targetWidth,
           forceApply: !hasOverlap,
@@ -3326,7 +3304,7 @@ class _CalendarTaskSurface extends StatelessWidget {
             (interactionController.dragHasMoved &&
                 !callbacks.isWidthDebounceActive());
         final double targetWidth =
-            allowNarrowing && hasOverlap ? width / 2 : width;
+            allowNarrowing && hasOverlap ? narrowedWidth : width;
         callbacks.updateDragFeedbackWidth(
           targetWidth,
           forceApply: !hasOverlap,
@@ -3378,7 +3356,7 @@ class _CalendarTaskSurface extends StatelessWidget {
         }
 
         final double primaryWidth =
-            showSplitPreview && allowNarrowing ? width / 2 : width;
+            showSplitPreview && allowNarrowing ? narrowedWidth : width;
         updateBounds(Rect.fromLTWH(left, top, primaryWidth, height));
 
         Widget baseTask = ResizableTaskWidget(
@@ -3428,7 +3406,7 @@ class _CalendarTaskSurface extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: FractionallySizedBox(
-                    widthFactor: 0.5,
+                    widthFactor: splitWidthFactor,
                     alignment: Alignment.centerLeft,
                     child: baseTask,
                   ),
@@ -3436,11 +3414,11 @@ class _CalendarTaskSurface extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerRight,
                   child: FractionallySizedBox(
-                    widthFactor: 0.5,
+                    widthFactor: splitWidthFactor,
                     alignment: Alignment.centerRight,
                     child: IgnorePointer(
                       child: Opacity(
-                        opacity: 0.55,
+                        opacity: calendarSplitPreviewGhostOpacity,
                         child: ResizableTaskWidget(
                           key: ValueKey('${task.id}-preview'),
                           interactionController: interactionController,
@@ -3450,7 +3428,7 @@ class _CalendarTaskSurface extends StatelessWidget {
                           hourHeight: hourHeight,
                           stepHeight: stepHeight,
                           minutesPerStep: minutesPerStep,
-                          width: width / 2,
+                          width: narrowedWidth,
                           height: height,
                           isDayView: isDayView,
                           enableInteractions: false,
