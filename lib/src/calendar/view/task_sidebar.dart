@@ -17,6 +17,7 @@ import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
+import 'controllers/task_draft_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
@@ -33,6 +34,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     with TickerProviderStateMixin {
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
   late final CalendarSidebarController _sidebarController;
+  late final TaskDraftController _draftController;
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
@@ -44,14 +46,12 @@ class _TaskSidebarState extends State<TaskSidebar>
       TextEditingController();
   static const Duration _selectionTimeStep = Duration(minutes: 15);
   final ScrollController _scrollController = ScrollController();
-  late final ValueNotifier<RecurrenceFormValue> _advancedRecurrenceNotifier;
 
   String _selectionRecurrenceSignature = '';
   late final ValueNotifier<RecurrenceFormValue> _selectionRecurrenceNotifier;
   late final ValueNotifier<bool> _selectionRecurrenceMixedNotifier;
 
-  RecurrenceFormValue get _advancedRecurrence =>
-      _advancedRecurrenceNotifier.value;
+  RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
   final Map<String, ShadPopoverController> _taskPopoverControllers = {};
@@ -80,8 +80,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       minWidth: _layoutTheme.sidebarMinWidth,
       maxWidth: _layoutTheme.sidebarMinWidth,
     );
-    _advancedRecurrenceNotifier =
-        ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
+    _draftController = TaskDraftController();
     _selectionRecurrenceNotifier =
         ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
     _selectionRecurrenceMixedNotifier = ValueNotifier<bool>(false);
@@ -96,7 +95,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _selectionDescriptionController.dispose();
     _selectionLocationController.dispose();
     _scrollController.dispose();
-    _advancedRecurrenceNotifier.dispose();
+    _draftController.dispose();
     _selectionRecurrenceNotifier.dispose();
     _selectionRecurrenceMixedNotifier.dispose();
     for (final controller in _taskPopoverControllers.values) {
@@ -191,7 +190,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           const SizedBox(height: calendarSidebarSectionSpacing),
           _buildQuickTaskInput(),
           const SizedBox(height: calendarSidebarSectionSpacing),
-          _buildPriorityToggles(uiState),
+          _buildPriorityToggles(),
           const SizedBox(height: calendarSidebarToggleSpacing),
           _buildAdvancedToggle(uiState),
           AnimatedSwitcher(
@@ -211,10 +210,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               );
             },
             child: uiState.showAdvancedOptions
-                ? _buildAdvancedOptions(
-                    uiState,
-                    key: const ValueKey('advanced'),
-                  )
+                ? _buildAdvancedOptions(key: const ValueKey('advanced'))
                 : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
           ),
           const SizedBox(height: calendarSidebarSectionSpacing),
@@ -1195,12 +1191,17 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildPriorityToggles(CalendarSidebarState uiState) {
-    return TaskPriorityToggles(
-      isImportant: uiState.isImportant,
-      isUrgent: uiState.isUrgent,
-      onImportantChanged: _sidebarController.setImportant,
-      onUrgentChanged: _sidebarController.setUrgent,
+  Widget _buildPriorityToggles() {
+    return AnimatedBuilder(
+      animation: _draftController,
+      builder: (context, _) {
+        return TaskPriorityToggles(
+          isImportant: _draftController.isImportant,
+          isUrgent: _draftController.isUrgent,
+          onImportantChanged: _draftController.setImportant,
+          onUrgentChanged: _draftController.setUrgent,
+        );
+      },
     );
   }
 
@@ -1227,10 +1228,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedOptions(
-    CalendarSidebarState uiState, {
-    Key? key,
-  }) {
+  Widget _buildAdvancedOptions({Key? key}) {
     return Padding(
       key: key,
       padding: const EdgeInsets.only(top: 12),
@@ -1259,12 +1257,17 @@ class _TaskSidebarState extends State<TaskSidebar>
           const SizedBox(height: 12),
           const TaskSectionHeader(title: 'Deadline'),
           const SizedBox(height: 6),
-          DeadlinePickerField(
-            value: uiState.selectedDeadline,
-            onChanged: _sidebarController.setSelectedDeadline,
+          AnimatedBuilder(
+            animation: _draftController,
+            builder: (context, _) {
+              return DeadlinePickerField(
+                value: _draftController.deadline,
+                onChanged: _draftController.setDeadline,
+              );
+            },
           ),
           const TaskSectionDivider(),
-          _buildAdvancedScheduleSection(uiState),
+          _buildAdvancedScheduleSection(),
           const TaskSectionDivider(),
           _buildAdvancedRecurrenceSection(),
         ],
@@ -1272,27 +1275,33 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedScheduleSection(CalendarSidebarState uiState) {
-    return TaskScheduleSection(
-      spacing: calendarSpacing6,
-      start: uiState.advancedStartTime,
-      end: uiState.advancedEndTime,
-      onStartChanged: _sidebarController.setAdvancedStart,
-      onEndChanged: _sidebarController.setAdvancedEnd,
-      onClear: () => _sidebarController.setAdvancedStart(null),
+  Widget _buildAdvancedScheduleSection() {
+    return AnimatedBuilder(
+      animation: _draftController,
+      builder: (context, _) {
+        return TaskScheduleSection(
+          spacing: calendarSpacing6,
+          start: _draftController.startTime,
+          end: _draftController.endTime,
+          onStartChanged: _draftController.updateStart,
+          onEndChanged: _draftController.updateEnd,
+          onClear: _draftController.clearSchedule,
+        );
+      },
     );
   }
 
   Widget _buildAdvancedRecurrenceSection() {
-    final referenceStart = _sidebarController.state.advancedStartTime;
-    final fallbackWeekday = referenceStart?.weekday ?? DateTime.now().weekday;
+    return AnimatedBuilder(
+      animation: _draftController,
+      builder: (context, _) {
+        final referenceStart = _draftController.startTime;
+        final fallbackWeekday =
+            referenceStart?.weekday ?? DateTime.now().weekday;
 
-    return ValueListenableBuilder<RecurrenceFormValue>(
-      valueListenable: _advancedRecurrenceNotifier,
-      builder: (context, recurrence, _) {
         return TaskRecurrenceSection(
           spacing: calendarSpacing6,
-          value: recurrence,
+          value: _draftController.recurrence,
           fallbackWeekday: fallbackWeekday,
           spacingConfig: const RecurrenceEditorSpacing(
             chipSpacing: 8,
@@ -1303,9 +1312,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             fieldGap: 12,
           ),
           intervalSelectWidth: 118,
-          onChanged: (next) {
-            _advancedRecurrenceNotifier.value = next;
-          },
+          onChanged: _draftController.setRecurrence,
         );
       },
     );
@@ -2134,26 +2141,17 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   TaskPriority _currentPriority() {
-    final uiState = _sidebarController.state;
-    if (uiState.isImportant && uiState.isUrgent) {
-      return TaskPriority.critical;
-    } else if (uiState.isImportant) {
-      return TaskPriority.important;
-    } else if (uiState.isUrgent) {
-      return TaskPriority.urgent;
-    }
-    return TaskPriority.none;
+    return _draftController.selectedPriority;
   }
 
   void _addTask() {
-    final uiState = _sidebarController.state;
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
 
     final priority = _currentPriority();
     final hasLocation = _locationController.text.trim().isNotEmpty;
     final hasSchedule =
-        uiState.advancedStartTime != null && uiState.advancedEndTime != null;
+        _draftController.startTime != null && _draftController.endTime != null;
     final hasRecurrence = _advancedRecurrence.isActive;
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
@@ -2163,27 +2161,19 @@ class _TaskSidebarState extends State<TaskSidebar>
               description: _descriptionController.text.trim().isNotEmpty
                   ? _descriptionController.text.trim()
                   : null,
-              deadline: uiState.selectedDeadline,
+              deadline: _draftController.deadline,
               priority: priority,
             ),
           );
     } else {
-      Duration? duration;
-      DateTime? scheduledTime;
-      if (hasSchedule) {
-        final DateTime start = uiState.advancedStartTime!;
-        DateTime end = uiState.advancedEndTime!;
-        duration = end.difference(start);
-        if (duration.inMinutes < 15) {
-          end = start.add(const Duration(minutes: 15));
-          duration = const Duration(minutes: 15);
-        }
-        scheduledTime = start;
-      }
+      final DateTime? scheduledTime = _draftController.startTime;
+      final Duration? duration = hasSchedule
+          ? _draftController.effectiveDuration ?? const Duration(minutes: 15)
+          : null;
 
       RecurrenceRule? recurrence;
       if (hasRecurrence) {
-        final reference = uiState.advancedStartTime ?? DateTime.now();
+        final reference = scheduledTime ?? DateTime.now();
         recurrence = _advancedRecurrence.toRule(start: reference);
       }
 
@@ -2195,7 +2185,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   : null,
               scheduledTime: scheduledTime,
               duration: duration,
-              deadline: uiState.selectedDeadline,
+              deadline: _draftController.deadline,
               location: hasLocation ? _locationController.text.trim() : null,
               priority: priority,
               recurrence: recurrence,
@@ -2210,7 +2200,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _titleController.clear();
     _descriptionController.clear();
     _locationController.clear();
-    _advancedRecurrenceNotifier.value = const RecurrenceFormValue();
+    _draftController.reset();
     _sidebarController.resetForm();
   }
 
