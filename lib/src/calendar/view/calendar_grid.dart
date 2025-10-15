@@ -3067,8 +3067,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 onDragPointerDown: (offset) =>
                     _handleTaskPointerDown(task, offset),
                 onToggleSelection: () {
-                  final String targetId =
-                      task.isOccurrence ? task.id : task.baseId;
+                  final String targetId = task.id;
                   if (selectionMode) {
                     _toggleTaskSelection(targetId);
                   } else {

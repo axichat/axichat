@@ -21,6 +21,9 @@ class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
     @HiveField(3) bool? isCancelled,
     @HiveField(4) TaskPriority? priority,
     @HiveField(5) bool? isCompleted,
+    @HiveField(6) String? title,
+    @HiveField(7) String? description,
+    @HiveField(8) String? location,
   }) = _TaskOccurrenceOverride;
 
   factory TaskOccurrenceOverride.fromJson(Map<String, dynamic> json) =>

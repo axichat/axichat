@@ -1080,7 +1080,7 @@ abstract class BaseCalendarBloc
 
     final now = _now();
     final updates = <String, CalendarTask>{};
-    final processedBases = <String>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
 
     for (final id in state.selectedTaskIds) {
       final CalendarTask? direct = state.model.tasks[id];
@@ -1092,29 +1092,65 @@ abstract class BaseCalendarBloc
       }
 
       final String baseId = baseTaskIdFrom(id);
-      if (!processedBases.add(baseId)) {
-        continue;
-      }
       final CalendarTask? baseTask = state.model.tasks[baseId];
-      if (baseTask == null || baseTask.title == title) {
+      if (baseTask == null) {
         continue;
       }
-      updates[baseId] = baseTask.copyWith(title: title, modifiedAt: now);
+
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (occurrenceKey == null || occurrenceKey.isEmpty) {
+        continue;
+      }
+
+      final CalendarTask baseReference = updates[baseId] ?? baseTask;
+      final overrides = baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseReference.occurrenceOverrides,
+        ),
+      );
+
+      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+          baseReference.occurrenceOverrides[occurrenceKey] ??
+          const TaskOccurrenceOverride();
+      final String? overrideTitle = title == baseTask.title ? null : title;
+      final TaskOccurrenceOverride updatedOverride =
+          existing.copyWith(title: overrideTitle);
+
+      if (_overrideIsEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
     }
 
-    if (updates.isEmpty) {
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
       return;
     }
 
     _recordUndoSnapshot();
-    final updatedModel = state.model.replaceTasks(updates);
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseTask =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+      mergedUpdates[baseId] = baseTask.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
     emitModel(
       updatedModel,
       emit,
       selectedTaskIds: state.selectedTaskIds,
     );
 
-    for (final task in updates.values) {
+    for (final task in mergedUpdates.values) {
       await onTaskUpdated(task);
     }
   }
@@ -1132,7 +1168,7 @@ abstract class BaseCalendarBloc
 
     final now = _now();
     final updates = <String, CalendarTask>{};
-    final processedBases = <String>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
 
     for (final id in state.selectedTaskIds) {
       final CalendarTask? direct = state.model.tasks[id];
@@ -1147,32 +1183,68 @@ abstract class BaseCalendarBloc
       }
 
       final String baseId = baseTaskIdFrom(id);
-      if (!processedBases.add(baseId)) {
-        continue;
-      }
       final CalendarTask? baseTask = state.model.tasks[baseId];
-      if (baseTask == null || baseTask.description == description) {
+      if (baseTask == null) {
         continue;
       }
-      updates[baseId] = baseTask.copyWith(
-        description: description,
-        modifiedAt: now,
+
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (occurrenceKey == null || occurrenceKey.isEmpty) {
+        continue;
+      }
+
+      final CalendarTask baseReference = updates[baseId] ?? baseTask;
+      final overrides = baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseReference.occurrenceOverrides,
+        ),
       );
+
+      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+          baseReference.occurrenceOverrides[occurrenceKey] ??
+          const TaskOccurrenceOverride();
+      final String baseDescription = baseTask.description ?? '';
+      final String newDescription = description ?? '';
+      final String? overrideDescription =
+          newDescription == baseDescription ? null : newDescription;
+      final TaskOccurrenceOverride updatedOverride =
+          existing.copyWith(description: overrideDescription);
+
+      if (_overrideIsEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
     }
 
-    if (updates.isEmpty) {
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
       return;
     }
 
     _recordUndoSnapshot();
-    final updatedModel = state.model.replaceTasks(updates);
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseTask =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+      mergedUpdates[baseId] = baseTask.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
     emitModel(
       updatedModel,
       emit,
       selectedTaskIds: state.selectedTaskIds,
     );
 
-    for (final task in updates.values) {
+    for (final task in mergedUpdates.values) {
       await onTaskUpdated(task);
     }
   }
@@ -1190,7 +1262,7 @@ abstract class BaseCalendarBloc
 
     final now = _now();
     final updates = <String, CalendarTask>{};
-    final processedBases = <String>{};
+    final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
 
     for (final id in state.selectedTaskIds) {
       final CalendarTask? direct = state.model.tasks[id];
@@ -1205,32 +1277,68 @@ abstract class BaseCalendarBloc
       }
 
       final String baseId = baseTaskIdFrom(id);
-      if (!processedBases.add(baseId)) {
-        continue;
-      }
       final CalendarTask? baseTask = state.model.tasks[baseId];
-      if (baseTask == null || baseTask.location == location) {
+      if (baseTask == null) {
         continue;
       }
-      updates[baseId] = baseTask.copyWith(
-        location: location,
-        modifiedAt: now,
+
+      final String? occurrenceKey = occurrenceKeyFrom(id);
+      if (occurrenceKey == null || occurrenceKey.isEmpty) {
+        continue;
+      }
+
+      final CalendarTask baseReference = updates[baseId] ?? baseTask;
+      final overrides = baseOverrideUpdates.putIfAbsent(
+        baseId,
+        () => Map<String, TaskOccurrenceOverride>.from(
+          baseReference.occurrenceOverrides,
+        ),
       );
+
+      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+          baseReference.occurrenceOverrides[occurrenceKey] ??
+          const TaskOccurrenceOverride();
+      final String baseLocation = baseTask.location ?? '';
+      final String newLocation = location ?? '';
+      final String? overrideLocation =
+          newLocation == baseLocation ? null : newLocation;
+      final TaskOccurrenceOverride updatedOverride =
+          existing.copyWith(location: overrideLocation);
+
+      if (_overrideIsEmpty(updatedOverride)) {
+        overrides.remove(occurrenceKey);
+      } else {
+        overrides[occurrenceKey] = updatedOverride;
+      }
     }
 
-    if (updates.isEmpty) {
+    if (updates.isEmpty && baseOverrideUpdates.isEmpty) {
       return;
     }
 
     _recordUndoSnapshot();
-    final updatedModel = state.model.replaceTasks(updates);
+    final mergedUpdates = <String, CalendarTask>{...updates};
+    for (final entry in baseOverrideUpdates.entries) {
+      final String baseId = entry.key;
+      final CalendarTask? baseTask =
+          mergedUpdates[baseId] ?? state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+      mergedUpdates[baseId] = baseTask.copyWith(
+        occurrenceOverrides: entry.value,
+        modifiedAt: now,
+      );
+    }
+
+    final updatedModel = state.model.replaceTasks(mergedUpdates);
     emitModel(
       updatedModel,
       emit,
       selectedTaskIds: state.selectedTaskIds,
     );
 
-    for (final task in updates.values) {
+    for (final task in mergedUpdates.values) {
       await onTaskUpdated(task);
     }
   }
@@ -1339,11 +1447,19 @@ abstract class BaseCalendarBloc
   }
 
   Set<String> _selectionGroupFor(String id) {
-    final CalendarTask? resolved = state.model.resolveTaskInstance(id);
-    if (resolved == null) {
-      return {id};
-    }
-    return {resolved.id};
+    return {id};
+  }
+
+  bool _overrideIsEmpty(TaskOccurrenceOverride override) {
+    return override.scheduledTime == null &&
+        override.duration == null &&
+        override.endDate == null &&
+        override.isCancelled == null &&
+        override.priority == null &&
+        override.isCompleted == null &&
+        override.title == null &&
+        override.description == null &&
+        override.location == null;
   }
 
   Duration _taskDuration(CalendarTask task) {
