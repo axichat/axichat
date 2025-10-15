@@ -53,6 +53,17 @@ class _TaskSidebarState extends State<TaskSidebar>
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
   final Map<String, ShadPopoverController> _taskPopoverControllers = {};
+  bool _selectionTitleDirty = false;
+  bool _selectionDescriptionDirty = false;
+  bool _selectionLocationDirty = false;
+  bool _isUpdatingSelectionTitle = false;
+  bool _isUpdatingSelectionDescription = false;
+  bool _isUpdatingSelectionLocation = false;
+
+  bool get _hasPendingSelectionEdits =>
+      _selectionTitleDirty ||
+      _selectionDescriptionDirty ||
+      _selectionLocationDirty;
 
   @override
   void initState() {
@@ -558,7 +569,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           controller: _selectionTitleController,
           hint: 'Set title for selected tasks',
           enabled: hasTasks,
-          onApply: _applySelectionTitle,
+          onChanged: _handleSelectionTitleChanged,
         ),
         const SizedBox(height: calendarSpacing8),
         _buildSelectionTextField(
@@ -568,7 +579,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           enabled: hasTasks,
           minLines: 2,
           maxLines: 3,
-          onApply: _applySelectionDescription,
+          onChanged: _handleSelectionDescriptionChanged,
         ),
         const SizedBox(height: calendarSpacing8),
         _buildSelectionTextField(
@@ -576,12 +587,23 @@ class _TaskSidebarState extends State<TaskSidebar>
           controller: _selectionLocationController,
           hint: 'Set location (leave blank to clear)',
           enabled: hasTasks,
-          onApply: _applySelectionLocation,
+          onChanged: _handleSelectionLocationChanged,
         ),
         const SizedBox(height: calendarSpacing12),
         const TaskSectionHeader(title: 'Adjust time'),
         const SizedBox(height: calendarSpacing8),
         _buildSelectionTimeAdjustRow(hasTasks),
+        const SizedBox(height: calendarSpacing12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TaskPrimaryButton(
+            label: 'Apply changes',
+            size: ShadButtonSize.sm,
+            onPressed: hasTasks && _hasPendingSelectionEdits
+                ? _applySelectionBatchChanges
+                : null,
+          ),
+        ),
       ],
     );
   }
@@ -591,9 +613,9 @@ class _TaskSidebarState extends State<TaskSidebar>
     required TextEditingController controller,
     required String hint,
     required bool enabled,
-    required VoidCallback onApply,
     int minLines = 1,
     int? maxLines,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,30 +630,17 @@ class _TaskSidebarState extends State<TaskSidebar>
           ),
         ),
         const SizedBox(height: calendarSpacing4),
-        Row(
-          crossAxisAlignment: maxLines != null && maxLines > 1
-              ? CrossAxisAlignment.start
-              : CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: TaskTextField(
-                controller: controller,
-                hintText: hint,
-                enabled: enabled,
-                minLines: minLines,
-                maxLines: maxLines ?? minLines,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: calendarSpacing12,
-                  vertical: calendarSpacing8,
-                ),
-              ),
-            ),
-            const SizedBox(width: calendarSpacing8),
-            TaskSecondaryButton(
-              label: 'Apply',
-              onPressed: enabled ? onApply : null,
-            ),
-          ],
+        TaskTextField(
+          controller: controller,
+          hintText: hint,
+          enabled: enabled,
+          minLines: minLines,
+          maxLines: maxLines ?? minLines,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: calendarSpacing12,
+            vertical: calendarSpacing8,
+          ),
+          onChanged: onChanged,
         ),
       ],
     );
@@ -680,47 +689,125 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  void _applySelectionTitle() {
+  void _handleSelectionTitleChanged(String value) {
+    if (_isUpdatingSelectionTitle) {
+      _isUpdatingSelectionTitle = false;
+      return;
+    }
+    setState(() {
+      _selectionTitleDirty = value.trim().isNotEmpty;
+    });
+  }
+
+  void _handleSelectionDescriptionChanged(String value) {
+    if (_isUpdatingSelectionDescription) {
+      _isUpdatingSelectionDescription = false;
+      return;
+    }
+    setState(() {
+      _selectionDescriptionDirty = true;
+    });
+  }
+
+  void _handleSelectionLocationChanged(String value) {
+    if (_isUpdatingSelectionLocation) {
+      _isUpdatingSelectionLocation = false;
+      return;
+    }
+    setState(() {
+      _selectionLocationDirty = true;
+    });
+  }
+
+  void _applySelectionBatchChanges() {
     final bloc = context.read<BaseCalendarBloc>();
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
       return;
+    }
+
+    bool applied = false;
+    bool hadError = false;
+
+    if (_selectionTitleDirty) {
+      if (_applySelectionTitle()) {
+        applied = true;
+      } else {
+        hadError = true;
+      }
+    }
+
+    if (_selectionDescriptionDirty && _applySelectionDescription()) {
+      applied = true;
+    }
+
+    if (_selectionLocationDirty && _applySelectionLocation()) {
+      applied = true;
+    }
+
+    if (applied && !hadError) {
+      _showSelectionMessage('Changes applied to selected tasks.');
+    } else if (!applied && !hadError) {
+      _showSelectionMessage('No pending changes to apply.');
+    }
+  }
+
+  bool _applySelectionTitle() {
+    final bloc = context.read<BaseCalendarBloc>();
+    if (bloc.state.selectedTaskIds.isEmpty) {
+      _showSelectionMessage('Select tasks before applying changes.');
+      return false;
     }
     final title = _selectionTitleController.text.trim();
     if (title.isEmpty) {
       _showSelectionMessage('Title cannot be blank.');
-      return;
+      return false;
     }
     bloc.add(CalendarEvent.selectionTitleChanged(title: title));
-    _selectionTitleController.clear();
+    setState(() {
+      _isUpdatingSelectionTitle = true;
+      _selectionTitleController.clear();
+      _selectionTitleDirty = false;
+    });
+    return true;
   }
 
-  void _applySelectionDescription() {
+  bool _applySelectionDescription() {
     final bloc = context.read<BaseCalendarBloc>();
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
-      return;
+      return false;
     }
     final raw = _selectionDescriptionController.text.trim();
     final description = raw.isEmpty ? null : raw;
     bloc.add(
       CalendarEvent.selectionDescriptionChanged(description: description),
     );
-    _selectionDescriptionController.clear();
+    setState(() {
+      _isUpdatingSelectionDescription = true;
+      _selectionDescriptionController.clear();
+      _selectionDescriptionDirty = false;
+    });
+    return true;
   }
 
-  void _applySelectionLocation() {
+  bool _applySelectionLocation() {
     final bloc = context.read<BaseCalendarBloc>();
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
-      return;
+      return false;
     }
     final raw = _selectionLocationController.text.trim();
     final location = raw.isEmpty ? null : raw;
     bloc.add(
       CalendarEvent.selectionLocationChanged(location: location),
     );
-    _selectionLocationController.clear();
+    setState(() {
+      _isUpdatingSelectionLocation = true;
+      _selectionLocationController.clear();
+      _selectionLocationDirty = false;
+    });
+    return true;
   }
 
   void _shiftSelectionTime({
