@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -2016,13 +2017,16 @@ class _TaskSidebarState extends State<TaskSidebar>
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeColumn,
         child: GestureDetector(
-          onPanStart: (_) => _sidebarController.beginResize(),
-          onPanUpdate: (details) =>
+          behavior: HitTestBehavior.translucent,
+          dragStartBehavior: DragStartBehavior.down,
+          onHorizontalDragStart: (_) => _sidebarController.beginResize(),
+          onHorizontalDragUpdate: (details) =>
               _sidebarController.adjustWidth(details.delta.dx),
-          onPanEnd: (_) => _sidebarController.endResize(),
+          onHorizontalDragEnd: (_) => _sidebarController.endResize(),
+          onHorizontalDragCancel: _sidebarController.endResize,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            width: 8,
+            width: 12,
             color: uiState.isResizing
                 ? calendarPrimaryColor.withValues(alpha: 0.2)
                 : Colors.transparent,
