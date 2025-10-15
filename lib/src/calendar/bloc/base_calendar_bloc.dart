@@ -1910,17 +1910,57 @@ abstract class BaseCalendarBloc
 
     final updates = <String, CalendarTask>{};
     final now = _now();
+    final RecurrenceRule? normalizedRecurrence =
+        (event.recurrence == null || event.recurrence!.isNone)
+            ? null
+            : event.recurrence;
+    final Set<String> processedBaseIds = <String>{};
 
-    for (final id in state.selectedTaskIds) {
-      final task = state.model.tasks[id];
-      if (task == null) continue;
+    bool _recurrenceMatches(CalendarTask task) {
+      final RecurrenceRule? current =
+          (task.recurrence == null || task.recurrence!.isNone)
+              ? null
+              : task.recurrence;
+      if (current == null && normalizedRecurrence == null) {
+        return true;
+      }
+      if (current != null && normalizedRecurrence != null) {
+        return current == normalizedRecurrence;
+      }
+      return false;
+    }
 
-      final recurrence = event.recurrence;
-      updates[id] = task.copyWith(
-        recurrence: recurrence == null || recurrence.isNone ? null : recurrence,
+    void _queueUpdate(String taskId, CalendarTask task) {
+      if (_recurrenceMatches(task)) {
+        return;
+      }
+      updates[taskId] = task.copyWith(
+        recurrence: normalizedRecurrence,
         occurrenceOverrides: const {},
         modifiedAt: now,
       );
+    }
+
+    for (final id in state.selectedTaskIds) {
+      final CalendarTask? direct = state.model.tasks[id];
+      if (direct != null) {
+        processedBaseIds.add(direct.id);
+        _queueUpdate(direct.id, direct);
+        continue;
+      }
+
+      final String baseId = baseTaskIdFrom(id);
+      if (baseId.isEmpty || processedBaseIds.contains(baseId)) {
+        continue;
+      }
+
+      processedBaseIds.add(baseId);
+      final CalendarTask? baseTask = state.model.tasks[baseId];
+      if (baseTask == null) {
+        continue;
+      }
+
+      _queueUpdate(baseId, baseTask);
     }
 
     if (updates.isEmpty) {

@@ -1020,7 +1020,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
             final gridBody = Container(
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: calendarBackgroundColor,
                 borderRadius: BorderRadius.zero,
                 border: Border(
                   top: BorderSide(
@@ -1053,7 +1053,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                         );
                         return Container(
                           decoration: const BoxDecoration(
-                            color: Color(0xfffafbfc),
+                            color: calendarStripedSlotColor,
                             borderRadius: BorderRadius.zero,
                           ),
                           child: SingleChildScrollView(
@@ -1182,7 +1182,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Widget _buildZoomControls() {
     return Material(
       elevation: _zoomControlsElevation,
-      color: Colors.white.withValues(alpha: 0.95),
+      color: calendarBackgroundColor.withValues(
+          alpha: calendarZoomControlsBackgroundOpacity),
       borderRadius: BorderRadius.circular(_zoomControlsBorderRadius),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -1627,7 +1628,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return Container(
       height: calendarWeekHeaderHeight,
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: calendarBackgroundColor,
         border: Border(
           bottom: BorderSide(
               color: calendarBorderColor, width: calendarBorderStroke),
@@ -1673,8 +1674,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       child: Container(
         decoration: BoxDecoration(
           color: isToday
-              ? calendarPrimaryColor.withValues(alpha: 0.05)
-              : Colors.white,
+              ? calendarPrimaryColor.withValues(
+                  alpha: calendarDayHeaderHighlightOpacity)
+              : calendarBackgroundColor,
           border: const Border(
             right: BorderSide(color: calendarBorderDarkColor),
           ),
@@ -1686,7 +1688,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: isToday ? calendarPrimaryColor : calendarTitleColor,
-              letterSpacing: 0.5,
+              letterSpacing: calendarDayHeaderLetterSpacing,
             ),
           ),
         ),
@@ -1726,7 +1728,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               ? Colors.transparent
               : isHourBoundary
                   ? calendarBorderDarkColor
-                  : calendarBorderColor.withValues(alpha: 0.3);
+                  : calendarBorderColor.withValues(
+                      alpha: calendarTimeDividerOpacity,
+                    );
           final double borderWidth = isFirstSlot
               ? 0.0
               : isHourBoundary
@@ -1787,7 +1791,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return Container(
       decoration: BoxDecoration(
         color: isToday
-            ? const Color(0xff0969DA).withValues(alpha: 0.03)
+            ? calendarPrimaryColor.withValues(
+                alpha: calendarTodayColumnHighlightOpacity,
+              )
             : Colors.transparent,
         border: const Border(
           right: BorderSide(
@@ -1943,20 +1949,28 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
         final backgroundColor = isToday
             ? (hour % 2 == 0
-                ? const Color(0xff0969DA).withValues(alpha: 0.01)
-                : const Color(0xff0969DA).withValues(alpha: 0.02))
-            : (hour % 2 == 0 ? Colors.white : const Color(0xfffafbfc));
+                ? calendarPrimaryColor.withValues(
+                    alpha: calendarTodaySlotLightOpacity,
+                  )
+                : calendarPrimaryColor.withValues(
+                    alpha: calendarTodaySlotDarkOpacity,
+                  ))
+            : (hour % 2 == 0
+                ? calendarBackgroundColor
+                : calendarStripedSlotColor);
 
         final borderColor = isFirstSlot
             ? Colors.transparent
             : minute == 0
                 ? calendarBorderColor
-                : calendarBorderColor.withValues(alpha: 0.3);
+                : calendarBorderColor.withValues(
+                    alpha: calendarTimeDividerOpacity,
+                  );
         final double borderWidth = isFirstSlot
             ? 0.0
             : minute == 0
-                ? 1.0
-                : 0.5;
+                ? calendarBorderStroke
+                : calendarSubSlotBorderStroke;
 
         return Container(
           height: slotHeight,
