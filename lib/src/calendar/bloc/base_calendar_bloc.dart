@@ -13,6 +13,18 @@ import '../utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
+class _CalendarUndoSnapshot {
+  const _CalendarUndoSnapshot({
+    required this.model,
+    required this.isSelectionMode,
+    required this.selectedTaskIds,
+  });
+
+  final CalendarModel model;
+  final bool isSelectionMode;
+  final Set<String> selectedTaskIds;
+}
+
 abstract class BaseCalendarBloc
     extends HydratedBloc<CalendarEvent, CalendarState> {
   BaseCalendarBloc({
@@ -71,8 +83,8 @@ abstract class BaseCalendarBloc
   final Storage _storage;
   Future<void> _pendingReminderSync = Future.value();
   static const int _undoHistoryLimit = 50;
-  final List<CalendarModel> _undoStack = <CalendarModel>[];
-  final List<CalendarModel> _redoStack = <CalendarModel>[];
+  final List<_CalendarUndoSnapshot> _undoStack = <_CalendarUndoSnapshot>[];
+  final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
   int _focusSequence = 0;
 
   @override
@@ -248,7 +260,13 @@ abstract class BaseCalendarBloc
   }
 
   void _recordUndoSnapshot() {
-    _undoStack.add(state.model);
+    _undoStack.add(
+      _CalendarUndoSnapshot(
+        model: state.model,
+        isSelectionMode: state.isSelectionMode,
+        selectedTaskIds: Set<String>.from(state.selectedTaskIds),
+      ),
+    );
     if (_undoStack.length > _undoHistoryLimit) {
       _undoStack.removeAt(0);
     }
@@ -1932,15 +1950,21 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    final previousModel = _undoStack.removeLast();
-    _redoStack.add(state.model);
+    final _CalendarUndoSnapshot previousSnapshot = _undoStack.removeLast();
+    _redoStack.add(
+      _CalendarUndoSnapshot(
+        model: state.model,
+        isSelectionMode: state.isSelectionMode,
+        selectedTaskIds: Set<String>.from(state.selectedTaskIds),
+      ),
+    );
 
     emitModel(
-      previousModel,
+      previousSnapshot.model,
       emit,
       selectedDate: state.selectedDate,
-      isSelectionMode: false,
-      selectedTaskIds: const <String>{},
+      isSelectionMode: previousSnapshot.isSelectionMode,
+      selectedTaskIds: Set<String>.from(previousSnapshot.selectedTaskIds),
     );
   }
 
@@ -1952,15 +1976,21 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    final nextModel = _redoStack.removeLast();
-    _undoStack.add(state.model);
+    final _CalendarUndoSnapshot nextSnapshot = _redoStack.removeLast();
+    _undoStack.add(
+      _CalendarUndoSnapshot(
+        model: state.model,
+        isSelectionMode: state.isSelectionMode,
+        selectedTaskIds: Set<String>.from(state.selectedTaskIds),
+      ),
+    );
 
     emitModel(
-      nextModel,
+      nextSnapshot.model,
       emit,
       selectedDate: state.selectedDate,
-      isSelectionMode: false,
-      selectedTaskIds: const <String>{},
+      isSelectionMode: nextSnapshot.isSelectionMode,
+      selectedTaskIds: Set<String>.from(nextSnapshot.selectedTaskIds),
     );
   }
 
