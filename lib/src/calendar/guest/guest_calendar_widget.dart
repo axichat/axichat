@@ -235,12 +235,10 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   Widget _buildTabletLayout(CalendarState state) {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets contentPadding = responsive.contentPadding;
-    final double sidebarWidth =
-        ResponsiveHelper.sidebarDimensions(context).defaultWidth;
     return Row(
       children: [
         // Resizable sidebar - extends full height
-        _buildSidebarWithProvider(width: sidebarWidth),
+        _buildSidebarWithProvider(),
 
         // Main content area with navigation and calendar
         Expanded(
@@ -290,12 +288,10 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   Widget _buildDesktopLayout(CalendarState state) {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets contentPadding = responsive.contentPadding;
-    final double sidebarWidth =
-        ResponsiveHelper.sidebarDimensions(context).defaultWidth;
     return Row(
       children: [
         // Full sidebar always visible - extends full height
-        _buildSidebarWithProvider(width: sidebarWidth),
+        _buildSidebarWithProvider(),
 
         // Main content area with navigation and calendar
         Expanded(
@@ -342,16 +338,15 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     );
   }
 
-  Widget _buildSidebarWithProvider({double? height, double? width}) {
+  Widget _buildSidebarWithProvider({double? height}) {
     final sidebar = BlocProvider<BaseCalendarBloc>.value(
       value: context.read<GuestCalendarBloc>(),
       child: const TaskSidebar(),
     );
 
-    if (height != null || width != null) {
+    if (height != null) {
       return SizedBox(
         height: height,
-        width: width,
         child: sidebar,
       );
     }

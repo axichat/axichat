@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -64,6 +65,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   bool _isUpdatingSelectionTitle = false;
   bool _isUpdatingSelectionDescription = false;
   bool _isUpdatingSelectionLocation = false;
+  int? _activeResizePointerId;
 
   bool get _hasPendingSelectionEdits =>
       _selectionTitleDirty ||
@@ -2016,14 +2018,40 @@ class _TaskSidebarState extends State<TaskSidebar>
       bottom: 0,
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeColumn,
-        child: GestureDetector(
+        child: Listener(
+          key: const ValueKey('calendar.sidebar.resizeHandle'),
           behavior: HitTestBehavior.translucent,
-          dragStartBehavior: DragStartBehavior.down,
-          onHorizontalDragStart: (_) => _sidebarController.beginResize(),
-          onHorizontalDragUpdate: (details) =>
-              _sidebarController.adjustWidth(details.delta.dx),
-          onHorizontalDragEnd: (_) => _sidebarController.endResize(),
-          onHorizontalDragCancel: _sidebarController.endResize,
+          onPointerDown: (event) {
+            if (_activeResizePointerId != null) {
+              return;
+            }
+            _activeResizePointerId = event.pointer;
+            _sidebarController.beginResize();
+          },
+          onPointerMove: (event) {
+            if (_activeResizePointerId != event.pointer) {
+              return;
+            }
+            final double deltaX = event.delta.dx;
+            if (deltaX == 0) {
+              return;
+            }
+            _sidebarController.adjustWidth(deltaX);
+          },
+          onPointerUp: (event) {
+            if (_activeResizePointerId != event.pointer) {
+              return;
+            }
+            _activeResizePointerId = null;
+            _sidebarController.endResize();
+          },
+          onPointerCancel: (event) {
+            if (_activeResizePointerId != event.pointer) {
+              return;
+            }
+            _activeResizePointerId = null;
+            _sidebarController.endResize();
+          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             width: 12,
@@ -2048,6 +2076,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       ),
     );
   }
+
+  @visibleForTesting
+  CalendarSidebarState get debugSidebarState => _sidebarController.state;
 
   List<CalendarTask> _sortTasksByDeadline(List<CalendarTask> tasks) {
     final List<CalendarTask> tasksCopy = List.from(tasks);
