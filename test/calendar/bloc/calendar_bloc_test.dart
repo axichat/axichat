@@ -41,6 +41,8 @@ void main() {
     late _MockCalendarSyncManager syncManager;
     late CalendarBloc bloc;
     late CalendarStorageRegistry registry;
+    late String undoBaseTaskId;
+    late String undoOccurrenceId;
 
     setUpAll(() {
       registerFallbackValue(
@@ -84,6 +86,90 @@ void main() {
           return state.dueReminders != null &&
               state.dueReminders!.isEmpty &&
               state.nextTask == null;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'undoRequested restores selection state after batch edit',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final DateTime start = DateTime(2024, 5, 1, 11);
+        final CalendarTask recurring = CalendarTask(
+          id: 'undo-series',
+          title: 'Recurring base',
+          description: null,
+          scheduledTime: start,
+          duration: const Duration(hours: 1),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: 'Desk',
+          deadline: null,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: null,
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+          ),
+          occurrenceOverrides: const {},
+        );
+        undoBaseTaskId = recurring.id;
+        final DateTime secondOccurrence = start.add(const Duration(days: 1));
+        undoOccurrenceId =
+            '${recurring.id}::${secondOccurrence.microsecondsSinceEpoch}';
+        final model = CalendarModel.empty().addTask(recurring);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) async {
+        bloc
+          ..add(CalendarEvent.selectionModeEntered(taskId: undoBaseTaskId))
+          ..add(CalendarEvent.selectionToggled(taskId: undoOccurrenceId));
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(
+          const CalendarEvent.selectionTitleChanged(title: 'Updated title'),
+        );
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const CalendarEvent.undoRequested());
+      },
+      expect: () => [
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 1 &&
+              state.selectedTaskIds.contains(undoBaseTaskId),
+        ),
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 2 &&
+              state.selectedTaskIds.containsAll(
+                {undoBaseTaskId, undoOccurrenceId},
+              ),
+        ),
+        predicate<CalendarState>((state) {
+          final CalendarTask base = state.model.tasks[undoBaseTaskId]!;
+          final Map<String, TaskOccurrenceOverride> overrides =
+              base.occurrenceOverrides;
+          final String key = undoOccurrenceId.split('::').last;
+          final TaskOccurrenceOverride? override = overrides[key];
+          return state.isSelectionMode &&
+              state.selectedTaskIds.containsAll(
+                {undoBaseTaskId, undoOccurrenceId},
+              ) &&
+              override?.title == 'Updated title';
+        }),
+        predicate<CalendarState>((state) {
+          final CalendarTask base = state.model.tasks[undoBaseTaskId]!;
+          return state.isSelectionMode &&
+              state.selectedTaskIds.containsAll(
+                {undoBaseTaskId, undoOccurrenceId},
+              ) &&
+              base.occurrenceOverrides.isEmpty &&
+              base.title == 'Recurring base';
         }),
       ],
     );

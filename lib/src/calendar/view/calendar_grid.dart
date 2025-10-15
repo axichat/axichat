@@ -2763,6 +2763,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 opacity: 0.45,
                 child: ResizableTaskWidget(
                   key: ValueKey('${task.id}-ghost'),
+                  interactionController: _taskInteractionController,
                   task: task,
                   onResizePreview: _handleResizePreview,
                   onResizeEnd: _handleResizeCommit,
@@ -3046,6 +3047,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
               Widget baseTask = ResizableTaskWidget(
                 key: ValueKey(task.id),
+                interactionController: _taskInteractionController,
                 task: task,
                 onResizePreview: _handleResizePreview,
                 onResizeEnd: _handleResizeCommit,
@@ -3068,6 +3070,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     _handleTaskPointerDown(task, offset),
                 onToggleSelection: () {
                   final String targetId = task.id;
+                  final bool isTappedSelected =
+                      selectionMode && _selectedTaskIds.contains(targetId);
+                  if (isTappedSelected &&
+                      _taskInteractionController.draggingTaskId == targetId) {
+                    _handleTaskDragEnded(task);
+                  }
                   if (selectionMode) {
                     _toggleTaskSelection(targetId);
                   } else {
@@ -3104,6 +3112,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                               opacity: 0.55,
                               child: ResizableTaskWidget(
                                 key: ValueKey('${task.id}-preview'),
+                                interactionController:
+                                    _taskInteractionController,
                                 task: previewTask,
                                 onResizePreview: null,
                                 onResizeEnd: null,

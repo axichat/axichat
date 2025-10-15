@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 
 void main() {
@@ -14,6 +15,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ResizableTaskWidget(
+            interactionController: TaskInteractionController(),
             task: task,
             onResizePreview: (_) {},
             onResizeEnd: (_) {},

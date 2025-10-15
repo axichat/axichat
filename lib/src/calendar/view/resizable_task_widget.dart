@@ -8,6 +8,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/calendar_task.dart';
+import 'controllers/task_interaction_controller.dart';
 
 class DragFeedbackHint {
   const DragFeedbackHint({
@@ -69,6 +70,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final double height;
   final bool isDayView;
   final bool isPopoverOpen;
+  final TaskInteractionController interactionController;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
   final void Function(CalendarTask task, Rect globalBounds)? onDragStarted;
   final ValueChanged<CalendarTask>? onDragEnded;
@@ -85,6 +87,7 @@ class ResizableTaskWidget extends StatefulWidget {
 
   const ResizableTaskWidget({
     super.key,
+    required this.interactionController,
     required this.task,
     this.onResizePreview,
     this.onResizeEnd,
@@ -119,6 +122,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   bool isHovering = false;
   bool isResizing = false;
   bool isDragging = false;
+  late final VoidCallback _controllerListener;
   String? activeHandle;
   double _totalDragDeltaY = 0;
   int _lastAppliedQuarterDelta = 0;
@@ -133,6 +137,44 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   late double _currentDurationHours;
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllerListener = _handleInteractionControllerUpdate;
+    widget.interactionController.addListener(_controllerListener);
+  }
+
+  @override
+  void didUpdateWidget(covariant ResizableTaskWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.interactionController != widget.interactionController) {
+      oldWidget.interactionController.removeListener(_controllerListener);
+      widget.interactionController.addListener(_controllerListener);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.interactionController.removeListener(_controllerListener);
+    super.dispose();
+  }
+
+  void _handleInteractionControllerUpdate() {
+    final controller = widget.interactionController;
+    final bool controllerDragging = controller.draggingTaskId == widget.task.id;
+    if (controllerDragging && !isDragging) {
+      setState(() {
+        isDragging = true;
+      });
+      return;
+    }
+    if (!controllerDragging && isDragging) {
+      setState(() {
+        isDragging = false;
+      });
+    }
+  }
 
   CalendarTask? _buildUpdatedTask() {
     final DateTime? scheduled = _tempScheduledTime ?? widget.task.scheduledTime;
@@ -678,7 +720,12 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 }
                 widget.onDragEnded?.call(task);
               },
-              childWhenDragging: const SizedBox.shrink(),
+              childWhenDragging: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.6,
+                  child: buildInteractiveContent(),
+                ),
+              ),
               child: buildInteractiveContent(),
             )
           : buildInteractiveContent();
