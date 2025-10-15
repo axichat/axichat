@@ -594,10 +594,6 @@ class _TaskSidebarState extends State<TaskSidebar>
           onChanged: _handleSelectionLocationChanged,
         ),
         const SizedBox(height: calendarSpacing12),
-        const TaskSectionHeader(title: 'Adjust time'),
-        const SizedBox(height: calendarSpacing8),
-        _buildSelectionTimeAdjustRow(hasTasks),
-        const SizedBox(height: calendarSpacing12),
         Align(
           alignment: Alignment.centerLeft,
           child: TaskPrimaryButton(
@@ -608,6 +604,13 @@ class _TaskSidebarState extends State<TaskSidebar>
                 : null,
           ),
         ),
+        const SizedBox(height: calendarSpacing12),
+        const TaskSectionDivider(
+          verticalPadding: calendarSpacing12,
+        ),
+        const TaskSectionHeader(title: 'Adjust time'),
+        const SizedBox(height: calendarSpacing8),
+        _buildSelectionTimeAdjustRow(hasTasks),
       ],
     );
   }

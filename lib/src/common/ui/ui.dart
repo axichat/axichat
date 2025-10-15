@@ -118,6 +118,14 @@ const calendarSlotSplashOpacity = 0.2;
 const calendarSlotHighlightOpacity = 0.1;
 const calendarTaskGhostOpacity = 0.45;
 const calendarSplitPreviewGhostOpacity = 0.55;
+const calendarZoomControlsBackgroundOpacity = 0.95;
+const calendarDayHeaderHighlightOpacity = 0.05;
+const calendarTimeDividerOpacity = 0.3;
+const calendarTodayColumnHighlightOpacity = 0.03;
+const calendarTodaySlotLightOpacity = 0.01;
+const calendarTodaySlotDarkOpacity = 0.02;
+const calendarStripedSlotColor = Color(0xFFFAFBFC);
+const calendarDayHeaderLetterSpacing = 0.5;
 
 // Standard spacing values
 const calendarSpacing2 = 2.0;
