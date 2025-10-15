@@ -80,69 +80,6 @@ class CalendarSidebarController extends ChangeNotifier {
     );
   }
 
-  void setImportant(bool value) {
-    if (value != _state.isImportant) {
-      _updateState(_state.copyWith(isImportant: value));
-    }
-  }
-
-  void setUrgent(bool value) {
-    if (value != _state.isUrgent) {
-      _updateState(_state.copyWith(isUrgent: value));
-    }
-  }
-
-  void setSelectedDeadline(DateTime? value) {
-    if (value != _state.selectedDeadline) {
-      _updateState(_state.copyWith(selectedDeadline: value));
-    }
-  }
-
-  void setAdvancedStart(DateTime? value) {
-    if (value == null) {
-      if (_state.advancedStartTime != null || _state.advancedEndTime != null) {
-        _updateState(
-          _state.copyWith(
-            advancedStartTime: null,
-            advancedEndTime: null,
-          ),
-        );
-      }
-      return;
-    }
-
-    DateTime? end = _state.advancedEndTime;
-    if (end == null || end.isBefore(value)) {
-      end = value.add(const Duration(hours: 1));
-    }
-
-    _updateState(
-      _state.copyWith(
-        advancedStartTime: value,
-        advancedEndTime: end,
-      ),
-    );
-  }
-
-  void setAdvancedEnd(DateTime? value) {
-    if (value == null) {
-      if (_state.advancedEndTime != null) {
-        _updateState(_state.copyWith(advancedEndTime: null));
-      }
-      return;
-    }
-
-    DateTime adjusted = value;
-    final DateTime? start = _state.advancedStartTime;
-    if (start != null && value.isBefore(start)) {
-      adjusted = start.add(const Duration(minutes: 15));
-    }
-
-    if (adjusted != _state.advancedEndTime) {
-      _updateState(_state.copyWith(advancedEndTime: adjusted));
-    }
-  }
-
   void toggleSection(CalendarSidebarSection section) {
     final CalendarSidebarSection next;
     if (_state.expandedSection == section) {
@@ -165,17 +102,11 @@ class CalendarSidebarController extends ChangeNotifier {
   }
 
   void resetForm({bool preserveAdvancedVisibility = true}) {
-    _updateState(
-      _state.copyWith(
-        showAdvancedOptions:
-            preserveAdvancedVisibility ? _state.showAdvancedOptions : false,
-        isImportant: false,
-        isUrgent: false,
-        selectedDeadline: null,
-        advancedStartTime: null,
-        advancedEndTime: null,
-      ),
-    );
+    final bool nextShowAdvanced =
+        preserveAdvancedVisibility ? _state.showAdvancedOptions : false;
+    if (nextShowAdvanced != _state.showAdvancedOptions) {
+      _updateState(_state.copyWith(showAdvancedOptions: nextShowAdvanced));
+    }
   }
 
   void _updateState(CalendarSidebarState next) {
@@ -196,11 +127,6 @@ class CalendarSidebarState extends Equatable {
     this.isResizing = false,
     this.showAdvancedOptions = false,
     this.expandedSection = CalendarSidebarSection.unscheduled,
-    this.isImportant = false,
-    this.isUrgent = false,
-    this.selectedDeadline,
-    this.advancedStartTime,
-    this.advancedEndTime,
     this.activePopoverTaskId,
   });
 
@@ -211,11 +137,6 @@ class CalendarSidebarState extends Equatable {
   final bool isResizing;
   final bool showAdvancedOptions;
   final CalendarSidebarSection expandedSection;
-  final bool isImportant;
-  final bool isUrgent;
-  final DateTime? selectedDeadline;
-  final DateTime? advancedStartTime;
-  final DateTime? advancedEndTime;
   final String? activePopoverTaskId;
 
   CalendarSidebarState copyWith({
@@ -226,11 +147,6 @@ class CalendarSidebarState extends Equatable {
     bool? isResizing,
     bool? showAdvancedOptions,
     CalendarSidebarSection? expandedSection,
-    bool? isImportant,
-    bool? isUrgent,
-    DateTime? selectedDeadline,
-    DateTime? advancedStartTime,
-    DateTime? advancedEndTime,
     String? activePopoverTaskId,
   }) {
     return CalendarSidebarState(
@@ -241,11 +157,6 @@ class CalendarSidebarState extends Equatable {
       isResizing: isResizing ?? this.isResizing,
       showAdvancedOptions: showAdvancedOptions ?? this.showAdvancedOptions,
       expandedSection: expandedSection ?? this.expandedSection,
-      isImportant: isImportant ?? this.isImportant,
-      isUrgent: isUrgent ?? this.isUrgent,
-      selectedDeadline: selectedDeadline ?? this.selectedDeadline,
-      advancedStartTime: advancedStartTime ?? this.advancedStartTime,
-      advancedEndTime: advancedEndTime ?? this.advancedEndTime,
       activePopoverTaskId: activePopoverTaskId ?? this.activePopoverTaskId,
     );
   }
@@ -259,11 +170,6 @@ class CalendarSidebarState extends Equatable {
         isResizing,
         showAdvancedOptions,
         expandedSection,
-        isImportant,
-        isUrgent,
-        selectedDeadline,
-        advancedStartTime,
-        advancedEndTime,
         activePopoverTaskId,
       ];
 }
