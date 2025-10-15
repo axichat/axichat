@@ -130,6 +130,9 @@ extension CalendarTaskInstanceX on CalendarTask {
       endDateOverride: override?.endDate,
       priorityOverride: override?.priority,
       completedOverride: override?.isCompleted,
+      titleOverride: override?.title,
+      descriptionOverride: override?.description,
+      locationOverride: override?.location,
     );
   }
 
@@ -206,6 +209,9 @@ extension CalendarTaskInstanceX on CalendarTask {
           endDateOverride: override?.endDate,
           priorityOverride: override?.priority,
           completedOverride: override?.isCompleted,
+          titleOverride: override?.title,
+          descriptionOverride: override?.description,
+          locationOverride: override?.location,
         ),
       );
     }
@@ -232,6 +238,9 @@ extension CalendarTaskInstanceX on CalendarTask {
     DateTime? endDateOverride,
     TaskPriority? priorityOverride,
     bool? completedOverride,
+    String? titleOverride,
+    String? descriptionOverride,
+    String? locationOverride,
   }) {
     final actualStart = scheduledOverride ?? originalStart;
     final adjustedDuration = durationOverride ?? duration;
@@ -271,6 +280,9 @@ extension CalendarTaskInstanceX on CalendarTask {
       priority: resolvedPriority,
       isCompleted: resolvedCompletion,
       endDate: shiftedEndDate,
+      title: titleOverride ?? title,
+      description: descriptionOverride ?? description,
+      location: locationOverride ?? location,
     );
   }
 }

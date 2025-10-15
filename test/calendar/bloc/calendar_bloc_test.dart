@@ -89,6 +89,144 @@ void main() {
     );
 
     blocTest<CalendarBloc, CalendarState>(
+      'selectionToggled retains existing recurring selections when adding another occurrence',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final DateTime start = DateTime(2024, 1, 8, 9);
+        final CalendarTask recurring = CalendarTask(
+          id: 'recurring-task',
+          title: 'Standup',
+          description: null,
+          scheduledTime: start,
+          duration: const Duration(minutes: 30),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: null,
+          deadline: null,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: null,
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+            interval: 1,
+          ),
+          occurrenceOverrides: const {},
+        );
+        final model = CalendarModel.empty().addTask(recurring);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final baseTask = bloc.state.model.tasks['recurring-task']!;
+        final secondOccurrenceStart = baseTask.scheduledTime!.add(
+          const Duration(days: 1),
+        );
+        final thirdOccurrenceStart = baseTask.scheduledTime!.add(
+          const Duration(days: 2),
+        );
+
+        final secondOccurrenceId =
+            '${baseTask.id}::${secondOccurrenceStart.microsecondsSinceEpoch}';
+        final thirdOccurrenceId =
+            '${baseTask.id}::${thirdOccurrenceStart.microsecondsSinceEpoch}';
+
+        bloc
+          ..add(CalendarEvent.selectionModeEntered(taskId: baseTask.id))
+          ..add(CalendarEvent.selectionToggled(taskId: secondOccurrenceId))
+          ..add(CalendarEvent.selectionToggled(taskId: thirdOccurrenceId));
+      },
+      expect: () => [
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 1 &&
+              state.selectedTaskIds.contains('recurring-task'),
+        ),
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 2 &&
+              state.selectedTaskIds.contains('recurring-task') &&
+              state.selectedTaskIds.any(
+                (id) => id.startsWith('recurring-task::'),
+              ),
+        ),
+        predicate<CalendarState>(
+          (state) =>
+              state.isSelectionMode &&
+              state.selectedTaskIds.length == 3 &&
+              state.selectedTaskIds.contains('recurring-task') &&
+              state.selectedTaskIds
+                      .where((id) => id.startsWith('recurring-task::'))
+                      .length ==
+                  2,
+        ),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'selectionTitleChanged applies overrides for recurring occurrences only',
+      build: () => CalendarBloc(
+        syncManagerBuilder: (_) => syncManager,
+        storage: storage,
+      ),
+      seed: () {
+        final DateTime start = DateTime(2024, 3, 10, 10);
+        final CalendarTask recurring = CalendarTask(
+          id: 'series-task',
+          title: 'Daily Sync',
+          description: 'Discuss blockers',
+          scheduledTime: start,
+          duration: const Duration(minutes: 30),
+          isCompleted: false,
+          createdAt: start,
+          modifiedAt: start,
+          location: 'Room 1',
+          deadline: null,
+          priority: null,
+          startHour: start.hour + (start.minute / 60.0),
+          endDate: null,
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.daily,
+            interval: 1,
+          ),
+          occurrenceOverrides: const {},
+        );
+        final DateTime secondOccurrenceStart =
+            start.add(const Duration(days: 1));
+        final String occurrenceId =
+            '${recurring.id}::${secondOccurrenceStart.microsecondsSinceEpoch}';
+        final model = CalendarModel.empty().addTask(recurring);
+        return CalendarState.initial().copyWith(
+          model: model,
+          isSelectionMode: true,
+          selectedTaskIds: {occurrenceId},
+        );
+      },
+      act: (bloc) => bloc.add(
+        const CalendarEvent.selectionTitleChanged(title: 'Updated Sync'),
+      ),
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final CalendarTask base = state.model.tasks['series-task']!;
+          final overrides = base.occurrenceOverrides;
+          final DateTime start = base.scheduledTime!;
+          final String occurrenceKey = start
+              .add(const Duration(days: 1))
+              .microsecondsSinceEpoch
+              .toString();
+          final TaskOccurrenceOverride? override = overrides[occurrenceKey];
+          return base.title == 'Daily Sync' &&
+              override != null &&
+              override.title == 'Updated Sync';
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
       'taskAdded inserts task and triggers sync',
       build: () => bloc,
       act: (bloc) => bloc.add(const CalendarEvent.taskAdded(

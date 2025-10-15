@@ -56,6 +56,10 @@ class _TaskSidebarState extends State<TaskSidebar>
   bool _selectionTitleDirty = false;
   bool _selectionDescriptionDirty = false;
   bool _selectionLocationDirty = false;
+  String _selectionFieldsSignature = '';
+  String _selectionTitleInitialValue = '';
+  String _selectionDescriptionInitialValue = '';
+  String _selectionLocationInitialValue = '';
   bool _isUpdatingSelectionTitle = false;
   bool _isUpdatingSelectionDescription = false;
   bool _isUpdatingSelectionLocation = false;
@@ -247,6 +251,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   ) {
     final tasks = _selectedTasks(state);
     _syncSelectionRecurrenceState(tasks);
+    _syncSelectionFieldControllers(tasks);
     final total = tasks.length;
     final hasTasks = tasks.isNotEmpty;
     final bool allCompleted =
@@ -695,7 +700,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       return;
     }
     setState(() {
-      _selectionTitleDirty = value.trim().isNotEmpty;
+      final normalized = value.trim();
+      final baseline = _selectionTitleInitialValue.trim();
+      _selectionTitleDirty = normalized.isNotEmpty && normalized != baseline;
     });
   }
 
@@ -705,7 +712,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       return;
     }
     setState(() {
-      _selectionDescriptionDirty = true;
+      final normalized = value.trim();
+      final baseline = _selectionDescriptionInitialValue.trim();
+      _selectionDescriptionDirty = normalized != baseline;
     });
   }
 
@@ -715,7 +724,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       return;
     }
     setState(() {
-      _selectionLocationDirty = true;
+      final normalized = value.trim();
+      final baseline = _selectionLocationInitialValue.trim();
+      _selectionLocationDirty = normalized != baseline;
     });
   }
 
@@ -765,8 +776,6 @@ class _TaskSidebarState extends State<TaskSidebar>
     }
     bloc.add(CalendarEvent.selectionTitleChanged(title: title));
     setState(() {
-      _isUpdatingSelectionTitle = true;
-      _selectionTitleController.clear();
       _selectionTitleDirty = false;
     });
     return true;
@@ -784,8 +793,6 @@ class _TaskSidebarState extends State<TaskSidebar>
       CalendarEvent.selectionDescriptionChanged(description: description),
     );
     setState(() {
-      _isUpdatingSelectionDescription = true;
-      _selectionDescriptionController.clear();
       _selectionDescriptionDirty = false;
     });
     return true;
@@ -803,8 +810,6 @@ class _TaskSidebarState extends State<TaskSidebar>
       CalendarEvent.selectionLocationChanged(location: location),
     );
     setState(() {
-      _isUpdatingSelectionLocation = true;
-      _selectionLocationController.clear();
       _selectionLocationDirty = false;
     });
     return true;
@@ -833,6 +838,126 @@ class _TaskSidebarState extends State<TaskSidebar>
   void _showSelectionMessage(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _syncSelectionFieldControllers(List<CalendarTask> tasks) {
+    final signature = _selectionFieldsSignatureFor(tasks);
+    final bool selectionChanged = signature != _selectionFieldsSignature;
+    if (selectionChanged) {
+      _selectionFieldsSignature = signature;
+      final sharedTitle = _sharedRequiredField(tasks, (task) => task.title);
+      final sharedDescription =
+          _sharedOptionalField(tasks, (task) => task.description);
+      final sharedLocation =
+          _sharedOptionalField(tasks, (task) => task.location);
+      _selectionTitleInitialValue = sharedTitle ?? '';
+      _selectionDescriptionInitialValue = sharedDescription ?? '';
+      _selectionLocationInitialValue = sharedLocation ?? '';
+      if (_selectionTitleDirty ||
+          _selectionDescriptionDirty ||
+          _selectionLocationDirty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            _selectionTitleDirty = false;
+            _selectionDescriptionDirty = false;
+            _selectionLocationDirty = false;
+          });
+        });
+      }
+    }
+
+    _updateSelectionController(
+      controller: _selectionTitleController,
+      nextValue: _selectionTitleInitialValue,
+      isDirty: _selectionTitleDirty,
+      setUpdating: (value) => _isUpdatingSelectionTitle = value,
+      forceUpdate: selectionChanged,
+    );
+    _updateSelectionController(
+      controller: _selectionDescriptionController,
+      nextValue: _selectionDescriptionInitialValue,
+      isDirty: _selectionDescriptionDirty,
+      setUpdating: (value) => _isUpdatingSelectionDescription = value,
+      forceUpdate: selectionChanged,
+    );
+    _updateSelectionController(
+      controller: _selectionLocationController,
+      nextValue: _selectionLocationInitialValue,
+      isDirty: _selectionLocationDirty,
+      setUpdating: (value) => _isUpdatingSelectionLocation = value,
+      forceUpdate: selectionChanged,
+    );
+  }
+
+  void _updateSelectionController({
+    required TextEditingController controller,
+    required String nextValue,
+    required bool isDirty,
+    required ValueChanged<bool> setUpdating,
+    bool forceUpdate = false,
+  }) {
+    final target = nextValue;
+    if (!forceUpdate && isDirty) {
+      return;
+    }
+    if (controller.text == target) {
+      return;
+    }
+    setUpdating(true);
+    controller.value = TextEditingValue(
+      text: target,
+      selection: TextSelection.collapsed(offset: target.length),
+    );
+  }
+
+  String _selectionFieldsSignatureFor(List<CalendarTask> tasks) {
+    if (tasks.isEmpty) {
+      return '';
+    }
+    final buffer = StringBuffer();
+    for (final task in tasks) {
+      buffer
+        ..write(task.id)
+        ..write('|')
+        ..write(task.modifiedAt.microsecondsSinceEpoch)
+        ..write('|')
+        ..write(task.title.trim())
+        ..write('|')
+        ..write((task.description ?? '').trim())
+        ..write('|')
+        ..write((task.location ?? '').trim())
+        ..write(';');
+    }
+    return buffer.toString();
+  }
+
+  String? _sharedRequiredField(
+    List<CalendarTask> tasks,
+    String Function(CalendarTask task) resolver,
+  ) {
+    if (tasks.isEmpty) {
+      return null;
+    }
+    final first = resolver(tasks.first).trim();
+    final allMatch = tasks.every(
+      (task) => resolver(task).trim() == first,
+    );
+    return allMatch ? first : null;
+  }
+
+  String? _sharedOptionalField(
+    List<CalendarTask> tasks,
+    String? Function(CalendarTask task) resolver,
+  ) {
+    if (tasks.isEmpty) {
+      return null;
+    }
+    final first = (resolver(tasks.first) ?? '').trim();
+    final allMatch = tasks.every(
+      (task) => (resolver(task) ?? '').trim() == first,
+    );
+    return allMatch ? first : null;
   }
 
   bool _formValuesEqual(
