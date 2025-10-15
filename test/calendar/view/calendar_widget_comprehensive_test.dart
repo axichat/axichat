@@ -176,5 +176,105 @@ void main() {
         matchesGoldenFile('goldens/task_sidebar_selection.png'),
       );
     }, skip: true);
+
+    testWidgets('TaskSidebar width responds to resize rail drag',
+        (tester) async {
+      final state = CalendarTestData.weekView();
+      await _pumpCalendarHarness(
+        tester,
+        state: state,
+        size: const Size(1280, 860),
+        child: Row(
+          children: const [
+            TaskSidebar(),
+            Expanded(child: SizedBox()),
+          ],
+        ),
+      );
+
+      Rect rect = tester.getRect(find.byType(TaskSidebar));
+      final double initialWidth = rect.width;
+      final Finder handleFinder =
+          find.byKey(const ValueKey('calendar.sidebar.resizeHandle'));
+      expect(handleFinder, findsOneWidget);
+      Rect handleRect = tester.getRect(handleFinder);
+
+      // Drag left to shrink the sidebar.
+      Offset dragStart = handleRect.center;
+      final TestGesture shrinkGesture = await tester.startGesture(dragStart);
+      await tester.pump();
+      final dynamic stateAfterPointerDown =
+          tester.state(find.byType(TaskSidebar));
+      final bool isResizingAfterDown = (stateAfterPointerDown as dynamic)
+          .debugSidebarState
+          .isResizing as bool;
+      expect(
+        isResizingAfterDown,
+        isTrue,
+        reason: 'Controller should enter resizing immediately on pointer down.',
+      );
+      await shrinkGesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+      handleRect = tester.getRect(handleFinder);
+      final dynamic sidebarStateDuringDrag =
+          tester.state(find.byType(TaskSidebar));
+      final bool isResizingDuringDrag = (sidebarStateDuringDrag as dynamic)
+          .debugSidebarState
+          .isResizing as bool;
+      expect(
+        isResizingDuringDrag,
+        isTrue,
+        reason:
+            'Controller should mark itself as resizing after drag movement.',
+      );
+      await shrinkGesture.up();
+      await tester.pumpAndSettle();
+
+      rect = tester.getRect(find.byType(TaskSidebar));
+      final double shrunkWidth = rect.width;
+      final dynamic sidebarStateAfterShrink =
+          tester.state(find.byType(TaskSidebar));
+      final double controllerShrunkWidth = (sidebarStateAfterShrink as dynamic)
+          .debugSidebarState
+          .width as double;
+      expect(
+        controllerShrunkWidth,
+        lessThan(initialWidth),
+        reason: 'Controller width should shrink after drag.',
+      );
+      expect(
+        shrunkWidth,
+        lessThan(initialWidth),
+        reason: 'Dragging the resize rail left should reduce sidebar width.',
+      );
+
+      // Drag right to expand the sidebar.
+      handleRect = tester.getRect(handleFinder);
+      dragStart = handleRect.center;
+      final TestGesture expandGesture = await tester.startGesture(dragStart);
+      await tester.pump();
+      await expandGesture.moveBy(const Offset(60, 0));
+      await tester.pump();
+      await expandGesture.up();
+      await tester.pumpAndSettle();
+
+      rect = tester.getRect(find.byType(TaskSidebar));
+      final double expandedWidth = rect.width;
+      final dynamic sidebarStateAfterExpand =
+          tester.state(find.byType(TaskSidebar));
+      final double controllerExpandedWidth =
+          (sidebarStateAfterExpand as dynamic).debugSidebarState.width
+              as double;
+      expect(
+        controllerExpandedWidth,
+        greaterThan(controllerShrunkWidth),
+        reason: 'Controller width should grow after dragging right.',
+      );
+      expect(
+        expandedWidth,
+        greaterThan(shrunkWidth),
+        reason: 'Dragging the resize rail right should increase sidebar width.',
+      );
+    });
   });
 }
