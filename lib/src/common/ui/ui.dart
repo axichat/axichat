@@ -116,6 +116,8 @@ const calendarSlotPreviewAnchorOpacity = 0.2;
 const calendarSplitPreviewBorderOpacity = 0.6;
 const calendarSlotSplashOpacity = 0.2;
 const calendarSlotHighlightOpacity = 0.1;
+const calendarTaskGhostOpacity = 0.45;
+const calendarSplitPreviewGhostOpacity = 0.55;
 
 // Standard spacing values
 const calendarSpacing2 = 2.0;
