@@ -128,12 +128,16 @@ const calendarStripedSlotColor = Color(0xFFFAFBFC);
 const calendarDayHeaderLetterSpacing = 0.5;
 
 // Standard spacing values
-const calendarSpacing2 = 2.0;
-const calendarSpacing4 = 4.0;
-const calendarSpacing6 = 6.0;
-const calendarSpacing8 = 8.0;
-const calendarSpacing12 = 12.0;
-const calendarSpacing16 = 16.0;
+// Insets handle tight adjustments inside components, while gutters separate larger regions.
+const calendarInsetSm = 2.0;
+const calendarInsetMd = 4.0;
+const calendarInsetLg = 6.0;
+const calendarGutterSm = 8.0;
+const calendarGutterMd = 12.0;
+const calendarGutterLg = 16.0;
+// Dedicated form spacing between stacked controls.
+const calendarFormGap = 10.0;
+const calendarTaskDetailGap = 3.0;
 const calendarCompactDayColumnWidth = 120.0;
 
 // Event layout constraints
@@ -190,10 +194,19 @@ const calendarQuickAddModalCompactMaxWidth = 360.0;
 const calendarMobileSidebarHeight = 200.0;
 
 // Standard EdgeInsets
-const calendarPadding4 = EdgeInsets.all(4.0);
-const calendarPadding8 = EdgeInsets.all(8.0);
-const calendarPadding12 = EdgeInsets.all(12.0);
-const calendarPadding16 = EdgeInsets.all(16.0);
+const calendarPaddingSm = EdgeInsets.all(4.0);
+const calendarPaddingMd = EdgeInsets.all(8.0);
+const calendarPaddingLg = EdgeInsets.all(12.0);
+const calendarPaddingXl = EdgeInsets.all(16.0);
+
+// Purpose-specific paddings for shared surfaces.
+const calendarMenuItemPadding =
+    EdgeInsets.symmetric(horizontal: 14, vertical: 12);
+const calendarFieldPadding = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+const calendarActionButtonPadding =
+    EdgeInsets.symmetric(horizontal: 14, vertical: 14);
+const calendarAccordionPadding =
+    EdgeInsets.fromLTRB(14, 6, 14, calendarFormGap);
 
 const calendarMarginSmall = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const calendarMarginMedium = EdgeInsets.symmetric(horizontal: 12, vertical: 6);

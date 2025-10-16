@@ -107,18 +107,18 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(calendarEventRadius),
           child: Padding(
-            padding: calendarPadding12,
+            padding: calendarPaddingLg,
             child: Row(
               children: [
                 _buildCheckbox(context),
-                const SizedBox(width: calendarSpacing12),
+                const SizedBox(width: calendarGutterMd),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTitle(context, maxLines: 1, fontSize: 14),
                       if (widget.task.scheduledTime != null) ...[
-                        const SizedBox(height: calendarSpacing4),
+                        const SizedBox(height: calendarInsetMd),
                         _buildTime(context, fontSize: 12)!,
                       ],
                     ],
@@ -154,7 +154,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(calendarEventRadius),
           child: Padding(
-            padding: calendarPadding12,
+            padding: calendarPaddingLg,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -175,12 +175,12 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                         ),
                       ),
                     ),
-                    const SizedBox(width: calendarSpacing8),
+                    const SizedBox(width: calendarGutterSm),
                     _buildCheckbox(context),
                   ],
                 ),
                 if (widget.task.scheduledTime != null) ...[
-                  const SizedBox(height: calendarSpacing8),
+                  const SizedBox(height: calendarGutterSm),
                   Row(
                     children: [
                       Icon(
@@ -188,7 +188,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                         size: 12,
                         color: textColor.withValues(alpha: 0.8),
                       ),
-                      const SizedBox(width: calendarSpacing4),
+                      const SizedBox(width: calendarInsetMd),
                       Text(
                         TimeFormatter.formatDateTime(
                             widget.task.scheduledTime!),
@@ -203,7 +203,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                     ],
                   ),
                 ] else ...[
-                  const SizedBox(height: calendarSpacing4),
+                  const SizedBox(height: calendarInsetMd),
                   Align(
                     alignment: Alignment.centerRight,
                     child: _buildActionsMenu(context),
@@ -243,12 +243,12 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             ),
           ),
           child: Padding(
-            padding: calendarPadding16,
+            padding: calendarPaddingXl,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildCheckbox(context),
-                const SizedBox(width: calendarSpacing16),
+                const SizedBox(width: calendarGutterLg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,9 +269,9 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                         ),
                       ),
                       if (widget.task.description?.isNotEmpty == true) ...[
-                        const SizedBox(height: calendarSpacing8),
+                        const SizedBox(height: calendarGutterSm),
                         Container(
-                          padding: calendarPadding8,
+                          padding: calendarPaddingMd,
                           decoration: BoxDecoration(
                             color: calendarSelectedDayColor,
                             borderRadius:
@@ -289,7 +289,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                         ),
                       ],
                       if (widget.task.scheduledTime != null) ...[
-                        const SizedBox(height: calendarSpacing8),
+                        const SizedBox(height: calendarGutterSm),
                         Row(
                           children: [
                             const Icon(
@@ -297,7 +297,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                               size: 16,
                               color: calendarTimeLabelColor,
                             ),
-                            const SizedBox(width: calendarSpacing6),
+                            const SizedBox(width: calendarInsetLg),
                             Text(
                               TimeFormatter.formatDateTime(
                                   widget.task.scheduledTime!),
@@ -309,13 +309,13 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                               ),
                             ),
                             if (widget.task.duration != null) ...[
-                              const SizedBox(width: calendarSpacing16),
+                              const SizedBox(width: calendarGutterLg),
                               const Icon(
                                 Icons.timer,
                                 size: 16,
                                 color: calendarTimeLabelColor,
                               ),
-                              const SizedBox(width: calendarSpacing6),
+                              const SizedBox(width: calendarInsetLg),
                               Text(
                                 _formatDuration(widget.task.duration!),
                                 style: const TextStyle(
@@ -327,13 +327,13 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                           ],
                         ),
                       ],
-                      const SizedBox(height: calendarSpacing12),
+                      const SizedBox(height: calendarGutterMd),
                       Row(
                         children: [
                           _buildStatusChip(context),
                           const Spacer(),
                           _buildEditButton(context),
-                          const SizedBox(width: calendarSpacing8),
+                          const SizedBox(width: calendarGutterSm),
                           _buildDeleteButton(context),
                         ],
                       ),
@@ -442,7 +442,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           child: Row(
             children: [
               Icon(Icons.edit, size: 16),
-              SizedBox(width: calendarSpacing8),
+              SizedBox(width: calendarGutterSm),
               Text('Edit'),
             ],
           ),
@@ -452,7 +452,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
           child: Row(
             children: [
               Icon(Icons.delete, size: 16),
-              SizedBox(width: calendarSpacing8),
+              SizedBox(width: calendarGutterSm),
               Text('Delete'),
             ],
           ),
@@ -464,7 +464,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
   Widget _buildStatusChip(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: calendarSpacing8, vertical: calendarSpacing2),
+          horizontal: calendarGutterSm, vertical: calendarInsetSm),
       decoration: BoxDecoration(
         color: _getStatusColor(context).withValues(alpha: 0.1),
         border: Border.all(color: _getStatusColor(context)),

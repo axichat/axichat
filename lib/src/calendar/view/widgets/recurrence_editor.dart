@@ -140,7 +140,7 @@ class RecurrenceEditor extends StatefulWidget {
     this.enabled = true,
     this.fallbackWeekday,
     this.spacing = const RecurrenceEditorSpacing(),
-    this.chipPadding = const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    this.chipPadding = const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: calendarGutterSm),
     this.weekdayChipPadding =
         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     this.intervalSelectWidth = 120,
@@ -340,7 +340,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
                 width: 1,
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: calendarGutterSm),
             trailing: const Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
@@ -370,7 +370,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
             letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: calendarInsetLg),
         DeadlinePickerField(
           value: value.until,
           placeholder: 'End',
@@ -393,7 +393,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
                 }
               : (_) {},
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: calendarGutterLg),
         const Text(
           'COUNT',
           style: TextStyle(
@@ -403,7 +403,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
             letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: calendarInsetLg),
         TextField(
           controller: _countController,
           enabled: enabled,
@@ -416,7 +416,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
               fontWeight: FontWeight.w400,
             ),
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: 10),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(calendarBorderRadius),
               borderSide: const BorderSide(color: calendarBorderColor),

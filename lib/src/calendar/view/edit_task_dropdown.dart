@@ -149,17 +149,17 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             const Divider(height: 1),
             Flexible(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: calendarGutterLg, vertical: calendarGutterMd),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildTitleField(),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: calendarFormGap),
                     _buildPriorityRow(),
                     _sectionDivider(),
                     _buildDescriptionField(),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: calendarFormGap),
                     _buildLocationField(),
                     _sectionDivider(),
                     _buildScheduleSection(),
@@ -183,7 +183,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+          horizontal: calendarGutterLg, vertical: calendarGutterMd),
       child: Row(
         children: [
           const Text(
@@ -212,7 +213,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       autofocus: true,
       hintText: 'Task title',
       textCapitalization: TextCapitalization.sentences,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: calendarMenuItemPadding,
     );
   }
 
@@ -224,7 +225,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       maxLines: 4,
       textInputAction: TextInputAction.newline,
       textCapitalization: TextCapitalization.sentences,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: calendarMenuItemPadding,
     );
   }
 
@@ -233,13 +234,13 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       controller: _locationController,
       hintText: 'Location (optional)',
       textCapitalization: TextCapitalization.words,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: calendarMenuItemPadding,
     );
   }
 
   Widget _sectionDivider() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: calendarGutterMd),
       child: Container(
         height: 1,
         decoration: BoxDecoration(
@@ -252,7 +253,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   Widget _buildScheduleSection() {
     return TaskScheduleSection(
-      spacing: calendarSpacing6,
+      spacing: calendarInsetLg,
       start: _startTime,
       end: _endTime,
       onStartChanged: (value) {
@@ -286,7 +287,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const TaskSectionHeader(title: 'Deadline'),
-        const SizedBox(height: 4),
+        const SizedBox(height: calendarInsetMd),
         DeadlinePickerField(
           value: _deadline,
           onChanged: (value) => setState(() => _deadline = value),
@@ -301,7 +302,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         DateTime.now().weekday;
 
     return TaskRecurrenceSection(
-      spacing: calendarSpacing4,
+      spacing: calendarInsetMd,
       value: _recurrence,
       fallbackWeekday: fallbackWeekday,
       spacingConfig: const RecurrenceEditorSpacing(
@@ -338,7 +339,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   Widget _buildActions() {
     return TaskFormActionsRow(
-      padding: const EdgeInsets.all(12),
+      padding: calendarPaddingLg,
       gap: 8,
       children: [
         TaskDestructiveButton(

@@ -44,7 +44,7 @@ class CalendarNavigation extends StatelessWidget {
             label: '← Previous',
             onPressed: () => _jumpBy(const Duration(days: -7)),
           ),
-          const SizedBox(width: calendarSpacing12),
+          const SizedBox(width: calendarGutterMd),
           _navButton(
             label: 'Today',
             highlighted: _isToday(state.selectedDate),
@@ -52,13 +52,13 @@ class CalendarNavigation extends StatelessWidget {
                 ? null
                 : () => onDateSelected(DateTime.now()),
           ),
-          const SizedBox(width: calendarSpacing12),
+          const SizedBox(width: calendarGutterMd),
           _navButton(
             label: 'Next →',
             onPressed: () => _jumpBy(const Duration(days: 7)),
           ),
           if (state.viewMode == CalendarView.day) ...[
-            const SizedBox(width: calendarSpacing12),
+            const SizedBox(width: calendarGutterMd),
             _navButton(
               label: 'Back to week',
               onPressed: () => onViewChanged(CalendarView.week),
@@ -67,7 +67,7 @@ class CalendarNavigation extends StatelessWidget {
         ],
       ),
     );
-    const double verticalPadding = calendarSpacing4;
+    const double verticalPadding = calendarInsetMd;
     final Widget undoRedoGroup = _buildUndoRedoGroup();
 
     return Container(
@@ -152,7 +152,7 @@ class CalendarNavigation extends StatelessWidget {
     }
     if (onRedo != null) {
       if (controls.isNotEmpty) {
-        controls.add(const SizedBox(width: 8));
+        controls.add(const SizedBox(width: calendarGutterSm));
       }
       controls.add(
         _iconControl(
@@ -257,8 +257,8 @@ class _DateLabelState extends State<_DateLabel> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(
-                horizontal: calendarSpacing8 + calendarSpacing2,
-                vertical: calendarSpacing6,
+                horizontal: calendarGutterSm + calendarInsetSm,
+                vertical: calendarInsetLg,
               ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
@@ -279,7 +279,7 @@ class _DateLabelState extends State<_DateLabel> {
                     size: 16,
                     color: calendarSubtitleColor,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: calendarGutterSm),
                   Text(
                     label,
                     style: const TextStyle(
@@ -289,7 +289,7 @@ class _DateLabelState extends State<_DateLabel> {
                       letterSpacing: 0.1,
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: calendarInsetLg),
                   Icon(
                     _overlayEntry == null
                         ? Icons.keyboard_arrow_down
@@ -404,7 +404,7 @@ class _CalendarDropdown extends StatelessWidget {
     return Container(
       width: dropdownWidth,
       padding: spec.contentPadding,
-      margin: const EdgeInsets.only(top: calendarSpacing8),
+      margin: const EdgeInsets.only(top: calendarGutterSm),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
@@ -426,23 +426,23 @@ class _CalendarDropdown extends StatelessWidget {
                 icon: Icons.chevron_left,
                 onPressed: () => onMonthChanged(_addMonths(month, -1)),
               ),
-              const SizedBox(width: calendarSpacing8),
+              const SizedBox(width: calendarGutterSm),
               _navIconButton(
                 icon: Icons.chevron_right,
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
             ],
           ),
-          const SizedBox(height: calendarSpacing12),
+          const SizedBox(height: calendarGutterMd),
           const _DayHeaders(),
-          const SizedBox(height: calendarSpacing6),
+          const SizedBox(height: calendarInsetLg),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              mainAxisSpacing: calendarSpacing4,
-              crossAxisSpacing: calendarSpacing4,
+              mainAxisSpacing: calendarInsetMd,
+              crossAxisSpacing: calendarInsetMd,
             ),
             itemCount: days.length,
             itemBuilder: (context, index) {
@@ -489,7 +489,7 @@ class _CalendarDropdown extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   padding:
-                      const EdgeInsets.symmetric(vertical: calendarSpacing6),
+                      const EdgeInsets.symmetric(vertical: calendarInsetLg),
                   child: Text(
                     '${date.day}',
                     style: calendarBodyTextStyle.copyWith(
@@ -501,7 +501,7 @@ class _CalendarDropdown extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: calendarSpacing12),
+          const SizedBox(height: calendarGutterMd),
           SizedBox(
             width: double.infinity,
             child: TaskSecondaryButton(

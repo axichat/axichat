@@ -138,7 +138,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
 
   Widget _buildDialogHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: calendarPaddingXl,
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Theme.of(context).dividerColor),
@@ -163,18 +163,18 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
 
   Widget _buildForm() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: calendarPaddingXl,
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildTitleField(),
-            const SizedBox(height: 16),
+            const SizedBox(height: calendarGutterLg),
             _buildDescriptionField(),
-            const SizedBox(height: 16),
+            const SizedBox(height: calendarGutterLg),
             _buildDateTimeSection(),
-            const SizedBox(height: 16),
+            const SizedBox(height: calendarGutterLg),
             _buildDurationField(),
           ],
         ),
@@ -219,7 +219,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           'Date & Time',
           style: Theme.of(context).textTheme.labelMedium,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: calendarGutterSm),
         TaskDateTimeToolbar(
           primaryField: TaskDateTimeToolbarField(
             selectedDate: _selectedDate,
@@ -245,7 +245,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           'Duration',
           style: Theme.of(context).textTheme.labelMedium,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: calendarGutterSm),
         ShadSelect<Duration>(
           placeholder: const Text('Select duration'),
           options: _durationOptions
@@ -267,7 +267,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       builder: (context, state) {
         final bool disabled = state.isLoading || _isSubmitting;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
           child: TaskPrimaryButton(
             label: 'Save',
             onPressed: disabled ? null : _saveTask,
@@ -291,7 +291,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
       },
       builder: (context, state) {
         return Container(
-          padding: const EdgeInsets.all(16),
+          padding: calendarPaddingXl,
           decoration: BoxDecoration(
             border: Border(
               top: BorderSide(color: Theme.of(context).dividerColor),
@@ -302,7 +302,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
             children: [
               if (state.error != null && _isSubmitting)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: calendarGutterLg),
                   child: ErrorDisplay(
                     error: state.error!,
                     onRetry: _saveTask,
@@ -313,7 +313,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
                 ),
               TaskFormActionsRow(
                 padding: EdgeInsets.zero,
-                gap: calendarSpacing12,
+                gap: calendarGutterMd,
                 children: [
                   const Spacer(),
                   TaskSecondaryButton(

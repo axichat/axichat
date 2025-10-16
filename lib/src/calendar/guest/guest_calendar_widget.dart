@@ -85,9 +85,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     final EdgeInsets basePadding = responsive.contentPadding;
     final EdgeInsets bannerPadding = EdgeInsets.fromLTRB(
       basePadding.left,
-      calendarSpacing12,
+      calendarGutterMd,
       basePadding.right,
-      calendarSpacing12,
+      calendarGutterMd,
     );
     return Container(
       decoration: BoxDecoration(
@@ -104,7 +104,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
             size: 18,
             color: Colors.blue.shade600,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: calendarGutterMd),
           Expanded(
             child: Text(
               'Guest Mode - Tasks saved locally on this device only',

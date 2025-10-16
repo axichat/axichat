@@ -78,7 +78,7 @@ class SyncControls extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSyncStatus(context),
-          const SizedBox(height: calendarSpacing12),
+          const SizedBox(height: calendarGutterMd),
           Row(
             children: [
               Expanded(
@@ -89,7 +89,7 @@ class SyncControls extends StatelessWidget {
                       state.isSyncing ? null : () => _requestSync(context),
                 ),
               ),
-              const SizedBox(width: calendarSpacing8),
+              const SizedBox(width: calendarGutterSm),
               Expanded(
                 child: TaskSecondaryButton(
                   label: 'Push',
@@ -122,25 +122,25 @@ class SyncControls extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
           ),
-          const SizedBox(height: calendarSpacing12),
+          const SizedBox(height: calendarGutterMd),
           _buildSyncStatus(context),
-          const SizedBox(height: calendarSpacing16),
+          const SizedBox(height: calendarGutterLg),
           TaskPrimaryButton(
             label: 'Request Update',
             icon: Icons.cloud_download,
             onPressed: state.isSyncing ? null : () => _requestSync(context),
             isBusy: state.isSyncing,
           ),
-          const SizedBox(height: calendarSpacing8),
+          const SizedBox(height: calendarGutterSm),
           TaskSecondaryButton(
             label: 'Push Update',
             icon: Icons.cloud_upload,
             onPressed: state.isSyncing ? null : () => _pushSync(context),
           ),
           if (state.syncError != null) ...[
-            const SizedBox(height: calendarSpacing12),
+            const SizedBox(height: calendarGutterMd),
             _buildErrorDisplay(context),
-            const SizedBox(height: calendarSpacing8),
+            const SizedBox(height: calendarGutterSm),
             TaskSecondaryButton(
               label: 'Retry',
               icon: Icons.refresh,
@@ -188,7 +188,7 @@ class SyncControls extends StatelessWidget {
     return Row(
       children: [
         _buildSyncStatusIcon(context),
-        const SizedBox(width: 8),
+        const SizedBox(width: calendarGutterSm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,7 +217,7 @@ class SyncControls extends StatelessWidget {
 
   Widget _buildErrorDisplay(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: calendarPaddingMd,
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.1),
         border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
@@ -226,7 +226,7 @@ class SyncControls extends StatelessWidget {
       child: Row(
         children: [
           const Icon(Icons.error_outline, color: Colors.red, size: 16),
-          const SizedBox(width: 8),
+          const SizedBox(width: calendarGutterSm),
           Expanded(
             child: Text(
               state.syncError!,

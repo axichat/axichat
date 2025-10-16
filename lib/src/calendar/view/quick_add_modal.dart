@@ -159,20 +159,20 @@ class _QuickAddModalState extends State<QuickAddModal>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildTaskNameInput(),
-                    const SizedBox(height: calendarSpacing12),
+                    const SizedBox(height: calendarGutterMd),
                     _buildDescriptionInput(),
-                    const SizedBox(height: calendarSpacing12),
+                    const SizedBox(height: calendarGutterMd),
                     _buildLocationField(),
-                    const SizedBox(height: calendarSpacing12),
+                    const SizedBox(height: calendarGutterMd),
                     _buildPriorityToggles(),
                     const TaskSectionDivider(
-                      verticalPadding: calendarSpacing12,
+                      verticalPadding: calendarGutterMd,
                     ),
                     _buildScheduleSection(),
-                    const SizedBox(height: calendarSpacing12),
+                    const SizedBox(height: calendarGutterMd),
                     _buildDeadlineField(),
                     const TaskSectionDivider(
-                      verticalPadding: calendarSpacing12,
+                      verticalPadding: calendarGutterMd,
                     ),
                     _buildRecurrenceSection(),
                   ],
@@ -191,8 +191,8 @@ class _QuickAddModalState extends State<QuickAddModal>
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: calendarSpacing16,
-        vertical: calendarSpacing12,
+        horizontal: calendarGutterLg,
+        vertical: calendarGutterMd,
       ),
       decoration: const BoxDecoration(
         border: Border(
@@ -206,7 +206,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             color: calendarTitleColor,
             size: 20,
           ),
-          const SizedBox(width: calendarSpacing8),
+          const SizedBox(width: calendarGutterSm),
           Text(
             'Add Task',
             style: calendarTitleTextStyle.copyWith(fontSize: 18),
@@ -301,7 +301,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
-          spacing: calendarSpacing8,
+          spacing: calendarGutterSm,
           start: _formController.startTime,
           end: _formController.endTime,
           onStartChanged: _formController.updateStart,
@@ -326,7 +326,7 @@ class _QuickAddModalState extends State<QuickAddModal>
                 fontSize: 13,
               ),
             ),
-            const SizedBox(height: calendarSpacing8),
+            const SizedBox(height: calendarGutterSm),
             DeadlinePickerField(
               value: _formController.deadline,
               onChanged: _formController.setDeadline,
@@ -350,7 +350,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             fontWeight: FontWeight.w600,
             fontSize: 13,
           ),
-          spacing: calendarSpacing8,
+          spacing: calendarGutterSm,
           value: _formController.recurrence,
           fallbackWeekday: fallbackWeekday,
           spacingConfig: const RecurrenceEditorSpacing(
@@ -377,8 +377,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             final bool canSubmit = value.text.trim().isNotEmpty;
             return TaskFormActionsRow(
               includeTopBorder: true,
-              padding: calendarPadding16,
-              gap: calendarSpacing12,
+              padding: calendarPaddingXl,
+              gap: calendarGutterMd,
               children: [
                 Expanded(
                   child: TaskSecondaryButton(
