@@ -1,7 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -20,6 +18,7 @@ import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_draft_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
+import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -467,14 +466,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                 value: recurrence,
                 enabled: hasTasks,
                 fallbackWeekday: fallbackWeekday,
-                spacingConfig: const RecurrenceEditorSpacing(
-                  chipSpacing: 8,
-                  chipRunSpacing: 8,
-                  weekdaySpacing: 12,
-                  advancedSectionSpacing: 12,
-                  endSpacing: 14,
-                  fieldGap: 12,
-                ),
+                spacingConfig: calendarRecurrenceSpacingStandard,
                 intervalSelectWidth: 118,
                 onChanged: (next) {
                   _selectionRecurrenceNotifier.value = next;
@@ -1813,7 +1805,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                       );
 
                       final scaffoldMessenger =
-                          ScaffoldMessenger.maybeOf(this.context);
+                          ScaffoldMessenger.maybeOf(context);
 
                       return ShadPopover(
                         controller: controller,

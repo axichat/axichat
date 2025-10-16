@@ -509,7 +509,8 @@ class TaskRecurrenceSection extends StatelessWidget {
             fallbackWeekday: fallbackWeekday,
             spacing: spacingConfig,
             chipPadding: chipPadding ??
-                const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: calendarGutterSm),
+                const EdgeInsets.symmetric(
+                    horizontal: calendarGutterMd, vertical: calendarGutterSm),
             weekdayChipPadding: weekdayChipPadding ??
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             intervalSelectWidth: intervalSelectWidth ?? 120,

@@ -426,7 +426,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: calendarGutterLg, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+            horizontal: calendarGutterLg, vertical: 14),
         decoration: BoxDecoration(
           border: Border.all(
             color: borderColor,
@@ -678,7 +679,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   Widget _buildMonthHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: calendarGutterSm),
+      padding: const EdgeInsets.symmetric(
+          horizontal: calendarGutterMd, vertical: calendarGutterSm),
       decoration: const BoxDecoration(
         border: Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
@@ -707,7 +709,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                         _markOverlayNeedsBuild();
                       }
                     : null,
-                padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm, vertical: calendarInsetLg),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: calendarGutterSm, vertical: calendarInsetLg),
                 child: Icon(
                   Icons.chevron_left,
                   size: 16,
@@ -749,7 +752,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                         _markOverlayNeedsBuild();
                       }
                     : null,
-                padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm, vertical: calendarInsetLg),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: calendarGutterSm, vertical: calendarInsetLg),
                 child: Icon(
                   Icons.chevron_right,
                   size: 16,
@@ -883,7 +887,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final selectedMinute = _roundToFive(selected.minute);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: 10),
+      padding: const EdgeInsets.symmetric(
+          horizontal: calendarGutterMd, vertical: 10),
       decoration: const BoxDecoration(
         border: Border(
           top: BorderSide(color: calendarBorderColor, width: 1),

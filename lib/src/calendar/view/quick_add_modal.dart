@@ -6,7 +6,7 @@ import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
 import 'controllers/quick_add_controller.dart';
 import 'widgets/deadline_picker_field.dart';
-import 'widgets/recurrence_editor.dart';
+import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -353,14 +353,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           spacing: calendarGutterSm,
           value: _formController.recurrence,
           fallbackWeekday: fallbackWeekday,
-          spacingConfig: const RecurrenceEditorSpacing(
-            chipSpacing: 6,
-            chipRunSpacing: 6,
-            weekdaySpacing: 10,
-            advancedSectionSpacing: 12,
-            endSpacing: 14,
-            fieldGap: 14,
-          ),
+          spacingConfig: calendarRecurrenceSpacingCompact,
           onChanged: _formController.setRecurrence,
         );
       },

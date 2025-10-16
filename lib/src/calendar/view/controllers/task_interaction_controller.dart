@@ -61,6 +61,37 @@ class TaskClipboardState {
   int get hashCode => Object.hash(template, pasteSlot);
 }
 
+@immutable
+class TaskResizeInteraction {
+  const TaskResizeInteraction({
+    required this.taskId,
+    required this.handle,
+  });
+
+  final String taskId;
+  final String handle;
+
+  TaskResizeInteraction copyWith({
+    String? handle,
+  }) {
+    return TaskResizeInteraction(
+      taskId: taskId,
+      handle: handle ?? this.handle,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is TaskResizeInteraction &&
+        other.taskId == taskId &&
+        other.handle == handle;
+  }
+
+  @override
+  int get hashCode => Object.hash(taskId, handle);
+}
+
 class TaskInteractionController extends ChangeNotifier {
   TaskInteractionController()
       : preview = ValueNotifier<DragPreview?>(null),
@@ -74,11 +105,15 @@ class TaskInteractionController extends ChangeNotifier {
             anchorDx: 0,
             anchorDy: 0,
           ),
-        );
+        ),
+        hoveredTaskId = ValueNotifier<String?>(null),
+        resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null);
 
   final ValueNotifier<DragPreview?> preview;
   final ValueNotifier<TaskClipboardState> clipboard;
   final ValueNotifier<DragFeedbackHint> feedbackHint;
+  final ValueNotifier<String?> hoveredTaskId;
+  final ValueNotifier<TaskResizeInteraction?> resizeInteraction;
 
   CalendarTask? _draggingTaskSnapshot;
   String? _draggingTaskId;
@@ -116,6 +151,8 @@ class TaskInteractionController extends ChangeNotifier {
 
   CalendarTask? get clipboardTemplate => clipboard.value.template;
   DateTime? get clipboardPasteSlot => clipboard.value.pasteSlot;
+  String? get currentHoveredTaskId => hoveredTaskId.value;
+  TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
 
   void setClipboardTemplate(CalendarTask template) {
     clipboard.value = TaskClipboardState(
@@ -135,6 +172,43 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     clipboard.value = const TaskClipboardState();
+    notifyListeners();
+  }
+
+  void setHoveringTask(String taskId) {
+    if (hoveredTaskId.value == taskId) {
+      return;
+    }
+    hoveredTaskId.value = taskId;
+    notifyListeners();
+  }
+
+  void clearHoveringTask(String taskId) {
+    if (hoveredTaskId.value != taskId) {
+      return;
+    }
+    hoveredTaskId.value = null;
+    notifyListeners();
+  }
+
+  void beginResizeInteraction({
+    required String taskId,
+    required String handle,
+  }) {
+    final TaskResizeInteraction next =
+        TaskResizeInteraction(taskId: taskId, handle: handle);
+    if (resizeInteraction.value == next) {
+      return;
+    }
+    resizeInteraction.value = next;
+    notifyListeners();
+  }
+
+  void endResizeInteraction(String taskId) {
+    if (resizeInteraction.value?.taskId != taskId) {
+      return;
+    }
+    resizeInteraction.value = null;
     notifyListeners();
   }
 
@@ -322,6 +396,8 @@ class TaskInteractionController extends ChangeNotifier {
     preview.dispose();
     clipboard.dispose();
     feedbackHint.dispose();
+    hoveredTaskId.dispose();
+    resizeInteraction.dispose();
     super.dispose();
   }
 

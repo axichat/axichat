@@ -7,7 +7,6 @@ import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
-import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import 'calendar_grid.dart';
 import 'calendar_navigation.dart';
@@ -162,7 +161,8 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
         // Toggle button
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: calendarGutterLg, vertical: calendarGutterSm),
+          padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterLg, vertical: calendarGutterSm),
           child: Row(
             children: [
               IconButton(
