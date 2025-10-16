@@ -520,7 +520,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: title),
-              const SizedBox(width: 6),
+              const SizedBox(width: calendarInsetLg),
               Flexible(
                 child: Text(
                   timeText,

@@ -263,8 +263,8 @@ class _TaskSidebarState extends State<TaskSidebar>
       children: [
         Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: calendarSpacing16,
-            vertical: calendarSpacing16,
+            horizontal: calendarGutterLg,
+            vertical: calendarGutterLg,
           ),
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -280,7 +280,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             children: [
               TaskSectionHeader(
                 title: 'Selection mode',
-                padding: const EdgeInsets.only(bottom: calendarSpacing8),
+                padding: const EdgeInsets.only(bottom: calendarGutterSm),
                 trailing: ShadButton.outline(
                   size: ShadButtonSize.sm,
                   onPressed: () => context
@@ -294,37 +294,37 @@ class _TaskSidebarState extends State<TaskSidebar>
                 style: calendarSubtitleTextStyle,
               ),
               const TaskSectionDivider(
-                verticalPadding: calendarSpacing12,
+                verticalPadding: calendarGutterMd,
               ),
               const TaskSectionHeader(title: 'Actions'),
-              const SizedBox(height: calendarSpacing8),
+              const SizedBox(height: calendarGutterSm),
               _buildSelectionActions(tasks, hasTasks),
               const TaskSectionDivider(
-                verticalPadding: calendarSpacing12,
+                verticalPadding: calendarGutterMd,
               ),
               _buildSelectionBatchEditSection(hasTasks),
               const TaskSectionDivider(
-                verticalPadding: calendarSpacing12,
+                verticalPadding: calendarGutterMd,
               ),
               const TaskSectionHeader(title: 'Set priority'),
-              const SizedBox(height: calendarSpacing8),
+              const SizedBox(height: calendarGutterSm),
               _buildPriorityControls(tasks),
-              const SizedBox(height: calendarSpacing12),
+              const SizedBox(height: calendarGutterMd),
               _buildSelectionCompletionToggle(
                 hasTasks: hasTasks,
                 allCompleted: allCompleted,
                 isIndeterminate: completionIndeterminate,
               ),
               const TaskSectionDivider(
-                verticalPadding: calendarSpacing12,
+                verticalPadding: calendarGutterMd,
               ),
               _buildSelectionRecurrenceSection(tasks),
             ],
           ),
         ),
-        const SizedBox(height: calendarSpacing16),
+        const SizedBox(height: calendarGutterLg),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: calendarSpacing16),
+          padding: const EdgeInsets.symmetric(horizontal: calendarGutterLg),
           child: _buildSelectedTaskList(tasks, uiState),
         ),
       ],
@@ -335,7 +335,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     final bloc = context.read<BaseCalendarBloc>();
     return TaskFormActionsRow(
       padding: EdgeInsets.zero,
-      gap: calendarSpacing8,
+      gap: calendarGutterSm,
       children: [
         TaskSecondaryButton(
           label: 'Clear Selection',
@@ -443,9 +443,9 @@ class _TaskSidebarState extends State<TaskSidebar>
             if (isMixed) {
               children.add(
                 Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const EdgeInsets.only(bottom: calendarGutterSm),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: calendarGutterMd, vertical: calendarGutterSm),
                   decoration: BoxDecoration(
                     color: calendarWarningColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
@@ -567,7 +567,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const TaskSectionHeader(title: 'Batch edit'),
-        const SizedBox(height: calendarSpacing8),
+        const SizedBox(height: calendarGutterSm),
         _buildSelectionTextField(
           label: 'Title',
           controller: _selectionTitleController,
@@ -575,7 +575,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           enabled: hasTasks,
           onChanged: _handleSelectionTitleChanged,
         ),
-        const SizedBox(height: calendarSpacing8),
+        const SizedBox(height: calendarGutterSm),
         _buildSelectionTextField(
           label: 'Description',
           controller: _selectionDescriptionController,
@@ -585,7 +585,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           maxLines: 3,
           onChanged: _handleSelectionDescriptionChanged,
         ),
-        const SizedBox(height: calendarSpacing8),
+        const SizedBox(height: calendarGutterSm),
         _buildSelectionTextField(
           label: 'Location',
           controller: _selectionLocationController,
@@ -593,7 +593,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           enabled: hasTasks,
           onChanged: _handleSelectionLocationChanged,
         ),
-        const SizedBox(height: calendarSpacing12),
+        const SizedBox(height: calendarGutterMd),
         Align(
           alignment: Alignment.centerLeft,
           child: TaskPrimaryButton(
@@ -604,12 +604,12 @@ class _TaskSidebarState extends State<TaskSidebar>
                 : null,
           ),
         ),
-        const SizedBox(height: calendarSpacing12),
+        const SizedBox(height: calendarGutterMd),
         const TaskSectionDivider(
-          verticalPadding: calendarSpacing12,
+          verticalPadding: calendarGutterMd,
         ),
         const TaskSectionHeader(title: 'Adjust time'),
-        const SizedBox(height: calendarSpacing8),
+        const SizedBox(height: calendarGutterSm),
         _buildSelectionTimeAdjustRow(hasTasks),
       ],
     );
@@ -636,7 +636,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             letterSpacing: 0.6,
           ),
         ),
-        const SizedBox(height: calendarSpacing4),
+        const SizedBox(height: calendarInsetMd),
         TaskTextField(
           controller: controller,
           hintText: hint,
@@ -644,8 +644,8 @@ class _TaskSidebarState extends State<TaskSidebar>
           minLines: minLines,
           maxLines: maxLines ?? minLines,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: calendarSpacing12,
-            vertical: calendarSpacing8,
+            horizontal: calendarGutterMd,
+            vertical: calendarGutterSm,
           ),
           onChanged: onChanged,
         ),
@@ -690,8 +690,8 @@ class _TaskSidebarState extends State<TaskSidebar>
     ];
 
     return Wrap(
-      spacing: calendarSpacing8,
-      runSpacing: calendarSpacing8,
+      spacing: calendarGutterSm,
+      runSpacing: calendarGutterSm,
       children: buttons,
     );
   }
@@ -1040,7 +1040,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   ) {
     if (tasks.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(calendarSpacing16),
+        padding: const EdgeInsets.all(calendarGutterLg),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(calendarBorderRadius + 2),
@@ -1078,7 +1078,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     final String scheduleLabel = _selectionScheduleLabel(task);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: calendarGutterSm),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Material(
@@ -1190,7 +1190,8 @@ class _TaskSidebarState extends State<TaskSidebar>
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => _addTask(),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: calendarGutterLg, vertical: 14),
     );
   }
 
@@ -1234,7 +1235,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   Widget _buildAdvancedOptions({Key? key}) {
     return Padding(
       key: key,
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(top: calendarGutterMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1244,22 +1245,22 @@ class _TaskSidebarState extends State<TaskSidebar>
             minLines: 2,
             maxLines: 4,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: calendarSpacing16,
-              vertical: calendarSpacing12,
+              horizontal: calendarGutterLg,
+              vertical: calendarGutterMd,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: calendarFormGap),
           TaskLocationField(
             controller: _locationController,
             hintText: 'Location (optional)',
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: calendarSpacing16,
-              vertical: calendarSpacing12,
+              horizontal: calendarGutterLg,
+              vertical: calendarGutterMd,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: calendarGutterMd),
           const TaskSectionHeader(title: 'Deadline'),
-          const SizedBox(height: 6),
+          const SizedBox(height: calendarInsetLg),
           AnimatedBuilder(
             animation: _draftController,
             builder: (context, _) {
@@ -1283,7 +1284,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       animation: _draftController,
       builder: (context, _) {
         return TaskScheduleSection(
-          spacing: calendarSpacing6,
+          spacing: calendarInsetLg,
           start: _draftController.startTime,
           end: _draftController.endTime,
           onStartChanged: _draftController.updateStart,
@@ -1303,7 +1304,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             referenceStart?.weekday ?? DateTime.now().weekday;
 
         return TaskRecurrenceSection(
-          spacing: calendarSpacing6,
+          spacing: calendarInsetLg,
           value: _draftController.recurrence,
           fallbackWeekday: fallbackWeekday,
           spacingConfig: const RecurrenceEditorSpacing(
@@ -1351,7 +1352,8 @@ class _TaskSidebarState extends State<TaskSidebar>
           uiState: uiState,
           itemCount: unscheduledTasks.length,
           expandedChild: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterSm, vertical: calendarInsetMd),
             child: _buildTaskList(
               unscheduledTasks,
               emptyLabel: 'No unscheduled tasks',
@@ -1361,14 +1363,15 @@ class _TaskSidebarState extends State<TaskSidebar>
           ),
           collapsedChild: _buildCollapsedPreview(unscheduledTasks),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: calendarInsetMd),
         _buildAccordionSection(
           title: 'REMINDERS',
           section: CalendarSidebarSection.reminders,
           uiState: uiState,
           itemCount: reminderTasks.length,
           expandedChild: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterSm, vertical: calendarInsetMd),
             child: _buildReminderList(reminderTasks, uiState),
           ),
           collapsedChild: _buildCollapsedPreview(reminderTasks),
@@ -1409,8 +1412,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               InkWell(
                 onTap: () => _sidebarController.toggleSection(section),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: calendarFieldPadding,
                   child: Row(
                     children: [
                       Expanded(
@@ -1425,7 +1427,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                         ),
                       ),
                       _buildCountBadge(itemCount, isExpanded),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: calendarGutterSm),
                       Icon(
                         isExpanded
                             ? Icons.keyboard_arrow_up
@@ -1442,7 +1444,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   duration: const Duration(milliseconds: 220),
                   firstChild: const SizedBox.shrink(),
                   secondChild: Container(
-                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+                    padding: calendarAccordionPadding,
                     child: expandedChild,
                   ),
                   crossFadeState: isExpanded
@@ -1488,7 +1490,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       children: previewTitles
           .map(
             (title) => Padding(
-              padding: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.only(bottom: calendarInsetSm),
               child: Text(
                 '• $title',
                 style:
@@ -1545,8 +1547,8 @@ class _TaskSidebarState extends State<TaskSidebar>
               : ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: calendarInsetLg, vertical: 2),
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
@@ -1576,7 +1578,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     required bool isHovering,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      padding: calendarActionButtonPadding,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1587,7 +1589,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               size: 48,
               color: isHovering ? calendarPrimaryColor : calendarTimeLabelColor,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: calendarGutterMd),
             Text(
               label,
               style: TextStyle(
@@ -1599,7 +1601,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               textAlign: TextAlign.center,
             ),
             if (hint != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: calendarInsetMd),
               Text(
                 hint,
                 style: const TextStyle(
@@ -1617,7 +1619,8 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   Widget _buildCountBadge(int count, bool isExpanded) {
     final badge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+          horizontal: calendarGutterSm, vertical: calendarInsetMd),
       decoration: BoxDecoration(
         color: isExpanded
             ? calendarPrimaryColor
@@ -1684,7 +1687,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     final bool isActive = uiState.activePopoverTaskId == task.id;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: calendarGutterSm),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(calendarBorderRadius),
         child: Container(
@@ -1937,7 +1940,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                       ),
                     ),
                     if (scheduleLabel != null) ...[
-                      const SizedBox(height: 2),
+                      const SizedBox(height: calendarInsetSm),
                       Text(
                         scheduleLabel,
                         style: const TextStyle(
@@ -1951,13 +1954,13 @@ class _TaskSidebarState extends State<TaskSidebar>
                 ),
               ),
               if (trailing != null) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: calendarInsetMd),
                 trailing,
               ],
             ],
           ),
           if (task.description?.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: calendarInsetMd),
             Text(
               task.description!.length > 50
                   ? '${task.description!.substring(0, 50)}...'
@@ -1969,9 +1972,10 @@ class _TaskSidebarState extends State<TaskSidebar>
             ),
           ],
           if (task.deadline != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: calendarInsetLg),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: calendarGutterSm, vertical: calendarInsetMd),
               decoration: BoxDecoration(
                 color: _getDeadlineBackgroundColor(task.deadline!),
                 borderRadius: BorderRadius.circular(4),
@@ -1984,7 +1988,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                     size: 12,
                     color: _getDeadlineColor(task.deadline!),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: calendarInsetMd),
                   Text(
                     _getFullDeadlineText(task.deadline!),
                     style: TextStyle(
@@ -1999,7 +2003,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             ),
           ],
           if (task.location?.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: calendarInsetMd),
             Row(
               children: [
                 const Text('📍 ', style: TextStyle(fontSize: 11)),

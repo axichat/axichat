@@ -79,7 +79,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                 if (widget.isGuestMode) _buildGuestBanner(),
                 if (state.error != null)
                   Container(
-                    margin: calendarPadding16,
+                    margin: calendarPaddingXl,
                     child: ErrorDisplay(
                       error: state.error!,
                       onRetry: () {
@@ -96,7 +96,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                   ),
                 Expanded(
                   child: Container(
-                    margin: calendarPadding16,
+                    margin: calendarPaddingXl,
                     child: ResponsiveHelper.layoutBuilder(
                       context,
                       mobile: _buildMobileLayout(state),
@@ -160,7 +160,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                       onTap: () => Navigator.pop(context),
                       borderRadius: BorderRadius.circular(24),
                       child: Container(
-                        padding: calendarPadding8,
+                        padding: calendarPaddingMd,
                         child: const Icon(
                           Icons.arrow_back_ios_new,
                           color: calendarTitleColor,
@@ -169,7 +169,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                       ),
                     ),
                   ),
-                const SizedBox(width: 8),
+                const SizedBox(width: calendarGutterSm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,7 +187,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                   ),
                 ),
                 _buildViewModeSelector(context, state),
-                const SizedBox(width: 8),
+                const SizedBox(width: calendarGutterSm),
                 if (!widget.isGuestMode) _buildSyncButton(context, state),
               ],
             ),
@@ -271,7 +271,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
 
   Widget _buildDateHeader(CalendarState state) {
     return Container(
-      padding: calendarPadding16,
+      padding: calendarPaddingXl,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -331,7 +331,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
               size: 64,
               color: calendarTimeLabelColor,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: calendarGutterLg),
             Text(
               'No tasks for this date',
               style: calendarTitleTextStyle.copyWith(
@@ -339,7 +339,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                 color: calendarSubtitleColor,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: calendarGutterSm),
             const Text(
               'Tap + to create a new task',
               style: calendarSubtitleTextStyle,
@@ -376,7 +376,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Padding(
-                  padding: EdgeInsets.all(16.0),
+                  padding: calendarPaddingXl,
                   child: Text('Quick Stats', style: calendarBodyTextStyle),
                 ),
                 ListTile(
@@ -391,7 +391,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                 ),
                 const Divider(),
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: calendarPaddingXl,
                   child: widget.isGuestMode
                       ? _buildGuestModeInfo()
                       : SyncControls(state: state),
@@ -409,7 +409,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Guest Mode', style: calendarBodyTextStyle),
-        const SizedBox(height: 8),
+        const SizedBox(height: calendarGutterSm),
         Text(
           'Your tasks are saved locally on this device. Sign up to sync across devices.',
           style: calendarSubtitleTextStyle.copyWith(

@@ -27,7 +27,7 @@ class LoadingIndicator extends StatelessWidget {
             child: const CircularProgressIndicator(strokeWidth: 2),
           ),
           if (showMessage && message != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: calendarGutterLg),
             Text(
               message!,
               style: calendarSubtitleTextStyle,
@@ -51,7 +51,7 @@ class CalendarLoadingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: calendarPadding16,
+      padding: calendarPaddingXl,
       decoration: BoxDecoration(
         color: calendarContainerColor,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
@@ -65,7 +65,7 @@ class CalendarLoadingIndicator extends StatelessWidget {
             height: 32,
             child: CircularProgressIndicator(strokeWidth: 3),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: calendarGutterLg),
           Text(
             message,
             style: const TextStyle(
@@ -155,7 +155,7 @@ class TaskSkeletonTile extends StatelessWidget {
         final double secondaryLineWidth = availableWidth * 0.3;
 
         return Container(
-          padding: calendarPadding16,
+          padding: calendarPaddingXl,
           margin: calendarMarginSmall,
           decoration: BoxDecoration(
             color: calendarContainerColor,
@@ -168,18 +168,18 @@ class TaskSkeletonTile extends StatelessWidget {
           child: Row(
             children: [
               const SkeletonLoader(width: 20, height: 20, borderRadius: 10),
-              const SizedBox(width: 12),
+              const SizedBox(width: calendarGutterMd),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SkeletonLoader(width: double.infinity, height: 16),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: calendarGutterSm),
                     SkeletonLoader(
                       width: primaryLineWidth,
                       height: 12,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: calendarInsetMd),
                     SkeletonLoader(
                       width: secondaryLineWidth,
                       height: 12,
@@ -187,7 +187,7 @@ class TaskSkeletonTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: calendarGutterMd),
               const SkeletonLoader(width: 24, height: 24, borderRadius: 4),
             ],
           ),

@@ -114,10 +114,10 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
               onChanged: (_) => _composerController.expand(),
             ),
             if (_composerController.isExpanded) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: calendarGutterSm),
               TaskDateTimeToolbar(
                 padding: EdgeInsets.zero,
-                gap: calendarSpacing8,
+                gap: calendarGutterSm,
                 primaryField: TaskDateTimeToolbarField(
                   selectedDate: _composerController.selectedDate,
                   selectedTime: _composerController.selectedTime,
@@ -131,10 +131,10 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
                   _focusNode.unfocus();
                 },
               ),
-              const SizedBox(height: calendarSpacing8),
+              const SizedBox(height: calendarGutterSm),
               TaskFormActionsRow(
                 padding: EdgeInsets.zero,
-                gap: calendarSpacing8,
+                gap: calendarGutterSm,
                 children: [
                   Expanded(
                     child: TaskPrimaryButton(

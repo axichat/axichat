@@ -1751,7 +1751,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: calendarInsetMd),
               Expanded(
                 child: Container(
                   height: 2,

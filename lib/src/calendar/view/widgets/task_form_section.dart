@@ -45,7 +45,7 @@ class TaskSectionHeader extends StatelessWidget {
             ),
           ),
           if (trailing != null) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: calendarGutterSm),
             trailing!,
           ],
         ],
@@ -92,7 +92,7 @@ class TaskPriorityToggles extends StatelessWidget {
     this.onUrgentChanged,
     this.isImportantIndeterminate = false,
     this.isUrgentIndeterminate = false,
-    this.spacing = calendarSpacing12,
+    this.spacing = calendarGutterMd,
   });
 
   final bool isImportant;
@@ -271,8 +271,8 @@ class TaskTextFormField extends StatelessWidget {
         ),
         contentPadding: contentPadding ??
             const EdgeInsets.symmetric(
-              horizontal: calendarSpacing12,
-              vertical: calendarSpacing12,
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterMd,
             ),
         filled: true,
         fillColor: effectiveFill,
@@ -308,7 +308,7 @@ class TaskToolbarButton extends StatelessWidget {
         children: [
           if (icon != null) ...[
             Icon(icon, size: 16),
-            const SizedBox(width: calendarSpacing4),
+            const SizedBox(width: calendarInsetMd),
           ],
           Text(
             label,
@@ -354,7 +354,7 @@ class TaskScheduleSection extends StatelessWidget {
     required this.onStartChanged,
     required this.onEndChanged,
     this.title = 'Schedule',
-    this.spacing = calendarSpacing8,
+    this.spacing = calendarGutterSm,
     this.padding = EdgeInsets.zero,
     this.headerStyle,
     this.headerTrailing,
@@ -402,7 +402,7 @@ class TaskScheduleSection extends StatelessWidget {
     }
     if (clearHandler != null) {
       if (trailingChildren.isNotEmpty) {
-        trailingChildren.add(const SizedBox(width: calendarSpacing4));
+        trailingChildren.add(const SizedBox(width: calendarInsetMd));
       }
       trailingChildren.add(
         TaskGhostIconButton(
@@ -456,7 +456,7 @@ class TaskRecurrenceSection extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.title = 'Repeat',
-    this.spacing = calendarSpacing8,
+    this.spacing = calendarGutterSm,
     this.padding = EdgeInsets.zero,
     this.headerStyle,
     this.headerTrailing,
@@ -509,7 +509,7 @@ class TaskRecurrenceSection extends StatelessWidget {
             fallbackWeekday: fallbackWeekday,
             spacing: spacingConfig,
             chipPadding: chipPadding ??
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: calendarGutterSm),
             weekdayChipPadding: weekdayChipPadding ??
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             intervalSelectWidth: intervalSelectWidth ?? 120,
@@ -607,7 +607,7 @@ class TaskDateTimeToolbar extends StatelessWidget {
     this.secondaryField,
     this.onClear,
     this.padding = EdgeInsets.zero,
-    this.gap = calendarSpacing8,
+    this.gap = calendarGutterSm,
     this.clearIcon = Icons.close,
     this.clearTooltip,
   });
@@ -713,7 +713,7 @@ class TaskPrimaryButton extends StatelessWidget {
               children: [
                 if (icon != null) ...[
                   Icon(icon, size: 16),
-                  const SizedBox(width: calendarSpacing4),
+                  const SizedBox(width: calendarInsetMd),
                 ],
                 Text(label),
               ],
@@ -767,7 +767,7 @@ class TaskSecondaryButton extends StatelessWidget {
               children: [
                 if (icon != null) ...[
                   Icon(icon, size: 16),
-                  const SizedBox(width: calendarSpacing4),
+                  const SizedBox(width: calendarInsetMd),
                 ],
                 Text(label),
               ],
@@ -810,7 +810,7 @@ class TaskDestructiveButton extends StatelessWidget {
               children: [
                 if (icon != null) ...[
                   Icon(icon, size: 16),
-                  const SizedBox(width: calendarSpacing4),
+                  const SizedBox(width: calendarInsetMd),
                 ],
                 Text(label),
               ],
@@ -868,8 +868,8 @@ class TaskDescriptionField extends StatelessWidget {
       focusBorderColor: focusBorderColor,
       contentPadding: contentPadding ??
           const EdgeInsets.symmetric(
-            horizontal: calendarSpacing16,
-            vertical: calendarSpacing12,
+            horizontal: calendarGutterLg,
+            vertical: calendarGutterMd,
           ),
     );
   }
@@ -919,8 +919,8 @@ class TaskLocationField extends StatelessWidget {
       focusBorderColor: focusBorderColor,
       contentPadding: contentPadding ??
           const EdgeInsets.symmetric(
-            horizontal: calendarSpacing16,
-            vertical: calendarSpacing12,
+            horizontal: calendarGutterLg,
+            vertical: calendarGutterMd,
           ),
     );
   }
@@ -933,7 +933,7 @@ class TaskFormActionsRow extends StatelessWidget {
   const TaskFormActionsRow({
     super.key,
     required this.children,
-    this.padding = const EdgeInsets.all(12),
+    this.padding = calendarPaddingLg,
     this.includeTopBorder = false,
     this.borderColor = calendarBorderColor,
     this.backgroundColor = Colors.transparent,

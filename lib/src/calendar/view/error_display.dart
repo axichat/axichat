@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../common/ui/ui.dart';
+
 class ErrorDisplay extends StatelessWidget {
   const ErrorDisplay({
     super.key,
@@ -16,8 +18,8 @@ class ErrorDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
+      margin: calendarPaddingXl,
+      padding: calendarPaddingXl,
       decoration: BoxDecoration(
         color: Colors.red.shade50,
         border: Border.all(color: Colors.red.shade200),
@@ -34,7 +36,7 @@ class ErrorDisplay extends StatelessWidget {
                 color: Colors.red.shade700,
                 size: 20,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: calendarGutterSm),
               Text(
                 'Error',
                 style: TextStyle(
@@ -54,7 +56,7 @@ class ErrorDisplay extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: calendarGutterSm),
           Text(
             _getFriendlyErrorMessage(error),
             style: TextStyle(
@@ -63,7 +65,7 @@ class ErrorDisplay extends StatelessWidget {
             ),
           ),
           if (onRetry != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: calendarGutterMd),
             ShadButton.outline(
               onPressed: onRetry,
               child: const Text('Try Again'),
@@ -120,7 +122,7 @@ class ErrorSnackBar {
         content: Row(
           children: [
             const Icon(Icons.error_outline, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
+            const SizedBox(width: calendarGutterSm),
             Expanded(
               child: Text(ErrorDisplay._getFriendlyErrorMessage(error)),
             ),

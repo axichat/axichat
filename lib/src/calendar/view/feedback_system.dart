@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../common/ui/ui.dart';
+
 class FeedbackMessage {
   final String message;
   final FeedbackType type;
@@ -108,7 +110,7 @@ class FeedbackSystem {
                 color: Colors.white,
                 size: 18,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: calendarGutterSm),
               Expanded(
                 child: Text(
                   feedback.message,
@@ -124,7 +126,7 @@ class FeedbackSystem {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
-        margin: const EdgeInsets.all(16),
+        margin: calendarPaddingXl,
       ),
     );
   }
@@ -176,8 +178,8 @@ class InlineFeedback extends StatelessWidget {
     final colors = FeedbackSystem._getColorsForType(context, type);
 
     return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: calendarPaddingLg,
+      margin: const EdgeInsets.symmetric(vertical: calendarGutterSm),
       decoration: BoxDecoration(
         color: colors.background.withValues(alpha: 0.1),
         border: Border.all(
@@ -193,7 +195,7 @@ class InlineFeedback extends StatelessWidget {
             color: colors.background,
             size: 18,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: calendarGutterSm),
           Expanded(
             child: Text(
               message,
@@ -204,7 +206,7 @@ class InlineFeedback extends StatelessWidget {
             ),
           ),
           if (onDismiss != null) ...[
-            const SizedBox(width: 8),
+            const SizedBox(width: calendarGutterSm),
             GestureDetector(
               onTap: onDismiss,
               child: Icon(
@@ -252,7 +254,7 @@ class ProgressIndicator extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: calendarGutterSm),
         LinearProgressIndicator(
           value: progress,
           backgroundColor:

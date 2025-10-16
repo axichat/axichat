@@ -38,7 +38,8 @@ class PriorityCheckboxTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+            horizontal: calendarGutterMd, vertical: 10),
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(10),
@@ -75,7 +76,7 @@ class PriorityCheckboxTile extends StatelessWidget {
               onChanged:
                   isEnabled ? (checked) => onChanged!(checked ?? false) : null,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: calendarFormGap),
             Expanded(
               child: Text(
                 label,

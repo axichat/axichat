@@ -426,7 +426,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: calendarGutterLg, vertical: 14),
         decoration: BoxDecoration(
           border: Border.all(
             color: borderColor,
@@ -442,14 +442,14 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               size: 20,
               color: iconColor,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: calendarGutterMd),
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: _buildFieldContent(iconColor),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: calendarGutterSm),
             Icon(
               _isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
               size: 20,
@@ -543,7 +543,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               letterSpacing: 0.2,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: calendarInsetSm),
           Text(
             displayDate,
             style: const TextStyle(
@@ -678,7 +678,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   Widget _buildMonthHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: calendarGutterSm),
       decoration: const BoxDecoration(
         border: Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
@@ -707,7 +707,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                         _markOverlayNeedsBuild();
                       }
                     : null,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm, vertical: calendarInsetLg),
                 child: Icon(
                   Icons.chevron_left,
                   size: 16,
@@ -749,7 +749,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                         _markOverlayNeedsBuild();
                       }
                     : null,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm, vertical: calendarInsetLg),
                 child: Icon(
                   Icons.chevron_right,
                   size: 16,
@@ -782,7 +782,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     }
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: calendarPaddingLg,
       child: Column(
         children: [
           Row(
@@ -803,7 +803,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 )
                 .toList(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: calendarGutterSm),
           Wrap(
             spacing: 4,
             runSpacing: 4,
@@ -883,7 +883,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final selectedMinute = _roundToFive(selected.minute);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: calendarGutterMd, vertical: 10),
       decoration: const BoxDecoration(
         border: Border(
           top: BorderSide(color: calendarBorderColor, width: 1),
@@ -901,7 +901,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               letterSpacing: 0.3,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: calendarFormGap),
           SizedBox(
             height: 210,
             child: Row(
@@ -956,7 +956,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
             letterSpacing: 0.3,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: calendarInsetLg),
         Expanded(
           child: DecoratedBox(
             decoration: showRightDivider
@@ -1044,7 +1044,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     ];
 
     if (_currentValue != null) {
-      actionChildren.add(const SizedBox(width: 8));
+      actionChildren.add(const SizedBox(width: calendarGutterSm));
       actionChildren.add(
         ShadButton.outline(
           size: ShadButtonSize.sm,

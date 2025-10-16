@@ -62,7 +62,7 @@ class ScheduleRangeFields extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               startField,
-              const SizedBox(height: calendarSpacing12),
+              const SizedBox(height: calendarGutterMd),
               endField,
             ],
           );
@@ -71,7 +71,7 @@ class ScheduleRangeFields extends StatelessWidget {
         return Row(
           children: [
             Expanded(child: startField),
-            const SizedBox(width: calendarSpacing12),
+            const SizedBox(width: calendarGutterMd),
             Expanded(child: endField),
           ],
         );
@@ -113,7 +113,7 @@ class _ScheduleField extends StatelessWidget {
             letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: calendarSpacing6),
+        const SizedBox(height: calendarInsetLg),
         DeadlinePickerField(
           value: value,
           placeholder: placeholder,

@@ -225,7 +225,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
                     borderRadius: BorderRadius.circular(1.5),
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: calendarInsetMd),
               ],
               Expanded(
                 child: Text(
@@ -248,7 +248,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
           // Time range
           if (widget.height > 32 && _timeRange.isNotEmpty) ...[
-            const SizedBox(height: 2),
+            const SizedBox(height: calendarInsetSm),
             Text(
               _timeRange,
               style: TextStyle(
@@ -261,7 +261,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
           // Description
           if (_showDescription) ...[
-            const SizedBox(height: 3),
+            const SizedBox(height: calendarTaskDetailGap),
             Expanded(
               child: Text(
                 widget.task.description!,
@@ -279,7 +279,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
           // Location indicator
           if (widget.height > 45 &&
               widget.task.location?.isNotEmpty == true) ...[
-            const SizedBox(height: 2),
+            const SizedBox(height: calendarInsetSm),
             Row(
               children: [
                 Icon(
@@ -287,7 +287,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
                   size: 8,
                   color: Colors.white.withValues(alpha: 0.7),
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: calendarInsetSm),
                 Expanded(
                   child: Text(
                     widget.task.location!,

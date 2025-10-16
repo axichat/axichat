@@ -106,7 +106,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
   Widget _buildErrorBanner(CalendarState state) {
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: calendarPaddingXl,
       child: ErrorDisplay(
         error: state.error!,
         onRetry: () => context.read<CalendarBloc>().add(
@@ -162,7 +162,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
         // Toggle button
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: calendarGutterLg, vertical: calendarGutterSm),
           child: Row(
             children: [
               IconButton(
