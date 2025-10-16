@@ -6,7 +6,6 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:bloc_test/bloc_test.dart';

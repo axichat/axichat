@@ -7,7 +7,6 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
-import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../view/calendar_grid.dart';
 import '../view/calendar_navigation.dart';

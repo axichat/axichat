@@ -20,18 +20,16 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart'
     show
         CalendarLayoutCalculator,
-        CalendarTaskLayout,
         CalendarLayoutMetrics,
         CalendarLayoutTheme,
         CalendarZoomLevel,
-        OverlapInfo,
-        calculateOverlapColumns,
         kCalendarZoomLevels;
 import 'controllers/zoom_controls_controller.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
 import 'controllers/slot_drag_controller.dart';
 import 'resizable_task_widget.dart';
+import 'widgets/calendar_task_entries_builder.dart';
 import 'widgets/calendar_task_surface.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
@@ -2187,138 +2185,91 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   List<Widget> _buildTasksForDayWithWidth(
       DateTime date, bool compact, double dayWidth,
       {bool isDayView = false, required Set<String> visibleTaskIds}) {
-    final tasks = _getTasksForDay(date);
-    final widgets = <Widget>[];
-    final draggingId = _taskInteractionController.draggingTaskId;
+    final List<CalendarTask> tasks = _getTasksForDay(date);
+    final String? draggingId = _taskInteractionController.draggingTaskId;
     final double stepHeight =
         (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
-    final Duration splitPreviewAnimationDuration =
-        _CalendarGridState._layoutTheme.splitPreviewAnimationDuration;
 
-    final weekStartDate = DateTime(
+    final CalendarTaskEntriesBuilder builder = CalendarTaskEntriesBuilder(
+      layoutCalculator: _layoutCalculator,
+      layoutMetrics: _currentLayoutMetrics,
+      interactionController: _taskInteractionController,
+      callbacksFactory: (task) {
+        return CalendarTaskTileCallbacks(
+          onResizePreview: _handleResizePreview,
+          onResizeEnd: _handleResizeCommit,
+          onResizePointerMove: _handleResizeAutoScroll,
+          onDragStarted: _handleTaskDragStarted,
+          onDragUpdate: _handleTaskDragUpdate,
+          onDragEnded: _handleTaskDragEnded,
+          onDragPointerDown: (offset) => _handleTaskPointerDown(task, offset),
+          onEnterSelectionMode: () => _enterSelectionMode(task.id),
+          onToggleSelection: () => _toggleTaskSelection(task.id),
+          onTap: _onScheduledTaskTapped,
+          computePreviewStartForHover: (offset) =>
+              _computePreviewStartForTaskHover(task, offset),
+          defaultPreviewStart: () => _defaultPreviewStartForTask(task),
+          previewOverlapsScheduled:
+              _slotDragController.previewOverlapsScheduled,
+          updateDragPreview: _updateDragPreview,
+          stopEdgeAutoScroll: _stopEdgeAutoScroll,
+          updateDragFeedbackWidth: _updateDragFeedbackWidth,
+          clearDragPreview: _clearDragPreview,
+          cancelPendingDragWidth: _cancelPendingDragWidth,
+          resetDragFeedbackHint: _resetDragFeedbackHint,
+          doesPreviewOverlap: () => _doesPreviewOverlap(task),
+          onTaskDrop: _handleTaskDrop,
+          isWidthDebounceActive: () => _isWidthDebounceActive,
+          isPreviewAnchor: _slotDragController.isPreviewAnchor,
+        );
+      },
+      registerVisibleTask: (task) => _visibleTasks[task.id] = task,
+      updateVisibleBounds: (taskId, rect) => _visibleTaskRects[taskId] = rect,
+      isSelectionMode: _isSelectionMode,
+      isTaskSelected: _isTaskSelected,
+      isPopoverOpen: _taskPopoverController.isPopoverOpen,
+      dragTargetKeyForTask: _taskPopoverController.keyForTask,
+      requestPopoverLayoutUpdate: (taskId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateActivePopoverLayoutForTask(taskId);
+        });
+      },
+      contextMenuDelegate: (task, menuController) =>
+          _buildTaskContextMenuBuilder(
+        task: task,
+        menuController: menuController,
+      ),
+      contextMenuGroupId: _contextMenuGroupId,
+      splitPreviewAnimationDuration:
+          _CalendarGridState._layoutTheme.splitPreviewAnimationDuration,
+      stepHeight: stepHeight,
+      minutesPerStep: _minutesPerStep,
+      hourHeight: _resolvedHourHeight,
+      draggingTaskId: draggingId,
+    );
+
+    final DateTime weekStartDate = DateTime(
       widget.state.weekStart.year,
       widget.state.weekStart.month,
       widget.state.weekStart.day,
     );
-    final weekEndDate = DateTime(
+    final DateTime weekEndDate = DateTime(
       widget.state.weekEnd.year,
       widget.state.weekEnd.month,
       widget.state.weekEnd.day,
     );
 
-    // Calculate overlaps for all tasks
-    final overlapMap = _calculateEventOverlaps(tasks);
-
-    for (final task in tasks) {
-      if (task.scheduledTime == null) continue;
-
-      _visibleTasks[task.id] = task;
-      visibleTaskIds.add(task.id);
-      final overlapInfo = overlapMap[task.id] ??
-          const OverlapInfo(columnIndex: 0, totalColumns: 1);
-      final bool isDraggingTask = draggingId != null && task.id == draggingId;
-      if (isDraggingTask) {
-        continue;
-      }
-
-      final CalendarTaskLayout? layout = _layoutCalculator.resolveTaskLayout(
-        task: task,
-        dayDate: date,
-        weekStartDate: weekStartDate,
-        weekEndDate: weekEndDate,
-        isDayView: isDayView,
-        startHour: startHour,
-        endHour: endHour,
-        dayWidth: dayWidth,
-        metrics: _currentLayoutMetrics,
-        overlap: overlapInfo,
-      );
-
-      if (layout == null) {
-        continue;
-      }
-
-      final double narrowedWidth =
-          _layoutCalculator.computeNarrowedWidth(dayWidth, layout.width);
-      final double splitWidthFactor = layout.width == 0
-          ? 0.0
-          : math.max(0.0, math.min(1.0, narrowedWidth / layout.width));
-      final bool selectionMode = _isSelectionMode;
-      final bool isSelected = _isTaskSelected(task);
-      final bool isPopoverOpen = _taskPopoverController.isPopoverOpen(task.id);
-      final GlobalKey dragTargetKey =
-          _taskPopoverController.keyForTask(task.id);
-
-      final CalendarTaskTileCallbacks callbacks = CalendarTaskTileCallbacks(
-        onResizePreview: _handleResizePreview,
-        onResizeEnd: _handleResizeCommit,
-        onResizePointerMove: _handleResizeAutoScroll,
-        onDragStarted: _handleTaskDragStarted,
-        onDragUpdate: _handleTaskDragUpdate,
-        onDragEnded: _handleTaskDragEnded,
-        onDragPointerDown: (offset) => _handleTaskPointerDown(task, offset),
-        onEnterSelectionMode: () => _enterSelectionMode(task.id),
-        onToggleSelection: () => _toggleTaskSelection(task.id),
-        onTap: _onScheduledTaskTapped,
-        computePreviewStartForHover: (offset) =>
-            _computePreviewStartForTaskHover(task, offset),
-        defaultPreviewStart: () => _defaultPreviewStartForTask(task),
-        previewOverlapsScheduled: _slotDragController.previewOverlapsScheduled,
-        updateDragPreview: _updateDragPreview,
-        stopEdgeAutoScroll: _stopEdgeAutoScroll,
-        updateDragFeedbackWidth: _updateDragFeedbackWidth,
-        clearDragPreview: _clearDragPreview,
-        cancelPendingDragWidth: _cancelPendingDragWidth,
-        resetDragFeedbackHint: _resetDragFeedbackHint,
-        doesPreviewOverlap: () => _doesPreviewOverlap(task),
-        onTaskDrop: _handleTaskDrop,
-        isWidthDebounceActive: () => _isWidthDebounceActive,
-        isPreviewAnchor: _slotDragController.isPreviewAnchor,
-      );
-
-      final CalendarTaskEntryBindings bindings = CalendarTaskEntryBindings(
-        isSelectionMode: selectionMode,
-        isSelected: isSelected,
-        isPopoverOpen: isPopoverOpen,
-        dragTargetKey: dragTargetKey,
-        splitPreviewAnimationDuration: splitPreviewAnimationDuration,
-        contextMenuGroupId: _contextMenuGroupId,
-        contextMenuBuilderFactory: (menuController) =>
-            _buildTaskContextMenuBuilder(
-          task: task,
-          menuController: menuController,
-        ),
-        interactionController: _taskInteractionController,
-        dragFeedbackHint: _taskInteractionController.feedbackHint,
-        callbacks: callbacks,
-        updateBounds: (rect) => _visibleTaskRects[task.id] = rect,
-        stepHeight: stepHeight,
-        minutesPerStep: _minutesPerStep,
-        hourHeight: _resolvedHourHeight,
-        schedulePopoverLayoutUpdate: () {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _updateActivePopoverLayoutForTask(task.id);
-          });
-        },
-      );
-
-      widgets.add(
-        CalendarTaskSurface(
-          key: ValueKey('calendar-task-${task.id}'),
-          task: task,
-          left: layout.left,
-          top: layout.top,
-          width: layout.width,
-          height: layout.height,
-          narrowedWidth: narrowedWidth,
-          splitWidthFactor: splitWidthFactor,
-          isDayView: isDayView,
-          bindings: bindings,
-        ),
-      );
-    }
-
-    return widgets;
+    return builder.build(
+      day: date,
+      dayWidth: dayWidth,
+      isDayView: isDayView,
+      startHour: startHour,
+      endHour: endHour,
+      tasks: tasks,
+      weekStartDate: weekStartDate,
+      weekEndDate: weekEndDate,
+      visibleTaskIds: visibleTaskIds,
+    );
   }
 
   TaskContextMenuBuilder _buildTaskContextMenuBuilder({
@@ -2504,10 +2455,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
       return menuItems;
     };
-  }
-
-  Map<String, OverlapInfo> _calculateEventOverlaps(List<CalendarTask> tasks) {
-    return calculateOverlapColumns(tasks);
   }
 
   Set<String> _seriesIdsForTask(CalendarTask task) {

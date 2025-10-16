@@ -119,11 +119,6 @@ class ResizableTaskWidget extends StatefulWidget {
 }
 
 class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
-  bool isHovering = false;
-  bool isResizing = false;
-  bool isDragging = false;
-  late final VoidCallback _controllerListener;
-  String? activeHandle;
   double _totalDragDeltaY = 0;
   int _lastAppliedQuarterDelta = 0;
   Offset _contextMenuLocalPosition = Offset.zero;
@@ -137,44 +132,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   late double _currentDurationHours;
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
-
-  @override
-  void initState() {
-    super.initState();
-    _controllerListener = _handleInteractionControllerUpdate;
-    widget.interactionController.addListener(_controllerListener);
-  }
-
-  @override
-  void didUpdateWidget(covariant ResizableTaskWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.interactionController != widget.interactionController) {
-      oldWidget.interactionController.removeListener(_controllerListener);
-      widget.interactionController.addListener(_controllerListener);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.interactionController.removeListener(_controllerListener);
-    super.dispose();
-  }
-
-  void _handleInteractionControllerUpdate() {
-    final controller = widget.interactionController;
-    final bool controllerDragging = controller.draggingTaskId == widget.task.id;
-    if (controllerDragging && !isDragging) {
-      setState(() {
-        isDragging = true;
-      });
-      return;
-    }
-    if (!controllerDragging && isDragging) {
-      setState(() {
-        isDragging = false;
-      });
-    }
-  }
 
   CalendarTask? _buildUpdatedTask() {
     final DateTime? scheduled = _tempScheduledTime ?? widget.task.scheduledTime;
@@ -276,387 +233,477 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final task = widget.task;
-    final taskColor = _taskColor;
+    return AnimatedBuilder(
+      animation: widget.interactionController,
+      builder: (context, _) {
+        final task = widget.task;
+        final taskColor = _taskColor;
+        final TaskInteractionController controller =
+            widget.interactionController;
+        final bool isDragging = controller.draggingTaskId == task.id;
+        final bool isHovering = controller.currentHoveredTaskId == task.id;
+        final TaskResizeInteraction? resizeSession =
+            controller.activeResizeInteraction;
+        final bool isResizing =
+            resizeSession != null && resizeSession.taskId == task.id;
+        final String? activeHandle = isResizing ? resizeSession.handle : null;
 
-    Widget buildFeedbackContent(DragFeedbackHint hint) {
-      final bool isCompleted = task.isCompleted;
-      final Color accentColor = taskColor;
-      final double blendAlpha = isCompleted ? 0.08 : 0.18;
-      final Color backgroundColor = Color.alphaBlend(
-        accentColor.withValues(alpha: blendAlpha),
-        calendarContainerColor,
-      );
-      final Color borderColor =
-          accentColor.withValues(alpha: isCompleted ? 0.4 : 0.5);
-      final Color stripeColor =
-          accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
+        Widget buildFeedbackContent(DragFeedbackHint hint) {
+          final bool isCompleted = task.isCompleted;
+          final Color accentColor = taskColor;
+          final double blendAlpha = isCompleted ? 0.08 : 0.18;
+          final Color backgroundColor = Color.alphaBlend(
+            accentColor.withValues(alpha: blendAlpha),
+            calendarContainerColor,
+          );
+          final Color borderColor =
+              accentColor.withValues(alpha: isCompleted ? 0.4 : 0.5);
+          final Color stripeColor =
+              accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
 
-      final double fallbackWidth = widget.width;
-      final double effectiveWidth =
-          hint.width.isFinite && hint.width > 0 ? hint.width : fallbackWidth;
-      final double anchorX = hint.anchorDx.clamp(0.0, effectiveWidth);
-      final double translationX = anchorX - (effectiveWidth / 2);
+          final double fallbackWidth = widget.width;
+          final double effectiveWidth = hint.width.isFinite && hint.width > 0
+              ? hint.width
+              : fallbackWidth;
+          final double anchorX = hint.anchorDx.clamp(0.0, effectiveWidth);
+          final double translationX = anchorX - (effectiveWidth / 2);
 
-      return Transform.translate(
-        offset: Offset(-translationX, 0),
-        child: Material(
-          elevation: 8,
-          color: Colors.transparent,
-          child: Container(
-            width: effectiveWidth,
-            height: widget.height,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: borderColor, width: 1.2),
-              boxShadow: calendarMediumShadow,
-            ),
-            child: Stack(
-              children: [
-                _buildAccentStripe(stripeColor),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    _accentWidth + _accentPadding,
-                    8,
-                    8,
-                    8,
-                  ),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Text(
-                      task.title,
-                      style: taskTitleTextStyle.copyWith(
-                        color: calendarTitleColor,
+          return Transform.translate(
+            offset: Offset(-translationX, 0),
+            child: Material(
+              elevation: 8,
+              color: Colors.transparent,
+              child: Container(
+                width: effectiveWidth,
+                height: widget.height,
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: borderColor, width: 1.2),
+                  boxShadow: calendarMediumShadow,
+                ),
+                child: Stack(
+                  children: [
+                    _buildAccentStripe(stripeColor),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        _accentWidth + _accentPadding,
+                        8,
+                        8,
+                        8,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: Text(
+                          task.title,
+                          style: taskTitleTextStyle.copyWith(
+                            color: calendarTitleColor,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      );
-    }
-
-    Widget buildFeedback() {
-      final ValueListenable<DragFeedbackHint>? listenable =
-          widget.dragFeedbackHint;
-      if (listenable == null) {
-        return buildFeedbackContent(
-          DragFeedbackHint(
-            width: widget.width,
-            pointerOffset: widget.width / 2,
-            anchorDx: widget.width / 2,
-            anchorDy: widget.height / 2,
-          ),
-        );
-      }
-      return ValueListenableBuilder<DragFeedbackHint>(
-        valueListenable: listenable,
-        builder: (context, state, child) {
-          return buildFeedbackContent(state);
-        },
-      );
-    }
-
-    Widget buildTaskBody() {
-      final bool showHoverEffects = widget.enableInteractions &&
-          (widget.isPopoverOpen || isHovering || isResizing || isDragging);
-      final bool selectionMode = widget.isSelectionMode;
-      final bool highlightSelection = selectionMode && widget.isSelected;
-      final bool isCompleted = task.isCompleted;
-      final Color accentColor = taskColor;
-      final double baseBlendAlpha = isCompleted ? 0.06 : 0.12;
-      final double activeBlendAlpha = isCompleted ? 0.1 : 0.18;
-      final double selectionBlendAlpha = highlightSelection
-          ? (isCompleted ? 0.18 : 0.26)
-          : (showHoverEffects ? activeBlendAlpha : baseBlendAlpha);
-      final Color backgroundColor = Color.alphaBlend(
-        accentColor.withValues(alpha: selectionBlendAlpha),
-        calendarContainerColor,
-      );
-      final Color borderColor = highlightSelection
-          ? accentColor
-          : showHoverEffects
-              ? accentColor.withValues(alpha: 0.45)
-              : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
-      final List<BoxShadow> boxShadows = highlightSelection
-          ? calendarMediumShadow
-          : showHoverEffects
-              ? calendarLightShadow
-              : const [];
-      final Color titleColor =
-          isCompleted ? calendarSubtitleColor : calendarTitleColor;
-      const Color secondaryColor = calendarSubtitleColor;
-      final Color stripeColor = highlightSelection
-          ? accentColor
-          : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
-
-      final decoration = BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: borderColor,
-          width: highlightSelection
-              ? 2.4
-              : isResizing
-                  ? 1.8
-                  : 1,
-        ),
-        boxShadow: boxShadows,
-      );
-
-      final double availableHeight =
-          (widget.height - 4).clamp(0.0, double.infinity);
-      final bool showHandles =
-          (ResizableTaskWidget.debugAlwaysShowHandles || showHoverEffects) &&
-              !task.isCompleted &&
-              availableHeight >= 14;
-
-      if (availableHeight <= 6) {
-        return Container(
-          margin: const EdgeInsets.all(2),
-          decoration: decoration,
-          child: Stack(
-            children: [
-              _buildAccentStripe(stripeColor),
-              if (showHandles) ..._buildResizeHandles(stripeColor),
-            ],
-          ),
-        );
-      }
-
-      double padding;
-      if (availableHeight >= 96) {
-        padding = 8;
-      } else if (availableHeight >= 72) {
-        padding = 6;
-      } else if (availableHeight >= 48) {
-        padding = 4;
-      } else {
-        padding = 2;
-      }
-
-      final double innerHeight =
-          (availableHeight - padding * 2).clamp(0.0, double.infinity);
-
-      if (innerHeight <= 10) {
-        return Container(
-          margin: const EdgeInsets.all(2),
-          decoration: decoration,
-          child: Stack(
-            children: [
-              _buildAccentStripe(stripeColor),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  padding + _accentWidth + _accentPadding,
-                  padding,
-                  padding,
-                  padding,
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: titleColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      decoration:
-                          task.isCompleted ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                ),
-              ),
-              if (showHandles) ..._buildResizeHandles(stripeColor),
-            ],
-          ),
-        );
-      }
-
-      final bool stackedTime = innerHeight >= 36;
-      final bool inlineTime =
-          !stackedTime && innerHeight >= 16 && widget.width >= 140;
-      final bool showTime = stackedTime || inlineTime;
-      final bool showDescription =
-          task.description?.isNotEmpty == true && innerHeight >= 56;
-
-      final double spacing = innerHeight >= 90
-          ? 6
-          : innerHeight >= 64
-              ? 4
-              : innerHeight >= 40
-                  ? 2
-                  : 0;
-
-      final int titleLines = innerHeight >= 48 ? 2 : 1;
-      final int descriptionLines = showDescription
-          ? math.max(1, (innerHeight / 18).floor() - (stackedTime ? 1 : 0))
-          : 0;
-      final TextOverflow descriptionOverflow =
-          descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
-
-      Widget buildTitle() {
-        final title = Text(
-          task.title,
-          maxLines: titleLines,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: titleColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-          ),
-        );
-
-        if (showTime && inlineTime) {
-          final timeText = _formatTimeRange();
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: title),
-              const SizedBox(width: calendarInsetLg),
-              Flexible(
-                child: Text(
-                  timeText,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: secondaryColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
           );
         }
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: title),
-          ],
-        );
-      }
-
-      final children = <Widget>[buildTitle()];
-
-      if (showTime && !inlineTime) {
-        if (spacing > 0) {
-          children.add(SizedBox(height: spacing));
+        Widget buildFeedback() {
+          final ValueListenable<DragFeedbackHint>? listenable =
+              widget.dragFeedbackHint;
+          if (listenable == null) {
+            return buildFeedbackContent(
+              DragFeedbackHint(
+                width: widget.width,
+                pointerOffset: widget.width / 2,
+                anchorDx: widget.width / 2,
+                anchorDy: widget.height / 2,
+              ),
+            );
+          }
+          return ValueListenableBuilder<DragFeedbackHint>(
+            valueListenable: listenable,
+            builder: (context, state, child) {
+              return buildFeedbackContent(state);
+            },
+          );
         }
-        children.add(
-          Text(
-            _formatTimeRange(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: secondaryColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        );
-      }
 
-      if (showDescription) {
-        if (spacing > 0) {
-          children.add(SizedBox(height: spacing));
-        }
-        children.add(
-          Text(
-            task.description!,
-            maxLines: descriptionLines,
-            overflow: descriptionOverflow,
-            softWrap: true,
-            style: const TextStyle(
-              color: secondaryColor,
-              fontSize: 10,
-              height: 1.2,
-            ),
-          ),
-        );
-      }
+        Widget buildTaskBody() {
+          final bool showHoverEffects = widget.enableInteractions &&
+              (widget.isPopoverOpen || isHovering || isResizing || isDragging);
+          final bool selectionMode = widget.isSelectionMode;
+          final bool highlightSelection = selectionMode && widget.isSelected;
+          final bool isCompleted = task.isCompleted;
+          final Color accentColor = taskColor;
+          final double baseBlendAlpha = isCompleted ? 0.06 : 0.12;
+          final double activeBlendAlpha = isCompleted ? 0.1 : 0.18;
+          final double selectionBlendAlpha = highlightSelection
+              ? (isCompleted ? 0.18 : 0.26)
+              : (showHoverEffects ? activeBlendAlpha : baseBlendAlpha);
+          final Color backgroundColor = Color.alphaBlend(
+            accentColor.withValues(alpha: selectionBlendAlpha),
+            calendarContainerColor,
+          );
+          final Color borderColor = highlightSelection
+              ? accentColor
+              : showHoverEffects
+                  ? accentColor.withValues(alpha: 0.45)
+                  : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
+          final List<BoxShadow> boxShadows = highlightSelection
+              ? calendarMediumShadow
+              : showHoverEffects
+                  ? calendarLightShadow
+                  : const [];
+          final Color titleColor =
+              isCompleted ? calendarSubtitleColor : calendarTitleColor;
+          const Color secondaryColor = calendarSubtitleColor;
+          final Color stripeColor = highlightSelection
+              ? accentColor
+              : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
 
-      return Container(
-        margin: const EdgeInsets.all(2),
-        decoration: decoration,
-        child: Stack(
-          children: [
-            _buildAccentStripe(stripeColor),
-            ClipRect(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  padding + _accentWidth + _accentPadding,
-                  padding,
-                  padding,
-                  padding,
-                ),
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  clipBehavior: Clip.hardEdge,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: children,
+          final decoration = BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: borderColor,
+              width: highlightSelection
+                  ? 2.4
+                  : isResizing
+                      ? 1.8
+                      : 1,
+            ),
+            boxShadow: boxShadows,
+          );
+
+          final double availableHeight =
+              (widget.height - 4).clamp(0.0, double.infinity);
+          final bool showHandles =
+              (ResizableTaskWidget.debugAlwaysShowHandles ||
+                      showHoverEffects) &&
+                  !task.isCompleted &&
+                  availableHeight >= 14;
+
+          if (availableHeight <= 6) {
+            return Container(
+              margin: const EdgeInsets.all(2),
+              decoration: decoration,
+              child: Stack(
+                children: [
+                  _buildAccentStripe(stripeColor),
+                  if (showHandles)
+                    ..._buildResizeHandles(
+                        stripeColor, isResizing, activeHandle),
+                ],
+              ),
+            );
+          }
+
+          double padding;
+          if (availableHeight >= 96) {
+            padding = 8;
+          } else if (availableHeight >= 72) {
+            padding = 6;
+          } else if (availableHeight >= 48) {
+            padding = 4;
+          } else {
+            padding = 2;
+          }
+
+          final double innerHeight =
+              (availableHeight - padding * 2).clamp(0.0, double.infinity);
+
+          if (innerHeight <= 10) {
+            return Container(
+              margin: const EdgeInsets.all(2),
+              decoration: decoration,
+              child: Stack(
+                children: [
+                  _buildAccentStripe(stripeColor),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      padding + _accentWidth + _accentPadding,
+                      padding,
+                      padding,
+                      padding,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                    ),
                   ),
+                  if (showHandles)
+                    ..._buildResizeHandles(
+                        stripeColor, isResizing, activeHandle),
+                ],
+              ),
+            );
+          }
+
+          final bool stackedTime = innerHeight >= 36;
+          final bool inlineTime =
+              !stackedTime && innerHeight >= 16 && widget.width >= 140;
+          final bool showTime = stackedTime || inlineTime;
+          final bool showDescription =
+              task.description?.isNotEmpty == true && innerHeight >= 56;
+
+          final double spacing = innerHeight >= 90
+              ? 6
+              : innerHeight >= 64
+                  ? 4
+                  : innerHeight >= 40
+                      ? 2
+                      : 0;
+
+          final int titleLines = innerHeight >= 48 ? 2 : 1;
+          final int descriptionLines = showDescription
+              ? math.max(1, (innerHeight / 18).floor() - (stackedTime ? 1 : 0))
+              : 0;
+          final TextOverflow descriptionOverflow =
+              descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
+
+          Widget buildTitle() {
+            final title = Text(
+              task.title,
+              maxLines: titleLines,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                decoration:
+                    task.isCompleted ? TextDecoration.lineThrough : null,
+              ),
+            );
+
+            if (showTime && inlineTime) {
+              final timeText = _formatTimeRange();
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: title),
+                  const SizedBox(width: calendarInsetLg),
+                  Flexible(
+                    child: Text(
+                      timeText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: secondaryColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: title),
+              ],
+            );
+          }
+
+          final children = <Widget>[buildTitle()];
+
+          if (showTime && !inlineTime) {
+            if (spacing > 0) {
+              children.add(SizedBox(height: spacing));
+            }
+            children.add(
+              Text(
+                _formatTimeRange(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: secondaryColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
+            );
+          }
+
+          if (showDescription) {
+            if (spacing > 0) {
+              children.add(SizedBox(height: spacing));
+            }
+            children.add(
+              Text(
+                task.description!,
+                maxLines: descriptionLines,
+                overflow: descriptionOverflow,
+                softWrap: true,
+                style: const TextStyle(
+                  color: secondaryColor,
+                  fontSize: 10,
+                  height: 1.2,
+                ),
+              ),
+            );
+          }
+
+          return Container(
+            margin: const EdgeInsets.all(2),
+            decoration: decoration,
+            child: Stack(
+              children: [
+                _buildAccentStripe(stripeColor),
+                ClipRect(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      padding + _accentWidth + _accentPadding,
+                      padding,
+                      padding,
+                      padding,
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      clipBehavior: Clip.hardEdge,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: children,
+                      ),
+                    ),
+                  ),
+                ),
+                if (showHandles)
+                  ..._buildResizeHandles(stripeColor, isResizing, activeHandle),
+              ],
             ),
-            if (showHandles) ..._buildResizeHandles(stripeColor),
-          ],
-        ),
-      );
-    }
+          );
+        }
 
-    Widget buildInteractiveContent() {
-      return IgnorePointer(
-        ignoring: isDragging,
-        child: MouseRegion(
-          onEnter: (_) {
-            if (!widget.isPopoverOpen && widget.enableInteractions) {
-              setState(() => isHovering = true);
-            }
-          },
-          onExit: (_) {
-            if (!widget.isPopoverOpen && widget.enableInteractions) {
-              setState(() => isHovering = false);
-            }
-          },
-          cursor: widget.enableInteractions && isResizing
-              ? SystemMouseCursors.resizeUpDown
-              : SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (widget.isSelectionMode) {
-                widget.onToggleSelection?.call();
-                return;
-              }
+        Widget buildInteractiveContent() {
+          return IgnorePointer(
+            ignoring: isDragging,
+            child: MouseRegion(
+              onEnter: (_) {
+                if (!widget.isPopoverOpen && widget.enableInteractions) {
+                  widget.interactionController.setHoveringTask(task.id);
+                }
+              },
+              onExit: (_) {
+                if (!widget.isPopoverOpen && widget.enableInteractions) {
+                  widget.interactionController.clearHoveringTask(task.id);
+                }
+              },
+              cursor: widget.enableInteractions && isResizing
+                  ? SystemMouseCursors.resizeUpDown
+                  : SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (widget.isSelectionMode) {
+                    widget.onToggleSelection?.call();
+                    return;
+                  }
 
-              final handler = widget.onTap;
-              if (handler == null) return;
+                  final handler = widget.onTap;
+                  if (handler == null) return;
 
-              final renderBox = context.findRenderObject() as RenderBox?;
-              if (renderBox == null) {
-                handler(task, Rect.zero);
-                return;
-              }
+                  final renderBox = context.findRenderObject() as RenderBox?;
+                  if (renderBox == null) {
+                    handler(task, Rect.zero);
+                    return;
+                  }
 
-              final origin = renderBox.localToGlobal(Offset.zero);
-              handler(task, origin & renderBox.size);
-            },
-            onSecondaryTapDown: (details) {
+                  final origin = renderBox.localToGlobal(Offset.zero);
+                  handler(task, origin & renderBox.size);
+                },
+                onSecondaryTapDown: (details) {
+                  if (!widget.enableInteractions) return;
+                  final Offset local = details.localPosition;
+                  final Offset normalized = _normalizedFromLocal(local);
+                  _captureContextMenuOffsets(
+                    localPosition: local,
+                    normalizedPosition: normalized,
+                  );
+                  widget.onDragPointerDown?.call(normalized);
+                },
+                onLongPressStart: (details) {
+                  if (!widget.enableInteractions) return;
+                  final RenderBox? renderBox =
+                      context.findRenderObject() as RenderBox?;
+                  if (renderBox == null) {
+                    const Offset fallback = Offset(0.5, 0.5);
+                    _captureContextMenuOffsets(
+                      localPosition: Offset(
+                        widget.width * fallback.dx,
+                        widget.height * fallback.dy,
+                      ),
+                      normalizedPosition: fallback,
+                    );
+                    widget.onDragPointerDown?.call(fallback);
+                    return;
+                  }
+                  final Offset localPosition =
+                      renderBox.globalToLocal(details.globalPosition);
+                  final Offset normalized = _normalizedFromLocal(localPosition);
+                  _captureContextMenuOffsets(
+                    localPosition: localPosition,
+                    normalizedPosition: normalized,
+                  );
+                  widget.onDragPointerDown?.call(normalized);
+                },
+                child: buildTaskBody(),
+              ),
+            ),
+          );
+        }
+
+        Widget buildSizedContent(DragFeedbackHint hint) {
+          Widget interactiveChild = widget.enableInteractions
+              ? Draggable<CalendarTask>(
+                  data: task,
+                  feedback: buildFeedback(),
+                  onDragStarted: () {
+                    final renderBox = context.findRenderObject() as RenderBox?;
+                    final Offset origin =
+                        renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+                    final Size size = renderBox?.size ?? Size.zero;
+                    widget.onDragStarted?.call(task, origin & size);
+                  },
+                  onDragUpdate: widget.onDragUpdate,
+                  onDragEnd: (_) {
+                    widget.interactionController.clearHoveringTask(task.id);
+                    widget.onDragEnded?.call(task);
+                  },
+                  childWhenDragging: IgnorePointer(
+                    child: Opacity(
+                      opacity: 0.6,
+                      child: buildInteractiveContent(),
+                    ),
+                  ),
+                  child: buildInteractiveContent(),
+                )
+              : buildInteractiveContent();
+
+          final listenerWrapped = Listener(
+            onPointerDown: (event) {
               if (!widget.enableInteractions) return;
-              final Offset local = details.localPosition;
+              final Offset local = event.localPosition;
               final Offset normalized = _normalizedFromLocal(local);
               _captureContextMenuOffsets(
                 localPosition: local,
@@ -664,114 +711,43 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               );
               widget.onDragPointerDown?.call(normalized);
             },
-            onLongPressStart: (details) {
-              if (!widget.enableInteractions) return;
-              final RenderBox? renderBox =
-                  context.findRenderObject() as RenderBox?;
-              if (renderBox == null) {
-                const Offset fallback = Offset(0.5, 0.5);
-                _captureContextMenuOffsets(
-                  localPosition: Offset(
-                    widget.width * fallback.dx,
-                    widget.height * fallback.dy,
-                  ),
-                  normalizedPosition: fallback,
-                );
-                widget.onDragPointerDown?.call(fallback);
-                return;
-              }
-              final Offset localPosition =
-                  renderBox.globalToLocal(details.globalPosition);
-              final Offset normalized = _normalizedFromLocal(localPosition);
-              _captureContextMenuOffsets(
-                localPosition: localPosition,
-                normalizedPosition: normalized,
-              );
-              widget.onDragPointerDown?.call(normalized);
-            },
-            child: buildTaskBody(),
-          ),
-        ),
-      );
-    }
-
-    Widget buildSizedContent(DragFeedbackHint hint) {
-      Widget interactiveChild = widget.enableInteractions
-          ? Draggable<CalendarTask>(
-              data: task,
-              feedback: buildFeedback(),
-              onDragStarted: () {
-                final renderBox = context.findRenderObject() as RenderBox?;
-                final Offset origin =
-                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-                final Size size = renderBox?.size ?? Size.zero;
-                widget.onDragStarted?.call(task, origin & size);
-                if (mounted) {
-                  setState(() => isDragging = true);
-                }
-              },
-              onDragUpdate: widget.onDragUpdate,
-              onDragEnd: (_) {
-                if (mounted) {
-                  setState(() {
-                    isHovering = false;
-                    isDragging = false;
-                  });
-                }
-                widget.onDragEnded?.call(task);
-              },
-              childWhenDragging: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.6,
-                  child: buildInteractiveContent(),
-                ),
-              ),
-              child: buildInteractiveContent(),
-            )
-          : buildInteractiveContent();
-
-      final listenerWrapped = Listener(
-        onPointerDown: (event) {
-          if (!widget.enableInteractions) return;
-          final Offset local = event.localPosition;
-          final Offset normalized = _normalizedFromLocal(local);
-          _captureContextMenuOffsets(
-            localPosition: local,
-            normalizedPosition: normalized,
+            child: interactiveChild,
           );
-          widget.onDragPointerDown?.call(normalized);
-        },
-        child: interactiveChild,
-      );
 
-      return SizedBox(
-        width: widget.width,
-        height: widget.height,
-        child: listenerWrapped,
-      );
-    }
+          return SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: listenerWrapped,
+          );
+        }
 
-    if (widget.dragFeedbackHint == null) {
-      final defaultContent = buildSizedContent(
-        DragFeedbackHint(
-          width: widget.width,
-          pointerOffset: widget.width / 2,
-          anchorDx: widget.width / 2,
-          anchorDy: widget.height / 2,
-        ),
-      );
-      return _wrapWithContextMenu(defaultContent);
-    }
+        if (widget.dragFeedbackHint == null) {
+          final defaultContent = buildSizedContent(
+            DragFeedbackHint(
+              width: widget.width,
+              pointerOffset: widget.width / 2,
+              anchorDx: widget.width / 2,
+              anchorDy: widget.height / 2,
+            ),
+          );
+          return _wrapWithContextMenu(defaultContent);
+        }
 
-    final listenableBuilder = ValueListenableBuilder<DragFeedbackHint>(
-      valueListenable: widget.dragFeedbackHint!,
-      builder: (context, hint, child) => buildSizedContent(hint),
+        final listenableBuilder = ValueListenableBuilder<DragFeedbackHint>(
+          valueListenable: widget.dragFeedbackHint!,
+          builder: (context, hint, child) => buildSizedContent(hint),
+        );
+
+        return _wrapWithContextMenu(listenableBuilder);
+      },
     );
-
-    return _wrapWithContextMenu(listenableBuilder);
   }
 
-  List<Widget> _buildResizeHandles(Color accentColor) {
+  List<Widget> _buildResizeHandles(
+    Color accentColor,
+    bool isResizing,
+    String? activeHandle,
+  ) {
     final Color activeColor = accentColor.withValues(alpha: 0.85);
     final Color idleColor = accentColor.withValues(alpha: 0.5);
 
@@ -864,27 +840,32 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   void _startResize(String handleType, DragStartDetails details) {
     if (widget.task.scheduledTime == null) return;
 
-    setState(() {
-      isResizing = true;
-      activeHandle = handleType;
-      _totalDragDeltaY = 0;
-      _lastAppliedQuarterDelta = 0;
+    widget.interactionController.beginResizeInteraction(
+      taskId: widget.task.id,
+      handle: handleType,
+    );
+    _totalDragDeltaY = 0;
+    _lastAppliedQuarterDelta = 0;
 
-      // Store original values
-      final time = widget.task.scheduledTime!;
-      _currentStartHour = time.hour + (time.minute / 60.0);
-      _currentDurationHours =
-          (widget.task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
-      // Clear temporary values
-      _tempScheduledTime = null;
-      _tempDuration = null;
-    });
+    // Store original values
+    final time = widget.task.scheduledTime!;
+    _currentStartHour = time.hour + (time.minute / 60.0);
+    _currentDurationHours =
+        (widget.task.duration ?? const Duration(hours: 1)).inMinutes / 60.0;
+    // Clear temporary values
+    _tempScheduledTime = null;
+    _tempDuration = null;
 
     HapticFeedback.selectionClick();
   }
 
   void _updateResize(String handleType, DragUpdateDetails details) {
-    if (!isResizing || widget.task.scheduledTime == null) return;
+    final TaskResizeInteraction? session =
+        widget.interactionController.activeResizeInteraction;
+    if (session?.taskId != widget.task.id ||
+        widget.task.scheduledTime == null) {
+      return;
+    }
 
     widget.onResizePointerMove?.call(details.globalPosition);
 
@@ -964,13 +945,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   void _endResize() {
     final CalendarTask? result = _buildUpdatedTask();
 
-    setState(() {
-      isResizing = false;
-      activeHandle = null;
-      _totalDragDeltaY = 0;
-      _tempScheduledTime = null;
-      _tempDuration = null;
-    });
+    widget.interactionController.endResizeInteraction(widget.task.id);
+    _totalDragDeltaY = 0;
+    _lastAppliedQuarterDelta = 0;
+    _tempScheduledTime = null;
+    _tempDuration = null;
 
     if (widget.onResizeEnd != null) {
       widget.onResizeEnd!(result ?? widget.task);

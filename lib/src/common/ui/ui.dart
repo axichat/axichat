@@ -139,6 +139,10 @@ const calendarGutterLg = 16.0;
 const calendarFormGap = 10.0;
 const calendarTaskDetailGap = 3.0;
 const calendarCompactDayColumnWidth = 120.0;
+const calendarRecurrenceEndGap = 14.0;
+const calendarRecurrenceFieldGap = calendarGutterMd;
+const calendarRecurrenceCompactFieldGap = 14.0;
+const calendarRecurrenceCompactWeekdayGap = calendarFormGap;
 
 // Event layout constraints
 const calendarEventMinHeight = 20.0;
