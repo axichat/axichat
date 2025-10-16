@@ -20,6 +20,8 @@ Over 500 numeric literals are scattered throughout the calendar code without sem
 
 **Testability impact:** Reusable named constants make it possible to write expectations such as `expect(tileHeight, equals(kCalendarRowHeight))` without hard-coding values in tests. Magic literals force assertions to mirror the same numbers, so changes break both production code and its safety net.
 
+**Preferred pattern:** Create semantic tokens whose names describe purpose—not the underlying number. Avoid labels like `gap16` or `opacity045`; instead reach for `calendarGutterMd` or `taskTileOverlaySm`. Stick to intent-based families (`*Sm`, `*Md`, `*Lg`) when a component truly needs size tiers, but skip variants that serve no purpose—every token should exist for a concrete reason.
+
 ## The Duplication Disaster
 
 The recurrence selection UI exists in three completely separate implementations, totaling nearly 1,000 lines of duplicate code. Task editing appears in sidebars, dropdown menus, and modal dialogs - each with its own implementation of the same logic.
@@ -48,7 +50,19 @@ Over 40 setState calls manage local widget state for things that should be deriv
 
 **The deeper problem:** setState represents imperative thinking - "when this happens, change that." Flutter thrives on declarative thinking - "given this state, render that." The calendar code constantly asks "what should I do?" instead of "what should I be?"
 
-**Testability impact:** Excess local state makes it difficult to deterministically reproduce scenarios in widget tests. Flow data through blocs or value notifiers so tests can pump a state snapshot and assert the resulting UI without juggling transient flags.
+**Testability impact:** Excess local state makes it difficult to deterministically reproduce scenarios in widget tests. Keep data flowing through blocs so tests can pump a state snapshot and assert the resulting UI without juggling transient flags or controller side effects.
+
+## The Controller Crutch
+
+Calendar fixes have repeatedly tried to patch imperative glitches by introducing more controllers, ValueNotifiers, or shared ValueListenables that sit high in the tree. The moment behaviour is hoisted into a coordinator object, we are back to a master widget deciding what every descendant should do.
+
+**How to spot it:** Scan for objects named `*Controller` that know about multiple widgets, or ValueListenables that hand state between siblings instead of letting the leaf widget own it. If the same helper is passed across unrelated branches of the tree, the behaviour is still centralised.
+
+**The deeper problem:** Controllers swap one imperative surface for another. Flutter stays declarative only when behaviour lives with the widget that renders it. Push logic as far down the tree as possible—into the leaf widget classes themselves, using their setters, getters, and focused methods to express capability. Parents should hand data and intent, not micromanage execution.
+
+**Testability impact:** Leaf-owned behaviour gives tests a precise target: pump the widget, call its public helper, and assert the rendered contract. Central controllers force tests to orchestrate multiple widgets just to exercise one action, recreating the brittleness we are trying to escape.
+
+**Preferred pattern:** Treat each leaf widget as the smallest unit of behaviour. Parents provide immutable inputs and simple callbacks; the leaf applies them. This keeps the code declarative over imperative and ensures future refactors can move or replace widgets without rewriting a web of controller plumbing.
 
 ## The Storage Architecture Confusion
 
@@ -72,13 +86,13 @@ The calendar assumes desktop-sized screens. Mobile layouts overflow, sidebar dra
 
 ## The Opacity Anti-Pattern
 
-Color opacity is calculated at runtime throughout the codebase using deprecated withOpacity() calls. This creates performance overhead and prevents compile-time color optimization.
+Color opacity is tweaked ad hoc throughout the codebase with inline `withOpacity()` calls, forcing every widget to invent its own translucency rules and drifting away from the shared design tokens.
 
 **How to spot it:** Search for withOpacity() calls. Look for colors being modified in build methods. Find opacity values being passed as parameters.
 
 **The deeper problem:** Runtime color calculation is a symptom of not thinking about the design system holistically. Instead of defining semantic color sets (primary, primaryLight, primaryDark), the code generates variations on the fly.
 
-**Testability impact:** Predefined palettes make it feasible to write snapshot tests for accessibility (contrast, theming) without fragile float comparisons. Runtime opacity calls force tests to replicate blending logic just to confirm visual intent.
+**Testability impact:** Predefined palettes make it feasible to write snapshot tests for accessibility (contrast, theming) without fragile float comparisons. Inline opacity math forces tests to replicate blending logic just to confirm visual intent, and the lack of shared tokens hides intent from reviewers.
 
 ## The Measurement Madness
 
