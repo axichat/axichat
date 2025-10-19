@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/services.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
@@ -58,6 +59,7 @@ class TaskContextMenuRequest {
 
 class ResizableTaskWidget extends StatefulWidget {
   static bool debugAlwaysShowHandles = false;
+  static bool debugLogContextMenu = false;
 
   final CalendarTask task;
   final ValueChanged<CalendarTask>? onResizePreview;
@@ -124,6 +126,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   Offset _contextMenuLocalPosition = Offset.zero;
   Offset _contextMenuNormalizedPosition = const Offset(0.5, 0.5);
   DateTime? _contextMenuSplitTime;
+  int _lastPointerButtons = 0;
+  bool _lastPointerWasSecondary = false;
+  Offset? _contextMenuGlobalPosition;
 
   static const double _accentWidth = 4.0;
   static const double _accentPadding = 6.0;
@@ -132,6 +137,27 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   late double _currentDurationHours;
   DateTime? _tempScheduledTime;
   Duration? _tempDuration;
+
+  void _debugLog(
+    String stage, {
+    Offset? local,
+    Offset? normalized,
+    Offset? global,
+    String? extra,
+  }) {
+    if (!ResizableTaskWidget.debugLogContextMenu || !kDebugMode) {
+      return;
+    }
+    final Offset localValue = local ?? _contextMenuLocalPosition;
+    final Offset normalizedValue = normalized ?? _contextMenuNormalizedPosition;
+    final Offset? globalValue = global ?? _contextMenuGlobalPosition;
+    debugPrint(
+      'ContextMenu[$stage] task=${widget.task.id} '
+      'local=$localValue normalized=$normalizedValue global=$globalValue '
+      'buttons=$_lastPointerButtons secondary=$_lastPointerWasSecondary'
+      '${extra != null ? ' $extra' : ''}',
+    );
+  }
 
   CalendarTask? _buildUpdatedTask() {
     final DateTime? scheduled = _tempScheduledTime ?? widget.task.scheduledTime;
@@ -173,26 +199,56 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   void _updateContextMenuState({
     required Offset localPosition,
     required Offset normalizedPosition,
+    Offset? globalPosition,
   }) {
     final DateTime? nextSplit = widget.task.splitTimeForFraction(
       fraction: normalizedPosition.dy,
       minutesPerStep: widget.minutesPerStep,
     );
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    final Offset resolvedGlobal = globalPosition ??
+        renderBox?.localToGlobal(localPosition) ??
+        _contextMenuGlobalPosition ??
+        Offset.zero;
     if (_contextMenuLocalPosition == localPosition &&
         _contextMenuNormalizedPosition == normalizedPosition &&
-        _contextMenuSplitTime == nextSplit) {
+        _contextMenuSplitTime == nextSplit &&
+        _contextMenuGlobalPosition == resolvedGlobal) {
       return;
     }
+    String? extra;
+    if (ResizableTaskWidget.debugLogContextMenu && kDebugMode) {
+      final NavigatorState? rootNavigator =
+          Navigator.maybeOf(context, rootNavigator: true);
+      final NavigatorState? shellNavigator = Navigator.maybeOf(context);
+      final RenderBox? rootOverlayBox =
+          rootNavigator?.overlay?.context.findRenderObject() as RenderBox?;
+      final RenderBox? shellOverlayBox =
+          shellNavigator?.overlay?.context.findRenderObject() as RenderBox?;
+      final Offset? rootOrigin = rootOverlayBox?.localToGlobal(Offset.zero);
+      final Offset? shellOrigin = shellOverlayBox?.localToGlobal(Offset.zero);
+      extra = 'shellOrigin=$shellOrigin rootOrigin=$rootOrigin';
+    }
+
     setState(() {
       _contextMenuLocalPosition = localPosition;
       _contextMenuNormalizedPosition = normalizedPosition;
       _contextMenuSplitTime = nextSplit;
+      _contextMenuGlobalPosition = resolvedGlobal;
     });
+    _debugLog(
+      'updateContextMenuState',
+      local: localPosition,
+      normalized: normalizedPosition,
+      global: resolvedGlobal,
+      extra: extra,
+    );
   }
 
   void _captureContextMenuOffsets({
     required Offset localPosition,
     required Offset normalizedPosition,
+    Offset? globalPosition,
   }) {
     if (widget.contextMenuBuilder == null ||
         widget.contextMenuController == null ||
@@ -202,6 +258,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     _updateContextMenuState(
       localPosition: localPosition,
       normalizedPosition: normalizedPosition,
+      globalPosition: globalPosition,
     );
   }
 
@@ -226,6 +283,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     return ShadContextMenuRegion(
       controller: controller,
       groupId: groupId,
+      longPressEnabled: true,
       items: items,
       child: child,
     );
@@ -615,6 +673,12 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
+                  if (_lastPointerWasSecondary ||
+                      (_lastPointerButtons & kSecondaryButton) != 0) {
+                    _lastPointerButtons = 0;
+                    _lastPointerWasSecondary = false;
+                    return;
+                  }
                   if (widget.isSelectionMode) {
                     widget.onToggleSelection?.call();
                     return;
@@ -632,41 +696,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   final origin = renderBox.localToGlobal(Offset.zero);
                   handler(task, origin & renderBox.size);
                 },
-                onSecondaryTapDown: (details) {
-                  if (!widget.enableInteractions) return;
-                  final Offset local = details.localPosition;
-                  final Offset normalized = _normalizedFromLocal(local);
-                  _captureContextMenuOffsets(
-                    localPosition: local,
-                    normalizedPosition: normalized,
-                  );
-                  widget.onDragPointerDown?.call(normalized);
-                },
-                onLongPressStart: (details) {
-                  if (!widget.enableInteractions) return;
-                  final RenderBox? renderBox =
-                      context.findRenderObject() as RenderBox?;
-                  if (renderBox == null) {
-                    const Offset fallback = Offset(0.5, 0.5);
-                    _captureContextMenuOffsets(
-                      localPosition: Offset(
-                        widget.width * fallback.dx,
-                        widget.height * fallback.dy,
-                      ),
-                      normalizedPosition: fallback,
-                    );
-                    widget.onDragPointerDown?.call(fallback);
-                    return;
-                  }
-                  final Offset localPosition =
-                      renderBox.globalToLocal(details.globalPosition);
-                  final Offset normalized = _normalizedFromLocal(localPosition);
-                  _captureContextMenuOffsets(
-                    localPosition: localPosition,
-                    normalizedPosition: normalized,
-                  );
-                  widget.onDragPointerDown?.call(normalized);
-                },
+                onSecondaryTapDown: null,
+                onSecondaryTapUp: null,
+                onLongPressStart: null,
                 child: buildTaskBody(),
               ),
             ),
@@ -703,13 +735,52 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           final listenerWrapped = Listener(
             onPointerDown: (event) {
               if (!widget.enableInteractions) return;
+              _lastPointerButtons = event.buttons;
+              _lastPointerWasSecondary =
+                  (event.buttons & kSecondaryButton) != 0;
               final Offset local = event.localPosition;
               final Offset normalized = _normalizedFromLocal(local);
               _captureContextMenuOffsets(
                 localPosition: local,
                 normalizedPosition: normalized,
+                globalPosition: event.position,
               );
+              if (_lastPointerWasSecondary) {
+                _debugLog(
+                  'pointerDown-secondary',
+                  local: local,
+                  normalized: normalized,
+                  global: event.position,
+                );
+                return;
+              }
               widget.onDragPointerDown?.call(normalized);
+              _debugLog(
+                'pointerDown-primary',
+                local: local,
+                normalized: normalized,
+                global: event.position,
+              );
+            },
+            onPointerUp: (event) {
+              if (_lastPointerWasSecondary) {
+                final Offset local = event.localPosition;
+                final Offset normalized = _normalizedFromLocal(local);
+                _captureContextMenuOffsets(
+                  localPosition: local,
+                  normalizedPosition: normalized,
+                  globalPosition: event.position,
+                );
+                _debugLog(
+                  'pointerUp-secondary',
+                  local: local,
+                  normalized: normalized,
+                  global: event.position,
+                );
+              }
+              _lastPointerButtons = 0;
+              _lastPointerWasSecondary = false;
+              _debugLog('pointerUp', global: event.position);
             },
             child: interactiveChild,
           );
@@ -982,4 +1053,9 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
     return '${formatTime(startTime)} - ${formatTime(endTime)}';
   }
+
+  Offset? get debugContextMenuGlobalPosition => _contextMenuGlobalPosition;
+  Offset get debugContextMenuLocalPosition => _contextMenuLocalPosition;
+  Offset get debugContextMenuNormalizedPosition =>
+      _contextMenuNormalizedPosition;
 }

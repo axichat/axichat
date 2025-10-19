@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -252,8 +253,16 @@ class CalendarWidgetHarness {
     return state.weekStart.add(Duration(days: index));
   }
 
+  Finder _taskFinder(String taskId) {
+    final Finder calendarFinder = find.byKey(ValueKey('calendar-task-$taskId'));
+    if (calendarFinder.evaluate().isNotEmpty) {
+      return calendarFinder;
+    }
+    return find.byKey(ValueKey(taskId));
+  }
+
   Rect taskRect(String taskId) {
-    final finder = find.byKey(ValueKey(taskId));
+    final finder = _taskFinder(taskId);
     expect(
       finder,
       findsOneWidget,
@@ -261,6 +270,23 @@ class CalendarWidgetHarness {
     );
     return tester.getRect(finder);
   }
+
+  Offset? contextMenuGlobalPosition(String taskId) {
+    final dynamic state = tester.state(_taskFinder(taskId));
+    return state.debugContextMenuGlobalPosition as Offset?;
+  }
+
+  Offset? contextMenuLocalPosition(String taskId) {
+    final dynamic state = tester.state(_taskFinder(taskId));
+    return state.debugContextMenuLocalPosition as Offset?;
+  }
+
+  Offset? contextMenuNormalizedPosition(String taskId) {
+    final dynamic state = tester.state(_taskFinder(taskId));
+    return state.debugContextMenuNormalizedPosition as Offset?;
+  }
+
+  double gridBodyTop() => _gridBodyTop();
 
   Future<void> rightClickTask(String taskId) async {
     final rect = taskRect(taskId);

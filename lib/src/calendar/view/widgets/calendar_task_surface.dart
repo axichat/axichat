@@ -151,7 +151,7 @@ class CalendarTaskSurface extends StatelessWidget {
       height: height,
       child: DragTarget<CalendarTask>(
         key: bindings.dragTargetKey,
-        hitTestBehavior: HitTestBehavior.translucent,
+        hitTestBehavior: HitTestBehavior.opaque,
         onWillAcceptWithDetails: (details) {
           final CalendarTask dragged = details.data;
           if (dragged.id == task.id) {

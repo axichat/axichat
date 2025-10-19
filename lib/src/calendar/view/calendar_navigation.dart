@@ -70,6 +70,7 @@ class CalendarNavigation extends StatelessWidget {
     const double verticalPadding = calendarInsetMd;
     final Widget undoRedoGroup = _buildUndoRedoGroup();
 
+    SystemMouseCursors.basic;
     return Container(
       padding: EdgeInsets.fromLTRB(
         horizontalPadding,
