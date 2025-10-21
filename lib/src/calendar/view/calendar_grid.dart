@@ -109,6 +109,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _blocInitialized = false;
   late final TaskInteractionController _taskInteractionController;
   late final TaskPopoverController _taskPopoverController;
+  final Map<String, ShadPopoverController> _slotContextMenuControllers =
+      <String, ShadPopoverController>{};
+  final Set<String> _activeSlotControllerKeys = <String>{};
   late final ZoomControlsController _zoomControlsController;
   late final CalendarSlotDragController _slotDragController;
   static const ValueKey<String> _contextMenuGroupId =
@@ -563,6 +566,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _edgeAutoScrollTicker?.dispose();
     _taskInteractionController.dispose();
     _taskPopoverController.dispose();
+    for (final controller in _slotContextMenuControllers.values) {
+      controller.dispose();
+    }
+    _slotContextMenuControllers.clear();
+    _activeSlotControllerKeys.clear();
     super.dispose();
   }
 
@@ -1087,6 +1095,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final visibleTaskIds = <String>{};
     _visibleTasks.clear();
     _visibleTaskRects.clear();
+    _activeSlotControllerKeys.clear();
     late final Widget content;
 
     if (isWeekView && isCompact) {
@@ -1156,6 +1165,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
     }
 
+    _cleanupSlotContextControllers();
     _cleanupTaskPopovers(visibleTaskIds);
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -1175,6 +1185,50 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         }
       });
     }
+  }
+
+  String _slotControllerKey(DateTime date, int hour, int minute) {
+    final DateTime dayOnly = DateTime(date.year, date.month, date.day);
+    return '${dayOnly.toIso8601String()}-$hour-$minute';
+  }
+
+  ShadPopoverController _slotControllerFor(
+      DateTime date, int hour, int minute) {
+    final String key = _slotControllerKey(date, hour, minute);
+    return _slotContextMenuControllers.putIfAbsent(
+      key,
+      ShadPopoverController.new,
+    );
+  }
+
+  ShadPopoverController Function() _slotControllerAcquirer(
+    DateTime date,
+    int hour,
+    int minute,
+  ) {
+    final String key = _slotControllerKey(date, hour, minute);
+    return () {
+      _activeSlotControllerKeys.add(key);
+      return _slotControllerFor(date, hour, minute);
+    };
+  }
+
+  void _cleanupSlotContextControllers() {
+    if (_slotContextMenuControllers.isEmpty) {
+      return;
+    }
+    final List<String> staleKeys = <String>[];
+    _slotContextMenuControllers.forEach((key, controller) {
+      if (!_activeSlotControllerKeys.contains(key)) {
+        controller.hide();
+        controller.dispose();
+        staleKeys.add(key);
+      }
+    });
+    for (final key in staleKeys) {
+      _slotContextMenuControllers.remove(key);
+    }
+    _activeSlotControllerKeys.clear();
   }
 
   void _updateActivePopoverLayoutForTask(String taskId) {
@@ -1840,6 +1894,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           onPasteTemplate: _pasteTask,
           contextMenuGroupId: _contextMenuGroupId,
           isWidthDebounceActive: () => _isWidthDebounceActive,
+          acquireSlotContextMenuController:
+              _slotControllerAcquirer(targetDate, hour, minute),
         );
 
         return Container(
@@ -2816,14 +2872,19 @@ class _CalendarSlotCell extends StatelessWidget {
         );
 
         final List<Widget> menuItems = <Widget>[];
-        final ShadPopoverController controller = ShadPopoverController();
+        ShadPopoverController? controller;
 
-        if (bindings.clipboardTemplateProvider() != null) {
+        void ensureController() {
+          controller ??= bindings.acquireSlotContextMenuController();
+        }
+
+        if (!hasTask && bindings.clipboardTemplateProvider() != null) {
+          ensureController();
           menuItems.add(
             ShadContextMenuItem(
               leading: const Icon(Icons.content_paste_outlined),
               onPressed: () {
-                controller.hide();
+                controller!.hide();
                 bindings.onPasteTemplate(slotTime);
               },
               child: const Text('Paste Task Here'),
@@ -2831,12 +2892,13 @@ class _CalendarSlotCell extends StatelessWidget {
           );
         }
 
-        if (bindings.isSelectionMode) {
+        if (!hasTask && bindings.isSelectionMode) {
+          ensureController();
           menuItems.add(
             ShadContextMenuItem(
               leading: const Icon(Icons.highlight_off),
               onPressed: () {
-                controller.hide();
+                controller!.hide();
                 bindings.clearSelectionMode();
               },
               child: const Text('Exit Selection Mode'),
@@ -2844,9 +2906,9 @@ class _CalendarSlotCell extends StatelessWidget {
           );
         }
 
-        if (menuItems.isNotEmpty) {
+        if (menuItems.isNotEmpty && controller != null) {
           slot = ShadContextMenuRegion(
-            controller: controller,
+            controller: controller!,
             groupId: bindings.contextMenuGroupId,
             items: menuItems,
             child: slot,
@@ -2886,6 +2948,7 @@ class _CalendarSlotBindings {
     required this.onPasteTemplate,
     required this.contextMenuGroupId,
     required this.isWidthDebounceActive,
+    required this.acquireSlotContextMenuController,
   });
 
   final DateTime slotTime;
@@ -2918,6 +2981,7 @@ class _CalendarSlotBindings {
   final void Function(DateTime slotTime) onPasteTemplate;
   final ValueKey<String> contextMenuGroupId;
   final bool Function() isWidthDebounceActive;
+  final ShadPopoverController Function() acquireSlotContextMenuController;
 }
 
 class _ZoomIntent extends Intent {

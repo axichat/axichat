@@ -39,6 +39,9 @@
 
 - Apply DRY aggressively: build small, composable widgets and reuse them everywhere rather than
   branching inside “super widgets.”
+- For complex animated shells (calendar cards, tabbed panels, etc.) prefer extracting the layout +
+  painting into a custom `RenderObject` instead of layering `addPostFrameCallback`/`findRenderObject`
+  hacks—use the render-object-driven pattern documented in `docs/tab_container_study.md`.
 - Treat `DeadlinePickerField` as the single source of truth for calendar/date picking. Update it
   once and only adjust parameters (e.g., `showTimeSelectors`) for each use-case.
 - When a screen needs a unique tweak, factor that logic into reusable helpers or slots (

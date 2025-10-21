@@ -81,23 +81,26 @@ class CalendarSidebarController extends ChangeNotifier {
   }
 
   void toggleSection(CalendarSidebarSection section) {
-    final CalendarSidebarSection next;
-    if (_state.expandedSection == section) {
-      next = section == CalendarSidebarSection.unscheduled
-          ? CalendarSidebarSection.reminders
-          : CalendarSidebarSection.unscheduled;
-    } else {
-      next = section;
-    }
-
+    final CalendarSidebarSection? next =
+        _state.expandedSection == section ? null : section;
     if (next != _state.expandedSection) {
-      _updateState(_state.copyWith(expandedSection: next));
+      _updateState(
+        _state.copyWith(
+          expandedSection: next,
+          expandedSectionSpecified: true,
+        ),
+      );
     }
   }
 
   void setActivePopoverTaskId(String? taskId) {
     if (taskId != _state.activePopoverTaskId) {
-      _updateState(_state.copyWith(activePopoverTaskId: taskId));
+      _updateState(
+        _state.copyWith(
+          activePopoverTaskId: taskId,
+          activePopoverTaskIdSpecified: true,
+        ),
+      );
     }
   }
 
@@ -136,7 +139,7 @@ class CalendarSidebarState extends Equatable {
   final bool hasUserResized;
   final bool isResizing;
   final bool showAdvancedOptions;
-  final CalendarSidebarSection expandedSection;
+  final CalendarSidebarSection? expandedSection;
   final String? activePopoverTaskId;
 
   CalendarSidebarState copyWith({
@@ -147,7 +150,9 @@ class CalendarSidebarState extends Equatable {
     bool? isResizing,
     bool? showAdvancedOptions,
     CalendarSidebarSection? expandedSection,
+    bool expandedSectionSpecified = false,
     String? activePopoverTaskId,
+    bool activePopoverTaskIdSpecified = false,
   }) {
     return CalendarSidebarState(
       width: width ?? this.width,
@@ -156,8 +161,12 @@ class CalendarSidebarState extends Equatable {
       hasUserResized: hasUserResized ?? this.hasUserResized,
       isResizing: isResizing ?? this.isResizing,
       showAdvancedOptions: showAdvancedOptions ?? this.showAdvancedOptions,
-      expandedSection: expandedSection ?? this.expandedSection,
-      activePopoverTaskId: activePopoverTaskId ?? this.activePopoverTaskId,
+      expandedSection: expandedSectionSpecified
+          ? expandedSection
+          : (expandedSection ?? this.expandedSection),
+      activePopoverTaskId: activePopoverTaskIdSpecified
+          ? activePopoverTaskId
+          : (activePopoverTaskId ?? this.activePopoverTaskId),
     );
   }
 
