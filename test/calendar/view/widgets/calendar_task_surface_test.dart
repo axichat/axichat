@@ -4,6 +4,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
 
 void main() {
@@ -42,6 +43,14 @@ void main() {
     bool isPopoverOpen = false;
     late void Function(void Function()) triggerRebuild;
 
+    final geometryNotifier = ValueNotifier<CalendarTaskGeometry>(
+      const CalendarTaskGeometry(
+        rect: Rect.fromLTWH(0, 0, 240, 72),
+        narrowedWidth: 200,
+        splitWidthFactor: 200 / 240,
+      ),
+    );
+
     CalendarTaskEntryBindings buildBindings() => CalendarTaskEntryBindings(
           isSelectionMode: false,
           isSelected: false,
@@ -59,6 +68,7 @@ void main() {
           minutesPerStep: 15,
           hourHeight: 48,
           schedulePopoverLayoutUpdate: () {},
+          geometry: geometryNotifier,
         );
 
     await tester.pumpWidget(
@@ -71,20 +81,14 @@ void main() {
           child: StatefulBuilder(
             builder: (context, setState) {
               triggerRebuild = setState;
-              return Stack(
-                children: [
-                  CalendarTaskSurface(
-                    task: task,
-                    left: 0,
-                    top: 0,
-                    width: 240,
-                    height: 72,
-                    isDayView: true,
-                    bindings: buildBindings(),
-                    narrowedWidth: 200,
-                    splitWidthFactor: 0.85,
-                  ),
-                ],
+              return SizedBox(
+                width: 240,
+                height: 72,
+                child: CalendarTaskSurface(
+                  task: task,
+                  isDayView: true,
+                  bindings: buildBindings(),
+                ),
               );
             },
           ),
