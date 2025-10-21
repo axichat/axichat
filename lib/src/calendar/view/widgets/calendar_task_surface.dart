@@ -105,7 +105,7 @@ class CalendarTaskEntryBindings {
   final VoidCallback schedulePopoverLayoutUpdate;
 }
 
-class CalendarTaskSurface extends StatelessWidget {
+class CalendarTaskSurface extends StatefulWidget {
   const CalendarTaskSurface({
     super.key,
     required this.task,
@@ -129,26 +129,50 @@ class CalendarTaskSurface extends StatelessWidget {
   final double narrowedWidth;
   final double splitWidthFactor;
 
-  TaskInteractionController get _interactionController =>
-      bindings.interactionController;
+  @override
+  State<CalendarTaskSurface> createState() => _CalendarTaskSurfaceState();
+}
 
-  CalendarTaskTileCallbacks get _callbacks => bindings.callbacks;
+class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
+  late final ShadPopoverController _menuController;
+
+  TaskInteractionController get _interactionController =>
+      widget.bindings.interactionController;
+
+  CalendarTaskTileCallbacks get _callbacks => widget.bindings.callbacks;
+
+  @override
+  void initState() {
+    super.initState();
+    _menuController = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    _menuController.dispose();
+    super.dispose();
+  }
+
+  @visibleForTesting
+  ShadPopoverController get menuController => _menuController;
 
   @override
   Widget build(BuildContext context) {
+    final CalendarTask task = widget.task;
+    final CalendarTaskEntryBindings bindings = widget.bindings;
+
     if (bindings.isPopoverOpen) {
       bindings.schedulePopoverLayoutUpdate();
     }
 
-    final ShadPopoverController menuController = ShadPopoverController();
     final TaskContextMenuBuilder contextMenuBuilder =
-        bindings.contextMenuBuilderFactory(menuController);
+        bindings.contextMenuBuilderFactory(_menuController);
 
     return Positioned(
-      left: left,
-      top: top,
-      width: width,
-      height: height,
+      left: widget.left,
+      top: widget.top,
+      width: widget.width,
+      height: widget.height,
       child: DragTarget<CalendarTask>(
         key: bindings.dragTargetKey,
         hitTestBehavior: HitTestBehavior.opaque,
@@ -171,8 +195,9 @@ class CalendarTaskSurface extends StatelessWidget {
                   !_callbacks.isWidthDebounceActive());
           _callbacks.updateDragPreview(previewStart, previewDuration);
           _callbacks.stopEdgeAutoScroll();
-          final double targetWidth =
-              allowNarrowing && hasOverlap ? narrowedWidth : width;
+          final double targetWidth = allowNarrowing && hasOverlap
+              ? widget.narrowedWidth
+              : widget.width;
           _callbacks.updateDragFeedbackWidth(
             targetWidth,
             forceApply: !hasOverlap,
@@ -192,8 +217,9 @@ class CalendarTaskSurface extends StatelessWidget {
           );
           final bool allowNarrowing = _interactionController.dragHasMoved &&
               !_callbacks.isWidthDebounceActive();
-          final double targetWidth =
-              allowNarrowing && hasOverlap ? narrowedWidth : width;
+          final double targetWidth = allowNarrowing && hasOverlap
+              ? widget.narrowedWidth
+              : widget.width;
           _callbacks.updateDragFeedbackWidth(
             targetWidth,
             forceApply: !hasOverlap,
@@ -234,7 +260,7 @@ class CalendarTaskSurface extends StatelessWidget {
               !_callbacks.isWidthDebounceActive();
           if (showSplitPreview && !allowNarrowing) {
             _callbacks.updateDragFeedbackWidth(
-              width,
+              widget.width,
               forceApply: false,
               forceCenterPointer: false,
             );
@@ -244,9 +270,12 @@ class CalendarTaskSurface extends StatelessWidget {
             _callbacks.resetDragFeedbackHint();
           }
 
-          final double primaryWidth =
-              showSplitPreview && allowNarrowing ? narrowedWidth : width;
-          bindings.updateBounds(Rect.fromLTWH(left, top, primaryWidth, height));
+          final double primaryWidth = showSplitPreview && allowNarrowing
+              ? widget.narrowedWidth
+              : widget.width;
+          bindings.updateBounds(
+            Rect.fromLTWH(widget.left, widget.top, primaryWidth, widget.height),
+          );
 
           Widget baseTask = ResizableTaskWidget(
             key: ValueKey(task.id),
@@ -259,14 +288,14 @@ class CalendarTaskSurface extends StatelessWidget {
             stepHeight: bindings.stepHeight,
             minutesPerStep: bindings.minutesPerStep,
             width: primaryWidth,
-            height: height,
-            isDayView: isDayView,
+            height: widget.height,
+            isDayView: widget.isDayView,
             isPopoverOpen: bindings.isPopoverOpen,
             enableInteractions: true,
             isSelectionMode: bindings.isSelectionMode,
             isSelected: bindings.isSelected,
             dragFeedbackHint: bindings.dragFeedbackHint,
-            contextMenuController: menuController,
+            contextMenuController: _menuController,
             contextMenuGroupId: bindings.contextMenuGroupId,
             contextMenuBuilder: contextMenuBuilder,
             onDragPointerDown: _callbacks.onDragPointerDown,
@@ -296,7 +325,7 @@ class CalendarTaskSurface extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: FractionallySizedBox(
-                      widthFactor: splitWidthFactor,
+                      widthFactor: widget.splitWidthFactor,
                       alignment: Alignment.centerLeft,
                       child: baseTask,
                     ),
@@ -304,7 +333,7 @@ class CalendarTaskSurface extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerRight,
                     child: FractionallySizedBox(
-                      widthFactor: splitWidthFactor,
+                      widthFactor: widget.splitWidthFactor,
                       alignment: Alignment.centerRight,
                       child: IgnorePointer(
                         child: Opacity(
@@ -318,9 +347,9 @@ class CalendarTaskSurface extends StatelessWidget {
                             hourHeight: bindings.hourHeight,
                             stepHeight: bindings.stepHeight,
                             minutesPerStep: bindings.minutesPerStep,
-                            width: narrowedWidth,
-                            height: height,
-                            isDayView: isDayView,
+                            width: widget.narrowedWidth,
+                            height: widget.height,
+                            isDayView: widget.isDayView,
                             enableInteractions: false,
                             isSelectionMode: false,
                             isSelected: false,

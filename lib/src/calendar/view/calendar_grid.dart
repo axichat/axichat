@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -2281,6 +2282,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         ShadContextMenuItem(
           leading: const Icon(Icons.copy_outlined),
           onPressed: () {
+            request.markCloseIntent();
             menuController.hide();
             _copyTask(task);
           },
@@ -2294,6 +2296,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           ShadContextMenuItem(
             leading: const Icon(Icons.content_paste_outlined),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               _pasteTask(task.scheduledTime!);
             },
@@ -2330,6 +2333,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   : Icons.check_box_outline_blank,
             ),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               if (selectionModeActive) {
                 _toggleTaskSelection(task.id);
@@ -2357,6 +2361,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   : Icons.check_box_outline_blank,
             ),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               if (isSeriesSelected) {
                 _capturedBloc.add(
@@ -2385,6 +2390,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               isSelected ? Icons.check_box : Icons.check_box_outline_blank,
             ),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               if (selectionModeActive) {
                 _toggleTaskSelection(task.id);
@@ -2403,6 +2409,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           ShadContextMenuItem(
             leading: const Icon(Icons.call_split),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               _splitTask(task, splitTime);
             },
@@ -2418,6 +2425,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           ShadContextMenuItem(
             leading: const Icon(Icons.highlight_off),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               _clearSelectionMode();
             },
@@ -2432,6 +2440,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           ShadContextMenuItem(
             leading: const Icon(Icons.copy_outlined),
             onPressed: () {
+              request.markCloseIntent();
               menuController.hide();
               _copyTask(task);
             },
@@ -2444,6 +2453,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         ShadContextMenuItem(
           leading: const Icon(Icons.delete_outline),
           onPressed: () {
+            request.markCloseIntent();
             menuController.hide();
             _capturedBloc.add(
               CalendarEvent.taskDeleted(taskId: task.baseId),

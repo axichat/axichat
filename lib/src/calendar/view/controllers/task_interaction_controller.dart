@@ -180,7 +180,6 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     hoveredTaskId.value = taskId;
-    notifyListeners();
   }
 
   void clearHoveringTask(String taskId) {
@@ -188,7 +187,6 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     hoveredTaskId.value = null;
-    notifyListeners();
   }
 
   void beginResizeInteraction({
