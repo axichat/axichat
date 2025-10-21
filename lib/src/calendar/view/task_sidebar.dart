@@ -71,6 +71,26 @@ class _TaskSidebarState extends State<TaskSidebar>
       _selectionDescriptionDirty ||
       _selectionLocationDirty;
 
+  void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
+    final List<String> staleIds = <String>[];
+    _taskPopoverControllers.forEach((id, controller) {
+      if (!activeTaskIds.contains(id)) {
+        controller.hide();
+        controller.dispose();
+        staleIds.add(id);
+      }
+    });
+    if (staleIds.isNotEmpty) {
+      for (final id in staleIds) {
+        _taskPopoverControllers.remove(id);
+      }
+    }
+    final String? activeId = _sidebarController.state.activePopoverTaskId;
+    if (activeId != null && !activeTaskIds.contains(activeId)) {
+      _sidebarController.setActivePopoverTaskId(null);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -138,6 +158,11 @@ class _TaskSidebarState extends State<TaskSidebar>
                     final content = state.isSelectionMode
                         ? _buildSelectionPanel(state, uiState)
                         : _buildUnscheduledContent(state, uiState);
+
+                    final Set<String> activeTaskIds = state.isSelectionMode
+                        ? _selectedTasks(state).map((task) => task.id).toSet()
+                        : state.unscheduledTasks.map((task) => task.id).toSet();
+                    _pruneTaskPopoverControllers(activeTaskIds);
 
                     return Scrollbar(
                       controller: _scrollController,

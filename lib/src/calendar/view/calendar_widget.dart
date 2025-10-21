@@ -26,6 +26,7 @@ class CalendarWidget extends StatefulWidget {
 
 class _CalendarWidgetState extends State<CalendarWidget> {
   late final ValueNotifier<bool> _sidebarVisible;
+  DateTime? _lastSyncToastTime;
 
   @override
   void initState() {
@@ -94,9 +95,11 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
     // Handle sync success
     if (state.lastSyncTime != null &&
+        state.lastSyncTime != _lastSyncToastTime &&
         DateTime.now().difference(state.lastSyncTime!).inSeconds < 3) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
+          _lastSyncToastTime = state.lastSyncTime;
           FeedbackSystem.showSuccess(context, 'Calendar synced successfully!');
         }
       });
