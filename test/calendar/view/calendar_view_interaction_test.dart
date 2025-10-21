@@ -264,9 +264,6 @@ void main() {
 
   testWidgets('task context menu opens across vertical positions',
       (tester) async {
-    ResizableTaskWidget.debugLogContextMenu = true;
-    addTearDown(() => ResizableTaskWidget.debugLogContextMenu = false);
-
     final taskFinder = await _pumpContextMenuSurface(tester);
     final menuFinder = find.text('Copy Task');
     final Rect taskRect = tester.getRect(taskFinder);
@@ -320,80 +317,89 @@ void main() {
   });
 
   testWidgets(
-    'grid context menu anchor tracks pointer vertical position',
+    'context menu opens for top and bottom tasks inside nested navigators',
     (tester) async {
-      ResizableTaskWidget.debugLogContextMenu = true;
-      addTearDown(() => ResizableTaskWidget.debugLogContextMenu = false);
+      final finders = await _pumpNestedContextMenuSurfaces(tester);
+      final Finder topTaskFinder = finders['top']!;
+      final Finder bottomTaskFinder = finders['bottom']!;
+      final Finder menuFinder = find.text('Copy Task');
 
-    final harness = await CalendarWidgetHarness.pump(
-      tester: tester,
-      size: const Size(1600, 900),
-    );
-    final baseState = harness.currentState;
+      Future<double> openMenu(Finder finder) async {
+        final TestGesture gesture = await tester.startGesture(
+          tester.getCenter(finder),
+          kind: PointerDeviceKind.mouse,
+          buttons: kSecondaryButton,
+        );
+        await tester.pump();
+        await gesture.up();
+        await tester.pump();
+        await tester.pumpAndSettle(const Duration(milliseconds: 100));
+        await _pumpUntilMenuVisible(tester, menuFinder);
+        final Rect menuRect = tester.getRect(menuFinder.first);
+        return menuRect.top;
+      }
 
-    final lateTask = CalendarTestData.scheduled(
-      'task-late-evening',
-      'Late Evening Task',
-      DateTime(2024, 1, 15, 21),
-      duration: const Duration(minutes: 45),
-    );
+      final double topMenuOffset = await openMenu(topTaskFinder);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle(const Duration(milliseconds: 150));
 
-    final updatedState = baseState.copyWith(
-      model: baseState.model.copyWith(
-        tasks: {
-          ...baseState.model.tasks,
-          lateTask.id: lateTask,
-        },
-      ),
-    );
-    await harness.pumpState(updatedState);
-    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+      final double bottomMenuOffset = await openMenu(bottomTaskFinder);
+      expect(
+        bottomMenuOffset,
+        greaterThan(topMenuOffset),
+        reason:
+            'Bottom task anchor should appear lower than the top task anchor.',
+      );
 
-    await harness.rightClickTask('task-weekly-sync');
-    await tester.pumpAndSettle(const Duration(milliseconds: 300));
-    final topGlobal = harness.contextMenuGlobalPosition('task-weekly-sync');
-    final topLocal = harness.contextMenuLocalPosition('task-weekly-sync');
-    final topNormalized =
-        harness.contextMenuNormalizedPosition('task-weekly-sync');
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle(const Duration(milliseconds: 150));
+    },
+  );
 
-    expect(
-      topGlobal,
-      isNotNull,
-      reason:
-          'Expected a recorded global anchor after right-clicking top task.',
-    );
-    expect(topLocal, isNotNull);
-    expect(topNormalized, isNotNull);
+  testWidgets(
+    'context menu remains open while hovering into menu items',
+    (tester) async {
+      final finders = await _pumpNestedContextMenuSurfaces(tester);
+      final Finder topTaskFinder = finders['top']!;
+      final Finder menuFinder = find.text('Copy Task');
 
-    await tester.tapAt(const Offset(5, 5));
-    await tester.pumpAndSettle(const Duration(milliseconds: 200));
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(topTaskFinder),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      await _pumpUntilMenuVisible(tester, menuFinder);
 
-    await harness.rightClickTask(lateTask.id);
-    await tester.pumpAndSettle(const Duration(milliseconds: 300));
-    final bottomGlobal = harness.contextMenuGlobalPosition(lateTask.id);
-    final bottomLocal = harness.contextMenuLocalPosition(lateTask.id);
-    final bottomNormalized =
-        harness.contextMenuNormalizedPosition(lateTask.id);
+      final Rect menuRect = tester.getRect(menuFinder.first);
+      final TestPointer hoverPointer = TestPointer(
+        21,
+        PointerDeviceKind.mouse,
+      );
+      await tester.sendEventToBinding(
+        hoverPointer.hover(menuRect.topLeft - const Offset(48, 48)),
+      );
+      await tester.pump();
+      await tester.sendEventToBinding(
+        hoverPointer.hover(menuRect.center),
+      );
+      await tester.pump();
 
-    expect(
-      bottomGlobal,
-      isNotNull,
-      reason:
-          'Expected a recorded global anchor after right-clicking bottom task.',
-    );
-    expect(bottomLocal, isNotNull);
-    expect(bottomNormalized, isNotNull);
+      expect(
+        menuFinder,
+        findsOneWidget,
+        reason: 'Menu should remain visible while hovering over entries.',
+      );
 
-    expect(
-      bottomGlobal!.dy,
-      greaterThan(topGlobal!.dy),
-      reason:
-          'Bottom task should capture a larger global dy than the top task.',
-    );
-
-    await tester.tapAt(const Offset(5, 5));
-    await tester.pumpAndSettle(const Duration(milliseconds: 200));
-  }, skip: true);
+      await tester.sendEventToBinding(hoverPointer.removePointer());
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle(const Duration(milliseconds: 150));
+      expect(menuFinder, findsNothing);
+    },
+  );
 
   testWidgets('log calendar grid geometry', (tester) async {
     final harness = await CalendarWidgetHarness.pump(
@@ -562,52 +568,15 @@ Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
     DateTime(2024, 1, 15, 10),
   );
   final interactionController = TaskInteractionController();
-  final bindings = CalendarTaskEntryBindings(
-    isSelectionMode: false,
-    isSelected: false,
-    isPopoverOpen: false,
-    dragTargetKey: GlobalKey(),
-    splitPreviewAnimationDuration: Duration.zero,
-    contextMenuGroupId: const ValueKey('test-task-menu'),
-    contextMenuBuilderFactory: (controller) => (context, request) => [
+  final bindings = _buildTestBindings(
+    controller: interactionController,
+    groupId: const ValueKey('test-task-menu'),
+    builderFactory: (controller) => (context, request) => [
           ShadContextMenuItem(
             onPressed: () => controller.hide(),
             child: const Text('Copy Task'),
           ),
         ],
-    interactionController: interactionController,
-    dragFeedbackHint: interactionController.feedbackHint,
-    callbacks: CalendarTaskTileCallbacks(
-      onResizePreview: (_) {},
-      onResizeEnd: (_) {},
-      onResizePointerMove: (_) {},
-      onDragStarted: (_, __) {},
-      onDragUpdate: (_) {},
-      onDragEnded: (_) {},
-      onDragPointerDown: (_) {},
-      onEnterSelectionMode: () {},
-      onToggleSelection: () {},
-      onTap: (_, __) {},
-      computePreviewStartForHover: (_) => null,
-      defaultPreviewStart: () => DateTime.now(),
-      previewOverlapsScheduled: (_, __) => false,
-      updateDragPreview: (_, __) {},
-      stopEdgeAutoScroll: () {},
-      updateDragFeedbackWidth: (_,
-          {bool forceApply = false, bool forceCenterPointer = false}) {},
-      clearDragPreview: () {},
-      cancelPendingDragWidth: () {},
-      resetDragFeedbackHint: () {},
-      doesPreviewOverlap: () => false,
-      onTaskDrop: (_, __) {},
-      isWidthDebounceActive: () => false,
-      isPreviewAnchor: (_) => false,
-    ),
-    updateBounds: (_) {},
-    stepHeight: 15,
-    minutesPerStep: 15,
-    hourHeight: 60,
-    schedulePopoverLayoutUpdate: () {},
   );
 
   await tester.pumpWidget(
@@ -647,4 +616,169 @@ Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   return find.byKey(const ValueKey('task-context-menu'));
+}
+
+CalendarTaskTileCallbacks _testTileCallbacks() => CalendarTaskTileCallbacks(
+      onResizePreview: (_) {},
+      onResizeEnd: (_) {},
+      onResizePointerMove: (_) {},
+      onDragStarted: (_, __) {},
+      onDragUpdate: (_) {},
+      onDragEnded: (_) {},
+      onDragPointerDown: (_) {},
+      onEnterSelectionMode: () {},
+      onToggleSelection: () {},
+      onTap: (_, __) {},
+      computePreviewStartForHover: (_) => null,
+      defaultPreviewStart: () => DateTime.now(),
+      previewOverlapsScheduled: (_, __) => false,
+      updateDragPreview: (_, __) {},
+      stopEdgeAutoScroll: () {},
+      updateDragFeedbackWidth: (_,
+          {bool forceApply = false, bool forceCenterPointer = false}) {},
+      clearDragPreview: () {},
+      cancelPendingDragWidth: () {},
+      resetDragFeedbackHint: () {},
+      doesPreviewOverlap: () => false,
+      onTaskDrop: (_, __) {},
+      isWidthDebounceActive: () => false,
+      isPreviewAnchor: (_) => false,
+    );
+
+CalendarTaskEntryBindings _buildTestBindings({
+  required TaskInteractionController controller,
+  required ValueKey<String> groupId,
+  required CalendarTaskContextMenuBuilderFactory builderFactory,
+}) {
+  return CalendarTaskEntryBindings(
+    isSelectionMode: false,
+    isSelected: false,
+    isPopoverOpen: false,
+    dragTargetKey: GlobalKey(),
+    splitPreviewAnimationDuration: Duration.zero,
+    contextMenuGroupId: groupId,
+    contextMenuBuilderFactory: builderFactory,
+    interactionController: controller,
+    dragFeedbackHint: controller.feedbackHint,
+    callbacks: _testTileCallbacks(),
+    updateBounds: (_) {},
+    stepHeight: 15,
+    minutesPerStep: 15,
+    hourHeight: 60,
+    schedulePopoverLayoutUpdate: () {},
+  );
+}
+
+Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
+  WidgetTester tester,
+) async {
+  final ValueKey<String> groupId = const ValueKey('test-task-menu');
+  final builderFactory = (ShadPopoverController controller) =>
+      (BuildContext context, TaskContextMenuRequest request) => [
+            ShadContextMenuItem(
+              onPressed: () => controller.hide(),
+              child: const Text('Copy Task'),
+            ),
+          ];
+
+  final TaskInteractionController topController = TaskInteractionController();
+  final TaskInteractionController bottomController =
+      TaskInteractionController();
+
+  final CalendarTask topTask = CalendarTestData.scheduled(
+    'task-top-context',
+    'Top Context Task',
+    DateTime(2024, 1, 15, 9),
+  );
+  final CalendarTask bottomTask = CalendarTestData.scheduled(
+    'task-bottom-context',
+    'Bottom Context Task',
+    DateTime(2024, 1, 15, 20),
+  );
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Navigator(
+        onGenerateRoute: (_) => MaterialPageRoute(
+          builder: (_) => Navigator(
+            onGenerateRoute: (_) => MaterialPageRoute(
+              builder: (_) => Scaffold(
+                body: ShadTheme(
+                  data: ShadThemeData(
+                    colorScheme: const ShadSlateColorScheme.light(),
+                    brightness: Brightness.light,
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 360,
+                      height: 680,
+                      child: Stack(
+                        children: [
+                          CalendarTaskSurface(
+                            key: ValueKey('surface-${topTask.id}'),
+                            task: topTask,
+                            left: 40,
+                            top: 24,
+                            width: 240,
+                            height: 140,
+                            narrowedWidth: 200,
+                            splitWidthFactor: 0.8,
+                            isDayView: true,
+                            bindings: _buildTestBindings(
+                              controller: topController,
+                              groupId: groupId,
+                              builderFactory: builderFactory,
+                            ),
+                          ),
+                          CalendarTaskSurface(
+                            key: ValueKey('surface-${bottomTask.id}'),
+                            task: bottomTask,
+                            left: 40,
+                            top: 420,
+                            width: 240,
+                            height: 140,
+                            narrowedWidth: 200,
+                            splitWidthFactor: 0.8,
+                            isDayView: true,
+                            bindings: _buildTestBindings(
+                              controller: bottomController,
+                              groupId: groupId,
+                              builderFactory: builderFactory,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  return {
+    'top': find.byKey(ValueKey(topTask.id)),
+    'bottom': find.byKey(ValueKey(bottomTask.id)),
+  };
+}
+
+Future<void> _pumpUntilMenuVisible(
+  WidgetTester tester,
+  Finder menuFinder,
+) async {
+  for (int i = 0; i < 12; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+    if (tester.any(menuFinder)) {
+      return;
+    }
+  }
+  expect(
+    menuFinder,
+    findsOneWidget,
+    reason: 'Context menu should appear after secondary tap.',
+  );
 }
