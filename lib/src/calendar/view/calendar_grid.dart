@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -30,7 +29,7 @@ import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
 import 'controllers/slot_drag_controller.dart';
 import 'resizable_task_widget.dart';
-import 'widgets/calendar_task_entries_builder.dart';
+import 'widgets/calendar_task_layer.dart';
 import 'widgets/calendar_task_surface.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
@@ -1711,13 +1710,19 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             );
           }
 
+          final Widget? taskLayer = _buildTasksLayerForDay(
+            date,
+            compact,
+            isDayView: isDayView,
+            visibleTaskIds: visibleTaskIds,
+          );
+
           Widget content = Stack(
             clipBehavior: Clip.none,
             children: [
               _buildTimeSlots(compact,
                   isDayView: isDayView, date: date, isToday: isToday),
-              ..._buildTasksForDayWithWidth(date, compact, constraints.maxWidth,
-                  isDayView: isDayView, visibleTaskIds: visibleTaskIds),
+              if (taskLayer != null) Positioned.fill(child: taskLayer),
               if (_shouldShowCurrentTimeIndicator(date))
                 _buildCurrentTimeIndicator(
                   date,
@@ -2239,15 +2244,36 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _hasAutoScrolled = true;
   }
 
-  List<Widget> _buildTasksForDayWithWidth(
-      DateTime date, bool compact, double dayWidth,
+  Widget? _buildTasksLayerForDay(DateTime date, bool compact,
       {bool isDayView = false, required Set<String> visibleTaskIds}) {
     final List<CalendarTask> tasks = _getTasksForDay(date);
+    if (tasks.isEmpty) {
+      return null;
+    }
+
     final String? draggingId = _taskInteractionController.draggingTaskId;
     final double stepHeight =
         (_resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
 
-    final CalendarTaskEntriesBuilder builder = CalendarTaskEntriesBuilder(
+    final DateTime weekStartDate = DateTime(
+      widget.state.weekStart.year,
+      widget.state.weekStart.month,
+      widget.state.weekStart.day,
+    );
+    final DateTime weekEndDate = DateTime(
+      widget.state.weekEnd.year,
+      widget.state.weekEnd.month,
+      widget.state.weekEnd.day,
+    );
+
+    return CalendarTaskLayer(
+      day: date,
+      isDayView: isDayView,
+      startHour: startHour,
+      endHour: endHour,
+      weekStartDate: weekStartDate,
+      weekEndDate: weekEndDate,
+      tasks: tasks,
       layoutCalculator: _layoutCalculator,
       layoutMetrics: _currentLayoutMetrics,
       interactionController: _taskInteractionController,
@@ -2286,11 +2312,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       isTaskSelected: _isTaskSelected,
       isPopoverOpen: _taskPopoverController.isPopoverOpen,
       dragTargetKeyForTask: _taskPopoverController.keyForTask,
-      requestPopoverLayoutUpdate: (taskId) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _updateActivePopoverLayoutForTask(taskId);
-        });
-      },
+      requestPopoverLayoutUpdate: _updateActivePopoverLayoutForTask,
       contextMenuDelegate: (task, menuController) =>
           _buildTaskContextMenuBuilder(
         task: task,
@@ -2302,30 +2324,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       stepHeight: stepHeight,
       minutesPerStep: _minutesPerStep,
       hourHeight: _resolvedHourHeight,
-      draggingTaskId: draggingId,
-    );
-
-    final DateTime weekStartDate = DateTime(
-      widget.state.weekStart.year,
-      widget.state.weekStart.month,
-      widget.state.weekStart.day,
-    );
-    final DateTime weekEndDate = DateTime(
-      widget.state.weekEnd.year,
-      widget.state.weekEnd.month,
-      widget.state.weekEnd.day,
-    );
-
-    return builder.build(
-      day: date,
-      dayWidth: dayWidth,
-      isDayView: isDayView,
-      startHour: startHour,
-      endHour: endHour,
-      tasks: tasks,
-      weekStartDate: weekStartDate,
-      weekEndDate: weekEndDate,
       visibleTaskIds: visibleTaskIds,
+      draggingTaskId: draggingId,
     );
   }
 

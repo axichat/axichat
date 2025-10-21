@@ -3,6 +3,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -593,17 +594,17 @@ Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
               height: 240,
               child: Stack(
                 children: [
-                  CalendarTaskSurface(
-                    key: const ValueKey('surface-task-context-menu'),
-                    task: task,
+                  Positioned(
                     left: 20,
                     top: 40,
                     width: 240,
                     height: 120,
-                    narrowedWidth: 200,
-                    splitWidthFactor: 0.8,
-                    isDayView: true,
-                    bindings: bindings,
+                    child: CalendarTaskSurface(
+                      key: const ValueKey('surface-task-context-menu'),
+                      task: task,
+                      isDayView: true,
+                      bindings: bindings,
+                    ),
                   ),
                 ],
               ),
@@ -649,7 +650,17 @@ CalendarTaskEntryBindings _buildTestBindings({
   required TaskInteractionController controller,
   required ValueKey<String> groupId,
   required CalendarTaskContextMenuBuilderFactory builderFactory,
+  Rect geometryRect = const Rect.fromLTWH(0, 0, 240, 60),
 }) {
+  final geometryNotifier = ValueNotifier<CalendarTaskGeometry>(
+    CalendarTaskGeometry(
+      rect: geometryRect,
+      narrowedWidth: geometryRect.width * 0.8,
+      splitWidthFactor: geometryRect.width == 0
+          ? 0
+          : (geometryRect.width * 0.8) / geometryRect.width,
+    ),
+  );
   return CalendarTaskEntryBindings(
     isSelectionMode: false,
     isSelected: false,
@@ -666,6 +677,7 @@ CalendarTaskEntryBindings _buildTestBindings({
     minutesPerStep: 15,
     hourHeight: 60,
     schedulePopoverLayoutUpdate: () {},
+    geometry: geometryNotifier,
   );
 }
 
@@ -714,36 +726,40 @@ Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
                       height: 680,
                       child: Stack(
                         children: [
-                          CalendarTaskSurface(
-                            key: ValueKey('surface-${topTask.id}'),
-                            task: topTask,
+                          Positioned(
                             left: 40,
                             top: 24,
                             width: 240,
                             height: 140,
-                            narrowedWidth: 200,
-                            splitWidthFactor: 0.8,
-                            isDayView: true,
-                            bindings: _buildTestBindings(
-                              controller: topController,
-                              groupId: groupId,
-                              builderFactory: builderFactory,
+                            child: CalendarTaskSurface(
+                              key: ValueKey('surface-${topTask.id}'),
+                              task: topTask,
+                              isDayView: true,
+                              bindings: _buildTestBindings(
+                                controller: topController,
+                                groupId: groupId,
+                                builderFactory: builderFactory,
+                                geometryRect:
+                                    const Rect.fromLTWH(40, 24, 240, 140),
+                              ),
                             ),
                           ),
-                          CalendarTaskSurface(
-                            key: ValueKey('surface-${bottomTask.id}'),
-                            task: bottomTask,
+                          Positioned(
                             left: 40,
                             top: 420,
                             width: 240,
                             height: 140,
-                            narrowedWidth: 200,
-                            splitWidthFactor: 0.8,
-                            isDayView: true,
-                            bindings: _buildTestBindings(
-                              controller: bottomController,
-                              groupId: groupId,
-                              builderFactory: builderFactory,
+                            child: CalendarTaskSurface(
+                              key: ValueKey('surface-${bottomTask.id}'),
+                              task: bottomTask,
+                              isDayView: true,
+                              bindings: _buildTestBindings(
+                                controller: bottomController,
+                                groupId: groupId,
+                                builderFactory: builderFactory,
+                                geometryRect:
+                                    const Rect.fromLTWH(40, 420, 240, 140),
+                              ),
                             ),
                           ),
                         ],
