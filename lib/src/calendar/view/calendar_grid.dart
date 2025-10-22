@@ -1710,9 +1710,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             );
           }
 
+          final double dayWidth = constraints.maxWidth;
+
           final Widget? taskLayer = _buildTasksLayerForDay(
             date,
             compact,
+            dayWidth: dayWidth,
             isDayView: isDayView,
             visibleTaskIds: visibleTaskIds,
           );
@@ -2244,10 +2247,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _hasAutoScrolled = true;
   }
 
-  Widget? _buildTasksLayerForDay(DateTime date, bool compact,
-      {bool isDayView = false, required Set<String> visibleTaskIds}) {
+  Widget? _buildTasksLayerForDay(
+    DateTime date,
+    bool compact, {
+    required double dayWidth,
+    bool isDayView = false,
+    required Set<String> visibleTaskIds,
+  }) {
     final List<CalendarTask> tasks = _getTasksForDay(date);
-    if (tasks.isEmpty) {
+    if (tasks.isEmpty || dayWidth <= 0) {
       return null;
     }
 
@@ -2276,6 +2284,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       tasks: tasks,
       layoutCalculator: _layoutCalculator,
       layoutMetrics: _currentLayoutMetrics,
+      dayWidth: dayWidth,
       interactionController: _taskInteractionController,
       callbacksFactory: (task) {
         return CalendarTaskTileCallbacks(

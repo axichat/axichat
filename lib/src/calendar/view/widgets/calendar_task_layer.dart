@@ -34,6 +34,7 @@ class CalendarTaskLayer extends StatelessWidget {
     required this.tasks,
     required this.layoutCalculator,
     required this.layoutMetrics,
+    required this.dayWidth,
     required this.interactionController,
     required this.callbacksFactory,
     required this.registerVisibleTask,
@@ -62,6 +63,7 @@ class CalendarTaskLayer extends StatelessWidget {
   final List<CalendarTask> tasks;
   final CalendarLayoutCalculator layoutCalculator;
   final CalendarLayoutMetrics layoutMetrics;
+  final double dayWidth;
   final TaskInteractionController interactionController;
   final CalendarTaskTileCallbacksFactory callbacksFactory;
   final void Function(CalendarTask task) registerVisibleTask;
@@ -84,125 +86,116 @@ class CalendarTaskLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<CalendarTask> scheduledTasks =
         tasks.where((task) => task.scheduledTime != null).toList();
-    if (scheduledTasks.isEmpty) {
+    if (scheduledTasks.isEmpty || dayWidth <= 0) {
       return const SizedBox.shrink();
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double dayWidth = constraints.maxWidth;
-        if (dayWidth == 0) {
-          return const SizedBox.shrink();
-        }
+    final Map<String, OverlapInfo> overlapMap =
+        calculateOverlapColumns(scheduledTasks);
+    final Map<String, CalendarTaskGeometry> geometryMap =
+        <String, CalendarTaskGeometry>{};
+    final List<Widget> children = <Widget>[];
 
-        final Map<String, OverlapInfo> overlapMap =
-            calculateOverlapColumns(scheduledTasks);
-        final Map<String, CalendarTaskGeometry> geometryMap =
-            <String, CalendarTaskGeometry>{};
-        final List<Widget> children = <Widget>[];
+    for (final CalendarTask task in scheduledTasks) {
+      registerVisibleTask(task);
+      visibleTaskIds.add(task.id);
 
-        for (final CalendarTask task in scheduledTasks) {
-          registerVisibleTask(task);
-          visibleTaskIds.add(task.id);
+      final bool skipTask = draggingTaskId != null &&
+          draggingTaskId == task.id &&
+          interactionController.dragHasMoved;
+      if (skipTask) {
+        continue;
+      }
 
-          final bool skipTask = draggingTaskId != null &&
-              draggingTaskId == task.id &&
-              interactionController.dragHasMoved;
-          if (skipTask) {
-            continue;
-          }
+      final OverlapInfo overlapInfo = overlapMap[task.id] ??
+          const OverlapInfo(columnIndex: 0, totalColumns: 1);
 
-          final OverlapInfo overlapInfo = overlapMap[task.id] ??
-              const OverlapInfo(columnIndex: 0, totalColumns: 1);
+      final CalendarTaskLayout? layout = layoutCalculator.resolveTaskLayout(
+        task: task,
+        dayDate: day,
+        weekStartDate: weekStartDate,
+        weekEndDate: weekEndDate,
+        isDayView: isDayView,
+        startHour: startHour,
+        endHour: endHour,
+        dayWidth: dayWidth,
+        metrics: layoutMetrics,
+        overlap: overlapInfo,
+      );
 
-          final CalendarTaskLayout? layout = layoutCalculator.resolveTaskLayout(
+      if (layout == null || layout.width <= 0 || layout.height <= 0) {
+        continue;
+      }
+
+      final double narrowedWidth =
+          layoutCalculator.computeNarrowedWidth(dayWidth, layout.width);
+      final double splitWidthFactor = layout.width == 0
+          ? 0.0
+          : math.max(0.0, math.min(1.0, narrowedWidth / layout.width));
+      final Rect rect = Rect.fromLTWH(
+        layout.left,
+        layout.top,
+        layout.width,
+        layout.height,
+      );
+
+      final geometry = CalendarTaskGeometry(
+        rect: rect,
+        narrowedWidth: narrowedWidth,
+        splitWidthFactor: splitWidthFactor,
+      );
+      geometryMap[task.id] = geometry;
+
+      final bindings = CalendarTaskEntryBindings(
+        isSelectionMode: isSelectionMode,
+        isSelected: isTaskSelected(task),
+        isPopoverOpen: isPopoverOpen(task.id),
+        dragTargetKey: dragTargetKeyForTask(task.id),
+        splitPreviewAnimationDuration: splitPreviewAnimationDuration,
+        contextMenuGroupId: contextMenuGroupId,
+        contextMenuBuilderFactory: (menuController) =>
+            contextMenuDelegate(task, menuController),
+        interactionController: interactionController,
+        dragFeedbackHint: interactionController.feedbackHint,
+        callbacks: callbacksFactory(task),
+        updateBounds: (rect) => updateVisibleBounds(task.id, rect),
+        stepHeight: stepHeight,
+        minutesPerStep: minutesPerStep,
+        hourHeight: hourHeight,
+        schedulePopoverLayoutUpdate: () =>
+            requestPopoverLayoutUpdate(task.id),
+        geometry: geometry,
+      );
+
+      children.add(
+        _CalendarTaskEntryWidget(
+          key: ValueKey<String>('calendar-task-${task.id}'),
+          task: task,
+          bindings: bindings,
+          geometry: geometry,
+          child: CalendarTaskSurface(
             task: task,
-            dayDate: day,
-            weekStartDate: weekStartDate,
-            weekEndDate: weekEndDate,
             isDayView: isDayView,
-            startHour: startHour,
-            endHour: endHour,
-            dayWidth: dayWidth,
-            metrics: layoutMetrics,
-            overlap: overlapInfo,
-          );
+            bindings: bindings,
+          ),
+        ),
+      );
+    }
 
-          if (layout == null || layout.width <= 0 || layout.height <= 0) {
-            continue;
-          }
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-          final double narrowedWidth =
-              layoutCalculator.computeNarrowedWidth(dayWidth, layout.width);
-          final double splitWidthFactor = layout.width == 0
-              ? 0.0
-              : math.max(0.0, math.min(1.0, narrowedWidth / layout.width));
-          final Rect rect = Rect.fromLTWH(
-            layout.left,
-            layout.top,
-            layout.width,
-            layout.height,
-          );
-
-          final geometry = CalendarTaskGeometry(
-            rect: rect,
-            narrowedWidth: narrowedWidth,
-            splitWidthFactor: splitWidthFactor,
-          );
-          geometryMap[task.id] = geometry;
-
-          final bindings = CalendarTaskEntryBindings(
-            isSelectionMode: isSelectionMode,
-            isSelected: isTaskSelected(task),
-            isPopoverOpen: isPopoverOpen(task.id),
-            dragTargetKey: dragTargetKeyForTask(task.id),
-            splitPreviewAnimationDuration: splitPreviewAnimationDuration,
-            contextMenuGroupId: contextMenuGroupId,
-            contextMenuBuilderFactory: (menuController) =>
-                contextMenuDelegate(task, menuController),
-            interactionController: interactionController,
-            dragFeedbackHint: interactionController.feedbackHint,
-            callbacks: callbacksFactory(task),
-            updateBounds: (rect) => updateVisibleBounds(task.id, rect),
-            stepHeight: stepHeight,
-            minutesPerStep: minutesPerStep,
-            hourHeight: hourHeight,
-            schedulePopoverLayoutUpdate: () =>
-                requestPopoverLayoutUpdate(task.id),
-            geometry: geometry,
-          );
-
-          children.add(
-            _CalendarTaskEntryWidget(
-              key: ValueKey<String>('calendar-task-${task.id}'),
-              task: task,
-              bindings: bindings,
-              geometry: geometry,
-              child: CalendarTaskSurface(
-                task: task,
-                isDayView: isDayView,
-                bindings: bindings,
-              ),
-            ),
-          );
-        }
-
-        if (children.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return _CalendarTaskLayerRenderWidget(
-          day: day,
-          isDayView: isDayView,
-          startHour: startHour,
-          endHour: endHour,
-          weekStartDate: weekStartDate,
-          weekEndDate: weekEndDate,
-          layoutMetrics: layoutMetrics,
-          geometryMap: geometryMap,
-          children: children,
-        );
-      },
+    return _CalendarTaskLayerRenderWidget(
+      day: day,
+      isDayView: isDayView,
+      startHour: startHour,
+      endHour: endHour,
+      weekStartDate: weekStartDate,
+      weekEndDate: weekEndDate,
+      layoutMetrics: layoutMetrics,
+      geometryMap: geometryMap,
+      children: children,
     );
   }
 }
