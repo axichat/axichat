@@ -105,7 +105,7 @@ class CalendarTaskEntryBindings {
   final int minutesPerStep;
   final double hourHeight;
   final VoidCallback schedulePopoverLayoutUpdate;
-  final ValueListenable<CalendarTaskGeometry> geometry;
+  final CalendarTaskGeometry geometry;
 }
 
 class CalendarTaskSurface extends StatefulWidget {
@@ -163,7 +163,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
       key: bindings.dragTargetKey,
       hitTestBehavior: HitTestBehavior.opaque,
       onWillAcceptWithDetails: (details) {
-        final CalendarTaskGeometry geometry = bindings.geometry.value;
+        final CalendarTaskGeometry geometry = bindings.geometry;
         if (geometry.rect.width <= 0) {
           return false;
         }
@@ -196,7 +196,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
         return true;
       },
       onMove: (details) {
-        final CalendarTaskGeometry geometry = bindings.geometry.value;
+        final CalendarTaskGeometry geometry = bindings.geometry;
         if (geometry.rect.width <= 0) {
           return;
         }
@@ -253,136 +253,130 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
         final bool allowNarrowing = _interactionController.dragHasMoved &&
             !_callbacks.isWidthDebounceActive();
 
-        return ValueListenableBuilder<CalendarTaskGeometry>(
-          valueListenable: bindings.geometry,
-          builder: (context, geometry, _) {
-            final Rect rect = geometry.rect;
-            if (rect.width <= 0 || rect.height <= 0) {
-              return const SizedBox.shrink();
+        final CalendarTaskGeometry geometry = bindings.geometry;
+        if (geometry.rect.width <= 0 || geometry.rect.height <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        final double width = geometry.rect.width;
+        final double height = geometry.rect.height;
+
+        if (showSplitPreview && !allowNarrowing) {
+          _callbacks.updateDragFeedbackWidth(
+            width,
+            forceApply: false,
+            forceCenterPointer: false,
+          );
+        }
+
+        if (isDraggingTask && !showSplitPreview) {
+          _callbacks.cancelPendingDragWidth();
+          _callbacks.resetDragFeedbackHint();
+        }
+
+        final double primaryWidth =
+            showSplitPreview && allowNarrowing ? geometry.narrowedWidth : width;
+
+        Widget baseTask = ResizableTaskWidget(
+          key: ValueKey(task.id),
+          interactionController: _interactionController,
+          task: task,
+          onResizePreview: _callbacks.onResizePreview,
+          onResizeEnd: _callbacks.onResizeEnd,
+          onResizePointerMove: _callbacks.onResizePointerMove,
+          hourHeight: bindings.hourHeight,
+          stepHeight: bindings.stepHeight,
+          minutesPerStep: bindings.minutesPerStep,
+          width: primaryWidth,
+          height: height,
+          isDayView: widget.isDayView,
+          isPopoverOpen: bindings.isPopoverOpen,
+          enableInteractions: true,
+          isSelectionMode: bindings.isSelectionMode,
+          isSelected: bindings.isSelected,
+          dragFeedbackHint: bindings.dragFeedbackHint,
+          contextMenuController: _menuController,
+          contextMenuGroupId: bindings.contextMenuGroupId,
+          contextMenuBuilder: contextMenuBuilder,
+          onDragPointerDown: _callbacks.onDragPointerDown,
+          onToggleSelection: () {
+            if (bindings.isSelectionMode &&
+                bindings.isSelected &&
+                _interactionController.draggingTaskId == task.id) {
+              _callbacks.onDragEnded(task);
             }
-
-            final double width = rect.width;
-            final double height = rect.height;
-
-            if (showSplitPreview && !allowNarrowing) {
-              _callbacks.updateDragFeedbackWidth(
-                width,
-                forceApply: false,
-                forceCenterPointer: false,
-              );
+            if (bindings.isSelectionMode) {
+              _callbacks.onToggleSelection();
+            } else {
+              _callbacks.onEnterSelectionMode();
             }
-
-            if (isDraggingTask && !showSplitPreview) {
-              _callbacks.cancelPendingDragWidth();
-              _callbacks.resetDragFeedbackHint();
-            }
-
-            final double primaryWidth = showSplitPreview && allowNarrowing
-                ? geometry.narrowedWidth
-                : width;
-
-            Widget baseTask = ResizableTaskWidget(
-              key: ValueKey(task.id),
-              interactionController: _interactionController,
-              task: task,
-              onResizePreview: _callbacks.onResizePreview,
-              onResizeEnd: _callbacks.onResizeEnd,
-              onResizePointerMove: _callbacks.onResizePointerMove,
-              hourHeight: bindings.hourHeight,
-              stepHeight: bindings.stepHeight,
-              minutesPerStep: bindings.minutesPerStep,
-              width: primaryWidth,
-              height: height,
-              isDayView: widget.isDayView,
-              isPopoverOpen: bindings.isPopoverOpen,
-              enableInteractions: true,
-              isSelectionMode: bindings.isSelectionMode,
-              isSelected: bindings.isSelected,
-              dragFeedbackHint: bindings.dragFeedbackHint,
-              contextMenuController: _menuController,
-              contextMenuGroupId: bindings.contextMenuGroupId,
-              contextMenuBuilder: contextMenuBuilder,
-              onDragPointerDown: _callbacks.onDragPointerDown,
-              onToggleSelection: () {
-                if (bindings.isSelectionMode &&
-                    bindings.isSelected &&
-                    _interactionController.draggingTaskId == task.id) {
-                  _callbacks.onDragEnded(task);
-                }
-                if (bindings.isSelectionMode) {
-                  _callbacks.onToggleSelection();
-                } else {
-                  _callbacks.onEnterSelectionMode();
-                }
-              },
-              onDragStarted: _callbacks.onDragStarted,
-              onDragUpdate: _callbacks.onDragUpdate,
-              onDragEnded: _callbacks.onDragEnded,
-              onTap: _callbacks.onTap,
-            );
-
-            if (previewTaskCandidate != null) {
-              final CalendarTask previewTask = previewTaskCandidate;
-              baseTask = SizedBox.expand(
-                child: Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: geometry.splitWidthFactor,
-                        alignment: Alignment.centerLeft,
-                        child: baseTask,
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FractionallySizedBox(
-                        widthFactor: geometry.splitWidthFactor,
-                        alignment: Alignment.centerRight,
-                        child: IgnorePointer(
-                          child: Opacity(
-                            opacity: calendarSplitPreviewGhostOpacity,
-                            child: ResizableTaskWidget(
-                              key: ValueKey('${task.id}-preview'),
-                              interactionController: _interactionController,
-                              task: previewTask,
-                              onResizePreview: null,
-                              onResizeEnd: null,
-                              hourHeight: bindings.hourHeight,
-                              stepHeight: bindings.stepHeight,
-                              minutesPerStep: bindings.minutesPerStep,
-                              width: geometry.narrowedWidth,
-                              height: height,
-                              isDayView: widget.isDayView,
-                              enableInteractions: false,
-                              isSelectionMode: false,
-                              isSelected: false,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return AnimatedContainer(
-              duration: bindings.splitPreviewAnimationDuration,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(calendarEventRadius),
-                border: showSplitPreview
-                    ? Border.all(
-                        color: calendarPrimaryColor.withValues(
-                          alpha: calendarSplitPreviewBorderOpacity,
-                        ),
-                        width: calendarBorderStroke * 2,
-                      )
-                    : null,
-              ),
-              child: baseTask,
-            );
           },
+          onDragStarted: _callbacks.onDragStarted,
+          onDragUpdate: _callbacks.onDragUpdate,
+          onDragEnded: _callbacks.onDragEnded,
+          onTap: _callbacks.onTap,
+        );
+
+        if (previewTaskCandidate != null) {
+          final CalendarTask previewTask = previewTaskCandidate;
+          baseTask = SizedBox.expand(
+            child: Stack(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: geometry.splitWidthFactor,
+                    alignment: Alignment.centerLeft,
+                    child: baseTask,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FractionallySizedBox(
+                    widthFactor: geometry.splitWidthFactor,
+                    alignment: Alignment.centerRight,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: calendarSplitPreviewGhostOpacity,
+                        child: ResizableTaskWidget(
+                          key: ValueKey('${task.id}-preview'),
+                          interactionController: _interactionController,
+                          task: previewTask,
+                          onResizePreview: null,
+                          onResizeEnd: null,
+                          hourHeight: bindings.hourHeight,
+                          stepHeight: bindings.stepHeight,
+                          minutesPerStep: bindings.minutesPerStep,
+                          width: geometry.narrowedWidth,
+                          height: height,
+                          isDayView: widget.isDayView,
+                          enableInteractions: false,
+                          isSelectionMode: false,
+                          isSelected: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return AnimatedContainer(
+          duration: bindings.splitPreviewAnimationDuration,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(calendarEventRadius),
+            border: showSplitPreview
+                ? Border.all(
+                    color: calendarPrimaryColor.withValues(
+                      alpha: calendarSplitPreviewBorderOpacity,
+                    ),
+                    width: calendarBorderStroke * 2,
+                  )
+                : null,
+          ),
+          child: baseTask,
         );
       },
     );

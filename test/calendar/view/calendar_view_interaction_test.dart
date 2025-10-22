@@ -652,14 +652,12 @@ CalendarTaskEntryBindings _buildTestBindings({
   required CalendarTaskContextMenuBuilderFactory builderFactory,
   Rect geometryRect = const Rect.fromLTWH(0, 0, 240, 60),
 }) {
-  final geometryNotifier = ValueNotifier<CalendarTaskGeometry>(
-    CalendarTaskGeometry(
-      rect: geometryRect,
-      narrowedWidth: geometryRect.width * 0.8,
-      splitWidthFactor: geometryRect.width == 0
-          ? 0
-          : (geometryRect.width * 0.8) / geometryRect.width,
-    ),
+  final geometry = CalendarTaskGeometry(
+    rect: geometryRect,
+    narrowedWidth: geometryRect.width * 0.8,
+    splitWidthFactor: geometryRect.width == 0
+        ? 0
+        : (geometryRect.width * 0.8) / geometryRect.width,
   );
   return CalendarTaskEntryBindings(
     isSelectionMode: false,
@@ -677,7 +675,7 @@ CalendarTaskEntryBindings _buildTestBindings({
     minutesPerStep: 15,
     hourHeight: 60,
     schedulePopoverLayoutUpdate: () {},
-    geometry: geometryNotifier,
+    geometry: geometry,
   );
 }
 

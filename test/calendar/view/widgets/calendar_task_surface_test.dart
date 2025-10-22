@@ -43,12 +43,10 @@ void main() {
     bool isPopoverOpen = false;
     late void Function(void Function()) triggerRebuild;
 
-    final geometryNotifier = ValueNotifier<CalendarTaskGeometry>(
-      const CalendarTaskGeometry(
-        rect: Rect.fromLTWH(0, 0, 240, 72),
-        narrowedWidth: 200,
-        splitWidthFactor: 200 / 240,
-      ),
+    const geometry = CalendarTaskGeometry(
+      rect: Rect.fromLTWH(0, 0, 240, 72),
+      narrowedWidth: 200,
+      splitWidthFactor: 200 / 240,
     );
 
     CalendarTaskEntryBindings buildBindings() => CalendarTaskEntryBindings(
@@ -68,7 +66,7 @@ void main() {
           minutesPerStep: 15,
           hourHeight: 48,
           schedulePopoverLayoutUpdate: () {},
-          geometry: geometryNotifier,
+          geometry: geometry,
         );
 
     await tester.pumpWidget(

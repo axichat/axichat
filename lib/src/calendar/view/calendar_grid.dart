@@ -2312,7 +2312,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       isTaskSelected: _isTaskSelected,
       isPopoverOpen: _taskPopoverController.isPopoverOpen,
       dragTargetKeyForTask: _taskPopoverController.keyForTask,
-      requestPopoverLayoutUpdate: _updateActivePopoverLayoutForTask,
+      requestPopoverLayoutUpdate: (taskId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateActivePopoverLayoutForTask(taskId);
+        });
+      },
       contextMenuDelegate: (task, menuController) =>
           _buildTaskContextMenuBuilder(
         task: task,
