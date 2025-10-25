@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../common/ui/ui.dart';
+import '../../utils/location_autocomplete.dart';
 import '../priority_checkbox_tile.dart';
 import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
@@ -878,7 +879,7 @@ class TaskDescriptionField extends StatelessWidget {
 
 /// Shared single-line location field for task editors. Applies consistent
 /// padding and defaults while allowing callers to override styling knobs.
-class TaskLocationField extends StatelessWidget {
+class TaskLocationField extends StatefulWidget {
   const TaskLocationField({
     super.key,
     required this.controller,
@@ -891,6 +892,9 @@ class TaskLocationField extends StatelessWidget {
     this.borderRadius,
     this.focusBorderColor,
     this.contentPadding,
+    this.autocomplete,
+    this.autocompleteLimit = 6,
+    this.enabled = true,
   });
 
   final TextEditingController controller;
@@ -903,22 +907,137 @@ class TaskLocationField extends StatelessWidget {
   final double? borderRadius;
   final Color? focusBorderColor;
   final EdgeInsetsGeometry? contentPadding;
+  final LocationAutocompleteHelper? autocomplete;
+  final int autocompleteLimit;
+  final bool enabled;
+
+  @override
+  State<TaskLocationField> createState() => _TaskLocationFieldState();
+}
+
+class _TaskLocationFieldState extends State<TaskLocationField> {
+  FocusNode? _focusNode;
+
+  FocusNode get _effectiveFocusNode => widget.focusNode ?? _focusNode!;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.focusNode == null) {
+      _focusNode = FocusNode();
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final helper = widget.autocomplete;
+    if (helper == null || !widget.enabled) {
+      return _buildField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+      );
+    }
+
+    return RawAutocomplete<LocationSuggestion>(
+      focusNode: _effectiveFocusNode,
+      textEditingController: widget.controller,
+      displayStringForOption: (option) => option.label,
+      optionsBuilder: (textEditingValue) {
+        final query = textEditingValue.text.trimLeft();
+        if (query.length < 2) {
+          return const Iterable<LocationSuggestion>.empty();
+        }
+        return helper.search(query, limit: widget.autocompleteLimit);
+      },
+      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+        return _buildField(
+          controller: textController,
+          focusNode: focusNode,
+          onSubmitted: (_) => onFieldSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final list = options.toList();
+        if (list.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, minWidth: 220),
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemBuilder: (context, index) {
+                  final suggestion = list[index];
+                  return ListTile(
+                    dense: true,
+                    horizontalTitleGap: 8,
+                    onTap: () {
+                      onSelected(suggestion);
+                      widget.onChanged?.call(suggestion.label);
+                    },
+                    title: Text(
+                      suggestion.label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: calendarTitleColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      suggestion.isHistory ? 'From your tasks' : 'Suggested',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: calendarSubtitleColor,
+                      ),
+                    ),
+                  );
+                },
+                separatorBuilder: (_, __) => const Divider(
+                  height: 1,
+                  color: calendarBorderColor,
+                ),
+                itemCount: list.length,
+              ),
+            ),
+          ),
+        );
+      },
+      onSelected: (selection) {
+        widget.onChanged?.call(selection.label);
+      },
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    FocusNode? focusNode,
+    ValueChanged<String>? onSubmitted,
+  }) {
     return TaskTextField(
       controller: controller,
-      focusNode: focusNode,
-      labelText: labelText,
-      hintText: hintText,
+      focusNode: focusNode ?? _effectiveFocusNode,
+      labelText: widget.labelText,
+      hintText: widget.hintText,
       minLines: 1,
       maxLines: 1,
-      textCapitalization: textCapitalization,
-      autofocus: autofocus,
-      onChanged: onChanged,
-      borderRadius: borderRadius,
-      focusBorderColor: focusBorderColor,
-      contentPadding: contentPadding ??
+      textCapitalization: widget.textCapitalization,
+      autofocus: widget.autofocus,
+      onChanged: widget.onChanged,
+      onSubmitted: onSubmitted,
+      enabled: widget.enabled,
+      borderRadius: widget.borderRadius,
+      focusBorderColor: widget.focusBorderColor,
+      contentPadding: widget.contentPadding ??
           const EdgeInsets.symmetric(
             horizontal: calendarGutterLg,
             vertical: calendarGutterMd,

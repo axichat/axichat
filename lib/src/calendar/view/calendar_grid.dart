@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -61,6 +62,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const int startHour = 0;
   static const int endHour = 24;
   static const int _defaultZoomIndex = 0;
+  static const double _mobileCompactHourHeight = 60;
   static const int _resizeStepMinutes = 15;
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
@@ -122,6 +124,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
   int? _lastHandledFocusToken;
+  bool _isCompactActive = false;
+  int? _preCompactZoomIndex;
 
   bool get _shouldFreezeWidth =>
       !_taskInteractionController.dragHasMoved && _isWidthDebounceActive;
@@ -168,7 +172,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   int get _minutesPerStep => _resizeStepMinutes;
   bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
   bool get _canZoomOut => _zoomIndex > 0;
-  bool get _isZoomEnabled => widget.state.viewMode != CalendarView.day;
+  bool get _shouldUseCompactZoom =>
+      _isCompactActive || widget.state.viewMode == CalendarView.day;
+  bool get _isZoomEnabled =>
+      widget.state.viewMode != CalendarView.day || _shouldUseCompactZoom;
   bool get _isSelectionMode => widget.state.isSelectionMode;
   Set<String> get _selectedTaskIds => widget.state.selectedTaskIds;
 
@@ -823,8 +830,127 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return _resolvedHourHeight;
   }
 
+  bool _shouldUseSheetMenus(BuildContext context) {
+    final bool hasMouse =
+        RendererBinding.instance.mouseTracker.mouseIsConnected;
+    return ResponsiveHelper.isCompact(context) || !hasMouse;
+  }
+
+  void _applyCompactZoomPreset() {
+    _preCompactZoomIndex ??= _zoomIndex;
+    const int target = 0;
+    if (_zoomIndex != target) {
+      _setZoomIndex(target);
+    }
+  }
+
+  void _restoreZoomPreset() {
+    final int target = _preCompactZoomIndex ?? _defaultZoomIndex;
+    _preCompactZoomIndex = null;
+    if (_zoomIndex != target) {
+      _setZoomIndex(target);
+    }
+  }
+
+  Future<void> _showTaskEditSheet(CalendarTask task) async {
+    final bloc = _capturedBloc;
+    final CalendarState state = bloc.state;
+    final String baseId = baseTaskIdFrom(task.id);
+    final CalendarTask latestTask = state.model.tasks[baseId] ?? task;
+    final CalendarTask? storedTask = state.model.tasks[task.id];
+    final String? occurrenceKey = occurrenceKeyFrom(task.id);
+    final CalendarTask? occurrenceTask =
+        storedTask == null && occurrenceKey != null
+            ? latestTask.occurrenceForId(task.id)
+            : null;
+    final CalendarTask displayTask = storedTask ?? occurrenceTask ?? latestTask;
+    final bool shouldUpdateOccurrence =
+        storedTask == null && occurrenceTask != null;
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final mediaQuery = MediaQuery.of(sheetContext);
+        final double maxHeight =
+            mediaQuery.size.height - mediaQuery.padding.top;
+        return SafeArea(
+          top: false,
+          child: EditTaskDropdown(
+            task: displayTask,
+            maxHeight: maxHeight,
+            isSheet: true,
+            onClose: () => Navigator.of(sheetContext).pop(),
+            scaffoldMessenger: scaffoldMessenger,
+            onTaskUpdated: (updatedTask) {
+              bloc.add(
+                CalendarEvent.taskUpdated(
+                  task: updatedTask,
+                ),
+              );
+            },
+            onOccurrenceUpdated: shouldUpdateOccurrence
+                ? (updatedTask) {
+                    bloc.add(
+                      CalendarEvent.taskOccurrenceUpdated(
+                        taskId: baseId,
+                        occurrenceId: task.id,
+                        scheduledTime: updatedTask.scheduledTime,
+                        duration: updatedTask.duration,
+                        endDate: updatedTask.endDate,
+                      ),
+                    );
+
+                    final CalendarTask seriesUpdate = latestTask.copyWith(
+                      title: updatedTask.title,
+                      description: updatedTask.description,
+                      location: updatedTask.location,
+                      deadline: updatedTask.deadline,
+                      priority: updatedTask.priority,
+                      isCompleted: updatedTask.isCompleted,
+                    );
+
+                    if (seriesUpdate != latestTask) {
+                      bloc.add(
+                        CalendarEvent.taskUpdated(
+                          task: seriesUpdate,
+                        ),
+                      );
+                    }
+                  }
+                : null,
+            onTaskDeleted: (taskId) {
+              bloc.add(
+                CalendarEvent.taskDeleted(
+                  taskId: taskId,
+                ),
+              );
+              Navigator.of(sheetContext).pop();
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void _updateCompactState(BuildContext context) {
+    final bool isCompact = ResponsiveHelper.isCompact(context);
+    if (isCompact == _isCompactActive) {
+      return;
+    }
+    _isCompactActive = isCompact;
+    if (isCompact) {
+      _applyCompactZoomPreset();
+    } else {
+      _restoreZoomPreset();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    _updateCompactState(context);
     return ResponsiveHelper.layoutBuilder(
       context,
       mobile: _buildMobileGrid(),
@@ -838,14 +964,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Widget _buildTabletGrid() {
-    return _buildWeekView(compact: false);
+    return _buildWeekView(
+      compact: true,
+      allowWeekViewInCompact: true,
+    );
   }
 
   Widget _buildDesktopGrid() {
     return _buildWeekView(compact: false);
   }
 
-  Widget _buildWeekView({required bool compact}) {
+  Widget _buildWeekView({
+    required bool compact,
+    bool allowWeekViewInCompact = false,
+  }) {
     return AnimatedBuilder(
       animation: _taskPopoverController,
       builder: (context, _) {
@@ -853,10 +985,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           animation: _taskInteractionController,
           builder: (context, __) {
             final weekDates = _getWeekDates(widget.state.selectedDate);
-            final isWeekView = widget.state.viewMode == CalendarView.week;
+            final bool isWeekView =
+                widget.state.viewMode == CalendarView.week &&
+                    (!compact || allowWeekViewInCompact);
             final headerDates =
                 isWeekView ? weekDates : [widget.state.selectedDate];
             final responsive = ResponsiveHelper.spec(context);
+            final double horizontalPadding =
+                compact ? 0 : responsive.gridHorizontalPadding;
+            final double? compactWeekDayWidth = (compact && isWeekView)
+                ? ResponsiveHelper.dayColumnWidth(
+                    context,
+                    fallback: calendarCompactDayColumnWidth,
+                  )
+                : null;
 
             final gridBody = Container(
               decoration: const BoxDecoration(
@@ -876,16 +1018,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               child: Column(
                 children: [
                   Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: responsive.gridHorizontalPadding,
+                    padding:
+                        EdgeInsets.symmetric(horizontal: horizontalPadding),
+                    child: _buildDayHeaders(
+                      headerDates,
+                      compact,
+                      isWeekView: isWeekView,
+                      compactWeekDayWidth: compactWeekDayWidth,
                     ),
-                    child: _buildDayHeaders(headerDates, compact),
                   ),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final availableHeight = constraints.maxHeight;
-                        final isDayView =
+                        final bool isDayView = compact ||
                             widget.state.viewMode == CalendarView.day;
                         _resolvedHourHeight = _resolveHourHeight(
                           availableHeight,
@@ -908,6 +1054,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     isWeekView,
                                     weekDates,
                                     compact,
+                                    compactWeekDayWidth,
                                   ),
                                 );
                               },
@@ -1078,30 +1225,45 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   double _resolveHourHeight(double availableHeight, {required bool isDayView}) {
-    final metrics = _layoutCalculator.resolveMetrics(
+    var metrics = _layoutCalculator.resolveMetrics(
       zoomIndex: _zoomIndex,
       isDayView: isDayView,
       availableHeight: availableHeight,
+      allowDayViewZoom: _shouldUseCompactZoom,
     );
+    if (_shouldUseCompactZoom && _zoomIndex == 0) {
+      final double compactHourHeight =
+          math.min(metrics.hourHeight, _mobileCompactHourHeight);
+      if (compactHourHeight != metrics.hourHeight) {
+        final double compactSlotHeight =
+            compactHourHeight / metrics.slotsPerHour;
+        metrics = CalendarLayoutMetrics(
+          hourHeight: compactHourHeight,
+          slotHeight: compactSlotHeight,
+          minutesPerSlot: metrics.minutesPerSlot,
+          slotsPerHour: metrics.slotsPerHour,
+        );
+      }
+    }
     _currentLayoutMetrics = metrics;
     return metrics.hourHeight;
   }
 
-  Widget _buildGridContent(
-      bool isWeekView, List<DateTime> weekDates, bool compact) {
+  Widget _buildGridContent(bool isWeekView, List<DateTime> weekDates,
+      bool compact, double? compactWeekDayWidth) {
     final responsive = ResponsiveHelper.spec(context);
-    final bool isCompact = responsive.sizeClass == CalendarSizeClass.compact;
     final visibleTaskIds = <String>{};
     _visibleTasks.clear();
     _visibleTaskRects.clear();
     _activeSlotControllerKeys.clear();
     late final Widget content;
 
-    if (isWeekView && isCompact) {
-      final double compactDayColumnWidth = ResponsiveHelper.dayColumnWidth(
-        context,
-        fallback: calendarCompactDayColumnWidth,
-      );
+    if (isWeekView && compact) {
+      final double compactDayColumnWidth = compactWeekDayWidth ??
+          ResponsiveHelper.dayColumnWidth(
+            context,
+            fallback: calendarCompactDayColumnWidth,
+          );
       // Mobile week view: horizontal scroll for day columns
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1168,7 +1330,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _cleanupTaskPopovers(visibleTaskIds);
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: responsive.gridHorizontalPadding,
+        horizontal: compact ? 0 : responsive.gridHorizontalPadding,
       ),
       child: content,
     );
@@ -1310,6 +1472,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _onScheduledTaskTapped(CalendarTask task, Rect bounds) {
+    if (_shouldUseSheetMenus(context)) {
+      _showTaskEditSheet(task);
+      return;
+    }
     if (_taskPopoverController.activeTaskId == task.id) {
       _closeTaskPopover(task.id, reason: 'toggle-close');
       return;
@@ -1510,7 +1676,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     });
   }
 
-  Widget _buildDayHeaders(List<DateTime> weekDates, bool compact) {
+  Widget _buildDayHeaders(
+    List<DateTime> weekDates,
+    bool compact, {
+    required bool isWeekView,
+    double? compactWeekDayWidth,
+  }) {
+    final bool useScrollableWeekHeader =
+        compact && isWeekView && compactWeekDayWidth != null;
     return Container(
       height: calendarWeekHeaderHeight,
       decoration: const BoxDecoration(
@@ -1537,13 +1710,40 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               ),
             ),
           ),
-          ...weekDates.asMap().entries.map((entry) {
-            final index = entry.key;
-            final date = entry.value;
-            return Expanded(
-              child: _buildDayHeader(date, compact, isFirst: index == 0),
-            );
-          }),
+          if (useScrollableWeekHeader)
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: weekDates.asMap().entries.map((entry) {
+                    final date = entry.value;
+                    return SizedBox(
+                      width: compactWeekDayWidth!,
+                      child: _buildDayHeader(
+                        date,
+                        compact,
+                        isFirst: entry.key == 0,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: Row(
+                children: weekDates.asMap().entries.map((entry) {
+                  final date = entry.value;
+                  return Expanded(
+                    child: _buildDayHeader(
+                      date,
+                      compact,
+                      isFirst: entry.key == 0,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
         ],
       ),
     );

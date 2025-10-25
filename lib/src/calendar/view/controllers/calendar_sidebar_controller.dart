@@ -129,7 +129,7 @@ class CalendarSidebarState extends Equatable {
     this.hasUserResized = false,
     this.isResizing = false,
     this.showAdvancedOptions = false,
-    this.expandedSection = CalendarSidebarSection.unscheduled,
+    this.expandedSection,
     this.activePopoverTaskId,
   });
 

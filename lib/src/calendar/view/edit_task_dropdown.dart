@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../../common/ui/ui.dart';
+import '../bloc/base_calendar_bloc.dart';
 import '../models/calendar_task.dart';
+import '../utils/location_autocomplete.dart';
+import '../utils/recurrence_utils.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
-import '../utils/recurrence_utils.dart';
 
 class EditTaskDropdown extends StatefulWidget {
   const EditTaskDropdown({
@@ -17,6 +21,7 @@ class EditTaskDropdown extends StatefulWidget {
     this.maxHeight = 520,
     this.onOccurrenceUpdated,
     this.scaffoldMessenger,
+    this.isSheet = false,
   });
 
   final CalendarTask task;
@@ -26,6 +31,7 @@ class EditTaskDropdown extends StatefulWidget {
   final double maxHeight;
   final void Function(CalendarTask task)? onOccurrenceUpdated;
   final ScaffoldMessengerState? scaffoldMessenger;
+  final bool isSheet;
 
   @override
   State<EditTaskDropdown> createState() => _EditTaskDropdownState();
@@ -122,60 +128,73 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: calendarTaskPopoverWidth,
-        constraints: BoxConstraints(
-          maxHeight: widget.maxHeight,
-          minWidth: 320,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: calendarBorderColor),
-          boxShadow: const [
+    final bool isSheet = widget.isSheet;
+    final BorderRadius radius = isSheet
+        ? const BorderRadius.vertical(top: Radius.circular(24))
+        : BorderRadius.circular(8);
+    final Color background =
+        isSheet ? Theme.of(context).colorScheme.surface : Colors.white;
+    final List<BoxShadow>? boxShadow = isSheet
+        ? null
+        : const [
             BoxShadow(
               color: Color(0x1F000000),
               blurRadius: 24,
               offset: Offset(0, 8),
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(),
-            const Divider(height: 1),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: calendarGutterLg, vertical: calendarGutterMd),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildTitleField(),
-                    const SizedBox(height: calendarFormGap),
-                    _buildPriorityRow(),
-                    _sectionDivider(),
-                    _buildDescriptionField(),
-                    const SizedBox(height: calendarFormGap),
-                    _buildLocationField(),
-                    _sectionDivider(),
-                    _buildScheduleSection(),
-                    _sectionDivider(),
-                    _buildDeadlineField(),
-                    _sectionDivider(),
-                    _buildRecurrenceSection(),
-                    _sectionDivider(),
-                    _buildCompletedCheckbox(),
-                  ],
-                ),
-              ),
+          ];
+    final Widget body = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildHeader(),
+        const Divider(height: 1),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterLg, vertical: calendarGutterMd),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildTitleField(),
+                const SizedBox(height: calendarFormGap),
+                _buildPriorityRow(),
+                _sectionDivider(),
+                _buildDescriptionField(),
+                const SizedBox(height: calendarFormGap),
+                _buildLocationField(),
+                _sectionDivider(),
+                _buildScheduleSection(),
+                _sectionDivider(),
+                _buildDeadlineField(),
+                _sectionDivider(),
+                _buildRecurrenceSection(),
+                _sectionDivider(),
+                _buildCompletedCheckbox(),
+              ],
             ),
-            const Divider(height: 1),
-            _buildActions(),
-          ],
+          ),
+        ),
+        const Divider(height: 1),
+        _buildActions(),
+      ],
+    );
+    return Material(
+      color: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Container(
+          width: isSheet ? double.infinity : calendarTaskPopoverWidth,
+          constraints: BoxConstraints(
+            maxHeight: widget.maxHeight,
+            minWidth: 320,
+          ),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: radius,
+            border: isSheet ? null : Border.all(color: calendarBorderColor),
+            boxShadow: boxShadow,
+          ),
+          child: body,
         ),
       ),
     );
@@ -230,12 +249,22 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   Widget _buildLocationField() {
-    return TaskTextField(
+    final helper = _resolveLocationHelper(context);
+    return TaskLocationField(
       controller: _locationController,
       hintText: 'Location (optional)',
       textCapitalization: TextCapitalization.words,
       contentPadding: calendarMenuItemPadding,
+      autocomplete: helper,
     );
+  }
+
+  LocationAutocompleteHelper _resolveLocationHelper(BuildContext context) {
+    final bloc = context.read<BaseCalendarBloc?>();
+    if (bloc == null) {
+      return LocationAutocompleteHelper.fromSeeds(const <String>[]);
+    }
+    return LocationAutocompleteHelper.fromState(bloc.state);
   }
 
   Widget _sectionDivider() {

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -9,6 +10,7 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
@@ -19,6 +21,7 @@ import 'controllers/task_draft_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
+import 'widgets/location_inline_suggestion.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -35,6 +38,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   late final CalendarSidebarController _sidebarController;
   late final TaskDraftController _draftController;
   final _titleController = TextEditingController();
+  final FocusNode _titleFocusNode = FocusNode(debugLabel: 'sidebarTitleInput');
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final TextEditingController _selectionTitleController =
@@ -108,6 +112,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   @override
   void dispose() {
     _titleController.dispose();
+    _titleFocusNode.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
     _selectionTitleController.dispose();
@@ -155,9 +160,15 @@ class _TaskSidebarState extends State<TaskSidebar>
                 child: BlocBuilder<BaseCalendarBloc, CalendarState>(
                   bloc: calendarBloc,
                   builder: (context, state) {
+                    final locationHelper =
+                        LocationAutocompleteHelper.fromState(state);
                     final content = state.isSelectionMode
-                        ? _buildSelectionPanel(state, uiState)
-                        : _buildUnscheduledContent(state, uiState);
+                        ? _buildSelectionPanel(state, uiState, locationHelper)
+                        : _buildUnscheduledContent(
+                            state,
+                            uiState,
+                            locationHelper,
+                          );
 
                     final Set<String> activeTaskIds = state.isSelectionMode
                         ? _selectedTasks(state).map((task) => task.id).toSet()
@@ -187,7 +198,10 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAddTaskSection(CalendarSidebarState uiState) {
+  Widget _buildAddTaskSection(
+    CalendarSidebarState uiState,
+    LocationAutocompleteHelper locationHelper,
+  ) {
     return Container(
       padding: calendarSidebarSectionPadding,
       decoration: const BoxDecoration(
@@ -212,7 +226,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             ),
           ),
           const SizedBox(height: calendarSidebarSectionSpacing),
-          _buildQuickTaskInput(),
+          _buildQuickTaskInput(locationHelper),
           const SizedBox(height: calendarSidebarSectionSpacing),
           _buildPriorityToggles(),
           const SizedBox(height: calendarSidebarToggleSpacing),
@@ -234,7 +248,10 @@ class _TaskSidebarState extends State<TaskSidebar>
               );
             },
             child: uiState.showAdvancedOptions
-                ? _buildAdvancedOptions(key: const ValueKey('advanced'))
+                ? _buildAdvancedOptions(
+                    key: const ValueKey('advanced'),
+                    locationHelper: locationHelper,
+                  )
                 : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
           ),
           const SizedBox(height: calendarSidebarSectionSpacing),
@@ -247,6 +264,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   Widget _buildUnscheduledContent(
     CalendarState state,
     CalendarSidebarState uiState,
+    LocationAutocompleteHelper locationHelper,
   ) {
     final unscheduledTasks = _sortTasksByDeadline(
       state.unscheduledTasks.where((task) => task.deadline == null).toList(),
@@ -258,7 +276,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildAddTaskSection(uiState),
+        _buildAddTaskSection(uiState, locationHelper),
         _buildTaskSections(
           unscheduledTasks,
           reminderTasks,
@@ -271,6 +289,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   Widget _buildSelectionPanel(
     CalendarState state,
     CalendarSidebarState uiState,
+    LocationAutocompleteHelper locationHelper,
   ) {
     final tasks = _selectedTasks(state);
     _syncSelectionRecurrenceState(tasks);
@@ -326,7 +345,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               const TaskSectionDivider(
                 verticalPadding: calendarGutterMd,
               ),
-              _buildSelectionBatchEditSection(hasTasks),
+              _buildSelectionBatchEditSection(hasTasks, locationHelper),
               const TaskSectionDivider(
                 verticalPadding: calendarGutterMd,
               ),
@@ -579,7 +598,10 @@ class _TaskSidebarState extends State<TaskSidebar>
     }
   }
 
-  Widget _buildSelectionBatchEditSection(bool hasTasks) {
+  Widget _buildSelectionBatchEditSection(
+    bool hasTasks,
+    LocationAutocompleteHelper locationHelper,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -603,13 +625,7 @@ class _TaskSidebarState extends State<TaskSidebar>
           onChanged: _handleSelectionDescriptionChanged,
         ),
         const SizedBox(height: calendarGutterSm),
-        _buildSelectionTextField(
-          label: 'Location',
-          controller: _selectionLocationController,
-          hint: 'Set location (leave blank to clear)',
-          enabled: hasTasks,
-          onChanged: _handleSelectionLocationChanged,
-        ),
+        _buildSelectionLocationField(hasTasks, locationHelper),
         const SizedBox(height: calendarGutterMd),
         Align(
           alignment: Alignment.centerLeft,
@@ -665,6 +681,39 @@ class _TaskSidebarState extends State<TaskSidebar>
             vertical: calendarGutterSm,
           ),
           onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionLocationField(
+    bool enabled,
+    LocationAutocompleteHelper helper,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'LOCATION',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: calendarInsetMd),
+        TaskLocationField(
+          controller: _selectionLocationController,
+          hintText: 'Set location (leave blank to clear)',
+          textCapitalization: TextCapitalization.words,
+          enabled: enabled,
+          onChanged: _handleSelectionLocationChanged,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: calendarGutterMd,
+            vertical: calendarGutterSm,
+          ),
+          autocomplete: helper,
         ),
       ],
     );
@@ -1200,15 +1249,31 @@ class _TaskSidebarState extends State<TaskSidebar>
     return tasks;
   }
 
-  Widget _buildQuickTaskInput() {
-    return TaskTextField(
+  Widget _buildQuickTaskInput(LocationAutocompleteHelper helper) {
+    const padding = EdgeInsets.symmetric(
+      horizontal: calendarGutterLg,
+      vertical: 14,
+    );
+    final field = TaskTextField(
       controller: _titleController,
+      focusNode: _titleFocusNode,
       hintText: 'Quick task (e.g., "Meeting at 2pm in Room 101")',
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => _addTask(),
-      contentPadding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterLg, vertical: 14),
+      contentPadding: padding,
+    );
+
+    return LocationInlineSuggestion(
+      controller: _titleController,
+      helper: helper,
+      contentPadding: padding,
+      textStyle: const TextStyle(
+        fontSize: 14,
+        color: calendarTitleColor,
+      ),
+      suggestionColor: calendarSubtitleColor,
+      child: field,
     );
   }
 
@@ -1249,7 +1314,10 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  Widget _buildAdvancedOptions({Key? key}) {
+  Widget _buildAdvancedOptions({
+    Key? key,
+    required LocationAutocompleteHelper locationHelper,
+  }) {
     return Padding(
       key: key,
       padding: const EdgeInsets.only(top: calendarGutterMd),
@@ -1274,6 +1342,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               horizontal: calendarGutterLg,
               vertical: calendarGutterMd,
             ),
+            autocomplete: locationHelper,
           ),
           const SizedBox(height: calendarGutterMd),
           const TaskSectionHeader(title: 'Deadline'),
@@ -1473,11 +1542,15 @@ class _TaskSidebarState extends State<TaskSidebar>
               ),
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 160),
-                firstChild: Container(
-                  key: ValueKey('${section.name}-collapsed'),
-                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-                  constraints: const BoxConstraints(minHeight: 40),
-                  child: collapsedChild,
+                firstChild: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _sidebarController.toggleSection(section),
+                  child: Container(
+                    key: ValueKey('${section.name}-collapsed'),
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                    constraints: const BoxConstraints(minHeight: 40),
+                    child: collapsedChild,
+                  ),
                 ),
                 secondChild: const SizedBox.shrink(),
                 crossFadeState: isExpanded
@@ -1703,7 +1776,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverTaskId == task.id;
 
-    return Container(
+    Widget tile = Container(
       margin: const EdgeInsets.only(bottom: calendarGutterSm),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(calendarBorderRadius),
@@ -1723,6 +1796,17 @@ class _TaskSidebarState extends State<TaskSidebar>
             child: enableInteraction
                 ? Builder(
                     builder: (tileContext) {
+                      if (_shouldUseSheetMenus(tileContext)) {
+                        return InkWell(
+                          borderRadius:
+                              BorderRadius.circular(calendarBorderRadius),
+                          hoverColor: calendarSidebarBackgroundColor.withValues(
+                              alpha: 0.5),
+                          onTap: () => _showTaskEditSheet(tileContext, task),
+                          child: _buildTaskTileBody(task),
+                        );
+                      }
+
                       final controller = _popoverControllerFor(task.id);
                       final renderBox =
                           tileContext.findRenderObject() as RenderBox?;
@@ -1930,6 +2014,64 @@ class _TaskSidebarState extends State<TaskSidebar>
         ),
       ),
     );
+
+    if (enableInteraction) {
+      tile = _wrapWithSidebarContextMenu(task: task, child: tile);
+    }
+
+    return tile;
+  }
+
+  Widget _wrapWithSidebarContextMenu({
+    required CalendarTask task,
+    required Widget child,
+  }) {
+    return ShadContextMenuRegion(
+      items: _buildSidebarContextMenuItems(task),
+      child: child,
+    );
+  }
+
+  List<Widget> _buildSidebarContextMenuItems(CalendarTask task) {
+    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
+    final bool useSheetMenus = _shouldUseSheetMenus(context);
+    final bool isCompleted = task.isCompleted;
+
+    return [
+      ShadContextMenuItem(
+        leading: const Icon(Icons.edit_outlined),
+        onPressed: () {
+          if (useSheetMenus) {
+            _showTaskEditSheet(context, task);
+          } else {
+            _openTaskPopover(task.id);
+          }
+        },
+        child: const Text('Edit Task'),
+      ),
+      ShadContextMenuItem(
+        leading: Icon(
+          isCompleted ? Icons.undo_rounded : Icons.check_circle_outline,
+        ),
+        onPressed: () {
+          final CalendarTask updated = task.copyWith(
+            isCompleted: !isCompleted,
+            modifiedAt: DateTime.now(),
+          );
+          bloc.add(CalendarEvent.taskUpdated(task: updated));
+        },
+        child: Text(isCompleted ? 'Mark as active' : 'Mark as done'),
+      ),
+      ShadContextMenuItem(
+        leading: const Icon(Icons.delete_outline),
+        onPressed: () {
+          bloc.add(CalendarEvent.taskDeleted(taskId: task.id));
+          _closeTaskPopover(task.id);
+          _taskPopoverControllers.remove(task.id)?.dispose();
+        },
+        child: const Text('Delete Task'),
+      ),
+    ];
   }
 
   Widget _buildTaskTileBody(
@@ -2039,6 +2181,101 @@ class _TaskSidebarState extends State<TaskSidebar>
           ],
         ],
       ),
+    );
+  }
+
+  bool _shouldUseSheetMenus(BuildContext context) {
+    final bool hasMouse =
+        RendererBinding.instance.mouseTracker.mouseIsConnected;
+    return ResponsiveHelper.isCompact(context) || !hasMouse;
+  }
+
+  Future<void> _showTaskEditSheet(
+    BuildContext context,
+    CalendarTask task,
+  ) async {
+    final bloc = context.read<BaseCalendarBloc>();
+    final state = bloc.state;
+    final String baseId = task.baseId;
+    final CalendarTask latestTask = state.model.tasks[baseId] ?? task;
+    final CalendarTask? storedTask = state.model.tasks[task.id];
+    final CalendarTask? occurrenceTask = storedTask == null && task.isOccurrence
+        ? latestTask.occurrenceForId(task.id)
+        : null;
+    final CalendarTask displayTask = storedTask ?? occurrenceTask ?? latestTask;
+    final bool shouldUpdateOccurrence =
+        storedTask == null && occurrenceTask != null;
+    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final mediaQuery = MediaQuery.of(sheetContext);
+        final double maxHeight =
+            mediaQuery.size.height - mediaQuery.padding.top;
+        return SafeArea(
+          top: false,
+          child: EditTaskDropdown(
+            task: displayTask,
+            maxHeight: maxHeight,
+            isSheet: true,
+            onClose: () {
+              _sidebarController.setActivePopoverTaskId(null);
+              Navigator.of(sheetContext).pop();
+            },
+            scaffoldMessenger: scaffoldMessenger,
+            onTaskUpdated: (updatedTask) {
+              bloc.add(
+                CalendarEvent.taskUpdated(
+                  task: updatedTask,
+                ),
+              );
+            },
+            onOccurrenceUpdated: shouldUpdateOccurrence
+                ? (updatedTask) {
+                    bloc.add(
+                      CalendarEvent.taskOccurrenceUpdated(
+                        taskId: baseId,
+                        occurrenceId: task.id,
+                        scheduledTime: updatedTask.scheduledTime,
+                        duration: updatedTask.duration,
+                        endDate: updatedTask.endDate,
+                      ),
+                    );
+
+                    final CalendarTask seriesUpdate = latestTask.copyWith(
+                      title: updatedTask.title,
+                      description: updatedTask.description,
+                      location: updatedTask.location,
+                      deadline: updatedTask.deadline,
+                      priority: updatedTask.priority,
+                      isCompleted: updatedTask.isCompleted,
+                    );
+
+                    if (seriesUpdate != latestTask) {
+                      bloc.add(
+                        CalendarEvent.taskUpdated(
+                          task: seriesUpdate,
+                        ),
+                      );
+                    }
+                  }
+                : null,
+            onTaskDeleted: (taskId) {
+              bloc.add(
+                CalendarEvent.taskDeleted(
+                  taskId: taskId,
+                ),
+              );
+              _taskPopoverControllers.remove(task.id)?.dispose();
+              _sidebarController.setActivePopoverTaskId(null);
+              Navigator.of(sheetContext).pop();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -2221,11 +2458,18 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _resetForm() {
-    _titleController.clear();
-    _descriptionController.clear();
-    _locationController.clear();
-    _draftController.reset();
-    _sidebarController.resetForm();
+    if (_titleController.text.isNotEmpty) {
+      _titleController.clear();
+    }
+    if (_descriptionController.text.isNotEmpty) {
+      _descriptionController.clear();
+    }
+    if (_locationController.text.isNotEmpty) {
+      _locationController.clear();
+    }
+    if (mounted) {
+      FocusScope.of(context).requestFocus(_titleFocusNode);
+    }
   }
 
   ShadPopoverController _popoverControllerFor(String taskId) {

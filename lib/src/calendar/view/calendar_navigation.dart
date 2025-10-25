@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../utils/responsive_helper.dart';
 import 'widgets/task_form_section.dart';
+
+const double _compactDateLabelCollapseWidth = 460;
+const double _compactDateLabelMaxWidth = 220;
+const double _defaultDateLabelMaxWidth = 320;
 
 class CalendarNavigation extends StatelessWidget {
   const CalendarNavigation({
@@ -35,81 +39,131 @@ class CalendarNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
     final double horizontalPadding = spec.gridHorizontalPadding;
-    final Widget navButtonStrip = SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: EdgeInsets.zero,
-      child: Row(
-        children: [
-          _navButton(
-            label: '← Previous',
-            onPressed: () => _jumpBy(const Duration(days: -7)),
-          ),
-          const SizedBox(width: calendarGutterMd),
-          _navButton(
-            label: 'Today',
-            highlighted: _isToday(state.selectedDate),
-            onPressed: _isToday(state.selectedDate)
-                ? null
-                : () => onDateSelected(DateTime.now()),
-          ),
-          const SizedBox(width: calendarGutterMd),
-          _navButton(
-            label: 'Next →',
-            onPressed: () => _jumpBy(const Duration(days: 7)),
-          ),
-          if (state.viewMode == CalendarView.day) ...[
-            const SizedBox(width: calendarGutterMd),
-            _navButton(
-              label: 'Back to week',
-              onPressed: () => onViewChanged(CalendarView.week),
-            ),
-          ],
-        ],
+    final bool isCompact = ResponsiveHelper.isCompact(context);
+    final bool showBackToWeek =
+        !isCompact && state.viewMode == CalendarView.day;
+    final bool hasUndoRedo = onUndo != null || onRedo != null;
+    final String unitLabel = _currentUnitLabel();
+    final List<Widget> navButtons = [
+      _navButton(
+        label: '← Previous',
+        icon: isCompact ? Icons.chevron_left : null,
+        tooltip: 'Previous $unitLabel',
+        compact: isCompact,
+        onPressed: () => _jumpRelative(-1),
       ),
-    );
+      _navButton(
+        label: 'Today',
+        icon: null,
+        highlighted: _isToday(state.selectedDate),
+        tooltip: 'Today',
+        compact: isCompact,
+        showLabelInCompact: true,
+        onPressed: _isToday(state.selectedDate)
+            ? null
+            : () => onDateSelected(DateTime.now()),
+      ),
+      _navButton(
+        label: 'Next →',
+        icon: isCompact ? Icons.chevron_right : null,
+        tooltip: 'Next $unitLabel',
+        compact: isCompact,
+        onPressed: () => _jumpRelative(1),
+      ),
+    ];
+    if (showBackToWeek) {
+      navButtons.add(
+        _navButton(
+          label: 'Back to week',
+          onPressed: () => onViewChanged(CalendarView.week),
+        ),
+      );
+    }
     const double verticalPadding = calendarInsetMd;
-    final Widget undoRedoGroup = _buildUndoRedoGroup();
+    final Widget undoRedoGroup = _buildUndoRedoGroup(context);
 
     SystemMouseCursors.basic;
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        horizontalPadding,
-        verticalPadding,
-        horizontalPadding,
-        verticalPadding,
-      ),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: navButtonStrip,
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double safeMaxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
+        final double availableWidth =
+            (safeMaxWidth - (horizontalPadding * 2)).clamp(
+          0.0,
+          double.infinity,
+        );
+        final bool collapseDateText =
+            isCompact && availableWidth < _compactDateLabelCollapseWidth;
+        final double navSpacing =
+            isCompact ? calendarGutterSm : calendarGutterMd;
+        final Widget navRow =
+            _buildNavRow(navButtons: navButtons, spacing: navSpacing);
+        final Widget trailingRow = _buildTrailingRow(
+          collapseDateText: collapseDateText,
+          isCompact: isCompact,
+          hasUndoRedo: hasUndoRedo,
+          undoRedoGroup: undoRedoGroup,
+        );
+
+        return Container(
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            verticalPadding,
+            horizontalPadding,
+            verticalPadding,
           ),
-          Flexible(
-            child: Center(
-              child: _DateLabel(
-                state: state,
-                onDateSelected: onDateSelected,
-              ),
-            ),
+          color: Colors.white,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              navRow,
+              const Spacer(),
+              trailingRow,
+            ],
           ),
-          Flexible(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: undoRedoGroup,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  void _jumpBy(Duration offset) {
-    onDateSelected(state.selectedDate.add(offset));
+  void _jumpRelative(int steps) {
+    onDateSelected(_shiftedDate(steps));
+  }
+
+  DateTime _shiftedDate(int steps) {
+    final DateTime base = state.selectedDate;
+    switch (state.viewMode) {
+      case CalendarView.day:
+        return base.add(Duration(days: steps));
+      case CalendarView.week:
+        return base.add(Duration(days: 7 * steps));
+      case CalendarView.month:
+        final DateTime candidateMonth =
+            DateTime(base.year, base.month + steps, 1);
+        final int maxDay = DateTime(
+          candidateMonth.year,
+          candidateMonth.month + 1,
+          0,
+        ).day;
+        final int clampedDay = base.day.clamp(1, maxDay).toInt();
+        return DateTime(
+          candidateMonth.year,
+          candidateMonth.month,
+          clampedDay,
+        );
+    }
+  }
+
+  String _currentUnitLabel() {
+    switch (state.viewMode) {
+      case CalendarView.day:
+        return 'day';
+      case CalendarView.week:
+        return 'week';
+      case CalendarView.month:
+        return 'month';
+    }
   }
 
   bool _isToday(DateTime date) {
@@ -123,24 +177,49 @@ class CalendarNavigation extends StatelessWidget {
     required String label,
     required VoidCallback? onPressed,
     bool highlighted = false,
+    IconData? icon,
+    bool compact = false,
+    String? tooltip,
+    bool showLabelInCompact = false,
   }) {
-    if (highlighted) {
-      return TaskPrimaryButton(
-        label: label,
+    final bool useCompactIconOnly = compact && !showLabelInCompact;
+    if (useCompactIconOnly) {
+      return _compactNavButton(
+        icon: icon ?? Icons.help_outline,
+        tooltip: tooltip ?? label,
         onPressed: onPressed,
-        isBusy: false,
+        highlighted: highlighted,
       );
     }
-    return TaskSecondaryButton(
-      label: label,
-      onPressed: onPressed,
-      foregroundColor: calendarTitleColor,
-      hoverForegroundColor: calendarPrimaryColor,
-      hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+    final Widget button = highlighted
+        ? TaskPrimaryButton(
+            label: label,
+            onPressed: onPressed,
+            isBusy: false,
+            icon: icon,
+          )
+        : TaskSecondaryButton(
+            label: label,
+            onPressed: onPressed,
+            icon: icon,
+            foregroundColor: calendarTitleColor,
+            hoverForegroundColor: calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+          );
+    if (!compact) {
+      return button;
+    }
+    return Tooltip(
+      message: tooltip ?? label,
+      child: SizedBox(
+        height: 40,
+        child: button,
+      ),
     );
   }
 
-  Widget _buildUndoRedoGroup() {
+  Widget _buildUndoRedoGroup(BuildContext context) {
+    final bool isCompact = ResponsiveHelper.isCompact(context);
     final controls = <Widget>[];
     if (onUndo != null) {
       controls.add(
@@ -148,6 +227,7 @@ class CalendarNavigation extends StatelessWidget {
           icon: Icons.undo_rounded,
           tooltip: 'Undo',
           onPressed: canUndo ? onUndo : null,
+          compact: isCompact,
         ),
       );
     }
@@ -160,6 +240,7 @@ class CalendarNavigation extends StatelessWidget {
           icon: Icons.redo_rounded,
           tooltip: 'Redo',
           onPressed: canRedo ? onRedo : null,
+          compact: isCompact,
         ),
       );
     }
@@ -173,11 +254,21 @@ class CalendarNavigation extends StatelessWidget {
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
+    bool compact = false,
   }) {
     final shortcut =
         icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
+    final String message = '$tooltip ($shortcut)';
+    if (compact) {
+      return _compactNavButton(
+        icon: icon,
+        tooltip: message,
+        onPressed: onPressed,
+        highlighted: false,
+      );
+    }
     return Tooltip(
-      message: '$tooltip ($shortcut)',
+      message: message,
       child: TaskSecondaryButton(
         label: tooltip,
         icon: icon,
@@ -188,16 +279,105 @@ class CalendarNavigation extends StatelessWidget {
       ),
     );
   }
+
+  Widget _compactNavButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+    required bool highlighted,
+  }) {
+    final Widget button = highlighted
+        ? ShadButton(
+            size: ShadButtonSize.sm,
+            backgroundColor: calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryHoverColor,
+            foregroundColor: Colors.white,
+            hoverForegroundColor: Colors.white,
+            onPressed: onPressed,
+            child: Icon(icon, size: 16),
+          )
+        : ShadButton.outline(
+            size: ShadButtonSize.sm,
+            onPressed: onPressed,
+            foregroundColor: calendarTitleColor,
+            hoverForegroundColor: calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+            child: Icon(icon, size: 16),
+          );
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: 44,
+        height: 40,
+        child: button,
+      ),
+    );
+  }
+
+  Widget _buildNavRow({
+    required List<Widget> navButtons,
+    required double spacing,
+  }) {
+    if (navButtons.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final children = <Widget>[];
+    for (var i = 0; i < navButtons.length; i++) {
+      children.add(navButtons[i]);
+      if (i < navButtons.length - 1) {
+        children.add(SizedBox(width: spacing));
+      }
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  Widget _buildTrailingRow({
+    required bool collapseDateText,
+    required bool isCompact,
+    required bool hasUndoRedo,
+    required Widget undoRedoGroup,
+  }) {
+    final double trailingGap = isCompact ? calendarGutterSm : calendarGutterMd;
+    final double maxDateLabelWidth =
+        isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
+
+    final children = <Widget>[
+      ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxDateLabelWidth),
+        child: _DateLabel(
+          state: state,
+          onDateSelected: onDateSelected,
+          collapseText: collapseDateText,
+        ),
+      ),
+    ];
+
+    if (hasUndoRedo) {
+      children
+        ..add(SizedBox(width: trailingGap))
+        ..add(undoRedoGroup);
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
 }
 
 class _DateLabel extends StatefulWidget {
   const _DateLabel({
     required this.state,
     required this.onDateSelected,
+    this.collapseText = false,
   });
 
   final CalendarState state;
   final void Function(DateTime date) onDateSelected;
+  final bool collapseText;
 
   @override
   State<_DateLabel> createState() => _DateLabelState();
@@ -244,6 +424,8 @@ class _DateLabelState extends State<_DateLabel> {
       CalendarView.month =>
         DateFormat.yMMMM().format(widget.state.selectedDate),
     };
+    final bool hideText =
+        widget.collapseText || MediaQuery.of(context).size.width < 420;
     return CompositedTransformTarget(
       link: _link,
       child: MouseRegion(
@@ -255,6 +437,10 @@ class _DateLabelState extends State<_DateLabel> {
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
             onTap: _toggleOverlay,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(
@@ -280,16 +466,18 @@ class _DateLabelState extends State<_DateLabel> {
                     size: 16,
                     color: calendarSubtitleColor,
                   ),
-                  const SizedBox(width: calendarGutterSm),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: calendarTitleColor,
-                      letterSpacing: 0.1,
+                  if (!hideText) ...[
+                    const SizedBox(width: calendarGutterSm),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: calendarTitleColor,
+                        letterSpacing: 0.1,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(width: calendarInsetLg),
                   Icon(
                     _overlayEntry == null
