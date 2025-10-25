@@ -161,12 +161,14 @@ class CalendarLayoutCalculator {
     required int zoomIndex,
     required bool isDayView,
     required double availableHeight,
+    bool allowDayViewZoom = false,
   }) {
     final CalendarZoomLevel zoom = zoomLevels[zoomIndex];
+    final bool useDayViewTheme = isDayView && !allowDayViewZoom;
     final double desiredHourHeight =
-        isDayView ? theme.dayViewHourHeight : zoom.hourHeight;
+        useDayViewTheme ? theme.dayViewHourHeight : zoom.hourHeight;
     final int subdivisions =
-        isDayView ? theme.dayViewSubdivisions : zoom.daySubdivisions;
+        useDayViewTheme ? theme.dayViewSubdivisions : zoom.daySubdivisions;
     final double baseSlotHeight = desiredHourHeight / subdivisions;
     // Legacy grid renders from 00:00 through 24:00 inclusive, resulting in 25
     // visible hour rows.

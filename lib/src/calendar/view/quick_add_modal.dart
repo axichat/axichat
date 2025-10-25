@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../common/ui/ui.dart';
+import '../bloc/base_calendar_bloc.dart';
 import '../models/calendar_task.dart';
+import '../utils/location_autocomplete.dart';
 import '../utils/responsive_helper.dart';
 import 'controllers/quick_add_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
+import 'widgets/location_inline_suggestion.dart';
+
+enum QuickAddModalSurface { dialog, bottomSheet }
 
 class QuickAddModal extends StatefulWidget {
   final DateTime? prefilledDateTime;
   final VoidCallback? onDismiss;
   final void Function(CalendarTask task) onTaskAdded;
+  final QuickAddModalSurface surface;
 
   const QuickAddModal({
     super.key,
     this.prefilledDateTime,
     this.onDismiss,
     required this.onTaskAdded,
+    this.surface = QuickAddModalSurface.dialog,
   });
 
   @override
@@ -64,7 +72,11 @@ class _QuickAddModalState extends State<QuickAddModal>
       curve: Curves.easeOutBack,
     ));
 
-    _animationController.forward();
+    if (widget.surface == QuickAddModalSurface.dialog) {
+      _animationController.forward();
+    } else {
+      _animationController.value = 1.0;
+    }
 
     final prefilled = widget.prefilledDateTime;
 
@@ -92,6 +104,16 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.surface == QuickAddModalSurface.bottomSheet) {
+      final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: _buildModalContent(isSheet: true),
+        ),
+      );
+    }
     return AnimatedBuilder(
       animation: _fadeAnimation,
       builder: (context, child) {
@@ -115,7 +137,7 @@ class _QuickAddModalState extends State<QuickAddModal>
                 builder: (context, child) {
                   return Transform.scale(
                     scale: _scaleAnimation.value,
-                    child: _buildModalContent(),
+                    child: _buildModalContent(isSheet: false),
                   );
                 },
               ),
@@ -126,25 +148,33 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
   }
 
-  Widget _buildModalContent() {
+  Widget _buildModalContent({required bool isSheet}) {
     final responsive = ResponsiveHelper.spec(context);
     final double maxWidth =
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
     final double maxHeight = responsive.quickAddMaxHeight;
-    return Container(
-      margin: responsive.modalMargin,
+    final locationHelper = _resolveLocationHelper(context);
+    final BorderRadius borderRadius = isSheet
+        ? const BorderRadius.vertical(top: Radius.circular(24))
+        : BorderRadius.circular(calendarBorderRadius);
+    final Color background = isSheet
+        ? Theme.of(context).colorScheme.surface
+        : calendarContainerColor;
+    final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
+    Widget shell = Container(
+      margin: isSheet ? EdgeInsets.zero : responsive.modalMargin,
       constraints: BoxConstraints(
-        maxWidth: maxWidth,
+        maxWidth: isSheet ? double.infinity : maxWidth,
         maxHeight: maxHeight,
       ),
       decoration: BoxDecoration(
-        color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        boxShadow: calendarMediumShadow,
+        color: background,
+        borderRadius: borderRadius,
+        boxShadow: boxShadow,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: borderRadius,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -158,11 +188,11 @@ class _QuickAddModalState extends State<QuickAddModal>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildTaskNameInput(),
+                    _buildTaskNameInput(locationHelper),
                     const SizedBox(height: calendarGutterMd),
                     _buildDescriptionInput(),
                     const SizedBox(height: calendarGutterMd),
-                    _buildLocationField(),
+                    _buildLocationField(locationHelper),
                     const SizedBox(height: calendarGutterMd),
                     _buildPriorityToggles(),
                     const TaskSectionDivider(
@@ -186,6 +216,13 @@ class _QuickAddModalState extends State<QuickAddModal>
         ),
       ),
     );
+    if (isSheet) {
+      return ClipRRect(
+        borderRadius: borderRadius,
+        child: shell,
+      );
+    }
+    return shell;
   }
 
   Widget _buildHeader() {
@@ -232,8 +269,12 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
   }
 
-  Widget _buildTaskNameInput() {
-    return Focus(
+  Widget _buildTaskNameInput(LocationAutocompleteHelper helper) {
+    const padding = EdgeInsets.symmetric(
+      horizontal: calendarGutterMd,
+      vertical: calendarGutterMd,
+    );
+    final field = Focus(
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter) {
@@ -252,7 +293,20 @@ class _QuickAddModalState extends State<QuickAddModal>
         borderRadius: calendarBorderRadius,
         focusBorderColor: calendarPrimaryColor,
         textCapitalization: TextCapitalization.sentences,
+        contentPadding: padding,
       ),
+    );
+
+    return LocationInlineSuggestion(
+      controller: _taskNameController,
+      helper: helper,
+      contentPadding: padding,
+      textStyle: const TextStyle(
+        fontSize: 14,
+        color: calendarTitleColor,
+      ),
+      suggestionColor: calendarSubtitleColor,
+      child: field,
     );
   }
 
@@ -281,14 +335,23 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
   }
 
-  Widget _buildLocationField() {
+  Widget _buildLocationField(LocationAutocompleteHelper helper) {
     return TaskLocationField(
       controller: _locationController,
       hintText: 'Location (optional)',
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
+      autocomplete: helper,
     );
+  }
+
+  LocationAutocompleteHelper _resolveLocationHelper(BuildContext context) {
+    final bloc = context.read<BaseCalendarBloc?>();
+    if (bloc == null) {
+      return LocationAutocompleteHelper.fromSeeds(const <String>[]);
+    }
+    return LocationAutocompleteHelper.fromState(bloc.state);
   }
 
   Widget _buildScheduleSection() {
@@ -446,7 +509,14 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Future<void> _dismissModal() async {
-    await _animationController.reverse();
+    if (widget.surface == QuickAddModalSurface.dialog) {
+      await _animationController.reverse();
+      if (mounted) {
+        widget.onDismiss?.call();
+        Navigator.of(context).pop();
+      }
+      return;
+    }
     if (mounted) {
       widget.onDismiss?.call();
       Navigator.of(context).pop();
@@ -460,6 +530,18 @@ Future<void> showQuickAddModal({
   DateTime? prefilledDateTime,
   required void Function(CalendarTask task) onTaskAdded,
 }) {
+  if (ResponsiveHelper.isCompact(context)) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => QuickAddModal(
+        surface: QuickAddModalSurface.bottomSheet,
+        prefilledDateTime: prefilledDateTime,
+        onTaskAdded: onTaskAdded,
+      ),
+    );
+  }
   return showDialog<void>(
     context: context,
     barrierDismissible: false,

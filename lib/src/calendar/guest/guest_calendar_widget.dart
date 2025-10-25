@@ -26,14 +26,46 @@ class GuestCalendarWidget extends StatefulWidget {
   State<GuestCalendarWidget> createState() => _GuestCalendarWidgetState();
 }
 
-class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
-  bool _sidebarVisible = true;
+class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
+    with TickerProviderStateMixin {
+  late final TabController _mobileTabController;
+  late final AnimationController _tasksTabPulseController;
+  late final Animation<double> _tasksTabPulse;
+  DateTime? _lastDragTabSwitch;
+
+  @override
+  void initState() {
+    super.initState();
+    _mobileTabController = TabController(length: 2, vsync: this);
+    _tasksTabPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _tasksTabPulse = CurvedAnimation(
+      parent: _tasksTabPulseController,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _mobileTabController.dispose();
+    _tasksTabPulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<GuestCalendarBloc, CalendarState>(
       listener: _handleStateChanges,
       builder: (context, state) {
+        final spec = ResponsiveHelper.spec(context);
+        final bool usesMobileLayout =
+            spec.sizeClass != CalendarSizeClass.expanded;
+        final bool highlightTasksTab = usesMobileLayout &&
+            state.isSelectionMode &&
+            _mobileTabController.index != 1;
+        _updateTasksTabPulse(highlightTasksTab);
         return CalendarKeyboardScope(
           autofocus: true,
           canUndo: state.canUndo,
@@ -61,8 +93,8 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
                     Expanded(
                       child: ResponsiveHelper.layoutBuilder(
                         context,
-                        mobile: _buildMobileLayout(state),
-                        tablet: _buildTabletLayout(state),
+                        mobile: _buildMobileLayout(state, highlightTasksTab),
+                        tablet: _buildTabletLayout(state, highlightTasksTab),
                         desktop: _buildDesktopLayout(state),
                       ),
                     ),
@@ -159,129 +191,100 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     );
   }
 
-  Widget _buildMobileLayout(CalendarState state) {
+  void _updateTasksTabPulse(bool shouldPulse) {
+    if (shouldPulse) {
+      if (!_tasksTabPulseController.isAnimating) {
+        _tasksTabPulseController.repeat(reverse: true);
+      }
+    } else {
+      if (_tasksTabPulseController.isAnimating ||
+          _tasksTabPulseController.value != 0) {
+        _tasksTabPulseController.stop();
+        _tasksTabPulseController.reset();
+      }
+    }
+  }
+
+  Widget _buildMobileLayout(
+    CalendarState state,
+    bool highlightTasksTab,
+  ) {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets contentPadding = responsive.contentPadding;
-    return Column(
-      children: [
-        // Navigation bar at the top
-        Padding(
-          padding: contentPadding,
-          child: CalendarNavigation(
-            state: state,
-            onDateSelected: (date) => context.read<GuestCalendarBloc>().add(
-                  CalendarEvent.dateSelected(date: date),
-                ),
-            onViewChanged: (view) => context.read<GuestCalendarBloc>().add(
-                  CalendarEvent.viewChanged(view: view),
-                ),
-            onErrorCleared: () => context.read<GuestCalendarBloc>().add(
-                  const CalendarEvent.errorCleared(),
-                ),
-            onUndo: () => context
-                .read<GuestCalendarBloc>()
-                .add(const CalendarEvent.undoRequested()),
-            onRedo: () => context
-                .read<GuestCalendarBloc>()
-                .add(const CalendarEvent.redoRequested()),
-            canUndo: state.canUndo,
-            canRedo: state.canRedo,
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _mobileTabController,
+            builder: (context, _) {
+              final bool showNavigation = _mobileTabController.index == 0;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showNavigation)
+                    Padding(
+                      padding: contentPadding,
+                      child: CalendarNavigation(
+                        state: state,
+                        onDateSelected: (date) =>
+                            context.read<GuestCalendarBloc>().add(
+                                  CalendarEvent.dateSelected(date: date),
+                                ),
+                        onViewChanged: (view) =>
+                            context.read<GuestCalendarBloc>().add(
+                                  CalendarEvent.viewChanged(view: view),
+                                ),
+                        onErrorCleared: () =>
+                            context.read<GuestCalendarBloc>().add(
+                                  const CalendarEvent.errorCleared(),
+                                ),
+                        onUndo: () => context
+                            .read<GuestCalendarBloc>()
+                            .add(const CalendarEvent.undoRequested()),
+                        onRedo: () => context
+                            .read<GuestCalendarBloc>()
+                            .add(const CalendarEvent.redoRequested()),
+                        canUndo: state.canUndo,
+                        canRedo: state.canRedo,
+                      ),
+                    ),
+                  if (state.error != null) _buildErrorBanner(state),
+                ],
+              );
+            },
           ),
-        ),
-
-        // Error display
-        if (state.error != null) _buildErrorBanner(state),
-
-        // Collapsible sidebar drawer or overlay
-        if (_sidebarVisible) _buildSidebarWithProvider(height: 200),
-
-        // Toggle button
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: contentPadding.left,
-            vertical: contentPadding.top / 1.5,
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: () =>
-                    setState(() => _sidebarVisible = !_sidebarVisible),
-                icon: Icon(
-                    _sidebarVisible ? Icons.expand_less : Icons.expand_more),
-                style: IconButton.styleFrom(
-                  backgroundColor: calendarContainerColor,
-                  foregroundColor: calendarTitleColor,
+          Expanded(
+            child: Stack(
+              children: [
+                TabBarView(
+                  controller: _mobileTabController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildCalendarGridWithHandlers(state),
+                    _buildSidebarWithProvider(),
+                  ],
                 ),
-              ),
-              Text(
-                _sidebarVisible ? 'Hide Tasks' : 'Show Tasks',
-                style: calendarBodyTextStyle.copyWith(
-                  color: calendarSubtitleColor,
-                ),
-              ),
-            ],
+                _buildEdgeDragTargets(),
+              ],
+            ),
           ),
-        ),
-
-        // Calendar grid
-        Expanded(
-          child: _buildCalendarGridWithHandlers(state),
-        ),
-      ],
+          Padding(
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+            child: _buildMobileTabBar(
+              context,
+              highlightTasksTab: highlightTasksTab,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildTabletLayout(CalendarState state) {
-    final responsive = ResponsiveHelper.spec(context);
-    final EdgeInsets contentPadding = responsive.contentPadding;
-    return Row(
-      children: [
-        // Resizable sidebar - extends full height
-        _buildSidebarWithProvider(),
-
-        // Main content area with navigation and calendar
-        Expanded(
-          child: Column(
-            children: [
-              // Navigation bar - only spans over calendar area
-              Padding(
-                padding: contentPadding,
-                child: CalendarNavigation(
-                  state: state,
-                  onDateSelected: (date) =>
-                      context.read<GuestCalendarBloc>().add(
-                            CalendarEvent.dateSelected(date: date),
-                          ),
-                  onViewChanged: (view) =>
-                      context.read<GuestCalendarBloc>().add(
-                            CalendarEvent.viewChanged(view: view),
-                          ),
-                  onErrorCleared: () => context.read<GuestCalendarBloc>().add(
-                        const CalendarEvent.errorCleared(),
-                      ),
-                  onUndo: () => context
-                      .read<GuestCalendarBloc>()
-                      .add(const CalendarEvent.undoRequested()),
-                  onRedo: () => context
-                      .read<GuestCalendarBloc>()
-                      .add(const CalendarEvent.redoRequested()),
-                  canUndo: state.canUndo,
-                  canRedo: state.canRedo,
-                ),
-              ),
-
-              // Error display
-              if (state.error != null) _buildErrorBanner(state),
-
-              // Calendar grid with horizontal scroll
-              Expanded(
-                child: _buildCalendarGridWithHandlers(state),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+  Widget _buildTabletLayout(CalendarState state, bool highlightTasksTab) {
+    return _buildMobileLayout(state, highlightTasksTab);
   }
 
   Widget _buildDesktopLayout(CalendarState state) {
@@ -337,6 +340,176 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
     );
   }
 
+  Widget _buildMobileTabBar(
+    BuildContext context, {
+    required bool highlightTasksTab,
+  }) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tabBar = TabBar(
+          controller: _mobileTabController,
+          dividerHeight: 0,
+          isScrollable: constraints.maxWidth < 200,
+          tabAlignment: constraints.maxWidth < 200
+              ? TabAlignment.center
+              : TabAlignment.fill,
+          tabs: [
+            const Tab(text: 'Schedule'),
+            Tab(child: _buildTasksTabLabel(highlightTasksTab)),
+          ],
+        );
+        return Material(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Stack(
+              children: [
+                tabBar,
+                Positioned.fill(
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildTabDragTarget(0)),
+                      Expanded(child: _buildTabDragTarget(1)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabDragTarget(int index) {
+    return DragTarget<CalendarTask>(
+      hitTestBehavior: HitTestBehavior.translucent,
+      onWillAcceptWithDetails: (_) {
+        _switchMobileTab(index, fromDrag: true);
+        return false;
+      },
+      builder: (context, candidateData, rejectedData) =>
+          const SizedBox.expand(),
+    );
+  }
+
+  Widget _buildTasksTabLabel(bool highlight) {
+    if (!highlight) {
+      return const Text('Tasks');
+    }
+    return AnimatedBuilder(
+      animation: _tasksTabPulse,
+      builder: (context, _) {
+        final double t = _tasksTabPulse.value;
+        final double scale = 0.85 + (0.25 * t);
+        final Color badgeColor = Color.lerp(
+          calendarPrimaryColor.withValues(alpha: 0.55),
+          calendarPrimaryColor,
+          t,
+        )!;
+        final bool isRtl = Directionality.of(context) == TextDirection.rtl;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Text(
+                'Tasks',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Positioned(
+              top: -6,
+              right: isRtl ? null : -14,
+              left: isRtl ? -14 : null,
+              child: Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        badgeColor.withValues(alpha: 0.9),
+                        badgeColor,
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: badgeColor.withValues(alpha: 0.45),
+                        blurRadius: 8 + (4 * t),
+                        spreadRadius: 1.5 + t,
+                      ),
+                    ],
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.25 + (0.15 * t)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEdgeDragTargets() {
+    const double zoneWidth = 32;
+    return Positioned.fill(
+      child: Row(
+        children: [
+          SizedBox(
+            width: zoneWidth,
+            child: DragTarget<CalendarTask>(
+              hitTestBehavior: HitTestBehavior.translucent,
+              onWillAcceptWithDetails: (_) {
+                _switchMobileTab(0, fromDrag: true);
+                return false;
+              },
+              builder: (context, candidateData, rejectedData) =>
+                  const SizedBox.expand(),
+            ),
+          ),
+          const Expanded(child: SizedBox.shrink()),
+          SizedBox(
+            width: zoneWidth,
+            child: DragTarget<CalendarTask>(
+              hitTestBehavior: HitTestBehavior.translucent,
+              onWillAcceptWithDetails: (_) {
+                _switchMobileTab(1, fromDrag: true);
+                return false;
+              },
+              builder: (context, candidateData, rejectedData) =>
+                  const SizedBox.expand(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _switchMobileTab(int index, {bool fromDrag = false}) {
+    if (_mobileTabController.index == index) {
+      return;
+    }
+    if (fromDrag) {
+      final DateTime now = DateTime.now();
+      if (_lastDragTabSwitch != null &&
+          now.difference(_lastDragTabSwitch!) <
+              const Duration(milliseconds: 400)) {
+        return;
+      }
+      _lastDragTabSwitch = now;
+    }
+    _mobileTabController.animateTo(index);
+  }
+
   Widget _buildSidebarWithProvider({double? height}) {
     final sidebar = BlocProvider<BaseCalendarBloc>.value(
       value: context.read<GuestCalendarBloc>(),
@@ -378,21 +551,19 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget> {
   }
 
   void _showQuickAddModal(Offset position, {required DateTime prefilledTime}) {
-    showDialog(
+    showQuickAddModal(
       context: context,
-      builder: (context) => QuickAddModal(
-        prefilledDateTime: prefilledTime,
-        onTaskAdded: (task) => context.read<GuestCalendarBloc>().add(
-              CalendarEvent.taskAdded(
-                title: task.title,
-                scheduledTime: task.scheduledTime,
-                description: task.description,
-                duration: task.duration,
-                priority: task.priority ?? TaskPriority.none,
-                recurrence: task.recurrence,
-              ),
+      prefilledDateTime: prefilledTime,
+      onTaskAdded: (task) => context.read<GuestCalendarBloc>().add(
+            CalendarEvent.taskAdded(
+              title: task.title,
+              scheduledTime: task.scheduledTime,
+              description: task.description,
+              duration: task.duration,
+              priority: task.priority ?? TaskPriority.none,
+              recurrence: task.recurrence,
             ),
-      ),
+          ),
     );
   }
 }
