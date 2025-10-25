@@ -7,8 +7,8 @@ import '../bloc/calendar_state.dart';
 import '../utils/responsive_helper.dart';
 import 'widgets/task_form_section.dart';
 
-const double _compactDateLabelCollapseWidth = 460;
-const double _compactDateLabelMaxWidth = 220;
+const double _compactDateLabelCollapseWidth = 560;
+const double _compactDateLabelMaxWidth = 170;
 const double _defaultDateLabelMaxWidth = 320;
 
 class CalendarNavigation extends StatelessWidget {
@@ -40,10 +40,10 @@ class CalendarNavigation extends StatelessWidget {
     final spec = ResponsiveHelper.spec(context);
     final double horizontalPadding = spec.gridHorizontalPadding;
     final bool isCompact = ResponsiveHelper.isCompact(context);
-    final bool showBackToWeek =
-        !isCompact && state.viewMode == CalendarView.day;
+    final CalendarView viewMode = state.viewMode;
+    final bool showBackToWeek = !isCompact && viewMode == CalendarView.day;
     final bool hasUndoRedo = onUndo != null || onRedo != null;
-    final String unitLabel = _currentUnitLabel();
+    final String unitLabel = _currentUnitLabel(viewMode);
     final List<Widget> navButtons = [
       _navButton(
         label: '← Previous',
@@ -155,8 +155,8 @@ class CalendarNavigation extends StatelessWidget {
     }
   }
 
-  String _currentUnitLabel() {
-    switch (state.viewMode) {
+  String _currentUnitLabel(CalendarView viewMode) {
+    switch (viewMode) {
       case CalendarView.day:
         return 'day';
       case CalendarView.week:

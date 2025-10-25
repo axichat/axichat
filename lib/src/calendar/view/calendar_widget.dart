@@ -159,7 +159,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
     }
   }
 
-  Widget _buildMobileLayout(CalendarState state, bool highlightTasksTab) {
+  Widget _buildMobileLayout(
+    CalendarState state,
+    bool highlightTasksTab,
+  ) {
     return SafeArea(
       top: true,
       bottom: false,
