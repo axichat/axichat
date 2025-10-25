@@ -126,6 +126,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   int? _lastHandledFocusToken;
   bool _isCompactActive = false;
   int? _preCompactZoomIndex;
+  CalendarView? _lastNonDayView;
+  bool _waitingForDayView = false;
+  CalendarView? _pendingRestoreView;
 
   bool get _shouldFreezeWidth =>
       !_taskInteractionController.dragHasMoved && _isWidthDebounceActive;
@@ -806,6 +809,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didUpdateWidget(covariant CalendarGrid<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_waitingForDayView && widget.state.viewMode == CalendarView.day) {
+      _waitingForDayView = false;
+    }
+    if (_pendingRestoreView != null &&
+        widget.state.viewMode == _pendingRestoreView) {
+      _pendingRestoreView = null;
+    }
+    if (!_isCompactActive && widget.state.viewMode != CalendarView.day) {
+      _lastNonDayView = null;
+    }
     // Detect view mode changes and animate transitions
     if (oldWidget.state.viewMode != widget.state.viewMode) {
       _viewTransitionController.reset();
@@ -936,15 +949,33 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _updateCompactState(BuildContext context) {
-    final bool isCompact = ResponsiveHelper.isCompact(context);
-    if (isCompact == _isCompactActive) {
-      return;
+    final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
+    final bool isCompactWidth = spec.sizeClass == CalendarSizeClass.compact;
+    if (_isCompactActive != isCompactWidth) {
+      _isCompactActive = isCompactWidth;
+      if (_isCompactActive) {
+        _applyCompactZoomPreset();
+      } else {
+        _restoreZoomPreset();
+      }
     }
-    _isCompactActive = isCompact;
-    if (isCompact) {
-      _applyCompactZoomPreset();
+
+    if (_isCompactActive) {
+      if (widget.state.viewMode != CalendarView.day) {
+        _lastNonDayView ??= widget.state.viewMode;
+        if (!_waitingForDayView) {
+          _waitingForDayView = true;
+          widget.onViewChanged(CalendarView.day);
+        }
+      }
     } else {
-      _restoreZoomPreset();
+      if (_pendingRestoreView == null &&
+          _lastNonDayView != null &&
+          widget.state.viewMode == CalendarView.day) {
+        _pendingRestoreView = _lastNonDayView;
+        _lastNonDayView = null;
+        widget.onViewChanged(_pendingRestoreView!);
+      }
     }
   }
 
