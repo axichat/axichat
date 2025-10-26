@@ -84,11 +84,6 @@ class _QuickAddModalState extends State<QuickAddModal>
       initialStart: prefilled,
       initialEnd: prefilled?.add(const Duration(hours: 1)),
     );
-
-    // Auto-focus the task name input
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _taskNameFocusNode.requestFocus();
-    });
   }
 
   @override
@@ -288,6 +283,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       child: TaskTextField(
         controller: _taskNameController,
         focusNode: _taskNameFocusNode,
+        autofocus: true,
         labelText: 'Task name *',
         hintText: 'Task name',
         borderRadius: calendarBorderRadius,
@@ -509,18 +505,32 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Future<void> _dismissModal() async {
+    Future<void> popSelfIfPossible() async {
+      if (!mounted) {
+        return;
+      }
+      final navigator = Navigator.maybeOf(context);
+      if (navigator == null) {
+        return;
+      }
+      await navigator.maybePop();
+    }
+
     if (widget.surface == QuickAddModalSurface.dialog) {
       await _animationController.reverse();
-      if (mounted) {
-        widget.onDismiss?.call();
-        Navigator.of(context).pop();
-      }
+    }
+
+    if (!mounted) {
       return;
     }
-    if (mounted) {
-      widget.onDismiss?.call();
-      Navigator.of(context).pop();
+
+    widget.onDismiss?.call();
+
+    if (!mounted) {
+      return;
     }
+
+    await popSelfIfPossible();
   }
 }
 

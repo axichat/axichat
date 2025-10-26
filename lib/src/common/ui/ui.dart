@@ -272,6 +272,12 @@ const calendarTimeLabelTextStyle = TextStyle(
   color: calendarTimeLabelColor,
 );
 
+const calendarMinorTimeLabelTextStyle = TextStyle(
+  fontSize: 9,
+  fontWeight: FontWeight.w500,
+  color: calendarTimeLabelColor,
+);
+
 // Additional typography hierarchy
 const calendarHeaderTextStyle = TextStyle(
   fontSize: 16,

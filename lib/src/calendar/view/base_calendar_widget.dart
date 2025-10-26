@@ -31,22 +31,20 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
     return BlocConsumer<T, CalendarState>(
       listener: (context, state) {
         if (state.error != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) {
-              final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-              if (scaffoldMessenger != null) {
-                ErrorSnackBar.show(
-                  context,
-                  state.error!,
-                  onRetry: () {
-                    if (context.mounted) {
-                      context.read<T>().add(const CalendarEvent.errorCleared());
-                    }
-                  },
-                );
-              }
+          if (context.mounted) {
+            final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+            if (scaffoldMessenger != null) {
+              ErrorSnackBar.show(
+                context,
+                state.error!,
+                onRetry: () {
+                  if (context.mounted) {
+                    context.read<T>().add(const CalendarEvent.errorCleared());
+                  }
+                },
+              );
             }
-          });
+          }
         }
 
         if (!widget.isGuestMode &&
@@ -55,15 +53,13 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
             state.error == null) {
           if (state.lastSyncTime!.difference(DateTime.now()).abs().inSeconds <
               5) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) {
-                final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-                if (scaffoldMessenger != null) {
-                  FeedbackSystem.showSuccess(
-                      context, 'Calendar synced successfully!');
-                }
+            if (context.mounted) {
+              final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+              if (scaffoldMessenger != null) {
+                FeedbackSystem.showSuccess(
+                    context, 'Calendar synced successfully!');
               }
-            });
+            }
           }
         }
       },

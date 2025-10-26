@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -18,12 +19,16 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_draft_controller.dart';
+import 'widgets/calendar_drag_interop.dart';
+import 'widgets/calendar_drag_target.dart';
+import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
+import 'feedback_system.dart';
 
 class TaskSidebar extends StatefulWidget {
   const TaskSidebar({super.key});
@@ -924,14 +929,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       if (_selectionTitleDirty ||
           _selectionDescriptionDirty ||
           _selectionLocationDirty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          setState(() {
-            _selectionTitleDirty = false;
-            _selectionDescriptionDirty = false;
-            _selectionLocationDirty = false;
-          });
-        });
+        _selectionTitleDirty = false;
+        _selectionDescriptionDirty = false;
+        _selectionLocationDirty = false;
       }
     }
 
@@ -1600,9 +1600,9 @@ class _TaskSidebarState extends State<TaskSidebar>
     String? emptyHint,
     required CalendarSidebarState uiState,
   }) {
-    return DragTarget<CalendarTask>(
-      onAcceptWithDetails: (details) {
-        final CalendarTask dropped = details.data;
+    return CalendarDragTargetRegion(
+      onDrop: (details) {
+        final CalendarTask dropped = details.task;
         final CalendarTask unscheduled = dropped.copyWith(
           scheduledTime: null,
           duration: null,
@@ -1616,8 +1616,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               ),
             );
       },
-      builder: (context, candidateData, rejectedData) {
-        final isHovering = candidateData.isNotEmpty;
+      builder: (context, isHovering, _) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
@@ -1740,31 +1739,35 @@ class _TaskSidebarState extends State<TaskSidebar>
     CalendarTask task,
     CalendarSidebarState uiState,
   ) {
-    return Draggable<CalendarTask>(
-      data: task,
-      feedback: Material(
-        color: Colors.transparent,
-        child: Opacity(
-          opacity: 0.7,
-          child: SizedBox(
-            width: uiState.width - 32,
-            child: _buildTaskTile(
-              task,
-              uiState: uiState,
-              enableInteraction: false,
-            ),
+    final Widget baseTile = _buildTaskTile(task, uiState: uiState);
+    final Widget fadedTile = Opacity(
+      opacity: 0.3,
+      child: _buildTaskTile(
+        task,
+        uiState: uiState,
+        enableInteraction: false,
+      ),
+    );
+    final Widget feedback = Material(
+      color: Colors.transparent,
+      child: Opacity(
+        opacity: 0.8,
+        child: SizedBox(
+          width: uiState.width - 32,
+          child: _buildTaskTile(
+            task,
+            uiState: uiState,
+            enableInteraction: false,
           ),
         ),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.3,
-        child: _buildTaskTile(
-          task,
-          uiState: uiState,
-          enableInteraction: false,
-        ),
-      ),
-      child: _buildTaskTile(task, uiState: uiState),
+    );
+
+    return CalendarSidebarDraggable(
+      task: task,
+      child: baseTile,
+      childWhenDragging: fadedTile,
+      feedback: feedback,
     );
   }
 
@@ -2032,35 +2035,42 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
+  void _copyTaskDetails(CalendarTask task) {
+    final buffer = StringBuffer();
+    if (task.title.trim().isNotEmpty) {
+      buffer.writeln(task.title.trim());
+    }
+    final description = task.description?.trim();
+    if (description != null && description.isNotEmpty) {
+      buffer.writeln(description);
+    }
+    final location = task.location?.trim();
+    if (location != null && location.isNotEmpty) {
+      buffer.writeln('Location: $location');
+    }
+    final deadline = task.deadline;
+    if (deadline != null) {
+      buffer.writeln(
+        'Due: ${TimeFormatter.formatFriendlyDateTime(deadline)}',
+      );
+    }
+    final payload = buffer.toString().trim().isEmpty
+        ? task.title.trim()
+        : buffer.toString().trim();
+    Clipboard.setData(ClipboardData(text: payload));
+    if (mounted) {
+      FeedbackSystem.showSuccess(context, 'Task copied');
+    }
+  }
+
   List<Widget> _buildSidebarContextMenuItems(CalendarTask task) {
     final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
-    final bool useSheetMenus = _shouldUseSheetMenus(context);
-    final bool isCompleted = task.isCompleted;
 
     return [
       ShadContextMenuItem(
-        leading: const Icon(Icons.edit_outlined),
-        onPressed: () {
-          if (useSheetMenus) {
-            _showTaskEditSheet(context, task);
-          } else {
-            _openTaskPopover(task.id);
-          }
-        },
-        child: const Text('Edit Task'),
-      ),
-      ShadContextMenuItem(
-        leading: Icon(
-          isCompleted ? Icons.undo_rounded : Icons.check_circle_outline,
-        ),
-        onPressed: () {
-          final CalendarTask updated = task.copyWith(
-            isCompleted: !isCompleted,
-            modifiedAt: DateTime.now(),
-          );
-          bloc.add(CalendarEvent.taskUpdated(task: updated));
-        },
-        child: Text(isCompleted ? 'Mark as active' : 'Mark as done'),
+        leading: const Icon(Icons.copy_outlined),
+        onPressed: () => _copyTaskDetails(task),
+        child: const Text('Copy Task'),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.delete_outline),

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:ui' show Rect;
+import 'dart:ui' show Offset, Rect, Size;
 
 import 'package:flutter/foundation.dart';
 
@@ -107,12 +107,14 @@ class TaskInteractionController extends ChangeNotifier {
           ),
         ),
         hoveredTaskId = ValueNotifier<String?>(null),
+        dropHoverTaskId = ValueNotifier<String?>(null),
         resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null);
 
   final ValueNotifier<DragPreview?> preview;
   final ValueNotifier<TaskClipboardState> clipboard;
   final ValueNotifier<DragFeedbackHint> feedbackHint;
   final ValueNotifier<String?> hoveredTaskId;
+  final ValueNotifier<String?> dropHoverTaskId;
   final ValueNotifier<TaskResizeInteraction?> resizeInteraction;
 
   CalendarTask? _draggingTaskSnapshot;
@@ -132,6 +134,7 @@ class TaskInteractionController extends ChangeNotifier {
   double? dragAnchorDx;
   double dragPointerNormalized = 0.5;
   double? dragPointerGlobalX;
+  double? dragPointerGlobalY;
   bool dragHasMoved = false;
 
   Timer? _dragWidthDebounce;
@@ -152,6 +155,7 @@ class TaskInteractionController extends ChangeNotifier {
   CalendarTask? get clipboardTemplate => clipboard.value.template;
   DateTime? get clipboardPasteSlot => clipboard.value.pasteSlot;
   String? get currentHoveredTaskId => hoveredTaskId.value;
+  String? get currentDropHoverTaskId => dropHoverTaskId.value;
   TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
 
   void setClipboardTemplate(CalendarTask template) {
@@ -187,6 +191,13 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     hoveredTaskId.value = null;
+  }
+
+  void setDropHoverTaskId(String? taskId) {
+    if (dropHoverTaskId.value == taskId) {
+      return;
+    }
+    dropHoverTaskId.value = taskId;
   }
 
   void beginResizeInteraction({
@@ -236,7 +247,7 @@ class TaskInteractionController extends ChangeNotifier {
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
-    dragPointerOffsetFromTop = null;
+    setDragPointerOffsetFromTop(null, notify: false);
     dragStartGlobalTop = bounds.top;
     draggingTaskHeight = bounds.height;
     dragStartGlobalLeft = pointerGlobalX - (bounds.width / 2.0);
@@ -245,7 +256,13 @@ class TaskInteractionController extends ChangeNotifier {
     dragInitialWidth = bounds.width;
     dragAnchorDx = bounds.width * pointerNormalized;
     dragPointerNormalized = pointerNormalized;
-    dragPointerGlobalX = pointerGlobalX;
+    updateDragPointerGlobalPosition(
+      Offset(
+        pointerGlobalX,
+        bounds.top + ((dragPointerOffsetFromTop ?? (bounds.height / 2))),
+      ),
+      notify: false,
+    );
     dragHasMoved = false;
     _dragOriginSlot = originSlot;
     _cancelPendingWidthUpdates();
@@ -258,7 +275,7 @@ class TaskInteractionController extends ChangeNotifier {
     _draggingTaskSnapshot = null;
     _dragStartScheduledTime = null;
     _dragOriginSlot = null;
-    dragPointerOffsetFromTop = null;
+    setDragPointerOffsetFromTop(null, notify: false);
     dragStartGlobalTop = null;
     draggingTaskHeight = null;
     dragStartGlobalLeft = null;
@@ -267,6 +284,7 @@ class TaskInteractionController extends ChangeNotifier {
     dragInitialWidth = null;
     dragAnchorDx = null;
     dragPointerGlobalX = null;
+    dragPointerGlobalY = null;
     dragPointerNormalized = 0.5;
     dragHasMoved = false;
     _pendingAnchorMinutes = null;
@@ -308,8 +326,64 @@ class TaskInteractionController extends ChangeNotifier {
     dragPointerNormalized = normalized;
   }
 
-  void setDragPointerGlobalX(double value) {
-    dragPointerGlobalX = value;
+  void setDragPointerOffsetFromTop(
+    double? value, {
+    bool notify = true,
+  }) {
+    if (dragPointerOffsetFromTop == value) {
+      return;
+    }
+    dragPointerOffsetFromTop = value;
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
+  void updateDragPointerGlobalPosition(
+    Offset globalPosition, {
+    bool notify = true,
+  }) {
+    final double dx = globalPosition.dx;
+    final double dy = globalPosition.dy;
+    final bool changed = dragPointerGlobalX != dx || dragPointerGlobalY != dy;
+    dragPointerGlobalX = dx;
+    dragPointerGlobalY = dy;
+    if (notify && changed) {
+      notifyListeners();
+    }
+  }
+
+  void beginExternalDrag({
+    required CalendarTask task,
+    required Offset pointerOffset,
+    required Size? feedbackSize,
+    required Offset globalPosition,
+  }) {
+    if (_draggingTaskId == task.id) {
+      return;
+    }
+    _draggingTaskId = task.id;
+    _draggingTaskBaseId = task.baseId;
+    _draggingTaskSnapshot = task;
+    _dragStartScheduledTime = task.scheduledTime;
+    setDragPointerOffsetFromTop(pointerOffset.dy, notify: false);
+    dragStartGlobalTop = globalPosition.dy - pointerOffset.dy;
+    draggingTaskHeight = feedbackSize?.height;
+    dragStartGlobalLeft = globalPosition.dx - pointerOffset.dx;
+    draggingTaskWidth = feedbackSize?.width;
+    activeDragWidth = feedbackSize?.width;
+    dragInitialWidth = feedbackSize?.width;
+    dragAnchorDx = pointerOffset.dx;
+    dragPointerNormalized = (feedbackSize == null || feedbackSize.width == 0)
+        ? 0.5
+        : (pointerOffset.dx / feedbackSize.width).clamp(0.0, 1.0);
+    updateDragPointerGlobalPosition(globalPosition, notify: false);
+    dragHasMoved = false;
+    notifyListeners();
+  }
+
+  void updateExternalDragPosition(Offset globalPosition) {
+    updateDragPointerGlobalPosition(globalPosition);
   }
 
   void markDragMoved() {
@@ -395,6 +469,7 @@ class TaskInteractionController extends ChangeNotifier {
     clipboard.dispose();
     feedbackHint.dispose();
     hoveredTaskId.dispose();
+    dropHoverTaskId.dispose();
     resizeInteraction.dispose();
     super.dispose();
   }

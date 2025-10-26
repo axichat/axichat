@@ -8,6 +8,21 @@ import '../../utils/time_formatter.dart';
 
 typedef DeadlineChanged = void Function(DateTime? value);
 
+class _AttachAwareScrollController extends ScrollController {
+  _AttachAwareScrollController({
+    required VoidCallback onAttach,
+    super.initialScrollOffset = 0,
+  }) : _onAttach = onAttach;
+
+  final VoidCallback _onAttach;
+
+  @override
+  void attach(ScrollPosition position) {
+    super.attach(position);
+    _onAttach();
+  }
+}
+
 class DeadlinePickerField extends StatefulWidget {
   const DeadlinePickerField({
     super.key,
@@ -90,8 +105,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   DateTime? _currentValue;
   DateTime? _initialValue;
   late DateTime _visibleMonth;
-  late ScrollController _hourScrollController;
-  late ScrollController _minuteScrollController;
+  late final ScrollController _hourScrollController;
+  late final ScrollController _minuteScrollController;
+  DateTime? _pendingTimeJump;
   DateTime? _minDate;
   DateTime? _maxDate;
 
@@ -142,11 +158,13 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     _visibleMonth = _monthStart(base);
     _minDate = _normalizeMinDate(widget.minDate);
     _maxDate = _normalizeMaxDate(widget.maxDate);
-    _hourScrollController = ScrollController(
+    _hourScrollController = _AttachAwareScrollController(
       initialScrollOffset: _hourOffset(base.hour),
+      onAttach: _handleTimeListAttached,
     );
-    _minuteScrollController = ScrollController(
+    _minuteScrollController = _AttachAwareScrollController(
       initialScrollOffset: _minuteOffset(_roundToFive(base.minute)),
+      onAttach: _handleTimeListAttached,
     );
     _ensureVisibleMonthInRange();
   }
@@ -1154,25 +1172,41 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   void _jumpToCurrent(DateTime reference) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_hourScrollController.hasClients) {
-        final target =
-            _clampedOffset(_hourScrollController, _hourOffset(reference.hour));
-        if ((_hourScrollController.offset - target).abs() > 0.5) {
-          _hourScrollController.jumpTo(target);
-        }
-      }
-      if (_minuteScrollController.hasClients) {
-        final target = _clampedOffset(
-          _minuteScrollController,
-          _minuteOffset(_roundToFive(reference.minute)),
-        );
-        if ((_minuteScrollController.offset - target).abs() > 0.5) {
-          _minuteScrollController.jumpTo(target);
-        }
-      }
-    });
+    if (_applyTimeJump(reference)) {
+      _pendingTimeJump = null;
+    } else {
+      _pendingTimeJump = reference;
+    }
+  }
+
+  void _handleTimeListAttached() {
+    if (_pendingTimeJump == null) {
+      return;
+    }
+    if (_applyTimeJump(_pendingTimeJump!)) {
+      _pendingTimeJump = null;
+    }
+  }
+
+  bool _applyTimeJump(DateTime reference) {
+    if (!_hourScrollController.hasClients ||
+        !_minuteScrollController.hasClients) {
+      return false;
+    }
+    final double hourTarget =
+        _clampedOffset(_hourScrollController, _hourOffset(reference.hour));
+    if ((_hourScrollController.offset - hourTarget).abs() > 0.5) {
+      _hourScrollController.jumpTo(hourTarget);
+    }
+
+    final double minuteTarget = _clampedOffset(
+      _minuteScrollController,
+      _minuteOffset(_roundToFive(reference.minute)),
+    );
+    if ((_minuteScrollController.offset - minuteTarget).abs() > 0.5) {
+      _minuteScrollController.jumpTo(minuteTarget);
+    }
+    return true;
   }
 }
 

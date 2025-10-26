@@ -100,24 +100,18 @@ class _CalendarWidgetState extends State<CalendarWidget>
 
   void _handleStateChanges(BuildContext context, CalendarState state) {
     // Handle errors
-    if (state.error != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          FeedbackSystem.showError(context, state.error!);
-        }
-      });
+    if (state.error != null && mounted) {
+      FeedbackSystem.showError(context, state.error!);
     }
 
     // Handle sync success
     if (state.lastSyncTime != null &&
         state.lastSyncTime != _lastSyncToastTime &&
         DateTime.now().difference(state.lastSyncTime!).inSeconds < 3) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _lastSyncToastTime = state.lastSyncTime;
-          FeedbackSystem.showSuccess(context, 'Calendar synced successfully!');
-        }
-      });
+      if (mounted) {
+        _lastSyncToastTime = state.lastSyncTime;
+        FeedbackSystem.showSuccess(context, 'Calendar synced successfully!');
+      }
     }
   }
 

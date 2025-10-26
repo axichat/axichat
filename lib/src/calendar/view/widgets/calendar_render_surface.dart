@@ -1,0 +1,1657 @@
+import 'dart:math' as math;
+
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
+
+import '../../../common/ui/ui.dart';
+import '../../models/calendar_task.dart';
+import '../controllers/task_interaction_controller.dart';
+import '../layout/calendar_layout.dart';
+import 'calendar_drag_interop.dart';
+import 'calendar_task_geometry.dart';
+import 'calendar_task_surface.dart';
+
+/// Controller that exposes geometry computed by [RenderCalendarSurface].
+class CalendarSurfaceController {
+  RenderCalendarSurface? _renderObject;
+  final List<VoidCallback> _geometryListeners = <VoidCallback>[];
+
+  void _attach(RenderCalendarSurface renderObject) {
+    _renderObject = renderObject;
+  }
+
+  void _detach(RenderCalendarSurface renderObject) {
+    if (_renderObject == renderObject) {
+      _renderObject = null;
+    }
+  }
+
+  void addGeometryListener(VoidCallback listener) {
+    _geometryListeners.add(listener);
+  }
+
+  void removeGeometryListener(VoidCallback listener) {
+    _geometryListeners.remove(listener);
+  }
+
+  void _notifyGeometryChanged() {
+    if (_geometryListeners.isEmpty) {
+      return;
+    }
+    final callbacks = List<VoidCallback>.from(_geometryListeners);
+    for (final callback in callbacks) {
+      callback();
+    }
+  }
+
+  CalendarTaskGeometry? geometryForTask(String taskId) =>
+      _renderObject?.geometryForTask(taskId);
+
+  Rect? localRectForTask(String taskId) =>
+      _renderObject?.localRectForTask(taskId);
+
+  Rect? globalRectForTask(String taskId) =>
+      _renderObject?.globalRectForTask(taskId);
+
+  DateTime? slotForOffset(Offset localOffset) =>
+      _renderObject?.slotForOffset(localOffset);
+
+  CalendarLayoutMetrics? get resolvedMetrics => _renderObject?.metrics;
+
+  bool containsTaskAt(Offset localPosition) =>
+      _renderObject?.containsTaskAt(localPosition) ?? false;
+
+  Rect? columnBoundsForDate(DateTime date) =>
+      _renderObject?.columnBoundsForDate(date);
+
+  double? columnWidthForOffset(Offset localOffset) =>
+      _renderObject?.columnWidthForOffset(localOffset);
+}
+
+/// Describes the visible day columns rendered inside [CalendarRenderSurface].
+@immutable
+class CalendarDayColumn {
+  const CalendarDayColumn({
+    required this.date,
+  });
+
+  final DateTime date;
+
+  DateTime get normalizedDate => DateTime(date.year, date.month, date.day);
+}
+
+typedef CalendarSurfacePaintCallback = void Function();
+
+@immutable
+class CalendarSurfaceTapDetails {
+  const CalendarSurfaceTapDetails({
+    required this.slotStart,
+    required this.localPosition,
+    required this.hitTask,
+  });
+
+  final DateTime slotStart;
+  final Offset localPosition;
+  final bool hitTask;
+}
+
+@immutable
+class CalendarSurfaceDragUpdateDetails {
+  const CalendarSurfaceDragUpdateDetails({
+    required this.slotStart,
+    required this.localPosition,
+    required this.globalPosition,
+    required this.columnWidth,
+    required this.previewStart,
+    required this.previewDuration,
+    this.hoverTaskId,
+    this.narrowedWidth,
+    this.overlapsScheduled = false,
+    this.shouldNarrowWidth = false,
+    this.forceCenterPointer = false,
+  });
+
+  final DateTime slotStart;
+  final Offset localPosition;
+  final Offset globalPosition;
+  final double? columnWidth;
+  final DateTime previewStart;
+  final Duration previewDuration;
+  final String? hoverTaskId;
+  final double? narrowedWidth;
+  final bool overlapsScheduled;
+  final bool shouldNarrowWidth;
+  final bool forceCenterPointer;
+}
+
+@immutable
+class CalendarSurfaceDragEndDetails {
+  const CalendarSurfaceDragEndDetails({
+    required this.slotStart,
+    required this.globalPosition,
+  });
+
+  final DateTime slotStart;
+  final Offset globalPosition;
+}
+
+class CalendarRenderSurface extends MultiChildRenderObjectWidget {
+  const CalendarRenderSurface({
+    super.key,
+    required super.children,
+    required this.columns,
+    required this.startHour,
+    required this.endHour,
+    required this.zoomIndex,
+    required this.allowDayViewZoom,
+    required this.weekStartDate,
+    required this.weekEndDate,
+    required this.layoutCalculator,
+    required this.layoutTheme,
+    required this.controller,
+    required this.minutesPerStep,
+    required this.interactionController,
+    this.onTap,
+    this.dragPreview,
+    this.onDragUpdate,
+    this.onDragEnd,
+    this.onDragExit,
+    this.onDragAutoScroll,
+    this.onDragAutoScrollStop,
+    this.isTaskDragInProgress,
+    this.onGeometryChanged,
+  });
+
+  final List<CalendarDayColumn> columns;
+  final int startHour;
+  final int endHour;
+  final int zoomIndex;
+  final bool allowDayViewZoom;
+  final DateTime weekStartDate;
+  final DateTime weekEndDate;
+  final CalendarLayoutCalculator layoutCalculator;
+  final CalendarLayoutTheme layoutTheme;
+  final CalendarSurfaceController controller;
+  final int minutesPerStep;
+  final TaskInteractionController interactionController;
+  final ValueChanged<CalendarSurfaceTapDetails>? onTap;
+  final DragPreview? dragPreview;
+  final ValueChanged<CalendarSurfaceDragUpdateDetails>? onDragUpdate;
+  final ValueChanged<CalendarSurfaceDragEndDetails>? onDragEnd;
+  final VoidCallback? onDragExit;
+  final ValueChanged<Offset>? onDragAutoScroll;
+  final VoidCallback? onDragAutoScrollStop;
+  final ValueGetter<bool>? isTaskDragInProgress;
+  final VoidCallback? onGeometryChanged;
+
+  @override
+  RenderCalendarSurface createRenderObject(BuildContext context) {
+    return RenderCalendarSurface(
+      columns: columns,
+      startHour: startHour,
+      endHour: endHour,
+      zoomIndex: zoomIndex,
+      allowDayViewZoom: allowDayViewZoom,
+      weekStartDate: weekStartDate,
+      weekEndDate: weekEndDate,
+      layoutCalculator: layoutCalculator,
+      layoutTheme: layoutTheme,
+      controller: controller,
+      minutesPerStep: minutesPerStep,
+      interactionController: interactionController,
+      devicePixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
+      onTap: onTap,
+      dragPreview: dragPreview,
+      onDragUpdate: onDragUpdate,
+      onDragEnd: onDragEnd,
+      onDragAutoScroll: onDragAutoScroll,
+      onDragAutoScrollStop: onDragAutoScrollStop,
+      isTaskDragInProgress: isTaskDragInProgress,
+      onGeometryChanged: onGeometryChanged,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderCalendarSurface renderObject,
+  ) {
+    renderObject
+      ..columns = columns
+      ..startHour = startHour
+      ..endHour = endHour
+      ..zoomIndex = zoomIndex
+      ..allowDayViewZoom = allowDayViewZoom
+      ..weekStartDate = weekStartDate
+      ..weekEndDate = weekEndDate
+      ..layoutCalculator = layoutCalculator
+      ..layoutTheme = layoutTheme
+      ..controller = controller
+      ..minutesPerStep = minutesPerStep
+      ..interactionController = interactionController
+      ..devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0
+      ..onTap = onTap
+      ..dragPreview = dragPreview
+      ..onDragUpdate = onDragUpdate
+      ..onDragEnd = onDragEnd
+      ..onDragExit = onDragExit
+      ..onDragAutoScroll = onDragAutoScroll
+      ..onDragAutoScrollStop = onDragAutoScrollStop
+      ..isTaskDragInProgress = isTaskDragInProgress
+      ..onGeometryChanged = onGeometryChanged;
+  }
+}
+
+class CalendarSurfaceTaskEntry
+    extends ParentDataWidget<CalendarSurfaceParentData> {
+  const CalendarSurfaceTaskEntry({
+    super.key,
+    required this.task,
+    required this.bindings,
+    required super.child,
+  });
+
+  final CalendarTask task;
+  final CalendarTaskEntryBindings bindings;
+
+  @override
+  void applyParentData(RenderObject renderObject) {
+    final parentData = renderObject.parentData as CalendarSurfaceParentData;
+    bool needsLayout = false;
+    if (parentData.task != task) {
+      parentData.task = task;
+      needsLayout = true;
+    }
+    if (!identical(parentData.bindings, bindings)) {
+      parentData.bindings = bindings;
+    }
+
+    if (needsLayout) {
+      final parent = renderObject.parent;
+      if (parent is RenderObject) {
+        parent.markNeedsLayout();
+      }
+    }
+  }
+
+  @override
+  Type get debugTypicalAncestorWidgetClass => CalendarRenderSurface;
+}
+
+class CalendarSurfaceParentData extends ContainerBoxParentData<RenderBox> {
+  CalendarTask? task;
+  CalendarTaskEntryBindings? bindings;
+  CalendarTaskGeometry geometry = CalendarTaskGeometry.empty;
+}
+
+class _DayColumnGeometry {
+  const _DayColumnGeometry({
+    required this.date,
+    required this.bounds,
+  });
+
+  final DateTime date;
+  final Rect bounds;
+
+  bool contains(DateTime target) =>
+      date.year == target.year &&
+      date.month == target.month &&
+      date.day == target.day;
+}
+
+class _TaskHit {
+  const _TaskHit({
+    required this.task,
+    required this.geometry,
+  });
+
+  final CalendarTask task;
+  final CalendarTaskGeometry geometry;
+}
+
+class _DragLayoutOverride {
+  const _DragLayoutOverride({
+    required this.rect,
+    required this.columnDate,
+  });
+
+  final Rect rect;
+  final DateTime columnDate;
+}
+
+class RenderCalendarSurface extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, CalendarSurfaceParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, CalendarSurfaceParentData>
+    implements CalendarDragTargetDelegate {
+  RenderCalendarSurface({
+    required List<CalendarDayColumn> columns,
+    required int startHour,
+    required int endHour,
+    required int zoomIndex,
+    required bool allowDayViewZoom,
+    required DateTime weekStartDate,
+    required DateTime weekEndDate,
+    required CalendarLayoutCalculator layoutCalculator,
+    required CalendarLayoutTheme layoutTheme,
+    required CalendarSurfaceController controller,
+    required int minutesPerStep,
+    required TaskInteractionController interactionController,
+    required double devicePixelRatio,
+    this.onTap,
+    DragPreview? dragPreview,
+    this.onDragUpdate,
+    this.onDragEnd,
+    this.onDragExit,
+    this.onDragAutoScroll,
+    this.onDragAutoScrollStop,
+    this.isTaskDragInProgress,
+    this.onGeometryChanged,
+  })  : _columns = columns,
+        _startHour = startHour,
+        _endHour = endHour,
+        _zoomIndex = zoomIndex,
+        _allowDayViewZoom = allowDayViewZoom,
+        _weekStartDate = weekStartDate,
+        _weekEndDate = weekEndDate,
+        _layoutCalculator = layoutCalculator,
+        _layoutTheme = layoutTheme,
+        _controller = controller,
+        _minutesPerStep = minutesPerStep,
+        _interactionController = interactionController,
+        _devicePixelRatio = devicePixelRatio,
+        _dragPreview = dragPreview;
+
+  List<CalendarDayColumn> get columns => _columns;
+  List<CalendarDayColumn> _columns;
+  set columns(List<CalendarDayColumn> value) {
+    if (_columns == value) return;
+    _columns = value;
+    markNeedsLayout();
+  }
+
+  int get startHour => _startHour;
+  int _startHour;
+  set startHour(int value) {
+    if (_startHour == value) return;
+    _startHour = value;
+    markNeedsLayout();
+  }
+
+  int get endHour => _endHour;
+  int _endHour;
+  set endHour(int value) {
+    if (_endHour == value) return;
+    _endHour = value;
+    markNeedsLayout();
+  }
+
+  int get zoomIndex => _zoomIndex;
+  int _zoomIndex;
+  set zoomIndex(int value) {
+    if (_zoomIndex == value) return;
+    _zoomIndex = value;
+    markNeedsLayout();
+  }
+
+  bool get allowDayViewZoom => _allowDayViewZoom;
+  bool _allowDayViewZoom;
+  set allowDayViewZoom(bool value) {
+    if (_allowDayViewZoom == value) return;
+    _allowDayViewZoom = value;
+    markNeedsLayout();
+  }
+
+  DateTime get weekStartDate => _weekStartDate;
+  DateTime _weekStartDate;
+  set weekStartDate(DateTime value) {
+    if (_weekStartDate == value) return;
+    _weekStartDate = value;
+    markNeedsLayout();
+  }
+
+  DateTime get weekEndDate => _weekEndDate;
+  DateTime _weekEndDate;
+  set weekEndDate(DateTime value) {
+    if (_weekEndDate == value) return;
+    _weekEndDate = value;
+    markNeedsLayout();
+  }
+
+  CalendarLayoutCalculator get layoutCalculator => _layoutCalculator;
+  CalendarLayoutCalculator _layoutCalculator;
+  set layoutCalculator(CalendarLayoutCalculator value) {
+    if (_layoutCalculator == value) return;
+    _layoutCalculator = value;
+    markNeedsLayout();
+  }
+
+  CalendarLayoutTheme get layoutTheme => _layoutTheme;
+  CalendarLayoutTheme _layoutTheme;
+  set layoutTheme(CalendarLayoutTheme value) {
+    if (_layoutTheme == value) return;
+    _layoutTheme = value;
+    markNeedsLayout();
+  }
+
+  CalendarSurfaceController? get controller => _controller;
+  CalendarSurfaceController? _controller;
+  set controller(CalendarSurfaceController? value) {
+    if (identical(_controller, value)) {
+      return;
+    }
+    _controller?._detach(this);
+    _controller = value;
+    _controller?._attach(this);
+  }
+
+  int get minutesPerStep => _minutesPerStep;
+  int _minutesPerStep;
+  set minutesPerStep(int value) {
+    if (_minutesPerStep == value) {
+      return;
+    }
+    _minutesPerStep = value;
+  }
+
+  TaskInteractionController? get interactionController =>
+      _interactionController;
+  TaskInteractionController? _interactionController;
+  set interactionController(TaskInteractionController? value) {
+    if (identical(_interactionController, value)) {
+      return;
+    }
+    _interactionController = value;
+  }
+
+  ValueChanged<CalendarSurfaceTapDetails>? onTap;
+  DragPreview? get dragPreview => _dragPreview;
+  DragPreview? _dragPreview;
+  set dragPreview(DragPreview? value) {
+    if (_dragPreview == value) {
+      return;
+    }
+    _dragPreview = value;
+    markNeedsLayout();
+  }
+
+  ValueChanged<CalendarSurfaceDragUpdateDetails>? onDragUpdate;
+  ValueChanged<CalendarSurfaceDragEndDetails>? onDragEnd;
+  VoidCallback? onDragExit;
+  ValueChanged<Offset>? onDragAutoScroll;
+  VoidCallback? onDragAutoScrollStop;
+  ValueGetter<bool>? isTaskDragInProgress;
+  VoidCallback? onGeometryChanged;
+
+  double get devicePixelRatio => _devicePixelRatio;
+  double _devicePixelRatio;
+  set devicePixelRatio(double value) {
+    if (_devicePixelRatio == value) return;
+    _devicePixelRatio = value;
+    markNeedsPaint();
+  }
+
+  CalendarLayoutMetrics? get metrics => _metrics;
+  CalendarLayoutMetrics? _metrics;
+
+  final Map<String, CalendarTaskGeometry> _taskGeometries =
+      <String, CalendarTaskGeometry>{};
+  final List<_DayColumnGeometry> _dayGeometries = <_DayColumnGeometry>[];
+  static const double _tapTolerance = 12.0;
+  int? _activePointerId;
+  Offset? _pointerDownLocal;
+  DateTime? _pointerDownSlot;
+  bool _pointerDownHitTask = false;
+  String? _currentHoverTaskId;
+  String? _externalDragTaskId;
+
+  bool get _isDragInProgress => isTaskDragInProgress?.call() ?? false;
+
+  @override
+  bool get isAttached => attached;
+
+  void _updateHoverTask(String? taskId) {
+    if (_currentHoverTaskId == taskId) {
+      return;
+    }
+    _currentHoverTaskId = taskId;
+    _interactionController?.setDropHoverTaskId(taskId);
+  }
+
+  _TaskHit? _taskHitTest(Offset localPosition) {
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as CalendarSurfaceParentData;
+      final CalendarTask? task = parentData.task;
+      final CalendarTaskGeometry geometry = parentData.geometry;
+      if (task != null &&
+          geometry.rect.width > 0 &&
+          geometry.rect.height > 0 &&
+          geometry.rect.contains(localPosition)) {
+        return _TaskHit(task: task, geometry: geometry);
+      }
+      child = childAfter(child);
+    }
+    return null;
+  }
+
+  _DragLayoutOverride? _dragOverrideForTask(
+    CalendarTask task,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final TaskInteractionController? controller = _interactionController;
+    final DragPreview? preview = _dragPreview;
+    if (controller == null ||
+        preview == null ||
+        controller.draggingTaskId != task.id ||
+        !controller.dragHasMoved) {
+      return null;
+    }
+    final _DayColumnGeometry? columnGeometry = _geometryForDate(preview.start);
+    if (columnGeometry == null) {
+      return null;
+    }
+
+    final double top = _verticalOffsetForTime(preview.start, metrics);
+    final double height = math.max(
+      metrics.heightForDuration(preview.duration),
+      metrics.slotHeight,
+    );
+    const double columnTop = 0.0;
+    final double columnBottom =
+        size.height.isFinite ? size.height : columnGeometry.bounds.bottom;
+    final double clampedTop = top.clamp(
+      columnTop,
+      math.max(columnTop, columnBottom - height),
+    );
+    final double clampedBottom = math
+        .min(clampedTop + height, columnBottom)
+        .clamp(clampedTop, double.infinity);
+    if (clampedBottom <= clampedTop) {
+      return null;
+    }
+
+    final Rect rect = Rect.fromLTWH(
+      columnGeometry.bounds.left,
+      clampedTop,
+      columnGeometry.bounds.width,
+      clampedBottom - clampedTop,
+    );
+    final DateTime normalizedColumnDate = DateTime(
+      columnGeometry.date.year,
+      columnGeometry.date.month,
+      columnGeometry.date.day,
+    );
+    return _DragLayoutOverride(
+      rect: rect,
+      columnDate: normalizedColumnDate,
+    );
+  }
+
+  void _handlePointerDragUpdate(
+    Offset localPosition,
+    Offset globalPosition,
+  ) {
+    onDragAutoScroll?.call(globalPosition);
+    final DateTime? slotTime = slotForOffset(localPosition);
+    final DateTime? snappedSlot =
+        slotTime != null ? _snapToStep(slotTime) : null;
+    if (slotTime == null) {
+      _updateHoverTask(null);
+      onDragExit?.call();
+      onDragAutoScrollStop?.call();
+      return;
+    }
+    _interactionController?.updateDragPointerGlobalPosition(globalPosition);
+    final TaskInteractionController? controller = _interactionController;
+    final CalendarTask? draggingTask = controller?.draggingTaskSnapshot;
+    final String? draggingTaskId = controller?.draggingTaskId;
+    final _TaskHit? hit = _taskHitTest(localPosition);
+    final String? hoverTaskId =
+        hit != null && draggingTaskId != hit.task.id ? hit.task.id : null;
+    final _TaskHit? hoverHit = hoverTaskId != null ? hit : null;
+    _updateHoverTask(hoverTaskId);
+    if (draggingTask == null || controller == null) {
+      return;
+    }
+
+    final Duration previewDuration =
+        draggingTask.duration ?? const Duration(hours: 1);
+    DateTime previewStart = snappedSlot ?? slotTime;
+    if (hoverHit != null) {
+      final DateTime targetDate = hoverHit.geometry.columnDate ??
+          DateTime(slotTime.year, slotTime.month, slotTime.day);
+      previewStart = _computePreviewStartForHover(targetDate, globalPosition) ??
+          previewStart;
+    }
+
+    bool overlapsScheduled =
+        _previewOverlapsScheduled(previewStart, previewDuration);
+
+    final double? columnWidth = columnWidthForOffset(localPosition);
+    final double baselineWidth = controller.draggingTaskWidth ??
+        controller.dragInitialWidth ??
+        columnWidth ??
+        0.0;
+
+    bool shouldNarrowWidth = hoverHit != null || overlapsScheduled;
+    double? narrowedWidth;
+    bool forceCenterPointer = false;
+
+    if (shouldNarrowWidth) {
+      if (hoverHit != null) {
+        narrowedWidth = hoverHit.geometry.narrowedWidth;
+        forceCenterPointer = true;
+      } else if (columnWidth != null && columnWidth > 0 && baselineWidth > 0) {
+        narrowedWidth = layoutCalculator.computeNarrowedWidth(
+          columnWidth,
+          baselineWidth <= 0 ? columnWidth : baselineWidth,
+        );
+        forceCenterPointer = narrowedWidth < baselineWidth;
+      }
+      if (narrowedWidth == null) {
+        shouldNarrowWidth = false;
+      }
+    }
+
+    onDragUpdate?.call(
+      CalendarSurfaceDragUpdateDetails(
+        slotStart: snappedSlot ?? slotTime,
+        localPosition: localPosition,
+        globalPosition: globalPosition,
+        columnWidth: columnWidth,
+        previewStart: previewStart,
+        previewDuration: previewDuration,
+        hoverTaskId: hoverTaskId,
+        narrowedWidth: narrowedWidth,
+        overlapsScheduled: overlapsScheduled,
+        shouldNarrowWidth: shouldNarrowWidth,
+        forceCenterPointer: forceCenterPointer,
+      ),
+    );
+  }
+
+  void _handlePointerUp(Offset localPosition, Offset globalPosition) {
+    final bool dragActive = _isDragInProgress;
+    final DateTime? slotTime = slotForOffset(localPosition);
+    final DateTime? snappedSlot =
+        slotTime != null ? _snapToStep(slotTime) : null;
+    if (dragActive) {
+      if (snappedSlot != null) {
+        onDragEnd?.call(
+          CalendarSurfaceDragEndDetails(
+            slotStart: snappedSlot,
+            globalPosition: globalPosition,
+          ),
+        );
+      } else {
+        onDragExit?.call();
+      }
+      onDragAutoScrollStop?.call();
+      _resetPointerState();
+      return;
+    }
+
+    if (!dragActive && onTap != null && _pointerDownSlot != null) {
+      final Offset down = _pointerDownLocal ?? localPosition;
+      if ((localPosition - down).distance <= _tapTolerance) {
+        final DateTime slot = snappedSlot ?? slotTime ?? _pointerDownSlot!;
+        onTap!(
+          CalendarSurfaceTapDetails(
+            slotStart: slot,
+            localPosition: localPosition,
+            hitTask: _pointerDownHitTask || containsTaskAt(localPosition),
+          ),
+        );
+      }
+    }
+    onDragAutoScrollStop?.call();
+    _resetPointerState();
+    _updateHoverTask(null);
+  }
+
+  void _handlePointerCancel() {
+    onDragExit?.call();
+    onDragAutoScrollStop?.call();
+    _resetPointerState();
+    _updateHoverTask(null);
+  }
+
+  void _resetPointerState() {
+    _activePointerId = null;
+    _pointerDownLocal = null;
+    _pointerDownSlot = null;
+    _pointerDownHitTask = false;
+    _updateHoverTask(null);
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _controller?._attach(this);
+    CalendarDragCoordinator.instance.registerTarget(this);
+  }
+
+  @override
+  void detach() {
+    _controller?._detach(this);
+    CalendarDragCoordinator.instance.unregisterTarget(this);
+    super.detach();
+  }
+
+  @override
+  void setupParentData(RenderObject child) {
+    if (child.parentData is! CalendarSurfaceParentData) {
+      child.parentData = CalendarSurfaceParentData();
+    }
+  }
+
+  double get _timeColumnWidth => layoutTheme.timeColumnWidth;
+
+  @override
+  void performLayout() {
+    final bool isDayView = columns.length <= 1;
+    final double fallbackHeight =
+        layoutTheme.visibleHourRows * layoutTheme.dayViewHourHeight;
+    final double availableHeight =
+        constraints.hasBoundedHeight && constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : fallbackHeight;
+    final CalendarLayoutMetrics resolvedMetrics =
+        layoutCalculator.resolveMetrics(
+      zoomIndex: zoomIndex,
+      isDayView: isDayView,
+      availableHeight: availableHeight,
+      allowDayViewZoom: allowDayViewZoom,
+    );
+    final double contentHeight = resolvedMetrics.slotHeight *
+        layoutTheme.visibleHourRows *
+        resolvedMetrics.slotsPerHour;
+    final double widthFallback = _timeColumnWidth +
+        math.max(1, columns.length) * layoutTheme.eventMinWidth;
+    final double resolvedWidth =
+        constraints.hasBoundedWidth && constraints.maxWidth.isFinite
+            ? math.max(constraints.maxWidth, widthFallback)
+            : widthFallback;
+
+    size = constraints.constrain(Size(resolvedWidth, contentHeight));
+
+    _metrics = resolvedMetrics;
+    _dayGeometries
+      ..clear()
+      ..addAll(_resolveDayGeometries());
+
+    final Map<String, OverlapInfo> overlapMap = _computeOverlapMap();
+    final Map<String, CalendarTaskGeometry> nextGeometries =
+        <String, CalendarTaskGeometry>{};
+
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as CalendarSurfaceParentData;
+      final CalendarTask? task = parentData.task;
+
+      CalendarTaskGeometry geometry = CalendarTaskGeometry.empty;
+      if (task != null && task.scheduledTime != null) {
+        final DateTime scheduled = task.scheduledTime!;
+        final _DayColumnGeometry? columnGeometry = _geometryForDate(scheduled);
+        if (columnGeometry != null) {
+          final _DragLayoutOverride? dragOverride =
+              _dragOverrideForTask(task, resolvedMetrics);
+          if (dragOverride != null) {
+            final Rect rect = dragOverride.rect;
+            final double columnWidth = rect.width;
+            final double narrowedWidth = layoutCalculator.computeNarrowedWidth(
+              columnWidth,
+              rect.width,
+            );
+            final double splitWidthFactor = rect.width == 0
+                ? 1.0
+                : (narrowedWidth / rect.width).clamp(0.0, 1.0);
+            geometry = CalendarTaskGeometry(
+              rect: rect,
+              narrowedWidth: narrowedWidth,
+              splitWidthFactor: splitWidthFactor,
+              columnDate: dragOverride.columnDate,
+            );
+            child.layout(
+              BoxConstraints.tight(rect.size),
+              parentUsesSize: true,
+            );
+            parentData.offset = rect.topLeft;
+            parentData.geometry = geometry;
+            nextGeometries[task.id] = geometry;
+            child = childAfter(child);
+            continue;
+          }
+          final OverlapInfo overlap = overlapMap[task.id] ??
+              const OverlapInfo(columnIndex: 0, totalColumns: 1);
+
+          final CalendarTaskLayout? layout = layoutCalculator.resolveTaskLayout(
+            task: task,
+            dayDate: columnGeometry.date,
+            weekStartDate: weekStartDate,
+            weekEndDate: weekEndDate,
+            isDayView: isDayView,
+            startHour: startHour,
+            endHour: endHour,
+            dayWidth: columnGeometry.bounds.width,
+            metrics: resolvedMetrics,
+            overlap: overlap,
+          );
+
+          if (layout != null && layout.width > 0 && layout.height > 0) {
+            final Rect rect = Rect.fromLTWH(
+              columnGeometry.bounds.left + layout.left,
+              layout.top,
+              math.min(layout.width, columnGeometry.bounds.width),
+              layout.height,
+            );
+            final double narrowedWidth = layoutCalculator.computeNarrowedWidth(
+              columnGeometry.bounds.width,
+              rect.width,
+            );
+            final double splitWidthFactor = rect.width == 0
+                ? 1.0
+                : (narrowedWidth / rect.width).clamp(0.0, 1.0);
+            geometry = CalendarTaskGeometry(
+              rect: rect,
+              narrowedWidth: narrowedWidth,
+              splitWidthFactor: splitWidthFactor,
+              columnDate: columnGeometry.date,
+            );
+
+            child.layout(
+              BoxConstraints.tight(rect.size),
+              parentUsesSize: true,
+            );
+            parentData.offset = rect.topLeft;
+            parentData.geometry = geometry;
+            nextGeometries[task.id] = geometry;
+          }
+        }
+      }
+
+      if (geometry == CalendarTaskGeometry.empty) {
+        child.layout(
+          const BoxConstraints.tightFor(width: 0, height: 0),
+          parentUsesSize: true,
+        );
+        parentData
+          ..offset = Offset.zero
+          ..geometry = CalendarTaskGeometry.empty;
+      }
+
+      child = childAfter(child);
+    }
+
+    _taskGeometries
+      ..clear()
+      ..addAll(nextGeometries);
+    _controller?._notifyGeometryChanged();
+    onGeometryChanged?.call();
+  }
+
+  Iterable<_DayColumnGeometry> _resolveDayGeometries() {
+    if (columns.isEmpty || size.width <= _timeColumnWidth) {
+      return const Iterable<_DayColumnGeometry>.empty();
+    }
+
+    final int dayCount = columns.length;
+    final double availableWidth = size.width - _timeColumnWidth;
+    final double columnWidth = dayCount == 0 ? 0 : availableWidth / dayCount;
+    final List<_DayColumnGeometry> resolved = <_DayColumnGeometry>[];
+
+    for (int i = 0; i < columns.length; i++) {
+      final CalendarDayColumn column = columns[i];
+      final double left = _timeColumnWidth + (i * columnWidth);
+      resolved.add(
+        _DayColumnGeometry(
+          date: column.normalizedDate,
+          bounds: Rect.fromLTWH(
+            left,
+            0,
+            columnWidth,
+            size.height,
+          ),
+        ),
+      );
+    }
+    return resolved;
+  }
+
+  _DayColumnGeometry? _geometryForDate(DateTime date) {
+    final DateTime normalized = DateTime(date.year, date.month, date.day);
+    for (final geometry in _dayGeometries) {
+      if (geometry.date == normalized) {
+        return geometry;
+      }
+    }
+    return null;
+  }
+
+  _DayColumnGeometry? _geometryForOffset(Offset localOffset) {
+    for (final _DayColumnGeometry geometry in _dayGeometries) {
+      if (geometry.bounds.contains(localOffset)) {
+        return geometry;
+      }
+    }
+    return null;
+  }
+
+  Map<String, OverlapInfo> _computeOverlapMap() {
+    final Map<DateTime, List<CalendarTask>> grouped =
+        <DateTime, List<CalendarTask>>{};
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as CalendarSurfaceParentData;
+      final CalendarTask? task = parentData.task;
+      if (task != null && task.scheduledTime != null) {
+        final DateTime normalized = DateTime(
+          task.scheduledTime!.year,
+          task.scheduledTime!.month,
+          task.scheduledTime!.day,
+        );
+        grouped.putIfAbsent(normalized, () => <CalendarTask>[]);
+        grouped[normalized]!.add(task);
+      }
+      child = childAfter(child);
+    }
+
+    final Map<String, OverlapInfo> overlaps = <String, OverlapInfo>{};
+    grouped.forEach((_, tasks) {
+      overlaps.addAll(calculateOverlapColumns(tasks));
+    });
+    return overlaps;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    _paintBackground(context.canvas, offset);
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestSelf(Offset position) => true;
+
+  void _paintBackground(Canvas canvas, Offset offset) {
+    final Rect bounds = offset & size;
+    final Paint basePaint = Paint()..color = calendarBackgroundColor;
+    canvas.drawRect(bounds, basePaint);
+
+    final Rect timeColumnRect = Rect.fromLTWH(
+      bounds.left,
+      bounds.top,
+      _timeColumnWidth,
+      bounds.height,
+    );
+    final Paint timeColumnPaint = Paint()
+      ..color = calendarSidebarBackgroundColor;
+    canvas.drawRect(timeColumnRect, timeColumnPaint);
+
+    if (_dayGeometries.isEmpty || _metrics == null) {
+      return;
+    }
+
+    final CalendarLayoutMetrics resolvedMetrics = _metrics!;
+    _paintDayColumns(canvas, offset, resolvedMetrics);
+    _paintGridLines(canvas, offset, resolvedMetrics);
+    _paintVerticalDividers(canvas, offset);
+    _paintTimeColumnLabels(canvas, offset, resolvedMetrics);
+    _paintCurrentTimeIndicator(canvas, offset, resolvedMetrics);
+    _paintDragPreview(canvas, offset, resolvedMetrics);
+  }
+
+  void _paintDayColumns(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final DateTime today = DateTime.now();
+    final double slotHeight = metrics.slotHeight;
+    final int totalSlots = layoutTheme.visibleHourRows * metrics.slotsPerHour;
+    final double maxHeight = size.height;
+
+    final Paint paint = Paint();
+    for (final _DayColumnGeometry column in _dayGeometries) {
+      final bool isToday = _isSameDay(column.date, today);
+      for (int slot = 0; slot < totalSlots; slot++) {
+        final double top = slot * slotHeight;
+        if (top >= maxHeight) {
+          break;
+        }
+        final int totalMinutes =
+            (startHour * 60) + (slot * metrics.minutesPerSlot);
+        final int hour = (totalMinutes ~/ 60) % 24;
+        paint.color = _slotBackgroundColor(
+          isToday: isToday,
+          hour: hour,
+          isEvenSlot: slot.isEven,
+        );
+        final Rect slotRect = Rect.fromLTWH(
+          offset.dx + column.bounds.left,
+          offset.dy + top,
+          column.bounds.width,
+          slotHeight,
+        );
+        canvas.drawRect(slotRect, paint);
+      }
+    }
+  }
+
+  void _paintGridLines(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final double slotHeight = metrics.slotHeight;
+    final int totalSlots = layoutTheme.visibleHourRows * metrics.slotsPerHour;
+    final double startX = offset.dx + _timeColumnWidth;
+    final double endX = offset.dx + size.width;
+
+    final double hourStrokeWidth =
+        math.max(1.0 / _devicePixelRatio, calendarBorderStroke);
+    final double slotStrokeWidth =
+        math.max(1.0 / _devicePixelRatio, calendarSubSlotBorderStroke);
+
+    final Paint hourLinePaint = Paint()
+      ..color = calendarBorderDarkColor
+      ..strokeWidth = hourStrokeWidth;
+    final Paint subSlotPaint = Paint()
+      ..color = calendarBorderColor.withValues(alpha: 0.6)
+      ..strokeWidth = slotStrokeWidth;
+
+    for (int slot = 0; slot <= totalSlots; slot++) {
+      final double dy = offset.dy + (slot * slotHeight);
+      final double snappedDy =
+          (dy * _devicePixelRatio).roundToDouble() / _devicePixelRatio;
+      final bool isHourBoundary = slot % metrics.slotsPerHour == 0;
+      final Paint paint = isHourBoundary ? hourLinePaint : subSlotPaint;
+      canvas.drawLine(
+          Offset(startX, snappedDy), Offset(endX, snappedDy), paint);
+    }
+  }
+
+  void _paintVerticalDividers(Canvas canvas, Offset offset) {
+    final Paint dividerPaint = Paint()
+      ..color = calendarBorderDarkColor
+      ..strokeWidth = calendarBorderStroke;
+    final double top = offset.dy;
+    final double bottom = offset.dy + size.height;
+    // Time column divider.
+    canvas.drawLine(
+      Offset(offset.dx + _timeColumnWidth, top),
+      Offset(offset.dx + _timeColumnWidth, bottom),
+      dividerPaint,
+    );
+    for (int i = 0; i < _dayGeometries.length; i++) {
+      final _DayColumnGeometry column = _dayGeometries[i];
+      final double boundaryX = offset.dx + column.bounds.right;
+      canvas.drawLine(
+        Offset(boundaryX, top),
+        Offset(boundaryX, bottom),
+        dividerPaint,
+      );
+    }
+  }
+
+  void _paintTimeColumnLabels(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final TextPainter painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.right,
+    );
+    const double padding = calendarInsetMd;
+    final double labelRight = offset.dx + _timeColumnWidth - padding;
+    final int totalSlots = layoutTheme.visibleHourRows * metrics.slotsPerHour;
+    final Paint tickPaint = Paint()..color = calendarBorderDarkColor;
+
+    for (int slot = 0; slot < totalSlots; slot++) {
+      final int minutesFromStart = slot * metrics.minutesPerSlot;
+      final int absoluteMinutes = (startHour * 60) + minutesFromStart;
+      final int hour = absoluteMinutes ~/ 60;
+      final int minute = absoluteMinutes % 60;
+      final bool isHourMark = minute == 0;
+
+      painter.text = TextSpan(
+        text: isHourMark
+            ? _formatHourLabel(hour)
+            : minute.toString().padLeft(2, '0'),
+        style: isHourMark
+            ? calendarTimeLabelTextStyle
+            : calendarMinorTimeLabelTextStyle,
+      );
+      painter.layout();
+      final double slotTop = offset.dy + (slot * metrics.slotHeight);
+      final double labelDy =
+          slotTop + (metrics.slotHeight - painter.height) / 2;
+      final double dx = labelRight - painter.width;
+      painter.paint(canvas, Offset(dx, labelDy));
+
+      final double tickY = slotTop;
+      final double tickLength = isHourMark ? 12.0 : 8.0;
+      tickPaint.strokeWidth = isHourMark ? 1.5 : 1.0;
+      final double tickEndX = offset.dx + _timeColumnWidth - calendarInsetSm;
+      final double tickStartX = tickEndX - tickLength;
+      canvas.drawLine(
+        Offset(tickStartX, tickY),
+        Offset(tickEndX, tickY),
+        tickPaint,
+      );
+    }
+  }
+
+  void _paintCurrentTimeIndicator(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final DateTime now = DateTime.now();
+    final _DayColumnGeometry? geometry = _geometryForDate(now);
+    if (geometry == null) {
+      return;
+    }
+    final int minutesFromStart =
+        (now.hour * 60 + now.minute) - (startHour * 60);
+    if (minutesFromStart < 0 || minutesFromStart > (endHour - startHour) * 60) {
+      return;
+    }
+
+    final double pixelsPerMinute = metrics.slotHeight / metrics.minutesPerSlot;
+    final double dy = offset.dy + (minutesFromStart * pixelsPerMinute);
+    final Paint indicatorPaint = Paint()
+      ..color = calendarPrimaryColor
+      ..strokeWidth = 2.0;
+
+    final double circleX = offset.dx + geometry.bounds.left + 4;
+    final Offset circleCenter = Offset(circleX, dy);
+    canvas.drawCircle(circleCenter, 4, indicatorPaint);
+    canvas.drawLine(
+      Offset(circleCenter.dx + 8, dy),
+      Offset(offset.dx + geometry.bounds.right, dy),
+      indicatorPaint,
+    );
+  }
+
+  void _paintDragPreview(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final DragPreview? preview = _dragPreview;
+    if (preview == null || preview.duration <= Duration.zero) {
+      return;
+    }
+    final _DayColumnGeometry? geometry = _geometryForDate(preview.start);
+    if (geometry == null) {
+      return;
+    }
+
+    final double top =
+        offset.dy + _verticalOffsetForTime(preview.start, metrics);
+    final double height = math.max(
+      metrics.heightForDuration(preview.duration),
+      metrics.slotHeight,
+    );
+    final double columnTop = offset.dy + geometry.bounds.top;
+    final double columnBottom = offset.dy + geometry.bounds.bottom;
+    final double clampedTop = top.clamp(columnTop, columnBottom);
+    final double clampedBottom = math.min(clampedTop + height, columnBottom);
+    if (clampedBottom <= clampedTop) {
+      return;
+    }
+
+    final Rect previewRect = Rect.fromLTWH(
+      offset.dx + geometry.bounds.left,
+      clampedTop,
+      geometry.bounds.width,
+      clampedBottom - clampedTop,
+    );
+
+    final Paint previewPaint = Paint()
+      ..color = calendarPrimaryColor.withValues(
+        alpha: calendarSlotPreviewOpacity,
+      );
+    canvas.drawRect(previewRect, previewPaint);
+
+    final double anchorHeight =
+        math.min(metrics.slotHeight, previewRect.height);
+    final Rect anchorRect = Rect.fromLTWH(
+      previewRect.left,
+      previewRect.top,
+      previewRect.width,
+      anchorHeight,
+    );
+    final Paint anchorPaint = Paint()
+      ..color = calendarPrimaryColor.withValues(
+        alpha: calendarSlotPreviewAnchorOpacity,
+      );
+    canvas.drawRect(anchorRect, anchorPaint);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!size.contains(position)) {
+      return false;
+    }
+    final bool hitChild = hitTestChildren(result, position: position);
+    result.add(BoxHitTestEntry(this, position));
+    return hitChild || hitTestSelf(position);
+  }
+
+  @override
+  void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
+    super.handleEvent(event, entry);
+    if (_isInTimeColumn(entry.localPosition)) {
+      if (event is PointerDownEvent) {
+        _activePointerId = null;
+        _pointerDownLocal = null;
+        _pointerDownSlot = null;
+      }
+      return;
+    }
+    if (event is PointerDownEvent) {
+      _activePointerId ??= event.pointer;
+      if (_activePointerId == event.pointer) {
+        _pointerDownLocal = entry.localPosition;
+        _pointerDownSlot = slotForOffset(entry.localPosition);
+        _pointerDownHitTask = containsTaskAt(entry.localPosition);
+      }
+      return;
+    }
+
+    if (event.pointer != _activePointerId) {
+      if (event is PointerUpEvent || event is PointerCancelEvent) {
+        onDragAutoScrollStop?.call();
+      }
+      return;
+    }
+
+    if (event is PointerMoveEvent) {
+      if (_isDragInProgress) {
+        _handlePointerDragUpdate(entry.localPosition, event.position);
+      }
+      return;
+    }
+
+    if (event is PointerUpEvent) {
+      _handlePointerUp(entry.localPosition, event.position);
+      return;
+    }
+
+    if (event is PointerCancelEvent) {
+      _handlePointerCancel();
+    }
+  }
+
+  CalendarTaskGeometry? geometryForTask(String taskId) =>
+      _taskGeometries[taskId];
+
+  Rect? localRectForTask(String taskId) => _taskGeometries[taskId]?.rect;
+
+  Rect? globalRectForTask(String taskId) {
+    final Rect? rect = localRectForTask(taskId);
+    if (rect == null) {
+      return null;
+    }
+    return MatrixUtils.transformRect(getTransformTo(null), rect);
+  }
+
+  bool containsTaskAt(Offset localPosition) {
+    for (final CalendarTaskGeometry geometry in _taskGeometries.values) {
+      if (geometry.rect.contains(localPosition)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _previewOverlapsScheduled(DateTime previewStart, Duration duration) {
+    final DateTime previewEnd = previewStart.add(duration);
+    final String? draggingId = _interactionController?.draggingTaskId;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as CalendarSurfaceParentData;
+      final CalendarTask? task = parentData.task;
+      if (task == null) {
+        child = childAfter(child);
+        continue;
+      }
+      if (draggingId != null && task.id == draggingId) {
+        child = childAfter(child);
+        continue;
+      }
+      final DateTime? taskStart = task.scheduledTime;
+      if (taskStart == null) {
+        child = childAfter(child);
+        continue;
+      }
+      final Duration taskDuration = task.duration ?? const Duration(hours: 1);
+      final DateTime taskEnd = taskStart.add(taskDuration);
+      if (previewStart.isBefore(taskEnd) && previewEnd.isAfter(taskStart)) {
+        return true;
+      }
+      child = childAfter(child);
+    }
+    return false;
+  }
+
+  Rect? columnBoundsForDate(DateTime date) => _geometryForDate(date)?.bounds;
+
+  double? columnWidthForOffset(Offset localOffset) =>
+      _geometryForOffset(localOffset)?.bounds.width;
+
+  bool _isInTimeColumn(Offset localPosition) =>
+      localPosition.dx <= _timeColumnWidth;
+
+  Offset _clampLocalOffset(Offset localPosition) {
+    final double effectiveWidth = size.width.isFinite && size.width > 0
+        ? size.width
+        : (_dayGeometries.isNotEmpty
+            ? _dayGeometries.last.bounds.right
+            : localPosition.dx);
+    final double effectiveHeight = size.height.isFinite && size.height > 0
+        ? size.height
+        : (_dayGeometries.isNotEmpty
+            ? _dayGeometries.last.bounds.bottom
+            : localPosition.dy);
+    final double dx = localPosition.dx.clamp(0.0, effectiveWidth);
+    final double dy = localPosition.dy.clamp(0.0, effectiveHeight);
+    return Offset(dx, dy);
+  }
+
+  DateTime? slotForOffset(Offset localOffset) {
+    if (_metrics == null || _dayGeometries.isEmpty) {
+      return null;
+    }
+    final CalendarLayoutMetrics resolvedMetrics = _metrics!;
+    final double dy = localOffset.dy;
+    final int minutesFromStart =
+        ((dy / resolvedMetrics.slotHeight) * resolvedMetrics.minutesPerSlot)
+            .round();
+    final int clampedMinutes = minutesFromStart.clamp(
+      0,
+      (endHour - startHour + 1) * 60,
+    );
+    final int minutes = startHour * 60 + clampedMinutes;
+    final int hour = minutes ~/ 60;
+    final int minute = minutes % 60;
+
+    _DayColumnGeometry? geometry;
+    for (final _DayColumnGeometry candidate in _dayGeometries) {
+      if (candidate.bounds.contains(localOffset)) {
+        geometry = candidate;
+        break;
+      }
+    }
+    geometry ??= _dayGeometries.isEmpty ? null : _dayGeometries.first;
+    if (geometry == null) {
+      return null;
+    }
+
+    return DateTime(
+      geometry.date.year,
+      geometry.date.month,
+      geometry.date.day,
+      hour,
+      minute,
+    );
+  }
+
+  DateTime? _computePreviewStartForHover(
+    DateTime targetDate,
+    Offset globalPosition,
+  ) {
+    final DateTime? computed =
+        _computePreviewStartFromGlobalOffset(globalPosition, targetDate);
+    if (computed != null) {
+      return _snapToStep(computed);
+    }
+    return _snapToStep(DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      startHour,
+    ));
+  }
+
+  DateTime? _computePreviewStartFromGlobalOffset(
+    Offset globalPosition,
+    DateTime targetDate,
+  ) {
+    final TaskInteractionController? controller = _interactionController;
+    if (controller == null || _metrics == null) {
+      return null;
+    }
+    final DateTime? origin = controller.dragOriginSlot;
+    final DateTime? dragStartTime = controller.dragStartScheduledTime;
+    final double? dragTopGlobal = controller.dragStartGlobalTop;
+    if (origin == null || dragTopGlobal == null) {
+      return null;
+    }
+
+    final double pointerOffset = controller.dragPointerOffsetFromTop ??
+        _computePointerTopOffset(globalPosition.dy);
+    final double pointerTopGlobal = globalPosition.dy - pointerOffset;
+    final double deltaPixels = pointerTopGlobal - dragTopGlobal;
+    final double pixelsPerMinute = _metrics!.hourHeight / 60.0;
+    if (pixelsPerMinute == 0) {
+      return dragStartTime ?? origin;
+    }
+
+    final int stepMinutes = minutesPerStep <= 0 ? 15 : minutesPerStep;
+    final double minutesDelta = deltaPixels / pixelsPerMinute;
+    final int snappedMinutes =
+        (minutesDelta / stepMinutes).round() * stepMinutes;
+
+    final DateTime baseTime = dragStartTime ?? origin;
+    final DateTime baseDateTime = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      baseTime.hour,
+      baseTime.minute,
+    );
+
+    final DateTime candidate =
+        baseDateTime.add(Duration(minutes: snappedMinutes));
+    return _clampPreviewStart(candidate, targetDate);
+  }
+
+  double _computePointerTopOffset(double pointerGlobalDy) {
+    final TaskInteractionController? controller = _interactionController;
+    if (controller == null) {
+      return 0;
+    }
+    final double? stored = controller.dragPointerOffsetFromTop;
+    if (stored != null) {
+      return stored;
+    }
+    final double referenceTop =
+        controller.dragStartGlobalTop ?? pointerGlobalDy;
+    double offset = pointerGlobalDy - referenceTop;
+    final double height = controller.draggingTaskHeight ?? 0;
+    if (height > 0) {
+      offset = offset.clamp(0.0, height);
+    } else {
+      offset = math.max(0.0, offset);
+    }
+    controller.setDragPointerOffsetFromTop(offset);
+    return offset;
+  }
+
+  DateTime _clampPreviewStart(DateTime candidate, DateTime targetDate) {
+    final DateTime dayStart = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      startHour,
+    );
+    final DateTime dayEnd = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      endHour,
+    );
+
+    if (candidate.isBefore(dayStart)) {
+      return dayStart;
+    }
+
+    final int stepMinutes = minutesPerStep <= 0 ? 15 : minutesPerStep;
+    if (!candidate.isBefore(dayEnd)) {
+      final DateTime lastStart =
+          dayEnd.subtract(Duration(minutes: stepMinutes));
+      return lastStart.isBefore(dayStart) ? dayStart : lastStart;
+    }
+
+    return candidate;
+  }
+
+  DateTime _snapToStep(DateTime timestamp) {
+    final int stepMinutes = minutesPerStep <= 0 ? 15 : minutesPerStep;
+    final int totalMinutes = (timestamp.hour * 60) + timestamp.minute;
+    final int snappedMinutes =
+        (totalMinutes / stepMinutes).round() * stepMinutes;
+    final int snappedHour = snappedMinutes ~/ 60;
+    final int snappedMinute = snappedMinutes % 60;
+    return DateTime(
+      timestamp.year,
+      timestamp.month,
+      timestamp.day,
+      snappedHour,
+      snappedMinute,
+    );
+  }
+
+  @override
+  void didEnter(CalendarDragDetails details) {
+    _ensureExternalDragInitialized(details);
+    _handleExternalDragUpdate(details);
+  }
+
+  @override
+  void didMove(CalendarDragDetails details) {
+    _ensureExternalDragInitialized(details);
+    _handleExternalDragUpdate(details);
+  }
+
+  @override
+  void didLeave(CalendarDragDetails details) {
+    _handleExternalDragExit();
+  }
+
+  @override
+  void didDrop(CalendarDragDetails details) {
+    _handleExternalDragDrop(details);
+    _externalDragTaskId = null;
+  }
+
+  void _handleExternalDragUpdate(CalendarDragDetails details) {
+    _interactionController?.updateExternalDragPosition(details.globalPosition);
+    final Offset local = _clampLocalOffset(details.localPosition);
+    _handlePointerDragUpdate(local, details.globalPosition);
+  }
+
+  void _handleExternalDragExit() {
+    if (_externalDragTaskId != null) {
+      _interactionController?.endDrag();
+      _externalDragTaskId = null;
+    }
+    onDragExit?.call();
+    onDragAutoScrollStop?.call();
+    _updateHoverTask(null);
+  }
+
+  void _handleExternalDragDrop(CalendarDragDetails details) {
+    final Offset local = _clampLocalOffset(details.localPosition);
+    final DateTime? slotTime = slotForOffset(local);
+    final DateTime? snapped = slotTime != null ? _snapToStep(slotTime) : null;
+    if (snapped != null) {
+      onDragEnd?.call(
+        CalendarSurfaceDragEndDetails(
+          slotStart: snapped,
+          globalPosition: details.globalPosition,
+        ),
+      );
+    } else {
+      onDragExit?.call();
+    }
+    onDragAutoScrollStop?.call();
+    _updateHoverTask(null);
+  }
+
+  void _ensureExternalDragInitialized(CalendarDragDetails details) {
+    final TaskInteractionController? controller = _interactionController;
+    if (controller == null) {
+      return;
+    }
+    if (controller.draggingTaskId != null &&
+        controller.draggingTaskId == details.task.id) {
+      return;
+    }
+    final Size feedbackSize = details.feedbackSize ??
+        Size(
+          controller.draggingTaskWidth ?? 0,
+          controller.draggingTaskHeight ?? _metrics?.slotHeight ?? 0,
+        );
+    controller.beginExternalDrag(
+      task: details.task,
+      pointerOffset: details.pointerOffsetFromOrigin,
+      feedbackSize: feedbackSize,
+      globalPosition: details.globalPosition,
+    );
+    _externalDragTaskId = details.task.id;
+  }
+
+  Color _slotBackgroundColor({
+    required bool isToday,
+    required int hour,
+    required bool isEvenSlot,
+  }) {
+    if (isToday) {
+      final double targetAlpha = isEvenSlot
+          ? calendarTodaySlotLightOpacity
+          : calendarTodaySlotDarkOpacity;
+      return calendarPrimaryColor.withValues(alpha: targetAlpha);
+    }
+    if (hour.isEven) {
+      return isEvenSlot ? calendarStripedSlotColor : calendarBackgroundColor;
+    }
+    return isEvenSlot ? calendarBackgroundColor : calendarStripedSlotColor;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatHourLabel(int hour) {
+    final int normalized = hour % 24;
+    if (normalized == 0) {
+      return '12 AM';
+    }
+    if (normalized < 12) {
+      return '$normalized AM';
+    }
+    if (normalized == 12) {
+      return '12 PM';
+    }
+    return '${normalized - 12} PM';
+  }
+
+  double _verticalOffsetForTime(
+    DateTime timestamp,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final int minutesFromStart =
+        (timestamp.hour * 60 + timestamp.minute) - (startHour * 60);
+    return metrics.verticalOffsetForMinutes(minutesFromStart.clamp(0, 24 * 60));
+  }
+}

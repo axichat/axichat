@@ -6,6 +6,7 @@ class CalendarTaskGeometry {
     required this.rect,
     required this.narrowedWidth,
     required this.splitWidthFactor,
+    this.columnDate,
   });
 
   static const CalendarTaskGeometry empty = CalendarTaskGeometry(
@@ -17,9 +18,11 @@ class CalendarTaskGeometry {
   final Rect rect;
   final double narrowedWidth;
   final double splitWidthFactor;
+  final DateTime? columnDate;
 
   @override
-  int get hashCode => Object.hash(rect, narrowedWidth, splitWidthFactor);
+  int get hashCode => Object.hash(rect, narrowedWidth, splitWidthFactor,
+      columnDate?.millisecondsSinceEpoch);
 
   @override
   bool operator ==(Object other) {
@@ -27,6 +30,7 @@ class CalendarTaskGeometry {
     return other is CalendarTaskGeometry &&
         rect == other.rect &&
         narrowedWidth == other.narrowedWidth &&
-        splitWidthFactor == other.splitWidthFactor;
+        splitWidthFactor == other.splitWidthFactor &&
+        other.columnDate == columnDate;
   }
 }
