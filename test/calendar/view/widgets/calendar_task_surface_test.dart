@@ -4,6 +4,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
 
@@ -24,20 +25,6 @@ void main() {
       onEnterSelectionMode: () {},
       onToggleSelection: () {},
       onTap: (_, __) {},
-      computePreviewStartForHover: (_) => null,
-      defaultPreviewStart: () => DateTime(2024),
-      previewOverlapsScheduled: (_, __) => false,
-      updateDragPreview: (_, __) {},
-      stopEdgeAutoScroll: () {},
-      updateDragFeedbackWidth: (_,
-          {forceApply = false, forceCenterPointer = false}) {},
-      clearDragPreview: () {},
-      cancelPendingDragWidth: () {},
-      resetDragFeedbackHint: () {},
-      doesPreviewOverlap: () => false,
-      onTaskDrop: (_, __) {},
-      isWidthDebounceActive: () => false,
-      isPreviewAnchor: (_) => false,
     );
 
     bool isPopoverOpen = false;
@@ -49,7 +36,11 @@ void main() {
       splitWidthFactor: 200 / 240,
     );
 
-    CalendarTaskEntryBindings buildBindings() => CalendarTaskEntryBindings(
+    CalendarTaskEntryBindings buildBindings({
+      void Function(VoidCallback listener)? addGeometryListener,
+      void Function(VoidCallback listener)? removeGeometryListener,
+    }) =>
+        CalendarTaskEntryBindings(
           isSelectionMode: false,
           isSelected: false,
           isPopoverOpen: isPopoverOpen,
@@ -61,12 +52,14 @@ void main() {
           interactionController: interactionController,
           dragFeedbackHint: interactionController.feedbackHint,
           callbacks: callbacks,
-          updateBounds: (_) {},
+          geometryProvider: (_) => geometry,
+          addGeometryListener:
+              addGeometryListener ?? (VoidCallback listener) {},
+          removeGeometryListener:
+              removeGeometryListener ?? (VoidCallback listener) {},
           stepHeight: 16,
           minutesPerStep: 15,
           hourHeight: 48,
-          schedulePopoverLayoutUpdate: () {},
-          geometry: geometry,
         );
 
     await tester.pumpWidget(
@@ -103,5 +96,84 @@ void main() {
 
     final dynamic updatedState = tester.state(find.byType(CalendarTaskSurface));
     expect(updatedState.menuController, same(initialController));
+  });
+
+  testWidgets('CalendarTaskSurface rebuilds when geometry becomes available',
+      (tester) async {
+    final interactionController = TaskInteractionController();
+    final task = CalendarTask.create(
+      title: 'Geometry Task',
+      scheduledTime: DateTime(2024, 1, 15, 9),
+    );
+
+    CalendarTaskGeometry geometry = CalendarTaskGeometry.empty;
+    VoidCallback? geometryListener;
+
+    final bindings = CalendarTaskEntryBindings(
+      isSelectionMode: false,
+      isSelected: false,
+      isPopoverOpen: false,
+      dragTargetKey: GlobalKey(),
+      splitPreviewAnimationDuration: Duration.zero,
+      contextMenuGroupId: const ValueKey<String>('geometry-menu'),
+      contextMenuBuilderFactory: (_) => (_, __) => const <Widget>[],
+      interactionController: interactionController,
+      dragFeedbackHint: interactionController.feedbackHint,
+      callbacks: CalendarTaskTileCallbacks(
+        onResizePreview: (_) {},
+        onResizeEnd: (_) {},
+        onResizePointerMove: (_) {},
+        onDragStarted: (_, __) {},
+        onDragUpdate: (_) {},
+        onDragEnded: (_) {},
+        onDragPointerDown: (_) {},
+        onEnterSelectionMode: () {},
+        onToggleSelection: () {},
+        onTap: (_, __) {},
+      ),
+      geometryProvider: (_) => geometry,
+      addGeometryListener: (listener) => geometryListener = listener,
+      removeGeometryListener: (listener) {
+        if (geometryListener == listener) {
+          geometryListener = null;
+        }
+      },
+      stepHeight: 16,
+      minutesPerStep: 15,
+      hourHeight: 48,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ShadTheme(
+          data: ShadThemeData(
+            colorScheme: const ShadSlateColorScheme.light(),
+            brightness: Brightness.light,
+          ),
+          child: SizedBox(
+            width: 240,
+            height: 72,
+            child: CalendarTaskSurface(
+              task: task,
+              isDayView: true,
+              bindings: bindings,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ResizableTaskWidget), findsNothing);
+
+    geometry = const CalendarTaskGeometry(
+      rect: Rect.fromLTWH(0, 0, 240, 72),
+      narrowedWidth: 200,
+      splitWidthFactor: 200 / 240,
+    );
+    geometryListener?.call();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(ResizableTaskWidget), findsOneWidget);
   });
 }

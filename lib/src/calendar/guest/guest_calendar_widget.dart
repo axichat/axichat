@@ -157,12 +157,8 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
 
   void _handleStateChanges(BuildContext context, CalendarState state) {
     // Handle errors (no sync errors in guest mode)
-    if (state.error != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          FeedbackSystem.showError(context, state.error!);
-        }
-      });
+    if (state.error != null && mounted) {
+      FeedbackSystem.showError(context, state.error!);
     }
   }
 

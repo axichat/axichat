@@ -630,20 +630,6 @@ CalendarTaskTileCallbacks _testTileCallbacks() => CalendarTaskTileCallbacks(
       onEnterSelectionMode: () {},
       onToggleSelection: () {},
       onTap: (_, __) {},
-      computePreviewStartForHover: (_) => null,
-      defaultPreviewStart: () => DateTime.now(),
-      previewOverlapsScheduled: (_, __) => false,
-      updateDragPreview: (_, __) {},
-      stopEdgeAutoScroll: () {},
-      updateDragFeedbackWidth: (_,
-          {bool forceApply = false, bool forceCenterPointer = false}) {},
-      clearDragPreview: () {},
-      cancelPendingDragWidth: () {},
-      resetDragFeedbackHint: () {},
-      doesPreviewOverlap: () => false,
-      onTaskDrop: (_, __) {},
-      isWidthDebounceActive: () => false,
-      isPreviewAnchor: (_) => false,
     );
 
 CalendarTaskEntryBindings _buildTestBindings({
@@ -670,12 +656,12 @@ CalendarTaskEntryBindings _buildTestBindings({
     interactionController: controller,
     dragFeedbackHint: controller.feedbackHint,
     callbacks: _testTileCallbacks(),
-    updateBounds: (_) {},
+    geometryProvider: (_) => geometry,
+    addGeometryListener: (_) {},
+    removeGeometryListener: (_) {},
     stepHeight: 15,
     minutesPerStep: 15,
     hourHeight: 60,
-    schedulePopoverLayoutUpdate: () {},
-    geometry: geometry,
   );
 }
 
