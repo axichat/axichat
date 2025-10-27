@@ -114,13 +114,27 @@ class CalendarNavigation extends StatelessWidget {
             verticalPadding,
           ),
           color: Colors.white,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              navRow,
-              const Spacer(),
-              trailingRow,
-            ],
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(fontSize: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: navRow,
+                  ),
+                ),
+                SizedBox(width: navSpacing),
+                Flexible(
+                  flex: 0,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: trailingRow,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -189,6 +203,7 @@ class CalendarNavigation extends StatelessWidget {
         tooltip: tooltip ?? label,
         onPressed: onPressed,
         highlighted: highlighted,
+        enabled: onPressed != null,
       );
     }
     final Widget button = highlighted
@@ -259,15 +274,17 @@ class CalendarNavigation extends StatelessWidget {
     final shortcut =
         icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
     final String message = '$tooltip ($shortcut)';
+    final bool enabled = onPressed != null;
     if (compact) {
       return _compactNavButton(
         icon: icon,
         tooltip: message,
         onPressed: onPressed,
         highlighted: false,
+        enabled: enabled,
       );
     }
-    return Tooltip(
+    Widget control = Tooltip(
       message: message,
       child: TaskSecondaryButton(
         label: tooltip,
@@ -278,6 +295,13 @@ class CalendarNavigation extends StatelessWidget {
         hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
       ),
     );
+    if (!enabled) {
+      control = Opacity(
+        opacity: 0.4,
+        child: control,
+      );
+    }
+    return control;
   }
 
   Widget _compactNavButton({
@@ -285,6 +309,7 @@ class CalendarNavigation extends StatelessWidget {
     required String tooltip,
     required VoidCallback? onPressed,
     required bool highlighted,
+    bool enabled = true,
   }) {
     final Widget button = highlighted
         ? ShadButton(
@@ -304,7 +329,7 @@ class CalendarNavigation extends StatelessWidget {
             hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
             child: Icon(icon, size: 16),
           );
-    return Tooltip(
+    Widget control = Tooltip(
       message: tooltip,
       child: SizedBox(
         width: 44,
@@ -312,6 +337,13 @@ class CalendarNavigation extends StatelessWidget {
         child: button,
       ),
     );
+    if (!enabled) {
+      control = Opacity(
+        opacity: 0.4,
+        child: control,
+      );
+    }
+    return control;
   }
 
   Widget _buildNavRow({
@@ -321,16 +353,11 @@ class CalendarNavigation extends StatelessWidget {
     if (navButtons.isEmpty) {
       return const SizedBox.shrink();
     }
-    final children = <Widget>[];
-    for (var i = 0; i < navButtons.length; i++) {
-      children.add(navButtons[i]);
-      if (i < navButtons.length - 1) {
-        children.add(SizedBox(width: spacing));
-      }
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: children,
+    return Wrap(
+      spacing: spacing,
+      runSpacing: calendarGutterSm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: navButtons,
     );
   }
 
@@ -344,7 +371,7 @@ class CalendarNavigation extends StatelessWidget {
     final double maxDateLabelWidth =
         isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
 
-    final children = <Widget>[
+    final trailingChildren = <Widget>[
       ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxDateLabelWidth),
         child: _DateLabel(
@@ -353,17 +380,15 @@ class CalendarNavigation extends StatelessWidget {
           collapseText: collapseDateText,
         ),
       ),
+      if (hasUndoRedo) undoRedoGroup,
     ];
 
-    if (hasUndoRedo) {
-      children
-        ..add(SizedBox(width: trailingGap))
-        ..add(undoRedoGroup);
-    }
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: children,
+    return Wrap(
+      spacing: trailingGap,
+      runSpacing: calendarGutterSm,
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: trailingChildren,
     );
   }
 }
@@ -468,13 +493,18 @@ class _DateLabelState extends State<_DateLabel> {
                   ),
                   if (!hideText) ...[
                     const SizedBox(width: calendarGutterSm),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: calendarTitleColor,
-                        letterSpacing: 0.1,
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 260),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: calendarTitleColor,
+                          letterSpacing: 0.1,
+                        ),
                       ),
                     ),
                   ],
