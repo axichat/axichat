@@ -805,12 +805,10 @@ class RenderCalendarSurface extends RenderBox
   @override
   void performLayout() {
     final bool isDayView = columns.length <= 1;
-    final double fallbackHeight =
-        layoutTheme.visibleHourRows * layoutTheme.dayViewHourHeight;
     final double availableHeight =
         constraints.hasBoundedHeight && constraints.maxHeight.isFinite
             ? constraints.maxHeight
-            : fallbackHeight;
+            : double.infinity;
     final CalendarLayoutMetrics resolvedMetrics =
         layoutCalculator.resolveMetrics(
       zoomIndex: zoomIndex,
