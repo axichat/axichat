@@ -57,6 +57,7 @@ const calendarBorderColor = Color(0xFFE1E4E8);
 const calendarBorderDarkColor = Color(0xFFD1D5DA);
 const calendarBorderLightColor = Color(0xFFF0F0F0);
 const calendarSelectedDayColor = Color(0xFFF6F8FA);
+const calendarSlotHoverColor = Color(0xFFE8F1FF);
 
 // Typography colors
 const calendarTitleColor = Color(0xFF24292E);
