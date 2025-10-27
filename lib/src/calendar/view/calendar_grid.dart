@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -98,6 +99,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
   late final ScrollController _verticalController;
+  late final ScrollController _horizontalHeaderController;
+  late final ScrollController _horizontalGridController;
   final GlobalKey _scrollableKey =
       GlobalKey(debugLabel: 'CalendarVerticalScroll');
   final FocusNode _focusNode = FocusNode(debugLabel: 'CalendarGridFocus');
@@ -129,6 +132,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   final CalendarSurfaceController _surfaceController =
       CalendarSurfaceController();
   final GlobalKey _surfaceKey = GlobalKey(debugLabel: 'calendar-surface');
+  late final ShadPopoverController _gridContextMenuController;
+  DateTime? _contextMenuSlot;
   double _edgeAutoScrollOffsetPerFrame = 0;
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
@@ -138,6 +143,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   CalendarView? _lastNonDayView;
   bool _waitingForDayView = false;
   CalendarView? _pendingRestoreView;
+  bool _syncingHorizontalScroll = false;
+  DateTime? _hoveredSlot;
+  bool _desktopDayPinned = false;
   bool _autoScrollPending = false;
   DateTime? _pendingScrollSlot;
   DateTime? _pendingZoomScrollTarget;
@@ -158,7 +166,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _verticalController = _CalendarScrollController(
       onAttached: _handleScrollAttach,
     );
+    _horizontalHeaderController = ScrollController();
+    _horizontalGridController = ScrollController();
+    _horizontalHeaderController.addListener(_handleHorizontalHeaderScroll);
+    _horizontalGridController.addListener(_handleHorizontalGridScroll);
     _taskInteractionController = TaskInteractionController();
+    _gridContextMenuController = ShadPopoverController();
+    _taskInteractionController.clipboard.addListener(
+      _handleClipboardChanged,
+    );
     _taskPopoverController = TaskPopoverController();
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
@@ -325,6 +341,43 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _processViewportRequests();
   }
 
+  void _handleClipboardChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  void _handleHorizontalHeaderScroll() {
+    if (_syncingHorizontalScroll ||
+        !_horizontalHeaderController.hasClients ||
+        !_horizontalGridController.hasClients) {
+      return;
+    }
+    _syncingHorizontalScroll = true;
+    final double targetOffset = _horizontalHeaderController.offset.clamp(
+      0.0,
+      _horizontalGridController.position.maxScrollExtent,
+    );
+    _horizontalGridController.jumpTo(targetOffset);
+    _syncingHorizontalScroll = false;
+  }
+
+  void _handleHorizontalGridScroll() {
+    if (_syncingHorizontalScroll ||
+        !_horizontalHeaderController.hasClients ||
+        !_horizontalGridController.hasClients) {
+      return;
+    }
+    _syncingHorizontalScroll = true;
+    final double targetOffset = _horizontalGridController.offset.clamp(
+      0.0,
+      _horizontalHeaderController.position.maxScrollExtent,
+    );
+    _horizontalHeaderController.jumpTo(targetOffset);
+    _syncingHorizontalScroll = false;
+  }
+
   void _scheduleAutoScroll() {
     _autoScrollPending = true;
     _maybeAutoScroll();
@@ -385,16 +438,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final position = _verticalController.position;
-    final double nextOffset =
-        (_verticalController.offset + _edgeAutoScrollOffsetPerFrame)
-            .clamp(position.minScrollExtent, position.maxScrollExtent);
+    final double currentOffset = _verticalController.offset;
+    final double nextOffset = (currentOffset + _edgeAutoScrollOffsetPerFrame)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
 
-    if ((nextOffset - _verticalController.offset).abs() <= 0.1) {
+    if ((nextOffset - currentOffset).abs() <= 0.1) {
       _stopEdgeAutoScroll();
       return;
     }
 
     _verticalController.jumpTo(nextOffset);
+    final double appliedDelta = nextOffset - currentOffset;
+    if (appliedDelta.abs() > 0) {
+      _taskInteractionController.dispatchResizeAutoScrollDelta(appliedDelta);
+    }
   }
 
   void _stopEdgeAutoScroll() {
@@ -493,27 +550,32 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         width;
     final bool widthChanged = (currentWidth - width).abs() > 0.5;
     final bool shouldCenter = forceCenterPointer || widthChanged;
-    final double pointerGlobalX = _taskInteractionController
-            .dragPointerGlobalX ??
-        (_taskInteractionController.dragStartGlobalLeft ?? 0.0) +
-            (currentWidth * _taskInteractionController.dragPointerNormalized);
+    double normalizedPointer =
+        _taskInteractionController.dragPointerNormalized.clamp(0.0, 1.0);
+    final double pointerGlobalX =
+        _taskInteractionController.dragPointerGlobalX ??
+            (_taskInteractionController.dragStartGlobalLeft ?? 0.0) +
+                (currentWidth * normalizedPointer);
+    if (shouldCenter) {
+      normalizedPointer = 0.5;
+      _taskInteractionController.setDragPointerNormalized(normalizedPointer);
+    }
     _setDragFeedbackHint(
       _buildDragHint(
         width: width,
         pointerFraction: shouldCenter ? 0.5 : null,
-        anchorDx: _taskInteractionController.dragAnchorDx,
+        anchorDx:
+            shouldCenter ? width / 2 : _taskInteractionController.dragAnchorDx,
         anchorDy: _taskInteractionController.dragPointerOffsetFromTop,
       ),
     );
-    if (shouldCenter) {
-      _taskInteractionController.setDragPointerNormalized(0.5);
-    }
-    _taskInteractionController.dragStartGlobalLeft =
-        pointerGlobalX - (width / 2);
+    final double adjustedLeft = width > 0
+        ? pointerGlobalX - (width * normalizedPointer)
+        : pointerGlobalX;
+    _taskInteractionController.dragStartGlobalLeft = adjustedLeft;
     if (width > 0) {
       _taskInteractionController.draggingTaskWidth = width;
-      _taskInteractionController.dragAnchorDx =
-          width * _taskInteractionController.dragPointerNormalized;
+      _taskInteractionController.dragAnchorDx = width * normalizedPointer;
     }
     _taskInteractionController.setActiveDragWidth(width);
   }
@@ -546,13 +608,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         ? pointerFraction.clamp(0.0, 1.0)
         : _taskInteractionController.dragPointerNormalized.clamp(0.0, 1.0);
 
-    if (pointerFraction != null) {
-      _taskInteractionController.setDragPointerNormalized(normalized);
-    }
-
     final double pointerOffset = (baseWidth * normalized).clamp(0.0, baseWidth);
-    final double anchorX =
-        anchorDx ?? _taskInteractionController.dragAnchorDx ?? pointerOffset;
+    final double anchorX = anchorDx ??
+        (pointerFraction != null
+            ? pointerFraction * baseWidth
+            : _taskInteractionController.dragAnchorDx ?? pointerOffset);
     final double anchorY =
         anchorDy ?? _taskInteractionController.dragPointerOffsetFromTop ?? 0.0;
 
@@ -604,6 +664,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
+    _taskInteractionController.clipboard
+        .removeListener(_handleClipboardChanged);
+    _horizontalHeaderController.removeListener(_handleHorizontalHeaderScroll);
+    _horizontalGridController.removeListener(_handleHorizontalGridScroll);
+    _horizontalHeaderController.dispose();
+    _horizontalGridController.dispose();
+    _gridContextMenuController.dispose();
     _taskInteractionController.dispose();
     _taskPopoverController.dispose();
     super.dispose();
@@ -685,11 +752,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       pointerGlobalX: pickupGlobalX,
       originSlot: _computeOriginSlot(task.scheduledTime),
     );
-    _taskInteractionController.setDragPointerOffsetFromTop(
-      null,
-      notify: false,
-    );
-    _taskInteractionController.setDragPointerNormalized(0.5);
     if (_taskInteractionController.draggingTaskWidth != null) {
       _taskInteractionController.dragAnchorDx =
           _taskInteractionController.draggingTaskWidth! *
@@ -701,7 +763,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _setDragFeedbackHint(
       _buildDragHint(
         width: bounds.width,
-        pointerFraction: _taskInteractionController.dragPointerNormalized,
+        pointerFraction: 0.5,
         anchorDx: _taskInteractionController.dragAnchorDx,
         anchorDy: _taskInteractionController.dragPointerOffsetFromTop,
       ),
@@ -711,10 +773,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _handleDragPointerDown(Offset normalizedOffset) {
     _taskInteractionController
         .setDragPointerNormalized(normalizedOffset.dx.clamp(0.0, 1.0));
-    _taskInteractionController.setDragPointerOffsetFromTop(
-      null,
-      notify: false,
-    );
     _taskInteractionController.dragHasMoved = false;
   }
 
@@ -833,6 +891,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     if (!_isCompactActive && widget.state.viewMode != CalendarView.day) {
       _lastNonDayView = null;
+    }
+    if (!_isCompactActive &&
+        oldWidget.state.viewMode != widget.state.viewMode) {
+      if (widget.state.viewMode == CalendarView.day && !_waitingForDayView) {
+        _desktopDayPinned = true;
+      } else if (widget.state.viewMode == CalendarView.week) {
+        _desktopDayPinned = false;
+      }
     }
     // Detect view mode changes and animate transitions
     if (oldWidget.state.viewMode != widget.state.viewMode) {
@@ -992,6 +1058,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         _pendingRestoreView = _lastNonDayView;
         _lastNonDayView = null;
         widget.onViewChanged(_pendingRestoreView!);
+      } else if (widget.state.viewMode == CalendarView.day &&
+          !_desktopDayPinned &&
+          !_waitingForDayView) {
+        widget.onViewChanged(CalendarView.week);
       }
     }
   }
@@ -1047,6 +1117,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     fallback: calendarCompactDayColumnWidth,
                   )
                 : null;
+            final bool enableHorizontalScroll =
+                isWeekView && compact && compactWeekDayWidth != null;
 
             final gridBody = Container(
               decoration: const BoxDecoration(
@@ -1073,6 +1145,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                       compact,
                       isWeekView: isWeekView,
                       compactWeekDayWidth: compactWeekDayWidth,
+                      horizontalScrollController: enableHorizontalScroll
+                          ? _horizontalHeaderController
+                          : null,
+                      enableHorizontalScroll: enableHorizontalScroll,
                     ),
                   ),
                   Expanded(
@@ -1104,6 +1180,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     weekDates,
                                     compact,
                                     compactWeekDayWidth,
+                                    enableHorizontalScroll:
+                                        enableHorizontalScroll,
+                                    horizontalScrollController:
+                                        enableHorizontalScroll
+                                            ? _horizontalGridController
+                                            : null,
+                                    hoveredSlot: _hoveredSlot,
                                   ),
                                 );
                               },
@@ -1244,12 +1327,36 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return metrics.hourHeight;
   }
 
+  double _effectiveHourHeight(CalendarLayoutMetrics? metrics) {
+    final double resolved =
+        metrics?.hourHeight ?? _currentLayoutMetrics.hourHeight;
+    return resolved > 0 ? resolved : _currentLayoutMetrics.hourHeight;
+  }
+
+  double _effectiveStepHeight(CalendarLayoutMetrics? metrics) {
+    final CalendarLayoutMetrics resolved = metrics ?? _currentLayoutMetrics;
+    final double slotHeight = resolved.slotHeight;
+    final int minutesPerSlot = resolved.minutesPerSlot;
+    if (slotHeight > 0 && minutesPerSlot > 0) {
+      final double ratio =
+          _minutesPerStep.toDouble() / minutesPerSlot.toDouble();
+      return slotHeight * ratio;
+    }
+    final double hourHeight = _effectiveHourHeight(metrics);
+    return (hourHeight / 60.0) * _minutesPerStep.toDouble();
+  }
+
   Widget _buildGridContent(
     bool isWeekView,
     List<DateTime> weekDates,
     bool compact,
-    double? compactWeekDayWidth,
-  ) {
+    double? compactWeekDayWidth, {
+    ScrollController? horizontalScrollController,
+    bool enableHorizontalScroll = false,
+    DateTime? hoveredSlot,
+  }) {
+    final bool allowHorizontalScroll = enableHorizontalScroll ||
+        (isWeekView && compact && compactWeekDayWidth != null);
     final responsive = ResponsiveHelper.spec(context);
     final List<DateTime> columns =
         isWeekView ? weekDates : <DateTime>[widget.state.selectedDate];
@@ -1292,6 +1399,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       controller: _surfaceController,
       minutesPerStep: _minutesPerStep,
       interactionController: _taskInteractionController,
+      hoveredSlot: hoveredSlot,
       onTap: _handleSurfaceTap,
       dragPreview: _taskInteractionController.preview.value,
       onDragUpdate: _handleSurfaceDragUpdate,
@@ -1306,13 +1414,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       children: taskEntries,
     );
 
-    final double overlayHourHeight =
-        _surfaceController.resolvedMetrics?.hourHeight ?? _resolvedHourHeight;
-    final double overlayResolvedHourHeight = overlayHourHeight <= 0
-        ? _currentLayoutMetrics.hourHeight
-        : overlayHourHeight;
-    final double overlayStepHeight =
-        (overlayResolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
+    final CalendarLayoutMetrics? overlayMetrics =
+        _surfaceController.resolvedMetrics;
+    final double overlayResolvedHourHeight =
+        _effectiveHourHeight(overlayMetrics);
+    final double overlayStepHeight = _effectiveStepHeight(overlayMetrics);
 
     final Widget layeredSurface = Stack(
       clipBehavior: Clip.none,
@@ -1328,28 +1434,45 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ],
     );
 
-    Widget surface = layeredSurface;
+    final Widget interactiveSurface = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onHover: _handleSurfaceHover,
+      onExit: (_) => _clearSurfaceHover(),
+      child: layeredSurface,
+    );
 
-    final bool enableHorizontalScroll =
-        isWeekView && compact && compactWeekDayWidth != null;
-    if (enableHorizontalScroll) {
-      final double dayWidth = compactWeekDayWidth;
+    Widget surface = interactiveSurface;
+    if (allowHorizontalScroll) {
+      final double dayWidth = compactWeekDayWidth!;
       final double totalWidth =
           _timeColumnWidth + (dayWidth * columnSpecs.length);
       surface = SingleChildScrollView(
         scrollDirection: Axis.horizontal,
+        controller: horizontalScrollController ?? _horizontalGridController,
         child: SizedBox(
           width: totalWidth,
-          child: layeredSurface,
+          child: interactiveSurface,
         ),
       );
     }
+
+    final Widget menuSurface = Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _handleGridPointerDown,
+      child: ShadContextMenuRegion(
+        controller: _gridContextMenuController,
+        groupId: _contextMenuGroupId,
+        longPressEnabled: true,
+        items: _buildGridContextMenuItems(),
+        child: surface,
+      ),
+    );
 
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 0 : responsive.gridHorizontalPadding,
       ),
-      child: surface,
+      child: menuSurface,
     );
   }
 
@@ -1369,6 +1492,121 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       }
     }
     widget.onEmptySlotTapped?.call(details.slotStart, Offset.zero);
+  }
+
+  void _handleGridPointerDown(PointerDownEvent event) {
+    _clearSurfaceHover();
+    final RenderObject? renderObject =
+        _surfaceKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderCalendarSurface) {
+      return;
+    }
+    final Offset localPosition = renderObject.globalToLocal(event.position);
+    if (_surfaceController.containsTaskAt(localPosition)) {
+      if (_contextMenuSlot != null) {
+        setState(() {
+          _contextMenuSlot = null;
+        });
+      }
+      return;
+    }
+    final DateTime? slot = renderObject.slotForOffset(localPosition);
+    if (slot == null || slot == _contextMenuSlot) {
+      return;
+    }
+    setState(() {
+      _contextMenuSlot = slot;
+    });
+  }
+
+  void _handleSurfaceHover(PointerHoverEvent event) {
+    final RenderObject? renderObject =
+        _surfaceKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderCalendarSurface) {
+      _updateHoveredSlot(null);
+      return;
+    }
+    final Offset localPosition = renderObject.globalToLocal(event.position);
+    if (localPosition.dx <= _timeColumnWidth ||
+        _surfaceController.containsTaskAt(localPosition)) {
+      _updateHoveredSlot(null);
+      return;
+    }
+    final DateTime? slot = _surfaceController.slotForOffset(localPosition);
+    if (slot == null) {
+      _updateHoveredSlot(null);
+      return;
+    }
+    final int step = _minutesPerStep;
+    final int snappedMinute = (slot.minute ~/ step) * step;
+    final DateTime snapped = DateTime(
+      slot.year,
+      slot.month,
+      slot.day,
+      slot.hour,
+      snappedMinute,
+    );
+    _updateHoveredSlot(snapped);
+  }
+
+  void _updateHoveredSlot(DateTime? slot) {
+    final DateTime? current = _hoveredSlot;
+    final bool unchanged = (current == null && slot == null) ||
+        (current != null && slot != null && current.isAtSameMomentAs(slot));
+    if (unchanged) {
+      return;
+    }
+    setState(() {
+      _hoveredSlot = slot;
+    });
+  }
+
+  void _clearSurfaceHover() {
+    if (_hoveredSlot == null) {
+      return;
+    }
+    setState(() {
+      _hoveredSlot = null;
+    });
+  }
+
+  List<Widget> _buildGridContextMenuItems() {
+    final DateTime? slot = _contextMenuSlot;
+    if (slot == null) {
+      return const <Widget>[];
+    }
+
+    final List<Widget> items = <Widget>[];
+    final CalendarTask? clipboardTemplate =
+        _taskInteractionController.clipboardTemplate;
+
+    if (clipboardTemplate != null) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(Icons.content_paste_outlined),
+          onPressed: () {
+            _gridContextMenuController.hide();
+            _pasteTask(slot);
+          },
+          child: const Text('Paste Task Here'),
+        ),
+      );
+    }
+
+    if (widget.onEmptySlotTapped != null) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(Icons.add_circle_outline),
+          onPressed: () {
+            _gridContextMenuController.hide();
+            widget.onEmptySlotTapped?.call(slot, Offset.zero);
+          },
+          child: const Text('Quick Add Task'),
+        ),
+      );
+    }
+
+    return items;
   }
 
   void _handleSurfaceDragUpdate(
@@ -1458,12 +1696,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required bool isDayView,
   }) {
     final List<Widget> entries = <Widget>[];
-    final double hourHeight =
-        _surfaceController.resolvedMetrics?.hourHeight ?? _resolvedHourHeight;
-    final double resolvedHourHeight =
-        hourHeight <= 0 ? _currentLayoutMetrics.hourHeight : hourHeight;
-    final double stepHeight =
-        (resolvedHourHeight / 60.0) * _minutesPerStep.toDouble();
+    final CalendarLayoutMetrics? resolvedMetrics =
+        _surfaceController.resolvedMetrics;
+    final double resolvedHourHeight = _effectiveHourHeight(resolvedMetrics);
+    final double stepHeight = _effectiveStepHeight(resolvedMetrics);
 
     for (final DateTime date in columns) {
       final List<CalendarTask> tasks = _getTasksForDay(date);
@@ -1851,9 +2087,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     bool compact, {
     required bool isWeekView,
     double? compactWeekDayWidth,
+    ScrollController? horizontalScrollController,
+    bool enableHorizontalScroll = false,
   }) {
     final bool useScrollableWeekHeader =
-        compact && isWeekView && compactWeekDayWidth != null;
+        enableHorizontalScroll && compactWeekDayWidth != null;
     return Container(
       height: calendarWeekHeaderHeight,
       decoration: const BoxDecoration(
@@ -1884,6 +2122,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             Expanded(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
+                controller: horizontalScrollController,
                 child: Row(
                   children: weekDates.asMap().entries.map((entry) {
                     final date = entry.value;
@@ -2014,16 +2253,34 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
 
+    final bool isResizing =
+        _taskInteractionController.activeResizeInteraction != null;
+    const double resizeBandFactor = 0.55;
+    const double resizeFastSpeedFactor = 0.4;
+    const double resizeSlowSpeedFactor = 0.55;
+
+    final double fastBandHeight = isResizing
+        ? (_edgeScrollFastBandHeight * resizeBandFactor)
+        : _edgeScrollFastBandHeight;
+    final double slowBandHeight = isResizing
+        ? (_edgeScrollSlowBandHeight * resizeBandFactor)
+        : _edgeScrollSlowBandHeight;
+    final double fastOffsetPerFrame = isResizing
+        ? (_edgeScrollFastOffsetPerFrame * resizeFastSpeedFactor)
+        : _edgeScrollFastOffsetPerFrame;
+    final double slowOffsetPerFrame = isResizing
+        ? (_edgeScrollSlowOffsetPerFrame * resizeSlowSpeedFactor)
+        : _edgeScrollSlowOffsetPerFrame;
+
     double? offsetPerFrame;
-    if (y <= _edgeScrollFastBandHeight || y < 0) {
-      offsetPerFrame = -_edgeScrollFastOffsetPerFrame;
-    } else if (y <= _edgeScrollFastBandHeight + _edgeScrollSlowBandHeight) {
-      offsetPerFrame = -_edgeScrollSlowOffsetPerFrame;
-    } else if (y >= height - _edgeScrollFastBandHeight || y > height) {
-      offsetPerFrame = _edgeScrollFastOffsetPerFrame;
-    } else if (y >=
-        height - (_edgeScrollFastBandHeight + _edgeScrollSlowBandHeight)) {
-      offsetPerFrame = _edgeScrollSlowOffsetPerFrame;
+    if (y <= fastBandHeight || y < 0) {
+      offsetPerFrame = -fastOffsetPerFrame;
+    } else if (y <= fastBandHeight + slowBandHeight) {
+      offsetPerFrame = -slowOffsetPerFrame;
+    } else if (y >= height - fastBandHeight || y > height) {
+      offsetPerFrame = fastOffsetPerFrame;
+    } else if (y >= height - (fastBandHeight + slowBandHeight)) {
+      offsetPerFrame = slowOffsetPerFrame;
     }
 
     if (offsetPerFrame != null) {

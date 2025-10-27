@@ -425,9 +425,17 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     final Rect bounds = _globalBounds();
     _dragActive = true;
     _pendingTap = false;
+    interactionController.suppressSurfaceTapOnce();
     final double normalized =
         size.width <= 0 ? 0.5 : (pointerLocal.dx / size.width).clamp(0.0, 1.0);
     interactionController.setDragPointerNormalized(normalized);
+    final double pointerOffsetFromTop = size.height.isFinite && size.height > 0
+        ? size.height / 2
+        : pointerLocal.dy;
+    interactionController.setDragPointerOffsetFromTop(
+      pointerOffsetFromTop,
+      notify: false,
+    );
     interactionController.dragAnchorDx = pointerLocal.dx;
     final Offset globalPosition =
         _pointerDownGlobal ?? localToGlobal(pointerLocal);
@@ -547,9 +555,13 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void _beginResize(String handle) {
     _resizeActive = true;
     _activeHandle = handle;
+    interactionController.suppressSurfaceTapOnce();
     interactionController.beginResizeInteraction(
       taskId: task.id,
       handle: handle,
+    );
+    interactionController.registerResizeAutoScrollHandler(
+      _handleResizeAutoScrollDelta,
     );
     final DateTime? start = task.scheduledTime;
     final Duration duration = task.duration ?? const Duration(hours: 1);
@@ -564,7 +576,14 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   void _updateResize(PointerMoveEvent event) {
     onResizePointerMove?.call(event.position);
-    _totalResizeDelta += event.delta.dy;
+    _applyResizeDelta(event.delta.dy);
+  }
+
+  void _applyResizeDelta(double deltaDy) {
+    if (!_resizeActive || deltaDy == 0) {
+      return;
+    }
+    _totalResizeDelta += deltaDy;
     final double steps = _totalResizeDelta / (stepHeight == 0 ? 1 : stepHeight);
     final int stepToApply = steps > 0 ? steps.floor() : steps.ceil();
     final int deltaSteps = stepToApply - _lastAppliedStep;
@@ -610,6 +629,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     if (preview != null) {
       onResizePreview?.call(preview);
     }
+  }
+
+  void _handleResizeAutoScrollDelta(double delta) {
+    _applyResizeDelta(delta);
   }
 
   void _endResize() {

@@ -96,9 +96,9 @@ class CalendarZoomLevel {
 }
 
 const List<CalendarZoomLevel> kCalendarZoomLevels = <CalendarZoomLevel>[
-  CalendarZoomLevel(hourHeight: 78, daySubdivisions: 4, label: 'Compact'),
-  CalendarZoomLevel(hourHeight: 132, daySubdivisions: 4, label: 'Comfort'),
-  CalendarZoomLevel(hourHeight: 192, daySubdivisions: 4, label: 'Expanded'),
+  CalendarZoomLevel(hourHeight: 64, daySubdivisions: 4, label: 'Compact'),
+  CalendarZoomLevel(hourHeight: 120, daySubdivisions: 4, label: 'Comfort'),
+  CalendarZoomLevel(hourHeight: 184, daySubdivisions: 4, label: 'Expanded'),
 ];
 
 /// Immutable layout metrics resolved for the active viewport.

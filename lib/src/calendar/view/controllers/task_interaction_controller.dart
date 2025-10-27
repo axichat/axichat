@@ -7,6 +7,8 @@ import '../../models/calendar_task.dart';
 import '../../utils/recurrence_utils.dart';
 import '../resizable_task_widget.dart';
 
+typedef ResizeAutoScrollHandler = void Function(double delta);
+
 @immutable
 class DragPreview {
   const DragPreview({
@@ -141,6 +143,8 @@ class TaskInteractionController extends ChangeNotifier {
   Timer? _pendingDragWidthTimer;
   double? _pendingDragWidth;
   bool _pendingDragForceCenter = false;
+  ResizeAutoScrollHandler? _resizeAutoScrollHandler;
+  bool _suppressSurfaceTap = false;
 
   final Map<String, CalendarTask> _resizePreviews = {};
 
@@ -177,6 +181,18 @@ class TaskInteractionController extends ChangeNotifier {
     }
     clipboard.value = const TaskClipboardState();
     notifyListeners();
+  }
+
+  void suppressSurfaceTapOnce() {
+    _suppressSurfaceTap = true;
+  }
+
+  bool consumeSurfaceTapSuppression() {
+    if (!_suppressSurfaceTap) {
+      return false;
+    }
+    _suppressSurfaceTap = false;
+    return true;
   }
 
   void setHoveringTask(String taskId) {
@@ -218,6 +234,7 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     resizeInteraction.value = null;
+    _resizeAutoScrollHandler = null;
     notifyListeners();
   }
 
@@ -243,24 +260,28 @@ class TaskInteractionController extends ChangeNotifier {
     required double pointerGlobalX,
     required DateTime? originSlot,
   }) {
+    final double normalizedPointer = pointerNormalized.clamp(0.0, 1.0);
     _draggingTaskId = task.id;
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
-    setDragPointerOffsetFromTop(null, notify: false);
+    final double pointerOffset = dragPointerOffsetFromTop ??
+        (bounds.height.isFinite && bounds.height > 0 ? bounds.height / 2 : 0.0);
+    setDragPointerOffsetFromTop(pointerOffset, notify: false);
     dragStartGlobalTop = bounds.top;
     draggingTaskHeight = bounds.height;
-    dragStartGlobalLeft = pointerGlobalX - (bounds.width / 2.0);
+    final double width = bounds.width.isFinite ? bounds.width : 0.0;
+    final double pointerLeftOffset =
+        width > 0 ? width * normalizedPointer : 0.0;
+    dragStartGlobalLeft = pointerGlobalX - pointerLeftOffset;
     draggingTaskWidth = bounds.width;
     activeDragWidth = bounds.width;
     dragInitialWidth = bounds.width;
-    dragAnchorDx = bounds.width * pointerNormalized;
-    dragPointerNormalized = pointerNormalized;
+    dragAnchorDx = bounds.width * normalizedPointer;
+    dragPointerNormalized = normalizedPointer;
+    final double pointerGlobalY = bounds.top + pointerOffset;
     updateDragPointerGlobalPosition(
-      Offset(
-        pointerGlobalX,
-        bounds.top + ((dragPointerOffsetFromTop ?? (bounds.height / 2))),
-      ),
+      Offset(pointerGlobalX, pointerGlobalY),
       notify: false,
     );
     dragHasMoved = false;
@@ -318,6 +339,16 @@ class TaskInteractionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void registerResizeAutoScrollHandler(
+    ResizeAutoScrollHandler? handler,
+  ) {
+    _resizeAutoScrollHandler = handler;
+  }
+
+  void dispatchResizeAutoScrollDelta(double delta) {
+    _resizeAutoScrollHandler?.call(delta);
+  }
+
   void setActiveDragWidth(double width) {
     activeDragWidth = width;
   }
@@ -366,17 +397,23 @@ class TaskInteractionController extends ChangeNotifier {
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = task;
     _dragStartScheduledTime = task.scheduledTime;
-    setDragPointerOffsetFromTop(pointerOffset.dy, notify: false);
-    dragStartGlobalTop = globalPosition.dy - pointerOffset.dy;
+    final double width = feedbackSize?.width ?? draggingTaskWidth ?? 0;
+    final double height = feedbackSize?.height ?? draggingTaskHeight ?? 0;
+    final double pointerOffsetY = height > 0 ? height / 2 : pointerOffset.dy;
+    setDragPointerOffsetFromTop(pointerOffsetY, notify: false);
+    dragStartGlobalTop = globalPosition.dy - pointerOffsetY;
     draggingTaskHeight = feedbackSize?.height;
-    dragStartGlobalLeft = globalPosition.dx - pointerOffset.dx;
+    final double clampedPointerDx = (!width.isFinite || width <= 0)
+        ? pointerOffset.dx
+        : pointerOffset.dx.clamp(0.0, width);
+    dragStartGlobalLeft = globalPosition.dx - clampedPointerDx;
     draggingTaskWidth = feedbackSize?.width;
     activeDragWidth = feedbackSize?.width;
     dragInitialWidth = feedbackSize?.width;
-    dragAnchorDx = pointerOffset.dx;
-    dragPointerNormalized = (feedbackSize == null || feedbackSize.width == 0)
+    dragAnchorDx = clampedPointerDx;
+    dragPointerNormalized = (!width.isFinite || width <= 0)
         ? 0.5
-        : (pointerOffset.dx / feedbackSize.width).clamp(0.0, 1.0);
+        : (clampedPointerDx / width).clamp(0.0, 1.0);
     updateDragPointerGlobalPosition(globalPosition, notify: false);
     dragHasMoved = false;
     notifyListeners();

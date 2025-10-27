@@ -1,5 +1,8 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -151,6 +154,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
     required this.controller,
     required this.minutesPerStep,
     required this.interactionController,
+    this.hoveredSlot,
     this.onTap,
     this.dragPreview,
     this.onDragUpdate,
@@ -174,6 +178,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
   final CalendarSurfaceController controller;
   final int minutesPerStep;
   final TaskInteractionController interactionController;
+  final DateTime? hoveredSlot;
   final ValueChanged<CalendarSurfaceTapDetails>? onTap;
   final DragPreview? dragPreview;
   final ValueChanged<CalendarSurfaceDragUpdateDetails>? onDragUpdate;
@@ -199,6 +204,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       controller: controller,
       minutesPerStep: minutesPerStep,
       interactionController: interactionController,
+      hoveredSlot: hoveredSlot,
       devicePixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
       onTap: onTap,
       dragPreview: dragPreview,
@@ -229,6 +235,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       ..controller = controller
       ..minutesPerStep = minutesPerStep
       ..interactionController = interactionController
+      ..hoveredSlot = hoveredSlot
       ..devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0
       ..onTap = onTap
       ..dragPreview = dragPreview
@@ -337,6 +344,7 @@ class RenderCalendarSurface extends RenderBox
     required CalendarSurfaceController controller,
     required int minutesPerStep,
     required TaskInteractionController interactionController,
+    DateTime? hoveredSlot,
     required double devicePixelRatio,
     this.onTap,
     DragPreview? dragPreview,
@@ -359,6 +367,7 @@ class RenderCalendarSurface extends RenderBox
         _controller = controller,
         _minutesPerStep = minutesPerStep,
         _interactionController = interactionController,
+        _hoveredSlot = hoveredSlot,
         _devicePixelRatio = devicePixelRatio,
         _dragPreview = dragPreview;
 
@@ -462,6 +471,17 @@ class RenderCalendarSurface extends RenderBox
       return;
     }
     _interactionController = value;
+    markNeedsPaint();
+  }
+
+  DateTime? get hoveredSlot => _hoveredSlot;
+  DateTime? _hoveredSlot;
+  set hoveredSlot(DateTime? value) {
+    if (_slotsMatch(_hoveredSlot, value)) {
+      return;
+    }
+    _hoveredSlot = value;
+    markNeedsPaint();
   }
 
   ValueChanged<CalendarSurfaceTapDetails>? onTap;
@@ -502,6 +522,8 @@ class RenderCalendarSurface extends RenderBox
   Offset? _pointerDownLocal;
   DateTime? _pointerDownSlot;
   bool _pointerDownHitTask = false;
+  bool _pointerDownIsPrimary = false;
+  bool _pointerDragSessionActive = false;
   String? _currentHoverTaskId;
   String? _externalDragTaskId;
 
@@ -592,8 +614,19 @@ class RenderCalendarSurface extends RenderBox
     Offset localPosition,
     Offset globalPosition,
   ) {
+    _pointerDragSessionActive = true;
+    _pointerDownLocal = null;
+    _pointerDownSlot = null;
+    _pointerDownHitTask = false;
     onDragAutoScroll?.call(globalPosition);
-    final DateTime? slotTime = slotForOffset(localPosition);
+    final double pointerOffsetY =
+        _interactionController?.dragPointerOffsetFromTop ?? 0.0;
+    final Offset dragTopLocal = Offset(
+      localPosition.dx,
+      (localPosition.dy - pointerOffsetY),
+    );
+    final Offset topOffset = _clampLocalOffset(dragTopLocal);
+    final DateTime? slotTime = slotForOffset(topOffset);
     final DateTime? snappedSlot =
         slotTime != null ? _snapToStep(slotTime) : null;
     if (slotTime == null) {
@@ -671,8 +704,19 @@ class RenderCalendarSurface extends RenderBox
     );
   }
 
+  void _trackPointerMovement(Offset localPosition) {
+    final Offset? down = _pointerDownLocal;
+    if (down == null) {
+      return;
+    }
+    if ((localPosition - down).distance > _tapTolerance) {
+      _pointerDragSessionActive = true;
+    }
+  }
+
   void _handlePointerUp(Offset localPosition, Offset globalPosition) {
     final bool dragActive = _isDragInProgress;
+    final bool dragSessionActive = dragActive || _pointerDragSessionActive;
     final DateTime? slotTime = slotForOffset(localPosition);
     final DateTime? snappedSlot =
         slotTime != null ? _snapToStep(slotTime) : null;
@@ -692,7 +736,16 @@ class RenderCalendarSurface extends RenderBox
       return;
     }
 
-    if (!dragActive && onTap != null && _pointerDownSlot != null) {
+    final bool suppressTap =
+        _interactionController?.consumeSurfaceTapSuppression() ?? false;
+
+    if (dragSessionActive || suppressTap) {
+      onDragAutoScrollStop?.call();
+      _resetPointerState();
+      return;
+    }
+
+    if (onTap != null && _pointerDownSlot != null && _pointerDownIsPrimary) {
       final Offset down = _pointerDownLocal ?? localPosition;
       if ((localPosition - down).distance <= _tapTolerance) {
         final DateTime slot = snappedSlot ?? slotTime ?? _pointerDownSlot!;
@@ -707,7 +760,6 @@ class RenderCalendarSurface extends RenderBox
     }
     onDragAutoScrollStop?.call();
     _resetPointerState();
-    _updateHoverTask(null);
   }
 
   void _handlePointerCancel() {
@@ -722,6 +774,8 @@ class RenderCalendarSurface extends RenderBox
     _pointerDownLocal = null;
     _pointerDownSlot = null;
     _pointerDownHitTask = false;
+    _pointerDownIsPrimary = false;
+    _pointerDragSessionActive = false;
     _updateHoverTask(null);
   }
 
@@ -999,6 +1053,7 @@ class RenderCalendarSurface extends RenderBox
     _paintTimeColumnLabels(canvas, offset, resolvedMetrics);
     _paintCurrentTimeIndicator(canvas, offset, resolvedMetrics);
     _paintDragPreview(canvas, offset, resolvedMetrics);
+    _paintHoverHighlight(canvas, offset, resolvedMetrics);
   }
 
   void _paintDayColumns(
@@ -1231,6 +1286,48 @@ class RenderCalendarSurface extends RenderBox
     canvas.drawRect(anchorRect, anchorPaint);
   }
 
+  void _paintHoverHighlight(
+    Canvas canvas,
+    Offset offset,
+    CalendarLayoutMetrics metrics,
+  ) {
+    final DateTime? slot = _hoveredSlot;
+    if (slot == null) {
+      return;
+    }
+    if (_interactionController?.draggingTaskId != null ||
+        _interactionController?.activeResizeInteraction != null ||
+        _isDragInProgress) {
+      return;
+    }
+    final _DayColumnGeometry? geometry = _geometryForDate(slot);
+    if (geometry == null) {
+      return;
+    }
+    final double slotHeight = metrics.slotHeight;
+    if (slotHeight <= 0) {
+      return;
+    }
+    final double top = _verticalOffsetForTime(slot, metrics);
+    final double clampedTop = top.clamp(
+      0.0,
+      math.max(0.0, size.height - slotHeight),
+    );
+    final Rect rect = Rect.fromLTWH(
+      offset.dx + geometry.bounds.left,
+      offset.dy + clampedTop,
+      geometry.bounds.width,
+      slotHeight,
+    );
+    final Paint hoverPaint = Paint()
+      ..color = calendarSlotHoverColor.withValues(alpha: 0.6);
+    final RRect rrect = RRect.fromRectAndRadius(
+      rect.deflate(1.0),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(rrect, hoverPaint);
+  }
+
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     return defaultHitTestChildren(result, position: position);
@@ -1254,10 +1351,22 @@ class RenderCalendarSurface extends RenderBox
         _activePointerId = null;
         _pointerDownLocal = null;
         _pointerDownSlot = null;
+        _pointerDownHitTask = false;
+        _pointerDownIsPrimary = false;
+        _pointerDragSessionActive = false;
       }
       return;
     }
     if (event is PointerDownEvent) {
+      _pointerDragSessionActive = false;
+      final bool isPrimary = _isPrimaryPointer(event);
+      _pointerDownIsPrimary = isPrimary;
+      if (!isPrimary) {
+        _pointerDownLocal = null;
+        _pointerDownSlot = null;
+        _pointerDownHitTask = false;
+        return;
+      }
       _activePointerId ??= event.pointer;
       if (_activePointerId == event.pointer) {
         _pointerDownLocal = entry.localPosition;
@@ -1275,6 +1384,7 @@ class RenderCalendarSurface extends RenderBox
     }
 
     if (event is PointerMoveEvent) {
+      _trackPointerMovement(entry.localPosition);
       if (_isDragInProgress) {
         _handlePointerDragUpdate(entry.localPosition, event.position);
       }
@@ -1291,6 +1401,13 @@ class RenderCalendarSurface extends RenderBox
     }
   }
 
+  bool _isPrimaryPointer(PointerDownEvent event) {
+    if (event.kind == ui.PointerDeviceKind.mouse) {
+      return event.buttons == kPrimaryButton;
+    }
+    return true;
+  }
+
   CalendarTaskGeometry? geometryForTask(String taskId) =>
       _taskGeometries[taskId];
 
@@ -1301,7 +1418,22 @@ class RenderCalendarSurface extends RenderBox
     if (rect == null) {
       return null;
     }
-    return MatrixUtils.transformRect(getTransformTo(null), rect);
+    final Matrix4 transform = getTransformTo(null);
+    final Float64List storage = Float64List.fromList(transform.storage);
+    final double perspective = storage[15];
+    if (perspective == 0 && storage[14] == 0) {
+      return MatrixUtils.transformRect(transform, rect);
+    }
+    final Matrix4 copy = Matrix4.fromList(storage);
+    copy
+      ..setEntry(2, 0, 0.0)
+      ..setEntry(2, 1, 0.0)
+      ..setEntry(2, 3, 0.0)
+      ..setEntry(3, 0, 0.0)
+      ..setEntry(3, 1, 0.0)
+      ..setEntry(3, 2, 0.0)
+      ..setEntry(3, 3, 1.0);
+    return MatrixUtils.transformRect(copy, rect);
   }
 
   bool containsTaskAt(Offset localPosition) {
@@ -1572,7 +1704,12 @@ class RenderCalendarSurface extends RenderBox
 
   void _handleExternalDragDrop(CalendarDragDetails details) {
     final Offset local = _clampLocalOffset(details.localPosition);
-    final DateTime? slotTime = slotForOffset(local);
+    final double pointerOffsetY =
+        _interactionController?.dragPointerOffsetFromTop ?? 0.0;
+    final Offset topLocal = _clampLocalOffset(
+      Offset(local.dx, local.dy - pointerOffsetY),
+    );
+    final DateTime? slotTime = slotForOffset(topLocal);
     final DateTime? snapped = slotTime != null ? _snapToStep(slotTime) : null;
     if (snapped != null) {
       onDragEnd?.call(
@@ -1608,6 +1745,7 @@ class RenderCalendarSurface extends RenderBox
       feedbackSize: feedbackSize,
       globalPosition: details.globalPosition,
     );
+    controller.suppressSurfaceTapOnce();
     _externalDragTaskId = details.task.id;
   }
 
@@ -1626,6 +1764,16 @@ class RenderCalendarSurface extends RenderBox
       return isEvenSlot ? calendarStripedSlotColor : calendarBackgroundColor;
     }
     return isEvenSlot ? calendarBackgroundColor : calendarStripedSlotColor;
+  }
+
+  bool _slotsMatch(DateTime? a, DateTime? b) {
+    if (identical(a, b)) {
+      return true;
+    }
+    if (a == null || b == null) {
+      return a == null && b == null;
+    }
+    return a.isAtSameMomentAs(b);
   }
 
   bool _isSameDay(DateTime a, DateTime b) {
