@@ -16,6 +16,7 @@ import 'loading_indicator.dart';
 import 'quick_add_modal.dart';
 import 'task_sidebar.dart';
 import 'widgets/calendar_keyboard_scope.dart';
+import 'widgets/calendar_drag_target.dart';
 
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});
@@ -230,31 +231,24 @@ class _CalendarWidgetState extends State<CalendarWidget>
     final bottomInset = MediaQuery.of(context).padding.bottom;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tabBar = TabBar(
-          controller: _mobileTabController,
-          dividerHeight: 0,
-          isScrollable: constraints.maxWidth < 200,
-          tabAlignment: constraints.maxWidth < 200
-              ? TabAlignment.center
-              : TabAlignment.fill,
-          tabs: [
-            const Tab(text: 'Schedule'),
-            Tab(child: _buildTasksTabLabel(highlightTasksTab)),
-          ],
-        );
         return Material(
           child: Padding(
             padding: EdgeInsets.only(bottom: bottomInset),
-            child: Stack(
-              children: [
-                tabBar,
-                Positioned.fill(
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildTabDragTarget(0)),
-                      Expanded(child: _buildTabDragTarget(1)),
-                    ],
-                  ),
+            child: TabBar(
+              controller: _mobileTabController,
+              dividerHeight: 0,
+              isScrollable: constraints.maxWidth < 200,
+              tabAlignment: constraints.maxWidth < 200
+                  ? TabAlignment.center
+                  : TabAlignment.fill,
+              tabs: [
+                _buildSwitchableTab(
+                  index: 0,
+                  child: const Text('Schedule'),
+                ),
+                _buildSwitchableTab(
+                  index: 1,
+                  child: _buildTasksTabLabel(highlightTasksTab),
                 ),
               ],
             ),
@@ -264,15 +258,25 @@ class _CalendarWidgetState extends State<CalendarWidget>
     );
   }
 
-  Widget _buildTabDragTarget(int index) {
-    return DragTarget<CalendarTask>(
-      hitTestBehavior: HitTestBehavior.translucent,
-      onWillAcceptWithDetails: (_) {
-        _switchMobileTab(index, fromDrag: true);
-        return false;
-      },
-      builder: (context, candidateData, rejectedData) =>
-          const SizedBox.expand(),
+  Widget _buildSwitchableTab({
+    required int index,
+    required Widget child,
+  }) {
+    return Tab(
+      child: CalendarDragTargetRegion(
+        onEnter: (_) => _switchMobileTab(index, fromDrag: true),
+        onMove: (_) => _switchMobileTab(index, fromDrag: true),
+        builder: (context, isHovering, details) {
+          return DragTarget<CalendarTask>(
+            hitTestBehavior: HitTestBehavior.translucent,
+            onWillAcceptWithDetails: (_) {
+              _switchMobileTab(index, fromDrag: true);
+              return false;
+            },
+            builder: (context, candidateData, rejectedData) => child,
+          );
+        },
+      ),
     );
   }
 
@@ -347,33 +351,29 @@ class _CalendarWidgetState extends State<CalendarWidget>
     return Positioned.fill(
       child: Row(
         children: [
-          SizedBox(
-            width: zoneWidth,
-            child: DragTarget<CalendarTask>(
-              hitTestBehavior: HitTestBehavior.translucent,
-              onWillAcceptWithDetails: (_) {
-                _switchMobileTab(0, fromDrag: true);
-                return false;
-              },
-              builder: (context, candidateData, rejectedData) =>
-                  const SizedBox.expand(),
-            ),
-          ),
+          SizedBox(width: zoneWidth, child: _buildEdgeSwitchZone(0)),
           const Expanded(child: SizedBox.shrink()),
-          SizedBox(
-            width: zoneWidth,
-            child: DragTarget<CalendarTask>(
-              hitTestBehavior: HitTestBehavior.translucent,
-              onWillAcceptWithDetails: (_) {
-                _switchMobileTab(1, fromDrag: true);
-                return false;
-              },
-              builder: (context, candidateData, rejectedData) =>
-                  const SizedBox.expand(),
-            ),
-          ),
+          SizedBox(width: zoneWidth, child: _buildEdgeSwitchZone(1)),
         ],
       ),
+    );
+  }
+
+  Widget _buildEdgeSwitchZone(int index) {
+    return CalendarDragTargetRegion(
+      onEnter: (_) => _switchMobileTab(index, fromDrag: true),
+      onMove: (_) => _switchMobileTab(index, fromDrag: true),
+      builder: (_, __, ___) {
+        return DragTarget<CalendarTask>(
+          hitTestBehavior: HitTestBehavior.translucent,
+          onWillAcceptWithDetails: (_) {
+            _switchMobileTab(index, fromDrag: true);
+            return false;
+          },
+          builder: (context, candidateData, rejectedData) =>
+              const SizedBox.expand(),
+        );
+      },
     );
   }
 

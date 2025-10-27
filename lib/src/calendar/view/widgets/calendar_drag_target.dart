@@ -164,4 +164,13 @@ class _RenderCalendarDragTarget extends RenderProxyBox
   void didDrop(CalendarDragDetails details) {
     onDrop?.call(details);
   }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final bool hitChild = super.hitTest(result, position: position);
+    if (size.contains(position)) {
+      result.add(HitTestEntry(this));
+    }
+    return hitChild;
+  }
 }
