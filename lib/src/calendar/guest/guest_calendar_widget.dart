@@ -16,6 +16,7 @@ import '../view/loading_indicator.dart';
 import '../view/quick_add_modal.dart';
 import '../view/task_sidebar.dart';
 import 'guest_calendar_bloc.dart';
+import '../view/widgets/calendar_drag_tab_mixin.dart';
 import '../view/widgets/calendar_keyboard_scope.dart';
 import '../view/widgets/task_form_section.dart';
 
@@ -27,11 +28,11 @@ class GuestCalendarWidget extends StatefulWidget {
 }
 
 class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, CalendarDragTabMixin {
   late final TabController _mobileTabController;
   late final AnimationController _tasksTabPulseController;
   late final Animation<double> _tasksTabPulse;
-  DateTime? _lastDragTabSwitch;
+  bool _usesMobileLayout = false;
 
   @override
   void initState() {
@@ -45,10 +46,12 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
       parent: _tasksTabPulseController,
       curve: Curves.easeInOut,
     );
+    initCalendarDragTabMixin();
   }
 
   @override
   void dispose() {
+    disposeCalendarDragTabMixin();
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     super.dispose();
@@ -62,6 +65,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
         final spec = ResponsiveHelper.spec(context);
         final bool usesMobileLayout =
             spec.sizeClass != CalendarSizeClass.expanded;
+        _usesMobileLayout = usesMobileLayout;
         final bool highlightTasksTab = usesMobileLayout &&
             state.isSelectionMode &&
             _mobileTabController.index != 1;
@@ -262,7 +266,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
                     _buildSidebarWithProvider(),
                   ],
                 ),
-                _buildEdgeDragTargets(),
+                buildDragEdgeTargets(),
               ],
             ),
           ),
@@ -336,6 +340,22 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
     );
   }
 
+  Widget _buildSidebarWithProvider({double? height}) {
+    final sidebar = BlocProvider<BaseCalendarBloc>.value(
+      value: context.read<GuestCalendarBloc>(),
+      child: const TaskSidebar(),
+    );
+
+    if (height != null) {
+      return SizedBox(
+        height: height,
+        child: sidebar,
+      );
+    }
+
+    return sidebar;
+  }
+
   Widget _buildMobileTabBar(
     BuildContext context, {
     required bool highlightTasksTab,
@@ -343,49 +363,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
     final bottomInset = MediaQuery.of(context).padding.bottom;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tabBar = TabBar(
-          controller: _mobileTabController,
-          dividerHeight: 0,
-          isScrollable: constraints.maxWidth < 200,
-          tabAlignment: constraints.maxWidth < 200
-              ? TabAlignment.center
-              : TabAlignment.fill,
-          tabs: [
-            const Tab(text: 'Schedule'),
-            Tab(child: _buildTasksTabLabel(highlightTasksTab)),
-          ],
-        );
-        return Material(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: Stack(
-              children: [
-                tabBar,
-                Positioned.fill(
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildTabDragTarget(0)),
-                      Expanded(child: _buildTabDragTarget(1)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return buildDragAwareTabBar(
+          context: context,
+          constraints: constraints,
+          bottomInset: bottomInset,
+          scheduleTabLabel: const Text('Schedule'),
+          tasksTabLabel: _buildTasksTabLabel(highlightTasksTab),
         );
       },
-    );
-  }
-
-  Widget _buildTabDragTarget(int index) {
-    return DragTarget<CalendarTask>(
-      hitTestBehavior: HitTestBehavior.translucent,
-      onWillAcceptWithDetails: (_) {
-        _switchMobileTab(index, fromDrag: true);
-        return false;
-      },
-      builder: (context, candidateData, rejectedData) =>
-          const SizedBox.expand(),
     );
   }
 
@@ -455,73 +440,6 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
     );
   }
 
-  Widget _buildEdgeDragTargets() {
-    const double zoneWidth = 32;
-    return Positioned.fill(
-      child: Row(
-        children: [
-          SizedBox(
-            width: zoneWidth,
-            child: DragTarget<CalendarTask>(
-              hitTestBehavior: HitTestBehavior.translucent,
-              onWillAcceptWithDetails: (_) {
-                _switchMobileTab(0, fromDrag: true);
-                return false;
-              },
-              builder: (context, candidateData, rejectedData) =>
-                  const SizedBox.expand(),
-            ),
-          ),
-          const Expanded(child: SizedBox.shrink()),
-          SizedBox(
-            width: zoneWidth,
-            child: DragTarget<CalendarTask>(
-              hitTestBehavior: HitTestBehavior.translucent,
-              onWillAcceptWithDetails: (_) {
-                _switchMobileTab(1, fromDrag: true);
-                return false;
-              },
-              builder: (context, candidateData, rejectedData) =>
-                  const SizedBox.expand(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _switchMobileTab(int index, {bool fromDrag = false}) {
-    if (_mobileTabController.index == index) {
-      return;
-    }
-    if (fromDrag) {
-      final DateTime now = DateTime.now();
-      if (_lastDragTabSwitch != null &&
-          now.difference(_lastDragTabSwitch!) <
-              const Duration(milliseconds: 400)) {
-        return;
-      }
-      _lastDragTabSwitch = now;
-    }
-    _mobileTabController.animateTo(index);
-  }
-
-  Widget _buildSidebarWithProvider({double? height}) {
-    final sidebar = BlocProvider<BaseCalendarBloc>.value(
-      value: context.read<GuestCalendarBloc>(),
-      child: const TaskSidebar(),
-    );
-
-    if (height != null) {
-      return SizedBox(
-        height: height,
-        child: sidebar,
-      );
-    }
-
-    return sidebar;
-  }
-
   Widget _buildCalendarGridWithHandlers(CalendarState state) {
     return CalendarGrid<GuestCalendarBloc>(
       state: state,
@@ -533,6 +451,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
       onViewChanged: (view) => context.read<GuestCalendarBloc>().add(
             CalendarEvent.viewChanged(view: view),
           ),
+      onDragSessionStarted: handleGridDragSessionStarted,
+      onDragGlobalPositionChanged: handleGridDragPositionChanged,
+      onDragSessionEnded: handleGridDragSessionEnded,
     );
   }
 
@@ -562,4 +483,10 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
           ),
     );
   }
+
+  @override
+  TabController get mobileTabController => _mobileTabController;
+
+  @override
+  bool get isDragSwitcherEnabled => _usesMobileLayout;
 }

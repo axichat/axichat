@@ -10,6 +10,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
+import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
@@ -19,7 +20,6 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_draft_controller.dart';
-import 'widgets/calendar_drag_interop.dart';
 import 'widgets/calendar_drag_target.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/deadline_picker_field.dart';
@@ -1542,15 +1542,39 @@ class _TaskSidebarState extends State<TaskSidebar>
               ),
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 160),
-                firstChild: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _sidebarController.toggleSection(section),
-                  child: Container(
-                    key: ValueKey('${section.name}-collapsed'),
-                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-                    constraints: const BoxConstraints(minHeight: 40),
-                    child: collapsedChild,
-                  ),
+                firstChild: CalendarDragTargetRegion(
+                  onEnter: (_) => _handleSidebarSectionDragEnter(section),
+                  onMove: (_) => _handleSidebarSectionDragEnter(section),
+                  onDrop: (details) {
+                    _handleSidebarSectionDragEnter(section);
+                    _handleTaskDroppedIntoSidebar(details.task);
+                  },
+                  builder: (context, isHovering, __) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _sidebarController.toggleSection(section),
+                      child: AnimatedContainer(
+                        key: ValueKey('${section.name}-collapsed'),
+                        duration: const Duration(milliseconds: 120),
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                        constraints: const BoxConstraints(minHeight: 40),
+                        decoration: BoxDecoration(
+                          color: isHovering
+                              ? calendarPrimaryColor.withValues(alpha: 0.12)
+                              : Colors.transparent,
+                          borderRadius:
+                              BorderRadius.circular(calendarBorderRadius),
+                          border: isHovering
+                              ? Border.all(
+                                  color: calendarPrimaryColor,
+                                  width: 1.5,
+                                )
+                              : null,
+                        ),
+                        child: collapsedChild,
+                      ),
+                    );
+                  },
                 ),
                 secondChild: const SizedBox.shrink(),
                 crossFadeState: isExpanded
@@ -1594,6 +1618,34 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
+  void _handleSidebarSectionDragEnter(CalendarSidebarSection section) {
+    _sidebarController.expandSection(section);
+  }
+
+  void _handleTaskDroppedIntoSidebar(CalendarTask dropped) {
+    final bloc = context.read<BaseCalendarBloc>();
+    final model = bloc.state.model;
+    CalendarTask? source =
+        model.tasks[dropped.id] ?? model.tasks[dropped.baseId];
+    source ??= model.resolveTaskInstance(dropped.id);
+    if (source == null) {
+      FeedbackSystem.showError(context, 'Task not found');
+      return;
+    }
+    final CalendarTask unscheduled = source.copyWith(
+      scheduledTime: null,
+      duration: null,
+      endDate: null,
+      startHour: null,
+      modifiedAt: DateTime.now(),
+    );
+    bloc.add(
+      CalendarEvent.taskUpdated(
+        task: unscheduled,
+      ),
+    );
+  }
+
   Widget _buildTaskList(
     List<CalendarTask> tasks, {
     required String emptyLabel,
@@ -1601,21 +1653,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     required CalendarSidebarState uiState,
   }) {
     return CalendarDragTargetRegion(
-      onDrop: (details) {
-        final CalendarTask dropped = details.task;
-        final CalendarTask unscheduled = dropped.copyWith(
-          scheduledTime: null,
-          duration: null,
-          endDate: null,
-          startHour: null,
-          modifiedAt: DateTime.now(),
-        );
-        context.read<BaseCalendarBloc>().add(
-              CalendarEvent.taskUpdated(
-                task: unscheduled,
-              ),
-            );
-      },
+      onDrop: (details) => _handleTaskDroppedIntoSidebar(details.task),
       builder: (context, isHovering, _) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -1765,9 +1803,9 @@ class _TaskSidebarState extends State<TaskSidebar>
 
     return CalendarSidebarDraggable(
       task: task,
-      child: baseTile,
       childWhenDragging: fadedTile,
       feedback: feedback,
+      child: baseTile,
     );
   }
 

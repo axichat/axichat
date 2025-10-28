@@ -30,6 +30,7 @@ import 'controllers/zoom_controls_controller.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
 import 'resizable_task_widget.dart';
+import 'widgets/calendar_drag_feedback_overlay.dart';
 import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_task_surface.dart';
 
@@ -54,6 +55,9 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final void Function(DateTime date) onDateSelected;
   final void Function(CalendarView view) onViewChanged;
   final TaskFocusRequest? focusRequest;
+  final VoidCallback? onDragSessionStarted;
+  final ValueChanged<Offset>? onDragGlobalPositionChanged;
+  final VoidCallback? onDragSessionEnded;
 
   const CalendarGrid({
     super.key,
@@ -63,6 +67,9 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
     required this.onDateSelected,
     required this.onViewChanged,
     this.focusRequest,
+    this.onDragSessionStarted,
+    this.onDragGlobalPositionChanged,
+    this.onDragSessionEnded,
   });
 
   @override
@@ -70,7 +77,10 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
 }
 
 class _CalendarGridState<T extends BaseCalendarBloc>
-    extends State<CalendarGrid<T>> with TickerProviderStateMixin {
+    extends State<CalendarGrid<T>>
+    with
+        TickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin<CalendarGrid<T>> {
   static const int startHour = 0;
   static const int endHour = 24;
   static const int _defaultZoomIndex = 1;
@@ -152,6 +162,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   TaskFocusRequest? _pendingFocusRequest;
   Offset? _contextMenuAnchor;
   bool _pendingPopoverGeometryUpdate = false;
+  bool _dragSessionNotified = false;
+  OverlayEntry? _dragOverlayEntry;
+  bool _pendingDragOverlayInsertion = false;
+  _DragOverlayConfig _dragOverlayConfig = const _DragOverlayConfig();
+  bool _dragOverlayRebuildScheduled = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -186,6 +204,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       if (mounted) {
         setState(() {});
       }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _ensureDragOverlayInserted();
     });
     _scheduleAutoScroll();
   }
@@ -663,6 +687,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _verticalController.dispose();
     _activePopoverEntry?.remove();
     _activePopoverEntry = null;
+    _removeDragOverlayEntry();
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
@@ -754,6 +779,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       pointerGlobalX: pickupGlobalX,
       originSlot: _computeOriginSlot(task.scheduledTime),
     );
+    _notifyDragSessionStarted();
+    final double? globalX = _taskInteractionController.dragPointerGlobalX;
+    final double? globalY = _taskInteractionController.dragPointerGlobalY;
+    if (globalX != null && globalY != null) {
+      _notifyDragGlobalPosition(Offset(globalX, globalY));
+    }
     if (_taskInteractionController.draggingTaskWidth != null) {
       _taskInteractionController.dragAnchorDx =
           _taskInteractionController.draggingTaskWidth! *
@@ -776,6 +807,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController
         .setDragPointerNormalized(normalizedOffset.dx.clamp(0.0, 1.0));
     _taskInteractionController.dragHasMoved = false;
+  }
+
+  void _notifyDragSessionStarted() {
+    if (_dragSessionNotified) {
+      return;
+    }
+    _dragSessionNotified = true;
+    widget.onDragSessionStarted?.call();
+  }
+
+  void _notifyDragGlobalPosition(Offset position) {
+    widget.onDragGlobalPositionChanged?.call(position);
+  }
+
+  void _notifyDragSessionEnded() {
+    if (!_dragSessionNotified) {
+      return;
+    }
+    _dragSessionNotified = false;
+    widget.onDragSessionEnded?.call();
   }
 
   void _handleTaskPointerDown(CalendarTask task, Offset normalizedOffset) {
@@ -825,6 +876,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     _taskInteractionController
         .updateDragPointerGlobalPosition(details.globalPosition);
+    _notifyDragSessionStarted();
+    _notifyDragGlobalPosition(details.globalPosition);
     final double widthForNormalization =
         _taskInteractionController.activeDragWidth ??
             _taskInteractionController.draggingTaskWidth ??
@@ -879,6 +932,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         anchorDy: 0.0,
       ),
     );
+    _notifyDragSessionEnded();
   }
 
   @override
@@ -1070,6 +1124,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     _updateCompactState(context);
     return ResponsiveHelper.layoutBuilder(
       context,
@@ -1443,26 +1498,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final double overlayResolvedHourHeight =
         _effectiveHourHeight(overlayMetrics);
     final double overlayStepHeight = _effectiveStepHeight(overlayMetrics);
-
-    final Widget layeredSurface = Stack(
-      clipBehavior: Clip.none,
-      children: [
-        renderSurface,
-        _DragFeedbackOverlay(
-          controller: _taskInteractionController,
-          hourHeight: overlayResolvedHourHeight,
-          stepHeight: overlayStepHeight,
-          minutesPerStep: _minutesPerStep,
-          isDayView: !isWeekView,
-        ),
-      ],
+    _updateDragOverlayConfig(
+      hourHeight: overlayResolvedHourHeight,
+      stepHeight: overlayStepHeight,
+      isDayView: !isWeekView,
     );
+    _ensureDragOverlayInserted();
 
     final Widget interactiveSurface = MouseRegion(
       cursor: SystemMouseCursors.click,
       onHover: _handleSurfaceHover,
       onExit: (_) => _clearSurfaceHover(),
-      child: layeredSurface,
+      child: renderSurface,
     );
 
     Widget surface = interactiveSurface;
@@ -1673,6 +1720,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (dragging == null) {
       return;
     }
+    _notifyDragSessionStarted();
+    _notifyDragGlobalPosition(details.globalPosition);
     _updateDragPreview(details.previewStart, details.previewDuration);
 
     final double? columnWidth = details.columnWidth ??
@@ -1722,6 +1771,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _cancelPendingDragWidth();
     _resetDragFeedbackHint();
     _stopEdgeAutoScroll();
+    _notifyDragSessionEnded();
   }
 
   void _handleSurfaceDragExit() {
@@ -1756,6 +1806,76 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (activeId != null && !trackedIds.contains(activeId)) {
       _updateActivePopoverLayoutForTask(activeId);
     }
+  }
+
+  void _ensureDragOverlayInserted() {
+    if (_dragOverlayEntry != null || _pendingDragOverlayInsertion) {
+      return;
+    }
+    _pendingDragOverlayInsertion = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingDragOverlayInsertion = false;
+      if (!mounted || _dragOverlayEntry != null) {
+        return;
+      }
+      final overlay = Overlay.of(context, rootOverlay: true);
+      _dragOverlayEntry = OverlayEntry(
+        builder: _buildDragOverlay,
+      );
+      overlay.insert(_dragOverlayEntry!);
+    });
+  }
+
+  void _removeDragOverlayEntry() {
+    _dragOverlayEntry?.remove();
+    _dragOverlayEntry = null;
+    _pendingDragOverlayInsertion = false;
+    _dragOverlayRebuildScheduled = false;
+  }
+
+  void _updateDragOverlayConfig({
+    required double hourHeight,
+    required double stepHeight,
+    required bool isDayView,
+  }) {
+    final _DragOverlayConfig nextConfig = _DragOverlayConfig(
+      hourHeight: hourHeight,
+      stepHeight: stepHeight,
+      minutesPerStep: _minutesPerStep,
+      isDayView: isDayView,
+    );
+    if (nextConfig == _dragOverlayConfig) {
+      return;
+    }
+    _dragOverlayConfig = nextConfig;
+    _scheduleDragOverlayRebuild();
+  }
+
+  Widget _buildDragOverlay(BuildContext context) {
+    final _DragOverlayConfig config = _dragOverlayConfig;
+    if (!config.isValid) {
+      return const SizedBox.shrink();
+    }
+    return Positioned.fill(
+      child: CalendarDragFeedbackOverlay(
+        controller: _taskInteractionController,
+        hourHeight: config.hourHeight,
+        stepHeight: config.stepHeight,
+        minutesPerStep: config.minutesPerStep,
+        isDayView: config.isDayView,
+      ),
+    );
+  }
+
+  void _scheduleDragOverlayRebuild() {
+    if (_dragOverlayEntry == null || _dragOverlayRebuildScheduled) {
+      return;
+    }
+    _dragOverlayRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _dragOverlayRebuildScheduled = false;
+      _dragOverlayEntry?.markNeedsBuild();
+    });
   }
 
   List<Widget> _buildTaskEntries({
@@ -2938,6 +3058,40 @@ class _TimeHeaderPainter extends CustomPainter {
   }
 }
 
+class _DragOverlayConfig {
+  const _DragOverlayConfig({
+    this.hourHeight = 0,
+    this.stepHeight = 0,
+    this.minutesPerStep = 0,
+    this.isDayView = true,
+  });
+
+  final double hourHeight;
+  final double stepHeight;
+  final int minutesPerStep;
+  final bool isDayView;
+
+  bool get isValid => hourHeight > 0 && stepHeight > 0;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    if (other is! _DragOverlayConfig) {
+      return false;
+    }
+    return hourHeight == other.hourHeight &&
+        stepHeight == other.stepHeight &&
+        minutesPerStep == other.minutesPerStep &&
+        isDayView == other.isDayView;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(hourHeight, stepHeight, minutesPerStep, isDayView);
+}
+
 class _DayHeaderDividerPainter extends CustomPainter {
   const _DayHeaderDividerPainter({
     required this.devicePixelRatio,
@@ -2988,102 +3142,3 @@ class _ZoomIntent extends Intent {
 }
 
 enum _ZoomAction { zoomIn, zoomOut, reset }
-
-class _DragFeedbackOverlay extends StatefulWidget {
-  const _DragFeedbackOverlay({
-    required this.controller,
-    required this.hourHeight,
-    required this.stepHeight,
-    required this.minutesPerStep,
-    required this.isDayView,
-  });
-
-  final TaskInteractionController controller;
-  final double hourHeight;
-  final double stepHeight;
-  final int minutesPerStep;
-  final bool isDayView;
-
-  @override
-  State<_DragFeedbackOverlay> createState() => _DragFeedbackOverlayState();
-}
-
-class _DragFeedbackOverlayState extends State<_DragFeedbackOverlay> {
-  final GlobalKey _overlayKey = GlobalKey(debugLabel: 'calendar-drag-overlay');
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: RepaintBoundary(
-        key: _overlayKey,
-        child: IgnorePointer(
-          child: AnimatedBuilder(
-            animation: widget.controller,
-            builder: (context, _) {
-              final CalendarTask? dragging =
-                  widget.controller.draggingTaskSnapshot;
-              final double? pointerX = widget.controller.dragPointerGlobalX;
-              final double? pointerY = widget.controller.dragPointerGlobalY;
-              final double width = widget.controller.activeDragWidth ??
-                  widget.controller.draggingTaskWidth ??
-                  0;
-              final double height =
-                  widget.controller.draggingTaskHeight ?? widget.hourHeight;
-              if (dragging == null ||
-                  pointerX == null ||
-                  pointerY == null ||
-                  width <= 0 ||
-                  height <= 0) {
-                return const SizedBox.shrink();
-              }
-              final RenderBox? box =
-                  _overlayKey.currentContext?.findRenderObject() as RenderBox?;
-              if (box == null) {
-                return const SizedBox.shrink();
-              }
-              final double anchorDx =
-                  widget.controller.dragAnchorDx ?? (width / 2);
-              final double anchorDy =
-                  widget.controller.dragPointerOffsetFromTop ?? (height / 2);
-              final Offset globalTopLeft =
-                  Offset(pointerX - anchorDx, pointerY - anchorDy);
-              final Offset localTopLeft = box.globalToLocal(globalTopLeft);
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned(
-                    left: localTopLeft.dx,
-                    top: localTopLeft.dy,
-                    child: SizedBox(
-                      width: width,
-                      height: height,
-                      child: IgnorePointer(
-                        child: Opacity(
-                          opacity: 0.9,
-                          child: ResizableTaskWidget(
-                            interactionController: widget.controller,
-                            task: dragging,
-                            hourHeight: widget.hourHeight,
-                            stepHeight: widget.stepHeight,
-                            minutesPerStep: widget.minutesPerStep,
-                            width: width,
-                            height: height,
-                            isDayView: widget.isDayView,
-                            enableInteractions: false,
-                            isSelectionMode: false,
-                            isSelected: false,
-                            dragFeedbackHint: widget.controller.feedbackHint,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}

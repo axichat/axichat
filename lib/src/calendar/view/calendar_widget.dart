@@ -15,8 +15,8 @@ import 'feedback_system.dart';
 import 'loading_indicator.dart';
 import 'quick_add_modal.dart';
 import 'task_sidebar.dart';
+import 'widgets/calendar_drag_tab_mixin.dart';
 import 'widgets/calendar_keyboard_scope.dart';
-import 'widgets/calendar_drag_target.dart';
 
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});
@@ -26,12 +26,12 @@ class CalendarWidget extends StatefulWidget {
 }
 
 class _CalendarWidgetState extends State<CalendarWidget>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, CalendarDragTabMixin {
   late final TabController _mobileTabController;
   late final AnimationController _tasksTabPulseController;
   late final Animation<double> _tasksTabPulse;
-  DateTime? _lastDragTabSwitch;
   DateTime? _lastSyncToastTime;
+  bool _usesMobileLayout = false;
 
   @override
   void initState() {
@@ -45,10 +45,12 @@ class _CalendarWidgetState extends State<CalendarWidget>
       parent: _tasksTabPulseController,
       curve: Curves.easeInOut,
     );
+    initCalendarDragTabMixin();
   }
 
   @override
   void dispose() {
+    disposeCalendarDragTabMixin();
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     super.dispose();
@@ -62,6 +64,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
         final spec = ResponsiveHelper.spec(context);
         final bool usesMobileLayout =
             spec.sizeClass != CalendarSizeClass.expanded;
+        _usesMobileLayout = usesMobileLayout;
         final bool highlightTasksTab = usesMobileLayout &&
             state.isSelectionMode &&
             _mobileTabController.index != 1;
@@ -207,7 +210,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
                     _buildSidebarWithProvider(),
                   ],
                 ),
-                _buildEdgeDragTargets(),
+                buildDragEdgeTargets(),
               ],
             ),
           ),
@@ -231,52 +234,14 @@ class _CalendarWidgetState extends State<CalendarWidget>
     final bottomInset = MediaQuery.of(context).padding.bottom;
     return LayoutBuilder(
       builder: (context, constraints) {
-        return Material(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: TabBar(
-              controller: _mobileTabController,
-              dividerHeight: 0,
-              isScrollable: constraints.maxWidth < 200,
-              tabAlignment: constraints.maxWidth < 200
-                  ? TabAlignment.center
-                  : TabAlignment.fill,
-              tabs: [
-                _buildSwitchableTab(
-                  index: 0,
-                  child: const Text('Schedule'),
-                ),
-                _buildSwitchableTab(
-                  index: 1,
-                  child: _buildTasksTabLabel(highlightTasksTab),
-                ),
-              ],
-            ),
-          ),
+        return buildDragAwareTabBar(
+          context: context,
+          constraints: constraints,
+          bottomInset: bottomInset,
+          scheduleTabLabel: const Text('Schedule'),
+          tasksTabLabel: _buildTasksTabLabel(highlightTasksTab),
         );
       },
-    );
-  }
-
-  Widget _buildSwitchableTab({
-    required int index,
-    required Widget child,
-  }) {
-    return Tab(
-      child: CalendarDragTargetRegion(
-        onEnter: (_) => _switchMobileTab(index, fromDrag: true),
-        onMove: (_) => _switchMobileTab(index, fromDrag: true),
-        builder: (context, isHovering, details) {
-          return DragTarget<CalendarTask>(
-            hitTestBehavior: HitTestBehavior.translucent,
-            onWillAcceptWithDetails: (_) {
-              _switchMobileTab(index, fromDrag: true);
-              return false;
-            },
-            builder: (context, candidateData, rejectedData) => child,
-          );
-        },
-      ),
     );
   }
 
@@ -344,53 +309,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
         );
       },
     );
-  }
-
-  Widget _buildEdgeDragTargets() {
-    const double zoneWidth = 32;
-    return Positioned.fill(
-      child: Row(
-        children: [
-          SizedBox(width: zoneWidth, child: _buildEdgeSwitchZone(0)),
-          const Expanded(child: SizedBox.shrink()),
-          SizedBox(width: zoneWidth, child: _buildEdgeSwitchZone(1)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEdgeSwitchZone(int index) {
-    return CalendarDragTargetRegion(
-      onEnter: (_) => _switchMobileTab(index, fromDrag: true),
-      onMove: (_) => _switchMobileTab(index, fromDrag: true),
-      builder: (_, __, ___) {
-        return DragTarget<CalendarTask>(
-          hitTestBehavior: HitTestBehavior.translucent,
-          onWillAcceptWithDetails: (_) {
-            _switchMobileTab(index, fromDrag: true);
-            return false;
-          },
-          builder: (context, candidateData, rejectedData) =>
-              const SizedBox.expand(),
-        );
-      },
-    );
-  }
-
-  void _switchMobileTab(int index, {bool fromDrag = false}) {
-    if (_mobileTabController.index == index) {
-      return;
-    }
-    if (fromDrag) {
-      final DateTime now = DateTime.now();
-      if (_lastDragTabSwitch != null &&
-          now.difference(_lastDragTabSwitch!) <
-              const Duration(milliseconds: 400)) {
-        return;
-      }
-      _lastDragTabSwitch = now;
-    }
-    _mobileTabController.animateTo(index);
   }
 
   Widget _buildTabletLayout(CalendarState state, bool highlightTasksTab) {
@@ -469,6 +387,9 @@ class _CalendarWidgetState extends State<CalendarWidget>
             CalendarEvent.viewChanged(view: view),
           ),
       focusRequest: state.pendingFocus,
+      onDragSessionStarted: handleGridDragSessionStarted,
+      onDragGlobalPositionChanged: handleGridDragPositionChanged,
+      onDragSessionEnded: handleGridDragSessionEnded,
     );
   }
 
@@ -499,4 +420,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
           ),
     );
   }
+
+  @override
+  TabController get mobileTabController => _mobileTabController;
+
+  @override
+  bool get isDragSwitcherEnabled => _usesMobileLayout;
 }

@@ -1,5 +1,6 @@
-import 'dart:ui' as ui;
+import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../models/calendar_task.dart';
@@ -24,6 +25,7 @@ class CalendarDragDetails {
 /// Contract implemented by render targets that wish to receive calendar drags.
 abstract class CalendarDragTargetDelegate {
   bool get isAttached;
+  bool get canAcceptDrop => true;
 
   void didEnter(CalendarDragDetails details);
 
@@ -42,6 +44,9 @@ class CalendarDragCoordinator {
 
   final Set<CalendarDragTargetDelegate> _targets =
       <CalendarDragTargetDelegate>{};
+  final ValueNotifier<bool> _dragActive = ValueNotifier<bool>(false);
+  final ValueNotifier<Offset?> _dragGlobalPosition =
+      ValueNotifier<Offset?>(null);
 
   void registerTarget(CalendarDragTargetDelegate target) {
     _targets.add(target);
@@ -53,29 +58,45 @@ class CalendarDragCoordinator {
 
   /// Hit tests the render tree and returns the active targets under [globalPosition].
   List<CalendarDragTargetDelegate> hitTestTargets(Offset globalPosition) {
-    final HitTestResult result = HitTestResult();
-    final Iterable<RenderView> renderViews =
-        RendererBinding.instance.renderViews;
-    if (renderViews.isEmpty) {
-      return const <CalendarDragTargetDelegate>[];
-    }
-    final ui.FlutterView flutterView = renderViews.first.flutterView;
-    RendererBinding.instance.hitTestInView(
-      result,
-      globalPosition,
-      flutterView.viewId,
-    );
-    final List<CalendarDragTargetDelegate> matches =
-        <CalendarDragTargetDelegate>[];
-    for (final HitTestEntry<dynamic> entry in result.path) {
-      final Object target = entry.target;
-      if (target is CalendarDragTargetDelegate && target.isAttached) {
-        if (_targets.contains(target)) {
+    final LinkedHashSet<CalendarDragTargetDelegate> matches =
+        LinkedHashSet<CalendarDragTargetDelegate>();
+    for (final RenderView view in RendererBinding.instance.renderViews) {
+      final HitTestResult result = HitTestResult();
+      RendererBinding.instance.hitTestInView(
+        result,
+        globalPosition,
+        view.flutterView.viewId,
+      );
+      for (final HitTestEntry<dynamic> entry in result.path) {
+        final Object target = entry.target;
+        if (target is CalendarDragTargetDelegate && target.isAttached) {
           matches.add(target);
         }
       }
     }
-    return matches;
+    return matches.toList(growable: false);
+  }
+
+  ValueListenable<bool> get dragActiveListenable => _dragActive;
+  ValueListenable<Offset?> get dragPositionListenable => _dragGlobalPosition;
+
+  void _notifyDragStart() {
+    if (!_dragActive.value) {
+      _dragActive.value = true;
+    }
+  }
+
+  void _notifyDragPosition(Offset position) {
+    _dragGlobalPosition.value = position;
+  }
+
+  void _notifyDragEnd() {
+    if (_dragActive.value) {
+      _dragActive.value = false;
+    }
+    if (_dragGlobalPosition.value != null) {
+      _dragGlobalPosition.value = null;
+    }
   }
 
   CalendarDragHandle startSession({
@@ -83,6 +104,7 @@ class CalendarDragCoordinator {
     required Offset pointerOffset,
     Size? feedbackSize,
   }) {
+    _notifyDragStart();
     return CalendarDragHandle._(
       coordinator: this,
       task: task,
@@ -106,90 +128,82 @@ class CalendarDragHandle {
   final CalendarTask task;
   final Offset _pointerOffset;
   final Size? _feedbackSize;
-  CalendarDragTargetDelegate? _activeTarget;
-  CalendarDragDetails? _lastDetails;
-  bool _pointerInsideActiveTarget = false;
+  final Map<CalendarDragTargetDelegate, CalendarDragDetails> _activeTargets =
+      <CalendarDragTargetDelegate, CalendarDragDetails>{};
+  CalendarDragTargetDelegate? _dropTarget;
+  CalendarDragDetails? _dropDetails;
   Offset? _lastGlobalPosition;
 
   void update(Offset globalPosition) {
     _lastGlobalPosition = globalPosition;
     _dispatch(globalPosition);
+    _coordinator._notifyDragPosition(globalPosition);
   }
 
   void end(Offset globalPosition) {
     update(globalPosition);
-    if (_activeTarget != null && _lastDetails != null) {
-      _activeTarget!.didDrop(_lastDetails!);
-      if (_pointerInsideActiveTarget) {
-        _activeTarget!.didLeave(_lastDetails!);
-      }
+    final CalendarDragTargetDelegate? dropTarget = _dropTarget;
+    final CalendarDragDetails? dropDetails = _dropDetails;
+    if (dropTarget != null && dropDetails != null) {
+      dropTarget.didDrop(dropDetails);
     }
+    _leaveAllTargets();
+    _coordinator._notifyDragEnd();
     _reset();
   }
 
   void cancel() {
-    if (_activeTarget != null &&
-        _lastDetails != null &&
-        _pointerInsideActiveTarget) {
-      _activeTarget!.didLeave(_lastDetails!);
-    }
+    _leaveAllTargets();
+    _coordinator._notifyDragEnd();
     _reset();
   }
 
   void _reset() {
-    _activeTarget = null;
-    _lastDetails = null;
-    _pointerInsideActiveTarget = false;
+    _activeTargets.clear();
+    _dropTarget = null;
+    _dropDetails = null;
   }
 
   void _dispatch(Offset globalPosition) {
     final List<CalendarDragTargetDelegate> targets =
         _coordinator.hitTestTargets(globalPosition);
-    final CalendarDragTargetDelegate? nextTarget =
-        targets.isNotEmpty ? targets.first : null;
+    final Map<CalendarDragTargetDelegate, CalendarDragDetails> nextActive =
+        <CalendarDragTargetDelegate, CalendarDragDetails>{};
 
-    if (!identical(nextTarget, _activeTarget)) {
-      if (_activeTarget != null &&
-          _pointerInsideActiveTarget &&
-          _lastDetails != null) {
-        _activeTarget!.didLeave(_lastDetails!);
-      }
-      _activeTarget = nextTarget;
-      _pointerInsideActiveTarget = nextTarget != null;
-      if (_activeTarget != null) {
-        final CalendarDragDetails enterDetails =
-            _buildDetails(_activeTarget!, globalPosition);
-        _activeTarget!.didEnter(enterDetails);
-        _activeTarget!.didMove(enterDetails);
-        _lastDetails = enterDetails;
+    for (final CalendarDragTargetDelegate target in targets) {
+      final CalendarDragDetails details = _buildDetails(target, globalPosition);
+      final CalendarDragDetails? previous = _activeTargets[target];
+      if (previous == null) {
+        target.didEnter(details);
       } else {
-        _lastDetails = null;
+        target.didMove(details);
       }
-      return;
+      nextActive[target] = details;
     }
 
-    if (_activeTarget != null) {
-      if (nextTarget == null &&
-          _pointerInsideActiveTarget &&
-          _lastDetails != null) {
-        _activeTarget!.didLeave(_lastDetails!);
-        _pointerInsideActiveTarget = false;
-      } else if (nextTarget != null && !_pointerInsideActiveTarget) {
-        final CalendarDragDetails reenterDetails =
-            _buildDetails(_activeTarget!, globalPosition);
-        _activeTarget!.didEnter(reenterDetails);
-        _pointerInsideActiveTarget = true;
-        _activeTarget!.didMove(reenterDetails);
-        _lastDetails = reenterDetails;
-        return;
-      } else if (nextTarget != null) {
-        _pointerInsideActiveTarget = true;
+    for (final MapEntry<CalendarDragTargetDelegate, CalendarDragDetails> entry
+        in _activeTargets.entries) {
+      if (!nextActive.containsKey(entry.key)) {
+        entry.key.didLeave(entry.value);
       }
-      final CalendarDragDetails moveDetails =
-          _buildDetails(_activeTarget!, globalPosition);
-      _activeTarget!.didMove(moveDetails);
-      _lastDetails = moveDetails;
     }
+
+    _activeTargets
+      ..clear()
+      ..addAll(nextActive);
+
+    CalendarDragTargetDelegate? dropCandidate;
+    CalendarDragDetails? dropDetails;
+    for (final CalendarDragTargetDelegate target in targets) {
+      if (!target.canAcceptDrop) {
+        continue;
+      }
+      dropCandidate = target;
+      dropDetails = nextActive[target];
+      break;
+    }
+    _dropTarget = dropCandidate;
+    _dropDetails = dropDetails;
   }
 
   CalendarDragDetails _buildDetails(
@@ -211,4 +225,14 @@ class CalendarDragHandle {
   }
 
   Offset? get lastGlobalPosition => _lastGlobalPosition;
+
+  void _leaveAllTargets() {
+    for (final MapEntry<CalendarDragTargetDelegate, CalendarDragDetails> entry
+        in _activeTargets.entries) {
+      entry.key.didLeave(entry.value);
+    }
+    _activeTargets.clear();
+    _dropTarget = null;
+    _dropDetails = null;
+  }
 }

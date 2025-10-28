@@ -532,6 +532,9 @@ class RenderCalendarSurface extends RenderBox
   @override
   bool get isAttached => attached;
 
+  @override
+  bool get canAcceptDrop => true;
+
   void _updateHoverTask(String? taskId) {
     if (_currentHoverTaskId == taskId) {
       return;
@@ -1688,6 +1691,10 @@ class RenderCalendarSurface extends RenderBox
     _interactionController?.updateExternalDragPosition(details.globalPosition);
     final Offset local = _clampLocalOffset(details.localPosition);
     _handlePointerDragUpdate(local, details.globalPosition);
+    final TaskInteractionController? controller = _interactionController;
+    if (controller != null && !controller.dragHasMoved) {
+      controller.markDragMoved();
+    }
   }
 
   void _handleExternalDragExit() {
