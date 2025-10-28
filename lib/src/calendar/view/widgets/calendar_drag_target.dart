@@ -131,6 +131,9 @@ class _RenderCalendarDragTarget extends RenderProxyBox
   ValueChanged<CalendarDragDetails>? onDrop;
 
   @override
+  bool get canAcceptDrop => onDrop != null;
+
+  @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
     _coordinator.registerTarget(this);
@@ -168,9 +171,10 @@ class _RenderCalendarDragTarget extends RenderProxyBox
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
     final bool hitChild = super.hitTest(result, position: position);
-    if (size.contains(position)) {
-      result.add(HitTestEntry(this));
+    if (!size.contains(position)) {
+      return hitChild;
     }
-    return hitChild;
+    result.add(BoxHitTestEntry(this, position));
+    return true;
   }
 }

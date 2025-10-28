@@ -93,6 +93,18 @@ class CalendarSidebarController extends ChangeNotifier {
     }
   }
 
+  void expandSection(CalendarSidebarSection section) {
+    if (_state.expandedSection == section) {
+      return;
+    }
+    _updateState(
+      _state.copyWith(
+        expandedSection: section,
+        expandedSectionSpecified: true,
+      ),
+    );
+  }
+
   void setActivePopoverTaskId(String? taskId) {
     if (taskId != _state.activePopoverTaskId) {
       _updateState(

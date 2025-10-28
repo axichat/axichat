@@ -28,6 +28,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   Size _childSize = Size.zero;
   Offset? _lastGlobal;
   Offset? _startGlobalPosition;
+  RenderBox? _overlayBox;
 
   Offset _anchorStrategy(
     Draggable<Object> draggable,
@@ -44,6 +45,9 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   }
 
   void _startDrag() {
+    final OverlayState? overlay =
+        Overlay.of(context, rootOverlay: true);
+    _overlayBox = overlay?.context.findRenderObject() as RenderBox?;
     _handle = CalendarDragCoordinator.instance.startSession(
       task: widget.task,
       pointerOffset: _anchorOffset,
@@ -56,19 +60,30 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   }
 
   void _updateDrag(DragUpdateDetails details) {
-    _lastGlobal = details.globalPosition;
-    _handle?.update(details.globalPosition);
+    Offset? nextGlobal;
+    final RenderBox? overlayBox = _overlayBox;
+    if (overlayBox != null) {
+      nextGlobal = overlayBox.localToGlobal(details.localPosition);
+    }
+    nextGlobal ??= (_lastGlobal ?? _startGlobalPosition ?? details.globalPosition) +
+        details.delta;
+    _lastGlobal = nextGlobal;
+    _handle?.update(nextGlobal);
   }
 
   void _completeDrag(DraggableDetails details) {
-    final Offset position = _lastGlobal ?? Offset.zero;
+    final Offset position =
+        _lastGlobal ?? _startGlobalPosition ?? details.offset;
     _handle?.end(position);
     _handle = null;
+    _overlayBox = null;
   }
 
   void _cancelDrag(Velocity velocity, Offset offset) {
-    _handle?.cancel();
+    final Offset position = _lastGlobal ?? _startGlobalPosition ?? offset;
+    _handle?.end(position);
     _handle = null;
+    _overlayBox = null;
   }
 
   @override
@@ -78,6 +93,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       dragAnchorStrategy: _anchorStrategy,
       feedback: widget.feedback,
       childWhenDragging: widget.childWhenDragging,
+      rootOverlay: true,
       onDragStarted: _startDrag,
       onDragUpdate: _updateDrag,
       onDragEnd: _completeDrag,
