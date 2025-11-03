@@ -36,11 +36,7 @@ void main() {
       splitWidthFactor: 200 / 240,
     );
 
-    CalendarTaskEntryBindings buildBindings({
-      void Function(VoidCallback listener)? addGeometryListener,
-      void Function(VoidCallback listener)? removeGeometryListener,
-    }) =>
-        CalendarTaskEntryBindings(
+    CalendarTaskEntryBindings buildBindings() => CalendarTaskEntryBindings(
           isSelectionMode: false,
           isSelected: false,
           isPopoverOpen: isPopoverOpen,
@@ -53,10 +49,7 @@ void main() {
           dragFeedbackHint: interactionController.feedbackHint,
           callbacks: callbacks,
           geometryProvider: (_) => geometry,
-          addGeometryListener:
-              addGeometryListener ?? (VoidCallback listener) {},
-          removeGeometryListener:
-              removeGeometryListener ?? (VoidCallback listener) {},
+          globalRectProvider: (_) => geometry.rect,
           stepHeight: 16,
           minutesPerStep: 15,
           hourHeight: 48,
@@ -107,41 +100,8 @@ void main() {
     );
 
     CalendarTaskGeometry geometry = CalendarTaskGeometry.empty;
-    VoidCallback? geometryListener;
 
-    final bindings = CalendarTaskEntryBindings(
-      isSelectionMode: false,
-      isSelected: false,
-      isPopoverOpen: false,
-      dragTargetKey: GlobalKey(),
-      splitPreviewAnimationDuration: Duration.zero,
-      contextMenuGroupId: const ValueKey<String>('geometry-menu'),
-      contextMenuBuilderFactory: (_) => (_, __) => const <Widget>[],
-      interactionController: interactionController,
-      dragFeedbackHint: interactionController.feedbackHint,
-      callbacks: CalendarTaskTileCallbacks(
-        onResizePreview: (_) {},
-        onResizeEnd: (_) {},
-        onResizePointerMove: (_) {},
-        onDragStarted: (_, __) {},
-        onDragUpdate: (_) {},
-        onDragEnded: (_) {},
-        onDragPointerDown: (_) {},
-        onEnterSelectionMode: () {},
-        onToggleSelection: () {},
-        onTap: (_, __) {},
-      ),
-      geometryProvider: (_) => geometry,
-      addGeometryListener: (listener) => geometryListener = listener,
-      removeGeometryListener: (listener) {
-        if (geometryListener == listener) {
-          geometryListener = null;
-        }
-      },
-      stepHeight: 16,
-      minutesPerStep: 15,
-      hourHeight: 48,
-    );
+    late void Function(void Function()) triggerRebuild;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -150,14 +110,47 @@ void main() {
             colorScheme: const ShadSlateColorScheme.light(),
             brightness: Brightness.light,
           ),
-          child: SizedBox(
-            width: 240,
-            height: 72,
-            child: CalendarTaskSurface(
-              task: task,
-              isDayView: true,
-              bindings: bindings,
-            ),
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              triggerRebuild = setState;
+              return SizedBox(
+                width: 240,
+                height: 72,
+                child: CalendarTaskSurface(
+                  task: task,
+                  isDayView: true,
+                  bindings: CalendarTaskEntryBindings(
+                    isSelectionMode: false,
+                    isSelected: false,
+                    isPopoverOpen: false,
+                    dragTargetKey: GlobalKey(),
+                    splitPreviewAnimationDuration: Duration.zero,
+                    contextMenuGroupId: const ValueKey<String>('geometry-menu'),
+                    contextMenuBuilderFactory: (_) =>
+                        (_, __) => const <Widget>[],
+                    interactionController: interactionController,
+                    dragFeedbackHint: interactionController.feedbackHint,
+                    callbacks: CalendarTaskTileCallbacks(
+                      onResizePreview: (_) {},
+                      onResizeEnd: (_) {},
+                      onResizePointerMove: (_) {},
+                      onDragStarted: (_, __) {},
+                      onDragUpdate: (_) {},
+                      onDragEnded: (_) {},
+                      onDragPointerDown: (_) {},
+                      onEnterSelectionMode: () {},
+                      onToggleSelection: () {},
+                      onTap: (_, __) {},
+                    ),
+                    geometryProvider: (_) => geometry,
+                    globalRectProvider: (_) => geometry.rect,
+                    stepHeight: 16,
+                    minutesPerStep: 15,
+                    hourHeight: 48,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -170,8 +163,7 @@ void main() {
       narrowedWidth: 200,
       splitWidthFactor: 200 / 240,
     );
-    geometryListener?.call();
-    await tester.pump();
+    triggerRebuild(() {});
     await tester.pump();
 
     expect(find.byType(ResizableTaskWidget), findsOneWidget);

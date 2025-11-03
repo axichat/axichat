@@ -386,6 +386,7 @@ class TaskInteractionController extends ChangeNotifier {
 
   void beginExternalDrag({
     required CalendarTask task,
+    required CalendarTask snapshot,
     required Offset pointerOffset,
     required Size? feedbackSize,
     required Offset globalPosition,
@@ -395,7 +396,7 @@ class TaskInteractionController extends ChangeNotifier {
     }
     _draggingTaskId = task.id;
     _draggingTaskBaseId = task.baseId;
-    _draggingTaskSnapshot = task;
+    _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
     final double width = feedbackSize?.width ?? draggingTaskWidth ?? 0;
     final double height = feedbackSize?.height ?? draggingTaskHeight ?? 0;

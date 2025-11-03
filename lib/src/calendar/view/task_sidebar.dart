@@ -31,7 +31,16 @@ import 'widgets/task_text_field.dart';
 import 'feedback_system.dart';
 
 class TaskSidebar extends StatefulWidget {
-  const TaskSidebar({super.key});
+  const TaskSidebar({
+    super.key,
+    this.onDragSessionStarted,
+    this.onDragSessionEnded,
+    this.onDragGlobalPositionChanged,
+  });
+
+  final VoidCallback? onDragSessionStarted;
+  final VoidCallback? onDragSessionEnded;
+  final ValueChanged<Offset>? onDragGlobalPositionChanged;
 
   @override
   State<TaskSidebar> createState() => _TaskSidebarState();
@@ -1547,7 +1556,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                   onMove: (_) => _handleSidebarSectionDragEnter(section),
                   onDrop: (details) {
                     _handleSidebarSectionDragEnter(section);
-                    _handleTaskDroppedIntoSidebar(details.task);
+                    _handleTaskDroppedIntoSidebar(details.payload.task);
                   },
                   builder: (context, isHovering, __) {
                     return GestureDetector(
@@ -1653,7 +1662,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     required CalendarSidebarState uiState,
   }) {
     return CalendarDragTargetRegion(
-      onDrop: (details) => _handleTaskDroppedIntoSidebar(details.task),
+      onDrop: (details) => _handleTaskDroppedIntoSidebar(details.payload.task),
       builder: (context, isHovering, _) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -1806,6 +1815,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       childWhenDragging: fadedTile,
       feedback: feedback,
       child: baseTile,
+      onDragSessionStarted: widget.onDragSessionStarted,
+      onDragSessionEnded: widget.onDragSessionEnded,
+      onDragGlobalPositionChanged: widget.onDragGlobalPositionChanged,
     );
   }
 

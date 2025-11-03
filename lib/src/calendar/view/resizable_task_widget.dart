@@ -62,7 +62,6 @@ class ResizableTaskWidget extends StatefulWidget {
   final CalendarTask task;
   final ValueChanged<CalendarTask>? onResizePreview;
   final ValueChanged<CalendarTask>? onResizeEnd;
-  final ValueChanged<DragUpdateDetails>? onDragUpdate;
   final double hourHeight;
   final double stepHeight;
   final int minutesPerStep;
@@ -72,8 +71,6 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isPopoverOpen;
   final TaskInteractionController interactionController;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
-  final void Function(CalendarTask task, Rect globalBounds)? onDragStarted;
-  final ValueChanged<CalendarTask>? onDragEnded;
   final bool enableInteractions;
   final bool isSelectionMode;
   final bool isSelected;
@@ -91,7 +88,6 @@ class ResizableTaskWidget extends StatefulWidget {
     required this.task,
     this.onResizePreview,
     this.onResizeEnd,
-    this.onDragUpdate,
     required this.hourHeight,
     required this.stepHeight,
     required this.minutesPerStep,
@@ -100,8 +96,6 @@ class ResizableTaskWidget extends StatefulWidget {
     required this.isDayView,
     this.isPopoverOpen = false,
     this.onTap,
-    this.onDragStarted,
-    this.onDragEnded,
     this.enableInteractions = true,
     this.isSelectionMode = false,
     this.isSelected = false,
@@ -240,9 +234,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 onResizePreview: widget.onResizePreview,
                 onResizeEnd: widget.onResizeEnd,
                 onResizePointerMove: widget.onResizePointerMove,
-                onDragStarted: widget.onDragStarted,
-                onDragUpdate: widget.onDragUpdate,
-                onDragEnded: widget.onDragEnded,
                 onDragPointerDown: widget.onDragPointerDown,
                 onTap: widget.onTap,
                 onToggleSelection: widget.onToggleSelection,

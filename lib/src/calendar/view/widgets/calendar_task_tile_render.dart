@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 
 import '../../models/calendar_task.dart';
 import '../controllers/task_interaction_controller.dart';
-import 'calendar_drag_interop.dart';
 
 typedef TaskTileContextMenuCallback = void Function(
   Offset localPosition,
@@ -30,9 +29,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
     required this.onResizePreview,
     required this.onResizeEnd,
     required this.onResizePointerMove,
-    required this.onDragStarted,
-    required this.onDragUpdate,
-    required this.onDragEnded,
     required this.onDragPointerDown,
     required this.onTap,
     required this.onToggleSelection,
@@ -51,9 +47,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   final ValueChanged<CalendarTask>? onResizePreview;
   final ValueChanged<CalendarTask>? onResizeEnd;
   final ValueChanged<Offset>? onResizePointerMove;
-  final void Function(CalendarTask task, Rect bounds)? onDragStarted;
-  final ValueChanged<DragUpdateDetails>? onDragUpdate;
-  final ValueChanged<CalendarTask>? onDragEnded;
   final ValueChanged<Offset>? onDragPointerDown;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
   final VoidCallback? onToggleSelection;
@@ -73,9 +66,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       onResizePreview: onResizePreview,
       onResizeEnd: onResizeEnd,
       onResizePointerMove: onResizePointerMove,
-      onDragStarted: onDragStarted,
-      onDragUpdate: onDragUpdate,
-      onDragEnded: onDragEnded,
       onDragPointerDown: onDragPointerDown,
       onTap: onTap,
       onToggleSelection: onToggleSelection,
@@ -100,9 +90,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       ..onResizePreview = onResizePreview
       ..onResizeEnd = onResizeEnd
       ..onResizePointerMove = onResizePointerMove
-      ..onDragStarted = onDragStarted
-      ..onDragUpdate = onDragUpdate
-      ..onDragEnded = onDragEnded
       ..onDragPointerDown = onDragPointerDown
       ..onTap = onTap
       ..onToggleSelection = onToggleSelection
@@ -123,9 +110,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     ValueChanged<CalendarTask>? onResizePreview,
     ValueChanged<CalendarTask>? onResizeEnd,
     ValueChanged<Offset>? onResizePointerMove,
-    void Function(CalendarTask task, Rect bounds)? onDragStarted,
-    ValueChanged<DragUpdateDetails>? onDragUpdate,
-    ValueChanged<CalendarTask>? onDragEnded,
     ValueChanged<Offset>? onDragPointerDown,
     void Function(CalendarTask task, Rect globalBounds)? onTap,
     VoidCallback? onToggleSelection,
@@ -142,9 +126,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
         _onResizePreview = onResizePreview,
         _onResizeEnd = onResizeEnd,
         _onResizePointerMove = onResizePointerMove,
-        _onDragStarted = onDragStarted,
-        _onDragUpdate = onDragUpdate,
-        _onDragEnded = onDragEnded,
         _onDragPointerDown = onDragPointerDown,
         _onTap = onTap,
         _onToggleSelection = onToggleSelection,
@@ -152,13 +133,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     onEnter = _handlePointerEnter;
     onExit = _handlePointerExit;
     cursor = SystemMouseCursors.click;
-    _dragRecognizer = ImmediateMultiDragGestureRecognizer(debugOwner: this)
-      ..onStart = _handleRecognizerStart;
   }
 
   static const double _handleExtent = 8.0;
   static const double _tapSlop = 3.0;
-  static final Drag _noopDrag = _NoopDrag();
 
   CalendarTask _task;
   TaskInteractionController _interactionController;
@@ -171,9 +149,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   ValueChanged<CalendarTask>? _onResizePreview;
   ValueChanged<CalendarTask>? _onResizeEnd;
   ValueChanged<Offset>? _onResizePointerMove;
-  void Function(CalendarTask task, Rect bounds)? _onDragStarted;
-  ValueChanged<DragUpdateDetails>? _onDragUpdate;
-  ValueChanged<CalendarTask>? _onDragEnded;
   ValueChanged<Offset>? _onDragPointerDown;
   void Function(CalendarTask task, Rect globalBounds)? _onTap;
   VoidCallback? _onToggleSelection;
@@ -181,8 +156,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   int? _activePointer;
   Offset? _downLocalPosition;
-  Offset? _pointerDownGlobal;
-  bool _dragActive = false;
   bool _resizeActive = false;
   bool _pendingTap = false;
   bool _lastPointerSecondary = false;
@@ -194,7 +167,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   double _currentDurationHours = 1;
   DateTime? _tempScheduled;
   Duration? _tempDuration;
-  late ImmediateMultiDragGestureRecognizer _dragRecognizer;
 
   CalendarTask get task => _task;
   set task(CalendarTask value) {
@@ -266,22 +238,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   ValueChanged<Offset>? get onResizePointerMove => _onResizePointerMove;
   set onResizePointerMove(ValueChanged<Offset>? value) {
     _onResizePointerMove = value;
-  }
-
-  void Function(CalendarTask task, Rect bounds)? get onDragStarted =>
-      _onDragStarted;
-  set onDragStarted(void Function(CalendarTask task, Rect bounds)? value) {
-    _onDragStarted = value;
-  }
-
-  ValueChanged<DragUpdateDetails>? get onDragUpdate => _onDragUpdate;
-  set onDragUpdate(ValueChanged<DragUpdateDetails>? value) {
-    _onDragUpdate = value;
-  }
-
-  ValueChanged<CalendarTask>? get onDragEnded => _onDragEnded;
-  set onDragEnded(ValueChanged<CalendarTask>? value) {
-    _onDragEnded = value;
   }
 
   ValueChanged<Offset>? get onDragPointerDown => _onDragPointerDown;
@@ -401,77 +357,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     cursor = SystemMouseCursors.click;
   }
 
-  bool get _canStartRenderDrag =>
-      enableInteractions && !_resizeActive && _onDragStarted != null;
-
-  Drag _handleRecognizerStart(Offset position) {
-    if (!_canStartRenderDrag) {
-      return _noopDrag;
-    }
-    _beginRenderDragSession(position);
-    final CalendarDragHandle handle =
-        CalendarDragCoordinator.instance.startSession(
-      task: task,
-      pointerOffset: position,
-      feedbackSize: size,
-    );
-    return _TaskTileDrag(owner: this, handle: handle);
-  }
-
-  void _beginRenderDragSession(Offset pointerLocal) {
-    if (_dragActive) {
-      return;
-    }
-    final Rect bounds = _globalBounds();
-    _dragActive = true;
-    _pendingTap = false;
-    interactionController.suppressSurfaceTapOnce();
-    final double normalized =
-        size.width <= 0 ? 0.5 : (pointerLocal.dx / size.width).clamp(0.0, 1.0);
-    interactionController.setDragPointerNormalized(normalized);
-    final double pointerOffsetFromTop = size.height.isFinite && size.height > 0
-        ? size.height / 2
-        : pointerLocal.dy;
-    interactionController.setDragPointerOffsetFromTop(
-      pointerOffsetFromTop,
-      notify: false,
-    );
-    interactionController.dragAnchorDx = pointerLocal.dx;
-    final Offset globalPosition =
-        _pointerDownGlobal ?? localToGlobal(pointerLocal);
-    interactionController.updateDragPointerGlobalPosition(
-      globalPosition,
-      notify: false,
-    );
-    _onDragStarted?.call(task, bounds);
-  }
-
-  void _handleRenderDragEnd() {
-    if (!_dragActive) {
-      return;
-    }
-    _dragActive = false;
-    _onDragEnded?.call(task);
-    interactionController.clearHoveringTask(task.id);
-  }
-
-  void _handleRenderDragCancel() {
-    if (!_dragActive) {
-      return;
-    }
-    _dragActive = false;
-    _onDragEnded?.call(task);
-    interactionController.clearHoveringTask(task.id);
-  }
-
-  void _emitDragUpdate(DragUpdateDetails details) {
-    _onDragUpdate?.call(details);
-  }
-
   void _handlePointerDown(PointerDownEvent event) {
     _activePointer = event.pointer;
     _downLocalPosition = event.localPosition;
-    _pointerDownGlobal = event.position;
     _pendingTap = true;
     _resizeActive = false;
     _activeHandle = null;
@@ -487,9 +375,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       if (_canResize && handle != null && !_resizeActive) {
         _beginResize(handle);
         return;
-      }
-      if (_canStartRenderDrag) {
-        _dragRecognizer.addPointer(event);
       }
     } else if (_hitHandle(event.localPosition) != null && _canResize) {
       // Secondary drag shouldn't initiate resize; ensure cursor updates only.
@@ -543,7 +428,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void _resetPointerState() {
     _activePointer = null;
     _downLocalPosition = null;
-    _pointerDownGlobal = null;
     _resizeActive = false;
     _pendingTap = false;
     _activeHandle = null;
@@ -714,10 +598,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     config.onDecrease = _handleSemanticShrink;
     config.onLongPress = _handleSemanticSelect;
     config.isSelected = isSelected;
-    config.customSemanticsActions = <CustomSemanticsAction, VoidCallback>{
-      const CustomSemanticsAction(label: 'Start drag'):
-          _handleSemanticDragStart,
-    };
+    config.customSemanticsActions =
+        const <CustomSemanticsAction, VoidCallback>{};
   }
 
   void _handleSemanticTap() {
@@ -763,52 +645,4 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void _handleSemanticSelect() {
     onToggleSelection?.call();
   }
-
-  void _handleSemanticDragStart() {
-    onDragStarted?.call(task, _globalBounds());
-  }
-}
-
-class _TaskTileDrag extends Drag {
-  _TaskTileDrag({
-    required this.owner,
-    required CalendarDragHandle handle,
-  }) : _handle = handle;
-
-  final RenderCalendarTaskTile owner;
-  final CalendarDragHandle _handle;
-  Offset? _lastGlobal;
-
-  @override
-  void update(DragUpdateDetails details) {
-    _lastGlobal = details.globalPosition;
-    owner._emitDragUpdate(details);
-    _handle.update(details.globalPosition);
-  }
-
-  @override
-  void end(DragEndDetails details) {
-    owner._handleRenderDragEnd();
-    final Offset position = _lastGlobal ?? Offset.zero;
-    _handle.end(position);
-  }
-
-  @override
-  void cancel() {
-    owner._handleRenderDragCancel();
-    _handle.cancel();
-  }
-}
-
-class _NoopDrag extends Drag {
-  _NoopDrag();
-
-  @override
-  void update(DragUpdateDetails details) {}
-
-  @override
-  void end(DragEndDetails details) {}
-
-  @override
-  void cancel() {}
 }

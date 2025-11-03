@@ -10,7 +10,7 @@ import '../../../common/ui/ui.dart';
 import '../../models/calendar_task.dart';
 import '../controllers/task_interaction_controller.dart';
 import '../layout/calendar_layout.dart';
-import 'calendar_drag_interop.dart';
+import '../models/calendar_drag_payload.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_surface.dart';
 
@@ -18,6 +18,7 @@ import 'calendar_task_surface.dart';
 class CalendarSurfaceController {
   RenderCalendarSurface? _renderObject;
   final List<VoidCallback> _geometryListeners = <VoidCallback>[];
+  bool _geometryDirty = false;
 
   void _attach(RenderCalendarSurface renderObject) {
     _renderObject = renderObject;
@@ -35,6 +36,18 @@ class CalendarSurfaceController {
 
   void removeGeometryListener(VoidCallback listener) {
     _geometryListeners.remove(listener);
+  }
+
+  void _markGeometryDirty() {
+    _geometryDirty = true;
+  }
+
+  void _dispatchGeometryChanged() {
+    if (!_geometryDirty) {
+      return;
+    }
+    _geometryDirty = false;
+    _notifyGeometryChanged();
   }
 
   void _notifyGeometryChanged() {
@@ -329,8 +342,7 @@ class _DragLayoutOverride {
 class RenderCalendarSurface extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, CalendarSurfaceParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, CalendarSurfaceParentData>
-    implements CalendarDragTargetDelegate {
+        RenderBoxContainerDefaultsMixin<RenderBox, CalendarSurfaceParentData> {
   RenderCalendarSurface({
     required List<CalendarDayColumn> columns,
     required int startHour,
@@ -370,6 +382,8 @@ class RenderCalendarSurface extends RenderBox
         _hoveredSlot = hoveredSlot,
         _devicePixelRatio = devicePixelRatio,
         _dragPreview = dragPreview;
+
+  bool _geometryDispatchPending = false;
 
   List<CalendarDayColumn> get columns => _columns;
   List<CalendarDayColumn> _columns;
@@ -786,13 +800,11 @@ class RenderCalendarSurface extends RenderBox
   void attach(PipelineOwner owner) {
     super.attach(owner);
     _controller?._attach(this);
-    CalendarDragCoordinator.instance.registerTarget(this);
   }
 
   @override
   void detach() {
     _controller?._detach(this);
-    CalendarDragCoordinator.instance.unregisterTarget(this);
     super.detach();
   }
 
@@ -942,8 +954,9 @@ class RenderCalendarSurface extends RenderBox
     _taskGeometries
       ..clear()
       ..addAll(nextGeometries);
-    _controller?._notifyGeometryChanged();
-    onGeometryChanged?.call();
+    _geometryDispatchPending = true;
+    _controller?._markGeometryDirty();
+    markNeedsPaint();
   }
 
   Iterable<_DayColumnGeometry> _resolveDayGeometries() {
@@ -1023,6 +1036,16 @@ class RenderCalendarSurface extends RenderBox
   void paint(PaintingContext context, Offset offset) {
     _paintBackground(context.canvas, offset);
     defaultPaint(context, offset);
+    _flushGeometryCallbacks();
+  }
+
+  void _flushGeometryCallbacks() {
+    if (!_geometryDispatchPending) {
+      return;
+    }
+    _geometryDispatchPending = false;
+    _controller?._dispatchGeometryChanged();
+    onGeometryChanged?.call();
   }
 
   @override
@@ -1664,41 +1687,43 @@ class RenderCalendarSurface extends RenderBox
     );
   }
 
-  @override
-  void didEnter(CalendarDragDetails details) {
-    _ensureExternalDragInitialized(details);
-    _handleExternalDragUpdate(details);
+  void handleDragPayloadUpdate(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
+    _ensureExternalDragInitialized(payload, globalPosition);
+    _handleExternalDragUpdate(payload, globalPosition);
   }
 
-  @override
-  void didMove(CalendarDragDetails details) {
-    _ensureExternalDragInitialized(details);
-    _handleExternalDragUpdate(details);
-  }
-
-  @override
-  void didLeave(CalendarDragDetails details) {
-    _handleExternalDragExit();
-  }
-
-  @override
-  void didDrop(CalendarDragDetails details) {
-    _handleExternalDragDrop(details);
+  void handleDragPayloadDrop(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
+    _ensureExternalDragInitialized(payload, globalPosition);
+    _handleExternalDragDrop(payload, globalPosition);
     _externalDragTaskId = null;
   }
 
-  void _handleExternalDragUpdate(CalendarDragDetails details) {
-    _interactionController?.updateExternalDragPosition(details.globalPosition);
-    final Offset local = _clampLocalOffset(details.localPosition);
-    _handlePointerDragUpdate(local, details.globalPosition);
+  void handleDragPayloadExit(CalendarDragPayload payload) {
+    _handleExternalDragExit(payload.task.id);
+  }
+
+  void _handleExternalDragUpdate(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
+    _interactionController?.updateExternalDragPosition(globalPosition);
+    final Offset local = _clampLocalOffset(globalToLocal(globalPosition));
+    _handlePointerDragUpdate(local, globalPosition);
     final TaskInteractionController? controller = _interactionController;
     if (controller != null && !controller.dragHasMoved) {
       controller.markDragMoved();
     }
   }
 
-  void _handleExternalDragExit() {
-    if (_externalDragTaskId != null) {
+  void _handleExternalDragExit([String? taskId]) {
+    if (_externalDragTaskId != null &&
+        (taskId == null || _externalDragTaskId == taskId)) {
       _interactionController?.endDrag();
       _externalDragTaskId = null;
     }
@@ -1707,10 +1732,14 @@ class RenderCalendarSurface extends RenderBox
     _updateHoverTask(null);
   }
 
-  void _handleExternalDragDrop(CalendarDragDetails details) {
-    final Offset local = _clampLocalOffset(details.localPosition);
-    final double pointerOffsetY =
-        _interactionController?.dragPointerOffsetFromTop ?? 0.0;
+  void _handleExternalDragDrop(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
+    final Offset local = _clampLocalOffset(globalToLocal(globalPosition));
+    final double pointerOffsetY = payload.pointerOffsetY ??
+        _interactionController?.dragPointerOffsetFromTop ??
+        0.0;
     final Offset topLocal = _clampLocalOffset(
       Offset(local.dx, local.dy - pointerOffsetY),
     );
@@ -1720,7 +1749,7 @@ class RenderCalendarSurface extends RenderBox
       onDragEnd?.call(
         CalendarSurfaceDragEndDetails(
           slotStart: snapped,
-          globalPosition: details.globalPosition,
+          globalPosition: globalPosition,
         ),
       );
     } else {
@@ -1730,28 +1759,69 @@ class RenderCalendarSurface extends RenderBox
     _updateHoverTask(null);
   }
 
-  void _ensureExternalDragInitialized(CalendarDragDetails details) {
+  void _ensureExternalDragInitialized(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
     final TaskInteractionController? controller = _interactionController;
     if (controller == null) {
       return;
     }
     if (controller.draggingTaskId != null &&
-        controller.draggingTaskId == details.task.id) {
+        controller.draggingTaskId == payload.task.id) {
       return;
     }
-    final Size feedbackSize = details.feedbackSize ??
+    final Size feedbackSize = payload.sourceBounds?.size ??
         Size(
           controller.draggingTaskWidth ?? 0,
           controller.draggingTaskHeight ?? _metrics?.slotHeight ?? 0,
         );
-    controller.beginExternalDrag(
-      task: details.task,
-      pointerOffset: details.pointerOffsetFromOrigin,
+    final Offset pointerOffset = _resolvePointerOffset(
+      controller: controller,
+      payload: payload,
       feedbackSize: feedbackSize,
-      globalPosition: details.globalPosition,
+      globalPosition: globalPosition,
+    );
+    controller.beginExternalDrag(
+      task: payload.task,
+      snapshot: payload.snapshot,
+      pointerOffset: pointerOffset,
+      feedbackSize: feedbackSize,
+      globalPosition: globalPosition,
     );
     controller.suppressSurfaceTapOnce();
-    _externalDragTaskId = details.task.id;
+    _externalDragTaskId = payload.task.id;
+  }
+
+  Offset _resolvePointerOffset({
+    required TaskInteractionController controller,
+    required CalendarDragPayload payload,
+    required Size feedbackSize,
+    required Offset globalPosition,
+  }) {
+    final double width = feedbackSize.width;
+    double dx;
+    if (payload.pointerNormalizedX != null && width.isFinite && width > 0) {
+      dx = (width * payload.pointerNormalizedX!).clamp(0.0, width);
+    } else if (payload.sourceBounds != null) {
+      dx = globalPosition.dx - payload.sourceBounds!.left;
+      if (width.isFinite && width > 0) {
+        dx = dx.clamp(0.0, width);
+      }
+    } else {
+      dx = controller.dragAnchorDx ?? 0.0;
+    }
+
+    final double height = feedbackSize.height;
+    double dy;
+    if (payload.pointerOffsetY != null) {
+      dy = payload.pointerOffsetY!;
+    } else if (height.isFinite && height > 0) {
+      dy = height / 2;
+    } else {
+      dy = controller.dragPointerOffsetFromTop ?? 0.0;
+    }
+    return Offset(dx, dy);
   }
 
   Color _slotBackgroundColor({

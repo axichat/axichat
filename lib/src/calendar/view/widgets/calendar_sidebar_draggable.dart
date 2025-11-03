@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../models/calendar_task.dart';
-import 'calendar_drag_interop.dart';
+import '../models/calendar_drag_payload.dart';
 
 class CalendarSidebarDraggable extends StatefulWidget {
   const CalendarSidebarDraggable({
@@ -10,12 +11,18 @@ class CalendarSidebarDraggable extends StatefulWidget {
     required this.child,
     required this.feedback,
     required this.childWhenDragging,
+    this.onDragSessionStarted,
+    this.onDragSessionEnded,
+    this.onDragGlobalPositionChanged,
   });
 
   final CalendarTask task;
   final Widget child;
   final Widget feedback;
   final Widget childWhenDragging;
+  final VoidCallback? onDragSessionStarted;
+  final VoidCallback? onDragSessionEnded;
+  final ValueChanged<Offset>? onDragGlobalPositionChanged;
 
   @override
   State<CalendarSidebarDraggable> createState() =>
@@ -23,82 +30,98 @@ class CalendarSidebarDraggable extends StatefulWidget {
 }
 
 class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
-  CalendarDragHandle? _handle;
-  Offset _anchorOffset = Offset.zero;
+  bool _dragSessionActive = false;
+  Rect? _sourceBounds;
   Size _childSize = Size.zero;
-  Offset? _lastGlobal;
-  Offset? _startGlobalPosition;
-  RenderBox? _overlayBox;
+  double? _pointerNormalized;
+  double? _pointerOffsetY;
 
-  Offset _anchorStrategy(
-    Draggable<Object> draggable,
-    BuildContext context,
-    Offset position,
-  ) {
+  void _handlePointerDown(PointerDownEvent event) {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box != null) {
-      _childSize = box.size;
-      _anchorOffset = box.globalToLocal(position);
-    }
-    _startGlobalPosition = position;
-    return _anchorOffset;
+    final Size size = box?.size ?? Size.zero;
+    final Offset globalTopLeft = box != null
+        ? box.localToGlobal(Offset.zero)
+        : event.position - event.localPosition;
+    final double width = size.width <= 0 ? 1.0 : size.width;
+    final double normalized = (event.localPosition.dx / width).clamp(0.0, 1.0);
+
+    setState(() {
+      _childSize = size;
+      _sourceBounds = Rect.fromLTWH(
+        globalTopLeft.dx,
+        globalTopLeft.dy,
+        size.width,
+        size.height,
+      );
+      _pointerNormalized = normalized;
+      _pointerOffsetY = event.localPosition.dy;
+    });
   }
 
-  void _startDrag() {
-    final OverlayState? overlay =
-        Overlay.of(context, rootOverlay: true);
-    _overlayBox = overlay?.context.findRenderObject() as RenderBox?;
-    _handle = CalendarDragCoordinator.instance.startSession(
+  CalendarDragPayload _buildPayload() {
+    final Rect? bounds = _sourceBounds;
+    final double pointerNormalized =
+        (_pointerNormalized ?? 0.5).clamp(0.0, 1.0);
+    final double pointerOffsetY = _pointerOffsetY ??
+        (_childSize.height.isFinite && _childSize.height > 0
+            ? _childSize.height / 2
+            : 0.0);
+
+    return CalendarDragPayload(
       task: widget.task,
-      pointerOffset: _anchorOffset,
-      feedbackSize: _childSize,
+      snapshot: widget.task,
+      sourceBounds: bounds,
+      pointerNormalizedX: pointerNormalized,
+      pointerOffsetY: pointerOffsetY,
+      originSlot: null,
     );
-    _lastGlobal = _startGlobalPosition;
-    if (_startGlobalPosition != null) {
-      _handle?.update(_startGlobalPosition!);
+  }
+
+  void _resetCachedPointer() {
+    _pointerNormalized = null;
+    _pointerOffsetY = null;
+    _sourceBounds = null;
+    _childSize = Size.zero;
+  }
+
+  void _handleDragStarted() {
+    if (_dragSessionActive) {
+      return;
     }
+    _dragSessionActive = true;
+    widget.onDragSessionStarted?.call();
   }
 
-  void _updateDrag(DragUpdateDetails details) {
-    Offset? nextGlobal;
-    final RenderBox? overlayBox = _overlayBox;
-    if (overlayBox != null) {
-      nextGlobal = overlayBox.localToGlobal(details.localPosition);
+  void _handleDragUpdated(DragUpdateDetails details) {
+    widget.onDragGlobalPositionChanged?.call(details.globalPosition);
+  }
+
+  void _handleDragFinished({required bool cancelled}) {
+    if (_dragSessionActive) {
+      _dragSessionActive = false;
+      widget.onDragSessionEnded?.call();
     }
-    nextGlobal ??= (_lastGlobal ?? _startGlobalPosition ?? details.globalPosition) +
-        details.delta;
-    _lastGlobal = nextGlobal;
-    _handle?.update(nextGlobal);
-  }
-
-  void _completeDrag(DraggableDetails details) {
-    final Offset position =
-        _lastGlobal ?? _startGlobalPosition ?? details.offset;
-    _handle?.end(position);
-    _handle = null;
-    _overlayBox = null;
-  }
-
-  void _cancelDrag(Velocity velocity, Offset offset) {
-    final Offset position = _lastGlobal ?? _startGlobalPosition ?? offset;
-    _handle?.end(position);
-    _handle = null;
-    _overlayBox = null;
+    _resetCachedPointer();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Draggable<CalendarTask>(
-      data: widget.task,
-      dragAnchorStrategy: _anchorStrategy,
+    final Widget listener = Listener(
+      onPointerDown: _handlePointerDown,
+      child: widget.child,
+    );
+
+    return Draggable<CalendarDragPayload>(
+      data: _buildPayload(),
+      dragAnchorStrategy: pointerDragAnchorStrategy,
       feedback: widget.feedback,
       childWhenDragging: widget.childWhenDragging,
       rootOverlay: true,
-      onDragStarted: _startDrag,
-      onDragUpdate: _updateDrag,
-      onDragEnd: _completeDrag,
-      onDraggableCanceled: _cancelDrag,
-      child: widget.child,
+      onDragStarted: _handleDragStarted,
+      onDragUpdate: _handleDragUpdated,
+      onDragEnd: (_) => _handleDragFinished(cancelled: false),
+      onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
+      child: listener,
     );
   }
 }
