@@ -7,6 +7,7 @@ import '../../models/calendar_task.dart';
 import '../controllers/task_interaction_controller.dart';
 import '../resizable_task_widget.dart';
 import 'calendar_task_geometry.dart';
+import 'calendar_task_draggable.dart';
 
 typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder Function(
   ShadPopoverController controller,
@@ -51,8 +52,7 @@ class CalendarTaskEntryBindings {
     required this.dragFeedbackHint,
     required this.callbacks,
     required this.geometryProvider,
-    required this.addGeometryListener,
-    required this.removeGeometryListener,
+    required this.globalRectProvider,
     required this.stepHeight,
     required this.minutesPerStep,
     required this.hourHeight,
@@ -69,8 +69,7 @@ class CalendarTaskEntryBindings {
   final ValueListenable<DragFeedbackHint> dragFeedbackHint;
   final CalendarTaskTileCallbacks callbacks;
   final CalendarTaskGeometry? Function(String taskId) geometryProvider;
-  final void Function(VoidCallback listener) addGeometryListener;
-  final void Function(VoidCallback listener) removeGeometryListener;
+  final Rect? Function(String taskId) globalRectProvider;
   final double stepHeight;
   final int minutesPerStep;
   final double hourHeight;
@@ -94,9 +93,6 @@ class CalendarTaskSurface extends StatefulWidget {
 
 class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   late final ShadPopoverController _menuController;
-  CalendarTaskGeometry _geometry = CalendarTaskGeometry.empty;
-  CalendarTaskGeometry? _pendingGeometry;
-  bool _geometryUpdateScheduled = false;
 
   TaskInteractionController get _interactionController =>
       widget.bindings.interactionController;
@@ -107,31 +103,12 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   void initState() {
     super.initState();
     _menuController = ShadPopoverController();
-    _geometry = _resolveGeometry();
-    widget.bindings.addGeometryListener(_handleGeometryChanged);
   }
 
   @override
   void dispose() {
-    widget.bindings.removeGeometryListener(_handleGeometryChanged);
     _menuController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(covariant CalendarTaskSurface oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final bool geometryListenerChanged =
-        oldWidget.bindings.addGeometryListener !=
-                widget.bindings.addGeometryListener ||
-            oldWidget.bindings.removeGeometryListener !=
-                widget.bindings.removeGeometryListener;
-    if (geometryListenerChanged) {
-      oldWidget.bindings.removeGeometryListener(_handleGeometryChanged);
-      widget.bindings.addGeometryListener(_handleGeometryChanged);
-    }
-    _pendingGeometry = _resolveGeometry();
-    _scheduleGeometryFlush();
   }
 
   @visibleForTesting
@@ -141,35 +118,6 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
       widget.bindings.geometryProvider(widget.task.id) ??
       CalendarTaskGeometry.empty;
 
-  void _handleGeometryChanged() {
-    _pendingGeometry = _resolveGeometry();
-    _scheduleGeometryFlush();
-  }
-
-  void _scheduleGeometryFlush() {
-    if (!mounted) {
-      return;
-    }
-    if (_geometryUpdateScheduled) {
-      return;
-    }
-    _geometryUpdateScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _geometryUpdateScheduled = false;
-      if (!mounted) {
-        return;
-      }
-      final CalendarTaskGeometry? nextGeometry = _pendingGeometry;
-      _pendingGeometry = null;
-      if (nextGeometry == null || nextGeometry == _geometry) {
-        return;
-      }
-      setState(() {
-        _geometry = nextGeometry;
-      });
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final CalendarTask task = widget.task;
@@ -178,7 +126,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     final TaskContextMenuBuilder contextMenuBuilder =
         bindings.contextMenuBuilderFactory(_menuController);
 
-    final CalendarTaskGeometry geometry = _geometry;
+    final CalendarTaskGeometry geometry = _resolveGeometry();
     if (geometry.rect.width <= 0 || geometry.rect.height <= 0) {
       return const SizedBox.shrink();
     }
@@ -208,17 +156,16 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 ? geometry.narrowedWidth
                 : width;
 
-            Widget baseTask;
-            if (isDraggingTask) {
-              baseTask = SizedBox(width: width, height: height);
-            } else {
-              baseTask = ResizableTaskWidget(
+            Widget buildBaseTask({required bool enableInteractions}) {
+              final resizable = ResizableTaskWidget(
                 key: ValueKey(task.id),
                 interactionController: _interactionController,
                 task: task,
-                onResizePreview: _callbacks.onResizePreview,
-                onResizeEnd: _callbacks.onResizeEnd,
-                onResizePointerMove: _callbacks.onResizePointerMove,
+                onResizePreview:
+                    enableInteractions ? _callbacks.onResizePreview : null,
+                onResizeEnd: enableInteractions ? _callbacks.onResizeEnd : null,
+                onResizePointerMove:
+                    enableInteractions ? _callbacks.onResizePointerMove : null,
                 hourHeight: bindings.hourHeight,
                 stepHeight: bindings.stepHeight,
                 minutesPerStep: bindings.minutesPerStep,
@@ -226,30 +173,61 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 height: height,
                 isDayView: widget.isDayView,
                 isPopoverOpen: bindings.isPopoverOpen,
-                enableInteractions: true,
+                enableInteractions: enableInteractions,
                 isSelectionMode: bindings.isSelectionMode,
                 isSelected: bindings.isSelected,
                 dragFeedbackHint: bindings.dragFeedbackHint,
                 contextMenuController: _menuController,
                 contextMenuGroupId: bindings.contextMenuGroupId,
                 contextMenuBuilder: contextMenuBuilder,
-                onDragPointerDown: _callbacks.onDragPointerDown,
-                onToggleSelection: () {
-                  if (bindings.isSelectionMode &&
-                      bindings.isSelected &&
-                      _interactionController.draggingTaskId == task.id) {
-                    _callbacks.onDragEnded(task);
-                  }
-                  if (bindings.isSelectionMode) {
-                    _callbacks.onToggleSelection();
-                  } else {
-                    _callbacks.onEnterSelectionMode();
-                  }
-                },
+                onDragPointerDown:
+                    enableInteractions ? _callbacks.onDragPointerDown : null,
+                onToggleSelection: enableInteractions
+                    ? () {
+                        if (bindings.isSelectionMode &&
+                            bindings.isSelected &&
+                            _interactionController.draggingTaskId == task.id) {
+                          _callbacks.onDragEnded(task);
+                        }
+                        if (bindings.isSelectionMode) {
+                          _callbacks.onToggleSelection();
+                        } else {
+                          _callbacks.onEnterSelectionMode();
+                        }
+                      }
+                    : null,
+                onTap: enableInteractions ? _callbacks.onTap : null,
+              );
+              return CalendarTaskDraggable(
+                task: task,
+                geometry: geometry,
+                globalRectProvider: bindings.globalRectProvider,
+                interactionController: _interactionController,
                 onDragStarted: _callbacks.onDragStarted,
                 onDragUpdate: _callbacks.onDragUpdate,
                 onDragEnded: _callbacks.onDragEnded,
-                onTap: _callbacks.onTap,
+                snapshotBuilder: () => task,
+                feedbackBuilder: (context, dragTask, dragGeometry) =>
+                    _buildDragFeedback(
+                  context: context,
+                  task: dragTask,
+                  geometry: dragGeometry,
+                  bindings: bindings,
+                  baseHeight: height,
+                ),
+                enabled: enableInteractions,
+                childWhenDragging: const SizedBox.shrink(),
+                child: resizable,
+              );
+            }
+
+            Widget baseTask = buildBaseTask(
+              enableInteractions: !isDraggingTask,
+            );
+            if (isDraggingTask) {
+              baseTask = Opacity(
+                opacity: 0.0,
+                child: baseTask,
               );
             }
 
@@ -352,5 +330,33 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     final DateTime taskEnd = taskStart.add(duration);
     final DateTime previewEnd = preview.start.add(preview.duration);
     return preview.start.isBefore(taskEnd) && previewEnd.isAfter(taskStart);
+  }
+
+  Widget _buildDragFeedback({
+    required BuildContext context,
+    required CalendarTask task,
+    required CalendarTaskGeometry geometry,
+    required CalendarTaskEntryBindings bindings,
+    required double baseHeight,
+  }) {
+    final double width = geometry.rect.width;
+    final double height = geometry.rect.height;
+    return Material(
+      color: Colors.transparent,
+      child: ResizableTaskWidget(
+        key: ValueKey('${task.id}-drag-feedback'),
+        interactionController: _interactionController,
+        task: task,
+        hourHeight: bindings.hourHeight,
+        stepHeight: bindings.stepHeight,
+        minutesPerStep: bindings.minutesPerStep,
+        width: width,
+        height: height > 0 ? height : baseHeight,
+        isDayView: widget.isDayView,
+        enableInteractions: false,
+        isSelectionMode: false,
+        isSelected: false,
+      ),
+    );
   }
 }

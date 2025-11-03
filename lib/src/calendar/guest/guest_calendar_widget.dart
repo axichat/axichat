@@ -343,7 +343,11 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
   Widget _buildSidebarWithProvider({double? height}) {
     final sidebar = BlocProvider<BaseCalendarBloc>.value(
       value: context.read<GuestCalendarBloc>(),
-      child: const TaskSidebar(),
+      child: TaskSidebar(
+        onDragSessionStarted: handleGridDragSessionStarted,
+        onDragSessionEnded: handleGridDragSessionEnded,
+        onDragGlobalPositionChanged: handleGridDragPositionChanged,
+      ),
     );
 
     if (height != null) {

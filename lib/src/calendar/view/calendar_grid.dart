@@ -30,8 +30,8 @@ import 'controllers/zoom_controls_controller.dart';
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
 import 'resizable_task_widget.dart';
-import 'widgets/calendar_drag_feedback_overlay.dart';
 import 'widgets/calendar_render_surface.dart';
+import 'widgets/calendar_surface_drag_target.dart';
 import 'widgets/calendar_task_surface.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
@@ -163,10 +163,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Offset? _contextMenuAnchor;
   bool _pendingPopoverGeometryUpdate = false;
   bool _dragSessionNotified = false;
-  OverlayEntry? _dragOverlayEntry;
-  bool _pendingDragOverlayInsertion = false;
-  _DragOverlayConfig _dragOverlayConfig = const _DragOverlayConfig();
-  bool _dragOverlayRebuildScheduled = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -204,12 +200,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       if (mounted) {
         setState(() {});
       }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _ensureDragOverlayInserted();
     });
     _scheduleAutoScroll();
   }
@@ -687,7 +677,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _verticalController.dispose();
     _activePopoverEntry?.remove();
     _activePopoverEntry = null;
-    _removeDragOverlayEntry();
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
@@ -1493,18 +1482,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       children: taskEntries,
     );
 
-    final CalendarLayoutMetrics? overlayMetrics =
-        _surfaceController.resolvedMetrics;
-    final double overlayResolvedHourHeight =
-        _effectiveHourHeight(overlayMetrics);
-    final double overlayStepHeight = _effectiveStepHeight(overlayMetrics);
-    _updateDragOverlayConfig(
-      hourHeight: overlayResolvedHourHeight,
-      stepHeight: overlayStepHeight,
-      isDayView: !isWeekView,
-    );
-    _ensureDragOverlayInserted();
-
     final Widget interactiveSurface = MouseRegion(
       cursor: SystemMouseCursors.click,
       onHover: _handleSurfaceHover,
@@ -1512,7 +1489,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       child: renderSurface,
     );
 
-    Widget surface = interactiveSurface;
+    final Widget dragAwareSurface = CalendarSurfaceDragTarget(
+      surfaceKey: _surfaceKey,
+      child: interactiveSurface,
+    );
+
+    Widget surface = dragAwareSurface;
     if (allowHorizontalScroll) {
       final double dayWidth = compactWeekDayWidth;
       final double totalWidth =
@@ -1522,7 +1504,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         controller: horizontalScrollController ?? _horizontalGridController,
         child: SizedBox(
           width: totalWidth,
-          child: interactiveSurface,
+          child: dragAwareSurface,
         ),
       );
     }
@@ -1597,16 +1579,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _contextMenuSlot = slot;
       _contextMenuAnchor = event.position;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      if (_buildGridContextMenuItems().isEmpty) {
-        _hideGridContextMenu();
-        return;
-      }
-      _gridContextMenuController.show();
-    });
+    if (_buildGridContextMenuItems().isEmpty) {
+      _hideGridContextMenu();
+      return;
+    }
+    _gridContextMenuController.show();
   }
 
   void _handleSurfaceHover(PointerHoverEvent event) {
@@ -1779,6 +1756,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _cancelPendingDragWidth();
     _resetDragFeedbackHint();
     _stopEdgeAutoScroll();
+    _notifyDragSessionEnded();
   }
 
   void _handleSurfaceGeometryChanged() {
@@ -1786,14 +1764,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     _pendingPopoverGeometryUpdate = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        _pendingPopoverGeometryUpdate = false;
-        return;
-      }
-      _pendingPopoverGeometryUpdate = false;
-      _refreshPopoverLayouts();
-    });
+    _refreshPopoverLayouts();
+    _pendingPopoverGeometryUpdate = false;
   }
 
   void _refreshPopoverLayouts() {
@@ -1806,76 +1778,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (activeId != null && !trackedIds.contains(activeId)) {
       _updateActivePopoverLayoutForTask(activeId);
     }
-  }
-
-  void _ensureDragOverlayInserted() {
-    if (_dragOverlayEntry != null || _pendingDragOverlayInsertion) {
-      return;
-    }
-    _pendingDragOverlayInsertion = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pendingDragOverlayInsertion = false;
-      if (!mounted || _dragOverlayEntry != null) {
-        return;
-      }
-      final overlay = Overlay.of(context, rootOverlay: true);
-      _dragOverlayEntry = OverlayEntry(
-        builder: _buildDragOverlay,
-      );
-      overlay.insert(_dragOverlayEntry!);
-    });
-  }
-
-  void _removeDragOverlayEntry() {
-    _dragOverlayEntry?.remove();
-    _dragOverlayEntry = null;
-    _pendingDragOverlayInsertion = false;
-    _dragOverlayRebuildScheduled = false;
-  }
-
-  void _updateDragOverlayConfig({
-    required double hourHeight,
-    required double stepHeight,
-    required bool isDayView,
-  }) {
-    final _DragOverlayConfig nextConfig = _DragOverlayConfig(
-      hourHeight: hourHeight,
-      stepHeight: stepHeight,
-      minutesPerStep: _minutesPerStep,
-      isDayView: isDayView,
-    );
-    if (nextConfig == _dragOverlayConfig) {
-      return;
-    }
-    _dragOverlayConfig = nextConfig;
-    _scheduleDragOverlayRebuild();
-  }
-
-  Widget _buildDragOverlay(BuildContext context) {
-    final _DragOverlayConfig config = _dragOverlayConfig;
-    if (!config.isValid) {
-      return const SizedBox.shrink();
-    }
-    return Positioned.fill(
-      child: CalendarDragFeedbackOverlay(
-        controller: _taskInteractionController,
-        hourHeight: config.hourHeight,
-        stepHeight: config.stepHeight,
-        minutesPerStep: config.minutesPerStep,
-        isDayView: config.isDayView,
-      ),
-    );
-  }
-
-  void _scheduleDragOverlayRebuild() {
-    if (_dragOverlayEntry == null || _dragOverlayRebuildScheduled) {
-      return;
-    }
-    _dragOverlayRebuildScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _dragOverlayRebuildScheduled = false;
-      _dragOverlayEntry?.markNeedsBuild();
-    });
   }
 
   List<Widget> _buildTaskEntries({
@@ -1940,8 +1842,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       dragFeedbackHint: _taskInteractionController.feedbackHint,
       callbacks: _buildTaskCallbacks(task),
       geometryProvider: _surfaceController.geometryForTask,
-      addGeometryListener: _surfaceController.addGeometryListener,
-      removeGeometryListener: _surfaceController.removeGeometryListener,
+      globalRectProvider: _surfaceController.globalRectForTask,
       stepHeight: stepHeight,
       minutesPerStep: _minutesPerStep,
       hourHeight: hourHeight,
@@ -3056,40 +2957,6 @@ class _TimeHeaderPainter extends CustomPainter {
         oldDelegate.strokeWidth != strokeWidth ||
         oldDelegate.devicePixelRatio != devicePixelRatio;
   }
-}
-
-class _DragOverlayConfig {
-  const _DragOverlayConfig({
-    this.hourHeight = 0,
-    this.stepHeight = 0,
-    this.minutesPerStep = 0,
-    this.isDayView = true,
-  });
-
-  final double hourHeight;
-  final double stepHeight;
-  final int minutesPerStep;
-  final bool isDayView;
-
-  bool get isValid => hourHeight > 0 && stepHeight > 0;
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
-    }
-    if (other is! _DragOverlayConfig) {
-      return false;
-    }
-    return hourHeight == other.hourHeight &&
-        stepHeight == other.stepHeight &&
-        minutesPerStep == other.minutesPerStep &&
-        isDayView == other.isDayView;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(hourHeight, stepHeight, minutesPerStep, isDayView);
 }
 
 class _DayHeaderDividerPainter extends CustomPainter {
