@@ -39,11 +39,15 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   void _handlePointerDown(PointerDownEvent event) {
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final Size size = box?.size ?? Size.zero;
-    final Offset globalTopLeft = box != null
-        ? box.localToGlobal(Offset.zero)
-        : event.position - event.localPosition;
-    final double width = size.width <= 0 ? 1.0 : size.width;
-    final double normalized = (event.localPosition.dx / width).clamp(0.0, 1.0);
+    final double width = size.width;
+    final double height = size.height;
+    final double anchorX =
+        width.isFinite && width > 0 ? width / 2 : event.localPosition.dx;
+    final double anchorY =
+        height.isFinite && height > 0 ? height / 2 : event.localPosition.dy;
+    final Offset anchorLocal = Offset(anchorX, anchorY);
+    final Offset globalTopLeft = event.position - anchorLocal;
+    final double normalized = 0.5;
 
     setState(() {
       _childSize = size;
@@ -54,7 +58,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
         size.height,
       );
       _pointerNormalized = normalized;
-      _pointerOffsetY = event.localPosition.dy;
+      _pointerOffsetY = anchorY;
     });
   }
 
@@ -113,7 +117,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
 
     return Draggable<CalendarDragPayload>(
       data: _buildPayload(),
-      dragAnchorStrategy: pointerDragAnchorStrategy,
+      dragAnchorStrategy: _centerDragAnchorStrategy,
       feedback: widget.feedback,
       childWhenDragging: widget.childWhenDragging,
       rootOverlay: true,
@@ -124,4 +128,17 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       child: listener,
     );
   }
+}
+
+Offset _centerDragAnchorStrategy(
+  Draggable<Object?> draggable,
+  BuildContext context,
+  Offset position,
+) {
+  final RenderBox? renderObject = context.findRenderObject() as RenderBox?;
+  if (renderObject == null || !renderObject.hasSize) {
+    return Offset.zero;
+  }
+  final Size size = renderObject.size;
+  return Offset(size.width / 2, size.height / 2);
 }
