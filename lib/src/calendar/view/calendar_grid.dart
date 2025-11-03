@@ -793,8 +793,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleDragPointerDown(Offset normalizedOffset) {
-    _taskInteractionController
-        .setDragPointerNormalized(normalizedOffset.dx.clamp(0.0, 1.0));
+    _taskInteractionController.setDragPointerNormalized(0.5);
+    _taskInteractionController.setDragPointerOffsetFromTop(null);
     _taskInteractionController.dragHasMoved = false;
   }
 

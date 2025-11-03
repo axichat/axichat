@@ -93,6 +93,9 @@ class CalendarTaskSurface extends StatefulWidget {
 
 class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   late final ShadPopoverController _menuController;
+  TaskInteractionController? _attachedController;
+  late final VoidCallback _controllerListener;
+  String? _lastDraggingTaskId;
 
   TaskInteractionController get _interactionController =>
       widget.bindings.interactionController;
@@ -103,12 +106,31 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   void initState() {
     super.initState();
     _menuController = ShadPopoverController();
+    _controllerListener = () {
+      final String? nextId = _interactionController.draggingTaskId;
+      if (_lastDraggingTaskId == nextId || !mounted) {
+        return;
+      }
+      _lastDraggingTaskId = nextId;
+      setState(() {});
+    };
+    _attachController(widget.bindings.interactionController);
   }
 
   @override
   void dispose() {
+    _attachedController?.removeListener(_controllerListener);
     _menuController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarTaskSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bindings.interactionController !=
+        widget.bindings.interactionController) {
+      _attachController(widget.bindings.interactionController);
+    }
   }
 
   @visibleForTesting
@@ -117,6 +139,16 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   CalendarTaskGeometry _resolveGeometry() =>
       widget.bindings.geometryProvider(widget.task.id) ??
       CalendarTaskGeometry.empty;
+
+  void _attachController(TaskInteractionController controller) {
+    if (_attachedController == controller) {
+      return;
+    }
+    _attachedController?.removeListener(_controllerListener);
+    _attachedController = controller;
+    _lastDraggingTaskId = controller.draggingTaskId;
+    controller.addListener(_controllerListener);
+  }
 
   @override
   Widget build(BuildContext context) {
