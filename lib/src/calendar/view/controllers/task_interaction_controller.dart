@@ -388,9 +388,8 @@ class TaskInteractionController extends ChangeNotifier {
     double? value, {
     bool notify = true,
   }) {
-    if (dragPointerOffsetFromTop == value) {
-      return;
-    }
+    final double? previous = dragPointerOffsetFromTop;
+    final bool changed = previous != value;
     dragPointerOffsetFromTop = value;
     if (_draggingTaskId == null) {
       dragPointerStartGlobalY = null;
@@ -399,7 +398,7 @@ class TaskInteractionController extends ChangeNotifier {
     } else if (value == null) {
       dragPointerStartGlobalY = null;
     }
-    if (notify) {
+    if (notify && changed) {
       notifyListeners();
     }
   }

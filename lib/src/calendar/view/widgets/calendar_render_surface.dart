@@ -702,8 +702,6 @@ class RenderCalendarSurface extends RenderBox
       draggingTask,
     );
     final int minutesPerSlot = metrics.minutesPerSlot;
-    final int totalSlots =
-        ((endHour - startHour) * 60) ~/ math.max(1, minutesPerSlot);
     final double previewSlotSpan =
         baseDuration.inMinutes / math.max(1, minutesPerSlot);
     if (!previewSlotSpan.isFinite || previewSlotSpan <= 0) {
@@ -716,12 +714,6 @@ class RenderCalendarSurface extends RenderBox
     if (!pointerOffset.isFinite || pointerOffset < 0) {
       pointerOffset = 0;
     }
-    final double pointerClampHeight =
-        (columnGeometry.bounds.height.isFinite && columnGeometry.bounds.height > 0)
-            ? columnGeometry.bounds.height
-            : double.infinity;
-    pointerOffset = pointerOffset.clamp(0.0, pointerClampHeight);
-
     final DateTime columnDate = DateTime(
       columnGeometry.date.year,
       columnGeometry.date.month,
@@ -730,10 +722,15 @@ class RenderCalendarSurface extends RenderBox
 
     final double columnTop = columnGeometry.bounds.top;
     final double columnBottom = columnGeometry.bounds.bottom;
-    final double columnHeight = math.max(0.0, columnBottom - columnTop);
-    if (columnHeight <= 0) {
+    final double columnHeight = columnBottom - columnTop;
+    if (!columnHeight.isFinite || columnHeight <= 0) {
       return null;
     }
+
+    final double pointerClampHeight = columnHeight.isFinite && columnHeight > 0
+        ? columnHeight
+        : double.infinity;
+    pointerOffset = pointerOffset.clamp(0.0, pointerClampHeight);
 
     final double pointerCurrentGlobalY =
         controller.dragPointerGlobalY ?? globalPosition.dy;
@@ -741,6 +738,7 @@ class RenderCalendarSurface extends RenderBox
         controller.dragPointerGlobalX ?? globalPosition.dx;
     final double? pointerStartGlobalY = controller.dragPointerStartGlobalY;
     final double? dragStartGlobalTop = controller.dragStartGlobalTop;
+    final double pointerLocalDy = localPosition.dy;
     double pointerTopLocal;
     if (pointerStartGlobalY != null && dragStartGlobalTop != null) {
       final double initialPointerOffset =
@@ -752,21 +750,77 @@ class RenderCalendarSurface extends RenderBox
       );
       pointerTopLocal = _clampLocalOffset(pointerTopLocalOffset).dy;
     } else {
-      pointerTopLocal = localPosition.dy - pointerOffset;
+      pointerTopLocal = pointerLocalDy - pointerOffset;
     }
     final double maxTop = previewHeight.isFinite && previewHeight > 0
         ? math.max(columnTop, columnBottom - previewHeight)
         : columnBottom;
-    final double clampedTopLocal = (previewHeight.isFinite && previewHeight > 0)
-        ? pointerTopLocal.clamp(columnTop, maxTop)
-        : pointerTopLocal.clamp(columnTop, columnBottom);
+    pointerTopLocal = pointerTopLocal.clamp(columnTop, maxTop);
 
-    final double relativeTop = clampedTopLocal - columnTop;
     final double minutesPerPixel =
         slotHeight == 0 ? 0.0 : minutesPerSlot / slotHeight;
-    final double minutesFromColumnStart = minutesPerPixel == 0
+    final double pointerTopMinutes = minutesPerPixel == 0
         ? 0.0
-        : relativeTop * minutesPerPixel;
+        : (pointerTopLocal - columnTop) * minutesPerPixel;
+    final double pointerLocalMinutes = minutesPerPixel == 0
+        ? 0.0
+        : (pointerLocalDy - columnTop) * minutesPerPixel;
+
+    final int rawStepMinutes = minutesPerStep;
+    final int stepMinutes = rawStepMinutes > 0
+        ? rawStepMinutes
+        : (minutesPerSlot > 0 ? minutesPerSlot : 15);
+    final double dayMinutes = (endHour - startHour) * 60.0;
+    final double previewMinutes = baseDuration.inMinutes.toDouble();
+    final double maxStartMinutes = math.max(0.0, dayMinutes - previewMinutes);
+    final int maxStepIndex = stepMinutes > 0
+        ? math.max(0, (maxStartMinutes / stepMinutes).floor())
+        : 0;
+
+    int stepIndex = stepMinutes > 0
+        ? ((pointerTopMinutes / stepMinutes).round())
+            .clamp(0, maxStepIndex)
+        : 0;
+    double topMinutes = stepIndex * stepMinutes.toDouble();
+    double bottomMinutes = topMinutes + previewMinutes;
+    const double epsilon = 1e-6;
+
+    while (pointerLocalMinutes + epsilon < topMinutes && stepIndex > 0) {
+      stepIndex -= 1;
+      topMinutes = stepIndex * stepMinutes.toDouble();
+      bottomMinutes = topMinutes + previewMinutes;
+    }
+    while (pointerLocalMinutes - epsilon > bottomMinutes &&
+        stepIndex < maxStepIndex) {
+      stepIndex += 1;
+      topMinutes = stepIndex * stepMinutes.toDouble();
+      bottomMinutes = topMinutes + previewMinutes;
+    }
+
+    double finalStartMinutes = topMinutes;
+    if (finalStartMinutes > maxStartMinutes && stepMinutes > 0) {
+      final int boundedIndex =
+          math.min(maxStepIndex, (maxStartMinutes / stepMinutes).floor());
+      finalStartMinutes = boundedIndex * stepMinutes.toDouble();
+      stepIndex = boundedIndex;
+    }
+    finalStartMinutes = finalStartMinutes.clamp(0.0, maxStartMinutes);
+
+    final double finalTopLocal =
+        columnTop + metrics.verticalOffsetForMinutes(finalStartMinutes);
+    final double clampedTopLocal =
+        finalTopLocal.clamp(columnTop, math.max(columnTop, columnBottom - previewHeight));
+
+    double updatedPointerOffset = pointerLocalDy - clampedTopLocal;
+    if (!updatedPointerOffset.isFinite) {
+      updatedPointerOffset = pointerOffset;
+    }
+    updatedPointerOffset =
+        updatedPointerOffset.clamp(0.0, pointerClampHeight);
+    controller.setDragPointerOffsetFromTop(
+      updatedPointerOffset,
+      notify: false,
+    );
 
     final DateTime dayStart = DateTime(
       columnGeometry.date.year,
@@ -774,19 +828,23 @@ class RenderCalendarSurface extends RenderBox
       columnGeometry.date.day,
       startHour,
     );
-    final int startMicros = (minutesFromColumnStart *
-            Duration.microsecondsPerMinute)
-        .round();
-    final DateTime pointerDerivedStart =
-        dayStart.add(Duration(microseconds: startMicros));
-    final DateTime pointerDerivedClamped = _clampPreviewStart(
-      pointerDerivedStart,
+    int effectiveMinutes;
+    if (stepMinutes > 0) {
+      effectiveMinutes = stepIndex * stepMinutes;
+    } else {
+      final double fallbackMinutes = minutesPerPixel == 0
+          ? 0.0
+          : (clampedTopLocal - columnTop) * minutesPerPixel;
+      effectiveMinutes = fallbackMinutes.round();
+    }
+    final DateTime candidateStart =
+        dayStart.add(Duration(minutes: effectiveMinutes));
+    final DateTime effectiveStart = _clampPreviewStart(
+      candidateStart,
       columnDate,
       baseDuration,
-      snapToStep: true,
+      snapToStep: false,
     );
-
-    final DateTime effectiveStart = pointerDerivedClamped;
 
     return _PreviewMetrics(
       start: effectiveStart,
