@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../models/calendar_drag_payload.dart';
 
@@ -51,9 +50,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
-  void initCalendarDragTabMixin() {}
+  void initCalendarDragTabMixin() {
+    mobileTabController.addListener(_handleTabControllerChanged);
+  }
 
   void disposeCalendarDragTabMixin() {
+    mobileTabController.removeListener(_handleTabControllerChanged);
     _cancelSwitchTimer();
   }
 
@@ -270,6 +272,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   void _scheduleSwitch(int index) {
     if (_pendingSwitchIndex == index && _switchTimer?.isActive == true) {
+      _tryPerformPendingSwitch();
       return;
     }
     _switchTimer?.cancel();
@@ -302,6 +305,17 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  void _handleTabControllerChanged() {
+    if (!_isAnyDragActive) {
+      return;
+    }
+    _switchTimer?.cancel();
+    _switchTimer = null;
+    _pendingSwitchIndex = null;
+    _evaluateEdgeAutoSwitch();
+    _tryPerformPendingSwitch();
+  }
+
   bool _canSwitchTo(int index) {
     if (!mounted ||
         !_isAnyDragActive ||
@@ -309,7 +323,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         mobileTabController.index == index) {
       return false;
     }
-    return SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle;
+    return true;
   }
 
   void _tryPerformPendingSwitch() {
