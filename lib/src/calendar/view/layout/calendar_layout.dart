@@ -116,11 +116,14 @@ class CalendarLayoutMetrics {
   final int slotsPerHour;
 
   double heightForDuration(Duration duration) {
-    final minutes = math.max(duration.inMinutes, minutesPerSlot);
-    return (minutes / minutesPerSlot) * slotHeight;
+    final double totalMinutes =
+        duration.inMicroseconds / Duration.microsecondsPerMinute;
+    final double normalizedMinutes =
+        math.max(totalMinutes, minutesPerSlot.toDouble());
+    return (normalizedMinutes / minutesPerSlot) * slotHeight;
   }
 
-  double verticalOffsetForMinutes(int minutesFromStart) {
+  double verticalOffsetForMinutes(double minutesFromStart) {
     final double slots = minutesFromStart / minutesPerSlot;
     return slots * slotHeight;
   }
@@ -321,9 +324,9 @@ class CalendarLayoutCalculator {
       return null;
     }
 
-    final int minutesFromStart =
+    final int minuteDelta =
         (scheduledTime.hour * 60 + scheduledTime.minute) - (startHour * 60);
-    if (minutesFromStart < 0) {
+    if (minuteDelta < 0) {
       return null;
     }
 
@@ -331,6 +334,7 @@ class CalendarLayoutCalculator {
       return null;
     }
 
+    final double minutesFromStart = minuteDelta.toDouble();
     final double topOffset = metrics.verticalOffsetForMinutes(
       minutesFromStart,
     );

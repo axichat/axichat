@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../common/ui/ui.dart';
@@ -56,6 +57,8 @@ class CalendarTaskEntryBindings {
     required this.stepHeight,
     required this.minutesPerStep,
     required this.hourHeight,
+    required this.addGeometryListener,
+    required this.removeGeometryListener,
   });
 
   final bool isSelectionMode;
@@ -73,6 +76,8 @@ class CalendarTaskEntryBindings {
   final double stepHeight;
   final int minutesPerStep;
   final double hourHeight;
+  final void Function(VoidCallback listener) addGeometryListener;
+  final void Function(VoidCallback listener) removeGeometryListener;
 }
 
 class CalendarTaskSurface extends StatefulWidget {
@@ -96,6 +101,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   TaskInteractionController? _attachedController;
   late final VoidCallback _controllerListener;
   String? _lastDraggingTaskId;
+  late final VoidCallback _geometryListener;
+  CalendarTaskEntryBindings? _geometryBindings;
 
   TaskInteractionController get _interactionController =>
       widget.bindings.interactionController;
@@ -112,13 +119,29 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
         return;
       }
       _lastDraggingTaskId = nextId;
-      setState(() {});
+      _scheduleRebuild();
+    };
+    _geometryListener = () {
+      if (!mounted) {
+        return;
+      }
+      final CalendarTaskGeometry geometry = _resolveGeometry();
+      final double height = geometry.rect.height;
+      if (height.isFinite && height > 0) {
+        _interactionController.applyPendingPointerOffsetFraction(
+          taskId: widget.task.id,
+          height: height,
+        );
+      }
+      _scheduleRebuild();
     };
     _attachController(widget.bindings.interactionController);
+    _attachGeometryListener(widget.bindings);
   }
 
   @override
   void dispose() {
+    _detachGeometryListener();
     _attachedController?.removeListener(_controllerListener);
     _menuController.dispose();
     super.dispose();
@@ -130,6 +153,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     if (oldWidget.bindings.interactionController !=
         widget.bindings.interactionController) {
       _attachController(widget.bindings.interactionController);
+    }
+    if (!identical(oldWidget.bindings, widget.bindings)) {
+      _attachGeometryListener(widget.bindings);
     }
   }
 
@@ -148,6 +174,41 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     _attachedController = controller;
     _lastDraggingTaskId = controller.draggingTaskId;
     controller.addListener(_controllerListener);
+  }
+
+  void _attachGeometryListener(CalendarTaskEntryBindings bindings) {
+    if (identical(_geometryBindings, bindings)) {
+      return;
+    }
+    _detachGeometryListener();
+    _geometryBindings = bindings;
+    bindings.addGeometryListener(_geometryListener);
+  }
+
+  void _detachGeometryListener() {
+    final CalendarTaskEntryBindings? bindings = _geometryBindings;
+    if (bindings == null) {
+      return;
+    }
+    bindings.removeGeometryListener(_geometryListener);
+    _geometryBindings = null;
+  }
+
+  void _scheduleRebuild() {
+    if (!mounted) {
+      return;
+    }
+    final SchedulerBinding scheduler = SchedulerBinding.instance;
+    if (scheduler.schedulerPhase == SchedulerPhase.idle) {
+      setState(() {});
+      return;
+    }
+    scheduler.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    });
   }
 
   @override

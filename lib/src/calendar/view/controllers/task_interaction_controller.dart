@@ -127,6 +127,8 @@ class TaskInteractionController extends ChangeNotifier {
   DateTime? _pendingAnchorMinutes;
 
   double? dragPointerOffsetFromTop;
+  double? _pendingPointerOffsetFraction;
+  String? _pendingPointerTaskId;
   double? dragStartGlobalTop;
   double? draggingTaskHeight;
   double? dragStartGlobalLeft;
@@ -265,8 +267,29 @@ class TaskInteractionController extends ChangeNotifier {
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
-    final double pointerOffset = dragPointerOffsetFromTop ??
-        (bounds.height.isFinite && bounds.height > 0 ? bounds.height / 2 : 0.0);
+    final double resolvedHeight =
+        bounds.height.isFinite && bounds.height > 0 ? bounds.height : 0.0;
+    final double? pointerOffsetFraction =
+        consumePendingPointerOffsetFraction(taskId: task.id);
+    double pointerOffset;
+    if (dragPointerOffsetFromTop != null) {
+      pointerOffset = dragPointerOffsetFromTop!;
+    } else if (pointerOffsetFraction != null && resolvedHeight > 0) {
+      pointerOffset = pointerOffsetFraction * resolvedHeight;
+    } else if (resolvedHeight > 0) {
+      pointerOffset = resolvedHeight / 2;
+    } else {
+      pointerOffset = 0.0;
+    }
+    if (!pointerOffset.isFinite) {
+      pointerOffset = 0.0;
+    }
+    if (resolvedHeight > 0) {
+      pointerOffset =
+          (pointerOffset.clamp(0.0, resolvedHeight) as num).toDouble();
+    } else if (pointerOffset < 0) {
+      pointerOffset = 0.0;
+    }
     setDragPointerOffsetFromTop(pointerOffset, notify: false);
     dragStartGlobalTop = bounds.top;
     draggingTaskHeight = bounds.height;
@@ -304,6 +327,8 @@ class TaskInteractionController extends ChangeNotifier {
     activeDragWidth = null;
     dragInitialWidth = null;
     dragAnchorDx = null;
+    _pendingPointerOffsetFraction = null;
+    _pendingPointerTaskId = null;
     dragPointerGlobalX = null;
     dragPointerGlobalY = null;
     dragPointerNormalized = 0.5;
@@ -370,6 +395,60 @@ class TaskInteractionController extends ChangeNotifier {
     }
   }
 
+  void setPendingPointerOffsetFraction(
+    double? fraction, {
+    String? taskId,
+  }) {
+    if (fraction == null || fraction.isNaN) {
+      _pendingPointerOffsetFraction = null;
+      if (taskId != null && _pendingPointerTaskId == taskId) {
+        _pendingPointerTaskId = null;
+      }
+      return;
+    }
+    _pendingPointerOffsetFraction =
+        (fraction.clamp(0.0, 1.0) as num).toDouble();
+    if (taskId != null) {
+      _pendingPointerTaskId = taskId;
+    }
+  }
+
+  double? consumePendingPointerOffsetFraction({String? taskId}) {
+    if (taskId != null &&
+        _pendingPointerTaskId != null &&
+        _pendingPointerTaskId != taskId) {
+      return null;
+    }
+    final double? fraction = _pendingPointerOffsetFraction;
+    _pendingPointerOffsetFraction = null;
+    if (taskId != null && _pendingPointerTaskId == taskId) {
+      _pendingPointerTaskId = null;
+    }
+    if (fraction == null || fraction.isNaN) {
+      return null;
+    }
+    return (fraction.clamp(0.0, 1.0) as num).toDouble();
+  }
+
+  void applyPendingPointerOffsetFraction({
+    required String taskId,
+    required double height,
+  }) {
+    if (_pendingPointerTaskId == null ||
+        _pendingPointerTaskId != taskId ||
+        height <= 0 ||
+        !height.isFinite) {
+      return;
+    }
+    final double? fraction = _pendingPointerOffsetFraction;
+    if (fraction == null || fraction.isNaN) {
+      return;
+    }
+    final double bounded = (fraction.clamp(0.0, 1.0) as num).toDouble();
+    final double offset = bounded * height;
+    setDragPointerOffsetFromTop(offset, notify: false);
+  }
+
   void updateDragPointerGlobalPosition(
     Offset globalPosition, {
     bool notify = true,
@@ -400,7 +479,15 @@ class TaskInteractionController extends ChangeNotifier {
     _dragStartScheduledTime = task.scheduledTime;
     final double width = feedbackSize?.width ?? draggingTaskWidth ?? 0;
     final double height = feedbackSize?.height ?? draggingTaskHeight ?? 0;
-    final double pointerOffsetY = height > 0 ? height / 2 : pointerOffset.dy;
+    double pointerOffsetY = pointerOffset.dy;
+    if (!pointerOffsetY.isFinite) {
+      pointerOffsetY = 0.0;
+    }
+    if (height.isFinite && height > 0) {
+      pointerOffsetY = pointerOffsetY.clamp(0.0, height);
+    } else if (pointerOffsetY < 0) {
+      pointerOffsetY = 0.0;
+    }
     setDragPointerOffsetFromTop(pointerOffsetY, notify: false);
     dragStartGlobalTop = globalPosition.dy - pointerOffsetY;
     draggingTaskHeight = feedbackSize?.height;
