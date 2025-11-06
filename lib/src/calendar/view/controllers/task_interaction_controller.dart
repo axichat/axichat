@@ -139,6 +139,7 @@ class TaskInteractionController extends ChangeNotifier {
   double dragPointerNormalized = 0.5;
   double? dragPointerGlobalX;
   double? dragPointerGlobalY;
+  double? dragPointerStartGlobalY;
   bool dragHasMoved = false;
 
   Timer? _dragWidthDebounce;
@@ -290,9 +291,9 @@ class TaskInteractionController extends ChangeNotifier {
     } else if (pointerOffset < 0) {
       pointerOffset = 0.0;
     }
-    setDragPointerOffsetFromTop(pointerOffset, notify: false);
     dragStartGlobalTop = bounds.top;
     draggingTaskHeight = bounds.height;
+    setDragPointerOffsetFromTop(pointerOffset, notify: false);
     final double width = bounds.width.isFinite ? bounds.width : 0.0;
     final double pointerLeftOffset =
         width > 0 ? width * normalizedPointer : 0.0;
@@ -331,6 +332,7 @@ class TaskInteractionController extends ChangeNotifier {
     _pendingPointerTaskId = null;
     dragPointerGlobalX = null;
     dragPointerGlobalY = null;
+    dragPointerStartGlobalY = null;
     dragPointerNormalized = 0.5;
     dragHasMoved = false;
     _pendingAnchorMinutes = null;
@@ -390,6 +392,13 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     dragPointerOffsetFromTop = value;
+    if (_draggingTaskId == null) {
+      dragPointerStartGlobalY = null;
+    } else if (value != null && dragStartGlobalTop != null) {
+      dragPointerStartGlobalY = dragStartGlobalTop! + value;
+    } else if (value == null) {
+      dragPointerStartGlobalY = null;
+    }
     if (notify) {
       notifyListeners();
     }
@@ -488,13 +497,13 @@ class TaskInteractionController extends ChangeNotifier {
     } else if (pointerOffsetY < 0) {
       pointerOffsetY = 0.0;
     }
+    dragStartGlobalTop = globalPosition.dy;
     setDragPointerOffsetFromTop(pointerOffsetY, notify: false);
-    dragStartGlobalTop = globalPosition.dy - pointerOffsetY;
     draggingTaskHeight = feedbackSize?.height;
     final double clampedPointerDx = (!width.isFinite || width <= 0)
         ? pointerOffset.dx
         : pointerOffset.dx.clamp(0.0, width);
-    dragStartGlobalLeft = globalPosition.dx - clampedPointerDx;
+    dragStartGlobalLeft = globalPosition.dx;
     draggingTaskWidth = feedbackSize?.width;
     activeDragWidth = feedbackSize?.width;
     dragInitialWidth = feedbackSize?.width;
@@ -502,13 +511,13 @@ class TaskInteractionController extends ChangeNotifier {
     dragPointerNormalized = (!width.isFinite || width <= 0)
         ? 0.5
         : (clampedPointerDx / width).clamp(0.0, 1.0);
-    updateDragPointerGlobalPosition(globalPosition, notify: false);
+    final Offset pointerPosition = Offset(
+      globalPosition.dx + clampedPointerDx,
+      globalPosition.dy + pointerOffsetY,
+    );
+    updateDragPointerGlobalPosition(pointerPosition, notify: false);
     dragHasMoved = false;
     notifyListeners();
-  }
-
-  void updateExternalDragPosition(Offset globalPosition) {
-    updateDragPointerGlobalPosition(globalPosition);
   }
 
   void markDragMoved() {

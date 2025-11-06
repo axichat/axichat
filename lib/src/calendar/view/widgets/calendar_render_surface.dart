@@ -735,7 +735,25 @@ class RenderCalendarSurface extends RenderBox
       return null;
     }
 
-    final double pointerTopLocal = localPosition.dy - pointerOffset;
+    final double pointerCurrentGlobalY =
+        controller.dragPointerGlobalY ?? globalPosition.dy;
+    final double pointerCurrentGlobalX =
+        controller.dragPointerGlobalX ?? globalPosition.dx;
+    final double? pointerStartGlobalY = controller.dragPointerStartGlobalY;
+    final double? dragStartGlobalTop = controller.dragStartGlobalTop;
+    double pointerTopLocal;
+    if (pointerStartGlobalY != null && dragStartGlobalTop != null) {
+      final double initialPointerOffset =
+          pointerStartGlobalY - dragStartGlobalTop;
+      final double pointerTopGlobal =
+          pointerCurrentGlobalY - initialPointerOffset;
+      final Offset pointerTopLocalOffset = globalToLocal(
+        Offset(pointerCurrentGlobalX, pointerTopGlobal),
+      );
+      pointerTopLocal = _clampLocalOffset(pointerTopLocalOffset).dy;
+    } else {
+      pointerTopLocal = localPosition.dy - pointerOffset;
+    }
     final double maxTop = previewHeight.isFinite && previewHeight > 0
         ? math.max(columnTop, columnBottom - previewHeight)
         : columnBottom;
@@ -776,6 +794,96 @@ class RenderCalendarSurface extends RenderBox
     );
   }
 
+  Offset _pointerGlobalForDragTarget({
+    required CalendarDragPayload payload,
+    required Offset dragTargetOffset,
+    required TaskInteractionController controller,
+  }) {
+    final double width = controller.draggingTaskWidth ??
+        controller.activeDragWidth ??
+        controller.dragInitialWidth ??
+        payload.sourceBounds?.width ??
+        0.0;
+    final double height = controller.draggingTaskHeight ??
+        payload.sourceBounds?.height ??
+        0.0;
+
+    double anchorDx;
+    if (controller.dragAnchorDx != null) {
+      anchorDx = controller.dragAnchorDx!;
+      if (width > 0) {
+        anchorDx = math.min(math.max(anchorDx, 0.0), width);
+      }
+    } else if (payload.pointerNormalizedX != null && width > 0) {
+      anchorDx = math.min(
+        math.max(width * payload.pointerNormalizedX!, 0.0),
+        width,
+      );
+    } else if (width > 0) {
+      final double normalized =
+          (controller.dragPointerNormalized.clamp(0.0, 1.0) as num).toDouble();
+      anchorDx = width * normalized;
+    } else {
+      anchorDx = 0.0;
+    }
+
+    double anchorDy;
+    if (controller.dragPointerOffsetFromTop != null) {
+      anchorDy = controller.dragPointerOffsetFromTop!;
+    } else if (payload.pointerOffsetY != null) {
+      anchorDy = payload.pointerOffsetY!;
+    } else if (height > 0) {
+      anchorDy = height / 2;
+    } else {
+      anchorDy = 0.0;
+    }
+    if (!anchorDy.isFinite) {
+      anchorDy = 0.0;
+    }
+    if (height > 0) {
+      anchorDy = math.min(math.max(anchorDy, 0.0), height);
+    } else if (anchorDy < 0) {
+      anchorDy = 0.0;
+    }
+
+    return Offset(
+      dragTargetOffset.dx + anchorDx,
+      dragTargetOffset.dy + anchorDy,
+    );
+  }
+
+  Offset _pointerGlobalForPayloadOnly(
+    CalendarDragPayload payload,
+    Offset dragTargetOffset,
+  ) {
+    final double width = payload.sourceBounds?.width ?? 0.0;
+    final double height = payload.sourceBounds?.height ?? 0.0;
+    double anchorDx;
+    if (payload.pointerNormalizedX != null && width > 0) {
+      anchorDx = math.min(
+        math.max(width * payload.pointerNormalizedX!, 0.0),
+        width,
+      );
+    } else if (width > 0) {
+      anchorDx = width / 2;
+    } else {
+      anchorDx = 0.0;
+    }
+    double anchorDy = payload.pointerOffsetY ?? (height > 0 ? height / 2 : 0.0);
+    if (!anchorDy.isFinite) {
+      anchorDy = 0.0;
+    }
+    if (height > 0) {
+      anchorDy = math.min(math.max(anchorDy, 0.0), height);
+    } else if (anchorDy < 0) {
+      anchorDy = 0.0;
+    }
+    return Offset(
+      dragTargetOffset.dx + anchorDx,
+      dragTargetOffset.dy + anchorDy,
+    );
+  }
+
   void _handlePointerDragUpdate(
     Offset localPosition,
     Offset globalPosition,
@@ -784,11 +892,12 @@ class RenderCalendarSurface extends RenderBox
     _pointerDownLocal = null;
     _pointerDownSlot = null;
     _pointerDownHitTask = false;
-    onDragAutoScroll?.call(globalPosition);
     final TaskInteractionController? controller = _interactionController;
     if (controller == null) {
+      onDragAutoScroll?.call(globalPosition);
       return;
     }
+    onDragAutoScroll?.call(globalPosition);
     controller.updateDragPointerGlobalPosition(globalPosition);
     final CalendarTask? draggingTask = controller.draggingTaskSnapshot;
     if (draggingTask == null) {
@@ -1994,10 +2103,16 @@ class RenderCalendarSurface extends RenderBox
     CalendarDragPayload payload,
     Offset globalPosition,
   ) {
-    _interactionController?.updateExternalDragPosition(globalPosition);
-    final Offset local = _clampLocalOffset(globalToLocal(globalPosition));
-    _handlePointerDragUpdate(local, globalPosition);
     final TaskInteractionController? controller = _interactionController;
+    final Offset pointerGlobal = controller == null
+        ? _pointerGlobalForPayloadOnly(payload, globalPosition)
+        : _pointerGlobalForDragTarget(
+            payload: payload,
+            dragTargetOffset: globalPosition,
+            controller: controller,
+          );
+    final Offset local = _clampLocalOffset(globalToLocal(pointerGlobal));
+    _handlePointerDragUpdate(local, pointerGlobal);
     if (controller != null && !controller.dragHasMoved) {
       controller.markDragMoved();
     }
@@ -2018,9 +2133,16 @@ class RenderCalendarSurface extends RenderBox
     CalendarDragPayload payload,
     Offset globalPosition,
   ) {
-    final Offset local = _clampLocalOffset(globalToLocal(globalPosition));
     final TaskInteractionController? controller = _interactionController;
     final CalendarTask? draggingTask = controller?.draggingTaskSnapshot;
+    final Offset pointerGlobal = controller == null
+        ? _pointerGlobalForPayloadOnly(payload, globalPosition)
+        : _pointerGlobalForDragTarget(
+            payload: payload,
+            dragTargetOffset: globalPosition,
+            controller: controller,
+          );
+    final Offset local = _clampLocalOffset(globalToLocal(pointerGlobal));
     DateTime? dropStart;
     final CalendarLayoutMetrics? metrics = _metrics;
     _DayColumnGeometry? columnGeometry;
@@ -2030,13 +2152,16 @@ class RenderCalendarSurface extends RenderBox
     } else {
       columnGeometry = null;
     }
+    if (controller != null) {
+      controller.updateDragPointerGlobalPosition(pointerGlobal);
+    }
     if (controller != null &&
         draggingTask != null &&
         metrics != null &&
         columnGeometry != null) {
       final _PreviewMetrics? previewMetrics = _computePreviewMetricsForPointer(
         localPosition: local,
-        globalPosition: globalPosition,
+        globalPosition: pointerGlobal,
         metrics: metrics,
         controller: controller,
         draggingTask: draggingTask,
@@ -2048,7 +2173,7 @@ class RenderCalendarSurface extends RenderBox
       onDragEnd?.call(
         CalendarSurfaceDragEndDetails(
           slotStart: dropStart,
-          globalPosition: globalPosition,
+          globalPosition: pointerGlobal,
         ),
       );
     } else {
