@@ -33,6 +33,7 @@ import 'resizable_task_widget.dart';
 import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_surface_drag_target.dart';
 import 'widgets/calendar_task_surface.dart';
+import 'widgets/calendar_task_geometry.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
@@ -792,9 +793,43 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  void _handleDragPointerDown(Offset normalizedOffset) {
-    _taskInteractionController.setDragPointerNormalized(0.5);
-    _taskInteractionController.setDragPointerOffsetFromTop(null);
+  void _handleDragPointerDown(
+    Offset normalizedOffset, {
+    double? pointerOffsetPixels,
+    String? taskId,
+  }) {
+    double normalizedX = normalizedOffset.dx;
+    double normalizedY = normalizedOffset.dy;
+    if (!normalizedX.isFinite) {
+      normalizedX = 0.5;
+    }
+    if (!normalizedY.isFinite) {
+      normalizedY = 0.5;
+    }
+    if (normalizedX < 0) {
+      normalizedX = 0;
+    } else if (normalizedX > 1) {
+      normalizedX = 1;
+    }
+    if (normalizedY < 0) {
+      normalizedY = 0;
+    } else if (normalizedY > 1) {
+      normalizedY = 1;
+    }
+    _taskInteractionController.setDragPointerNormalized(normalizedX);
+    _taskInteractionController.setPendingPointerOffsetFraction(
+      normalizedY,
+      taskId: taskId,
+    );
+    final double? offset = pointerOffsetPixels != null &&
+            pointerOffsetPixels.isFinite &&
+            pointerOffsetPixels >= 0
+        ? pointerOffsetPixels
+        : null;
+    _taskInteractionController.setDragPointerOffsetFromTop(
+      offset,
+      notify: false,
+    );
     _taskInteractionController.dragHasMoved = false;
   }
 
@@ -819,7 +854,22 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleTaskPointerDown(CalendarTask task, Offset normalizedOffset) {
-    _handleDragPointerDown(normalizedOffset);
+    double? pointerOffset;
+    final CalendarTaskGeometry? geometry =
+        _surfaceController.geometryForTask(task.id);
+    final double normalizedDy =
+        (normalizedOffset.dy.clamp(0.0, 1.0) as num).toDouble();
+    if (geometry != null) {
+      final double height = geometry.rect.height;
+      if (height.isFinite && height > 0) {
+        pointerOffset = normalizedDy * height;
+      }
+    }
+    _handleDragPointerDown(
+      normalizedOffset,
+      pointerOffsetPixels: pointerOffset,
+      taskId: task.id,
+    );
   }
 
   DateTime? _computeOriginSlot(DateTime? scheduled) {
@@ -893,13 +943,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final RenderObject? surfaceObject =
         _surfaceKey.currentContext?.findRenderObject();
     if (surfaceObject is RenderCalendarSurface) {
-      final Offset localPosition =
-          surfaceObject.globalToLocal(details.globalPosition);
-      final DateTime? slotTime = surfaceObject.slotForOffset(localPosition);
-      if (slotTime != null) {
-        final Duration previewDuration =
-            draggingTask.duration ?? const Duration(hours: 1);
-        _updateDragPreview(slotTime, previewDuration);
+      final DragPreview? preview =
+          surfaceObject.previewForGlobalPosition(details.globalPosition);
+      if (preview != null) {
+        _updateDragPreview(preview.start, preview.duration);
       }
     }
   }
@@ -1764,8 +1811,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     _pendingPopoverGeometryUpdate = true;
-    _refreshPopoverLayouts();
-    _pendingPopoverGeometryUpdate = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _pendingPopoverGeometryUpdate = false;
+        return;
+      }
+      _refreshPopoverLayouts();
+      _pendingPopoverGeometryUpdate = false;
+    });
   }
 
   void _refreshPopoverLayouts() {
@@ -1846,6 +1899,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       stepHeight: stepHeight,
       minutesPerStep: _minutesPerStep,
       hourHeight: hourHeight,
+      addGeometryListener: _surfaceController.addGeometryListener,
+      removeGeometryListener: _surfaceController.removeGeometryListener,
     );
   }
 

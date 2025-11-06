@@ -44,6 +44,12 @@ class TaskPopoverController extends ChangeNotifier {
       _layouts[taskId] ?? defaultTaskPopoverLayout();
 
   void setLayout(String taskId, TaskPopoverLayout layout) {
+    final TaskPopoverLayout? current = _layouts[taskId];
+    if (current != null &&
+        current.topLeft == layout.topLeft &&
+        current.maxHeight == layout.maxHeight) {
+      return;
+    }
     _layouts[taskId] = layout;
     notifyListeners();
   }

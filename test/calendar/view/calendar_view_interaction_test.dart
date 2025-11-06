@@ -661,6 +661,8 @@ CalendarTaskEntryBindings _buildTestBindings({
     stepHeight: 15,
     minutesPerStep: 15,
     hourHeight: 60,
+    addGeometryListener: (_) {},
+    removeGeometryListener: (_) {},
   );
 }
 

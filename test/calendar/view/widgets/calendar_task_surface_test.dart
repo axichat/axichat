@@ -53,6 +53,8 @@ void main() {
           stepHeight: 16,
           minutesPerStep: 15,
           hourHeight: 48,
+          addGeometryListener: (_) {},
+          removeGeometryListener: (_) {},
         );
 
     await tester.pumpWidget(
@@ -147,6 +149,8 @@ void main() {
                     stepHeight: 16,
                     minutesPerStep: 15,
                     hourHeight: 48,
+                    addGeometryListener: (_) {},
+                    removeGeometryListener: (_) {},
                   ),
                 ),
               );

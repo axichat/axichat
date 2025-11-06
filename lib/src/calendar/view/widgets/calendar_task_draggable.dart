@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 
@@ -120,7 +122,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
 
     return Draggable<CalendarDragPayload>(
       data: payload,
-      dragAnchorStrategy: _centerDragAnchorStrategy,
+      dragAnchorStrategy: _dragAnchorStrategy,
       maxSimultaneousDrags: canDrag ? 1 : 0,
       feedback: widget.feedbackBuilder(context, widget.task, _geometry),
       childWhenDragging: widget.childWhenDragging ?? widget.child,
@@ -132,17 +134,23 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     );
   }
 
-  static Offset _centerDragAnchorStrategy(
+  Offset _dragAnchorStrategy(
     Draggable<Object?> draggable,
     BuildContext context,
     Offset position,
   ) {
+    final Offset? anchor = _lastPointerLocal;
     final RenderBox? renderObject = context.findRenderObject() as RenderBox?;
     if (renderObject == null || !renderObject.hasSize) {
-      return Offset.zero;
+      return anchor ?? Offset.zero;
     }
     final Size size = renderObject.size;
-    return Offset(size.width / 2, size.height / 2);
+    if (anchor == null) {
+      return Offset(size.width / 2, size.height / 2);
+    }
+    final double dx = math.min(math.max(anchor.dx, 0.0), size.width);
+    final double dy = math.min(math.max(anchor.dy, 0.0), size.height);
+    return Offset(dx, dy);
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -154,31 +162,59 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     final Size size = geometry.rect.size;
     final bool suppressDrag = _isPointerOverResizeHandle(local, size);
 
-    final double width = size.width.isFinite && size.width > 0
+    double width = size.width.isFinite && size.width > 0
         ? size.width
         : geometry.rect.width;
-    final double height = size.height.isFinite && size.height > 0
+    double height = size.height.isFinite && size.height > 0
         ? size.height
         : geometry.rect.height;
+    if (!width.isFinite || width <= 0) {
+      width = 0;
+    }
+    if (!height.isFinite || height <= 0) {
+      height = 0;
+    }
 
-    final double anchorX = width.isFinite && width > 0 ? width / 2 : local.dx;
-    final double anchorY =
-        height.isFinite && height > 0 ? height / 2 : local.dy;
-    final Offset anchorLocal = Offset(anchorX, anchorY);
+    double anchorLocalX = local.dx;
+    double anchorLocalY = local.dy;
+    if (width > 0) {
+      anchorLocalX = math.min(math.max(anchorLocalX, 0.0), width);
+    }
+    if (height > 0) {
+      anchorLocalY = math.min(math.max(anchorLocalY, 0.0), height);
+    }
+    final Offset anchorLocal = Offset(anchorLocalX, anchorLocalY);
     final Offset fallbackTopLeft = event.position - anchorLocal;
+    final Rect? centeredBounds = width > 0 && height > 0
+        ? Rect.fromLTWH(fallbackTopLeft.dx, fallbackTopLeft.dy, width, height)
+        : null;
+    final Rect? resolvedBounds =
+        centeredBounds ?? _resolveGlobalBounds(fallbackTopLeft: fallbackTopLeft);
+
+    double normalizedX = width > 0 && anchorLocal.dx.isFinite
+        ? anchorLocal.dx / width
+        : 0.5;
+    if (!normalizedX.isFinite) {
+      normalizedX = 0.5;
+    }
+    normalizedX = math.min(math.max(normalizedX, 0.0), 1.0);
+    double pointerOffsetY = anchorLocal.dy;
+    if (!pointerOffsetY.isFinite || pointerOffsetY < 0) {
+      pointerOffsetY = 0.0;
+    } else if (height > 0 && pointerOffsetY > height) {
+      pointerOffsetY = height;
+    }
 
     setState(() {
       _suppressDrag = suppressDrag;
       _lastPointerLocal = anchorLocal;
       _lastPointerGlobal = event.position;
-      _pointerNormalized = width.isFinite && width > 0
-          ? 0.5
-          : (anchorLocal.dx / (width == 0 ? 1.0 : width)).clamp(0.0, 1.0);
-      _pointerOffsetY = anchorY;
-      _sourceBounds = _resolveGlobalBounds(
-        fallbackTopLeft: fallbackTopLeft,
-      );
+      _pointerNormalized = normalizedX;
+      _pointerOffsetY = pointerOffsetY;
+      _sourceBounds = resolvedBounds;
     });
+    widget.interactionController
+        .setDragPointerOffsetFromTop(pointerOffsetY, notify: false);
   }
 
   void _handlePointerUp(PointerUpEvent event) {
