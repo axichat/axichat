@@ -1803,7 +1803,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _cancelPendingDragWidth();
     _resetDragFeedbackHint();
     _stopEdgeAutoScroll();
-    _notifyDragSessionEnded();
   }
 
   void _handleSurfaceGeometryChanged() {
