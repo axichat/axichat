@@ -40,40 +40,45 @@ class DraftsList extends StatelessWidget {
           );
         }
 
-        return ListView.separated(
-          separatorBuilder: (_, __) => const AxiListDivider(),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items![index];
-            final recipients = item.jids.length;
-            return AxiListTile(
-              key: Key(item.id.toString()),
-              onTap: () => context.push(
-                const ComposeRoute().location,
-                extra: {
-                  'locate': context.read,
-                  'id': item.id,
-                  'jids': item.jids,
-                  'body': item.body,
-                },
-              ),
-              menuItems: [
-                AxiDeleteMenuItem(
-                  onPressed: () async {
-                    if (await confirm(context, text: 'Delete draft?') == true &&
-                        context.mounted) {
-                      context.read<DraftCubit?>()?.deleteDraft(id: item.id);
-                    }
-                  },
-                )
-              ],
-              leading: AxiAvatar(
-                jid: recipients == 1 ? item.jids[0] : recipients.toString(),
-              ),
-              title: item.jids.join(', '),
-              subtitle: item.body,
-            );
-          },
+        return ColoredBox(
+          color: context.colorScheme.background,
+          child: ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items![index];
+              final recipients = item.jids.length;
+              return ListItemPadding(
+                child: AxiListTile(
+                  key: Key(item.id.toString()),
+                  onTap: () => context.push(
+                    const ComposeRoute().location,
+                    extra: {
+                      'locate': context.read,
+                      'id': item.id,
+                      'jids': item.jids,
+                      'body': item.body,
+                    },
+                  ),
+                  menuItems: [
+                    AxiDeleteMenuItem(
+                      onPressed: () async {
+                        if (await confirm(context, text: 'Delete draft?') ==
+                                true &&
+                            context.mounted) {
+                          context.read<DraftCubit?>()?.deleteDraft(id: item.id);
+                        }
+                      },
+                    )
+                  ],
+                  leading: AxiAvatar(
+                    jid: recipients == 1 ? item.jids[0] : recipients.toString(),
+                  ),
+                  title: item.jids.join(', '),
+                  subtitle: item.body,
+                ),
+              );
+            },
+          ),
         );
       },
     );

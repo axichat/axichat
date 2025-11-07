@@ -1,3 +1,4 @@
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -21,6 +22,7 @@ class ComposeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: context.colorScheme.background,
       appBar: AppBar(
         title: const Text('Compose'),
       ),
@@ -29,19 +31,31 @@ class ComposeScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400.0),
-            child: MultiBlocProvider(
-              providers: [
-                BlocProvider.value(
-                  value: locate<DraftCubit>(),
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: context.colorScheme.card,
+                shape: ContinuousRectangleBorder(
+                  borderRadius: context.radius,
+                  side: BorderSide(color: context.colorScheme.border),
                 ),
-                BlocProvider.value(
-                  value: locate<RosterCubit>(),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider.value(
+                      value: locate<DraftCubit>(),
+                    ),
+                    BlocProvider.value(
+                      value: locate<RosterCubit>(),
+                    ),
+                  ],
+                  child: DraftForm(
+                    id: id,
+                    jids: jids,
+                    body: body,
+                  ),
                 ),
-              ],
-              child: DraftForm(
-                id: id,
-                jids: jids,
-                body: body,
               ),
             ),
           ),

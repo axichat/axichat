@@ -4,7 +4,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -146,22 +146,16 @@ class MaterialAxichat extends StatelessWidget {
             responsive: state.readReceipts,
           );
         }
-        final lightTheme = ShadThemeData(
-          colorScheme: ShadColorScheme.fromName(state.shadColor.name),
+        const chatNeutrals = ChatNeutrals();
+        final lightTheme = AppTheme.build(
+          shadColor: state.shadColor,
           brightness: Brightness.light,
-          decoration: const ShadDecoration(
-            errorPadding: inputSubtextInsets,
-          ),
+          neutrals: chatNeutrals,
         );
-        final darkTheme = ShadThemeData(
-          colorScheme: ShadColorScheme.fromName(
-            state.shadColor.name,
-            brightness: Brightness.dark,
-          ),
+        final darkTheme = AppTheme.build(
+          shadColor: state.shadColor,
           brightness: Brightness.dark,
-          decoration: const ShadDecoration(
-            errorPadding: inputSubtextInsets,
-          ),
+          neutrals: chatNeutrals,
         );
         return ShadApp.router(
           localizationsDelegates: const [
@@ -180,6 +174,32 @@ class MaterialAxichat extends StatelessWidget {
           materialThemeBuilder: (context, theme) {
             final shadTheme =
                 theme.brightness == Brightness.light ? lightTheme : darkTheme;
+            final chatTokens = AppTheme.tokens(
+              brightness: theme.brightness,
+              neutrals: chatNeutrals,
+            );
+            final materialColors = shadTheme.colorScheme;
+            final globalRadius = shadTheme.radius;
+            final buttonShape =
+                ContinuousRectangleBorder(borderRadius: globalRadius);
+            final listTileShape = buttonShape;
+            final outlineInputBorder = OutlineInputBorder(
+              borderRadius: globalRadius,
+              borderSide: BorderSide(color: materialColors.border),
+            );
+            final focusedInputBorder = outlineInputBorder.copyWith(
+              borderSide: BorderSide(color: materialColors.primary, width: 1.5),
+            );
+            final errorBorder = outlineInputBorder.copyWith(
+              borderSide:
+                  BorderSide(color: materialColors.destructive, width: 1),
+            );
+            final selectionOverlay = materialColors.primary.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
+            );
+            final focusRingColor = materialColors.primary.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.25 : 0.15,
+            );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: 20),
               textTheme: TextTheme(
@@ -196,6 +216,93 @@ class MaterialAxichat extends StatelessWidget {
                 labelMedium: shadTheme.textTheme.muted,
                 labelSmall: shadTheme.textTheme.muted,
               ),
+              scaffoldBackgroundColor: materialColors.background,
+              dividerColor: materialColors.border,
+              cardColor: materialColors.card,
+              listTileTheme: ListTileThemeData(
+                shape: listTileShape,
+                tileColor: materialColors.card,
+                selectedTileColor: Color.alphaBlend(
+                  selectionOverlay,
+                  materialColors.card,
+                ),
+                textColor: materialColors.foreground,
+                iconColor: materialColors.foreground,
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: materialColors.card,
+                focusColor: focusRingColor,
+                hoverColor: materialColors.card,
+                border: outlineInputBorder,
+                enabledBorder: outlineInputBorder,
+                disabledBorder: outlineInputBorder.copyWith(
+                  borderSide: BorderSide(
+                    color: materialColors.border.withValues(alpha: 0.6),
+                  ),
+                ),
+                focusedBorder: focusedInputBorder,
+                errorBorder: errorBorder,
+                focusedErrorBorder: errorBorder,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: materialColors.primary,
+                  foregroundColor: materialColors.primaryForeground,
+                  shape: buttonShape,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: materialColors.card,
+                  foregroundColor: materialColors.foreground,
+                  shape: buttonShape,
+                  side: BorderSide(color: materialColors.border),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: materialColors.foreground,
+                  shape: buttonShape,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+              ),
+              scrollbarTheme: ScrollbarThemeData(
+                thickness: const WidgetStatePropertyAll<double>(4),
+                radius: const Radius.circular(999),
+                thumbColor: WidgetStateProperty.resolveWith(
+                  (states) {
+                    final hovered = states.contains(WidgetState.hovered) ||
+                        states.contains(WidgetState.focused) ||
+                        states.contains(WidgetState.dragged);
+                    return hovered
+                        ? chatTokens.scrollbarHover
+                        : chatTokens.scrollbar;
+                  },
+                ),
+              ),
+              extensions: [
+                ...theme.extensions.values
+                    .where((extension) => extension is! ChatThemeTokens),
+                chatTokens,
+              ],
             );
           },
           routerConfig: _router,
@@ -234,4 +341,10 @@ extension ThemeExtension on BuildContext {
   IconThemeData get iconTheme => IconTheme.of(this);
 
   BorderRadius get radius => ShadTheme.of(this).radius;
+
+  ChatThemeTokens get chatTheme =>
+      Theme.of(this).extension<ChatThemeTokens>() ??
+      AppTheme.tokens(
+        brightness: Theme.of(this).brightness,
+      );
 }

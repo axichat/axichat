@@ -120,24 +120,21 @@ Map<String, String> _cargoEnvForTarget({
 
     if (codeConfig.targetOS == OS.android) {
       final androidConfig = codeConfig.android;
-      final ndkApi = androidConfig?.targetNdkApi;
-      if (ndkApi != null) {
-        final targetPrefix = '$triple$ndkApi';
-        final targetClang =
-            _toolchainBinary(toolchainDir, '$targetPrefix-clang');
-        final targetClangxx =
-            _toolchainBinary(toolchainDir, '$targetPrefix-clang++');
-        if (targetClang != null) {
-          compilerPath = targetClang;
-        }
-        if (targetClangxx != null) {
-          linkerPath = targetClangxx;
-          cxxPath = targetClangxx;
-        }
-        final targetArg = '--target=$targetPrefix';
-        env['CFLAGS_$tripleKey'] = targetArg;
-        env['CXXFLAGS_$tripleKey'] = targetArg;
+      final ndkApi = androidConfig.targetNdkApi;
+      final targetPrefix = '$triple$ndkApi';
+      final targetClang = _toolchainBinary(toolchainDir, '$targetPrefix-clang');
+      final targetClangxx =
+          _toolchainBinary(toolchainDir, '$targetPrefix-clang++');
+      if (targetClang != null) {
+        compilerPath = targetClang;
       }
+      if (targetClangxx != null) {
+        linkerPath = targetClangxx;
+        cxxPath = targetClangxx;
+      }
+      final targetArg = '--target=$targetPrefix';
+      env['CFLAGS_$tripleKey'] = targetArg;
+      env['CXXFLAGS_$tripleKey'] = targetArg;
     }
 
     env['CARGO_TARGET_${tripleKey}_LINKER'] = linkerPath;
@@ -156,9 +153,7 @@ Map<String, String> _cargoEnvForTarget({
 
   if (codeConfig.targetOS == OS.android) {
     final androidConfig = codeConfig.android;
-    if (androidConfig != null) {
-      env['ANDROID_NDK_API_LEVEL'] = '${androidConfig.targetNdkApi}';
-    }
+    env['ANDROID_NDK_API_LEVEL'] = '${androidConfig.targetNdkApi}';
   }
 
   return env;

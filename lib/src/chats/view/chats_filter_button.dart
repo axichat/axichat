@@ -1,7 +1,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -83,6 +85,28 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('Non-contacts'),
+                  ),
+                  ShadButton.ghost(
+                    width: double.infinity,
+                    foregroundColor: context.colorScheme.foreground,
+                    onPressed: () {
+                      context
+                          .read<ChatsCubit?>()
+                          ?.filterChats((chat) => chat.transport.isXmpp);
+                      popoverController.toggle();
+                    },
+                    child: const Text('XMPP only'),
+                  ),
+                  ShadButton.ghost(
+                    width: double.infinity,
+                    foregroundColor: context.colorScheme.foreground,
+                    onPressed: () {
+                      context
+                          .read<ChatsCubit?>()
+                          ?.filterChats((chat) => chat.transport.isEmail);
+                      popoverController.toggle();
+                    },
+                    child: const Text('Email only'),
                   ),
                 ],
               ),

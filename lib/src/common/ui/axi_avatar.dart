@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+enum AxiAvatarShape { circle, squircle }
+
 class AxiAvatar extends StatefulWidget {
   const AxiAvatar({
     super.key,
@@ -15,6 +17,8 @@ class AxiAvatar extends StatefulWidget {
     this.presence,
     this.status,
     this.active = false,
+    this.shape = AxiAvatarShape.circle,
+    this.size = 50.0,
   });
 
   final String jid;
@@ -22,6 +26,8 @@ class AxiAvatar extends StatefulWidget {
   final Presence? presence;
   final String? status;
   final bool active;
+  final AxiAvatarShape shape;
+  final double size;
 
   @override
   State<AxiAvatar> createState() => _AxiAvatarState();
@@ -44,44 +50,67 @@ class _AxiAvatarState extends State<AxiAvatar> {
 
   @override
   Widget build(BuildContext context) {
-    Widget child = Stack(
-      fit: StackFit.expand,
-      children: [
-        BlocBuilder<SettingsCubit, SettingsState>(
-          builder: (context, state) {
-            final baseJid = widget.jid;
-            final initial = baseJid.isNotEmpty
-                ? baseJid.substring(0, 1).toUpperCase()
-                : '?';
-            return CircleAvatar(
-              backgroundColor: state.colorfulAvatars
+    final radius = widget.size * 0.45;
+    final ShapeBorder avatarShape = widget.shape == AxiAvatarShape.circle
+        ? const CircleBorder()
+        : ContinuousRectangleBorder(
+            borderRadius: BorderRadius.circular(radius),
+          );
+
+    Widget child = SizedBox.square(
+      dimension: widget.size,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          BlocBuilder<SettingsCubit, SettingsState>(
+            builder: (context, state) {
+              final baseJid = widget.jid;
+              final initial = baseJid.isNotEmpty
+                  ? baseJid.substring(0, 1).toUpperCase()
+                  : '?';
+              final backgroundColor = state.colorfulAvatars
                   ? stringToColor(widget.jid)
-                  : context.colorScheme.secondary,
-              child: Text(
-                initial,
-                style: state.colorfulAvatars
-                    ? null
-                    : TextStyle(color: context.colorScheme.secondaryForeground),
-              ),
-            );
-          },
-        ),
-        widget.presence == null ||
-                widget.subscription.isNone ||
-                widget.subscription.isFrom
-            ? const SizedBox()
-            : Positioned.fill(
-                child: FractionallySizedBox(
-                  widthFactor: 0.35,
-                  heightFactor: 0.35,
-                  alignment: Alignment.bottomRight,
-                  child: PresenceIndicator(
-                    presence: widget.presence!,
-                    status: widget.status,
+                  : context.colorScheme.secondary;
+              final textColor = state.colorfulAvatars
+                  ? Colors.white
+                  : context.colorScheme.secondaryForeground;
+              final textStyle = TextStyle(
+                color: textColor,
+                fontSize: widget.size * 0.45,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              );
+              return ClipPath(
+                clipper: ShapeBorderClipper(shape: avatarShape),
+                child: ColoredBox(
+                  color: backgroundColor,
+                  child: Center(
+                    child: Text(
+                      initial,
+                      style: textStyle,
+                    ),
                   ),
                 ),
-              ),
-      ],
+              );
+            },
+          ),
+          widget.presence == null ||
+                  widget.subscription.isNone ||
+                  widget.subscription.isFrom
+              ? const SizedBox()
+              : Positioned.fill(
+                  child: FractionallySizedBox(
+                    widthFactor: 0.35,
+                    heightFactor: 0.35,
+                    alignment: Alignment.bottomRight,
+                    child: PresenceIndicator(
+                      presence: widget.presence!,
+                      status: widget.status,
+                    ),
+                  ),
+                ),
+        ],
+      ),
     );
     if (widget.active && widget.presence != null) {
       final locate = context.read;
@@ -126,19 +155,14 @@ class _AxiAvatarState extends State<AxiAvatar> {
         ),
       );
     }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(
-        maxHeight: 50.0,
-        maxWidth: 50.0,
-      ),
-      child: widget.presence == null
-          ? child
-          : AxiTooltip(
-              builder: (_) => Text(widget.status == null
-                  ? '(${widget.presence!.tooltip})'
-                  : '${widget.status} (${widget.presence!.tooltip})'),
-              child: child,
-            ),
-    );
+    final sizedChild = SizedBox.square(dimension: widget.size, child: child);
+    return widget.presence == null
+        ? sizedChild
+        : AxiTooltip(
+            builder: (_) => Text(widget.status == null
+                ? '(${widget.presence!.tooltip})'
+                : '${widget.status} (${widget.presence!.tooltip})'),
+            child: sizedChild,
+          );
   }
 }
