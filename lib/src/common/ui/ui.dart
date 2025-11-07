@@ -20,6 +20,7 @@ export 'axi_tooltip.dart';
 export 'axi_version.dart';
 export 'display_fingerprint.dart';
 export 'display_time_since.dart';
+export 'axi_tab_bar.dart';
 export 'dynamic_inline_text.dart';
 export 'jid_input.dart';
 export 'list_item_padding.dart';

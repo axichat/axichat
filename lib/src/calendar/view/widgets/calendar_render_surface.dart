@@ -1442,6 +1442,9 @@ class RenderCalendarSurface extends RenderBox
   void paint(PaintingContext context, Offset offset) {
     _paintBackground(context.canvas, offset);
     defaultPaint(context, offset);
+    if (_metrics != null) {
+      _paintCurrentTimeIndicator(context.canvas, offset, _metrics!);
+    }
     _flushGeometryCallbacks();
   }
 
@@ -1481,7 +1484,6 @@ class RenderCalendarSurface extends RenderBox
     _paintGridLines(canvas, offset, resolvedMetrics);
     _paintVerticalDividers(canvas, offset);
     _paintTimeColumnLabels(canvas, offset, resolvedMetrics);
-    _paintCurrentTimeIndicator(canvas, offset, resolvedMetrics);
     _paintDragPreview(canvas, offset, resolvedMetrics);
     _paintHoverHighlight(canvas, offset, resolvedMetrics);
   }
@@ -2179,18 +2181,18 @@ class RenderCalendarSurface extends RenderBox
 
   void handleDragPayloadUpdate(
     CalendarDragPayload payload,
-    Offset globalPosition,
+    Offset dragTargetOffset,
   ) {
-    _ensureExternalDragInitialized(payload, globalPosition);
-    _handleExternalDragUpdate(payload, globalPosition);
+    _ensureExternalDragInitialized(payload, dragTargetOffset);
+    _handleExternalDragUpdate(payload, dragTargetOffset);
   }
 
   void handleDragPayloadDrop(
     CalendarDragPayload payload,
-    Offset globalPosition,
+    Offset dragTargetOffset,
   ) {
-    _ensureExternalDragInitialized(payload, globalPosition);
-    _handleExternalDragDrop(payload, globalPosition);
+    _ensureExternalDragInitialized(payload, dragTargetOffset);
+    _handleExternalDragDrop(payload, dragTargetOffset);
     _externalDragTaskId = null;
   }
 
@@ -2200,14 +2202,14 @@ class RenderCalendarSurface extends RenderBox
 
   void _handleExternalDragUpdate(
     CalendarDragPayload payload,
-    Offset globalPosition,
+    Offset dragTargetOffset,
   ) {
     final TaskInteractionController? controller = _interactionController;
     final Offset pointerGlobal = controller == null
-        ? _pointerGlobalForPayloadOnly(payload, globalPosition)
+        ? _pointerGlobalForPayloadOnly(payload, dragTargetOffset)
         : _pointerGlobalForDragTarget(
             payload: payload,
-            dragTargetOffset: globalPosition,
+            dragTargetOffset: dragTargetOffset,
             controller: controller,
           );
     final Offset local = _clampLocalOffset(globalToLocal(pointerGlobal));
@@ -2230,15 +2232,15 @@ class RenderCalendarSurface extends RenderBox
 
   void _handleExternalDragDrop(
     CalendarDragPayload payload,
-    Offset globalPosition,
+    Offset dragTargetOffset,
   ) {
     final TaskInteractionController? controller = _interactionController;
     final CalendarTask? draggingTask = controller?.draggingTaskSnapshot;
     final Offset pointerGlobal = controller == null
-        ? _pointerGlobalForPayloadOnly(payload, globalPosition)
+        ? _pointerGlobalForPayloadOnly(payload, dragTargetOffset)
         : _pointerGlobalForDragTarget(
             payload: payload,
-            dragTargetOffset: globalPosition,
+            dragTargetOffset: dragTargetOffset,
             controller: controller,
           );
     final Offset local = _clampLocalOffset(globalToLocal(pointerGlobal));
@@ -2284,7 +2286,7 @@ class RenderCalendarSurface extends RenderBox
 
   void _ensureExternalDragInitialized(
     CalendarDragPayload payload,
-    Offset globalPosition,
+    Offset dragTargetOffset,
   ) {
     final TaskInteractionController? controller = _interactionController;
     if (controller == null) {
@@ -2311,14 +2313,14 @@ class RenderCalendarSurface extends RenderBox
       controller: controller,
       payload: payload,
       feedbackSize: feedbackSize,
-      globalPosition: globalPosition,
+      globalPosition: dragTargetOffset,
     );
     controller.beginExternalDrag(
       task: payload.task,
       snapshot: payload.snapshot,
       pointerOffset: pointerOffset,
       feedbackSize: feedbackSize,
-      globalPosition: globalPosition,
+      globalPosition: dragTargetOffset,
     );
     controller.suppressSurfaceTapOnce();
     _externalDragTaskId = payload.task.id;

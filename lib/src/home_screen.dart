@@ -322,29 +322,20 @@ class Nexus extends StatelessWidget {
             ),
           ),
         ),
-        LayoutBuilder(
-          builder: (context, constraints) => Material(
-            child: TabBar(
-              isScrollable: constraints.maxWidth < tabs.length * 90,
-              tabAlignment: constraints.maxWidth < tabs.length * 90
-                  ? TabAlignment.center
-                  : TabAlignment.fill,
-              dividerHeight: 0.0,
-              tabs: tabs.map((e) {
-                final (label, _, _) = e;
-                if (label == 'New') {
-                  final length = context.watch<RosterCubit?>()?.inviteCount;
-                  return Tab(
-                    child: AxiBadge(
-                      count: length ?? 0,
-                      child: Text(label),
-                    ),
-                  );
-                }
-                return Tab(text: label);
-              }).toList(),
-            ),
-          ),
+        AxiTabBar(
+          tabs: tabs.map((e) {
+            final (label, _, _) = e;
+            if (label == 'New') {
+              final length = context.watch<RosterCubit?>()?.inviteCount;
+              return Tab(
+                child: AxiBadge(
+                  count: length ?? 0,
+                  child: Text(label),
+                ),
+              );
+            }
+            return Tab(text: label);
+          }).toList(),
         ),
         const ProfileTile(),
       ],
