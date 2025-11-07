@@ -7,6 +7,7 @@ class AxiListTile extends StatelessWidget {
   const AxiListTile({
     super.key,
     this.leading,
+    this.leadingConstraints,
     this.title,
     this.subtitle,
     this.subtitlePlaceholder,
@@ -18,6 +19,7 @@ class AxiListTile extends StatelessWidget {
   });
 
   final Widget? leading;
+  final BoxConstraints? leadingConstraints;
   final String? title;
   final String? subtitle;
   final String? subtitlePlaceholder;
@@ -29,28 +31,46 @@ class AxiListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final brightness = Theme.of(context).brightness;
+    final selectionOverlay = colors.primary.withValues(
+      alpha: brightness == Brightness.dark ? 0.12 : 0.06,
+    );
+    final backgroundColor = selected
+        ? Color.alphaBlend(selectionOverlay, colors.card)
+        : colors.card;
+    final shape = ContinuousRectangleBorder(
+      borderRadius: const BorderRadius.all(Radius.circular(16)),
+      side: BorderSide(color: colors.border),
+    );
+
     Widget child = ListTile(
       titleAlignment: ListTileTitleAlignment.center,
       horizontalTitleGap: 16.0,
       contentPadding: const EdgeInsets.only(left: 16.0, right: 16.0),
-      minTileHeight: 70.0,
+      minTileHeight: 84.0,
       selected: selected,
-      selectedTileColor: context.colorScheme.accent,
+      selectedTileColor: Colors.transparent,
+      hoverColor: selectionOverlay,
+      tileColor: Colors.transparent,
+      iconColor: colors.foreground,
       onTap: onTap,
       leading: leading == null
           ? null
           : ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxHeight: 40.0,
-                maxWidth: 40.0,
-              ),
+              constraints: leadingConstraints ??
+                  const BoxConstraints(
+                    maxHeight: 40.0,
+                    maxWidth: 40.0,
+                  ),
               child: leading,
             ),
       title: title == null
           ? null
           : Text(
               title!,
-              style: context.textTheme.small,
+              style: context.textTheme.small
+                  .copyWith(color: colors.foreground, height: 1.2),
               overflow: TextOverflow.ellipsis,
             ),
       subtitle: subtitle == null
@@ -58,19 +78,31 @@ class AxiListTile extends StatelessWidget {
               ? null
               : Text(
                   subtitlePlaceholder!,
-                  style: context.textTheme.muted
-                      .copyWith(fontStyle: FontStyle.italic),
+                  style: context.textTheme.muted.copyWith(
+                    fontStyle: FontStyle.italic,
+                    color: colors.mutedForeground,
+                  ),
                 )
           : Text(
               subtitle!,
               overflow: TextOverflow.ellipsis,
-              style: context.textTheme.muted,
+              style: context.textTheme.muted
+                  .copyWith(color: colors.mutedForeground, height: 1.2),
             ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [...?actions],
       ),
+    );
+
+    child = AnimatedContainer(
+      duration: baseAnimationDuration,
+      decoration: ShapeDecoration(
+        color: backgroundColor,
+        shape: shape,
+      ),
+      child: child,
     );
 
     if (badgeCount > 0) {

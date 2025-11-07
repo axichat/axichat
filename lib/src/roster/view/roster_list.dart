@@ -43,57 +43,63 @@ class RosterList extends StatelessWidget {
           );
         }
 
-        return ListView.separated(
-          separatorBuilder: (_, __) => const AxiListDivider(),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final item = items![index];
-            final open =
-                context.watch<ChatsCubit?>()?.state.openJid == item.jid;
-            return AxiListTile(
-              key: Key(item.jid),
-              onTap: () =>
-                  context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
-              menuItems: [
-                ShadContextMenuItem(
-                  leading: const Icon(LucideIcons.pencilLine),
-                  child: const Text('Compose'),
-                  onPressed: () => context.push(
-                    const ComposeRoute().location,
-                    extra: {
-                      'locate': context.read,
-                      'jids': [item.jid],
-                    },
+        return ColoredBox(
+          color: context.colorScheme.background,
+          child: ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items![index];
+              final open =
+                  context.watch<ChatsCubit?>()?.state.openJid == item.jid;
+              return ListItemPadding(
+                child: AxiListTile(
+                  key: Key(item.jid),
+                  onTap: () =>
+                      context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
+                  menuItems: [
+                    ShadContextMenuItem(
+                      leading: const Icon(LucideIcons.pencilLine),
+                      child: const Text('Compose'),
+                      onPressed: () => context.push(
+                        const ComposeRoute().location,
+                        extra: {
+                          'locate': context.read,
+                          'jids': [item.jid],
+                        },
+                      ),
+                    ),
+                    BlockMenuItem(jid: item.jid),
+                    AxiDeleteMenuItem(
+                      onPressed: () async {
+                        if (!(state is RosterLoading &&
+                                state.jid == item.jid) &&
+                            await confirm(context,
+                                    text:
+                                        'Remove ${item.jid} from contacts?') ==
+                                true &&
+                            context.mounted) {
+                          context
+                              .read<RosterCubit?>()
+                              ?.removeContact(jid: item.jid);
+                        }
+                      },
+                    ),
+                  ],
+                  selected: open,
+                  leading: AxiAvatar(
+                    jid: item.jid,
+                    subscription: item.subscription,
+                    presence: item.subscription.isTo || item.subscription.isBoth
+                        ? item.presence
+                        : null,
+                    status: item.status,
                   ),
+                  title: item.title,
+                  subtitle: item.jid,
                 ),
-                BlockMenuItem(jid: item.jid),
-                AxiDeleteMenuItem(
-                  onPressed: () async {
-                    if (!(state is RosterLoading && state.jid == item.jid) &&
-                        await confirm(context,
-                                text: 'Remove ${item.jid} from contacts?') ==
-                            true &&
-                        context.mounted) {
-                      context
-                          .read<RosterCubit?>()
-                          ?.removeContact(jid: item.jid);
-                    }
-                  },
-                ),
-              ],
-              selected: open,
-              leading: AxiAvatar(
-                jid: item.jid,
-                subscription: item.subscription,
-                presence: item.subscription.isTo || item.subscription.isBoth
-                    ? item.presence
-                    : null,
-                status: item.status,
-              ),
-              title: item.title,
-              subtitle: item.jid,
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
