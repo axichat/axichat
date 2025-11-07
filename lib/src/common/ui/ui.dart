@@ -6,6 +6,7 @@ export 'axi_app_bar.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'axi_confirm.dart';
+export 'axi_cutout.dart';
 export 'axi_delete_menu_item.dart';
 export 'axi_fab.dart';
 export 'axi_icon_button.dart';
@@ -27,6 +28,7 @@ export 'list_item_padding.dart';
 export 'password_input.dart';
 export 'presence_indicator.dart';
 export 'string_to_color.dart';
+export 'squircle_border.dart';
 
 const appDisplayName = 'axichat';
 const androidIconPath = 'app_icon';
