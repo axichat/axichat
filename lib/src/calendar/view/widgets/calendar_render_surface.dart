@@ -82,6 +82,47 @@ class CalendarSurfaceController {
 
   double? columnWidthForOffset(Offset localOffset) =>
       _renderObject?.columnWidthForOffset(localOffset);
+
+  RenderCalendarSurface? get _activeSurface {
+    final RenderCalendarSurface? surface = _renderObject;
+    if (surface == null || !surface.attached) {
+      return null;
+    }
+    return surface;
+  }
+
+  bool dispatchDragPayloadUpdate(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
+    final RenderCalendarSurface? surface = _activeSurface;
+    if (surface == null) {
+      return false;
+    }
+    surface.handleDragPayloadUpdate(payload, globalPosition);
+    return true;
+  }
+
+  bool dispatchDragPayloadDrop(
+    CalendarDragPayload payload,
+    Offset globalPosition,
+  ) {
+    final RenderCalendarSurface? surface = _activeSurface;
+    if (surface == null) {
+      return false;
+    }
+    surface.handleDragPayloadDrop(payload, globalPosition);
+    return true;
+  }
+
+  bool dispatchDragPayloadExit(CalendarDragPayload payload) {
+    final RenderCalendarSurface? surface = _activeSurface;
+    if (surface == null) {
+      return false;
+    }
+    surface.handleDragPayloadExit(payload);
+    return true;
+  }
 }
 
 /// Describes the visible day columns rendered inside [CalendarRenderSurface].
@@ -709,8 +750,8 @@ class RenderCalendarSurface extends RenderBox
     }
 
     final double previewHeight = previewSlotSpan * slotHeight;
-    double pointerOffset =
-        controller.dragPointerOffsetFromTop ?? _pointerOffsetForDrag(controller);
+    double pointerOffset = controller.dragPointerOffsetFromTop ??
+        _pointerOffsetForDrag(controller);
     if (!pointerOffset.isFinite || pointerOffset < 0) {
       pointerOffset = 0;
     }
@@ -778,8 +819,7 @@ class RenderCalendarSurface extends RenderBox
         : 0;
 
     int stepIndex = stepMinutes > 0
-        ? ((pointerTopMinutes / stepMinutes).round())
-            .clamp(0, maxStepIndex)
+        ? ((pointerTopMinutes / stepMinutes).round()).clamp(0, maxStepIndex)
         : 0;
     double topMinutes = stepIndex * stepMinutes.toDouble();
     double bottomMinutes = topMinutes + previewMinutes;
@@ -808,15 +848,14 @@ class RenderCalendarSurface extends RenderBox
 
     final double finalTopLocal =
         columnTop + metrics.verticalOffsetForMinutes(finalStartMinutes);
-    final double clampedTopLocal =
-        finalTopLocal.clamp(columnTop, math.max(columnTop, columnBottom - previewHeight));
+    final double clampedTopLocal = finalTopLocal.clamp(
+        columnTop, math.max(columnTop, columnBottom - previewHeight));
 
     double updatedPointerOffset = pointerLocalDy - clampedTopLocal;
     if (!updatedPointerOffset.isFinite) {
       updatedPointerOffset = pointerOffset;
     }
-    updatedPointerOffset =
-        updatedPointerOffset.clamp(0.0, pointerClampHeight);
+    updatedPointerOffset = updatedPointerOffset.clamp(0.0, pointerClampHeight);
     controller.setDragPointerOffsetFromTop(
       updatedPointerOffset,
       notify: false,
@@ -862,9 +901,8 @@ class RenderCalendarSurface extends RenderBox
         controller.dragInitialWidth ??
         payload.sourceBounds?.width ??
         0.0;
-    final double height = controller.draggingTaskHeight ??
-        payload.sourceBounds?.height ??
-        0.0;
+    final double height =
+        controller.draggingTaskHeight ?? payload.sourceBounds?.height ?? 0.0;
 
     double anchorDx;
     if (controller.dragAnchorDx != null) {
@@ -1923,12 +1961,14 @@ class RenderCalendarSurface extends RenderBox
       return null;
     }
 
-    final Offset localPosition = _clampLocalOffset(globalToLocal(globalPosition));
+    final Offset localPosition =
+        _clampLocalOffset(globalToLocal(globalPosition));
     if (_isInTimeColumn(localPosition)) {
       return null;
     }
 
-    final _DayColumnGeometry? columnGeometry = _geometryForOffset(localPosition);
+    final _DayColumnGeometry? columnGeometry =
+        _geometryForOffset(localPosition);
     if (columnGeometry == null) {
       return null;
     }
@@ -2052,7 +2092,8 @@ class RenderCalendarSurface extends RenderBox
 
     final double minutesDelta = deltaPixels / pixelsPerMinute;
     final Duration delta = Duration(
-      microseconds: (minutesDelta * 60 * Duration.microsecondsPerSecond).round(),
+      microseconds:
+          (minutesDelta * 60 * Duration.microsecondsPerSecond).round(),
     );
 
     final DateTime candidate = baseDateTime.add(delta);
@@ -2373,8 +2414,7 @@ class RenderCalendarSurface extends RenderBox
         (timestamp.second / 60.0) +
         (timestamp.millisecond / 60000.0) +
         (timestamp.microsecond / 60000000.0);
-    final double minutesFromStart =
-        totalMinutes - (startHour * 60).toDouble();
+    final double minutesFromStart = totalMinutes - (startHour * 60).toDouble();
     final double clamped = minutesFromStart.clamp(0.0, 24.0 * 60.0);
     return metrics.verticalOffsetForMinutes(clamped);
   }

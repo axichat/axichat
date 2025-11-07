@@ -1,28 +1,18 @@
 import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../models/calendar_drag_payload.dart';
 
-enum _PointerUpdateSource { direct, fallback }
-
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
-  static const double _edgeActivationExtent = 72.0;
-  static const double _pointerActivationExtent = 40.0;
+  static const double _edgeHotZoneWidth = 44.0;
+  static const double _pointerHotZoneMin = 40.0;
+  static const double _pointerHotZoneMax = 40.0;
+  static const double _pointerHotZoneFraction = 0.04;
   static const Duration _switchDelay = Duration(milliseconds: 220);
-  static const Duration _pointerFallbackDelay = Duration(milliseconds: 90);
-  static const Duration _pointerStaleTimeout = Duration(milliseconds: 120);
-  static const double _minPointerThreshold = 32.0;
-  static const double _maxPointerThreshold = 64.0;
-
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
   bool _evaluatingSwitch = false;
   Offset? _lastGlobalPosition;
-  DateTime? _dragSessionStartTime;
-  DateTime? _lastPointerUpdateTime;
-  _PointerUpdateSource? _lastPointerSource;
   bool _gridDragActive = false;
   bool _edgeDragActive = false;
   bool _showLeftEdgeCue = false;
@@ -72,15 +62,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   void handleGridDragSessionStarted() {
     _setGridDragActive(true);
-    _dragSessionStartTime = DateTime.now();
     _lastGlobalPosition = null;
-    _lastPointerUpdateTime = null;
-    _lastPointerSource = null;
     _evaluateEdgeAutoSwitch();
   }
 
   void handleGridDragPositionChanged(Offset globalPosition) {
-    _recordPointerUpdate(globalPosition, _PointerUpdateSource.direct);
+    _recordPointerUpdate(globalPosition);
     _evaluateEdgeAutoSwitch();
     _tryPerformPendingSwitch();
   }
@@ -90,9 +77,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     if (!_edgeDragActive) {
       _lastGlobalPosition = null;
     }
-    _dragSessionStartTime = null;
-    _lastPointerUpdateTime = null;
-    _lastPointerSource = null;
     _updateEdgeCue(null);
     _cancelSwitchTimer();
   }
@@ -214,7 +198,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     return Align(
       alignment: alignment,
       child: SizedBox(
-        width: 56,
+        width: _edgeHotZoneWidth,
         child: IgnorePointer(
           ignoring: !_isAnyDragActive,
           child: DragTarget<CalendarDragPayload>(
@@ -244,25 +228,14 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   void _handleEdgeDragEvent(DragTargetDetails<CalendarDragPayload> details) {
     _setEdgeDragActive(true);
-    final Offset? fallbackPosition = _pointerPositionForDetails(details);
-    final bool shouldApplyFallback = _shouldUseFallbackPointer;
-    if (_lastGlobalPosition == null && !shouldApplyFallback) {
-      _updateEdgeCue(null);
-      _cancelSwitchTimer();
-      return;
-    }
-    if (shouldApplyFallback) {
+    if (_lastGlobalPosition == null) {
+      final Offset? fallbackPosition = _pointerPositionForDetails(details);
       if (fallbackPosition == null) {
         _updateEdgeCue(null);
         _cancelSwitchTimer();
         return;
       }
-      _recordPointerUpdate(fallbackPosition, _PointerUpdateSource.fallback);
-    }
-    if (_lastGlobalPosition == null) {
-      _updateEdgeCue(null);
-      _cancelSwitchTimer();
-      return;
+      _recordPointerUpdate(fallbackPosition);
     }
     _evaluateEdgeAutoSwitch();
     _tryPerformPendingSwitch();
@@ -272,8 +245,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _setEdgeDragActive(false);
     if (!_gridDragActive) {
       _lastGlobalPosition = null;
-      _lastPointerUpdateTime = null;
-      _lastPointerSource = null;
     }
     _updateEdgeCue(null);
     _cancelSwitchTimer();
@@ -293,9 +264,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
     final Offset localPosition = box.globalToLocal(globalPosition);
     final double width = box.size.width;
-    final double pointerThreshold = math.max(
-      _minPointerThreshold,
-      math.min(_maxPointerThreshold, width * 0.08),
+    double pointerThreshold = width * _pointerHotZoneFraction;
+    pointerThreshold = pointerThreshold.clamp(
+      _pointerHotZoneMin,
+      _pointerHotZoneMax,
     );
     int? cueIndex;
     final bool pointerInLeftZone = localPosition.dx <= pointerThreshold;
@@ -372,8 +344,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final CalendarDragPayload payload = details.data;
     final Rect? sourceBounds = payload.sourceBounds;
     final double normalized =
-        ((payload.pointerNormalizedX ?? 0.5).clamp(0.0, 1.0) as num)
-            .toDouble();
+        ((payload.pointerNormalizedX ?? 0.5).clamp(0.0, 1.0) as num).toDouble();
     double width = sourceBounds?.width ?? 0.0;
     double height = sourceBounds?.height ?? 0.0;
     if (!width.isFinite || width <= 0) {
@@ -403,26 +374,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     return pointer;
   }
 
-  bool get _shouldUseFallbackPointer {
-    final DateTime now = DateTime.now();
-    final DateTime? lastUpdate = _lastPointerUpdateTime;
-    if (lastUpdate != null && _lastPointerSource == _PointerUpdateSource.direct) {
-      return now.difference(lastUpdate) > _pointerStaleTimeout;
-    }
-    if (lastUpdate != null && _lastPointerSource != _PointerUpdateSource.direct) {
-      return true;
-    }
-    final DateTime? dragStart = _dragSessionStartTime;
-    if (dragStart == null) {
-      return false;
-    }
-    return now.difference(dragStart) > _pointerFallbackDelay;
-  }
-
-  void _recordPointerUpdate(Offset position, _PointerUpdateSource source) {
+  void _recordPointerUpdate(Offset position) {
     _lastGlobalPosition = position;
-    _lastPointerUpdateTime = DateTime.now();
-    _lastPointerSource = source;
   }
 
   bool _canSwitchTo(int index) {
