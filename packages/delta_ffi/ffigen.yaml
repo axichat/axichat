@@ -1,0 +1,8 @@
+name: DeltaChatBindings
+description: Auto-generated bindings for Delta Chat Core.
+output: 'lib/src/bindings.dart'
+headers:
+  entry-points:
+    - 'headers/deltachat.h'
+llvm-path:
+  - '/opt/homebrew/opt/llvm'

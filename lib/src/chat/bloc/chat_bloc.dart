@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/common/event_transform.dart';
+import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -9,6 +11,7 @@ import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:logging/logging.dart';
 
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
@@ -20,10 +23,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required MessageService messageService,
     required ChatsService chatsService,
     required NotificationService notificationService,
+    EmailService? emailService,
     OmemoService? omemoService,
   })  : _messageService = messageService,
         _chatsService = chatsService,
         _notificationService = notificationService,
+        _emailService = emailService,
         _omemoService = omemoService,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
@@ -39,6 +44,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
+    on<ChatTransportChanged>(_onChatTransportChanged);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatAlertHidden>(_onChatAlertHidden);
     if (jid != null) {
@@ -49,6 +55,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _messageSubscription = _messageService
           .messageStreamForChat(jid!, end: messageBatchSize)
           .listen((items) => add(_ChatMessagesUpdated(items)));
+      unawaited(_initializeTransport());
     }
   }
 
@@ -58,14 +65,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final MessageService _messageService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
+  final EmailService? _emailService;
   final OmemoService? _omemoService;
+  final Logger _log = Logger('ChatBloc');
 
   late final StreamSubscription<Chat?> _chatSubscription;
   late StreamSubscription<List<Message>> _messageSubscription;
 
   RestartableTimer? _typingTimer;
+  MessageTransport _transport = MessageTransport.xmpp;
 
   bool get encryptionAvailable => _omemoService != null;
+  bool get _isEmailChat {
+    final chat = state.chat;
+    if (chat == null) return false;
+    if (_transport.isEmail) return true;
+    return chat.transport.isEmail;
+  }
+
+  Future<void> _initializeTransport() async {
+    if (jid == null) return;
+    try {
+      _transport = await _chatsService.loadChatTransportPreference(jid!);
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to load transport preference for $jid',
+        error,
+        stackTrace,
+      );
+    }
+  }
 
   @override
   Future<void> close() async {
@@ -81,6 +110,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chat: event.chat,
       showAlert: event.chat.alert != null && state.chat?.alert == null,
     ));
+    if (event.chat.deltaChatId != null && _transport.isXmpp) {
+      _transport = MessageTransport.email;
+      unawaited(
+        _chatsService.saveChatTransportPreference(
+          jid: event.chat.jid,
+          transport: _transport,
+        ),
+      );
+    }
   }
 
   void _onChatMessagesUpdated(
@@ -89,7 +127,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     emit(state.copyWith(items: event.items));
 
-    if (SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+    final lifecycleState = SchedulerBinding.instance.lifecycleState;
+    if (!_isEmailChat && lifecycleState == AppLifecycleState.resumed) {
       for (final item in event.items) {
         if (!item.displayed &&
             item.senderJid != _chatsService.myJid &&
@@ -125,7 +164,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         () => add(const _ChatTypingStopped()),
       );
     }
-    await _chatsService.sendTyping(jid: state.chat!.jid, typing: true);
+    if (!_isEmailChat) {
+      await _chatsService.sendTyping(jid: state.chat!.jid, typing: true);
+    }
     emit(state.copyWith(typing: true));
   }
 
@@ -140,14 +181,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     _stopTyping();
     emit(state.copyWith(typing: false));
+    final chat = state.chat;
+    if (chat == null) return;
+    final isEmailChat = _isEmailChat;
     try {
-      await _messageService.sendMessage(
-        jid: jid!,
-        text: event.text,
-        encryptionProtocol: state.chat!.encryptionProtocol,
-      );
+      if (isEmailChat) {
+        final service = _emailService;
+        if (service == null) {
+          throw StateError('EmailService not available for email chat.');
+        }
+        await service.sendMessage(chat: chat, body: event.text);
+      } else {
+        await _messageService.sendMessage(
+          jid: jid!,
+          text: event.text,
+          encryptionProtocol: chat.encryptionProtocol,
+        );
+      }
     } on XmppMessageException catch (_) {
       // Don't panic. User will see a visual difference in the message bubble.
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send message for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -184,6 +242,28 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _omemoService?.recreateSessions(jid: jid!);
   }
 
+  Future<void> _onChatTransportChanged(
+    ChatTransportChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    if (_transport == event.transport) return;
+    try {
+      _transport = event.transport;
+      await _chatsService.saveChatTransportPreference(
+        jid: chat.jid,
+        transport: event.transport,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to change transport for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   Future<void> _onChatLoadEarlier(
     ChatLoadEarlier event,
     Emitter<ChatState> emit,
@@ -208,6 +288,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _stopTyping() async {
     _typingTimer?.cancel();
     _typingTimer = null;
-    await _chatsService.sendTyping(jid: state.chat!.jid, typing: false);
+    if (!_isEmailChat) {
+      await _chatsService.sendTyping(jid: state.chat!.jid, typing: false);
+    }
   }
 }

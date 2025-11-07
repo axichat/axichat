@@ -160,6 +160,8 @@ class Message with _$Message implements Insertable<Message> {
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
     @Default(<String>[]) List<String> reactionsPreview,
+    int? deltaChatId,
+    int? deltaMsgId,
   }) = _Message;
 
   const factory Message.fromDb({
@@ -192,6 +194,8 @@ class Message with _$Message implements Insertable<Message> {
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
     @Default(<String>[]) List<String> reactionsPreview,
+    required int? deltaChatId,
+    required int? deltaMsgId,
   }) = _MessageFromDb;
 
   factory Message.fromMox(mox.MessageEvent event) {
@@ -290,6 +294,8 @@ class Message with _$Message implements Insertable<Message> {
         stickerPackID: Value.absentIfNull(stickerPackID),
         pseudoMessageType: Value.absentIfNull(pseudoMessageType),
         pseudoMessageData: Value.absentIfNull(pseudoMessageData),
+        deltaChatId: Value.absentIfNull(deltaChatId),
+        deltaMsgId: Value.absentIfNull(deltaMsgId),
       ).toColumns(nullToAbsent);
 }
 
@@ -358,6 +364,10 @@ class Messages extends Table {
 
   TextColumn get pseudoMessageData =>
       text().nullable().map(const MapStringDynamicConverter())();
+
+  IntColumn get deltaChatId => integer().nullable()();
+
+  IntColumn get deltaMsgId => integer().nullable()();
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};

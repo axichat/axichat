@@ -5,6 +5,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
@@ -81,6 +82,19 @@ class Axichat extends StatelessWidget {
         RepositoryProvider.value(value: _notificationService),
         RepositoryProvider.value(value: _capability),
         RepositoryProvider.value(value: _policy),
+        RepositoryProvider<CredentialStore>(
+          create: (context) => CredentialStore(
+            capability: context.read<Capability>(),
+            policy: context.read<Policy>(),
+          ),
+        ),
+        RepositoryProvider<EmailService>(
+          create: (context) => EmailService(
+            credentialStore: context.read<CredentialStore>(),
+            databaseBuilder: () => context.read<XmppService>().database,
+            notificationService: context.read<NotificationService>(),
+          ),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -89,11 +103,9 @@ class Axichat extends StatelessWidget {
           ),
           BlocProvider(
             create: (context) => AuthenticationCubit(
-              credentialStore: CredentialStore(
-                capability: context.read<Capability>(),
-                policy: context.read<Policy>(),
-              ),
+              credentialStore: context.read<CredentialStore>(),
               xmppService: context.read<XmppService>(),
+              emailService: context.read<EmailService>(),
               notificationService: context.read<NotificationService>(),
             ),
           ),
