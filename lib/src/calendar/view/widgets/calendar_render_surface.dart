@@ -2179,8 +2179,8 @@ class RenderCalendarSurface extends RenderBox
   void _handleExternalDragExit([String? taskId]) {
     if (_externalDragTaskId != null &&
         (taskId == null || _externalDragTaskId == taskId)) {
-      _interactionController?.endDrag();
-      _externalDragTaskId = null;
+      _interactionController?.clearPreview();
+      _interactionController?.resetFeedbackHint();
     }
     onDragExit?.call();
     onDragAutoScrollStop?.call();
