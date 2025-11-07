@@ -57,12 +57,21 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       localY = localY.clamp(0.0, height);
     }
     final Offset anchorLocal = Offset(localX, localY);
-    final Offset globalTopLeft = event.position - anchorLocal;
+    final double centerDx = width > 0 ? width / 2 : anchorLocal.dx;
+    final double centerDy = height > 0 ? height / 2 : anchorLocal.dy;
+    final Offset anchorForFeedback = Offset(
+      centerDx.isFinite ? centerDx : 0.0,
+      centerDy.isFinite ? centerDy : 0.0,
+    );
+    final Offset globalTopLeft = event.position - anchorForFeedback;
     double normalized = 0.5;
-    if (width > 0 && localX.isFinite) {
-      normalized = (localX / width).clamp(0.0, 1.0);
+    if (width > 0 && anchorForFeedback.dx.isFinite && width.isFinite) {
+      normalized = (anchorForFeedback.dx / width).clamp(0.0, 1.0);
     }
-
+    final double feedbackAnchorNormalized = normalized;
+    final double feedbackAnchorDy = anchorForFeedback.dy.isFinite
+        ? anchorForFeedback.dy
+        : (height.isFinite && height > 0 ? height / 2 : 0.0);
     setState(() {
       _childSize = size;
       _sourceBounds = Rect.fromLTWH(
@@ -71,9 +80,8 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
         size.width,
         size.height,
       );
-      _pointerNormalized = normalized;
-      _pointerOffsetY =
-          localY.isFinite ? localY : (height.isFinite && height > 0 ? height / 2 : null);
+      _pointerNormalized = feedbackAnchorNormalized;
+      _pointerOffsetY = feedbackAnchorDy;
     });
     _activePointerId = event.pointer;
     _trackedPointer = event.position;

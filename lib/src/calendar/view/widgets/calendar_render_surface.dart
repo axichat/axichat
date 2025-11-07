@@ -896,6 +896,25 @@ class RenderCalendarSurface extends RenderBox
     required Offset dragTargetOffset,
     required TaskInteractionController controller,
   }) {
+    if (payload.originSlot != null) {
+      return _pointerGlobalForScheduledDrag(
+        payload: payload,
+        dragTargetOffset: dragTargetOffset,
+        controller: controller,
+      );
+    }
+    return _pointerGlobalForUnscheduledDrag(
+      payload: payload,
+      dragTargetOffset: dragTargetOffset,
+      controller: controller,
+    );
+  }
+
+  Offset _pointerGlobalForScheduledDrag({
+    required CalendarDragPayload payload,
+    required Offset dragTargetOffset,
+    required TaskInteractionController controller,
+  }) {
     final double width = controller.draggingTaskWidth ??
         controller.activeDragWidth ??
         controller.dragInitialWidth ??
@@ -942,10 +961,70 @@ class RenderCalendarSurface extends RenderBox
       anchorDy = 0.0;
     }
 
-    return Offset(
-      dragTargetOffset.dx + anchorDx,
-      dragTargetOffset.dy + anchorDy,
-    );
+    return dragTargetOffset + Offset(anchorDx, anchorDy);
+  }
+
+  Offset _pointerGlobalForUnscheduledDrag({
+    required CalendarDragPayload payload,
+    required Offset dragTargetOffset,
+    required TaskInteractionController controller,
+  }) {
+    final double overlayWidth = payload.sourceBounds?.width ??
+        controller.draggingTaskWidth ??
+        controller.activeDragWidth ??
+        controller.dragInitialWidth ??
+        0.0;
+    final double overlayHeight = payload.sourceBounds?.height ??
+        controller.draggingTaskHeight ??
+        0.0;
+
+    double anchorDx;
+    if (payload.pointerNormalizedX != null && overlayWidth > 0) {
+      anchorDx = ((overlayWidth * payload.pointerNormalizedX!)
+              .clamp(0.0, overlayWidth) as num)
+          .toDouble();
+    } else if (controller.dragAnchorDx != null) {
+      final double fallbackWidth = overlayWidth > 0
+          ? overlayWidth
+          : (controller.draggingTaskWidth ??
+              controller.activeDragWidth ??
+              controller.dragInitialWidth ??
+              0.0);
+      final double candidate = controller.dragAnchorDx!;
+      anchorDx = fallbackWidth > 0
+          ? (candidate.clamp(0.0, fallbackWidth) as num).toDouble()
+          : candidate;
+    } else if (overlayWidth > 0) {
+      final double normalized =
+          (controller.dragPointerNormalized.clamp(0.0, 1.0) as num).toDouble();
+      anchorDx = overlayWidth * normalized;
+    } else {
+      anchorDx = 0.0;
+    }
+
+    double anchorDy;
+    if (payload.pointerOffsetY != null) {
+      anchorDy = payload.pointerOffsetY!;
+    } else if (controller.dragPointerOffsetFromTop != null) {
+      anchorDy = controller.dragPointerOffsetFromTop!;
+    } else if (overlayHeight > 0) {
+      anchorDy = overlayHeight / 2;
+    } else {
+      anchorDy = 0.0;
+    }
+    if (!anchorDy.isFinite) {
+      anchorDy = 0.0;
+    }
+    final double heightClamp = overlayHeight > 0
+        ? overlayHeight
+        : (controller.draggingTaskHeight ?? double.infinity);
+    if (heightClamp.isFinite && heightClamp > 0) {
+      anchorDy = (anchorDy.clamp(0.0, heightClamp) as num).toDouble();
+    } else if (anchorDy < 0) {
+      anchorDy = 0.0;
+    }
+
+    return dragTargetOffset + Offset(anchorDx, anchorDy);
   }
 
   Offset _pointerGlobalForPayloadOnly(
@@ -1997,6 +2076,9 @@ class RenderCalendarSurface extends RenderBox
     TaskInteractionController controller,
     CalendarTask task,
   ) {
+    final Duration fallbackDuration = controller.draggingTaskSnapshot?.duration ??
+        task.duration ??
+        const Duration(hours: 1);
     final CalendarLayoutMetrics? metrics = _metrics;
     final double? height = controller.draggingTaskHeight;
     if (metrics != null &&
@@ -2009,7 +2091,7 @@ class RenderCalendarSurface extends RenderBox
           metrics.minutesPerSlot, (slots * metrics.minutesPerSlot).round());
       return Duration(minutes: minutes);
     }
-    return task.duration ?? const Duration(hours: 1);
+    return fallbackDuration;
   }
 
   double _pointerOffsetForDrag(TaskInteractionController controller) {
@@ -2183,7 +2265,13 @@ class RenderCalendarSurface extends RenderBox
     CalendarDragPayload payload,
     Offset dragTargetOffset,
   ) {
-    _ensureExternalDragInitialized(payload, dragTargetOffset);
+    final Offset pointerGlobal =
+        _pointerGlobalForPayloadOnly(payload, dragTargetOffset);
+    _ensureExternalDragInitialized(
+      payload,
+      dragTargetOffset,
+      pointerGlobal,
+    );
     _handleExternalDragUpdate(payload, dragTargetOffset);
   }
 
@@ -2191,7 +2279,13 @@ class RenderCalendarSurface extends RenderBox
     CalendarDragPayload payload,
     Offset dragTargetOffset,
   ) {
-    _ensureExternalDragInitialized(payload, dragTargetOffset);
+    final Offset pointerGlobal =
+        _pointerGlobalForPayloadOnly(payload, dragTargetOffset);
+    _ensureExternalDragInitialized(
+      payload,
+      dragTargetOffset,
+      pointerGlobal,
+    );
     _handleExternalDragDrop(payload, dragTargetOffset);
     _externalDragTaskId = null;
   }
@@ -2287,6 +2381,7 @@ class RenderCalendarSurface extends RenderBox
   void _ensureExternalDragInitialized(
     CalendarDragPayload payload,
     Offset dragTargetOffset,
+    Offset pointerGlobal,
   ) {
     final TaskInteractionController? controller = _interactionController;
     if (controller == null) {
@@ -2296,24 +2391,39 @@ class RenderCalendarSurface extends RenderBox
         controller.draggingTaskId == payload.task.id) {
       return;
     }
+    final CalendarLayoutMetrics? metrics = _metrics;
     Size feedbackSize = payload.sourceBounds?.size ??
         Size(
           controller.draggingTaskWidth ?? 0,
-          controller.draggingTaskHeight ?? _metrics?.slotHeight ?? 0,
+          controller.draggingTaskHeight ?? metrics?.slotHeight ?? 0,
         );
-    final double slotHeight = _metrics?.slotHeight ?? 0;
-    if (payload.originSlot == null && slotHeight > 0) {
-      final double resolvedHeight =
+    if (payload.originSlot == null) {
+      final double slotHeight = metrics?.slotHeight ?? 0;
+      final Duration duration = payload.snapshot.duration ??
+          payload.task.duration ??
+          const Duration(hours: 1);
+      double resolvedHeight =
           feedbackSize.height.isFinite && feedbackSize.height > 0
-              ? math.max(feedbackSize.height, slotHeight)
-              : slotHeight;
-      feedbackSize = Size(feedbackSize.width, resolvedHeight);
+              ? feedbackSize.height
+              : 0.0;
+      if (metrics != null) {
+        final double durationHeight = metrics.heightForDuration(duration);
+        if (durationHeight.isFinite && durationHeight > 0) {
+          resolvedHeight = math.max(resolvedHeight, durationHeight);
+        }
+      }
+      if (slotHeight > 0) {
+        resolvedHeight = math.max(resolvedHeight, slotHeight);
+      }
+      if (resolvedHeight > 0) {
+        feedbackSize = Size(feedbackSize.width, resolvedHeight);
+      }
     }
     final Offset pointerOffset = _resolvePointerOffset(
       controller: controller,
       payload: payload,
       feedbackSize: feedbackSize,
-      globalPosition: dragTargetOffset,
+      globalPosition: pointerGlobal,
     );
     controller.beginExternalDrag(
       task: payload.task,
