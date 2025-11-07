@@ -61,6 +61,17 @@ class _ChatListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final transport = item.transport;
+    final previewUnreadBadge =
+        _shouldPreviewUnreadBadge(); // TODO: remove once layout finalized.
+    final showUnreadBadge = previewUnreadBadge || item.unreadCount > 0;
+    final unreadCount =
+        item.unreadCount == 0 && previewUnreadBadge ? 1 : item.unreadCount;
+    final unreadThickness = showUnreadBadge
+        ? _measureUnreadBadgeWidth(
+            context,
+            unreadCount,
+          )
+        : 0.0;
     final timestampLabel = item.lastMessage == null
         ? null
         : formatTimeSinceLabel(DateTime.now(), item.lastChangeTimestamp);
@@ -75,6 +86,13 @@ class _ChatListTile extends StatelessWidget {
                 16.0,
           );
 
+    final brightness = Theme.of(context).brightness;
+    final selectionOverlay = colors.primary.withValues(
+      alpha: brightness == Brightness.dark ? 0.12 : 0.06,
+    );
+    final tileBackgroundColor = item.open
+        ? Color.alphaBlend(selectionOverlay, colors.card)
+        : colors.card;
     final locate = context.read;
     final tile = AxiListTile(
       key: Key(item.jid),
@@ -147,24 +165,23 @@ class _ChatListTile extends StatelessWidget {
     );
 
     final cutouts = <_CutoutSpec>[
-      if (item.unreadCount > 0)
+      if (showUnreadBadge)
         _CutoutSpec(
           edge: _CutoutEdge.top,
-          alignment: const Alignment(0.72, -1),
-          depth: 18,
-          thickness: 60,
+          alignment: const Alignment(0.84, -1),
+          depth: 14,
+          thickness: unreadThickness,
           cornerRadius: 18,
-          childInset: 0,
-          childOffset: const Offset(0, -14),
-          child: _UnreadBadge(count: item.unreadCount),
+          child: _UnreadBadge(count: unreadCount),
         ),
       _CutoutSpec(
         edge: _CutoutEdge.right,
-        alignment: const Alignment(1.06, 0.1),
+        alignment: const Alignment(1.02, 0),
         depth: 32,
         thickness: 46,
         cornerRadius: 18,
         child: _FavoriteToggle(
+          backgroundColor: tileBackgroundColor,
           favorited: item.favorited,
           onPressed: () => context.read<ChatsCubit?>()?.toggleFavorited(
                 jid: item.jid,
@@ -179,7 +196,6 @@ class _ChatListTile extends StatelessWidget {
           depth: 14,
           thickness: timestampThickness,
           cornerRadius: 18,
-          childInset: 0,
           child: DisplayTimeSince(
             timestamp: item.lastChangeTimestamp,
             style: context.textTheme.small.copyWith(
@@ -190,7 +206,8 @@ class _ChatListTile extends StatelessWidget {
     ];
 
     return _CutoutTile(
-      selected: item.open,
+      backgroundColor: tileBackgroundColor,
+      borderColor: colors.border,
       cutouts: cutouts,
       child: tile,
     );
@@ -208,6 +225,15 @@ double _measureLabelWidth(BuildContext context, String text) {
     textDirection: Directionality.of(context),
   )..layout();
   return painter.width;
+}
+
+bool _shouldPreviewUnreadBadge() => true;
+
+double _measureUnreadBadgeWidth(BuildContext context, int count) {
+  final textWidth = _measureLabelWidth(context, '$count');
+  const horizontalPadding = 20.0; // padding in _UnreadBadge
+  const minWidth = 36.0;
+  return math.max(minWidth, textWidth + horizontalPadding);
 }
 
 class _TransportAwareAvatar extends StatelessWidget {
@@ -283,10 +309,12 @@ class _UnreadBadge extends StatelessWidget {
 
 class _FavoriteToggle extends StatelessWidget {
   const _FavoriteToggle({
+    required this.backgroundColor,
     required this.favorited,
     required this.onPressed,
   });
 
+  final Color backgroundColor;
   final bool favorited;
   final VoidCallback onPressed;
 
@@ -295,7 +323,7 @@ class _FavoriteToggle extends StatelessWidget {
     final colors = context.colorScheme;
     return DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.card,
+        color: backgroundColor,
         shape: SquircleBorder(
           cornerRadius: 14,
           side: BorderSide(color: colors.background, width: 2),
@@ -324,24 +352,17 @@ class _CutoutTile extends StatelessWidget {
   const _CutoutTile({
     required this.child,
     required this.cutouts,
-    required this.selected,
+    required this.backgroundColor,
+    required this.borderColor,
   });
 
   final Widget child;
   final List<_CutoutSpec> cutouts;
-  final bool selected;
+  final Color backgroundColor;
+  final Color borderColor;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final brightness = Theme.of(context).brightness;
-    final selectionOverlay = colors.primary.withValues(
-      alpha: brightness == Brightness.dark ? 0.12 : 0.06,
-    );
-    final backgroundColor = selected
-        ? Color.alphaBlend(selectionOverlay, colors.card)
-        : colors.card;
-
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -349,7 +370,7 @@ class _CutoutTile extends StatelessWidget {
           painter: _CutoutPainter(
             borderRadius: 18,
             backgroundColor: backgroundColor,
-            borderColor: colors.border,
+            borderColor: borderColor,
             cutouts: cutouts,
           ),
           child: child,
@@ -384,8 +405,6 @@ class _CutoutSpec {
     required this.thickness,
     required this.child,
     this.cornerRadius = 16,
-    this.childInset,
-    this.childOffset = Offset.zero,
   });
 
   final _CutoutEdge edge;
@@ -394,8 +413,6 @@ class _CutoutSpec {
   final double thickness;
   final Widget child;
   final double cornerRadius;
-  final double? childInset;
-  final Offset childOffset;
 }
 
 enum _CutoutEdge { top, right, bottom, left }
@@ -533,14 +550,13 @@ class _CutoutAttachmentDelegate extends SingleChildLayoutDelegate {
         Offset(
           childSize.width / 2,
           childSize.height / 2,
-        ) +
-        spec.childOffset;
+        );
     return topLeft;
   }
 
   double _resolvedInset(Size childSize) {
-    final raw = spec.childInset ?? _autoInset(childSize);
-    return raw.clamp(-spec.depth, spec.depth);
+    final inset = _autoInset(childSize);
+    return inset.clamp(-spec.depth, spec.depth);
   }
 
   double _autoInset(Size childSize) {
