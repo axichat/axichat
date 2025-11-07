@@ -232,16 +232,11 @@ class _CalendarWidgetState extends State<CalendarWidget>
     required bool highlightTasksTab,
   }) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return buildDragAwareTabBar(
-          context: context,
-          constraints: constraints,
-          bottomInset: bottomInset,
-          scheduleTabLabel: const Text('Schedule'),
-          tasksTabLabel: _buildTasksTabLabel(highlightTasksTab),
-        );
-      },
+    return buildDragAwareTabBar(
+      context: context,
+      bottomInset: bottomInset,
+      scheduleTabLabel: const Text('Schedule'),
+      tasksTabLabel: _buildTasksTabLabel(highlightTasksTab),
     );
   }
 

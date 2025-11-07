@@ -211,7 +211,8 @@ class _TaskSidebarState extends State<TaskSidebar>
                   },
                 ),
               ),
-              _buildResizeHandle(uiState),
+              if (ResponsiveHelper.isExpanded(context))
+                _buildResizeHandle(uiState),
             ],
           ),
         );

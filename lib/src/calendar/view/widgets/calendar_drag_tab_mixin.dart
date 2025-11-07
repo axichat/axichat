@@ -1,9 +1,12 @@
 import 'dart:async';
+
+import 'package:axichat/src/common/ui/axi_tab_bar.dart';
 import 'package:flutter/material.dart';
 
 import '../models/calendar_drag_payload.dart';
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
+  static const double _tabBarHeight = kTextTabBarHeight;
   static const double _edgeHotZoneWidth = 44.0;
   static const double _pointerHotZoneMin = 40.0;
   static const double _pointerHotZoneMax = 40.0;
@@ -120,72 +123,99 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   Widget buildDragAwareTabBar({
     required BuildContext context,
-    required BoxConstraints constraints,
     required double bottomInset,
     required Widget scheduleTabLabel,
     required Widget tasksTabLabel,
   }) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final EdgeInsets padding = EdgeInsets.fromLTRB(
-      16,
-      8,
-      16,
-      bottomInset > 0 ? bottomInset : 12,
-    );
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final bool scheduleCueActive = _tabCueIndex == 0 && _isAnyDragActive;
+    final bool tasksCueActive = _tabCueIndex == 1 && _isAnyDragActive;
+    final double height = _tabBarHeight + bottomInset;
 
-    Widget decorateTab(Widget label, bool highlighted) {
-      final Color highlightColor = scheme.primary.withValues(alpha: 0.12);
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: highlighted ? highlightColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: DefaultTextStyle.merge(
-          style: TextStyle(
-            fontWeight: highlighted ? FontWeight.w600 : FontWeight.w500,
+    return SizedBox(
+      height: height,
+      child: Stack(
+        children: [
+          AxiTabBar(
+            controller: mobileTabController,
+            padding: EdgeInsets.only(bottom: bottomInset),
+            indicatorColor: scheme.primary,
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: <Widget>[
+              Tab(
+                child: _buildTabLabel(
+                  label: scheduleTabLabel,
+                  scheme: scheme,
+                  showCue: scheduleCueActive,
+                ),
+              ),
+              Tab(
+                child: _buildTabLabel(
+                  label: tasksTabLabel,
+                  scheme: scheme,
+                  showCue: tasksCueActive,
+                ),
+              ),
+            ],
           ),
-          child: label,
-        ),
-      );
-    }
-
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: scheme.shadow.withValues(alpha: 0.08),
-            offset: const Offset(0, -4),
-            blurRadius: 16,
-          ),
+          if (isDragSwitcherEnabled)
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_isAnyDragActive,
+                child: Row(
+                  children: [
+                    Expanded(child: _buildTabDragTarget(tabIndex: 0)),
+                    Expanded(child: _buildTabDragTarget(tabIndex: 1)),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
-      child: TabBar(
-        controller: mobileTabController,
-        indicatorColor: scheme.primary,
-        indicatorWeight: 3,
-        labelColor: scheme.onSurface,
-        unselectedLabelColor: scheme.onSurfaceVariant,
-        labelPadding: EdgeInsets.zero,
-        indicatorSize: TabBarIndicatorSize.tab,
-        tabs: <Widget>[
-          Tab(
-            child: decorateTab(
-              scheduleTabLabel,
-              _tabCueIndex == 0 && _isAnyDragActive,
-            ),
+    );
+  }
+
+  Widget _buildTabDragTarget({required int tabIndex}) {
+    return DragTarget<CalendarDragPayload>(
+      hitTestBehavior: HitTestBehavior.translucent,
+      onWillAcceptWithDetails: (details) {
+        _handleTabButtonDragEvent(tabIndex, details);
+        return true;
+      },
+      onMove: (details) => _handleTabButtonDragEvent(tabIndex, details),
+      onLeave: (_) => _handleTabButtonDragLeave(tabIndex),
+      onAcceptWithDetails: (_) => _handleTabButtonDragLeave(tabIndex),
+      builder: (context, _, __) => const SizedBox.expand(),
+    );
+  }
+
+  Widget _buildTabLabel({
+    required Widget label,
+    required ColorScheme scheme,
+    required bool showCue,
+  }) {
+    final Color cueColor =
+        showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: cueColor,
+            width: 2,
           ),
-          Tab(
-            child: decorateTab(
-              tasksTabLabel,
-              _tabCueIndex == 1 && _isAnyDragActive,
-            ),
-          ),
-        ],
+        ),
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(
+          fontWeight: showCue ? FontWeight.w600 : FontWeight.w500,
+        ),
+        child: Align(
+          alignment: Alignment.center,
+          child: label,
+        ),
       ),
     );
   }
@@ -250,6 +280,37 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _cancelSwitchTimer();
   }
 
+  void _handleTabButtonDragEvent(
+    int tabIndex,
+    DragTargetDetails<CalendarDragPayload> details,
+  ) {
+    if (!isDragSwitcherEnabled || !_isAnyDragActive) {
+      return;
+    }
+    final Offset? pointer = _pointerPositionForDetails(details);
+    if (pointer != null) {
+      _recordPointerUpdate(pointer);
+    }
+    _setEdgeCueVisibility(showLeft: false, showRight: false);
+    _updateTabCueOnly(tabIndex);
+    if (mobileTabController.index == tabIndex) {
+      _cancelSwitchTimer();
+      return;
+    }
+    _scheduleSwitch(tabIndex);
+  }
+
+  void _handleTabButtonDragLeave(int tabIndex) {
+    if (!_isAnyDragActive) {
+      return;
+    }
+    if (_tabCueIndex == tabIndex) {
+      _updateTabCueOnly(null);
+    }
+    _evaluateEdgeAutoSwitch();
+    _tryPerformPendingSwitch();
+  }
+
   void _evaluateEdgeAutoSwitch() {
     if (!mounted || !isDragSwitcherEnabled || !_isAnyDragActive) {
       _updateEdgeCue(null);
@@ -305,6 +366,29 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _switchTimer?.cancel();
     _switchTimer = null;
     _pendingSwitchIndex = null;
+  }
+
+  void _setEdgeCueVisibility({
+    required bool showLeft,
+    required bool showRight,
+  }) {
+    if (!mounted ||
+        (_showLeftEdgeCue == showLeft && _showRightEdgeCue == showRight)) {
+      return;
+    }
+    setState(() {
+      _showLeftEdgeCue = showLeft;
+      _showRightEdgeCue = showRight;
+    });
+  }
+
+  void _updateTabCueOnly(int? cueIndex) {
+    if (!mounted || _tabCueIndex == cueIndex) {
+      return;
+    }
+    setState(() {
+      _tabCueIndex = cueIndex;
+    });
   }
 
   void _updateEdgeCue(int? cueIndex) {
