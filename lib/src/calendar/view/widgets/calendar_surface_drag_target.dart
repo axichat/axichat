@@ -7,11 +7,11 @@ import 'calendar_render_surface.dart';
 class CalendarSurfaceDragTarget extends StatefulWidget {
   const CalendarSurfaceDragTarget({
     super.key,
-    required this.surfaceKey,
+    required this.controller,
     required this.child,
   });
 
-  final GlobalKey surfaceKey;
+  final CalendarSurfaceController controller;
   final Widget child;
 
   @override
@@ -25,40 +25,39 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
   CalendarDragPayload? _pendingDropPayload;
   Offset? _pendingDropOffset;
 
-  RenderCalendarSurface? get _renderSurface {
-    final BuildContext? surfaceContext = widget.surfaceKey.currentContext;
-    if (surfaceContext == null) {
-      return null;
-    }
-    final RenderObject? renderObject = surfaceContext.findRenderObject();
-    return renderObject is RenderCalendarSurface ? renderObject : null;
+  bool _flushPendingOperations() {
+    final bool updateHandled = _maybeDispatchPendingUpdate();
+    final bool dropHandled = _maybeDispatchPendingDrop();
+    return updateHandled || dropHandled;
   }
 
-  bool _flushPendingOperations() {
-    final RenderCalendarSurface? surface = _renderSurface;
-    if (surface == null) {
-      return false;
-    }
-
-    bool handled = false;
+  bool _maybeDispatchPendingUpdate() {
     final CalendarDragPayload? pendingPayload = _pendingPayload;
     final Offset? pendingOffset = _pendingOffset;
-    if (pendingPayload != null && pendingOffset != null) {
+    if (pendingPayload == null || pendingOffset == null) {
+      return false;
+    }
+    final bool handled = widget.controller
+        .dispatchDragPayloadUpdate(pendingPayload, pendingOffset);
+    if (handled) {
       _pendingPayload = null;
       _pendingOffset = null;
-      surface.handleDragPayloadUpdate(pendingPayload, pendingOffset);
-      handled = true;
     }
+    return handled;
+  }
 
+  bool _maybeDispatchPendingDrop() {
     final CalendarDragPayload? dropPayload = _pendingDropPayload;
     final Offset? dropOffset = _pendingDropOffset;
-    if (dropPayload != null && dropOffset != null) {
+    if (dropPayload == null || dropOffset == null) {
+      return false;
+    }
+    final bool handled =
+        widget.controller.dispatchDragPayloadDrop(dropPayload, dropOffset);
+    if (handled) {
       _pendingDropPayload = null;
       _pendingDropOffset = null;
-      surface.handleDragPayloadDrop(dropPayload, dropOffset);
-      handled = true;
     }
-
     return handled;
   }
 
@@ -90,41 +89,36 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
   }
 
   bool _handleWillAccept(DragTargetDetails<CalendarDragPayload> details) {
-    final RenderCalendarSurface? surface = _renderSurface;
-    if (surface == null) {
+    if (!widget.controller
+        .dispatchDragPayloadUpdate(details.data, details.offset)) {
       _scheduleDeferredUpdate(details.data, details.offset);
-      return true;
     }
-    surface.handleDragPayloadUpdate(details.data, details.offset);
     return true;
   }
 
   void _handleMove(DragTargetDetails<CalendarDragPayload> details) {
-    final RenderCalendarSurface? surface = _renderSurface;
-    if (surface == null) {
+    final bool handled = widget.controller
+        .dispatchDragPayloadUpdate(details.data, details.offset);
+    if (!handled) {
       _scheduleDeferredUpdate(details.data, details.offset);
-      return;
     }
-    surface.handleDragPayloadUpdate(details.data, details.offset);
   }
 
   void _handleAccept(DragTargetDetails<CalendarDragPayload> details) {
     _cancelDeferredUpdate();
-    final RenderCalendarSurface? surface = _renderSurface;
-    if (surface == null) {
+    final bool handled =
+        widget.controller.dispatchDragPayloadDrop(details.data, details.offset);
+    if (!handled) {
       _scheduleDeferredDrop(details.data, details.offset);
-      return;
     }
-    surface.handleDragPayloadDrop(details.data, details.offset);
   }
 
   void _handleLeave(CalendarDragPayload? payload) {
     _cancelDeferredUpdate();
-    final RenderCalendarSurface? surface = _renderSurface;
-    if (surface == null || payload == null) {
+    if (payload == null) {
       return;
     }
-    surface.handleDragPayloadExit(payload);
+    widget.controller.dispatchDragPayloadExit(payload);
   }
 
   @override

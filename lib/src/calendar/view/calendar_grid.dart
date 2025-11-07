@@ -159,7 +159,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _desktopDayPinned = false;
   bool _autoScrollPending = false;
   DateTime? _pendingScrollSlot;
-  DateTime? _pendingZoomScrollTarget;
   TaskFocusRequest? _pendingFocusRequest;
   Offset? _contextMenuAnchor;
   bool _pendingPopoverGeometryUpdate = false;
@@ -413,11 +412,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _flushPendingScrollTargets() {
     if (!_verticalController.hasClients) {
       return;
-    }
-    if (_pendingZoomScrollTarget != null) {
-      final DateTime target = _pendingZoomScrollTarget!;
-      _pendingZoomScrollTarget = null;
-      _scrollToSlot(target, allowDeferral: false);
     }
     if (_pendingScrollSlot != null) {
       final DateTime target = _pendingScrollSlot!;
@@ -1537,7 +1531,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
 
     final Widget dragAwareSurface = CalendarSurfaceDragTarget(
-      surfaceKey: _surfaceKey,
+      controller: _surfaceController,
       child: interactiveSurface,
     );
 
@@ -1582,7 +1576,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _handleSurfaceTap(CalendarSurfaceTapDetails details) {
     if (details.hitTask) {
-      _zoomToCell(details.slotStart);
+      _scrollToSlot(details.slotStart, allowDeferral: false);
       return;
     }
     if (widget.state.viewMode == CalendarView.day) {
@@ -2488,15 +2482,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       duration: _layoutTheme.scrollAnimationDuration,
       curve: Curves.easeOut,
     );
-  }
-
-  void _zoomToCell(DateTime slotTime) {
-    if (_isZoomEnabled) {
-      _pendingZoomScrollTarget = slotTime;
-      _setZoomIndex(_zoomLevels.length - 1);
-    } else {
-      _scrollToSlot(slotTime);
-    }
   }
 
   CalendarTask? _resolveTaskForId(String id, CalendarState state) {
