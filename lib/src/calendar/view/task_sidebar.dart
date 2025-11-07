@@ -67,6 +67,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   final GlobalKey _scrollViewportKey = GlobalKey();
   Ticker? _sidebarAutoScrollTicker;
   double _sidebarAutoScrollOffsetPerFrame = 0;
+  static const double _autoScrollHorizontalSlop = 32.0;
 
   String _selectionRecurrenceSignature = '';
   late final ValueNotifier<RecurrenceFormValue> _selectionRecurrenceNotifier;
@@ -1716,7 +1717,20 @@ class _TaskSidebarState extends State<TaskSidebar>
       _stopSidebarAutoScroll();
       return;
     }
+    final double width = viewportSize.width;
+    if (!width.isFinite || width <= 0) {
+      _stopSidebarAutoScroll();
+      return;
+    }
     final Offset local = viewport.globalToLocal(globalPosition);
+    final double pointerX = local.dx;
+    final bool isPointerWithinSidebar =
+        pointerX >= -_autoScrollHorizontalSlop &&
+            pointerX <= width + _autoScrollHorizontalSlop;
+    if (!isPointerWithinSidebar) {
+      _stopSidebarAutoScroll();
+      return;
+    }
     final double fastBandHeight =
         math.min(_layoutTheme.edgeScrollFastBandHeight, height / 2);
     final double slowBandHeight =

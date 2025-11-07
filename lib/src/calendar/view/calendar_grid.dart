@@ -89,6 +89,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const int _resizeStepMinutes = 15;
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
+  static const double _autoScrollHorizontalSlop = 32.0;
 
   double get _edgeScrollFastBandHeight => _layoutTheme.edgeScrollFastBandHeight;
   double get _edgeScrollSlowBandHeight => _layoutTheme.edgeScrollSlowBandHeight;
@@ -2394,12 +2395,28 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
 
-    final Offset localPosition = renderObject.globalToLocal(globalPosition);
-    final double y = localPosition.dy;
-    final double height = renderObject.size.height;
+    final Size viewportSize = renderObject.size;
+    final double height = viewportSize.height;
     if (!height.isFinite || height <= 0) {
       return;
     }
+
+    final double width = viewportSize.width;
+    if (!width.isFinite || width <= 0) {
+      _stopEdgeAutoScroll();
+      return;
+    }
+
+    final Offset localPosition = renderObject.globalToLocal(globalPosition);
+    final double pointerX = localPosition.dx;
+    final bool isPointerWithinGrid = pointerX >= -_autoScrollHorizontalSlop &&
+        pointerX <= width + _autoScrollHorizontalSlop;
+    if (!isPointerWithinGrid) {
+      _stopEdgeAutoScroll();
+      return;
+    }
+
+    final double y = localPosition.dy;
 
     final bool isResizing =
         _taskInteractionController.activeResizeInteraction != null;
