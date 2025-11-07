@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
+import 'package:flutter/scheduler.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -47,7 +48,7 @@ class TaskSidebar extends StatefulWidget {
 }
 
 class _TaskSidebarState extends State<TaskSidebar>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
   late final CalendarSidebarController _sidebarController;
   late final TaskDraftController _draftController;
@@ -63,6 +64,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       TextEditingController();
   static const Duration _selectionTimeStep = Duration(minutes: 15);
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _scrollViewportKey = GlobalKey();
+  Ticker? _sidebarAutoScrollTicker;
+  double _sidebarAutoScrollOffsetPerFrame = 0;
 
   String _selectionRecurrenceSignature = '';
   late final ValueNotifier<RecurrenceFormValue> _selectionRecurrenceNotifier;
@@ -136,6 +140,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _draftController.dispose();
     _selectionRecurrenceNotifier.dispose();
     _selectionRecurrenceMixedNotifier.dispose();
+    _sidebarAutoScrollTicker?.dispose();
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
     }
@@ -145,6 +150,7 @@ class _TaskSidebarState extends State<TaskSidebar>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final sidebarDimensions = ResponsiveHelper.sidebarDimensions(context);
     _sidebarController.syncBounds(
       minWidth: sidebarDimensions.minWidth,
@@ -195,6 +201,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                           const Radius.circular(calendarSidebarScrollbarRadius),
                       thickness: _layoutTheme.sidebarScrollbarThickness,
                       child: SingleChildScrollView(
+                        key: _scrollViewportKey,
                         controller: _scrollController,
                         padding: calendarSidebarScrollPadding,
                         physics: const ClampingScrollPhysics(),
@@ -211,6 +218,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       },
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Widget _buildAddTaskSection(
     CalendarSidebarState uiState,
@@ -1655,6 +1665,128 @@ class _TaskSidebarState extends State<TaskSidebar>
     );
   }
 
+  void _handleSidebarDragSessionStarted() {
+    widget.onDragSessionStarted?.call();
+  }
+
+  void _handleSidebarDragSessionEnded() {
+    _stopSidebarAutoScroll();
+    widget.onDragSessionEnded?.call();
+  }
+
+  void _forwardSidebarGlobalPosition(
+    Offset globalPosition, {
+    bool notifyParent = true,
+  }) {
+    _handleSidebarAutoScroll(globalPosition);
+    if (notifyParent) {
+      widget.onDragGlobalPositionChanged?.call(globalPosition);
+    }
+  }
+
+  void _handleSidebarDragTargetHover(CalendarDropDetails details) {
+    _forwardSidebarGlobalPosition(
+      details.globalPosition,
+      notifyParent: false,
+    );
+  }
+
+  void _handleSidebarAutoScroll(Offset globalPosition) {
+    if (!_scrollController.hasClients) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    final ScrollPosition position = _scrollController.position;
+    if (!position.hasPixels ||
+        (position.maxScrollExtent - position.minScrollExtent).abs() <= 0.5) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    final BuildContext? viewportContext = _scrollViewportKey.currentContext;
+    final RenderBox? viewport =
+        viewportContext?.findRenderObject() as RenderBox?;
+    if (viewport == null || !viewport.hasSize) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    final Size viewportSize = viewport.size;
+    final double height = viewportSize.height;
+    if (!height.isFinite || height <= 0) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    final Offset local = viewport.globalToLocal(globalPosition);
+    final double fastBandHeight =
+        math.min(_layoutTheme.edgeScrollFastBandHeight, height / 2);
+    final double slowBandHeight =
+        math.min(_layoutTheme.edgeScrollSlowBandHeight, height / 2);
+    final double fastSpeed = _layoutTheme.edgeScrollFastOffsetPerFrame;
+    final double slowSpeed = _layoutTheme.edgeScrollSlowOffsetPerFrame;
+
+    double? offsetPerFrame;
+    if (local.dy <= fastBandHeight || local.dy < 0) {
+      offsetPerFrame = -fastSpeed;
+    } else if (local.dy <= fastBandHeight + slowBandHeight) {
+      offsetPerFrame = -slowSpeed;
+    } else if (local.dy >= height - fastBandHeight || local.dy > height) {
+      offsetPerFrame = fastSpeed;
+    } else if (local.dy >= height - (fastBandHeight + slowBandHeight)) {
+      offsetPerFrame = slowSpeed;
+    }
+
+    if (offsetPerFrame == null) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+
+    final double currentOffset = position.pixels;
+    if ((offsetPerFrame < 0 &&
+            currentOffset <= position.minScrollExtent + 0.5) ||
+        (offsetPerFrame > 0 &&
+            currentOffset >= position.maxScrollExtent - 0.5)) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+
+    _startSidebarAutoScroll(offsetPerFrame);
+  }
+
+  void _startSidebarAutoScroll(double offsetPerFrame) {
+    _sidebarAutoScrollOffsetPerFrame = offsetPerFrame;
+    _sidebarAutoScrollTicker ??= createTicker(_onSidebarAutoScrollTick);
+    if (!(_sidebarAutoScrollTicker!.isActive)) {
+      _sidebarAutoScrollTicker!.start();
+    }
+  }
+
+  void _onSidebarAutoScrollTick(Duration elapsed) {
+    if (_sidebarAutoScrollOffsetPerFrame.abs() < 0.01 ||
+        !_scrollController.hasClients) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    final ScrollPosition position = _scrollController.position;
+    if (!position.hasPixels) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    final double currentOffset = _scrollController.offset;
+    final double nextOffset = (currentOffset + _sidebarAutoScrollOffsetPerFrame)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if ((nextOffset - currentOffset).abs() <= 0.1) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+    _scrollController.jumpTo(nextOffset);
+  }
+
+  void _stopSidebarAutoScroll() {
+    _sidebarAutoScrollOffsetPerFrame = 0;
+    if (_sidebarAutoScrollTicker?.isActive ?? false) {
+      _sidebarAutoScrollTicker!.stop();
+    }
+  }
+
   Widget _buildTaskList(
     List<CalendarTask> tasks, {
     required String emptyLabel,
@@ -1662,7 +1794,17 @@ class _TaskSidebarState extends State<TaskSidebar>
     required CalendarSidebarState uiState,
   }) {
     return CalendarDragTargetRegion(
-      onDrop: (details) => _handleTaskDroppedIntoSidebar(details.payload.task),
+      onEnter: _handleSidebarDragTargetHover,
+      onMove: _handleSidebarDragTargetHover,
+      onLeave: (_) => _stopSidebarAutoScroll(),
+      onDrop: (details) {
+        _stopSidebarAutoScroll();
+        _forwardSidebarGlobalPosition(
+          details.globalPosition,
+          notifyParent: false,
+        );
+        _handleTaskDroppedIntoSidebar(details.payload.task);
+      },
       builder: (context, isHovering, _) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -1815,9 +1957,9 @@ class _TaskSidebarState extends State<TaskSidebar>
       childWhenDragging: fadedTile,
       feedback: feedback,
       child: baseTile,
-      onDragSessionStarted: widget.onDragSessionStarted,
-      onDragSessionEnded: widget.onDragSessionEnded,
-      onDragGlobalPositionChanged: widget.onDragGlobalPositionChanged,
+      onDragSessionStarted: _handleSidebarDragSessionStarted,
+      onDragSessionEnded: _handleSidebarDragSessionEnded,
+      onDragGlobalPositionChanged: _forwardSidebarGlobalPosition,
     );
   }
 

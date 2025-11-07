@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter/widgets.dart';
 
 import '../../models/calendar_task.dart';
@@ -35,19 +37,31 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
   Size _childSize = Size.zero;
   double? _pointerNormalized;
   double? _pointerOffsetY;
+  int? _activePointerId;
+  Offset? _trackedPointer;
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (_dragSessionActive) {
+      return;
+    }
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final Size size = box?.size ?? Size.zero;
-    final double width = size.width;
-    final double height = size.height;
-    final double anchorX =
-        width.isFinite && width > 0 ? width / 2 : event.localPosition.dx;
-    final double anchorY =
-        height.isFinite && height > 0 ? height / 2 : event.localPosition.dy;
-    final Offset anchorLocal = Offset(anchorX, anchorY);
+    final double width = size.width.isFinite ? size.width : 0.0;
+    final double height = size.height.isFinite ? size.height : 0.0;
+    double localX = event.localPosition.dx;
+    double localY = event.localPosition.dy;
+    if (width > 0) {
+      localX = localX.clamp(0.0, width);
+    }
+    if (height > 0) {
+      localY = localY.clamp(0.0, height);
+    }
+    final Offset anchorLocal = Offset(localX, localY);
     final Offset globalTopLeft = event.position - anchorLocal;
-    final double normalized = 0.5;
+    double normalized = 0.5;
+    if (width > 0 && localX.isFinite) {
+      normalized = (localX / width).clamp(0.0, 1.0);
+    }
 
     setState(() {
       _childSize = size;
@@ -58,8 +72,21 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
         size.height,
       );
       _pointerNormalized = normalized;
-      _pointerOffsetY = anchorY;
+      _pointerOffsetY =
+          localY.isFinite ? localY : (height.isFinite && height > 0 ? height / 2 : null);
     });
+    _activePointerId = event.pointer;
+    _trackedPointer = event.position;
+  }
+
+  void _handlePointerUpOrCancel(PointerEvent event) {
+    if (_dragSessionActive) {
+      return;
+    }
+    if (_activePointerId == event.pointer) {
+      _activePointerId = null;
+      _trackedPointer = null;
+    }
   }
 
   CalendarDragPayload _buildPayload() {
@@ -86,6 +113,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     _pointerOffsetY = null;
     _sourceBounds = null;
     _childSize = Size.zero;
+    _trackedPointer = null;
   }
 
   void _handleDragStarted() {
@@ -93,11 +121,19 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       return;
     }
     _dragSessionActive = true;
+    _startPointerTracking();
     widget.onDragSessionStarted?.call();
+    final Offset? pointer = _trackedPointer;
+    if (pointer != null) {
+      widget.onDragGlobalPositionChanged?.call(pointer);
+    }
   }
 
   void _handleDragUpdated(DragUpdateDetails details) {
-    widget.onDragGlobalPositionChanged?.call(details.globalPosition);
+    if (_activePointerId == null) {
+      _trackedPointer = details.globalPosition;
+      widget.onDragGlobalPositionChanged?.call(details.globalPosition);
+    }
   }
 
   void _handleDragFinished({required bool cancelled}) {
@@ -105,13 +141,59 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       _dragSessionActive = false;
       widget.onDragSessionEnded?.call();
     }
+    _stopPointerTracking();
     _resetCachedPointer();
+    _activePointerId = null;
+  }
+
+  void _startPointerTracking() {
+    final int? pointerId = _activePointerId;
+    if (pointerId == null) {
+      return;
+    }
+    RendererBinding.instance.pointerRouter.addRoute(
+      pointerId,
+      _handlePointerRoute,
+    );
+  }
+
+  void _handlePointerRoute(PointerEvent event) {
+    if (event.pointer != _activePointerId) {
+      return;
+    }
+    if (event is PointerMoveEvent) {
+      _trackedPointer = event.position;
+      widget.onDragGlobalPositionChanged?.call(event.position);
+      return;
+    }
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _stopPointerTracking();
+    }
+  }
+
+  void _stopPointerTracking() {
+    final int? pointerId = _activePointerId;
+    if (pointerId != null) {
+      RendererBinding.instance.pointerRouter.removeRoute(
+        pointerId,
+        _handlePointerRoute,
+      );
+    }
+    _activePointerId = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPointerTracking();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final Widget listener = Listener(
       onPointerDown: _handlePointerDown,
+      onPointerUp: _handlePointerUpOrCancel,
+      onPointerCancel: _handlePointerUpOrCancel,
       child: widget.child,
     );
 
