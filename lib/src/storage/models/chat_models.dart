@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
@@ -266,6 +267,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     String? contactAvatarPath,
     String? contactAvatarHash,
     mox.ChatState? chatState,
+    int? deltaChatId,
+    String? emailAddress,
   }) = _Chat;
 
   const factory Chat.fromDb({
@@ -289,6 +292,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String? contactAvatarPath,
     required String? contactAvatarHash,
     required mox.ChatState? chatState,
+    required int? deltaChatId,
+    required String? emailAddress,
   }) = _ChatFromDb;
 
   factory Chat.fromJid(String jid) => Chat(
@@ -323,6 +328,8 @@ class Chat with _$Chat implements Insertable<Chat> {
         contactAvatarPath: Value.absentIfNull(contactAvatarPath),
         contactAvatarHash: Value.absentIfNull(contactAvatarHash),
         chatState: Value.absentIfNull(chatState),
+        deltaChatId: Value.absentIfNull(deltaChatId),
+        emailAddress: Value.absentIfNull(emailAddress),
       ).toColumns(nullToAbsent);
 }
 
@@ -370,6 +377,10 @@ class Chats extends Table {
 
   TextColumn get chatState => textEnum<mox.ChatState>().nullable()();
 
+  IntColumn get deltaChatId => integer().nullable()();
+
+  TextColumn get emailAddress => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {jid};
 }
@@ -381,6 +392,13 @@ class Contacts extends Table {
 
   @override
   Set<Column> get primaryKey => {nativeID};
+}
+
+extension ChatTransportExtension on Chat {
+  MessageTransport get transport => (deltaChatId != null ||
+          (emailAddress != null && emailAddress!.isNotEmpty))
+      ? MessageTransport.email
+      : MessageTransport.xmpp;
 }
 
 @Freezed(toJson: false, fromJson: false)

@@ -636,7 +636,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -647,6 +647,12 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       onUpgrade: (m, from, to) async {
         if (from < 2) {
           await m.createTable(omemoBundleCaches);
+        }
+        if (from < 3) {
+          await m.addColumn(messages, messages.deltaChatId);
+          await m.addColumn(messages, messages.deltaMsgId);
+          await m.addColumn(chats, chats.deltaChatId);
+          await m.addColumn(chats, chats.emailAddress);
         }
       },
       beforeOpen: (_) async {

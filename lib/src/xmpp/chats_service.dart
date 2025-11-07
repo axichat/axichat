@@ -1,6 +1,61 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin ChatsService on XmppBase, BaseStreamService {
+  static final _transportKeys = <String, RegisteredStateKey>{};
+
+  RegisteredStateKey _transportKeyFor(String jid) => _transportKeys.putIfAbsent(
+        jid,
+        () => XmppStateStore.registerKey('chat_transport_$jid'),
+      );
+
+  MessageTransport _transportFrom(Object? raw) {
+    if (raw is String) {
+      return MessageTransport.values.firstWhere(
+        (transport) => transport.name == raw,
+        orElse: () => MessageTransport.xmpp,
+      );
+    }
+    return MessageTransport.xmpp;
+  }
+
+  Future<MessageTransport> loadChatTransportPreference(String jid) async {
+    try {
+      return await _dbOpReturning<XmppStateStore, MessageTransport>(
+        (store) => _transportFrom(store.read(key: _transportKeyFor(jid))),
+      );
+    } on XmppAbortedException {
+      return MessageTransport.xmpp;
+    }
+  }
+
+  Future<void> saveChatTransportPreference({
+    required String jid,
+    required MessageTransport transport,
+  }) async {
+    await _dbOp<XmppStateStore>(
+      (store) => store.write(
+        key: _transportKeyFor(jid),
+        value: transport.name,
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  Stream<MessageTransport> watchChatTransportPreference(String jid) async* {
+    yield await loadChatTransportPreference(jid);
+    try {
+      final store = await _dbOpReturning<XmppStateStore, XmppStateStore>(
+        (store) => store,
+      );
+      final stream = store.watch<String?>(key: _transportKeyFor(jid));
+      if (stream != null) {
+        yield* stream.map(_transportFrom);
+      }
+    } on XmppAbortedException {
+      return;
+    }
+  }
+
   Stream<List<Chat>> chatsStream({
     int start = 0,
     int end = basePageItemLimit,

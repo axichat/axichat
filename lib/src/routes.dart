@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:axichat/src/compose_screen.dart';
+import 'package:axichat/src/email/demo/email_demo_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
 import 'package:axichat/src/profile_screen.dart';
@@ -20,6 +21,7 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const ProfileRoute().location: const ProfileRoute(),
   const ComposeRoute().location: const ComposeRoute(),
   const LoginRoute().location: const LoginRoute(),
+  const EmailDemoRoute().location: const EmailDemoRoute(),
 });
 
 class TransitionGoRouteData extends GoRouteData {
@@ -84,6 +86,19 @@ class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
       body: extra['body'] ?? '',
     );
   }
+}
+
+@TypedGoRoute<EmailDemoRoute>(path: '/email-demo')
+class EmailDemoRoute extends TransitionGoRouteData
+    with AuthenticationRouteData {
+  const EmailDemoRoute();
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const EmailDemoScreen();
 }
 
 @TypedGoRoute<LoginRoute>(path: '/login')

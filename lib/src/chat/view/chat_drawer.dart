@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_button_inline.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -24,6 +25,10 @@ class ChatDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final jid = state.chat?.jid;
     final muted = state.chat?.muted;
+    final chat = state.chat;
+    final isEmailChat = chat?.transport.isEmail ?? false;
+    final encryptionAvailable =
+        context.read<ChatBloc>().encryptionAvailable && !isEmailChat;
     return Drawer(
       width: 360.0,
       shape: const ContinuousRectangleBorder(),
@@ -40,13 +45,13 @@ class ChatDrawer extends StatelessWidget {
               ),
             ),
           ),
-          context.read<ChatBloc>().encryptionAvailable
+          encryptionAvailable
               ? Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: ShadSwitch(
                     label: const Text('Encryption'),
                     sublabel: const Text('Send messages end-to-end encrypted'),
-                    value: state.chat!.encryptionProtocol.isNotNone,
+                    value: chat!.encryptionProtocol.isNotNone,
                     onChanged: (encrypted) => context.read<ChatBloc>().add(
                           ChatEncryptionChanged(
                             protocol: encrypted
@@ -68,7 +73,7 @@ class ChatDrawer extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          context.read<ChatBloc>().encryptionAvailable
+          encryptionAvailable
               ? ShadButton.ghost(
                   width: double.infinity,
                   mainAxisAlignment: MainAxisAlignment.start,
@@ -84,28 +89,32 @@ class ChatDrawer extends StatelessWidget {
                   },
                 )
               : const SizedBox.shrink(),
-          ShadButton.ghost(
-            width: double.infinity,
-            mainAxisAlignment: MainAxisAlignment.start,
-            leading: Icon(
-              LucideIcons.userCog,
-              size: context.iconTheme.size,
-            ),
-            foregroundColor: context.colorScheme.destructive,
-            onPressed: () async {
-              if (await confirm(
-                    context,
-                    text: 'Only do this is you are an expert.',
-                  ) !=
-                  true) {
-                return;
-              }
-              if (context.mounted) {
-                context.read<ChatBloc>().add(const ChatEncryptionRepaired());
-              }
-            },
-            child: const Text('Repair encryption'),
-          ),
+          encryptionAvailable
+              ? ShadButton.ghost(
+                  width: double.infinity,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  leading: Icon(
+                    LucideIcons.userCog,
+                    size: context.iconTheme.size,
+                  ),
+                  foregroundColor: context.colorScheme.destructive,
+                  onPressed: () async {
+                    if (await confirm(
+                          context,
+                          text: 'Only do this is you are an expert.',
+                        ) !=
+                        true) {
+                      return;
+                    }
+                    if (context.mounted) {
+                      context
+                          .read<ChatBloc>()
+                          .add(const ChatEncryptionRepaired());
+                    }
+                  },
+                  child: const Text('Repair encryption'),
+                )
+              : const SizedBox.shrink(),
           ShadButton.ghost(
             width: double.infinity,
             mainAxisAlignment: MainAxisAlignment.start,

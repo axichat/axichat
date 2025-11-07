@@ -7,6 +7,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/defer.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/ui/ui.dart';

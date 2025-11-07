@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,7 @@ class ChatsList extends StatelessWidget {
           itemBuilder: (context, index) {
             final item = items[index];
             final locate = context.read;
+            final transport = item.transport;
             return AxiListTile(
               key: Key(item.jid),
               badgeCount: item.unreadCount,
@@ -103,9 +105,9 @@ class ChatsList extends StatelessWidget {
               subtitle: item.lastMessage,
               subtitlePlaceholder: 'No messages',
               actions: [
-                item.lastMessage == null
-                    ? const SizedBox()
-                    : DisplayTimeSince(timestamp: item.lastChangeTimestamp),
+                _TransportLabel(transport: transport),
+                if (item.lastMessage != null)
+                  DisplayTimeSince(timestamp: item.lastChangeTimestamp),
                 ShadIconButton.ghost(
                   icon: Icon(
                     item.favorited
@@ -122,6 +124,40 @@ class ChatsList extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _TransportLabel extends StatelessWidget {
+  const _TransportLabel({required this.transport});
+
+  final MessageTransport transport;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final background = transport.isEmail
+        ? colors.destructive.withValues(alpha: 0.12)
+        : colors.accent.withValues(alpha: 0.12);
+    final defaultMutedColor = context.textTheme.muted.color ??
+        colors.foreground.withValues(alpha: 0.7);
+    final foreground =
+        transport.isEmail ? colors.destructive : defaultMutedColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        transport.label,
+        style: context.textTheme.muted.copyWith(
+          fontWeight: FontWeight.w600,
+          color: foreground,
+          letterSpacing: 0.4,
+        ),
+      ),
     );
   }
 }
