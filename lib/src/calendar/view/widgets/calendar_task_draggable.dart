@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter/widgets.dart';
 
 import '../../models/calendar_task.dart';
@@ -61,6 +63,10 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   bool _suppressDrag = false;
   String? _lastResizeTaskId;
   late final VoidCallback _controllerListener;
+  int? _trackedPointerId;
+  bool _dragSessionActive = false;
+  DateTime? _lastDragUpdateTime;
+  static const Duration _syntheticUpdateDelay = Duration(milliseconds: 24);
 
   TaskInteractionController get _controller => widget.interactionController;
   CalendarTaskGeometry get _geometry => widget.geometry;
@@ -100,6 +106,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
 
   @override
   void dispose() {
+    _stopPointerTracking();
     widget.interactionController.removeListener(_controllerListener);
     super.dispose();
   }
@@ -127,7 +134,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       feedback: widget.feedbackBuilder(context, widget.task, _geometry),
       childWhenDragging: widget.childWhenDragging ?? widget.child,
       onDragStarted: _handleDragStarted,
-      onDragUpdate: widget.onDragUpdate,
+      onDragUpdate: _handleDragUpdate,
       onDragEnd: (details) => _handleDragFinished(cancelled: false),
       onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
       child: interactiveChild,
@@ -157,6 +164,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     if (!widget.enabled) {
       return;
     }
+    _stopPointerTracking();
     final Offset local = event.localPosition;
     final CalendarTaskGeometry geometry = _geometry;
     final Size size = geometry.rect.size;
@@ -213,6 +221,8 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       _pointerOffsetY = pointerOffsetY;
       _sourceBounds = resolvedBounds;
     });
+    _trackedPointerId = event.pointer;
+    _startPointerTracking();
     widget.interactionController
         .setDragPointerOffsetFromTop(pointerOffsetY, notify: false);
   }
@@ -223,6 +233,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         _suppressDrag = false;
       });
     }
+    if (!_dragSessionActive && _trackedPointerId == event.pointer) {
+      _stopPointerTracking();
+    }
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
@@ -231,14 +244,24 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         _suppressDrag = false;
       });
     }
+    if (!_dragSessionActive && _trackedPointerId == event.pointer) {
+      _stopPointerTracking();
+    }
   }
 
   void _handleDragStarted() {
+    _dragSessionActive = true;
+    _lastDragUpdateTime = DateTime.now();
     widget.interactionController.suppressSurfaceTapOnce();
     final Rect? bounds = _sourceBounds ?? _resolveGlobalBounds();
     if (bounds != null) {
       widget.onDragStarted(widget.task, bounds);
     }
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    _lastDragUpdateTime = DateTime.now();
+    widget.onDragUpdate?.call(details);
   }
 
   void _handleDragFinished({required bool cancelled}) {
@@ -247,7 +270,10 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         _suppressDrag = false;
       });
     }
+    _dragSessionActive = false;
+    _lastDragUpdateTime = null;
     widget.onDragEnded(widget.task);
+    _stopPointerTracking();
   }
 
   bool _isPointerOverResizeHandle(Offset local, Size size) {
@@ -296,5 +322,52 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       pointerOffsetY: pointerOffsetY,
       originSlot: widget.task.scheduledTime,
     );
+  }
+
+  void _startPointerTracking() {
+    final int? pointerId = _trackedPointerId;
+    if (pointerId == null) {
+      return;
+    }
+    RendererBinding.instance.pointerRouter.addRoute(
+      pointerId,
+      _handlePointerRoute,
+    );
+  }
+
+  void _handlePointerRoute(PointerEvent event) {
+    if (event.pointer != _trackedPointerId) {
+      return;
+    }
+    if (_dragSessionActive && event is PointerMoveEvent) {
+      _lastPointerGlobal = event.position;
+      final DateTime now = DateTime.now();
+      final DateTime? lastUpdate = _lastDragUpdateTime;
+      if (lastUpdate == null ||
+          now.difference(lastUpdate) >= _syntheticUpdateDelay) {
+        final DragUpdateDetails syntheticDetails = DragUpdateDetails(
+          sourceTimeStamp: event.timeStamp,
+          delta: event.delta,
+          primaryDelta: event.delta.dy,
+          globalPosition: event.position,
+        );
+        _handleDragUpdate(syntheticDetails);
+      }
+    }
+    if (!_dragSessionActive &&
+        (event is PointerUpEvent || event is PointerCancelEvent)) {
+      _stopPointerTracking();
+    }
+  }
+
+  void _stopPointerTracking() {
+    final int? pointerId = _trackedPointerId;
+    if (pointerId != null) {
+      RendererBinding.instance.pointerRouter.removeRoute(
+        pointerId,
+        _handlePointerRoute,
+      );
+    }
+    _trackedPointerId = null;
   }
 }
