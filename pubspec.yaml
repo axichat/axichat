@@ -64,10 +64,21 @@ dependencies:
   dnsolve: ^1.0.0
   app_settings: ^6.1.1
   intl: any
+  chrono_dart: ^2.0.2
 
 dependency_overrides:
   pinenacl: ^0.6.0
   intl: ^0.20.2
+  moxxmpp:
+    git:
+      url: https://gitlab.com/axichat/moxxmpp.git
+      path: packages/moxxmpp
+      ref: f15a6a85227c408c330814652f209151ce16618d
+  moxxmpp_socket_tcp:
+    git:
+      url: https://gitlab.com/axichat/moxxmpp.git
+      path: packages/moxxmpp_socket_tcp
+      ref: f15a6a85227c408c330814652f209151ce16618d
 
 dev_dependencies:
   flutter_driver:

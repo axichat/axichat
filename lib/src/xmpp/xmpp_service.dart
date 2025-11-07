@@ -244,12 +244,14 @@ class XmppService extends XmppBase
           _log.warning('Failed to enable carbons.');
         }
       }
-      await _omemoManager.value?.commitDevice(await _device);
-      if (await _ensureOmemoDevicePublished() case final result?) {
-        _log.severe('Failed to publish OMEMO device. $result');
-      }
+      // TODO(calendar-branch): OMEMO publishing disabled here; restore when
+      // merging with the encryption branch.
+      // await _omemoManager.value?.commitDevice(await _device);
+      // if (await _ensureOmemoDevicePublished() case final result?) {
+      //   _log.severe('Failed to publish OMEMO device. $result');
+      // }
       if (event.resumed) return;
-      await _omemoManager.value?.onNewConnection();
+      // await _omemoManager.value?.onNewConnection();
     })
     ..registerHandler<mox.ResourceBoundEvent>((event) async {
       _log.info('Bound resource: ${event.resource}...');
