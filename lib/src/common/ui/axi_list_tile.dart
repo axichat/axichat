@@ -15,7 +15,10 @@ class AxiListTile extends StatelessWidget {
     this.selected = false,
     this.onTap,
     this.menuItems,
-    this.badgeCount = 0,
+    this.surfaceColor,
+    this.surfaceShape,
+    this.paintSurface = true,
+    this.contentPadding,
   });
 
   final Widget? leading;
@@ -27,7 +30,10 @@ class AxiListTile extends StatelessWidget {
   final bool selected;
   final void Function()? onTap;
   final List<Widget>? menuItems;
-  final int badgeCount;
+  final Color? surfaceColor;
+  final ShapeBorder? surfaceShape;
+  final bool paintSurface;
+  final EdgeInsetsGeometry? contentPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -36,18 +42,21 @@ class AxiListTile extends StatelessWidget {
     final selectionOverlay = colors.primary.withValues(
       alpha: brightness == Brightness.dark ? 0.12 : 0.06,
     );
-    final backgroundColor = selected
-        ? Color.alphaBlend(selectionOverlay, colors.card)
-        : colors.card;
-    final shape = ContinuousRectangleBorder(
-      borderRadius: const BorderRadius.all(Radius.circular(16)),
-      side: BorderSide(color: colors.border),
-    );
+    Color backgroundColor = surfaceColor ?? colors.card;
+    backgroundColor = selected
+        ? Color.alphaBlend(selectionOverlay, backgroundColor)
+        : backgroundColor;
+    final shape = surfaceShape ??
+        SquircleBorder(
+          cornerRadius: 18,
+          side: BorderSide(color: colors.border),
+        );
 
     Widget child = ListTile(
       titleAlignment: ListTileTitleAlignment.center,
       horizontalTitleGap: 16.0,
-      contentPadding: const EdgeInsets.only(left: 16.0, right: 16.0),
+      contentPadding:
+          contentPadding ?? const EdgeInsets.only(left: 16.0, right: 16.0),
       minTileHeight: 84.0,
       selected: selected,
       selectedTileColor: Colors.transparent,
@@ -96,19 +105,13 @@ class AxiListTile extends StatelessWidget {
       ),
     );
 
-    child = AnimatedContainer(
-      duration: baseAnimationDuration,
-      decoration: ShapeDecoration(
-        color: backgroundColor,
-        shape: shape,
-      ),
-      child: child,
-    );
-
-    if (badgeCount > 0) {
-      child = AxiBadge(
-        count: badgeCount,
-        offset: const Offset(-5, 10),
+    if (paintSurface) {
+      child = AnimatedContainer(
+        duration: baseAnimationDuration,
+        decoration: ShapeDecoration(
+          color: backgroundColor,
+          shape: shape,
+        ),
         child: child,
       );
     }
