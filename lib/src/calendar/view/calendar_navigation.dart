@@ -7,7 +7,7 @@ import '../bloc/calendar_state.dart';
 import '../utils/responsive_helper.dart';
 import 'widgets/task_form_section.dart';
 
-const double _compactDateLabelCollapseWidth = 560;
+const double _compactDateLabelCollapseWidth = smallScreen;
 const double _compactDateLabelMaxWidth = 170;
 const double _defaultDateLabelMaxWidth = 320;
 
@@ -94,7 +94,7 @@ class CalendarNavigation extends StatelessWidget {
           double.infinity,
         );
         final bool collapseDateText =
-            isCompact && availableWidth < _compactDateLabelCollapseWidth;
+            isCompact || availableWidth < _compactDateLabelCollapseWidth;
         final double navSpacing =
             isCompact ? calendarGutterSm : calendarGutterMd;
         final Widget navRow =

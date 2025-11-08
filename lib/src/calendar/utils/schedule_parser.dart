@@ -13,6 +13,231 @@ const String _weekdayWordPattern =
     r'thu(?:r|rs|rsday|rsdays)?|fri(?:day|days)?|sat(?:urday|urdays)?|'
     r'sun(?:day|days)?';
 
+const Set<String> _nonLocationVocabulary = {
+  'api',
+  'apis',
+  'app',
+  'apps',
+  'bug',
+  'bugs',
+  'button',
+  'buttons',
+  'calendar',
+  'calendars',
+  'card',
+  'cards',
+  'chat',
+  'chats',
+  'client',
+  'clients',
+  'component',
+  'components',
+  'contact',
+  'contacts',
+  'content',
+  'copy',
+  'dashboard',
+  'dashboards',
+  'dialog',
+  'dialogs',
+  'doc',
+  'docs',
+  'document',
+  'documents',
+  'draft',
+  'drafts',
+  'field',
+  'fields',
+  'form',
+  'forms',
+  'inbox',
+  'issue',
+  'issues',
+  'list',
+  'lists',
+  'message',
+  'messages',
+  'modal',
+  'modals',
+  'module',
+  'modules',
+  'notification',
+  'notifications',
+  'panel',
+  'panels',
+  'screen',
+  'screens',
+  'server',
+  'servers',
+  'schedule',
+  'scheduler',
+  'schedules',
+  'stack',
+  'task',
+  'tasks',
+  'tile',
+  'tiles',
+  'toolbar',
+  'ui',
+  'ux',
+  'view',
+  'views',
+  'widget',
+  'widgets',
+};
+
+const Set<String> _generalLocationHints = {
+  'arena',
+  'auditorium',
+  'bank',
+  'bar',
+  'beach',
+  'bistro',
+  'boardroom',
+  'building',
+  'bldg',
+  'cabin',
+  'cafe',
+  'campus',
+  'center',
+  'centre',
+  'church',
+  'clinic',
+  'club',
+  'coffee',
+  'condo',
+  'court',
+  'courtroom',
+  'deck',
+  'diner',
+  'dock',
+  'garage',
+  'garden',
+  'gym',
+  'hall',
+  'harbor',
+  'harbour',
+  'headquarters',
+  'home',
+  'hotel',
+  'hq',
+  'lab',
+  'labs',
+  'library',
+  'lobby',
+  'lodge',
+  'loft',
+  'lounge',
+  'mall',
+  'office',
+  'park',
+  'patio',
+  'pier',
+  'plant',
+  'plaza',
+  'pool',
+  'pub',
+  'resort',
+  'restaurant',
+  'road',
+  'room',
+  'rooms',
+  'salon',
+  'spa',
+  'station',
+  'store',
+  'studio',
+  'suite',
+  'terminal',
+  'warehouse',
+};
+
+final RegExp _streetSuffixPattern = RegExp(
+  r'\b(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|way|'
+  r'pkwy|parkway|hwy|highway|trl|trail|ct|court|sq|square|pl|place|plz|plaza|'
+  r'terrace|ter)\b',
+  caseSensitive: false,
+);
+
+final RegExp _unitPattern = RegExp(
+  r'\b(apt|apartment|unit|suite|ste|room|rm|floor|fl|building|bldg|wing)\b',
+  caseSensitive: false,
+);
+
+bool _looksLikeLocationCandidate(String candidate, FuzzyPolicy policy) {
+  final trimmed = candidate.trim();
+  if (trimmed.isEmpty) return false;
+
+  final lower = trimmed.toLowerCase();
+  final rawTokens = trimmed
+      .split(RegExp(r'\s+'))
+      .where((token) => token.isNotEmpty)
+      .toList();
+  if (rawTokens.isEmpty) return false;
+  final lowerTokens = rawTokens.map((token) => token.toLowerCase()).toList();
+
+  if (lowerTokens.every(_nonLocationVocabulary.contains)) {
+    return false;
+  }
+
+  if (_hasAddressMarkers(trimmed, lower)) return true;
+  if (_containsHint(lower, policy.trailingLocationHints)) return true;
+  if (_containsHint(lower, _generalLocationHints)) return true;
+  if (_looksLikeAllCapsLocation(rawTokens)) return true;
+  if (_looksLikeProperPlaceName(rawTokens, lowerTokens)) return true;
+
+  return false;
+}
+
+bool _hasAddressMarkers(String text, String lower) {
+  final hasDigits = RegExp(r'\d').hasMatch(text);
+  if (text.contains('#')) return true;
+  if (_unitPattern.hasMatch(lower) && hasDigits) return true;
+  if (_streetSuffixPattern.hasMatch(lower) && hasDigits) return true;
+  return false;
+}
+
+bool _containsHint(String lower, Iterable<String> hints) {
+  for (final hint in hints) {
+    final normalized = hint.trim().toLowerCase();
+    if (normalized.isEmpty) continue;
+    final pattern =
+        RegExp('\\b${RegExp.escape(normalized)}\\b', caseSensitive: false);
+    if (pattern.hasMatch(lower)) return true;
+  }
+  return false;
+}
+
+bool _looksLikeAllCapsLocation(List<String> rawTokens) {
+  if (rawTokens.length != 1) return false;
+  final lettersOnly = rawTokens.first.replaceAll(RegExp(r'[^A-Za-z]'), '');
+  if (lettersOnly.length < 2) return false;
+  return lettersOnly == lettersOnly.toUpperCase();
+}
+
+bool _looksLikeProperPlaceName(
+  List<String> rawTokens,
+  List<String> lowerTokens,
+) {
+  int capitalizedWords = 0;
+  for (int i = 0; i < rawTokens.length; i++) {
+    final token = rawTokens[i];
+    final lower = lowerTokens[i];
+    if (_nonLocationVocabulary.contains(lower)) continue;
+    if (token.length < 2) continue;
+    final first = token[0];
+    final rest = token.substring(1);
+    final isAlpha = RegExp(r'[A-Za-z]').hasMatch(rest);
+    if (!isAlpha) continue;
+    if (first == first.toUpperCase() && rest != rest.toUpperCase()) {
+      capitalizedWords += 1;
+    }
+  }
+  if (capitalizedWords >= 2) return true;
+  if (capitalizedWords == 1 && rawTokens.length == 1) return true;
+  return false;
+}
+
 /// ---------------------------------------------------------------------------
 /// Public enums & models
 /// ---------------------------------------------------------------------------
@@ -419,7 +644,8 @@ class ScheduleParser {
           _normalizeLocation(_clean(match.namedGroup('loc')!)));
       if (candidate == null ||
           _looksTemporalPhrase(candidate) ||
-          consumed.overlaps(candidate)) {
+          consumed.overlaps(candidate) ||
+          !_looksLikeLocationCandidate(candidate, opts.policy)) {
         continue;
       }
       location = candidate;
@@ -434,7 +660,8 @@ class ScheduleParser {
             _pruneTemporalSuffix(_normalizeLocation(_clean(atSig.group(1)!)));
         if (candidate != null &&
             !_looksLikeHandle(candidate) &&
-            !consumed.overlaps(candidate)) {
+            !consumed.overlaps(candidate) &&
+            _looksLikeLocationCandidate(candidate, opts.policy)) {
           location = candidate;
           flags.add(AmbiguityFlag.locationGuessed);
           assumptions.add('Used "@ …" as location.');
@@ -1477,6 +1704,25 @@ class ScheduleParser {
           text = text.replaceRange(compactMatch.start, compactMatch.end, ' ');
           assumptions.add('Interpreted "${compactMatch.group(0)}" '
               'as ${_hhmm(hour)}.');
+        }
+      }
+    }
+    Match? simpleHourMatch;
+    if (timeMatch == null && hour == null) {
+      simpleHourMatch = RegExp(
+        r'\b(?:at|@|around|from|by)\s*(\d{1,2})(?![:\d])\b',
+        caseSensitive: false,
+      ).firstMatch(text);
+      if (simpleHourMatch != null) {
+        final value = int.parse(simpleHourMatch.group(1)!);
+        if (value <= 23) {
+          hour = value;
+          minute = 0;
+          ambiguousNoMeridiem = true;
+          text =
+              text.replaceRange(simpleHourMatch.start, simpleHourMatch.end, ' ');
+          assumptions.add(
+              'Interpreted "${simpleHourMatch.group(0)}" as ${_hhmm(hour!)}.');
         }
       }
     }
