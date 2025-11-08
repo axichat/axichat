@@ -41,6 +41,21 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID);
 
+  Stream<List<Reaction>> watchReactionsForChat(String jid);
+
+  Future<List<Reaction>> getReactionsForChat(String jid);
+
+  Future<List<Reaction>> getReactionsForMessageSender({
+    required String messageId,
+    required String senderJid,
+  });
+
+  Future<void> replaceReactions({
+    required String messageId,
+    required String senderJid,
+    required List<String> emojis,
+  });
+
   Future<void> saveMessage(Message message);
 
   Future<void> saveMessageError({
@@ -329,6 +344,56 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
       (delete(table)..where((item) => item.chatJid.equals(jid))).go();
 }
 
+@DriftAccessor(tables: [Reactions, Messages])
+class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
+    with _$ReactionsAccessorMixin {
+  ReactionsAccessor(super.attachedDatabase);
+
+  Stream<List<Reaction>> watchChat(String jid) {
+    final query = select(reactions).join([
+      innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
+    ])
+      ..where(messages.chatJid.equals(jid));
+    return query
+        .watch()
+        .map((rows) => rows.map((row) => row.readTable(reactions)).toList());
+  }
+
+  Future<List<Reaction>> selectByChat(String jid) {
+    final query = select(reactions).join([
+      innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
+    ])
+      ..where(messages.chatJid.equals(jid));
+    return query
+        .get()
+        .then((rows) => rows.map((row) => row.readTable(reactions)).toList());
+  }
+
+  Future<List<Reaction>> selectByMessageAndSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      (select(reactions)
+            ..where(
+              (table) =>
+                  table.messageID.equals(messageId) &
+                  table.senderJid.equals(senderJid),
+            ))
+          .get();
+
+  Future<void> deleteByMessageAndSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      (delete(reactions)
+            ..where(
+              (table) =>
+                  table.messageID.equals(messageId) &
+                  table.senderJid.equals(senderJid),
+            ))
+          .go();
+}
+
 @DriftAccessor(tables: [Drafts])
 class DraftsAccessor extends BaseAccessor<Draft, $DraftsTable>
     with _$DraftsAccessorMixin {
@@ -607,6 +672,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   StickerPacks,
 ], daos: [
   MessagesAccessor,
+  ReactionsAccessor,
   DraftsAccessor,
   OmemoDevicesAccessor,
   OmemoTrustsAccessor,
@@ -636,7 +702,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -653,6 +719,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           await m.addColumn(messages, messages.deltaMsgId);
           await m.addColumn(chats, chats.deltaChatId);
           await m.addColumn(chats, chats.emailAddress);
+        }
+        if (from < 4) {
+          await m.deleteTable(reactions.actualTableName);
+          await m.createTable(reactions);
         }
       },
       beforeOpen: (_) async {
@@ -695,6 +765,48 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
+
+  @override
+  Stream<List<Reaction>> watchReactionsForChat(String jid) =>
+      reactionsAccessor.watchChat(jid);
+
+  @override
+  Future<List<Reaction>> getReactionsForChat(String jid) =>
+      reactionsAccessor.selectByChat(jid);
+
+  @override
+  Future<List<Reaction>> getReactionsForMessageSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      reactionsAccessor.selectByMessageAndSender(
+        messageId: messageId,
+        senderJid: senderJid,
+      );
+
+  @override
+  Future<void> replaceReactions({
+    required String messageId,
+    required String senderJid,
+    required List<String> emojis,
+  }) async {
+    await transaction(() async {
+      await reactionsAccessor.deleteByMessageAndSender(
+        messageId: messageId,
+        senderJid: senderJid,
+      );
+      for (final emoji in emojis) {
+        await into(reactions).insert(
+          ReactionsCompanion.insert(
+            messageID: messageId,
+            senderJid: senderJid,
+            emoji: emoji,
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
+  }
 
   @override
   Future<void> saveMessage(Message message) async {

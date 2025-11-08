@@ -61,11 +61,8 @@ class _ChatListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final transport = item.transport;
-    final previewUnreadBadge =
-        _shouldPreviewUnreadBadge(); // TODO: remove once layout finalized.
-    final showUnreadBadge = previewUnreadBadge || item.unreadCount > 0;
-    final unreadCount =
-        item.unreadCount == 0 && previewUnreadBadge ? 1 : item.unreadCount;
+    final showUnreadBadge = item.unreadCount > 0;
+    final unreadCount = item.unreadCount;
     final unreadThickness = showUnreadBadge
         ? _measureUnreadBadgeWidth(
             context,
@@ -164,18 +161,18 @@ class _ChatListTile extends StatelessWidget {
       subtitlePlaceholder: 'No messages',
     );
 
-    final cutouts = <_CutoutSpec>[
+    final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
-        _CutoutSpec(
-          edge: _CutoutEdge.top,
+        CutoutSpec(
+          edge: CutoutEdge.top,
           alignment: const Alignment(0.84, -1),
           depth: 14,
           thickness: unreadThickness,
           cornerRadius: 18,
           child: _UnreadBadge(count: unreadCount),
         ),
-      _CutoutSpec(
-        edge: _CutoutEdge.right,
+      CutoutSpec(
+        edge: CutoutEdge.right,
         alignment: const Alignment(1.02, 0),
         depth: 32,
         thickness: 46,
@@ -190,10 +187,10 @@ class _ChatListTile extends StatelessWidget {
         ),
       ),
       if (timestampLabel != null)
-        _CutoutSpec(
-          edge: _CutoutEdge.bottom,
+        CutoutSpec(
+          edge: CutoutEdge.bottom,
           alignment: const Alignment(0.52, 1),
-          depth: 14,
+          depth: 10,
           thickness: timestampThickness,
           cornerRadius: 18,
           child: DisplayTimeSince(
@@ -205,10 +202,14 @@ class _ChatListTile extends StatelessWidget {
         ),
     ];
 
-    return _CutoutTile(
+    return CutoutSurface(
       backgroundColor: tileBackgroundColor,
       borderColor: colors.border,
       cutouts: cutouts,
+      shape: SquircleBorder(
+        cornerRadius: 18,
+        side: BorderSide(color: colors.border),
+      ),
       child: tile,
     );
   }
@@ -226,8 +227,6 @@ double _measureLabelWidth(BuildContext context, String text) {
   )..layout();
   return painter.width;
 }
-
-bool _shouldPreviewUnreadBadge() => true;
 
 double _measureUnreadBadgeWidth(BuildContext context, int count) {
   final textWidth = _measureLabelWidth(context, '$count');
@@ -326,7 +325,7 @@ class _FavoriteToggle extends StatelessWidget {
         color: backgroundColor,
         shape: SquircleBorder(
           cornerRadius: 14,
-          side: BorderSide(color: colors.background, width: 2),
+          side: BorderSide(color: colors.border, width: 1.4),
         ),
       ),
       child: IconButton(
@@ -346,254 +345,4 @@ class _FavoriteToggle extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CutoutTile extends StatelessWidget {
-  const _CutoutTile({
-    required this.child,
-    required this.cutouts,
-    required this.backgroundColor,
-    required this.borderColor,
-  });
-
-  final Widget child;
-  final List<_CutoutSpec> cutouts;
-  final Color backgroundColor;
-  final Color borderColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CustomPaint(
-          painter: _CutoutPainter(
-            borderRadius: 18,
-            backgroundColor: backgroundColor,
-            borderColor: borderColor,
-            cutouts: cutouts,
-          ),
-          child: child,
-        ),
-        for (final spec in cutouts) _CutoutAttachment(spec: spec),
-      ],
-    );
-  }
-}
-
-class _CutoutAttachment extends StatelessWidget {
-  const _CutoutAttachment({required this.spec});
-
-  final _CutoutSpec spec;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: CustomSingleChildLayout(
-        delegate: _CutoutAttachmentDelegate(spec),
-        child: spec.child,
-      ),
-    );
-  }
-}
-
-class _CutoutSpec {
-  const _CutoutSpec({
-    required this.edge,
-    required this.alignment,
-    required this.depth,
-    required this.thickness,
-    required this.child,
-    this.cornerRadius = 16,
-  });
-
-  final _CutoutEdge edge;
-  final Alignment alignment;
-  final double depth;
-  final double thickness;
-  final Widget child;
-  final double cornerRadius;
-}
-
-enum _CutoutEdge { top, right, bottom, left }
-
-class _CutoutPainter extends CustomPainter {
-  const _CutoutPainter({
-    required this.borderRadius,
-    required this.backgroundColor,
-    required this.borderColor,
-    required this.cutouts,
-  });
-
-  final double borderRadius;
-  final Color backgroundColor;
-  final Color borderColor;
-  final List<_CutoutSpec> cutouts;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    var path = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          Radius.circular(borderRadius),
-        ),
-      );
-
-    for (final spec in cutouts) {
-      final rect = _cutoutRect(size, spec);
-      final cutout =
-          SquircleBorder(cornerRadius: spec.cornerRadius).getOuterPath(rect);
-      path = Path.combine(PathOperation.difference, path, cutout);
-    }
-
-    final fillPaint = Paint()
-      ..color = backgroundColor
-      ..style = PaintingStyle.fill;
-    final strokePaint = Paint()
-      ..color = borderColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..strokeJoin = StrokeJoin.round;
-
-    canvas.drawPath(path, fillPaint);
-    canvas.drawPath(path, strokePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _CutoutPainter oldDelegate) => true;
-}
-
-Offset _edgeAnchor(Size size, _CutoutSpec spec) {
-  final fx = ((spec.alignment.x + 1) / 2) * size.width;
-  final fy = ((spec.alignment.y + 1) / 2) * size.height;
-  switch (spec.edge) {
-    case _CutoutEdge.right:
-      return Offset(size.width, fy);
-    case _CutoutEdge.left:
-      return Offset(0, fy);
-    case _CutoutEdge.top:
-      return Offset(fx, 0);
-    case _CutoutEdge.bottom:
-      return Offset(fx, size.height);
-  }
-}
-
-Offset _insideNormal(_CutoutEdge edge) {
-  switch (edge) {
-    case _CutoutEdge.right:
-      return const Offset(-1, 0);
-    case _CutoutEdge.left:
-      return const Offset(1, 0);
-    case _CutoutEdge.top:
-      return const Offset(0, 1);
-    case _CutoutEdge.bottom:
-      return const Offset(0, -1);
-  }
-}
-
-Rect _cutoutRect(Size size, _CutoutSpec spec) {
-  final anchor = _edgeAnchor(size, spec);
-  final halfThickness = spec.thickness / 2;
-  switch (spec.edge) {
-    case _CutoutEdge.right:
-      return Rect.fromLTRB(
-        size.width - spec.depth,
-        anchor.dy - halfThickness,
-        size.width + spec.depth,
-        anchor.dy + halfThickness,
-      );
-    case _CutoutEdge.left:
-      return Rect.fromLTRB(
-        -spec.depth,
-        anchor.dy - halfThickness,
-        spec.depth,
-        anchor.dy + halfThickness,
-      );
-    case _CutoutEdge.top:
-      return Rect.fromLTRB(
-        anchor.dx - halfThickness,
-        -spec.depth,
-        anchor.dx + halfThickness,
-        spec.depth,
-      );
-    case _CutoutEdge.bottom:
-      return Rect.fromLTRB(
-        anchor.dx - halfThickness,
-        size.height - spec.depth,
-        anchor.dx + halfThickness,
-        size.height + spec.depth,
-      );
-  }
-}
-
-class _CutoutAttachmentDelegate extends SingleChildLayoutDelegate {
-  const _CutoutAttachmentDelegate(this.spec);
-
-  final _CutoutSpec spec;
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(Size(
-      constraints.maxWidth,
-      constraints.maxHeight,
-    ));
-  }
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    final rect = _cutoutRect(size, spec);
-    final direction = _insideNormal(spec.edge);
-    final inset = _resolvedInset(childSize);
-    final target = rect.center + direction * inset;
-    final topLeft = target -
-        Offset(
-          childSize.width / 2,
-          childSize.height / 2,
-        );
-    return topLeft;
-  }
-
-  double _resolvedInset(Size childSize) {
-    final inset = _autoInset(childSize);
-    return inset.clamp(-spec.depth, spec.depth);
-  }
-
-  double _autoInset(Size childSize) {
-    final normalExtent = _extentAlongNormal(childSize);
-    final perpendicularExtent = _extentPerpendicular(childSize);
-    final targetClearance =
-        math.max(0.0, (spec.thickness - perpendicularExtent) / 2);
-    final inset = spec.depth - normalExtent / 2 - targetClearance;
-    if (inset <= 0) {
-      return 0;
-    }
-    return math.min(inset, spec.depth);
-  }
-
-  double _extentAlongNormal(Size childSize) {
-    switch (spec.edge) {
-      case _CutoutEdge.right:
-      case _CutoutEdge.left:
-        return childSize.width;
-      case _CutoutEdge.top:
-      case _CutoutEdge.bottom:
-        return childSize.height;
-    }
-  }
-
-  double _extentPerpendicular(Size childSize) {
-    switch (spec.edge) {
-      case _CutoutEdge.right:
-      case _CutoutEdge.left:
-        return childSize.height;
-      case _CutoutEdge.top:
-      case _CutoutEdge.bottom:
-        return childSize.width;
-    }
-  }
-
-  @override
-  bool shouldRelayout(covariant _CutoutAttachmentDelegate oldDelegate) =>
-      oldDelegate.spec != spec;
 }

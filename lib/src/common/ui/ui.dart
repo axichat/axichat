@@ -3,6 +3,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 export 'axi_adaptive_layout.dart';
 export 'axi_app_bar.dart';
+export 'axi_context_menu_region.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'axi_confirm.dart';
@@ -19,7 +20,9 @@ export 'axi_progress_indicator.dart';
 export 'axi_text_form_field.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
+export 'axi_tap_bounce.dart';
 export 'axi_version.dart';
+export 'cutout.dart';
 export 'display_fingerprint.dart';
 export 'display_time_since.dart';
 export 'dynamic_inline_text.dart';

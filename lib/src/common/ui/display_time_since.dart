@@ -50,7 +50,7 @@ String formatTimeSinceLabel(DateTime now, DateTime timestamp) {
   return switch (difference) {
     < const Duration(minutes: 1) => 'Just now',
     < const Duration(hours: 1) => '${difference.inMinutes}min ago',
-    < const Duration(hours: 2) => '1 hr ago',
+    < const Duration(hours: 2) => '1hr ago',
     < const Duration(days: 1) => '${difference.inHours}hrs ago',
     < const Duration(days: 2) => '1 day ago',
     < const Duration(days: 7) => '${difference.inDays} days ago',

@@ -6,6 +6,7 @@ class ChatState with _$ChatState {
     required List<Message> items,
     Chat? chat,
     Message? focused,
+    Message? quoting,
     @Default(false) bool typing,
     @Default(true) bool showAlert,
   }) = _ChatState;

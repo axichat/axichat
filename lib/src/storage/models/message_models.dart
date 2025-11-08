@@ -122,6 +122,44 @@ enum PseudoMessageType { newDevice, changedDevice }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
 
+class ReactionPreview {
+  const ReactionPreview({
+    required this.emoji,
+    required this.count,
+    this.reactedBySelf = false,
+  });
+
+  final String emoji;
+  final int count;
+  final bool reactedBySelf;
+
+  ReactionPreview copyWith({
+    String? emoji,
+    int? count,
+    bool? reactedBySelf,
+  }) =>
+      ReactionPreview(
+        emoji: emoji ?? this.emoji,
+        count: count ?? this.count,
+        reactedBySelf: reactedBySelf ?? this.reactedBySelf,
+      );
+
+  @override
+  int get hashCode => Object.hash(emoji, count, reactedBySelf);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReactionPreview &&
+          other.emoji == emoji &&
+          other.count == count &&
+          other.reactedBySelf == reactedBySelf;
+
+  @override
+  String toString() =>
+      'ReactionPreview(emoji: $emoji, count: $count, reactedBySelf: $reactedBySelf)';
+}
+
 class OmemoDeviceData {
   const OmemoDeviceData({required this.id});
 
@@ -159,7 +197,7 @@ class Message with _$Message implements Insertable<Message> {
     String? stickerPackID,
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
-    @Default(<String>[]) List<String> reactionsPreview,
+    @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
     int? deltaChatId,
     int? deltaMsgId,
   }) = _Message;
@@ -193,7 +231,7 @@ class Message with _$Message implements Insertable<Message> {
     required String? stickerPackID,
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
-    @Default(<String>[]) List<String> reactionsPreview,
+    @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
     required int? deltaChatId,
     required int? deltaMsgId,
   }) = _MessageFromDb;
@@ -239,13 +277,36 @@ class Message with _$Message implements Insertable<Message> {
   bool get isPseudoMessage =>
       pseudoMessageType != null && pseudoMessageData != null;
 
-  mox.MessageEvent toMox() {
+  mox.MessageEvent toMox({
+    String? quotedBody,
+    mox.JID? quotedJid,
+  }) {
     final extensions = <mox.StanzaHandlerExtension>[
-      mox.MessageBodyData(body),
       const mox.MarkableData(true),
       mox.MessageIdData(stanzaID),
       mox.ChatState.active,
     ];
+
+    var outgoingBody = body ?? '';
+    mox.ReplyData? replyData;
+    if (quoting != null) {
+      if (quotedBody != null) {
+        final quote = mox.QuoteData.fromBodies(quotedBody, outgoingBody);
+        outgoingBody = quote.body;
+        replyData = mox.ReplyData.fromQuoteData(
+          quoting!,
+          quote,
+          jid: quotedJid,
+        );
+      } else {
+        replyData = mox.ReplyData(quoting!, jid: quotedJid);
+      }
+    }
+
+    extensions.insert(0, mox.MessageBodyData(outgoingBody));
+    if (replyData != null) {
+      extensions.add(replyData);
+    }
 
     // Add OMEMO flag if encryption is requested
     if (encryptionProtocol == EncryptionProtocol.omemo) {
@@ -384,7 +445,7 @@ class Reaction with _$Reaction {
 
 @UseRowClass(Reaction)
 class Reactions extends Table {
-  TextColumn get messageID => text().references(Messages, #id)();
+  TextColumn get messageID => text().references(Messages, #stanzaID)();
 
   TextColumn get senderJid => text()();
 
