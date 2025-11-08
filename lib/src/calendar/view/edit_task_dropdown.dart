@@ -116,7 +116,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             task.duration ?? const Duration(hours: 1),
           );
       _deadline = task.deadline;
-      _recurrence = RecurrenceFormValue.fromRule(task.recurrence);
+      _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
+          .resolveLinkedLimits(_startTime ?? task.scheduledTime);
     }
 
     if (rebuild && mounted) {
@@ -295,6 +296,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           if (_endTime == null || _endTime!.isBefore(value)) {
             _endTime = value.add(const Duration(hours: 1));
           }
+          _recurrence = _normalizeRecurrence(_recurrence);
         });
       },
       onEndChanged: (value) {
@@ -306,6 +308,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           if (_startTime != null && value.isBefore(_startTime!)) {
             _endTime = _startTime!.add(const Duration(minutes: 15));
           }
+          _recurrence = _normalizeRecurrence(_recurrence);
         });
       },
     );
@@ -344,7 +347,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       ),
       onChanged: (next) {
         setState(() {
-          _recurrence = next;
+          _recurrence = _normalizeRecurrence(next);
         });
       },
     );
@@ -394,6 +397,11 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     );
   }
 
+  RecurrenceFormValue _normalizeRecurrence(RecurrenceFormValue value) {
+    final DateTime? anchor = _startTime ?? widget.task.scheduledTime;
+    return value.resolveLinkedLimits(anchor);
+  }
+
   void _handleSave() {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
@@ -436,7 +444,9 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     final recurrenceAnchor =
         scheduledTime ?? widget.task.scheduledTime ?? DateTime.now();
     final recurrence = _recurrence.isActive
-        ? _recurrence.toRule(start: recurrenceAnchor)
+        ? _recurrence
+            .resolveLinkedLimits(recurrenceAnchor)
+            .toRule(start: recurrenceAnchor)
         : null;
 
     final updatedTask = widget.task.copyWith(

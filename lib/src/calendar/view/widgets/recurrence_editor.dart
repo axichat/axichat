@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,6 +42,28 @@ class RecurrenceFormValue {
 
   bool get isActive => frequency != RecurrenceFrequency.none;
 
+  RecurrenceFormValue resolveLinkedLimits(DateTime? start) {
+    if (start == null || !isActive) {
+      return this;
+    }
+    final _RecurrenceLimitSolver solver = _RecurrenceLimitSolver(start, this);
+
+    DateTime? derivedUntil = until;
+    int? derivedCount = count;
+
+    if (derivedUntil == null && derivedCount != null) {
+      derivedUntil = solver.untilForCount(derivedCount);
+    } else if (derivedCount == null && derivedUntil != null) {
+      derivedCount = solver.countThrough(derivedUntil);
+    }
+
+    if (derivedUntil == until && derivedCount == count) {
+      return this;
+    }
+
+    return copyWith(until: derivedUntil, count: derivedCount);
+  }
+
   RecurrenceFormValue copyWith({
     RecurrenceFrequency? frequency,
     int? interval,
@@ -60,21 +83,22 @@ class RecurrenceFormValue {
   }
 
   RecurrenceRule? toRule({required DateTime start}) {
-    if (frequency == RecurrenceFrequency.none) {
+    final RecurrenceFormValue normalized = resolveLinkedLimits(start);
+    if (normalized.frequency == RecurrenceFrequency.none) {
       return null;
     }
 
-    final effectiveUntil = count != null ? null : until;
+    final effectiveUntil = normalized.count != null ? null : normalized.until;
 
-    switch (frequency) {
+    switch (normalized.frequency) {
       case RecurrenceFrequency.none:
         return null;
       case RecurrenceFrequency.daily:
         return RecurrenceRule(
           frequency: RecurrenceFrequency.daily,
-          interval: interval,
+          interval: normalized.interval,
           until: effectiveUntil,
-          count: count,
+          count: normalized.count,
         );
       case RecurrenceFrequency.weekdays:
         return const RecurrenceRule(
@@ -88,27 +112,27 @@ class RecurrenceFormValue {
             DateTime.friday,
           ],
         ).copyWith(
-          interval: interval,
+          interval: normalized.interval,
           until: effectiveUntil,
-          count: count,
+          count: normalized.count,
         );
       case RecurrenceFrequency.weekly:
-        final normalizedWeekdays = weekdays.isEmpty
+        final normalizedWeekdays = normalized.weekdays.isEmpty
             ? <int>{start.weekday}
-            : SplayTreeSet.of(weekdays).toList();
+            : SplayTreeSet.of(normalized.weekdays).toList();
         return RecurrenceRule(
           frequency: RecurrenceFrequency.weekly,
-          interval: interval,
+          interval: normalized.interval,
           byWeekdays: normalizedWeekdays.toList(),
           until: effectiveUntil,
-          count: count,
+          count: normalized.count,
         );
       case RecurrenceFrequency.monthly:
         return RecurrenceRule(
           frequency: RecurrenceFrequency.monthly,
-          interval: interval,
+          interval: normalized.interval,
           until: effectiveUntil,
-          count: count,
+          count: normalized.count,
         );
     }
   }
@@ -512,5 +536,119 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
       case RecurrenceFrequency.none:
         return 'time(s)';
     }
+  }
+}
+
+class _RecurrenceLimitSolver {
+  _RecurrenceLimitSolver(this.anchor, this.value)
+      : _effectiveWeekdays = value.frequency == RecurrenceFrequency.weekdays
+            ? const {
+                DateTime.monday,
+                DateTime.tuesday,
+                DateTime.wednesday,
+                DateTime.thursday,
+                DateTime.friday,
+              }
+            : (value.weekdays.isNotEmpty
+                ? Set<int>.from(value.weekdays)
+                : {anchor.weekday}),
+        _anchorDay = anchor.day;
+
+  final DateTime anchor;
+  final RecurrenceFormValue value;
+  final Set<int> _effectiveWeekdays;
+  final int _anchorDay;
+
+  static const int _maxIterations = 5000;
+
+  DateTime? untilForCount(int count) {
+    if (count <= 1) return anchor;
+    var current = anchor;
+    for (var produced = 1;
+        produced < count && produced < _maxIterations;
+        produced++) {
+      current = _nextOccurrence(current);
+    }
+    return current;
+  }
+
+  int? countThrough(DateTime until) {
+    if (until.isBefore(anchor)) {
+      return 1;
+    }
+    var current = anchor;
+    var occurrences = 1;
+    for (var guard = 0; guard < _maxIterations; guard++) {
+      final next = _nextOccurrence(current);
+      if (next.isAfter(until)) {
+        break;
+      }
+      current = next;
+      occurrences++;
+      if (!next.isBefore(until)) {
+        break;
+      }
+    }
+    return occurrences;
+  }
+
+  DateTime _nextOccurrence(DateTime current) {
+    switch (value.frequency) {
+      case RecurrenceFrequency.none:
+        return current;
+      case RecurrenceFrequency.daily:
+        return current.add(Duration(days: math.max(value.interval, 1)));
+      case RecurrenceFrequency.weekdays:
+      case RecurrenceFrequency.weekly:
+        return _advanceWeekly(current);
+      case RecurrenceFrequency.monthly:
+        return _advanceMonthly(current);
+    }
+  }
+
+  DateTime _advanceWeekly(DateTime current) {
+    final sorted = _effectiveWeekdays.toList()..sort();
+    if (sorted.isEmpty) {
+      sorted.add(anchor.weekday);
+    }
+    for (final day in sorted) {
+      if (day > current.weekday) {
+        return current.add(Duration(days: day - current.weekday));
+      }
+    }
+    final int firstDay = sorted.first;
+    final int intervalWeeks = math.max(value.interval, 1);
+    final int daysToNextCycle = ((intervalWeeks - 1) * 7) +
+        ((DateTime.sunday - current.weekday + 7) % 7) +
+        firstDay;
+    return current.add(Duration(days: daysToNextCycle));
+  }
+
+  DateTime _advanceMonthly(DateTime current) {
+    final int intervalMonths = math.max(value.interval, 1);
+    final int newMonthIndex = (current.month - 1) + intervalMonths;
+    final int year = current.year + (newMonthIndex ~/ 12);
+    final int month = (newMonthIndex % 12) + 1;
+    final int day = _clampDay(_anchorDay, year, month);
+    return DateTime(
+      year,
+      month,
+      day,
+      current.hour,
+      current.minute,
+      current.second,
+      current.millisecond,
+      current.microsecond,
+    );
+  }
+
+  int _clampDay(int desiredDay, int year, int month) {
+    return math.min(desiredDay, _daysInMonth(year, month));
+  }
+
+  int _daysInMonth(int year, int month) {
+    final DateTime firstNext =
+        month == 12 ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
+    return firstNext.subtract(const Duration(days: 1)).day;
   }
 }

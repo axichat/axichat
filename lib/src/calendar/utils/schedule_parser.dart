@@ -8,6 +8,11 @@ const String _timeSnippetPattern =
     r'(?:\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)?'
     r'|\d{1,2}\s*h\d{0,2}|noon|midnight)';
 
+const String _weekdayWordPattern =
+    r'mon(?:day|days)?|tue(?:s|sday|sdays)?|wed(?:nesday|nesdays)?|'
+    r'thu(?:r|rs|rsday|rsdays)?|fri(?:day|days)?|sat(?:urday|urdays)?|'
+    r'sun(?:day|days)?';
+
 /// ---------------------------------------------------------------------------
 /// Public enums & models
 /// ---------------------------------------------------------------------------
@@ -191,7 +196,6 @@ class FuzzyPolicy {
       'now',
       'immediately',
       'right away',
-      'today',
       'stat',
       '!!!'
     ],
@@ -242,10 +246,18 @@ class ScheduleParser {
 
     // Normalize sloppy input
     final normal = _normalize(original, base);
+    final rawRelativeLabel = normal.relativeFallbackLabel;
+    final String? relativeLabel = rawRelativeLabel == null
+        ? null
+        : rawRelativeLabel.trim().isEmpty
+            ? null
+            : rawRelativeLabel.trim();
     var s = ' ${normal.text} '; // working text buffer
     final flags = <AmbiguityFlag>{...normal.flags};
     final assumptions = <String>[...normal.assumptions];
     var confidence = 1.0;
+    bool usedRelativeFallback = false;
+    final _ConsumedPhraseTracker consumed = _ConsumedPhraseTracker();
 
     // DEADLINE: extract and strip from sentence
     final _DeadlineParse dl = _extractDeadline(s, base);
@@ -257,8 +269,9 @@ class ScheduleParser {
     // RECURRENCE: strip triggers but keep anchor words like "Friday 10"
     final _RecurrenceParse rec = _parseRecurrence(s, base);
     s = ' ${rec.cleaned} ';
-    if (rec.recurrence != null) {
-      assumptions.add('Recurrence: ${rec.recurrence!.rrule}');
+    Recurrence? recurrence = rec.recurrence;
+    if (recurrence != null) {
+      assumptions.add('Recurrence: ${recurrence.rrule}');
     }
 
     // Date/time via chrono
@@ -303,14 +316,22 @@ class ScheduleParser {
         best.index?.toInt() ?? 0,
         best.text.length,
       );
+      consumed.add(best.text);
     } else {
       // Use relative fallback from normalization ("in N days/hours")
       if (normal.relativeFallback != null) {
         start = normal.relativeFallback;
         allDay = false;
+        usedRelativeFallback = true;
         flags.add(AmbiguityFlag.relativeDate);
         assumptions.add(
             'Interpreted relative duration "${normal.relativeFallbackLabel}".');
+        if (relativeLabel != null && relativeLabel.isNotEmpty) {
+          final pattern =
+              RegExp(RegExp.escape(relativeLabel), caseSensitive: false);
+          s = s.replaceFirst(pattern, ' ');
+          consumed.add(relativeLabel);
+        }
       }
     }
 
@@ -323,6 +344,19 @@ class ScheduleParser {
         flags.addAll(fallback.flags);
         assumptions.addAll(fallback.assumptions);
         confidence -= 0.15;
+      }
+    }
+
+    if (recurrence != null && start != null) {
+      final _RecurrenceSpec? snapSpec =
+          _RecurrenceMath.tryParse(recurrence, start.location);
+      if (snapSpec != null) {
+        final tz.TZDateTime aligned =
+            _RecurrenceMath.alignStart(start, snapSpec);
+        if (!aligned.isAtSameMomentAs(start)) {
+          start = aligned;
+          assumptions.add('Aligned start to recurrence cadence.');
+        }
       }
     }
 
@@ -381,12 +415,15 @@ class ScheduleParser {
     );
     final atInToMatches = atInToRegex.allMatches(s).toList();
     for (final match in atInToMatches) {
-      final candidate =
-          _pruneTemporalSuffix(_normalizeLocation(_clean(match.namedGroup('loc')!)));
-      if (candidate == null || _looksTemporalPhrase(candidate)) {
+      final candidate = _pruneTemporalSuffix(
+          _normalizeLocation(_clean(match.namedGroup('loc')!)));
+      if (candidate == null ||
+          _looksTemporalPhrase(candidate) ||
+          consumed.overlaps(candidate)) {
         continue;
       }
       location = candidate;
+      consumed.add(candidate);
       s = s.replaceRange(match.start, match.end, ' ');
       break;
     }
@@ -395,10 +432,13 @@ class ScheduleParser {
       if (atSig != null) {
         final candidate =
             _pruneTemporalSuffix(_normalizeLocation(_clean(atSig.group(1)!)));
-        if (candidate != null && !_looksLikeHandle(candidate)) {
+        if (candidate != null &&
+            !_looksLikeHandle(candidate) &&
+            !consumed.overlaps(candidate)) {
           location = candidate;
           flags.add(AmbiguityFlag.locationGuessed);
           assumptions.add('Used "@ …" as location.');
+          consumed.add(candidate);
           s = s.replaceRange(atSig.start, atSig.end, ' ');
         }
       }
@@ -409,10 +449,14 @@ class ScheduleParser {
       if (trailing != null) {
         final word = trailing.group(1)!.trim().toLowerCase();
         if (opts.policy.trailingLocationHints.contains(word)) {
-          location = _normalizeLocation(_clean(word));
+          final normalized = _normalizeLocation(_clean(word));
+          if (normalized != null && !consumed.overlaps(normalized)) {
+            location = normalized;
           flags.add(AmbiguityFlag.locationGuessed);
           assumptions.add('Guessed trailing word as location.');
-          s = s.replaceRange(trailing.start, trailing.end, ' ');
+            consumed.add(normalized);
+            s = s.replaceRange(trailing.start, trailing.end, ' ');
+          }
         }
       }
     }
@@ -518,12 +562,17 @@ class ScheduleParser {
       durationExtraction = workingDuration;
     }
     durationExtraction ??= _extractDurationPhrase(original);
+    if (durationExtraction != null &&
+        consumed.overlaps(durationExtraction.phrase)) {
+      durationExtraction = null;
+    }
 
     if (start != null &&
         end == null &&
         durationExtraction != null &&
         durationExtraction.duration.inMinutes > 0) {
       end = start.add(durationExtraction.duration);
+      consumed.add(durationExtraction.phrase);
       assumptions.add(
         'Applied duration "${durationExtraction.phrase}" '
         '(${_formatDuration(durationExtraction.duration)}).',
@@ -546,18 +595,20 @@ class ScheduleParser {
     title = _stripPriorityMarkers(title, pr.triggerTokens);
     title = _stripAppliedMetadata(
       title,
-      hasStart: start != null || rec.recurrence != null,
+      hasStart: start != null || recurrence != null,
       hasDeadline: deadline != null,
-      hasRecurrence: rec.recurrence != null,
+      hasRecurrence: recurrence != null,
       location: location,
+      consumedPhrases: consumed.phrases,
     );
     if (title.isEmpty) {
       title = _stripAppliedMetadata(
         original,
-        hasStart: start != null || rec.recurrence != null,
+        hasStart: start != null || recurrence != null,
         hasDeadline: deadline != null,
-        hasRecurrence: rec.recurrence != null,
+        hasRecurrence: recurrence != null,
         location: location,
+        consumedPhrases: consumed.phrases,
       ).trim();
     }
     if (title.isEmpty) title = 'Untitled';
@@ -587,6 +638,8 @@ class ScheduleParser {
     if (confidence < 0.2) confidence = 0.2;
     if (confidence > 1.0) confidence = 1.0;
 
+    recurrence = _finalizeRecurrence(recurrence, start);
+
     return ScheduleItem(
       task: title,
       start: start,
@@ -600,7 +653,7 @@ class ScheduleParser {
       assumptions: [...assumptions, ...pr.assumptions],
       approximate: approximate,
       priority: pr.quadrant,
-      recurrence: rec.recurrence,
+      recurrence: recurrence,
       deadline: deadline,
     );
   }
@@ -828,20 +881,58 @@ class ScheduleParser {
   }
 
   _RecurrenceParse _parseRecurrence(String s, tz.TZDateTime base) {
-    String lower = s.toLowerCase();
+    final weekdayMatcher = RegExp(
+      '\\b(?:$_weekdayWordPattern)\\b',
+      caseSensitive: false,
+    );
 
-    final hasTrigger = RegExp(
-            r'\b(every|each|daily|weekly|monthly|yearly|annually|biweekly|weekdays|weekends|mwf|tth)\b')
-        .hasMatch(lower);
-    if (!hasTrigger) return _RecurrenceParse(s, null);
+    int extendToBoundary(int index) {
+      var cursor = index;
+      while (cursor < s.length) {
+        final ch = s[cursor];
+        if (ch == ',' || ch == ';' || ch == '.') {
+          break;
+        }
+        cursor++;
+      }
+      return cursor;
+    }
 
-    final span = RegExp(
-      r'\b(?:every|each|daily|weekly|monthly|yearly|annually|biweekly|weekdays|weekends|mwf|tth)\b[^,.;]*',
+    int? spanStart;
+    int? spanEnd;
+    final ordinalSpan = RegExp(
+      '\\b(?:the\\s+)?(?:first|second|third|fourth|last|\\d{1,2}(?:st|nd|rd|th))\\s+($_weekdayWordPattern)\\s+of\\s+(?:the\\s+)?(?:each\\s+|every\\s+)?month\\b',
       caseSensitive: false,
     ).firstMatch(s);
-    if (span == null) return _RecurrenceParse(s, null);
+    if (ordinalSpan != null) {
+      spanStart = ordinalSpan.start;
+      spanEnd = extendToBoundary(ordinalSpan.end);
+    }
 
-    final phrase = s.substring(span.start, span.end).trim();
+    if (spanStart == null) {
+      final spanMatch = RegExp(
+        r'\b(?:every|each|everyday|daily|weekly|monthly|yearly|annually|biweekly|weekday|weekdays|weekend|weekends|mwf|tth)\b[^,.;]*',
+        caseSensitive: false,
+      ).firstMatch(s);
+      if (spanMatch != null) {
+        spanStart = spanMatch.start;
+        spanEnd = spanMatch.end;
+      }
+    }
+
+    if (spanStart == null) {
+      final looseMatches = weekdayMatcher.allMatches(s).toList();
+      if (looseMatches.length >= 2) {
+        spanStart = looseMatches.first.start;
+        spanEnd = extendToBoundary(looseMatches.last.end);
+      }
+    }
+
+    if (spanStart == null || spanEnd == null) {
+      return _RecurrenceParse(s, null);
+    }
+
+    final phrase = s.substring(spanStart, spanEnd).trim();
 
     String freq = '';
     int interval = 1;
@@ -900,27 +991,51 @@ class ScheduleParser {
         freq = 'YEARLY';
     }
 
-    if (RegExp(r'\bweekdays\b').hasMatch(phrase)) {
+    final bool mentionsDailyUnit = RegExp(
+      r'\b(?:everyday|(?:every|each)(?:\s+other)?\s+day(?:s)?)\b',
+      caseSensitive: false,
+    ).hasMatch(phrase);
+    final bool mentionsWeeklyUnit = RegExp(
+      r'\b(?:every|each)(?:\s+other)?\s+week(?:s)?\b',
+      caseSensitive: false,
+    ).hasMatch(phrase);
+    final bool mentionsMonthlyUnit = RegExp(
+      r'\b(?:every|each)(?:\s+other)?\s+month(?:s)?\b',
+      caseSensitive: false,
+    ).hasMatch(phrase);
+    final bool mentionsYearlyUnit = RegExp(
+      r'\b(?:every|each)(?:\s+other)?\s+year(?:s)?\b',
+      caseSensitive: false,
+    ).hasMatch(phrase);
+
+    if (freq.isEmpty && mentionsDailyUnit) {
+      freq = 'DAILY';
+    } else if (freq.isEmpty && mentionsWeeklyUnit) {
+      freq = 'WEEKLY';
+    } else if (freq.isEmpty && mentionsMonthlyUnit) {
+      freq = 'MONTHLY';
+    } else if (freq.isEmpty && mentionsYearlyUnit) {
+      freq = 'YEARLY';
+    }
+
+    if (RegExp(r'\bweekday(s)?\b', caseSensitive: false).hasMatch(phrase)) {
       _ensureWeekly();
       byday = ['MO', 'TU', 'WE', 'TH', 'FR'];
     }
-    if (RegExp(r'\bweekends\b').hasMatch(phrase)) {
+    if (RegExp(r'\bweekend(s)?\b', caseSensitive: false).hasMatch(phrase)) {
       _ensureWeekly();
       byday = ['SA', 'SU'];
     }
-    if (RegExp(r'\bmwf\b').hasMatch(phrase)) {
+    if (RegExp(r'\bmwf\b', caseSensitive: false).hasMatch(phrase)) {
       _ensureWeekly();
       byday = ['MO', 'WE', 'FR'];
     }
-    if (RegExp(r'\btth\b').hasMatch(phrase)) {
+    if (RegExp(r'\btth\b', caseSensitive: false).hasMatch(phrase)) {
       _ensureWeekly();
       byday = ['TU', 'TH'];
     }
 
-    final dayMatches = RegExp(
-      r'\b(mon(day)?|tue(s|sday)?|wed(nesday)?|thu(r|rs|rsday)?|fri(day)?|sat(urday)?|sun(day)?)\b',
-      caseSensitive: false,
-    ).allMatches(phrase).toList();
+    final dayMatches = weekdayMatcher.allMatches(phrase).toList();
     if (dayMatches.isNotEmpty) {
       _ensureWeekly();
       final seen = <String>{};
@@ -931,7 +1046,7 @@ class ScheduleParser {
     }
 
     final mOrd = RegExp(
-      r'\b(first|second|third|fourth|last)\s+(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+of\s+(the\s+)?month\b',
+      '\\b(first|second|third|fourth|last)\\s+($_weekdayWordPattern)\\s+of\\s+(?:the\\s+)?(?:each\\s+|every\\s+)?month\\b',
       caseSensitive: false,
     ).firstMatch(phrase);
     if (mOrd != null) {
@@ -946,6 +1061,21 @@ class ScheduleParser {
         'fourth' => 4,
         _ => -1
       };
+    }
+
+    final mNumericOrd = RegExp(
+      '\\b(?:the\\s+)?(\\d{1,2})(st|nd|rd|th)\\s+($_weekdayWordPattern)\\s+of\\s+(?:the\\s+)?(?:each\\s+|every\\s+)?month\\b',
+      caseSensitive: false,
+    ).firstMatch(phrase);
+    if (mNumericOrd != null) {
+      freq = 'MONTHLY';
+      final ordValue = int.tryParse(mNumericOrd.group(1)!);
+      final day = mNumericOrd.group(3)!;
+      if (ordValue != null && ordValue > 0) {
+        byday = [_dowToIcs(day)];
+        final capped = ordValue > 4 ? 4 : ordValue;
+        bysetpos = capped;
+      }
     }
 
     final mMonthDay = RegExp(
@@ -995,15 +1125,41 @@ class ScheduleParser {
             }
           }
           untilLocal = dt;
+        } else {
+          untilLocal = _parseLooseDateFallback(untilText, base);
         }
       }
     }
 
-    final mCount =
-        RegExp(r'\bfor\s+(\d+)\s+(times|occurrences)\b', caseSensitive: false)
-            .firstMatch(phrase);
+    final mCount = RegExp(
+      r'\bfor\s+(\d+)\s+(times|occurrences)\b',
+      caseSensitive: false,
+    ).firstMatch(phrase);
     if (mCount != null) {
       count = int.parse(mCount.group(1)!);
+    }
+
+    final mDurationLimit = RegExp(
+      r'\bfor\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)\b',
+      caseSensitive: false,
+    ).firstMatch(phrase);
+    int? limitCount;
+    String? limitUnit;
+    if (mDurationLimit != null) {
+      limitCount = int.tryParse(mDurationLimit.group(1)!);
+      limitUnit = mDurationLimit.group(2)!.toLowerCase();
+      if (freq.isEmpty && limitUnit != null) {
+        freq = switch (limitUnit) {
+          'day' || 'days' => 'DAILY',
+          'week' || 'weeks' => 'WEEKLY',
+          'month' || 'months' => 'MONTHLY',
+          'year' || 'years' => 'YEARLY',
+          _ => freq,
+        };
+      }
+    }
+    if (count == null && limitCount != null) {
+      count = limitCount;
     }
 
     if (freq.isEmpty &&
@@ -1022,13 +1178,13 @@ class ScheduleParser {
     if (untilLocal != null) rrule += ';UNTIL=${_formatIcsUtc(untilLocal)}';
     if (count != null) rrule += ';COUNT=$count';
 
-    final anchorText = (byday.isNotEmpty ||
+    final anchorTextBase = (byday.isNotEmpty ||
             bymonthday != null ||
             bysetpos != null)
         ? phrase
             .replaceAll(
                 RegExp(
-                    r'\b(every|each|weekly|monthly|yearly|annually|biweekly|weekdays|weekends|mwf|tth)\b',
+                    r'\b(every|each|everyday|weekly|monthly|yearly|annually|biweekly|weekday|weekdays|weekend|weekends|mwf|tth)\b',
                     caseSensitive: false),
                 '')
             .replaceAll(
@@ -1040,12 +1196,26 @@ class ScheduleParser {
                 '')
             .trim()
         : '';
+    String anchorText = anchorTextBase;
+    final timeAnchorMatch = RegExp(
+      r'\b(?:at|@|around)\s+' + _timeSnippetPattern,
+      caseSensitive: false,
+    ).firstMatch(phrase);
+    if (timeAnchorMatch != null) {
+      final snippet =
+          phrase.substring(timeAnchorMatch.start, timeAnchorMatch.end).trim();
+      if (!anchorText.contains(snippet)) {
+        anchorText = [anchorText, snippet]
+            .where((part) => part.trim().isNotEmpty)
+            .join(' ');
+      }
+    }
 
-    final cleaned = (s.substring(0, span.start) +
+    final cleaned = (s.substring(0, spanStart) +
             ' ' +
             (anchorText.isEmpty ? '' : anchorText) +
             ' ' +
-            s.substring(span.end))
+            s.substring(spanEnd))
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
@@ -1059,6 +1229,132 @@ class ScheduleParser {
     final utc = local.toUtc();
     String two(int n) => n.toString().padLeft(2, '0');
     return '${utc.year}${two(utc.month)}${two(utc.day)}T${two(utc.hour)}${two(utc.minute)}${two(utc.second)}Z';
+  }
+
+  tz.TZDateTime? _parseLooseDateFallback(String text, tz.TZDateTime base) {
+    var working = text.trim();
+    if (working.isEmpty) return null;
+    working = working.replaceAll(
+        RegExp(r'(\d)(st|nd|rd|th)\b', caseSensitive: false), r'$1');
+    final patterns = [
+      DateFormat('MMMM d'),
+      DateFormat('MMM d'),
+      DateFormat('d MMMM'),
+      DateFormat('d MMM'),
+    ];
+    for (final format in patterns) {
+      try {
+        final parsed = format.parseLoose(working);
+        var candidate = tz.TZDateTime(
+          opts.tzLocation,
+          base.year,
+          parsed.month,
+          parsed.day,
+          opts.policy.endOfDayHour,
+          59,
+          59,
+        );
+        if (candidate.isBefore(base)) {
+          candidate = tz.TZDateTime(
+            opts.tzLocation,
+            base.year + 1,
+            parsed.month,
+            parsed.day,
+            opts.policy.endOfDayHour,
+            59,
+            59,
+          );
+        }
+        return candidate;
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  Recurrence? _finalizeRecurrence(
+    Recurrence? recurrence,
+    tz.TZDateTime? start,
+  ) {
+    if (recurrence == null || start == null) {
+      return recurrence;
+    }
+    final _RecurrenceSpec? spec =
+        _RecurrenceMath.tryParse(recurrence, start.location);
+    if (spec == null) {
+      return recurrence;
+    }
+
+    tz.TZDateTime? until = recurrence.until;
+    int? count = recurrence.count;
+
+    if (until == null && count != null && count > 0) {
+      until = _RecurrenceMath.computeUntilFromCount(start, spec, count);
+    }
+    if (count == null && until != null) {
+      count = _RecurrenceMath.computeCountFromUntil(start, spec, until);
+    }
+
+    if (until == recurrence.until && count == recurrence.count) {
+      return recurrence;
+    }
+
+    final String updatedRrule = _rewriteRrule(
+      recurrence.rrule,
+      until: until,
+      count: count,
+    );
+
+    return Recurrence(
+      rrule: updatedRrule,
+      text: recurrence.text,
+      until: until,
+      count: count,
+    );
+  }
+
+  String _rewriteRrule(
+    String rrule, {
+    tz.TZDateTime? until,
+    int? count,
+  }) {
+    final Map<String, String> fields = {};
+    for (final token in rrule.split(';')) {
+      final idx = token.indexOf('=');
+      if (idx <= 0) continue;
+      final key = token.substring(0, idx).toUpperCase();
+      final value = token.substring(idx + 1);
+      fields[key] = value;
+    }
+    if (until != null) {
+      fields['UNTIL'] = _formatIcsUtc(until);
+    }
+    if (count != null) {
+      fields['COUNT'] = count.toString();
+    }
+    const orderedKeys = <String>[
+      'FREQ',
+      'INTERVAL',
+      'BYDAY',
+      'BYMONTHDAY',
+      'BYSETPOS',
+      'UNTIL',
+      'COUNT',
+    ];
+    final buffer = <String>[];
+    for (final key in orderedKeys) {
+      final value = fields.remove(key);
+      if (value != null && value.isNotEmpty) {
+        buffer.add('$key=$value');
+      }
+    }
+    fields.forEach((key, value) {
+      if (value.isNotEmpty) {
+        buffer.add('$key=$value');
+      }
+    });
+    return buffer.join(';');
   }
 
   _ManualFallbackResult? _manualTimeFallback(
@@ -1399,6 +1695,7 @@ class ScheduleParser {
     required bool hasDeadline,
     required bool hasRecurrence,
     String? location,
+    Iterable<String> consumedPhrases = const [],
   }) {
     if (text.isEmpty) return text;
     var cleaned = text;
@@ -1430,7 +1727,7 @@ class ScheduleParser {
       );
       cleaned = cleaned.replaceAll(
         RegExp(
-          r'\b(mon|monday|tue|tues|tuesday|wed|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b',
+          '\\b(?:$_weekdayWordPattern)\\b',
           caseSensitive: false,
         ),
         ' ',
@@ -1454,11 +1751,21 @@ class ScheduleParser {
     if (hasRecurrence) {
       cleaned = cleaned.replaceAll(
         RegExp(
-          r'\b(every|each|daily|weekly|monthly|annually|yearly|weekdays|weekends|biweekly|mwf|tth|mon-fri|mon thru fri)\b',
+          r'\b(every|each|everyday|daily|weekly|monthly|annually|yearly|weekday|weekdays|weekend|weekends|biweekly|mwf|tth|mon-fri|mon thru fri)\b',
           caseSensitive: false,
         ),
         ' ',
       );
+    }
+
+    for (final phrase in consumedPhrases) {
+      final normalized = phrase.trim();
+      if (normalized.isEmpty) continue;
+      final pattern = RegExp(
+        '(^|[\\s,:;!\\-\\/])${RegExp.escape(normalized)}(?=\$|[\\s,:;!\\-\\/])',
+        caseSensitive: false,
+      );
+      cleaned = cleaned.replaceAll(pattern, ' ');
     }
 
     return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -1492,14 +1799,21 @@ class ScheduleParser {
     if (raw == null) return null;
     var working = raw.trim();
     if (working.isEmpty) return null;
+    bool trimmedTemporal = false;
     while (working.isNotEmpty && _looksTemporalPhrase(working)) {
+      trimmedTemporal = true;
       final lastSpace = working.lastIndexOf(' ');
       if (lastSpace == -1) {
         return null;
       }
       working = working.substring(0, lastSpace).trim();
     }
-    return working.isEmpty ? null : working;
+    if (working.isEmpty) return null;
+    if (trimmedTemporal &&
+        RegExp(r'^\d{1,3}(?:st|nd|rd|th)?$').hasMatch(working.toLowerCase())) {
+      return null;
+    }
+    return working;
   }
 
   bool _looksTemporalPhrase(String text) {
@@ -1957,6 +2271,38 @@ class _ManualFallbackResult {
   final Set<AmbiguityFlag> flags;
 }
 
+class _ConsumedPhraseTracker {
+  final Set<String> _phrases = <String>{};
+
+  bool add(String? raw) {
+    final normalized = _normalize(raw);
+    if (normalized == null) return false;
+    return _phrases.add(normalized);
+  }
+
+  bool overlaps(String? raw) {
+    final normalized = _normalize(raw);
+    if (normalized == null) return false;
+    for (final phrase in _phrases) {
+      if (phrase.contains(normalized) || normalized.contains(phrase)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Iterable<String> get phrases => _phrases;
+
+  String? _normalize(String? raw) {
+    if (raw == null) return null;
+    var value = raw.trim().toLowerCase();
+    if (value.isEmpty) return null;
+    value = value.replaceAll(RegExp(r'\s+'), ' ');
+    value = value.replaceAll(RegExp(r'[,.:;!\/\\-]+$'), '').trim();
+    return value.isEmpty ? null : value;
+  }
+}
+
 class _Normalized {
   final String text;
   final Set<AmbiguityFlag> flags;
@@ -2005,4 +2351,381 @@ class _PriorityResult {
   final Set<String> triggerTokens;
 
   _PriorityResult(this.quadrant, this.assumptions, this.triggerTokens);
+}
+
+class _RecurrenceSpec {
+  const _RecurrenceSpec({
+    required this.frequency,
+    required this.interval,
+    required this.byWeekdays,
+    required this.byMonthDay,
+    required this.bySetPos,
+    required this.location,
+  });
+
+  final _RecurrenceFrequency frequency;
+  final int interval;
+  final List<int> byWeekdays;
+  final int? byMonthDay;
+  final int? bySetPos;
+  final tz.Location location;
+}
+
+enum _RecurrenceFrequency { daily, weekly, monthly, yearly }
+
+class _RecurrenceMath {
+  static const int _maxIterations = 5000;
+
+  static _RecurrenceSpec? tryParse(
+      Recurrence recurrence, tz.Location location) {
+    final Map<String, String> fields = {};
+    for (final token in recurrence.rrule.split(';')) {
+      final idx = token.indexOf('=');
+      if (idx <= 0) continue;
+      fields[token.substring(0, idx).toUpperCase()] = token.substring(idx + 1);
+    }
+    final freqRaw = fields['FREQ'];
+    if (freqRaw == null) return null;
+    final _RecurrenceFrequency? frequency = switch (freqRaw.toUpperCase()) {
+      'DAILY' => _RecurrenceFrequency.daily,
+      'WEEKLY' => _RecurrenceFrequency.weekly,
+      'MONTHLY' => _RecurrenceFrequency.monthly,
+      'YEARLY' => _RecurrenceFrequency.yearly,
+      _ => null,
+    };
+    if (frequency == null) return null;
+    final interval =
+        (int.tryParse(fields['INTERVAL'] ?? '1') ?? 1).clamp(1, 1000);
+    final List<int> byWeekdays = [];
+    final byDayRaw = fields['BYDAY'];
+    if (byDayRaw != null && byDayRaw.isNotEmpty) {
+      for (final token in byDayRaw.split(',')) {
+        final weekday = _weekdayFromIcs(token.trim());
+        if (weekday != null && !byWeekdays.contains(weekday)) {
+          byWeekdays.add(weekday);
+        }
+      }
+    }
+    final int? byMonthDay = int.tryParse(fields['BYMONTHDAY'] ?? '');
+    final int? bySetPos = int.tryParse(fields['BYSETPOS'] ?? '');
+
+    return _RecurrenceSpec(
+      frequency: frequency,
+      interval: interval,
+      byWeekdays: byWeekdays,
+      byMonthDay: byMonthDay,
+      bySetPos: bySetPos,
+      location: location,
+    );
+  }
+
+  static tz.TZDateTime? computeUntilFromCount(
+    tz.TZDateTime start,
+    _RecurrenceSpec spec,
+    int count,
+  ) {
+    if (count <= 1) return start;
+    var current = start;
+    var produced = 1;
+    while (produced < count && produced < _maxIterations) {
+      final next = _nextOccurrence(current, spec);
+      if (next == null) return current;
+      current = next;
+      produced++;
+    }
+    return current;
+  }
+
+  static int? computeCountFromUntil(
+    tz.TZDateTime start,
+    _RecurrenceSpec spec,
+    tz.TZDateTime until,
+  ) {
+    if (until.isBefore(start)) return 1;
+    var current = start;
+    var count = 1;
+    while (count < _maxIterations) {
+      final next = _nextOccurrence(current, spec);
+      if (next == null) break;
+      if (next.isAfter(until)) {
+        break;
+      }
+      count++;
+      current = next;
+      if (!next.isBefore(until)) {
+        break;
+      }
+    }
+    return count;
+  }
+
+  static tz.TZDateTime? _nextOccurrence(
+    tz.TZDateTime current,
+    _RecurrenceSpec spec,
+  ) {
+    switch (spec.frequency) {
+      case _RecurrenceFrequency.daily:
+        return current.add(Duration(days: spec.interval));
+      case _RecurrenceFrequency.weekly:
+        return _advanceWeekly(current, spec);
+      case _RecurrenceFrequency.monthly:
+        return _advanceMonthly(current, spec);
+      case _RecurrenceFrequency.yearly:
+        return _advanceYearly(current, spec);
+    }
+  }
+
+  static tz.TZDateTime alignStart(
+    tz.TZDateTime candidate,
+    _RecurrenceSpec spec,
+  ) {
+    if (_matchesSpec(candidate, spec)) return candidate;
+    var probe = candidate;
+    for (var i = 0; i < _maxIterations; i++) {
+      final next = _nextOccurrence(probe, spec);
+      if (next == null) break;
+      if (_matchesSpec(next, spec)) return next;
+      probe = next;
+    }
+    return candidate;
+  }
+
+  static bool _matchesSpec(tz.TZDateTime dt, _RecurrenceSpec spec) {
+    switch (spec.frequency) {
+      case _RecurrenceFrequency.daily:
+        return true;
+      case _RecurrenceFrequency.weekly:
+        if (spec.byWeekdays.isEmpty) return true;
+        return spec.byWeekdays.contains(dt.weekday);
+      case _RecurrenceFrequency.monthly:
+        if (spec.byMonthDay != null) {
+          return dt.day == spec.byMonthDay;
+        }
+        if (spec.bySetPos != null && spec.byWeekdays.isNotEmpty) {
+          final tz.TZDateTime target = _nthWeekdayOfMonth(
+            dt.location,
+            dt.year,
+            dt.month,
+            spec.byWeekdays.first,
+            spec.bySetPos!,
+          );
+          return dt.year == target.year &&
+              dt.month == target.month &&
+              dt.day == target.day;
+        }
+        return true;
+      case _RecurrenceFrequency.yearly:
+        if (spec.byMonthDay != null) {
+          return dt.day == spec.byMonthDay;
+        }
+        if (spec.bySetPos != null && spec.byWeekdays.isNotEmpty) {
+          final tz.TZDateTime target = _nthWeekdayOfMonth(
+            dt.location,
+            dt.year,
+            dt.month,
+            spec.byWeekdays.first,
+            spec.bySetPos!,
+          );
+          return dt.year == target.year &&
+              dt.month == target.month &&
+              dt.day == target.day;
+        }
+        return true;
+    }
+  }
+
+  static tz.TZDateTime _advanceWeekly(
+    tz.TZDateTime current,
+    _RecurrenceSpec spec,
+  ) {
+    final List<int> targets = List<int>.from(
+        spec.byWeekdays.isEmpty ? [current.weekday] : spec.byWeekdays)
+      ..sort();
+    for (final day in targets) {
+      if (day > current.weekday) {
+        final delta = day - current.weekday;
+        return current.add(Duration(days: delta));
+      }
+    }
+    final int loopStart = targets.isEmpty ? current.weekday : targets.first;
+    final int daysUntilNextCycle =
+        spec.interval * 7 - (current.weekday - loopStart);
+    return current.add(Duration(days: daysUntilNextCycle));
+  }
+
+  static tz.TZDateTime _advanceMonthly(
+    tz.TZDateTime current,
+    _RecurrenceSpec spec,
+  ) {
+    final tz.TZDateTime monthAnchor = tz.TZDateTime(
+      current.location,
+      current.year,
+      current.month + spec.interval,
+      1,
+      current.hour,
+      current.minute,
+      current.second,
+    );
+    if (spec.byMonthDay != null) {
+      final int day = spec.byMonthDay!.clamp(
+        1,
+        _daysInMonth(monthAnchor.year, monthAnchor.month),
+      );
+      return tz.TZDateTime(
+        current.location,
+        monthAnchor.year,
+        monthAnchor.month,
+        day,
+        current.hour,
+        current.minute,
+        current.second,
+      );
+    }
+    if (spec.bySetPos != null && spec.byWeekdays.isNotEmpty) {
+      final tz.TZDateTime target = _nthWeekdayOfMonth(
+        current.location,
+        monthAnchor.year,
+        monthAnchor.month,
+        spec.byWeekdays.first,
+        spec.bySetPos!,
+      );
+      return tz.TZDateTime(
+        current.location,
+        target.year,
+        target.month,
+        target.day,
+        current.hour,
+        current.minute,
+        current.second,
+      );
+    }
+    final int day = current.day.clamp(
+      1,
+      _daysInMonth(monthAnchor.year, monthAnchor.month),
+    );
+    return tz.TZDateTime(
+      current.location,
+      monthAnchor.year,
+      monthAnchor.month,
+      day,
+      current.hour,
+      current.minute,
+      current.second,
+    );
+  }
+
+  static tz.TZDateTime _advanceYearly(
+    tz.TZDateTime current,
+    _RecurrenceSpec spec,
+  ) {
+    final tz.TZDateTime yearAnchor = tz.TZDateTime(
+      current.location,
+      current.year + spec.interval,
+      current.month,
+      1,
+      current.hour,
+      current.minute,
+      current.second,
+    );
+    if (spec.byMonthDay != null) {
+      final int day = spec.byMonthDay!.clamp(
+        1,
+        _daysInMonth(yearAnchor.year, current.month),
+      );
+      return tz.TZDateTime(
+        current.location,
+        yearAnchor.year,
+        current.month,
+        day,
+        current.hour,
+        current.minute,
+        current.second,
+      );
+    }
+    if (spec.bySetPos != null && spec.byWeekdays.isNotEmpty) {
+      final tz.TZDateTime target = _nthWeekdayOfMonth(
+        current.location,
+        yearAnchor.year,
+        current.month,
+        spec.byWeekdays.first,
+        spec.bySetPos!,
+      );
+      return tz.TZDateTime(
+        current.location,
+        target.year,
+        target.month,
+        target.day,
+        current.hour,
+        current.minute,
+        current.second,
+      );
+    }
+    final int day = current.day.clamp(
+      1,
+      _daysInMonth(yearAnchor.year, current.month),
+    );
+    return tz.TZDateTime(
+      current.location,
+      yearAnchor.year,
+      current.month,
+      day,
+      current.hour,
+      current.minute,
+      current.second,
+    );
+  }
+
+  static tz.TZDateTime _nthWeekdayOfMonth(
+    tz.Location location,
+    int year,
+    int month,
+    int weekday,
+    int setpos,
+  ) {
+    final int daysInMonth = _daysInMonth(year, month);
+    if (setpos >= 1) {
+      var count = 0;
+      for (int day = 1; day <= daysInMonth; day++) {
+        final candidate = tz.TZDateTime(location, year, month, day);
+        if (candidate.weekday == weekday) {
+          count++;
+          if (count == setpos) return candidate;
+        }
+      }
+      return tz.TZDateTime(location, year, month, daysInMonth);
+    } else {
+      var count = 0;
+      for (int day = daysInMonth; day >= 1; day--) {
+        final candidate = tz.TZDateTime(location, year, month, day);
+        if (candidate.weekday == weekday) {
+          count++;
+          if (count == -setpos) return candidate;
+        }
+      }
+      return tz.TZDateTime(location, year, month, daysInMonth);
+    }
+  }
+
+  static int _daysInMonth(int year, int month) {
+    final nextMonth =
+        month == 12 ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
+    final lastDay = nextMonth.subtract(const Duration(days: 1));
+    return lastDay.day;
+  }
+
+  static int? _weekdayFromIcs(String token) {
+    final match = RegExp(r'(MO|TU|WE|TH|FR|SA|SU)', caseSensitive: false)
+        .firstMatch(token.toUpperCase());
+    if (match == null) return null;
+    return switch (match.group(1)) {
+      'MO' => DateTime.monday,
+      'TU' => DateTime.tuesday,
+      'WE' => DateTime.wednesday,
+      'TH' => DateTime.thursday,
+      'FR' => DateTime.friday,
+      'SA' => DateTime.saturday,
+      'SU' => DateTime.sunday,
+      _ => null,
+    };
+  }
 }
