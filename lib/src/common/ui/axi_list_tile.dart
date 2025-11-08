@@ -1,7 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiListTile extends StatelessWidget {
   const AxiListTile({
@@ -117,11 +116,17 @@ class AxiListTile extends StatelessWidget {
     }
 
     if (menuItems != null) {
-      child = ShadContextMenuRegion(
+      child = AxiContextMenuRegion(
         items: menuItems!,
         child: child,
       );
     }
+
+    final enableBounce = onTap != null || (menuItems?.isNotEmpty ?? false);
+    child = AxiTapBounce(
+      enabled: enableBounce,
+      child: child,
+    );
 
     return child;
   }
