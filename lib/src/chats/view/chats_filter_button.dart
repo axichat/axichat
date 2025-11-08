@@ -60,7 +60,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('All'),
-                  ),
+                  ).withTapBounce(),
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: context.colorScheme.foreground,
@@ -72,7 +72,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('Contacts'),
-                  ),
+                  ).withTapBounce(),
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: context.colorScheme.foreground,
@@ -85,7 +85,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('Non-contacts'),
-                  ),
+                  ).withTapBounce(),
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: context.colorScheme.foreground,
@@ -96,7 +96,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('XMPP only'),
-                  ),
+                  ).withTapBounce(),
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: context.colorScheme.foreground,
@@ -107,7 +107,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('Email only'),
-                  ),
+                  ).withTapBounce(),
                 ],
               ),
             ),
@@ -119,7 +119,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         child: ShadIconButton.secondary(
           onPressed: popoverController.toggle,
           icon: const Icon(LucideIcons.listFilter),
-        ),
+        ).withTapBounce(),
       ),
     );
   }

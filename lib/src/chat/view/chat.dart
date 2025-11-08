@@ -41,10 +41,28 @@ enum _ChatRoute {
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 const _bubbleRadius = 18.0;
-const _reactionBubbleInset = 14.0;
-const _reactionCutoutDepth = 18.0;
-const _reactionCutoutThickness = 36.0;
-const _reactionCutoutRadius = 14.0;
+const _reactionBubbleInset = 20.0;
+const _reactionCutoutDepth = 14.0;
+const _reactionCutoutThickness = 34.0;
+const _reactionCutoutRadius = 16.0;
+const _reactionStripOffset = Offset(0, -2);
+const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+const _reactionChipSpacing = 1.2;
+const _reactionCutoutAlignment = 0.76;
+
+List<BoxShadow> _selectedBubbleShadows(Color color) => [
+      BoxShadow(
+        color: color.withValues(alpha: 0.28),
+        blurRadius: 44,
+        spreadRadius: 2,
+        offset: const Offset(0, 20),
+      ),
+      BoxShadow(
+        color: color.withValues(alpha: 0.18),
+        blurRadius: 18,
+        offset: const Offset(0, 6),
+      ),
+    ];
 
 ShapeDecoration _bubbleDecoration({
   required Color background,
@@ -118,6 +136,7 @@ class _ChatState extends State<Chat> {
   late final TextEditingController _textController;
 
   var _chatRoute = _ChatRoute.main;
+  String? _contextMenuMessageId;
 
   void _typingListener() {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
@@ -212,7 +231,7 @@ class _ChatState extends State<Chat> {
                   }
                   context.read<ChatsCubit>().toggleChat(jid: state.chat!.jid);
                 },
-              ),
+              ).withTapBounce(),
               title: jid == null
                   ? const SizedBox.shrink()
                   : BlocBuilder<RosterCubit, RosterState>(
@@ -603,6 +622,7 @@ class _ChatState extends State<Chat> {
                                                   reactions: reactions,
                                                   message: messageModel,
                                                   canReact: canReact,
+                                                  isSelf: self,
                                                 ),
                                           child: Padding(
                                             padding: bubblePadding,
@@ -614,9 +634,77 @@ class _ChatState extends State<Chat> {
                                             ),
                                           ),
                                         );
+                                        final isContextMenuTarget =
+                                            _contextMenuMessageId ==
+                                                messageModel.stanzaID;
+                                        final bubbleHighlightColor =
+                                            context.colorScheme.primary;
+                                        final highlightedBubble =
+                                            AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 220),
+                                          curve: Curves.easeOutCubic,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                              _bubbleRadius + 6,
+                                            ),
+                                            boxShadow: isContextMenuTarget
+                                                ? _selectedBubbleShadows(
+                                                    bubbleHighlightColor,
+                                                  )
+                                                : const [],
+                                          ),
+                                          child: Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              bubble,
+                                              Positioned.fill(
+                                                child: IgnorePointer(
+                                                  child: AnimatedOpacity(
+                                                    opacity: isContextMenuTarget
+                                                        ? 1
+                                                        : 0,
+                                                    duration: const Duration(
+                                                        milliseconds: 140),
+                                                    curve: Curves.easeOutCubic,
+                                                    child: DecoratedBox(
+                                                      decoration: BoxDecoration(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(
+                                                          _bubbleRadius + 2,
+                                                        ),
+                                                        border: Border.all(
+                                                          color:
+                                                              bubbleHighlightColor
+                                                                  .withValues(
+                                                            alpha: 0.38,
+                                                          ),
+                                                          width: 1.2,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
                                         final canResend = message.status ==
                                             MessageStatus.failed;
                                         return AxiContextMenuRegion(
+                                          onMenuVisibilityChanged: (visible) {
+                                            if (!mounted) return;
+                                            setState(() {
+                                              if (visible) {
+                                                _contextMenuMessageId =
+                                                    messageModel.stanzaID;
+                                              } else if (_contextMenuMessageId ==
+                                                  messageModel.stanzaID) {
+                                                _contextMenuMessageId = null;
+                                              }
+                                            });
+                                          },
                                           items: [
                                             if (canReact)
                                               ShadContextMenuItem(
@@ -705,7 +793,7 @@ class _ChatState extends State<Chat> {
                                               child: const Text('Details'),
                                             ),
                                           ],
-                                          child: bubble,
+                                          child: highlightedBubble,
                                         );
                                       },
                                     ),
@@ -773,7 +861,7 @@ class _ChatState extends State<Chat> {
                                           Icons.send,
                                           size: 24,
                                         ),
-                                      ),
+                                      ).withTapBounce(),
                                       inputDecoration: _chatInputDecoration(
                                         context,
                                         hintText: isEmailTransport
@@ -798,7 +886,7 @@ class _ChatState extends State<Chat> {
                                               LucideIcons.smile,
                                               size: 24,
                                             ),
-                                          ),
+                                          ).withTapBounce(),
                                           popover: (context) => EmojiPicker(
                                             textEditingController:
                                                 _textController,
@@ -925,7 +1013,7 @@ class _ChatState extends State<Chat> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Forward to…',
+                    'Forward to...',
                     style: context.textTheme.large.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -975,35 +1063,47 @@ class _ChatState extends State<Chat> {
     required List<ReactionPreview> reactions,
     required Message? message,
     required bool canReact,
+    required bool isSelf,
   }) {
     if (reactions.isEmpty) {
       return const [];
     }
     const maxVisible = 4;
     final visible = reactions.take(maxVisible).toList();
-    final spacing = visible.length > 1 ? (visible.length - 1) * 4.0 : 0.0;
+    const emojiSpacing = _reactionChipSpacing;
+    final spacing =
+        visible.length > 1 ? (visible.length - 1) * emojiSpacing : 0.0;
     final baseWidth = visible.fold<double>(0, (sum, reaction) {
           final countWidth = reaction.count > 1
-              ? 10 + (reaction.count.toString().length * 4)
+              ? 8 + (reaction.count.toString().length * 4)
               : 0;
-          return sum + 18 + countWidth;
+          return sum + 14 + countWidth;
         }) +
         spacing +
-        8;
+        _reactionCutoutPadding.horizontal;
     final thickness = baseWidth.clamp(
         _reactionCutoutThickness, _reactionCutoutThickness + 80);
     return [
       CutoutSpec(
         edge: CutoutEdge.bottom,
-        alignment: const Alignment(0, 1),
+        alignment: Alignment(
+          isSelf ? _reactionCutoutAlignment : -_reactionCutoutAlignment,
+          1,
+        ),
         depth: _reactionCutoutDepth,
         thickness: thickness,
         cornerRadius: _reactionCutoutRadius,
-        child: _ReactionStrip(
-          reactions: visible,
-          onReactionTap: canReact && message != null
-              ? (emoji) => _toggleQuickReaction(message, emoji)
-              : null,
+        child: Transform.translate(
+          offset: _reactionStripOffset,
+          child: Padding(
+            padding: _reactionCutoutPadding,
+            child: _ReactionStrip(
+              reactions: visible,
+              onReactionTap: canReact && message != null
+                  ? (emoji) => _toggleQuickReaction(message, emoji)
+                  : null,
+            ),
+          ),
         ),
       ),
     ];
@@ -1031,7 +1131,8 @@ class _ReactionStrip extends StatelessWidget {
                 ? null
                 : () => onReactionTap!(reactions[i].emoji),
           ),
-          if (i != reactions.length - 1) const SizedBox(width: 2),
+          if (i != reactions.length - 1)
+            const SizedBox(width: _reactionChipSpacing),
         ],
       ],
     );
@@ -1064,7 +1165,7 @@ class _ReactionChip extends StatelessWidget {
       behavior: HitTestBehavior.translucent,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 0.6, vertical: 2),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1160,7 +1261,7 @@ class _QuoteBanner extends StatelessWidget {
               spacing: 4,
               children: [
                 Text(
-                  'Replying to…',
+                  'Replying to...',
                   style: context.textTheme.small.copyWith(
                     color: colors.mutedForeground,
                     fontWeight: FontWeight.w600,
@@ -1356,7 +1457,7 @@ class _GuestChatState extends State<GuestChat> {
                   Icons.send,
                   size: 24,
                 ),
-              ),
+              ).withTapBounce(),
               inputDecoration: _chatInputDecoration(
                 context,
                 hintText: 'Send a message',
@@ -1376,7 +1477,7 @@ class _GuestChatState extends State<GuestChat> {
                       LucideIcons.smile,
                       size: 24,
                     ),
-                  ),
+                  ).withTapBounce(),
                   popover: (context) => EmojiPicker(
                     textEditingController: _textController,
                     config: Config(

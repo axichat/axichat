@@ -111,7 +111,7 @@ class _ChatListTile extends StatelessWidget {
                     ShadButton.outline(
                       onPressed: () => context.pop(),
                       child: const Text('Cancel'),
-                    ),
+                    ).withTapBounce(),
                     ShadButton.destructive(
                       onPressed: () {
                         if (deleteMessages) {
@@ -122,7 +122,7 @@ class _ChatListTile extends StatelessWidget {
                         return context.pop();
                       },
                       child: const Text('Continue'),
-                    )
+                    ).withTapBounce(),
                   ],
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,13 +190,16 @@ class _ChatListTile extends StatelessWidget {
         CutoutSpec(
           edge: CutoutEdge.bottom,
           alignment: const Alignment(0.52, 1),
-          depth: 10,
+          depth: 16,
           thickness: timestampThickness,
           cornerRadius: 18,
-          child: DisplayTimeSince(
-            timestamp: item.lastChangeTimestamp,
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
+          child: Transform.translate(
+            offset: const Offset(0, -3),
+            child: DisplayTimeSince(
+              timestamp: item.lastChangeTimestamp,
+              style: context.textTheme.small.copyWith(
+                color: colors.mutedForeground,
+              ),
             ),
           ),
         ),
@@ -315,7 +318,7 @@ class _FavoriteToggle extends StatelessWidget {
 
   final Color backgroundColor;
   final bool favorited;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -342,7 +345,7 @@ class _FavoriteToggle extends StatelessWidget {
           color: favorited ? colors.primary : colors.mutedForeground,
         ),
         onPressed: onPressed,
-      ),
+      ).withTapBounce(enabled: onPressed != null),
     );
   }
 }

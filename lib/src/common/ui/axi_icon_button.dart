@@ -19,7 +19,7 @@ class AxiIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = ShadIconButton.outline(
+    Widget child = ShadIconButton.outline(
       decoration: ShadDecoration(border: ShadBorder.all(color: color)),
       height: 36.0,
       width: 36.0,
@@ -30,6 +30,8 @@ class AxiIconButton extends StatelessWidget {
         iconData,
       ),
     );
+
+    child = child.withTapBounce(enabled: onPressed != null);
 
     if (tooltip == null) return child;
 

@@ -127,7 +127,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     ),
                     trailing: const SizedBox.shrink(),
                     child: const Text('Continue'),
-                  );
+                  ).withTapBounce(enabled: !loading);
                 },
               ),
             ],

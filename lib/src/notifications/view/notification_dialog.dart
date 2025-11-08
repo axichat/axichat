@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -13,7 +14,7 @@ Future<bool?> showNotificationDialog(
           ShadButton.destructive(
             onPressed: () => context.pop(false),
             child: const Text('Ignore'),
-          ),
+          ).withTapBounce(),
           ShadButton(
             onPressed: () async {
               if (await notificationService
@@ -23,7 +24,7 @@ Future<bool?> showNotificationDialog(
               }
             },
             child: const Text('Continue'),
-          )
+          ).withTapBounce(),
         ],
         child: const Text('Chats can always be muted later.'),
       ),

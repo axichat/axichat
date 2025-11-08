@@ -123,10 +123,7 @@ class AxiListTile extends StatelessWidget {
     }
 
     final enableBounce = onTap != null || (menuItems?.isNotEmpty ?? false);
-    child = AxiTapBounce(
-      enabled: enableBounce,
-      child: child,
-    );
+    child = child.withTapBounce(enabled: enableBounce);
 
     return child;
   }
