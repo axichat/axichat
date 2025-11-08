@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,13 +8,16 @@ import '../../common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
+import '../utils/nl_parser_service.dart';
+import '../utils/nl_schedule_adapter.dart';
 import '../utils/responsive_helper.dart';
 import 'controllers/quick_add_controller.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'widgets/location_inline_suggestion.dart';
+import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
-import 'widgets/location_inline_suggestion.dart';
 
 enum QuickAddModalSurface { dialog, bottomSheet }
 
@@ -46,6 +51,18 @@ class _QuickAddModalState extends State<QuickAddModal>
   final _taskNameFocusNode = FocusNode();
 
   late final QuickAddController _formController;
+  late final NlScheduleParserService _parserService;
+  Timer? _parserDebounce;
+  int _parserRequestId = 0;
+  String _lastParserInput = '';
+  bool _isApplyingParser = false;
+
+  bool _locationLocked = false;
+  bool _scheduleLocked = false;
+  bool _deadlineLocked = false;
+  bool _recurrenceLocked = false;
+  bool _priorityLocked = false;
+  NlAdapterResult? _lastParserResult;
 
   @override
   void initState() {
@@ -84,10 +101,13 @@ class _QuickAddModalState extends State<QuickAddModal>
       initialStart: prefilled,
       initialEnd: prefilled?.add(const Duration(hours: 1)),
     );
+    _parserService = NlScheduleParserService();
+    _resetParserLocks();
   }
 
   @override
   void dispose() {
+    _parserDebounce?.cancel();
     _animationController.dispose();
     _taskNameController.dispose();
     _descriptionController.dispose();
@@ -264,6 +284,206 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
   }
 
+  void _handleTaskNameChanged(String value) {
+    final trimmed = value.trim();
+    _parserDebounce?.cancel();
+    if (trimmed.isEmpty) {
+      _clearParserState(clearFields: true);
+      return;
+    }
+    if (trimmed == _lastParserInput) {
+      return;
+    }
+    _parserDebounce = Timer(const Duration(milliseconds: 350), () {
+      _runParser(trimmed);
+    });
+  }
+
+  Future<void> _runParser(String input) async {
+    final requestId = ++_parserRequestId;
+    try {
+      final result = await _parserService.parse(input);
+      if (!mounted || requestId != _parserRequestId) {
+        return;
+      }
+      _lastParserInput = input;
+      _lastParserResult = result;
+      _applyParserResult(result);
+    } catch (error) {
+      if (!mounted || requestId != _parserRequestId) {
+        return;
+      }
+      _lastParserInput = '';
+      _lastParserResult = null;
+      _clearParserDrivenFields();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Parser unavailable (${error.runtimeType})')),
+      );
+    }
+  }
+
+  void _applyParserResult(NlAdapterResult result) {
+    final CalendarTask task = result.task;
+    _lastParserResult = result;
+    _isApplyingParser = true;
+
+    if (!_scheduleLocked) {
+      final DateTime? start = task.scheduledTime;
+      final DateTime? end = task.endDate ??
+          (start != null && task.duration != null
+              ? start.add(task.duration!)
+              : null);
+      if (start != null) {
+        _formController.updateStart(start);
+        if (end != null) {
+          _formController.updateEnd(end);
+        }
+      } else {
+        _formController.clearSchedule();
+      }
+    }
+
+    if (!_deadlineLocked) {
+      _formController.setDeadline(task.deadline);
+    }
+
+    if (!_recurrenceLocked) {
+      final RecurrenceFormValue value =
+          RecurrenceFormValue.fromRule(task.recurrence);
+      _formController.setRecurrence(value);
+    }
+
+    if (!_priorityLocked) {
+      final TaskPriority priority = task.priority ?? TaskPriority.none;
+      _formController.setImportant(
+        priority == TaskPriority.important || priority == TaskPriority.critical,
+      );
+      _formController.setUrgent(
+        priority == TaskPriority.urgent || priority == TaskPriority.critical,
+      );
+    }
+
+    if (!_locationLocked) {
+      _setLocationField(task.location);
+    }
+
+    _isApplyingParser = false;
+  }
+
+  void _setLocationField(String? value) {
+    final String next = value?.trim() ?? '';
+    if (_locationController.text == next) {
+      return;
+    }
+    final selection = TextSelection.collapsed(offset: next.length);
+    _locationController.value = TextEditingValue(
+      text: next,
+      selection: selection,
+    );
+  }
+
+  String _effectiveParserTitle(String fallback) {
+    final trimmed = fallback.trim();
+    if (_lastParserResult == null) return trimmed;
+    if (_lastParserInput != trimmed) return trimmed;
+    final parserTitle = _lastParserResult!.task.title.trim();
+    return parserTitle.isEmpty ? trimmed : parserTitle;
+  }
+
+  void _clearParserState({bool clearFields = false}) {
+    _parserDebounce?.cancel();
+    _parserRequestId++;
+    _lastParserInput = '';
+    _lastParserResult = null;
+    if (clearFields) {
+      _clearParserDrivenFields();
+      _resetParserLocks();
+    }
+  }
+
+  void _clearParserDrivenFields() {
+    _isApplyingParser = true;
+    if (!_scheduleLocked) {
+      _formController.clearSchedule();
+    }
+    if (!_deadlineLocked) {
+      _formController.setDeadline(null);
+    }
+    if (!_recurrenceLocked) {
+      _formController.setRecurrence(const RecurrenceFormValue());
+    }
+    if (!_priorityLocked) {
+      _formController.setImportant(false);
+      _formController.setUrgent(false);
+    }
+    if (!_locationLocked && _locationController.text.isNotEmpty) {
+      _locationController.clear();
+    }
+    _isApplyingParser = false;
+  }
+
+  void _handleLocationEdited(String value) {
+    if (_isApplyingParser) {
+      return;
+    }
+    _locationLocked = value.trim().isNotEmpty;
+  }
+
+  void _onUserStartChanged(DateTime? value) {
+    _scheduleLocked = value != null || _formController.endTime != null;
+    _formController.updateStart(value);
+    if (value == null && _formController.endTime == null) {
+      _scheduleLocked = false;
+    }
+  }
+
+  void _onUserEndChanged(DateTime? value) {
+    _scheduleLocked = value != null || _formController.startTime != null;
+    _formController.updateEnd(value);
+    if (value == null && _formController.startTime == null) {
+      _scheduleLocked = false;
+    }
+  }
+
+  void _onUserScheduleCleared() {
+    _scheduleLocked = false;
+    _formController.clearSchedule();
+  }
+
+  void _onUserDeadlineChanged(DateTime? value) {
+    _deadlineLocked = value != null;
+    _formController.setDeadline(value);
+    if (value == null) {
+      _deadlineLocked = false;
+    }
+  }
+
+  void _onUserRecurrenceChanged(RecurrenceFormValue value) {
+    _recurrenceLocked = value.isActive;
+    _formController.setRecurrence(value);
+    if (!value.isActive) {
+      _recurrenceLocked = false;
+    }
+  }
+
+  void _onUserImportantChanged(bool value) {
+    _priorityLocked = true;
+    _formController.setImportant(value);
+  }
+
+  void _onUserUrgentChanged(bool value) {
+    _priorityLocked = true;
+    _formController.setUrgent(value);
+  }
+
+  void _resetParserLocks() {
+    _locationLocked = false;
+    _scheduleLocked = false;
+    _deadlineLocked = false;
+    _recurrenceLocked = false;
+    _priorityLocked = false;
+  }
+
   Widget _buildTaskNameInput(LocationAutocompleteHelper helper) {
     const padding = EdgeInsets.symmetric(
       horizontal: calendarGutterMd,
@@ -290,6 +510,7 @@ class _QuickAddModalState extends State<QuickAddModal>
         focusBorderColor: calendarPrimaryColor,
         textCapitalization: TextCapitalization.sentences,
         contentPadding: padding,
+        onChanged: _handleTaskNameChanged,
       ),
     );
 
@@ -324,8 +545,8 @@ class _QuickAddModalState extends State<QuickAddModal>
           isImportant: _formController.isImportant,
           isUrgent: _formController.isUrgent,
           spacing: 10,
-          onImportantChanged: (value) => _formController.setImportant(value),
-          onUrgentChanged: (value) => _formController.setUrgent(value),
+          onImportantChanged: _onUserImportantChanged,
+          onUrgentChanged: _onUserUrgentChanged,
         );
       },
     );
@@ -338,6 +559,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
+      onChanged: _handleLocationEdited,
       autocomplete: helper,
     );
   }
@@ -363,9 +585,9 @@ class _QuickAddModalState extends State<QuickAddModal>
           spacing: calendarGutterSm,
           start: _formController.startTime,
           end: _formController.endTime,
-          onStartChanged: _formController.updateStart,
-          onEndChanged: _formController.updateEnd,
-          onClear: _formController.clearSchedule,
+          onStartChanged: _onUserStartChanged,
+          onEndChanged: _onUserEndChanged,
+          onClear: _onUserScheduleCleared,
         );
       },
     );
@@ -388,7 +610,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             const SizedBox(height: calendarGutterSm),
             DeadlinePickerField(
               value: _formController.deadline,
-              onChanged: _formController.setDeadline,
+              onChanged: _onUserDeadlineChanged,
             ),
           ],
         );
@@ -413,7 +635,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           value: _formController.recurrence,
           fallbackWeekday: fallbackWeekday,
           spacingConfig: calendarRecurrenceSpacingCompact,
-          onChanged: _formController.setRecurrence,
+          onChanged: _onUserRecurrenceChanged,
         );
       },
     );
@@ -469,6 +691,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     _formController.setSubmitting(true);
 
     final taskName = _taskNameController.text.trim();
+    final taskTitle = _effectiveParserTitle(taskName);
     final description = _descriptionController.text.trim();
     final scheduledTime = _formController.startTime;
 
@@ -481,7 +704,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     // Create the task
     final task = CalendarTask(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: taskName,
+      title: taskTitle,
       description: description.isNotEmpty ? description : null,
       scheduledTime: scheduledTime,
       duration: duration,

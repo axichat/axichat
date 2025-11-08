@@ -4,6 +4,10 @@ import 'package:chrono_dart/chrono_dart.dart'
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
 
+const String _timeSnippetPattern =
+    r'(?:\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)?'
+    r'|\d{1,2}\s*h\d{0,2}|noon|midnight)';
+
 /// ---------------------------------------------------------------------------
 /// Public enums & models
 /// ---------------------------------------------------------------------------
@@ -310,6 +314,18 @@ class ScheduleParser {
       }
     }
 
+    if (start == null) {
+      final fallback = _manualTimeFallback(original, s, base);
+      if (fallback != null) {
+        start = fallback.start;
+        allDay = fallback.allDay;
+        s = fallback.cleanedText;
+        flags.addAll(fallback.flags);
+        assumptions.addAll(fallback.assumptions);
+        confidence -= 0.15;
+      }
+    }
+
     // Vague parts of day
     final vague = _resolveVaguePartOfDay(original);
     if (vague != null) {
@@ -358,21 +374,33 @@ class ScheduleParser {
 
     // Location: at/in/to …, @ …, or trailing hint
     String? location;
-    final atInTo = RegExp(
-      r'\b(?:at|in|to)\s+(?:the\s+)?(?<loc>(?!\d{1,2}(:\d{2})?\s*(?:am|pm)\b)[^,.;]+?)'
+    final atInToRegex = RegExp(
+      r'\b(?:at|in|to)\s+(?:the\s+)?(?<loc>[^,.;]+?)'
       r'(?=(?:\s+(?:with|on|for|by|at|in|to)\b|[,.;]|$))',
       caseSensitive: false,
-    ).firstMatch(s);
-    if (atInTo != null) {
-      location = _clean(atInTo.namedGroup('loc')!);
-      s = s.replaceRange(atInTo.start, atInTo.end, ' ');
-    } else if (opts.policy.allowAtSignLocation) {
+    );
+    final atInToMatches = atInToRegex.allMatches(s).toList();
+    for (final match in atInToMatches) {
+      final candidate =
+          _pruneTemporalSuffix(_normalizeLocation(_clean(match.namedGroup('loc')!)));
+      if (candidate == null || _looksTemporalPhrase(candidate)) {
+        continue;
+      }
+      location = candidate;
+      s = s.replaceRange(match.start, match.end, ' ');
+      break;
+    }
+    if (location == null && opts.policy.allowAtSignLocation) {
       final atSig = RegExp(r"\B@\s*([A-Za-z0-9#&+\-' ]{2,})").firstMatch(s);
       if (atSig != null) {
-        location = _clean(atSig.group(1)!);
-        flags.add(AmbiguityFlag.locationGuessed);
-        assumptions.add('Used "@ …" as location.');
-        s = s.replaceRange(atSig.start, atSig.end, ' ');
+        final candidate =
+            _pruneTemporalSuffix(_normalizeLocation(_clean(atSig.group(1)!)));
+        if (candidate != null && !_looksLikeHandle(candidate)) {
+          location = candidate;
+          flags.add(AmbiguityFlag.locationGuessed);
+          assumptions.add('Used "@ …" as location.');
+          s = s.replaceRange(atSig.start, atSig.end, ' ');
+        }
       }
     }
     if (location == null) {
@@ -381,7 +409,7 @@ class ScheduleParser {
       if (trailing != null) {
         final word = trailing.group(1)!.trim().toLowerCase();
         if (opts.policy.trailingLocationHints.contains(word)) {
-          location = _clean(word);
+          location = _normalizeLocation(_clean(word));
           flags.add(AmbiguityFlag.locationGuessed);
           assumptions.add('Guessed trailing word as location.');
           s = s.replaceRange(trailing.start, trailing.end, ' ');
@@ -391,20 +419,64 @@ class ScheduleParser {
 
     // Participants
     final participants = <String>[];
+    final participantSeen = <String>{};
     for (final pat in [
       RegExp(r'\bwith\s+([^,.;]+)', caseSensitive: false),
       RegExp(r'\binvite\s+([^,.;]+)', caseSensitive: false),
       RegExp(r'\bw\/\s*([^,.;]+)', caseSensitive: false),
     ]) {
-      final m = pat.firstMatch(s);
-      if (m != null) {
-        participants.addAll(_splitNames(_clean(m.group(1)!)));
+      for (final match in pat.allMatches(s)) {
+        final names = _splitNames(_clean(match.group(1)!));
+        for (final name in names) {
+          final key = name.toLowerCase();
+          if (participantSeen.add(key)) {
+            participants.add(name);
+          }
+        }
       }
     }
 
-    // Time range 3-4, 3–4pm, etc.
+    // Time range 3-4, “from 2pm to 4pm”, etc.
     tz.TZDateTime? end;
-    if (start != null) {
+    final _ExplicitRange? explicitRange = _extractExplicitRange(original);
+    if (explicitRange != null) {
+      final tz.TZDateTime anchorDay = tz.TZDateTime(
+        opts.tzLocation,
+        start?.year ?? base.year,
+        start?.month ?? base.month,
+        start?.day ?? base.day,
+      );
+      if (explicitRange.start != null && start == null) {
+        start = _materializeClockToken(
+          explicitRange.start!,
+          anchorDay,
+          reference: base,
+        );
+        allDay = false;
+      }
+      if (start != null && explicitRange.end != null) {
+        var candidate = _materializeClockToken(
+          explicitRange.end!,
+          tz.TZDateTime(
+            opts.tzLocation,
+            start.year,
+            start.month,
+            start.day,
+          ),
+          reference: start,
+        );
+        if (!candidate.isAfter(start)) {
+          candidate = candidate.add(const Duration(hours: 1));
+        }
+        end = candidate;
+        flags.add(AmbiguityFlag.rangeParsed);
+        if (explicitRange.start != null) {
+          allDay = false;
+        }
+      }
+    }
+
+    if (start != null && end == null) {
       final range = RegExp(
         r'\b(?:(\d{1,2})(?::(\d{2}))?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)?)\s*[-–—]\s*'
         r'(?:(\d{1,2})(?::(\d{2}))?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)?)\b',
@@ -438,12 +510,57 @@ class ScheduleParser {
       }
     }
 
+    // Explicit duration phrases ("for 3 hours", "lasting 90 minutes", etc.)
+    _DurationExtraction? durationExtraction;
+    final _DurationExtraction? workingDuration = _extractDurationPhrase(s);
+    if (workingDuration != null) {
+      s = workingDuration.cleaned;
+      durationExtraction = workingDuration;
+    }
+    durationExtraction ??= _extractDurationPhrase(original);
+
+    if (start != null &&
+        end == null &&
+        durationExtraction != null &&
+        durationExtraction.duration.inMinutes > 0) {
+      end = start.add(durationExtraction.duration);
+      assumptions.add(
+        'Applied duration "${durationExtraction.phrase}" '
+        '(${_formatDuration(durationExtraction.duration)}).',
+      );
+    }
+
+    // Priority (Eisenhower)
+    final _PriorityResult pr = _parsePriority(
+      original: original,
+      base: base,
+      start: start,
+      policy: opts.policy,
+    );
+
     // Title cleanup
     var title = s
         .replaceAll(RegExp(r'\b(on|at|in|to)\b', caseSensitive: false), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
-    if (title.isEmpty) title = original;
+    title = _stripPriorityMarkers(title, pr.triggerTokens);
+    title = _stripAppliedMetadata(
+      title,
+      hasStart: start != null || rec.recurrence != null,
+      hasDeadline: deadline != null,
+      hasRecurrence: rec.recurrence != null,
+      location: location,
+    );
+    if (title.isEmpty) {
+      title = _stripAppliedMetadata(
+        original,
+        hasStart: start != null || rec.recurrence != null,
+        hasDeadline: deadline != null,
+        hasRecurrence: rec.recurrence != null,
+        location: location,
+      ).trim();
+    }
+    if (title.isEmpty) title = 'Untitled';
 
     // Confidence & ambiguity
     if (start == null) {
@@ -470,14 +587,6 @@ class ScheduleParser {
     if (confidence < 0.2) confidence = 0.2;
     if (confidence > 1.0) confidence = 1.0;
 
-    // Priority (Eisenhower)
-    final _PriorityResult pr = _parsePriority(
-      original: original,
-      base: base,
-      start: start,
-      policy: opts.policy,
-    );
-
     return ScheduleItem(
       task: title,
       start: start,
@@ -495,8 +604,6 @@ class ScheduleParser {
       deadline: deadline,
     );
   }
-
-  /// ------------------- Helpers -------------------
 
   _Normalized _normalize(String text, tz.TZDateTime base) {
     String s = ' $text ';
@@ -526,22 +633,87 @@ class ScheduleParser {
     tz.TZDateTime? relative;
     String? relativeLabel;
     final rel = RegExp(
-            r'\bin\s+(\d+)\s+(minute|minutes|hour|hours|day|days|week|weeks)\b',
+            r'\bin\s+(\d+(?:\.\d+)?)\s+(minute|minutes|hour|hours|day|days|week|weeks)\b',
             caseSensitive: false)
         .firstMatch(s);
     if (rel != null) {
-      final n = int.parse(rel.group(1)!);
+      final double amount = double.parse(rel.group(1)!);
       final unit = rel.group(2)!.toLowerCase();
-      if (unit.startsWith('minute')) {
-        relative = base.add(Duration(minutes: n));
-      } else if (unit.startsWith('hour')) {
-        relative = base.add(Duration(hours: n));
-      } else if (unit.startsWith('day')) {
-        relative = base.add(Duration(days: n));
-      } else {
-        relative = base.add(Duration(days: n * 7));
+      final Duration? delta = _durationFromUnitAmount(amount, unit);
+      if (delta != null) {
+        relative = base.add(delta);
+        relativeLabel = rel.group(0)!;
       }
-      relativeLabel = rel.group(0)!;
+    } else {
+      final relWord = RegExp(
+        r'\bin\s+(?:a|an)?\s*(half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple|few|several|dozen)\s+'
+        r'(minute|minutes|hour|hours|day|days|week|weeks)\b',
+        caseSensitive: false,
+      ).firstMatch(s);
+      if (relWord != null) {
+        final double? amount = _parseDurationValue(relWord.group(1)!);
+        final String unit = relWord.group(2)!.toLowerCase();
+        final Duration? delta =
+            amount != null ? _durationFromUnitAmount(amount, unit) : null;
+        if (delta != null) {
+          relative = base.add(delta);
+          relativeLabel = relWord.group(0)!;
+        }
+      }
+    }
+
+    if (relative == null) {
+      final fromNow = RegExp(
+        r'\b(half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple|few|several|dozen|\d+(?:\.\d+)?)\s+'
+        r'(minute|minutes|hour|hours|day|days|week|weeks)\s+from\s+now\b',
+        caseSensitive: false,
+      ).firstMatch(s);
+      if (fromNow != null) {
+        final double? amount = _parseDurationValue(fromNow.group(1)!);
+        final String unit = fromNow.group(2)!.toLowerCase();
+        final Duration? delta =
+            amount != null ? _durationFromUnitAmount(amount, unit) : null;
+        if (delta != null) {
+          relative = base.add(delta);
+          relativeLabel = fromNow.group(0)!;
+        }
+      }
+    }
+
+    if (relative == null) {
+      final afterMatch = RegExp(
+        r'\bafter\s+(?:a|an)?\s*(half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple|few|several|dozen|\d+(?:\.\d+)?)\s+'
+        r'(minute|minutes|hour|hours|day|days|week|weeks)\b',
+        caseSensitive: false,
+      ).firstMatch(s);
+      if (afterMatch != null) {
+        final double? amount = _parseDurationValue(afterMatch.group(1)!);
+        final String unit = afterMatch.group(2)!.toLowerCase();
+        final Duration? delta =
+            amount != null ? _durationFromUnitAmount(amount, unit) : null;
+        if (delta != null) {
+          relative = base.add(delta);
+          relativeLabel = afterMatch.group(0)!;
+        }
+      }
+    }
+
+    if (relative == null) {
+      final laterMatch = RegExp(
+        r'\b(half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple|few|several|dozen|\d+(?:\.\d+)?)\s+'
+        r'(minute|minutes|hour|hours|day|days|week|weeks)\s+later\b',
+        caseSensitive: false,
+      ).firstMatch(s);
+      if (laterMatch != null) {
+        final double? amount = _parseDurationValue(laterMatch.group(1)!);
+        final String unit = laterMatch.group(2)!.toLowerCase();
+        final Duration? delta =
+            amount != null ? _durationFromUnitAmount(amount, unit) : null;
+        if (delta != null) {
+          relative = base.add(delta);
+          relativeLabel = laterMatch.group(0)!;
+        }
+      }
     }
 
     s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -889,42 +1061,267 @@ class ScheduleParser {
     return '${utc.year}${two(utc.month)}${two(utc.day)}T${two(utc.hour)}${two(utc.minute)}${two(utc.second)}Z';
   }
 
+  _ManualFallbackResult? _manualTimeFallback(
+    String original,
+    String working,
+    tz.TZDateTime base,
+  ) {
+    var text = working;
+    final assumptions = <String>[];
+    final flags = <AmbiguityFlag>{};
+    final dayStart =
+        tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day);
+    var anchor = dayStart;
+    var anchorExplicit = false;
+    var useReferenceTime = false;
+    final lowerOriginal = original.toLowerCase();
+    final bool hasMorningCue =
+        RegExp(r'\b(morning|sunrise|dawn)\b').hasMatch(lowerOriginal);
+    final bool hasEveningCue = RegExp(r'\b(tonight|evening|night|afternoon)\b')
+        .hasMatch(lowerOriginal);
+
+    Match? match = RegExp(r'\bthis time tomorrow\b', caseSensitive: false)
+        .firstMatch(text);
+    if (match != null) {
+      anchor = anchor.add(const Duration(days: 1));
+      anchorExplicit = true;
+      useReferenceTime = true;
+      text = text.replaceRange(match.start, match.end, ' ');
+      flags.add(AmbiguityFlag.relativeDate);
+      assumptions.add(
+          'Mapped "${match.group(0)}" to ${_fmtDate(anchor)} at ${_hhmm(base.hour)}.');
+    } else {
+      match = RegExp(r'\bday after tomorrow\b', caseSensitive: false)
+          .firstMatch(text);
+      if (match != null) {
+        anchor = anchor.add(const Duration(days: 2));
+        anchorExplicit = true;
+        text = text.replaceRange(match.start, match.end, ' ');
+        flags.add(AmbiguityFlag.relativeDate);
+        assumptions
+            .add('Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.');
+      } else {
+        match = RegExp(r'\btomorrow\b', caseSensitive: false).firstMatch(text);
+        if (match != null) {
+          anchor = anchor.add(const Duration(days: 1));
+          anchorExplicit = true;
+          text = text.replaceRange(match.start, match.end, ' ');
+          flags.add(AmbiguityFlag.relativeDate);
+          assumptions
+              .add('Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.');
+        }
+      }
+    }
+
+    match = RegExp(
+      r'\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match != null) {
+      final weekday = _weekdayFromToken(match.group(1)!);
+      if (weekday != null) {
+        anchor = _nextWeekday(anchor, weekday);
+        anchorExplicit = true;
+        text = text.replaceRange(match.start, match.end, ' ');
+        flags.add(AmbiguityFlag.relativeDate);
+        assumptions
+            .add('Interpreted "${match.group(0)}" as ${_fmtDate(anchor)}.');
+      }
+    }
+
+    void _consumeAnchor(RegExp pattern) {
+      final m = pattern.firstMatch(text);
+      if (m != null) {
+        anchorExplicit = true;
+        text = text.replaceRange(m.start, m.end, ' ');
+      }
+    }
+
+    _consumeAnchor(RegExp(r'\btoday\b', caseSensitive: false));
+    _consumeAnchor(RegExp(r'\btonight\b', caseSensitive: false));
+    _consumeAnchor(
+      RegExp(r'\bthis\s+(morning|afternoon|evening|night)\b',
+          caseSensitive: false),
+    );
+
+    Match? timeMatch = RegExp(
+      r'\b(?:at|@)\s*(\d{1,2})(?::(\d{2}))?\s*((?:a\.?m\.?|p\.?m\.?|am|pm))\b',
+      caseSensitive: false,
+    ).firstMatch(text);
+
+    var explicit24h = false;
+    if (timeMatch == null) {
+      timeMatch = RegExp(
+        r'\b(\d{1,2})(?::(\d{2}))?\s*((?:a\.?m\.?|p\.?m\.?|am|pm))\b',
+        caseSensitive: false,
+      ).firstMatch(text);
+    }
+    if (timeMatch == null) {
+      timeMatch = RegExp(r'\b(\d{1,2}):(\d{2})\b').firstMatch(text);
+      explicit24h = timeMatch != null;
+    }
+    int? hour;
+    int? minute;
+    bool ambiguousNoMeridiem = false;
+    Match? compactMatch;
+    if (timeMatch == null) {
+      compactMatch = RegExp(
+        r'\b(?:at|@|around|from|by)\s*(\d{3,4})\b',
+        caseSensitive: false,
+      ).firstMatch(text);
+      if (compactMatch != null) {
+        final digits = compactMatch.group(1)!;
+        final int value = int.parse(digits);
+        final int hours = value ~/ 100;
+        final int minutes = value % 100;
+        if (hours <= 23 && minutes < 60) {
+          hour = hours;
+          minute = minutes;
+          explicit24h = true;
+          text = text.replaceRange(compactMatch.start, compactMatch.end, ' ');
+          assumptions.add('Interpreted "${compactMatch.group(0)}" '
+              'as ${_hhmm(hour)}.');
+        }
+      }
+    }
+
+    if (timeMatch != null) {
+      hour = int.parse(timeMatch.group(1)!);
+      minute = timeMatch.group(2) != null ? int.parse(timeMatch.group(2)!) : 0;
+      final meridiem = timeMatch.groupCount >= 3
+          ? timeMatch.group(3)?.replaceAll('.', '').toLowerCase()
+          : null;
+      if (meridiem != null) {
+        if (meridiem.contains('p') && hour < 12) hour += 12;
+        if (meridiem.contains('a') && hour == 12) hour = 0;
+      } else if (!explicit24h) {
+        ambiguousNoMeridiem = true;
+      }
+      text = text.replaceRange(timeMatch.start, timeMatch.end, ' ');
+      assumptions.add('Interpreted "${timeMatch.group(0)}" as ${_hhmm(hour)}.');
+    }
+
+    if (hour == null &&
+        RegExp(r'\bnoon\b', caseSensitive: false).hasMatch(text)) {
+      hour = 12;
+      minute = 0;
+      text = text.replaceFirst(RegExp(r'\bnoon\b', caseSensitive: false), ' ');
+      assumptions.add('Mapped "noon" to 12:00.');
+    } else if (hour == null &&
+        RegExp(r'\bmidnight\b', caseSensitive: false).hasMatch(text)) {
+      hour = 0;
+      minute = 0;
+      text =
+          text.replaceFirst(RegExp(r'\bmidnight\b', caseSensitive: false), ' ');
+      assumptions.add('Mapped "midnight" to 00:00.');
+    } else if (hour == null && useReferenceTime) {
+      hour = base.hour;
+      minute = base.minute;
+    }
+
+    if (ambiguousNoMeridiem && hour != null) {
+      final int minutes = minute ?? 0;
+      final tz.TZDateTime sameDayCandidate = tz.TZDateTime(
+        opts.tzLocation,
+        anchor.year,
+        anchor.month,
+        anchor.day,
+        hour!,
+        minutes,
+      );
+      final bool shouldShiftToPm = hour! < 12 &&
+          !hasMorningCue &&
+          (hasEveningCue ||
+              (!anchorExplicit && sameDayCandidate.isBefore(base)));
+      if (shouldShiftToPm) {
+        hour = (hour! + 12) % 24;
+      }
+    }
+
+    if (hour == null) return null;
+    minute ??= 0;
+
+    var candidate = tz.TZDateTime(
+        opts.tzLocation, anchor.year, anchor.month, anchor.day, hour, minute);
+    if (!anchorExplicit && candidate.isBefore(base)) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+
+    return _ManualFallbackResult(
+      start: candidate,
+      allDay: false,
+      cleanedText: text,
+      assumptions: assumptions,
+      flags: flags,
+    );
+  }
+
+  tz.TZDateTime _nextWeekday(tz.TZDateTime start, int weekday) {
+    var delta = (weekday - start.weekday + 7) % 7;
+    if (delta <= 0) delta += 7;
+    return start.add(Duration(days: delta));
+  }
+
+  int? _weekdayFromToken(String token) {
+    final normalized = token.toLowerCase();
+    if (normalized.startsWith('mon')) return DateTime.monday;
+    if (normalized.startsWith('tue')) return DateTime.tuesday;
+    if (normalized.startsWith('wed')) return DateTime.wednesday;
+    if (normalized.startsWith('thu')) return DateTime.thursday;
+    if (normalized.startsWith('fri')) return DateTime.friday;
+    if (normalized.startsWith('sat')) return DateTime.saturday;
+    if (normalized.startsWith('sun')) return DateTime.sunday;
+    return null;
+  }
+
+  String _fmtDate(tz.TZDateTime dt) => DateFormat('y-MM-dd').format(dt);
+
   _PriorityResult _parsePriority({
     required String original,
     required tz.TZDateTime base,
     required tz.TZDateTime? start,
     required FuzzyPolicy policy,
   }) {
-    final s = original.toLowerCase();
     bool important = false, urgent = false;
     final notes = <String>[];
+    final tokensUsed = <String>{};
 
-    bool containsAny(List<String> words) => words.any((w) => s.contains(w));
+    String? matchToken(List<String> words) {
+      for (final word in words) {
+        final regex = _priorityTokenRegex(word);
+        if (regex == null) continue;
+        final match = regex.firstMatch(original);
+        if (match != null) {
+          return match.group(2);
+        }
+      }
+      return null;
+    }
 
-    if (containsAny(policy.importantWords)) {
+    final importantToken = matchToken(policy.importantWords);
+    if (importantToken != null) {
       important = true;
+      tokensUsed.add(importantToken);
       notes.add('Marked important from text.');
     }
-    if (containsAny(policy.notImportantWords)) {
+    final notImportantToken = matchToken(policy.notImportantWords);
+    if (notImportantToken != null) {
       important = false;
+      tokensUsed.add(notImportantToken);
       notes.add('Marked not‑important from text.');
     }
 
-    if (containsAny(policy.urgentWords)) {
+    final urgentToken = matchToken(policy.urgentWords);
+    if (urgentToken != null) {
       urgent = true;
+      tokensUsed.add(urgentToken);
       notes.add('Marked urgent from text.');
     }
-    if (containsAny(policy.notUrgentWords)) {
+    final notUrgentToken = matchToken(policy.notUrgentWords);
+    if (notUrgentToken != null) {
       urgent = false;
+      tokensUsed.add(notUrgentToken);
       notes.add('Marked not‑urgent from text.');
-    }
-
-    if (!containsAny(policy.urgentWords) && start != null) {
-      final hours = start.difference(base).inMinutes / 60.0;
-      if (hours >= 0 && hours <= policy.urgentHorizonHours) {
-        urgent = true;
-        notes.add('Due in ≤ ${policy.urgentHorizonHours}h → urgent.');
-      }
     }
 
     PriorityQuadrant quadrant;
@@ -937,7 +1334,7 @@ class ScheduleParser {
     } else {
       quadrant = PriorityQuadrant.notImportantNotUrgent;
     }
-    return _PriorityResult(quadrant, notes);
+    return _PriorityResult(quadrant, notes, tokensUsed);
   }
 
   _Vague? _resolveVaguePartOfDay(String original) {
@@ -981,6 +1378,180 @@ class ScheduleParser {
       .where((e) => e.isNotEmpty)
       .toList(growable: false);
 
+  String _stripPriorityMarkers(String text, Set<String> tokens) {
+    if (text.isEmpty) return text.trim();
+    if (tokens.isEmpty) return text.trim();
+    var cleaned = text;
+    for (final token in tokens) {
+      final regex = _priorityTokenRegex(token);
+      if (regex == null) continue;
+      cleaned = cleaned.replaceAllMapped(regex, (match) {
+        final prefix = match.group(1) ?? '';
+        return prefix.isEmpty ? ' ' : prefix;
+      });
+    }
+    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  String _stripAppliedMetadata(
+    String text, {
+    required bool hasStart,
+    required bool hasDeadline,
+    required bool hasRecurrence,
+    String? location,
+  }) {
+    if (text.isEmpty) return text;
+    var cleaned = text;
+
+    if (location != null && location.isNotEmpty) {
+      final escaped = RegExp.escape(location);
+      cleaned = cleaned.replaceAll(
+        RegExp(r'\b(?:at|in|to)\s+(?:the\s+)?' + escaped + r'\b',
+            caseSensitive: false),
+        ' ',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(r'\b' + escaped + r'\b', caseSensitive: false),
+        ' ',
+      );
+    }
+
+    if (hasStart) {
+      cleaned = cleaned.replaceAll(
+        RegExp(_timeSnippetPattern, caseSensitive: false),
+        ' ',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\b(today|tonight|tomorrow|tmrw|day after tomorrow|next week|next weekend|this weekend|this morning|this afternoon|this evening|this night|next month|next year|next monday|next tuesday|next wednesday|next thursday|next friday|next saturday|next sunday)\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\b(mon|monday|tue|tues|tuesday|wed|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(r'\b(?:this|next)\s+week\b', caseSensitive: false),
+        ' ',
+      );
+    }
+
+    if (hasDeadline) {
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\b(by|before|no\s+later\s+than|not\s+later\s+than|due|deadline)\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+    }
+
+    if (hasRecurrence) {
+      cleaned = cleaned.replaceAll(
+        RegExp(
+          r'\b(every|each|daily|weekly|monthly|annually|yearly|weekdays|weekends|biweekly|mwf|tth|mon-fri|mon thru fri)\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+    }
+
+    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  RegExp? _priorityTokenRegex(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    final pattern = trimmed
+        .split(RegExp(r'\s+'))
+        .map((segment) => RegExp.escape(segment))
+        .join(r'\s+');
+    if (pattern.isEmpty) return null;
+    return RegExp(
+      '(^|[\\s,:;!\\-\\/])($pattern)(?=\$|[\\s,:;!\\-\\/])',
+      caseSensitive: false,
+    );
+  }
+
+  String? _normalizeLocation(String? raw) {
+    if (raw == null) return null;
+    var value = raw.trim();
+    if (value.isEmpty) return null;
+    value = value.replaceFirst(
+        RegExp(r'^(?:at|in|to)\s+', caseSensitive: false), '');
+    value = value.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  String? _pruneTemporalSuffix(String? raw) {
+    if (raw == null) return null;
+    var working = raw.trim();
+    if (working.isEmpty) return null;
+    while (working.isNotEmpty && _looksTemporalPhrase(working)) {
+      final lastSpace = working.lastIndexOf(' ');
+      if (lastSpace == -1) {
+        return null;
+      }
+      working = working.substring(0, lastSpace).trim();
+    }
+    return working.isEmpty ? null : working;
+  }
+
+  bool _looksTemporalPhrase(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('today') ||
+        lower.contains('tonight') ||
+        lower.contains('tomorrow') ||
+        lower.contains('yesterday')) {
+      return true;
+    }
+    if (lower.contains('this time ')) {
+      return true;
+    }
+    if (RegExp(
+            r'\bthis\s+(time|morning|afternoon|evening|night|week|weekend|month|year)\b')
+        .hasMatch(lower)) {
+      return true;
+    }
+    if (RegExp(
+            r'\bnext\s+(week|weekend|month|year|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun'
+            r'|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b')
+        .hasMatch(lower)) {
+      return true;
+    }
+    if (RegExp(r'\b\d{1,2}(:\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm)\b')
+        .hasMatch(lower)) {
+      return true;
+    }
+    if (RegExp(r'\b\d+\s+(minute|hour|day|week|month|year)s?\b')
+        .hasMatch(lower)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _looksLikeHandle(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.contains(' ')) return false;
+    if (trimmed.contains('.')) return true;
+    if (trimmed.contains('@')) return true;
+    if (trimmed.startsWith('#')) return true;
+    if (trimmed.length <= 2) return true;
+    final hasDigits = RegExp(r'\d').hasMatch(trimmed);
+    final isAlphaNum =
+        RegExp(r'^[a-z0-9_\-]+$', caseSensitive: false).hasMatch(trimmed);
+    if (!hasDigits && isAlphaNum && trimmed.length <= 20) {
+      return true;
+    }
+    return false;
+  }
+
   String _clean(String s) => s
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim()
@@ -1004,6 +1575,386 @@ class ScheduleParser {
     return tz.TZDateTime(opts.tzLocation, startOfDay.year, startOfDay.month,
         startOfDay.day + delta, opts.policy.defaultMorningHour);
   }
+}
+
+class _ExplicitRange {
+  const _ExplicitRange({this.start, this.end, required this.raw});
+
+  final _ClockToken? start;
+  final _ClockToken? end;
+  final String raw;
+}
+
+_ExplicitRange? _extractExplicitRange(String text) {
+  final patterns = <RegExp>[
+    RegExp(
+      '\\bfrom\\s+(?<start>${_timeSnippetPattern})\\s+(?:to|till|til|until|through)\\s+(?<end>${_timeSnippetPattern})',
+      caseSensitive: false,
+    ),
+    RegExp(
+      '\\b(?<start>${_timeSnippetPattern})\\s+(?:to|till|til|until|through)\\s+(?<end>${_timeSnippetPattern})',
+      caseSensitive: false,
+    ),
+  ];
+
+  for (final pattern in patterns) {
+    final match = pattern.firstMatch(text);
+    if (match == null) continue;
+    final startRaw = match.namedGroup('start');
+    final endRaw = match.namedGroup('end');
+    final _ClockToken? startToken =
+        startRaw != null ? _parseClockToken(startRaw) : null;
+    final _ClockToken? endToken =
+        endRaw != null ? _parseClockToken(endRaw) : null;
+    if (startToken == null && endToken == null) continue;
+    return _ExplicitRange(
+        start: startToken, end: endToken, raw: match.group(0)!);
+  }
+  return null;
+}
+
+class _ClockToken {
+  const _ClockToken({
+    required this.hour,
+    required this.minute,
+    required this.hasMeridiem,
+    required this.isPm,
+    required this.isAm,
+    required this.was24Hour,
+  });
+
+  final int hour;
+  final int minute;
+  final bool hasMeridiem;
+  final bool isPm;
+  final bool isAm;
+  final bool was24Hour;
+}
+
+_ClockToken? _parseClockToken(String raw) {
+  var value = raw.trim().toLowerCase();
+  if (value.isEmpty) return null;
+  if (value.contains('noon')) {
+    return const _ClockToken(
+      hour: 12,
+      minute: 0,
+      hasMeridiem: true,
+      isPm: true,
+      isAm: false,
+      was24Hour: false,
+    );
+  }
+  if (value.contains('midnight')) {
+    return const _ClockToken(
+      hour: 0,
+      minute: 0,
+      hasMeridiem: true,
+      isPm: false,
+      isAm: true,
+      was24Hour: false,
+    );
+  }
+
+  final bool isPm =
+      RegExp(r'p\.?m\.?|\bpm\b', caseSensitive: false).hasMatch(value);
+  final bool isAm =
+      RegExp(r'a\.?m\.?|\bam\b', caseSensitive: false).hasMatch(value);
+  final bool hasMeridiem = isPm || isAm;
+  value =
+      value.replaceAll(RegExp(r'p\.?m\.?|a\.?m\.?|\bpm\b|\bam\b'), ' ').trim();
+  value = value.replaceFirst(RegExp(r'^(at|around)\s+'), '');
+
+  int? hour;
+  int minute = 0;
+  bool was24Hour = false;
+
+  final colon = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(value);
+  if (colon != null) {
+    hour = int.tryParse(colon.group(1)!);
+    minute = int.tryParse(colon.group(2)!) ?? 0;
+  } else {
+    final hNotation = RegExp(r'(\d{1,2})\s*h\s*(\d{1,2})?').firstMatch(value);
+    if (hNotation != null) {
+      hour = int.tryParse(hNotation.group(1)!);
+      minute = int.tryParse(hNotation.group(2) ?? '0') ?? 0;
+      was24Hour = true;
+    } else {
+      final tight = RegExp(r'(\d{1,2})h(\d{1,2})?').firstMatch(value);
+      if (tight != null) {
+        hour = int.tryParse(tight.group(1)!);
+        minute = int.tryParse(tight.group(2) ?? '0') ?? 0;
+        was24Hour = true;
+      } else {
+        final lone = RegExp(r'\b(\d{1,2})\b').firstMatch(value);
+        if (lone != null) {
+          hour = int.tryParse(lone.group(1)!);
+        }
+      }
+    }
+  }
+
+  if (hour == null || hour > 23) return null;
+  if (minute < 0 || minute > 59) return null;
+  if (!hasMeridiem && hour >= 13) {
+    was24Hour = true;
+  }
+  return _ClockToken(
+    hour: hour,
+    minute: minute,
+    hasMeridiem: hasMeridiem,
+    isPm: isPm,
+    isAm: isAm,
+    was24Hour: was24Hour,
+  );
+}
+
+tz.TZDateTime _materializeClockToken(
+  _ClockToken token,
+  tz.TZDateTime anchor, {
+  tz.TZDateTime? reference,
+  tz.Location? location,
+}) {
+  final tz.Location loc = location ?? anchor.location;
+  int hour = token.hour;
+  if (token.hasMeridiem) {
+    if (token.isPm && hour < 12) hour += 12;
+    if (token.isAm && hour == 12) hour = 0;
+  }
+  var candidate = tz.TZDateTime(
+      loc, anchor.year, anchor.month, anchor.day, hour, token.minute);
+  if (reference != null) {
+    if (!token.hasMeridiem &&
+        !token.was24Hour &&
+        candidate.isBefore(reference)) {
+      if (reference.hour >= 12 && candidate.hour < 12) {
+        candidate = candidate.add(const Duration(hours: 12));
+      }
+      if (candidate.isBefore(reference)) {
+        candidate = candidate.add(const Duration(days: 1));
+      }
+    } else if (candidate.isBefore(reference)) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+  }
+  return candidate;
+}
+
+/// ------------------- Duration helpers (top-level) -------------------
+
+class _DurationExtraction {
+  const _DurationExtraction({
+    required this.duration,
+    required this.cleaned,
+    required this.phrase,
+  });
+
+  final Duration duration;
+  final String cleaned;
+  final String phrase;
+}
+
+_DurationExtraction? _extractDurationPhrase(String text) {
+  final List<RegExp> patterns = [
+    RegExp(
+      r'\b(?:for|lasting|lasts?|runs?|running|going)(?:\s+for)?\s+'
+      r'(?<value>half|quarter|an|a|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple|few|several|dozen|\d+(?:\.\d+)?)\s*'
+      r'(?<unit>hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec|days?|day|weeks?|week)\b',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\b(?<value>half|quarter|an|a|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|couple|few|several|dozen|\d+(?:\.\d+)?)\s*'
+      r'(?<unit>hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec|days?|day|weeks?|week)\s+'
+      r'(?:long|duration|straight)\b',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\b(?<value>\d+(?:\.\d+)?)\s*'
+      r'(?<unit>hours?|hrs?|hr|minutes?|mins?|min|seconds?|secs?|sec|days?|day|weeks?|week)\s*'
+      r'(?:session|meeting|event)\b',
+      caseSensitive: false,
+    ),
+  ];
+
+  for (final pattern in patterns) {
+    final match = pattern.firstMatch(text);
+    if (match == null) continue;
+    final Duration? duration = _durationFromCapture(
+      match.namedGroup('value'),
+      match.namedGroup('unit'),
+    );
+    if (duration == null) continue;
+    final String cleaned = text.replaceRange(match.start, match.end, ' ');
+    final String phrase = text.substring(match.start, match.end).trim();
+    return _DurationExtraction(
+      duration: duration,
+      cleaned: cleaned,
+      phrase: phrase,
+    );
+  }
+
+  final RegExp composite = RegExp(
+    r'\b(?<hours>\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?'
+    r'(?:\s*(?<minutes>\d+(?:\.\d+)?)\s*m(?:in(?:utes?)?)?)?\b',
+    caseSensitive: false,
+  );
+  final compositeMatch = composite.firstMatch(text);
+  if (compositeMatch != null) {
+    final double hours =
+        double.parse(compositeMatch.namedGroup('hours') ?? '0');
+    final double minutes =
+        double.parse(compositeMatch.namedGroup('minutes') ?? '0');
+    final Duration duration =
+        Duration(minutes: ((hours * 60) + minutes).round());
+    if (duration.inMinutes > 0) {
+      final cleaned =
+          text.replaceRange(compositeMatch.start, compositeMatch.end, ' ');
+      final phrase =
+          text.substring(compositeMatch.start, compositeMatch.end).trim();
+      return _DurationExtraction(
+        duration: duration,
+        cleaned: cleaned,
+        phrase: phrase,
+      );
+    }
+  }
+
+  final RegExp tightComposite = RegExp(
+    r'\b(?<hours>\d+)h(?<minutes>\d{1,2})m?\b',
+    caseSensitive: false,
+  );
+  final tightMatch = tightComposite.firstMatch(text);
+  if (tightMatch != null) {
+    final int hours = int.parse(tightMatch.namedGroup('hours')!);
+    final int minutes = int.parse(tightMatch.namedGroup('minutes')!);
+    final Duration duration = Duration(minutes: hours * 60 + minutes);
+    if (duration.inMinutes > 0) {
+      final cleaned = text.replaceRange(tightMatch.start, tightMatch.end, ' ');
+      final phrase = text.substring(tightMatch.start, tightMatch.end).trim();
+      return _DurationExtraction(
+        duration: duration,
+        cleaned: cleaned,
+        phrase: phrase,
+      );
+    }
+  }
+
+  final RegExp bare = RegExp(
+    r'\b(?<value>half|quarter|an|a|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+(?:\.\d+)?)\s*'
+    r'(?<unit>h|hr|hrs|hour|hours|m|min|mins|minute|minutes|day|days|week|weeks)\b',
+    caseSensitive: false,
+  );
+  final bareMatch = bare.firstMatch(text);
+  if (bareMatch != null) {
+    final prefix = text.substring(0, bareMatch.start);
+    if (!RegExp(r'\bin\s*$', caseSensitive: false).hasMatch(prefix)) {
+      final Duration? duration = _durationFromCapture(
+        bareMatch.namedGroup('value'),
+        bareMatch.namedGroup('unit'),
+      );
+      if (duration != null) {
+        final cleaned = text.replaceRange(bareMatch.start, bareMatch.end, ' ');
+        final phrase = text.substring(bareMatch.start, bareMatch.end).trim();
+        return _DurationExtraction(
+          duration: duration,
+          cleaned: cleaned,
+          phrase: phrase,
+        );
+      }
+    }
+  }
+
+  return null;
+}
+
+Duration? _durationFromCapture(String? rawValue, String? rawUnit) {
+  if (rawValue == null || rawUnit == null) return null;
+  final double? numericValue = _parseDurationValue(rawValue);
+  if (numericValue == null) return null;
+  return _durationFromUnitAmount(numericValue, rawUnit);
+}
+
+Duration? _durationFromUnitAmount(double amount, String unit) {
+  final String normalized = unit.toLowerCase();
+  double minutes;
+  if (normalized.startsWith('hour') ||
+      normalized.startsWith('hr') ||
+      normalized == 'h') {
+    minutes = amount * 60;
+  } else if (normalized.startsWith('min') || normalized == 'm') {
+    minutes = amount;
+  } else if (normalized.startsWith('sec')) {
+    minutes = amount / 60;
+  } else if (normalized.startsWith('day')) {
+    minutes = amount * 1440;
+  } else if (normalized.startsWith('week')) {
+    minutes = amount * 10080;
+  } else {
+    return null;
+  }
+  final int rounded = minutes.round();
+  if (rounded <= 0) return null;
+  return Duration(minutes: rounded);
+}
+
+double? _parseDurationValue(String raw) {
+  final String value = raw.toLowerCase().trim();
+  if (value == 'half') return 0.5;
+  if (value == 'quarter') return 0.25;
+  if (value == 'an' || value == 'a' || value == 'one') return 1;
+  const Map<String, double> words = {
+    'two': 2,
+    'three': 3,
+    'four': 4,
+    'five': 5,
+    'six': 6,
+    'seven': 7,
+    'eight': 8,
+    'nine': 9,
+    'ten': 10,
+    'eleven': 11,
+    'twelve': 12,
+    'couple': 2,
+    'few': 3,
+    'several': 4,
+    'dozen': 12,
+  };
+  if (words.containsKey(value)) {
+    return words[value];
+  }
+  return double.tryParse(value);
+}
+
+String _formatDuration(Duration duration) {
+  final int totalMinutes = duration.inMinutes;
+  final int hours = totalMinutes ~/ 60;
+  final int minutes = totalMinutes % 60;
+  if (hours > 0 && minutes > 0) {
+    return '${hours}h ${minutes}m';
+  }
+  if (hours > 0) {
+    return '${hours}h';
+  }
+  if (minutes > 0) {
+    return '${minutes}m';
+  }
+  final int seconds = duration.inSeconds;
+  return '${seconds}s';
+}
+
+class _ManualFallbackResult {
+  const _ManualFallbackResult({
+    required this.start,
+    required this.allDay,
+    required this.cleanedText,
+    required this.assumptions,
+    required this.flags,
+  });
+
+  final tz.TZDateTime start;
+  final bool allDay;
+  final String cleanedText;
+  final List<String> assumptions;
+  final Set<AmbiguityFlag> flags;
 }
 
 class _Normalized {
@@ -1051,6 +2002,7 @@ class _RecurrenceParse {
 class _PriorityResult {
   final PriorityQuadrant quadrant;
   final List<String> assumptions;
+  final Set<String> triggerTokens;
 
-  _PriorityResult(this.quadrant, this.assumptions);
+  _PriorityResult(this.quadrant, this.assumptions, this.triggerTokens);
 }
