@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,8 @@ import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
+import '../utils/nl_parser_service.dart';
+import '../utils/nl_schedule_adapter.dart';
 import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
@@ -73,6 +76,19 @@ class _TaskSidebarState extends State<TaskSidebar>
   late final ValueNotifier<RecurrenceFormValue> _selectionRecurrenceNotifier;
   late final ValueNotifier<bool> _selectionRecurrenceMixedNotifier;
 
+  late final NlScheduleParserService _nlParserService;
+  Timer? _parserDebounce;
+  int _parserRequestId = 0;
+  String _lastParserInput = '';
+  bool _isApplyingParser = false;
+  NlAdapterResult? _lastParserResult;
+
+  bool _locationLocked = false;
+  bool _scheduleLocked = false;
+  bool _deadlineLocked = false;
+  bool _recurrenceLocked = false;
+  bool _priorityLocked = false;
+
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
@@ -93,6 +109,210 @@ class _TaskSidebarState extends State<TaskSidebar>
       _selectionTitleDirty ||
       _selectionDescriptionDirty ||
       _selectionLocationDirty;
+
+  void _handleQuickTaskInputChanged(String value) {
+    _ensureAdvancedOptionsVisible();
+    final trimmed = value.trim();
+    _parserDebounce?.cancel();
+    if (trimmed.isEmpty) {
+      _clearParserState(clearFields: true);
+      return;
+    }
+    if (trimmed == _lastParserInput) {
+      return;
+    }
+    _parserDebounce = Timer(const Duration(milliseconds: 350), () {
+      _runParser(trimmed);
+    });
+  }
+
+  void _ensureAdvancedOptionsVisible() {
+    if (!_sidebarController.state.showAdvancedOptions) {
+      _sidebarController.toggleAdvancedOptions();
+    }
+  }
+
+  Future<void> _runParser(String input) async {
+    final requestId = ++_parserRequestId;
+    try {
+      final result = await _nlParserService.parse(input);
+      if (!mounted || requestId != _parserRequestId) {
+        return;
+      }
+      _lastParserInput = input;
+      _lastParserResult = result;
+      _applyParserResult(result);
+    } catch (error) {
+      if (!mounted || requestId != _parserRequestId) {
+        return;
+      }
+      _lastParserInput = '';
+      _lastParserResult = null;
+      _clearParserDrivenFields();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Parser unavailable (${error.runtimeType})')),
+      );
+    }
+  }
+
+  void _applyParserResult(NlAdapterResult result) {
+    final CalendarTask task = result.task;
+    _lastParserResult = result;
+    _isApplyingParser = true;
+
+    if (!_scheduleLocked) {
+      final DateTime? start = task.scheduledTime;
+      final DateTime? end = task.endDate ??
+          (start != null && task.duration != null
+              ? start.add(task.duration!)
+              : null);
+      if (start == null && end == null) {
+        _draftController.clearSchedule();
+      } else {
+        _draftController.updateStart(start);
+        _draftController.updateEnd(end);
+      }
+    }
+
+    if (!_deadlineLocked) {
+      _draftController.setDeadline(task.deadline);
+    }
+
+    if (!_recurrenceLocked) {
+      _draftController.setRecurrence(
+        RecurrenceFormValue.fromRule(task.recurrence),
+      );
+    }
+
+    if (!_priorityLocked) {
+      final TaskPriority priority = task.priority ?? TaskPriority.none;
+      _draftController.setImportant(
+        priority == TaskPriority.important || priority == TaskPriority.critical,
+      );
+      _draftController.setUrgent(
+        priority == TaskPriority.urgent || priority == TaskPriority.critical,
+      );
+    }
+
+    if (!_locationLocked) {
+      _setLocationField(task.location);
+    }
+
+    _isApplyingParser = false;
+  }
+
+  void _setLocationField(String? value) {
+    final String next = value?.trim() ?? '';
+    if (_locationController.text == next) {
+      return;
+    }
+    final selection = TextSelection.collapsed(offset: next.length);
+    _locationController.value = TextEditingValue(
+      text: next,
+      selection: selection,
+    );
+  }
+
+  String _effectiveParserTitle(String fallback) {
+    final trimmed = fallback.trim();
+    if (_lastParserResult == null) return trimmed;
+    if (_lastParserInput != trimmed) return trimmed;
+    final parserTitle = _lastParserResult!.task.title.trim();
+    return parserTitle.isEmpty ? trimmed : parserTitle;
+  }
+
+  void _clearParserState({bool clearFields = false}) {
+    _parserDebounce?.cancel();
+    _parserRequestId++;
+    _lastParserInput = '';
+    _lastParserResult = null;
+    if (clearFields) {
+      _clearParserDrivenFields();
+    }
+  }
+
+  void _clearParserDrivenFields() {
+    _isApplyingParser = true;
+    if (!_scheduleLocked) {
+      _draftController.clearSchedule();
+    }
+    if (!_deadlineLocked) {
+      _draftController.setDeadline(null);
+    }
+    if (!_recurrenceLocked) {
+      _draftController.setRecurrence(const RecurrenceFormValue());
+    }
+    if (!_priorityLocked) {
+      _draftController.setImportant(false);
+      _draftController.setUrgent(false);
+    }
+    if (!_locationLocked && _locationController.text.isNotEmpty) {
+      _locationController.clear();
+    }
+    _isApplyingParser = false;
+  }
+
+  void _handleLocationEdited() {
+    if (_isApplyingParser) {
+      return;
+    }
+    _locationLocked = _locationController.text.trim().isNotEmpty;
+  }
+
+  void _onUserStartChanged(DateTime? value) {
+    _scheduleLocked = value != null || _draftController.endTime != null;
+    _draftController.updateStart(value);
+    if (value == null && _draftController.endTime == null) {
+      _scheduleLocked = false;
+    }
+  }
+
+  void _onUserEndChanged(DateTime? value) {
+    _scheduleLocked = value != null || _draftController.startTime != null;
+    _draftController.updateEnd(value);
+    if (value == null && _draftController.startTime == null) {
+      _scheduleLocked = false;
+    }
+  }
+
+  void _onUserScheduleCleared() {
+    _scheduleLocked = false;
+    _draftController.clearSchedule();
+  }
+
+  void _onUserDeadlineChanged(DateTime? value) {
+    _deadlineLocked = value != null;
+    _draftController.setDeadline(value);
+    if (value == null) {
+      _deadlineLocked = false;
+    }
+  }
+
+  void _onUserRecurrenceChanged(RecurrenceFormValue value) {
+    _recurrenceLocked = value.isActive;
+    _draftController.setRecurrence(value);
+    if (!value.isActive) {
+      _recurrenceLocked = false;
+    }
+  }
+
+  void _onUserImportantChanged(bool value) {
+    _priorityLocked = true;
+    _draftController.setImportant(value);
+  }
+
+  void _onUserUrgentChanged(bool value) {
+    _priorityLocked = true;
+    _draftController.setUrgent(value);
+  }
+
+  void _resetParserLocks() {
+    _locationLocked = false;
+    _scheduleLocked = false;
+    _deadlineLocked = false;
+    _recurrenceLocked = false;
+    _priorityLocked = false;
+  }
 
   void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
     final List<String> staleIds = <String>[];
@@ -126,6 +346,8 @@ class _TaskSidebarState extends State<TaskSidebar>
     _selectionRecurrenceNotifier =
         ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
     _selectionRecurrenceMixedNotifier = ValueNotifier<bool>(false);
+    _nlParserService = NlScheduleParserService();
+    _locationController.addListener(_handleLocationEdited);
   }
 
   @override
@@ -133,7 +355,9 @@ class _TaskSidebarState extends State<TaskSidebar>
     _titleController.dispose();
     _titleFocusNode.dispose();
     _descriptionController.dispose();
+    _locationController.removeListener(_handleLocationEdited);
     _locationController.dispose();
+
     _selectionTitleController.dispose();
     _selectionDescriptionController.dispose();
     _selectionLocationController.dispose();
@@ -142,6 +366,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     _selectionRecurrenceNotifier.dispose();
     _selectionRecurrenceMixedNotifier.dispose();
     _sidebarAutoScrollTicker?.dispose();
+    _parserDebounce?.cancel();
     for (final controller in _taskPopoverControllers.values) {
       controller.dispose();
     }
@@ -1281,6 +1506,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       hintText: 'Quick task (e.g., "Meeting at 2pm in Room 101")',
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
+      onChanged: _handleQuickTaskInputChanged,
       onSubmitted: (_) => _addTask(),
       contentPadding: padding,
     );
@@ -1305,8 +1531,8 @@ class _TaskSidebarState extends State<TaskSidebar>
         return TaskPriorityToggles(
           isImportant: _draftController.isImportant,
           isUrgent: _draftController.isUrgent,
-          onImportantChanged: _draftController.setImportant,
-          onUrgentChanged: _draftController.setUrgent,
+          onImportantChanged: _onUserImportantChanged,
+          onUrgentChanged: _onUserUrgentChanged,
         );
       },
     );
@@ -1373,7 +1599,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             builder: (context, _) {
               return DeadlinePickerField(
                 value: _draftController.deadline,
-                onChanged: _draftController.setDeadline,
+                onChanged: _onUserDeadlineChanged,
               );
             },
           ),
@@ -1394,9 +1620,9 @@ class _TaskSidebarState extends State<TaskSidebar>
           spacing: calendarInsetLg,
           start: _draftController.startTime,
           end: _draftController.endTime,
-          onStartChanged: _draftController.updateStart,
-          onEndChanged: _draftController.updateEnd,
-          onClear: _draftController.clearSchedule,
+          onStartChanged: _onUserStartChanged,
+          onEndChanged: _onUserEndChanged,
+          onClear: _onUserScheduleCleared,
         );
       },
     );
@@ -1423,7 +1649,7 @@ class _TaskSidebarState extends State<TaskSidebar>
             fieldGap: 12,
           ),
           intervalSelectWidth: 118,
-          onChanged: _draftController.setRecurrence,
+          onChanged: _onUserRecurrenceChanged,
         );
       },
     );
@@ -2623,8 +2849,9 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _addTask() {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) return;
+    final rawTitle = _titleController.text.trim();
+    if (rawTitle.isEmpty) return;
+    final title = _effectiveParserTitle(rawTitle);
 
     final priority = _currentPriority();
     final hasLocation = _locationController.text.trim().isNotEmpty;
@@ -2675,6 +2902,8 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _resetForm() {
+    _clearParserState(clearFields: true);
+    _resetParserLocks();
     if (_titleController.text.isNotEmpty) {
       _titleController.clear();
     }

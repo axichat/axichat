@@ -1850,9 +1850,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           hourHeight: resolvedHourHeight,
         );
 
+        final DateTime columnDate = DateTime(date.year, date.month, date.day);
+        final String keyId =
+            'calendar-task-${task.id}-${columnDate.toIso8601String()}';
         entries.add(
           CalendarSurfaceTaskEntry(
-            key: ValueKey<String>('calendar-task-${task.id}'),
+            key: ValueKey<String>(keyId),
             task: task,
             bindings: bindings,
             child: CalendarTaskSurface(

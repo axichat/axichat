@@ -6,7 +6,6 @@ import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../common/ui/ui.dart';
-import '../utils/smart_parser.dart';
 
 part 'calendar_task.freezed.dart';
 part 'calendar_task.g.dart';
@@ -137,11 +136,6 @@ class CalendarTask with _$CalendarTask {
       createdAt: now,
       modifiedAt: now,
     );
-  }
-
-  factory CalendarTask.fromNaturalLanguage(String input) {
-    // Use enhanced smart parser to parse natural language input
-    return SmartTaskParser.parseToTask(input);
   }
 }
 

@@ -9,6 +9,8 @@ import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../reminders/calendar_reminder_controller.dart';
 import '../storage/calendar_storage_registry.dart';
+import '../utils/nl_parser_service.dart';
+import '../utils/nl_schedule_adapter.dart';
 import '../utils/recurrence_utils.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
@@ -33,11 +35,13 @@ abstract class BaseCalendarBloc
     String storageId = '',
     CalendarReminderController? reminderController,
     DateTime Function()? now,
+    NlScheduleParserService? parserService,
   })  : _reminderController = reminderController,
         _now = now ?? DateTime.now,
         _storagePrefix = storagePrefix,
         _storageId = storageId,
         _storage = storage,
+        _nlParserService = parserService ?? NlScheduleParserService(),
         super(CalendarState.initial()) {
     _assertStorageRegistered();
     on<CalendarStarted>(_onStarted);
@@ -81,6 +85,7 @@ abstract class BaseCalendarBloc
   final String _storagePrefix;
   final String _storageId;
   final Storage _storage;
+  final NlScheduleParserService _nlParserService;
   Future<void> _pendingReminderSync = Future.value();
   static const int _undoHistoryLimit = 50;
   final List<_CalendarUndoSnapshot> _undoStack = <_CalendarUndoSnapshot>[];
@@ -974,7 +979,9 @@ abstract class BaseCalendarBloc
 
       _recordUndoSnapshot();
 
-      final parsed = CalendarTask.fromNaturalLanguage(event.text);
+      final NlAdapterResult parsedResult =
+          await _nlParserService.parse(event.text);
+      final CalendarTask parsed = parsedResult.task;
       final now = _now();
       final task = parsed.copyWith(
         description: event.description ?? parsed.description,
