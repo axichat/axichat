@@ -219,6 +219,48 @@ void main() {
 
       expect(result.location, 'innovation lab');
     });
+
+    test('does not treat feature phrases after "in" as locations', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result =
+          parser.parse('polish contact list tiles in chat composer');
+
+      expect(result.location, isNull);
+      expect(result.bucket, TaskBucket.unscheduled);
+      expect(result.task, contains('contact list tiles'));
+      expect(result.task, contains('chat composer'));
+    });
+
+    test('still captures obvious standalone place names', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result =
+          parser.parse('coffee sync tomorrow at 3pm at Starbucks');
+
+      expect(result.location, 'Starbucks');
+      expect(result.start, isNotNull);
+      expect(result.start!.hour, 15);
+    });
+
+    test('plain hour without meridiem still schedules start time', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 16)); // noon local
+      final result = parser.parse('stuff at 5 every day');
+
+      expect(result.start, isNotNull);
+      expect(result.start!.hour, 17);
+      expect(result.recurrence, isNotNull);
+      expect(result.recurrence!.rrule, 'FREQ=DAILY');
+      expect(result.bucket, TaskBucket.scheduled);
+    });
+
+    test('ignores bare numbers without time cue', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result = parser.parse('come up with 5 reasons');
+
+      expect(result.start, isNull);
+      expect(result.recurrence, isNull);
+      expect(result.bucket, TaskBucket.unscheduled);
+      expect(result.task, 'come up with 5 reasons');
+    });
   });
 
   group('ScheduleParser recurrence parsing', () {
