@@ -412,7 +412,6 @@ class _DateLabelState extends State<_DateLabel> {
   final LayerLink _link = LayerLink();
   OverlayEntry? _overlayEntry;
   late DateTime _visibleMonth;
-  bool _isHovered = false;
 
   @override
   void initState() {
@@ -436,7 +435,7 @@ class _DateLabelState extends State<_DateLabel> {
 
   @override
   void dispose() {
-    _removeOverlay();
+    _removeOverlay(requestRebuild: false);
     super.dispose();
   }
 
@@ -451,74 +450,54 @@ class _DateLabelState extends State<_DateLabel> {
     };
     final bool hideText =
         widget.collapseText || MediaQuery.of(context).size.width < 420;
+    final bool isOpen = _overlayEntry != null;
+    final Color iconColor =
+        isOpen ? calendarPrimaryColor : calendarSubtitleColor;
+    final Color textColor = isOpen ? calendarPrimaryColor : calendarTitleColor;
+
     return CompositedTransformTarget(
       link: _link,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: _toggleOverlay,
-            hoverColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            splashColor: Colors.transparent,
-            overlayColor: WidgetStateProperty.all(Colors.transparent),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterSm + calendarInsetSm,
-                vertical: calendarInsetLg,
+      child: SizedBox(
+        height: 40,
+        child: ShadButton.outline(
+          size: ShadButtonSize.sm,
+          onPressed: _toggleOverlay,
+          foregroundColor: textColor,
+          hoverForegroundColor: calendarPrimaryColor,
+          hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 16,
+                color: iconColor,
               ),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _isHovered
-                      ? calendarPrimaryColor.withValues(alpha: 0.4)
-                      : calendarBorderColor,
-                ),
-                color: _isHovered
-                    ? calendarPrimaryColor.withValues(alpha: 0.08)
-                    : Colors.white,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.calendar_today_outlined,
-                    size: 16,
-                    color: calendarSubtitleColor,
-                  ),
-                  if (!hideText) ...[
-                    const SizedBox(width: calendarGutterSm),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 260),
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: calendarTitleColor,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
+              if (!hideText) ...[
+                const SizedBox(width: calendarGutterSm),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                      letterSpacing: 0.1,
                     ),
-                  ],
-                  const SizedBox(width: calendarInsetLg),
-                  Icon(
-                    _overlayEntry == null
-                        ? Icons.keyboard_arrow_down
-                        : Icons.keyboard_arrow_up,
-                    size: 18,
-                    color: calendarSubtitleColor,
                   ),
-                ],
+                ),
+              ],
+              const SizedBox(width: calendarInsetLg),
+              Icon(
+                isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                size: 18,
+                color: iconColor,
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -544,10 +523,10 @@ class _DateLabelState extends State<_DateLabel> {
     final buttonHeight = renderBox?.size.height ?? 0;
     final verticalOffset = buttonHeight + spec.contentPadding.vertical / 2;
 
-    _overlayEntry = OverlayEntry(
+    final entry = OverlayEntry(
       builder: (context) {
         return GestureDetector(
-          onTap: _removeOverlay,
+          onTap: () => _removeOverlay(),
           behavior: HitTestBehavior.translucent,
           child: Stack(
             children: [
@@ -565,7 +544,7 @@ class _DateLabelState extends State<_DateLabel> {
                       month: _visibleMonth,
                       selectedWeekStart: widget.state.weekStart,
                       selectedDate: widget.state.selectedDate,
-                      onClose: _removeOverlay,
+                      onClose: () => _removeOverlay(),
                       onMonthChanged: (month) {
                         setState(() => _visibleMonth = month);
                         _overlayEntry?.markNeedsBuild();
@@ -584,12 +563,21 @@ class _DateLabelState extends State<_DateLabel> {
       },
     );
 
-    overlay.insert(_overlayEntry!);
+    setState(() => _overlayEntry = entry);
+    overlay.insert(entry);
   }
 
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+  void _removeOverlay({bool requestRebuild = true}) {
+    final entry = _overlayEntry;
+    if (entry == null) {
+      return;
+    }
+    entry.remove();
+    if (requestRebuild && mounted) {
+      setState(() => _overlayEntry = null);
+    } else {
+      _overlayEntry = null;
+    }
   }
 
   String _formatDay(DateTime date) => DateFormat.yMMMd().format(date);
@@ -694,26 +682,34 @@ class _CalendarDropdown extends StatelessWidget {
                 border = BorderSide.none;
               }
 
-              return InkWell(
-                borderRadius: BorderRadius.circular(calendarBorderRadius / 1.5),
-                onTap: () => onDateSelected(date),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: backgroundColor,
-                    borderRadius:
-                        BorderRadius.circular(calendarBorderRadius / 1.5),
-                    border: border == BorderSide.none
-                        ? null
-                        : Border.fromBorderSide(border),
-                  ),
-                  alignment: Alignment.center,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: calendarInsetLg),
-                  child: Text(
-                    '${date.day}',
-                    style: calendarBodyTextStyle.copyWith(
-                      fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
-                      color: textColor,
+              return MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: InkWell(
+                  borderRadius:
+                      BorderRadius.circular(calendarBorderRadius / 1.5),
+                  mouseCursor: SystemMouseCursors.click,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  splashColor: Colors.transparent,
+                  onTap: () => onDateSelected(date),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius:
+                          BorderRadius.circular(calendarBorderRadius / 1.5),
+                      border: border == BorderSide.none
+                          ? null
+                          : Border.fromBorderSide(border),
+                    ),
+                    alignment: Alignment.center,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: calendarInsetLg),
+                    child: Text(
+                      '${date.day}',
+                      style: calendarBodyTextStyle.copyWith(
+                        fontWeight: isToday ? FontWeight.w600 : FontWeight.w500,
+                        color: textColor,
+                      ),
                     ),
                   ),
                 ),
