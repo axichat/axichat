@@ -73,6 +73,10 @@ class TaskDraftController extends ChangeNotifier {
       _recurrence = _recurrence.copyWith(weekdays: {value.weekday});
     }
 
+    if (_recurrence.isActive) {
+      _recurrence = _recurrence.resolveLinkedLimits(_startTime);
+    }
+
     notifyListeners();
   }
 
@@ -117,8 +121,10 @@ class TaskDraftController extends ChangeNotifier {
   }
 
   void setRecurrence(RecurrenceFormValue value) {
-    if (_recurrence == value) return;
-    _recurrence = value;
+    final RecurrenceFormValue normalized =
+        value.resolveLinkedLimits(_startTime);
+    if (_recurrence == normalized) return;
+    _recurrence = normalized;
     notifyListeners();
   }
 
@@ -147,7 +153,9 @@ class TaskDraftController extends ChangeNotifier {
     if (reference == null) {
       return null;
     }
-    return _recurrence.toRule(start: reference);
+    final RecurrenceFormValue normalized =
+        _recurrence.resolveLinkedLimits(reference);
+    return normalized.toRule(start: reference);
   }
 
   /// Resets the draft back to an empty state. Returns `true` if listeners were

@@ -764,7 +764,8 @@ class _TaskSidebarState extends State<TaskSidebar>
                 spacingConfig: calendarRecurrenceSpacingStandard,
                 intervalSelectWidth: 118,
                 onChanged: (next) {
-                  _selectionRecurrenceNotifier.value = next;
+                  final normalized = _normalizeSelectionRecurrence(next);
+                  _selectionRecurrenceNotifier.value = normalized;
                   if (_selectionRecurrenceMixedNotifier.value) {
                     _selectionRecurrenceMixedNotifier.value = false;
                   }
@@ -799,6 +800,12 @@ class _TaskSidebarState extends State<TaskSidebar>
         recurrence: recurrence,
       ),
     );
+  }
+
+  RecurrenceFormValue _normalizeSelectionRecurrence(RecurrenceFormValue value) {
+    final bloc = context.read<BaseCalendarBloc>();
+    final DateTime? reference = bloc.state.selectedDate;
+    return value.resolveLinkedLimits(reference);
   }
 
   void _syncSelectionRecurrenceState(List<CalendarTask> tasks) {
@@ -837,6 +844,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         weekdays: {_defaultSelectionWeekday(tasks)},
       );
     }
+    nextValue = _normalizeSelectionRecurrence(nextValue);
 
     final currentValue = _selectionRecurrenceNotifier.value;
     if (!_formValuesEqual(currentValue, nextValue)) {
