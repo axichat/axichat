@@ -124,7 +124,7 @@ class ChatDrawer extends StatelessWidget {
                       showVerification?.call();
                       Scaffold.of(context).closeEndDrawer();
                     },
-                  )
+                  ).withTapBounce()
                 : const SizedBox.shrink(),
             encryptionAvailable
                 ? ShadButton.ghost(
@@ -150,7 +150,7 @@ class ChatDrawer extends StatelessWidget {
                       }
                     },
                     child: const Text('Repair encryption'),
-                  )
+                  ).withTapBounce()
                 : const SizedBox.shrink(),
             ShadButton.ghost(
               width: double.infinity,
@@ -169,7 +169,7 @@ class ChatDrawer extends StatelessWidget {
                 },
               ),
               child: const Text('Report spam'),
-            ),
+            ).withTapBounce(),
             BlockButtonInline(
               jid: jid!,
               showIcon: true,

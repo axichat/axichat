@@ -13,6 +13,7 @@ class AxiContextMenuRegion extends StatefulWidget {
     this.visible,
     this.controller,
     this.longPressEnabled,
+    this.onMenuVisibilityChanged,
   });
 
   final Widget child;
@@ -20,6 +21,7 @@ class AxiContextMenuRegion extends StatefulWidget {
   final bool? visible;
   final ShadContextMenuController? controller;
   final bool? longPressEnabled;
+  final ValueChanged<bool>? onMenuVisibilityChanged;
 
   @override
   State<AxiContextMenuRegion> createState() => _AxiContextMenuRegionState();
@@ -27,6 +29,7 @@ class AxiContextMenuRegion extends StatefulWidget {
 
 class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
   ShadContextMenuController? _controller;
+  ShadContextMenuController? _attachedController;
   ShadContextMenuController get controller =>
       widget.controller ??
       (_controller ??=
@@ -36,6 +39,13 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
   Offset? _pendingLongPress;
   final bool _isContextMenuAlreadyDisabled =
       kIsWeb && !BrowserContextMenu.enabled;
+  var _controllerOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachControllerListener();
+  }
 
   @override
   void didUpdateWidget(covariant AxiContextMenuRegion oldWidget) {
@@ -43,10 +53,16 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     if (widget.visible != null) {
       controller.setOpen(widget.visible!);
     }
+    if (oldWidget.controller != widget.controller) {
+      _attachControllerListener(force: true);
+    } else {
+      _attachControllerListener();
+    }
   }
 
   @override
   void dispose() {
+    _attachedController?.removeListener(_handleControllerChanged);
     _controller?.dispose();
     super.dispose();
   }
@@ -57,10 +73,30 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
       _anchor = _edgeAwareAnchor(offset);
     });
     controller.show();
+    _updateOpenState(true);
   }
 
   void _hide() {
     controller.hide();
+    _updateOpenState(false);
+  }
+
+  void _attachControllerListener({bool force = false}) {
+    final current = controller;
+    if (!force && identical(current, _attachedController)) return;
+    _attachedController?.removeListener(_handleControllerChanged);
+    _attachedController = current;
+    _attachedController?.addListener(_handleControllerChanged);
+  }
+
+  void _handleControllerChanged() {
+    _updateOpenState(controller.isOpen);
+  }
+
+  void _updateOpenState(bool open) {
+    if (_controllerOpen == open) return;
+    _controllerOpen = open;
+    widget.onMenuVisibilityChanged?.call(open);
   }
 
   ShadAnchorAuto _edgeAwareAnchor(Offset globalPosition) {
@@ -84,7 +120,18 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
 
     final aboveSpace = clampedDy - safeTop;
     final belowSpace = (size.height - safeBottom) - clampedDy;
-    final preferBelow = belowSpace >= aboveSpace;
+    const edgeThreshold = 128.0;
+    const menuClearance = 240.0;
+    final nearTopEdge = aboveSpace < edgeThreshold;
+    final nearBottomEdge = belowSpace < edgeThreshold;
+    final fitsBelow = belowSpace >= menuClearance;
+    final fitsAbove = aboveSpace >= menuClearance;
+    final preferBelow = switch ((nearTopEdge, nearBottomEdge)) {
+      (true, false) => true,
+      (false, true) => false,
+      _ when fitsBelow != fitsAbove => fitsBelow,
+      _ => belowSpace >= aboveSpace,
+    };
 
     const snapThreshold = 96.0;
     final leftSpace = clampedDx - safeLeft;

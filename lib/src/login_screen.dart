@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _login = !_login;
                     }),
                     child: Text(_login ? 'Sign up' : 'Log in'),
-                  ),
+                  ).withTapBounce(),
                 ],
               ),
             ),

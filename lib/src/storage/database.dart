@@ -702,7 +702,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -720,8 +720,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           await m.addColumn(chats, chats.deltaChatId);
           await m.addColumn(chats, chats.emailAddress);
         }
-        if (from < 4) {
+        final rebuildReactions = from < 4;
+        if (rebuildReactions) {
           await m.deleteTable(reactions.actualTableName);
+        }
+        if (from < 5) {
+          await _rebuildMessagesTable(m);
+        }
+        if (rebuildReactions) {
           await m.createTable(reactions);
         }
       },
@@ -1487,6 +1493,67 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> deleteBlocklist() async {
     _log.info('Deleting blocklist...');
     await blocklistAccessor.deleteAll();
+  }
+
+  Future<void> _rebuildMessagesTable(Migrator m) async {
+    final tableName = messages.actualTableName;
+    final tempTableName = '${tableName}_old';
+    const columnNames = <String>[
+      'id',
+      'stanza_i_d',
+      'origin_i_d',
+      'occupant_i_d',
+      'sender_jid',
+      'chat_jid',
+      'body',
+      'timestamp',
+      'error',
+      'warning',
+      'encryption_protocol',
+      'trust',
+      'trusted',
+      'device_i_d',
+      'no_store',
+      'acked',
+      'received',
+      'displayed',
+      'edited',
+      'retracted',
+      'is_file_upload_notification',
+      'file_downloading',
+      'file_uploading',
+      'file_metadata_i_d',
+      'quoting',
+      'sticker_pack_i_d',
+      'pseudo_message_type',
+      'pseudo_message_data',
+      'delta_chat_id',
+      'delta_msg_id',
+    ];
+    final columnList = columnNames.map((c) => '"$c"').join(', ');
+    final tableExists = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable<String>(tableName)],
+    ).get();
+    if (tableExists.isEmpty) {
+      await m.createTable(messages);
+      return;
+    }
+    await customStatement('PRAGMA foreign_keys = OFF');
+    try {
+      await customStatement('DROP TABLE IF EXISTS "$tempTableName"');
+      await customStatement(
+        'ALTER TABLE "$tableName" RENAME TO "$tempTableName"',
+      );
+      await m.createTable(messages);
+      await customStatement(
+        'INSERT INTO "$tableName" ($columnList) '
+        'SELECT $columnList FROM "$tempTableName"',
+      );
+      await customStatement('DROP TABLE "$tempTableName"');
+    } finally {
+      await customStatement('PRAGMA foreign_keys = ON');
+    }
   }
 
   @override

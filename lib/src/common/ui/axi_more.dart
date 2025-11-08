@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -51,7 +52,7 @@ class _AxiMoreState extends State<AxiMore> {
         enabled: widget.enabled,
         onPressed: popoverController.toggle,
         icon: const Icon(LucideIcons.ellipsisVertical),
-      ),
+      ).withTapBounce(enabled: widget.enabled),
     );
   }
 }

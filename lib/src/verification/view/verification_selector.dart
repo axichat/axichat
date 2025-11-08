@@ -71,7 +71,7 @@ class VerificationSelector extends StatelessWidget {
                     context.read<ProfileCubit>().regenerateDevice();
                   }
                 },
-              )
+              ).withTapBounce(enabled: !state.regenerating)
             else ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

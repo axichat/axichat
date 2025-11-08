@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -26,12 +27,12 @@ class AxiInputDialog extends StatelessWidget {
         ShadButton.outline(
           onPressed: () => context.pop(),
           child: const Text('Cancel'),
-        ),
+        ).withTapBounce(),
         ...actions,
         ShadButton(
           onPressed: callback,
           child: Text(callbackText),
-        ),
+        ).withTapBounce(enabled: callback != null),
       ],
       child: content,
     );

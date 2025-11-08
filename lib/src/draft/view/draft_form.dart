@@ -75,20 +75,19 @@ class _DraftFormState extends State<DraftForm> {
                   children: MessageTransport.values.map((transport) {
                     final selected = _transport == transport;
                     final buttonChild = Text(transport.label);
+                    final handler = enabled
+                        ? () => setState(() => _transport = transport)
+                        : null;
                     if (selected) {
                       return ShadButton(
-                        onPressed: enabled
-                            ? () => setState(() => _transport = transport)
-                            : null,
+                        onPressed: handler,
                         child: buttonChild,
-                      );
+                      ).withTapBounce(enabled: handler != null);
                     }
                     return ShadButton.outline(
-                      onPressed: enabled
-                          ? () => setState(() => _transport = transport)
-                          : null,
+                      onPressed: handler,
                       child: buttonChild,
-                    );
+                    ).withTapBounce(enabled: handler != null);
                   }).toList(),
                 ),
                 const SizedBox(height: 12),
@@ -113,14 +112,14 @@ class _DraftFormState extends State<DraftForm> {
                           onPressed: () => setState(() {
                             _jids.add('');
                           }),
-                        )
+                        ).withTapBounce()
                       else
                         ShadIconButton.ghost(
                           icon: const Icon(LucideIcons.minus),
                           onPressed: () => setState(() {
                             _jids.removeAt(i);
                           }),
-                        ),
+                        ).withTapBounce(),
                     ],
                   ),
                 const SizedBox(height: 12),
@@ -155,6 +154,11 @@ class _DraftFormState extends State<DraftForm> {
                               id: id,
                               jids: _jids,
                               body: _bodyTextController.text)),
+                    ).withTapBounce(
+                      enabled: enabled &&
+                          (_jids.any((e) => e.isNotEmpty) ||
+                              _bodyTextController.text.isNotEmpty) &&
+                          _transport != MessageTransport.email,
                     ),
                     ShadButton(
                       enabled: enabled &&
@@ -171,6 +175,10 @@ class _DraftFormState extends State<DraftForm> {
                         if (!context.mounted) return;
                         context.pop();
                       },
+                    ).withTapBounce(
+                      enabled: enabled &&
+                          _jids.any((e) => e.isNotEmpty) &&
+                          _bodyTextController.text.isNotEmpty,
                     ),
                   ],
                 ),

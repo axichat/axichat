@@ -269,7 +269,7 @@ class _SignupFormState extends State<SignupForm> {
                                   onPressed: () => setState(() {
                                     _captchaSrc = _loadCaptchaSrc();
                                   }),
-                                ),
+                                ).withTapBounce(),
                               ],
                             );
                           },
@@ -313,7 +313,7 @@ class _SignupFormState extends State<SignupForm> {
                           _currentIndex--;
                         }),
                         child: const Text('Back'),
-                      ),
+                      ).withTapBounce(enabled: !loading),
                     if (_currentIndex < _formKeys.length - 1)
                       ShadButton(
                         enabled: !loading,
@@ -338,7 +338,7 @@ class _SignupFormState extends State<SignupForm> {
                           });
                         },
                         child: const Text('Continue'),
-                      )
+                      ).withTapBounce(enabled: !loading)
                     else
                       ShadButton(
                         enabled: !loading,
@@ -357,7 +357,7 @@ class _SignupFormState extends State<SignupForm> {
                         ),
                         trailing: const SizedBox.shrink(),
                         child: const Text('Sign up'),
-                      ),
+                      ).withTapBounce(enabled: !loading),
                   ],
                 );
               },
