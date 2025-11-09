@@ -24,6 +24,7 @@ import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_draft_controller.dart';
+import 'models/task_context_action.dart';
 import 'widgets/calendar_drag_target.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/deadline_picker_field.dart';
@@ -2591,7 +2592,7 @@ class TaskSidebarState extends State<TaskSidebar>
       ),
     );
 
-    if (enableInteraction) {
+    if (enableInteraction && _hasPrecisePointerInput) {
       tile = _wrapWithSidebarContextMenu(task: task, child: tile);
     }
 
@@ -2606,6 +2607,28 @@ class TaskSidebarState extends State<TaskSidebar>
       items: _buildSidebarContextMenuItems(task),
       child: child,
     );
+  }
+
+  List<TaskContextAction> _buildSidebarInlineActions(
+    CalendarTask task, {
+    VoidCallback? onClose,
+  }) {
+    return [
+      TaskContextAction(
+        icon: Icons.copy_outlined,
+        label: 'Copy',
+        onSelected: () => _copyTaskDetails(task),
+      ),
+      TaskContextAction(
+        icon: Icons.delete_outline,
+        label: 'Delete',
+        destructive: true,
+        onSelected: () {
+          _deleteSidebarTask(task);
+          onClose?.call();
+        },
+      ),
+    ];
   }
 
   void _copyTaskDetails(CalendarTask task) {
@@ -2636,9 +2659,13 @@ class TaskSidebarState extends State<TaskSidebar>
     }
   }
 
-  List<Widget> _buildSidebarContextMenuItems(CalendarTask task) {
-    final BaseCalendarBloc bloc = _bloc;
+  void _deleteSidebarTask(CalendarTask task) {
+    _bloc.add(CalendarEvent.taskDeleted(taskId: task.id));
+    _closeTaskPopover(task.id);
+    _taskPopoverControllers.remove(task.id)?.dispose();
+  }
 
+  List<Widget> _buildSidebarContextMenuItems(CalendarTask task) {
     return [
       ShadContextMenuItem(
         leading: const Icon(Icons.copy_outlined),
@@ -2647,11 +2674,7 @@ class TaskSidebarState extends State<TaskSidebar>
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.delete_outline),
-        onPressed: () {
-          bloc.add(CalendarEvent.taskDeleted(taskId: task.id));
-          _closeTaskPopover(task.id);
-          _taskPopoverControllers.remove(task.id)?.dispose();
-        },
+        onPressed: () => _deleteSidebarTask(task),
         child: const Text('Delete Task'),
       ),
     ];
@@ -2798,16 +2821,20 @@ class TaskSidebarState extends State<TaskSidebar>
         final mediaQuery = MediaQuery.of(sheetContext);
         final double maxHeight =
             mediaQuery.size.height - mediaQuery.padding.top;
+        final VoidCallback closeSheet = () {
+          _sidebarController.setActivePopoverTaskId(null);
+          Navigator.of(sheetContext).pop();
+        };
         return SafeArea(
           top: false,
           child: EditTaskDropdown(
             task: displayTask,
             maxHeight: maxHeight,
             isSheet: true,
-            onClose: () {
-              _sidebarController.setActivePopoverTaskId(null);
-              Navigator.of(sheetContext).pop();
-            },
+            inlineActionsBloc: bloc,
+            inlineActionsBuilder: (_) =>
+                _buildSidebarInlineActions(displayTask, onClose: closeSheet),
+            onClose: closeSheet,
             scaffoldMessenger: scaffoldMessenger,
             locationHelper: LocationAutocompleteHelper.fromState(state),
             onTaskUpdated: (updatedTask) {
