@@ -47,10 +47,10 @@ class TaskSidebar extends StatefulWidget {
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
 
   @override
-  State<TaskSidebar> createState() => _TaskSidebarState();
+  State<TaskSidebar> createState() => TaskSidebarState();
 }
 
-class _TaskSidebarState extends State<TaskSidebar>
+class TaskSidebarState extends State<TaskSidebar>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
   late final CalendarSidebarController _sidebarController;
@@ -71,6 +71,14 @@ class _TaskSidebarState extends State<TaskSidebar>
   Ticker? _sidebarAutoScrollTicker;
   double _sidebarAutoScrollOffsetPerFrame = 0;
   static const double _autoScrollHorizontalSlop = 32.0;
+  BaseCalendarBloc? _calendarBloc;
+  BaseCalendarBloc get _bloc {
+    final BaseCalendarBloc? bloc = _calendarBloc;
+    if (bloc == null) {
+      throw StateError('TaskSidebar requires BaseCalendarBloc in the tree.');
+    }
+    return bloc;
+  }
 
   String _selectionRecurrenceSignature = '';
   late final ValueNotifier<RecurrenceFormValue> _selectionRecurrenceNotifier;
@@ -109,6 +117,43 @@ class _TaskSidebarState extends State<TaskSidebar>
       _selectionTitleDirty ||
       _selectionDescriptionDirty ||
       _selectionLocationDirty;
+
+  bool _externalGridDragActive = false;
+
+  bool get _hasPrecisePointerInput =>
+      RendererBinding.instance.mouseTracker.mouseIsConnected;
+
+  bool get _isTouchOnlyInput => !_hasPrecisePointerInput;
+
+  void handleExternalGridDragStarted({required bool isTouchMode}) {
+    if (_externalGridDragActive) {
+      return;
+    }
+    _externalGridDragActive = true;
+    if (!isTouchMode) {
+      return;
+    }
+    final CalendarSidebarSection? current =
+        _sidebarController.state.expandedSection;
+    if (current == CalendarSidebarSection.unscheduled) {
+      return;
+    }
+    _sidebarController.expandSection(CalendarSidebarSection.unscheduled);
+  }
+
+  void handleExternalGridDragPosition(Offset globalPosition) {
+    if (!_externalGridDragActive) {
+      return;
+    }
+    // Reserved for future hover-driven expansions.
+  }
+
+  void handleExternalGridDragEnded() {
+    if (!_externalGridDragActive) {
+      return;
+    }
+    _externalGridDragActive = false;
+  }
 
   void _handleQuickTaskInputChanged(String value) {
     _ensureAdvancedOptionsVisible();
@@ -351,6 +396,12 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _calendarBloc ??= BlocProvider.of<BaseCalendarBloc>(context);
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     _titleFocusNode.dispose();
@@ -388,7 +439,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       animation: _sidebarController,
       builder: (context, _) {
         final CalendarSidebarState uiState = _sidebarController.state;
-        final BaseCalendarBloc calendarBloc = context.read<BaseCalendarBloc>();
+        final BaseCalendarBloc calendarBloc = _bloc;
         return Container(
           width: uiState.width,
           decoration: const BoxDecoration(
@@ -577,9 +628,8 @@ class _TaskSidebarState extends State<TaskSidebar>
                 padding: const EdgeInsets.only(bottom: calendarGutterSm),
                 trailing: ShadButton.outline(
                   size: ShadButtonSize.sm,
-                  onPressed: () => context
-                      .read<BaseCalendarBloc>()
-                      .add(const CalendarEvent.selectionCleared()),
+                  onPressed: () =>
+                      _bloc.add(const CalendarEvent.selectionCleared()),
                   child: const Text('Exit'),
                 ),
               ),
@@ -626,7 +676,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildSelectionActions(List<CalendarTask> tasks, bool hasTasks) {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     return TaskFormActionsRow(
       padding: EdgeInsets.zero,
       gap: calendarGutterSm,
@@ -648,7 +698,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   Widget _buildPriorityControls(List<CalendarTask> tasks) {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     final bool hasTasks = tasks.isNotEmpty;
 
     final bool allImportant =
@@ -707,7 +757,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       isIndeterminate: isIndeterminate,
       enabled: hasTasks,
       onChanged: hasTasks
-          ? (completed) => context.read<BaseCalendarBloc>().add(
+          ? (completed) => _bloc.add(
                 CalendarEvent.selectionCompletedToggled(
                   completed: completed,
                 ),
@@ -785,7 +835,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _dispatchSelectionRecurrence() {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
       return;
     }
@@ -803,7 +853,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   RecurrenceFormValue _normalizeSelectionRecurrence(RecurrenceFormValue value) {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     final DateTime? reference = bloc.state.selectedDate;
     return value.resolveLinkedLimits(reference);
   }
@@ -1058,7 +1108,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _applySelectionBatchChanges() {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
       return;
@@ -1091,7 +1141,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   bool _applySelectionTitle() {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
       return false;
@@ -1109,7 +1159,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   bool _applySelectionDescription() {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
       return false;
@@ -1126,7 +1176,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   bool _applySelectionLocation() {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before applying changes.');
       return false;
@@ -1149,7 +1199,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     if (startDelta == Duration.zero && endDelta == Duration.zero) {
       return;
     }
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     if (bloc.state.selectedTaskIds.isEmpty) {
       _showSelectionMessage('Select tasks before adjusting time.');
       return;
@@ -1394,7 +1444,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }) {
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverTaskId == task.id;
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     final String scheduleLabel = _selectionScheduleLabel(task);
 
     return Container(
@@ -1440,7 +1490,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _focusTask(CalendarTask task) {
-    context.read<BaseCalendarBloc>().add(
+    _bloc.add(
           CalendarEvent.taskFocusRequested(taskId: task.id),
         );
   }
@@ -1878,7 +1928,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _handleTaskDroppedIntoSidebar(CalendarTask dropped) {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     final model = bloc.state.model;
     CalendarTask? source =
         model.tasks[dropped.id] ?? model.tasks[dropped.baseId];
@@ -1902,6 +1952,9 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   void _handleSidebarDragSessionStarted() {
+    if (_isTouchOnlyInput) {
+      _sidebarController.expandSection(CalendarSidebarSection.unscheduled);
+    }
     widget.onDragSessionStarted?.call();
   }
 
@@ -2209,6 +2262,7 @@ class _TaskSidebarState extends State<TaskSidebar>
       onDragSessionStarted: _handleSidebarDragSessionStarted,
       onDragSessionEnded: _handleSidebarDragSessionEnded,
       onDragGlobalPositionChanged: _forwardSidebarGlobalPosition,
+      requiresLongPress: _isTouchOnlyInput,
     );
   }
 
@@ -2387,8 +2441,10 @@ class _TaskSidebarState extends State<TaskSidebar>
                                 maxHeight: effectiveMaxHeight,
                                 onClose: () => _closeTaskPopover(task.id),
                                 scaffoldMessenger: scaffoldMessenger,
+                                locationHelper:
+                                    LocationAutocompleteHelper.fromState(state),
                                 onTaskUpdated: (updatedTask) {
-                                  context.read<BaseCalendarBloc>().add(
+                                  _bloc.add(
                                         CalendarEvent.taskUpdated(
                                           task: updatedTask,
                                         ),
@@ -2396,7 +2452,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                                 },
                                 onOccurrenceUpdated: shouldUpdateOccurrence
                                     ? (updatedTask) {
-                                        context.read<BaseCalendarBloc>().add(
+                                        _bloc.add(
                                               CalendarEvent
                                                   .taskOccurrenceUpdated(
                                                 taskId: baseId,
@@ -2419,7 +2475,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                                         );
 
                                         if (seriesUpdate != latestTask) {
-                                          context.read<BaseCalendarBloc>().add(
+                                          _bloc.add(
                                                 CalendarEvent.taskUpdated(
                                                   task: seriesUpdate,
                                                 ),
@@ -2428,7 +2484,7 @@ class _TaskSidebarState extends State<TaskSidebar>
                                       }
                                     : null,
                                 onTaskDeleted: (taskId) {
-                                  context.read<BaseCalendarBloc>().add(
+                                  _bloc.add(
                                         CalendarEvent.taskDeleted(
                                           taskId: taskId,
                                         ),
@@ -2505,7 +2561,7 @@ class _TaskSidebarState extends State<TaskSidebar>
   }
 
   List<Widget> _buildSidebarContextMenuItems(CalendarTask task) {
-    final BaseCalendarBloc bloc = context.read<BaseCalendarBloc>();
+    final BaseCalendarBloc bloc = _bloc;
 
     return [
       ShadContextMenuItem(
@@ -2645,7 +2701,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     BuildContext context,
     CalendarTask task,
   ) async {
-    final bloc = context.read<BaseCalendarBloc>();
+    final bloc = _bloc;
     final state = bloc.state;
     final String baseId = task.baseId;
     final CalendarTask latestTask = state.model.tasks[baseId] ?? task;
@@ -2677,6 +2733,7 @@ class _TaskSidebarState extends State<TaskSidebar>
               Navigator.of(sheetContext).pop();
             },
             scaffoldMessenger: scaffoldMessenger,
+            locationHelper: LocationAutocompleteHelper.fromState(state),
             onTaskUpdated: (updatedTask) {
               bloc.add(
                 CalendarEvent.taskUpdated(
@@ -2868,7 +2925,7 @@ class _TaskSidebarState extends State<TaskSidebar>
     final hasRecurrence = _advancedRecurrence.isActive;
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
-      context.read<BaseCalendarBloc>().add(
+      _bloc.add(
             CalendarEvent.quickTaskAdded(
               text: title,
               description: _descriptionController.text.trim().isNotEmpty
@@ -2890,7 +2947,7 @@ class _TaskSidebarState extends State<TaskSidebar>
         recurrence = _advancedRecurrence.toRule(start: reference);
       }
 
-      context.read<BaseCalendarBloc>().add(
+      _bloc.add(
             CalendarEvent.taskAdded(
               title: title,
               description: _descriptionController.text.trim().isNotEmpty

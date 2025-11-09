@@ -29,6 +29,7 @@ class CalendarTaskDraggable extends StatefulWidget {
     this.enabled = true,
     this.snapshotBuilder,
     this.childWhenDragging,
+    this.requiresLongPress = false,
   });
 
   final CalendarTask task;
@@ -47,6 +48,7 @@ class CalendarTaskDraggable extends StatefulWidget {
   final Widget child;
   final Widget? childWhenDragging;
   final bool enabled;
+  final bool requiresLongPress;
 
   @override
   State<CalendarTaskDraggable> createState() => _CalendarTaskDraggableState();
@@ -126,6 +128,22 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       onPointerCancel: _handlePointerCancel,
       child: widget.child,
     );
+
+    if (widget.requiresLongPress) {
+      return LongPressDraggable<CalendarDragPayload>(
+        data: payload,
+        dragAnchorStrategy: _dragAnchorStrategy,
+        maxSimultaneousDrags: canDrag ? 1 : 0,
+        feedback: widget.feedbackBuilder(context, widget.task, _geometry),
+        childWhenDragging: widget.childWhenDragging ?? widget.child,
+        onDragStarted: _handleDragStarted,
+        onDragUpdate: _handleDragUpdate,
+        onDragEnd: (details) => _handleDragFinished(cancelled: false),
+        onDraggableCanceled: (_, __) =>
+            _handleDragFinished(cancelled: true),
+        child: interactiveChild,
+      );
+    }
 
     return Draggable<CalendarDragPayload>(
       data: payload,

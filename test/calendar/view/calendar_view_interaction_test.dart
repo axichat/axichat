@@ -2,6 +2,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
@@ -35,6 +36,7 @@ void main() {
           child: QuickAddModal(
             prefilledDateTime: slotTime,
             onTaskAdded: (task) => submitted = task,
+            locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
           ),
         ),
       ),
@@ -653,6 +655,8 @@ CalendarTaskEntryBindings _buildTestBindings({
     splitPreviewAnimationDuration: Duration.zero,
     contextMenuGroupId: groupId,
     contextMenuBuilderFactory: builderFactory,
+    enableContextMenuLongPress: true,
+    resizeHandleExtent: 12,
     interactionController: controller,
     dragFeedbackHint: controller.feedbackHint,
     callbacks: _testTileCallbacks(),
@@ -663,6 +667,7 @@ CalendarTaskEntryBindings _buildTestBindings({
     hourHeight: 60,
     addGeometryListener: (_) {},
     removeGeometryListener: (_) {},
+    requiresLongPressToDrag: false,
   );
 }
 

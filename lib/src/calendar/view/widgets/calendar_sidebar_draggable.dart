@@ -16,6 +16,7 @@ class CalendarSidebarDraggable extends StatefulWidget {
     this.onDragSessionStarted,
     this.onDragSessionEnded,
     this.onDragGlobalPositionChanged,
+    this.requiresLongPress = false,
   });
 
   final CalendarTask task;
@@ -25,6 +26,7 @@ class CalendarSidebarDraggable extends StatefulWidget {
   final VoidCallback? onDragSessionStarted;
   final VoidCallback? onDragSessionEnded;
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
+  final bool requiresLongPress;
 
   @override
   State<CalendarSidebarDraggable> createState() =>
@@ -204,6 +206,21 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       onPointerCancel: _handlePointerUpOrCancel,
       child: widget.child,
     );
+
+    if (widget.requiresLongPress) {
+      return LongPressDraggable<CalendarDragPayload>(
+        data: _buildPayload(),
+        dragAnchorStrategy: _centerDragAnchorStrategy,
+        feedback: widget.feedback,
+        childWhenDragging: widget.childWhenDragging,
+        rootOverlay: true,
+        onDragStarted: _handleDragStarted,
+        onDragUpdate: _handleDragUpdated,
+        onDragEnd: (_) => _handleDragFinished(cancelled: false),
+        onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
+        child: listener,
+      );
+    }
 
     return Draggable<CalendarDragPayload>(
       data: _buildPayload(),

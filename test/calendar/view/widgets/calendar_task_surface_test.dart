@@ -45,6 +45,8 @@ void main() {
           contextMenuGroupId: const ValueKey<String>('calendar-menu'),
           contextMenuBuilderFactory: (_) =>
               (context, request) => const <Widget>[],
+          enableContextMenuLongPress: false,
+          resizeHandleExtent: 12,
           interactionController: interactionController,
           dragFeedbackHint: interactionController.feedbackHint,
           callbacks: callbacks,
@@ -55,6 +57,7 @@ void main() {
           hourHeight: 48,
           addGeometryListener: (_) {},
           removeGeometryListener: (_) {},
+          requiresLongPressToDrag: false,
         );
 
     await tester.pumpWidget(
@@ -130,6 +133,8 @@ void main() {
                     contextMenuGroupId: const ValueKey<String>('geometry-menu'),
                     contextMenuBuilderFactory: (_) =>
                         (_, __) => const <Widget>[],
+                    enableContextMenuLongPress: false,
+                    resizeHandleExtent: 12,
                     interactionController: interactionController,
                     dragFeedbackHint: interactionController.feedbackHint,
                     callbacks: CalendarTaskTileCallbacks(
@@ -151,6 +156,7 @@ void main() {
                     hourHeight: 48,
                     addGeometryListener: (_) {},
                     removeGeometryListener: (_) {},
+                    requiresLongPressToDrag: false,
                   ),
                 ),
               );

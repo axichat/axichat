@@ -173,6 +173,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   bool _pendingTap = false;
   bool _lastPointerSecondary = false;
   String? _activeHandle;
+  LongPressGestureRecognizer? _resizeLongPressRecognizer;
+  String? _pendingResizeHandle;
 
   double _totalResizeDelta = 0;
   int _lastAppliedStep = 0;
@@ -376,6 +378,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _pendingTap = true;
     _resizeActive = false;
     _activeHandle = null;
+    _cancelResizeLongPressRecognizer();
     _lastPointerSecondary = (event.buttons & kSecondaryButton) != 0;
     onContextMenuPosition?.call(
       event.localPosition,
@@ -386,7 +389,11 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
       final String? handle = _hitHandle(event.localPosition);
       if (_canResize && handle != null && !_resizeActive) {
-        _beginResize(handle);
+        if (_shouldDelayResizeForPointer(event.kind)) {
+          _startResizeLongPressRecognizer(handle, event);
+        } else {
+          _beginResize(handle);
+        }
         return;
       }
     } else if (_hitHandle(event.localPosition) != null && _canResize) {
@@ -396,6 +403,12 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    if (_resizeLongPressRecognizer != null &&
+        _pendingResizeHandle != null &&
+        _downLocalPosition != null &&
+        (event.localPosition - _downLocalPosition!).distance > _tapSlop) {
+      _cancelResizeLongPressRecognizer();
+    }
     if (_resizeActive) {
       _updateResize(event);
       return;
@@ -407,6 +420,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    _cancelResizeLongPressRecognizer();
     if (_resizeActive) {
       _endResize();
       _resetPointerState();
@@ -419,6 +433,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handlePointerCancel() {
+    _cancelResizeLongPressRecognizer();
     if (_resizeActive) {
       interactionController.endResizeInteraction(task.id);
     }
@@ -431,6 +446,44 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       return;
     }
     onTap?.call(task, _globalBounds());
+  }
+
+  bool _shouldDelayResizeForPointer(PointerDeviceKind kind) {
+    return kind == PointerDeviceKind.touch ||
+        kind == PointerDeviceKind.stylus;
+  }
+
+  void _startResizeLongPressRecognizer(
+    String handle,
+    PointerDownEvent event,
+  ) {
+    _pendingResizeHandle = handle;
+    final LongPressGestureRecognizer recognizer = LongPressGestureRecognizer()
+      ..onLongPressStart = (_) {
+        if (_pendingResizeHandle != null && !_resizeActive) {
+          _beginResize(_pendingResizeHandle!);
+        }
+      }
+      ..onLongPressEnd = (_) {
+        _cancelResizeLongPressRecognizer();
+      }
+      ..onLongPressUp = () {
+        _cancelResizeLongPressRecognizer();
+      };
+    _resizeLongPressRecognizer = recognizer;
+    recognizer.addPointer(event);
+  }
+
+  void _cancelResizeLongPressRecognizer() {
+    _pendingResizeHandle = null;
+    _resizeLongPressRecognizer?.dispose();
+    _resizeLongPressRecognizer = null;
+  }
+
+  @override
+  void dispose() {
+    _cancelResizeLongPressRecognizer();
+    super.dispose();
   }
 
   Rect _globalBounds() {
@@ -450,6 +503,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _beginResize(String handle) {
+    _pendingResizeHandle = null;
     _resizeActive = true;
     _activeHandle = handle;
     interactionController.suppressSurfaceTapOnce();
