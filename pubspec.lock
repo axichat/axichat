@@ -571,10 +571,9 @@ packages:
   flutter_native_timezone:
     dependency: "direct main"
     description:
-      name: flutter_native_timezone
-      sha256: ed7bfb982f036243de1c068e269182a877100c994f05143c8b26a325e28c1b02
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/flutter_native_timezone"
+      relative: true
+    source: path
     version: "2.0.0"
   flutter_parsed_text:
     dependency: transitive

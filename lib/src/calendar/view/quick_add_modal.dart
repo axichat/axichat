@@ -103,6 +103,9 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
     _parserService = NlScheduleParserService();
     _resetParserLocks();
+    if (prefilled != null) {
+      _scheduleLocked = true;
+    }
   }
 
   @override

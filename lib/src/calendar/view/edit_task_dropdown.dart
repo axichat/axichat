@@ -3,9 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
+import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
+import 'models/task_context_action.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_form_section.dart';
@@ -22,6 +24,8 @@ class EditTaskDropdown extends StatefulWidget {
     this.onOccurrenceUpdated,
     this.scaffoldMessenger,
     this.isSheet = false,
+    this.inlineActionsBuilder,
+    this.inlineActionsBloc,
   });
 
   final CalendarTask task;
@@ -32,6 +36,9 @@ class EditTaskDropdown extends StatefulWidget {
   final void Function(CalendarTask task)? onOccurrenceUpdated;
   final ScaffoldMessengerState? scaffoldMessenger;
   final bool isSheet;
+  final List<TaskContextAction> Function(CalendarState state)?
+      inlineActionsBuilder;
+  final BaseCalendarBloc? inlineActionsBloc;
 
   @override
   State<EditTaskDropdown> createState() => _EditTaskDropdownState();
@@ -149,6 +156,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       children: [
         _buildHeader(),
         const Divider(height: 1),
+        _buildInlineActionsHost(),
         Flexible(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
@@ -223,6 +231,75 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             onPressed: widget.onClose,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildInlineActionsHost() {
+    final builder = widget.inlineActionsBuilder;
+    final BaseCalendarBloc? bloc = widget.inlineActionsBloc;
+    if (builder == null || bloc == null) {
+      return const SizedBox.shrink();
+    }
+    return BlocBuilder<BaseCalendarBloc, CalendarState>(
+      bloc: bloc,
+      builder: (context, state) {
+        final List<TaskContextAction> actions = builder(state);
+        if (actions.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterLg,
+                vertical: calendarGutterMd,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Task actions',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: calendarInsetSm),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: actions
+                        .map((action) => _buildInlineActionChip(action))
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildInlineActionChip(TaskContextAction action) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final Color baseColor =
+        action.destructive ? scheme.error : calendarPrimaryColor;
+    final Color background = baseColor.withValues(alpha: 0.12);
+    return TextButton.icon(
+      onPressed: action.onSelected,
+      style: TextButton.styleFrom(
+        foregroundColor: baseColor,
+        backgroundColor: background,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: Icon(action.icon, size: 16),
+      label: Text(
+        action.label,
+        style: const TextStyle(fontWeight: FontWeight.w500),
       ),
     );
   }

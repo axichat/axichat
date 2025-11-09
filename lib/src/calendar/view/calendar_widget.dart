@@ -214,14 +214,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
               ],
             ),
           ),
-          Padding(
-            padding:
-                EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-            child: _buildMobileTabBar(
-              context,
-              highlightTasksTab: highlightTasksTab,
-            ),
-          ),
+          _buildMobileTabBar(
+          context,
+          highlightTasksTab: highlightTasksTab,
+        ),
         ],
       ),
     );

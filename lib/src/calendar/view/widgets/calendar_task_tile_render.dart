@@ -33,6 +33,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
     required this.onTap,
     required this.onToggleSelection,
     required this.onContextMenuPosition,
+    this.handleExtent = 8.0,
     required super.child,
   });
 
@@ -51,6 +52,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
   final VoidCallback? onToggleSelection;
   final TaskTileContextMenuCallback? onContextMenuPosition;
+  final double handleExtent;
 
   @override
   RenderCalendarTaskTile createRenderObject(BuildContext context) {
@@ -70,6 +72,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       onTap: onTap,
       onToggleSelection: onToggleSelection,
       onContextMenuPosition: onContextMenuPosition,
+      handleExtent: handleExtent,
     );
   }
 
@@ -93,7 +96,8 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       ..onDragPointerDown = onDragPointerDown
       ..onTap = onTap
       ..onToggleSelection = onToggleSelection
-      ..onContextMenuPosition = onContextMenuPosition;
+      ..onContextMenuPosition = onContextMenuPosition
+      ..handleExtent = handleExtent;
   }
 }
 
@@ -114,6 +118,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     void Function(CalendarTask task, Rect globalBounds)? onTap,
     VoidCallback? onToggleSelection,
     TaskTileContextMenuCallback? onContextMenuPosition,
+    double handleExtent = 8.0,
     super.child,
   })  : _task = task,
         _interactionController = interactionController,
@@ -129,13 +134,14 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
         _onDragPointerDown = onDragPointerDown,
         _onTap = onTap,
         _onToggleSelection = onToggleSelection,
-        _onContextMenuPosition = onContextMenuPosition {
+        _onContextMenuPosition = onContextMenuPosition,
+        _handleExtent = handleExtent {
     onEnter = _handlePointerEnter;
     onExit = _handlePointerExit;
     cursor = SystemMouseCursors.click;
   }
 
-  static const double _handleExtent = 8.0;
+  double _handleExtent;
   static const double _tapSlop = 3.0;
 
   CalendarTask _task;
@@ -153,6 +159,13 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void Function(CalendarTask task, Rect globalBounds)? _onTap;
   VoidCallback? _onToggleSelection;
   TaskTileContextMenuCallback? _onContextMenuPosition;
+  double get handleExtent => _handleExtent;
+  set handleExtent(double value) {
+    if (_handleExtent == value) {
+      return;
+    }
+    _handleExtent = value.clamp(4.0, double.infinity);
+  }
 
   int? _activePointer;
   Offset? _downLocalPosition;

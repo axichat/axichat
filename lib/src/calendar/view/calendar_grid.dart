@@ -19,6 +19,7 @@ import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
+import 'models/task_context_action.dart';
 import 'layout/calendar_layout.dart'
     show
         CalendarLayoutCalculator,
@@ -139,6 +140,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ZoomControlsController _zoomControlsController;
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
+  static const double _desktopHandleExtent = 8.0;
+  static const double _touchHandleExtent = 18.0;
   Ticker? _edgeAutoScrollTicker;
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   final CalendarSurfaceController _surfaceController =
@@ -1013,10 +1016,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return _resolvedHourHeight;
   }
 
+  bool get _hasMouseInput =>
+      RendererBinding.instance.mouseTracker.mouseIsConnected;
+
+  bool get _shouldEnableTouchGridMenu => !_hasMouseInput;
+
   bool _shouldUseSheetMenus(BuildContext context) {
-    final bool hasMouse =
-        RendererBinding.instance.mouseTracker.mouseIsConnected;
-    return ResponsiveHelper.isCompact(context) || !hasMouse;
+    return ResponsiveHelper.isCompact(context) || !_hasMouseInput;
   }
 
   void _applyCompactZoomPreset() {
@@ -1065,6 +1071,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             task: displayTask,
             maxHeight: maxHeight,
             isSheet: true,
+            inlineActionsBloc: bloc,
+            inlineActionsBuilder: (state) {
+              final CalendarTask? latest =
+                  state.model.tasks[displayTask.id] ??
+                      state.model.tasks[displayTask.baseId];
+              final CalendarTask resolved = latest ?? displayTask;
+              return _buildTaskContextActions(
+                task: resolved,
+                state: state,
+                onTaskDeleted: () => Navigator.of(sheetContext).pop(),
+              );
+            },
             onClose: () => Navigator.of(sheetContext).pop(),
             scaffoldMessenger: scaffoldMessenger,
             onTaskUpdated: (updatedTask) {
@@ -1507,6 +1525,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       layoutCalculator: _layoutCalculator,
       layoutTheme: _layoutTheme,
       controller: _surfaceController,
+      verticalScrollController: _verticalController,
       minutesPerStep: _minutesPerStep,
       interactionController: _taskInteractionController,
       hoveredSlot: hoveredSlot,
@@ -1567,11 +1586,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
     );
 
+    final Widget touchAwareSurface = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPressStart:
+          _shouldEnableTouchGridMenu ? _handleGridLongPressStart : null,
+      child: menuSurface,
+    );
+
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 0 : responsive.gridHorizontalPadding,
       ),
-      child: menuSurface,
+      child: touchAwareSurface,
     );
   }
 
@@ -1607,7 +1633,24 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _hideGridContextMenu();
       return;
     }
-    final Offset localPosition = renderObject.globalToLocal(event.position);
+    _showGridContextMenuAt(event.position);
+  }
+
+  void _handleGridLongPressStart(LongPressStartDetails details) {
+    if (!_shouldEnableTouchGridMenu) {
+      return;
+    }
+    _showGridContextMenuAt(details.globalPosition);
+  }
+
+  void _showGridContextMenuAt(Offset globalPosition) {
+    final RenderObject? renderObject =
+        _surfaceKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderCalendarSurface) {
+      _hideGridContextMenu();
+      return;
+    }
+    final Offset localPosition = renderObject.globalToLocal(globalPosition);
     if (_surfaceController.containsTaskAt(localPosition)) {
       _hideGridContextMenu();
       return;
@@ -1619,7 +1662,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     setState(() {
       _contextMenuSlot = slot;
-      _contextMenuAnchor = event.position;
+      _contextMenuAnchor = globalPosition;
     });
     if (_buildGridContextMenuItems().isEmpty) {
       _hideGridContextMenu();
@@ -1876,6 +1919,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required double stepHeight,
     required double hourHeight,
   }) {
+    final bool hasMouse = _hasMouseInput;
     return CalendarTaskEntryBindings(
       isSelectionMode: _isSelectionMode,
       isSelected: _isTaskSelected(task),
@@ -1888,6 +1932,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         task: task,
         menuController: menuController,
       ),
+      enableContextMenuLongPress: hasMouse,
+      resizeHandleExtent:
+          hasMouse ? _desktopHandleExtent : _touchHandleExtent,
       interactionController: _taskInteractionController,
       dragFeedbackHint: _taskInteractionController.feedbackHint,
       callbacks: _buildTaskCallbacks(task),
@@ -2652,135 +2699,169 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _hasAutoScrolled = true;
   }
 
+  List<TaskContextAction> _buildTaskContextActions({
+    required CalendarTask task,
+    required CalendarState state,
+    VoidCallback? onTaskDeleted,
+  }) {
+    final List<TaskContextAction> actions = <TaskContextAction>[
+      TaskContextAction(
+        icon: Icons.copy_outlined,
+        label: 'Copy Task',
+        onSelected: () => _copyTask(task),
+      ),
+    ];
+
+    final CalendarTask? clipboardTemplate =
+        _taskInteractionController.clipboardTemplate;
+    if (clipboardTemplate != null && task.scheduledTime != null) {
+      actions.add(
+        TaskContextAction(
+          icon: Icons.content_paste_outlined,
+          label: 'Paste Task Here',
+          onSelected: () => _pasteTask(task.scheduledTime!),
+        ),
+      );
+    }
+
+    final Set<String> seriesIds =
+        _seriesIdsForTask(task, stateSnapshot: state);
+    final bool selectionModeActive = state.isSelectionMode;
+    final Set<String> selectedIds = state.selectedTaskIds;
+    final bool hasSeriesGroup = seriesIds.length > 1;
+    final bool isSeriesTask = hasSeriesGroup ||
+        task.isOccurrence ||
+        !task.effectiveRecurrence.isNone;
+    final bool isOccurrenceSelected = selectedIds.contains(task.id);
+    final bool isSeriesSelected =
+        hasSeriesGroup && seriesIds.every(selectedIds.contains);
+    final bool isSelected = selectedIds.contains(task.id);
+
+    if (isSeriesTask) {
+      final String occurrenceLabel = selectionModeActive
+          ? (isOccurrenceSelected ? 'Deselect Task' : 'Add Task to Selection')
+          : 'Select Task';
+      actions.add(
+        TaskContextAction(
+          icon: isOccurrenceSelected
+              ? Icons.check_box
+              : Icons.check_box_outline_blank,
+          label: occurrenceLabel,
+          onSelected: () {
+            if (selectionModeActive) {
+              _toggleTaskSelection(task.id);
+            } else {
+              _enterSelectionMode(task.id);
+            }
+          },
+        ),
+      );
+
+      final String seriesLabel = selectionModeActive
+          ? (isSeriesSelected ? 'Deselect All Repeats' : 'Add All Repeats')
+          : 'Select All Repeats';
+      actions.add(
+        TaskContextAction(
+          icon: isSeriesSelected
+              ? Icons.check_box
+              : Icons.check_box_outline_blank,
+          label: seriesLabel,
+          onSelected: () {
+            if (isSeriesSelected) {
+              _capturedBloc.add(
+                CalendarEvent.selectionIdsRemoved(taskIds: seriesIds),
+              );
+            } else {
+              _capturedBloc.add(
+                CalendarEvent.selectionIdsAdded(taskIds: seriesIds),
+              );
+            }
+          },
+        ),
+      );
+    } else {
+      final String selectionLabel = selectionModeActive
+          ? (isSelected ? 'Deselect Task' : 'Add to Selection')
+          : 'Select Task';
+      actions.add(
+        TaskContextAction(
+          icon: isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+          label: selectionLabel,
+          onSelected: () {
+            if (selectionModeActive) {
+              _toggleTaskSelection(task.id);
+            } else {
+              _enterSelectionMode(task.id);
+            }
+          },
+        ),
+      );
+    }
+
+    if (selectionModeActive) {
+      actions.add(
+        TaskContextAction(
+          icon: Icons.highlight_off,
+          label: 'Exit Selection Mode',
+          onSelected: _clearSelectionMode,
+        ),
+      );
+    }
+
+    if (!task.isOccurrence) {
+      actions.add(
+        TaskContextAction(
+          icon: Icons.copy_outlined,
+          label: 'Copy Template',
+          onSelected: () => _copyTask(task),
+        ),
+      );
+    }
+
+    actions.add(
+      TaskContextAction(
+        icon: Icons.delete_outline,
+        label: 'Delete Task',
+        destructive: true,
+        onSelected: () {
+          _capturedBloc.add(
+            CalendarEvent.taskDeleted(taskId: task.baseId),
+          );
+          onTaskDeleted?.call();
+        },
+      ),
+    );
+
+    return actions;
+  }
+
   TaskContextMenuBuilder _buildTaskContextMenuBuilder({
     required CalendarTask task,
     required ShadPopoverController menuController,
   }) {
     return (context, request) {
-      final List<Widget> menuItems = <Widget>[
-        ShadContextMenuItem(
-          leading: const Icon(Icons.copy_outlined),
-          onPressed: () {
-            request.markCloseIntent();
-            menuController.hide();
-            _copyTask(task);
-          },
-          child: const Text('Copy Task'),
-        ),
-      ];
-
-      if (_taskInteractionController.clipboardTemplate != null &&
-          task.scheduledTime != null) {
-        menuItems.add(
-          ShadContextMenuItem(
-            leading: const Icon(Icons.content_paste_outlined),
-            onPressed: () {
-              request.markCloseIntent();
-              menuController.hide();
-              _pasteTask(task.scheduledTime!);
-            },
-            child: const Text('Paste Task Here'),
-          ),
-        );
-      }
-
-      final Set<String> seriesIds = _seriesIdsForTask(task);
-      final bool hasSeriesGroup = seriesIds.length > 1;
-      final bool selectionModeActive = _isSelectionMode;
-      final bool isSeriesTask = hasSeriesGroup ||
-          task.isOccurrence ||
-          !task.effectiveRecurrence.isNone;
-      final bool isOccurrenceSelected = _selectedTaskIds.contains(task.id);
-      final bool isSeriesSelected =
-          hasSeriesGroup && seriesIds.every(_selectedTaskIds.contains);
-      final bool isSelected = _isTaskSelected(task);
-
-      if (isSeriesTask) {
-        final String occurrenceLabel;
-        if (selectionModeActive) {
-          occurrenceLabel =
-              isOccurrenceSelected ? 'Deselect Task' : 'Add Task to Selection';
-        } else {
-          occurrenceLabel = 'Select Task';
-        }
-
-        menuItems.add(
-          ShadContextMenuItem(
-            leading: Icon(
-              isOccurrenceSelected
-                  ? Icons.check_box
-                  : Icons.check_box_outline_blank,
+      final ThemeData theme = Theme.of(context);
+      final List<TaskContextAction> actions = _buildTaskContextActions(
+        task: task,
+        state: widget.state,
+      );
+      final List<Widget> menuItems = actions
+          .map(
+            (action) => ShadContextMenuItem(
+              leading: Icon(
+                action.icon,
+                color:
+                    action.destructive ? theme.colorScheme.error : null,
+              ),
+              onPressed: () {
+                request.markCloseIntent();
+                menuController.hide();
+                action.onSelected();
+              },
+              child: Text(action.label),
             ),
-            onPressed: () {
-              request.markCloseIntent();
-              menuController.hide();
-              if (selectionModeActive) {
-                _toggleTaskSelection(task.id);
-              } else {
-                _enterSelectionMode(task.id);
-              }
-            },
-            child: Text(occurrenceLabel),
-          ),
-        );
-
-        final String seriesLabel;
-        if (selectionModeActive) {
-          seriesLabel =
-              isSeriesSelected ? 'Deselect All Repeats' : 'Add All Repeats';
-        } else {
-          seriesLabel = 'Select All Repeats';
-        }
-
-        menuItems.add(
-          ShadContextMenuItem(
-            leading: Icon(
-              isSeriesSelected
-                  ? Icons.check_box
-                  : Icons.check_box_outline_blank,
-            ),
-            onPressed: () {
-              request.markCloseIntent();
-              menuController.hide();
-              if (isSeriesSelected) {
-                _capturedBloc.add(
-                  CalendarEvent.selectionIdsRemoved(taskIds: seriesIds),
-                );
-              } else {
-                _capturedBloc.add(
-                  CalendarEvent.selectionIdsAdded(taskIds: seriesIds),
-                );
-              }
-            },
-            child: Text(seriesLabel),
-          ),
-        );
-      } else {
-        final String selectionLabel;
-        if (selectionModeActive) {
-          selectionLabel = isSelected ? 'Deselect Task' : 'Add to Selection';
-        } else {
-          selectionLabel = 'Select Task';
-        }
-
-        menuItems.add(
-          ShadContextMenuItem(
-            leading: Icon(
-              isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-            ),
-            onPressed: () {
-              request.markCloseIntent();
-              menuController.hide();
-              if (selectionModeActive) {
-                _toggleTaskSelection(task.id);
-              } else {
-                _enterSelectionMode(task.id);
-              }
-            },
-            child: Text(selectionLabel),
-          ),
-        );
-      }
+          )
+          .toList();
 
       final DateTime? splitTime = request.splitTime;
       if (splitTime != null) {
@@ -2799,56 +2880,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         );
       }
 
-      if (selectionModeActive) {
-        menuItems.add(
-          ShadContextMenuItem(
-            leading: const Icon(Icons.highlight_off),
-            onPressed: () {
-              request.markCloseIntent();
-              menuController.hide();
-              _clearSelectionMode();
-            },
-            child: const Text('Exit Selection Mode'),
-          ),
-        );
-      }
-
-      final bool canCopyTemplate = !task.isOccurrence;
-      if (canCopyTemplate) {
-        menuItems.add(
-          ShadContextMenuItem(
-            leading: const Icon(Icons.copy_outlined),
-            onPressed: () {
-              request.markCloseIntent();
-              menuController.hide();
-              _copyTask(task);
-            },
-            child: const Text('Copy Template'),
-          ),
-        );
-      }
-
-      menuItems.add(
-        ShadContextMenuItem(
-          leading: const Icon(Icons.delete_outline),
-          onPressed: () {
-            request.markCloseIntent();
-            menuController.hide();
-            _capturedBloc.add(
-              CalendarEvent.taskDeleted(taskId: task.baseId),
-            );
-          },
-          child: const Text('Delete Task'),
-        ),
-      );
-
       return menuItems;
     };
   }
 
-  Set<String> _seriesIdsForTask(CalendarTask task) {
+  Set<String> _seriesIdsForTask(
+    CalendarTask task, {
+    CalendarState? stateSnapshot,
+  }) {
     final String baseId = task.baseId;
-    final CalendarTask? baseTask = widget.state.model.tasks[baseId];
+    final CalendarState snapshot = stateSnapshot ?? widget.state;
+    final CalendarTask? baseTask = snapshot.model.tasks[baseId];
     final bool hasModelSibling = widget.state.model.tasks.values.any(
       (entry) => entry.baseId == baseId && entry.id != baseId,
     );
@@ -2896,7 +2938,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       }
     }
 
-    for (final selected in _selectedTaskIds) {
+    for (final selected in snapshot.selectedTaskIds) {
       if (baseTaskIdFrom(selected) == baseId) {
         ids.add(selected);
       }

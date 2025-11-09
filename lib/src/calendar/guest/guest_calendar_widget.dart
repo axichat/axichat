@@ -88,21 +88,25 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
             backgroundColor: calendarBackgroundColor,
             body: Stack(
               children: [
-                Column(
-                  children: [
-                    // Guest banner at very top
-                    _buildGuestBanner(),
+                SafeArea(
+                  top: true,
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      // Guest banner at very top
+                      _buildGuestBanner(),
 
-                    // New structure: Row with sidebar OUTSIDE of navigation column
-                    Expanded(
-                      child: ResponsiveHelper.layoutBuilder(
-                        context,
-                        mobile: _buildMobileLayout(state, highlightTasksTab),
-                        tablet: _buildTabletLayout(state, highlightTasksTab),
-                        desktop: _buildDesktopLayout(state),
+                      // New structure: Row with sidebar OUTSIDE of navigation column
+                      Expanded(
+                        child: ResponsiveHelper.layoutBuilder(
+                          context,
+                          mobile: _buildMobileLayout(state, highlightTasksTab),
+                          tablet: _buildTabletLayout(state, highlightTasksTab),
+                          desktop: _buildDesktopLayout(state),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 // Loading overlay
@@ -211,75 +215,66 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
   ) {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets contentPadding = responsive.contentPadding;
-    return SafeArea(
-      top: true,
-      bottom: false,
-      child: Column(
-        children: [
-          AnimatedBuilder(
-            animation: _mobileTabController,
-            builder: (context, _) {
-              final bool showNavigation = _mobileTabController.index == 0;
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showNavigation)
-                    Padding(
-                      padding: contentPadding,
-                      child: CalendarNavigation(
-                        state: state,
-                        onDateSelected: (date) =>
-                            context.read<GuestCalendarBloc>().add(
-                                  CalendarEvent.dateSelected(date: date),
-                                ),
-                        onViewChanged: (view) =>
-                            context.read<GuestCalendarBloc>().add(
-                                  CalendarEvent.viewChanged(view: view),
-                                ),
-                        onErrorCleared: () =>
-                            context.read<GuestCalendarBloc>().add(
-                                  const CalendarEvent.errorCleared(),
-                                ),
-                        onUndo: () => context
-                            .read<GuestCalendarBloc>()
-                            .add(const CalendarEvent.undoRequested()),
-                        onRedo: () => context
-                            .read<GuestCalendarBloc>()
-                            .add(const CalendarEvent.redoRequested()),
-                        canUndo: state.canUndo,
-                        canRedo: state.canRedo,
-                      ),
-                    ),
-                  if (state.error != null) _buildErrorBanner(state),
-                ],
-              );
-            },
-          ),
-          Expanded(
-            child: Stack(
+    return Column(
+      children: [
+        AnimatedBuilder(
+          animation: _mobileTabController,
+          builder: (context, _) {
+            final bool showNavigation = _mobileTabController.index == 0;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                TabBarView(
-                  controller: _mobileTabController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildCalendarGridWithHandlers(state),
-                    _buildSidebarWithProvider(),
-                  ],
-                ),
-                buildDragEdgeTargets(),
+                if (showNavigation)
+                  Padding(
+                    padding: contentPadding,
+                    child: CalendarNavigation(
+                      state: state,
+                      onDateSelected: (date) =>
+                          context.read<GuestCalendarBloc>().add(
+                                CalendarEvent.dateSelected(date: date),
+                              ),
+                      onViewChanged: (view) =>
+                          context.read<GuestCalendarBloc>().add(
+                                CalendarEvent.viewChanged(view: view),
+                              ),
+                      onErrorCleared: () => context
+                          .read<GuestCalendarBloc>()
+                          .add(const CalendarEvent.errorCleared()),
+                      onUndo: () => context
+                          .read<GuestCalendarBloc>()
+                          .add(const CalendarEvent.undoRequested()),
+                      onRedo: () => context
+                          .read<GuestCalendarBloc>()
+                          .add(const CalendarEvent.redoRequested()),
+                      canUndo: state.canUndo,
+                      canRedo: state.canRedo,
+                    ),
+                  ),
+                if (state.error != null) _buildErrorBanner(state),
               ],
-            ),
+            );
+          },
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              TabBarView(
+                controller: _mobileTabController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildCalendarGridWithHandlers(state),
+                  _buildSidebarWithProvider(),
+                ],
+              ),
+              buildDragEdgeTargets(),
+            ],
           ),
-          Padding(
-            padding:
-                EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-            child: _buildMobileTabBar(
-              context,
-              highlightTasksTab: highlightTasksTab,
-            ),
-          ),
-        ],
-      ),
+        ),
+        _buildMobileTabBar(
+          context,
+          highlightTasksTab: highlightTasksTab,
+        ),
+      ],
     );
   }
 

@@ -81,6 +81,8 @@ class ResizableTaskWidget extends StatefulWidget {
   final ValueKey<String>? contextMenuGroupId;
   final TaskContextMenuBuilder? contextMenuBuilder;
   final ValueChanged<Offset>? onResizePointerMove;
+  final bool contextMenuLongPressEnabled;
+  final double resizeHandleExtent;
 
   const ResizableTaskWidget({
     super.key,
@@ -106,6 +108,8 @@ class ResizableTaskWidget extends StatefulWidget {
     this.contextMenuGroupId,
     this.contextMenuBuilder,
     this.onResizePointerMove,
+    this.contextMenuLongPressEnabled = true,
+    this.resizeHandleExtent = 8.0,
   });
 
   @override
@@ -179,7 +183,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     return ShadContextMenuRegion(
       controller: controller,
       groupId: groupId,
-      longPressEnabled: true,
+      longPressEnabled: widget.contextMenuLongPressEnabled,
       items: items,
       child: child,
     );
@@ -238,6 +242,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 onTap: widget.onTap,
                 onToggleSelection: widget.onToggleSelection,
                 onContextMenuPosition: _captureContextMenuOffsets,
+                handleExtent: widget.resizeHandleExtent,
                 child: contextualized,
               );
             }
