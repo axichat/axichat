@@ -22,9 +22,7 @@ import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -70,6 +68,10 @@ const _reactionManagerPadding = EdgeInsets.symmetric(
 );
 const _reactionManagerShadowGap = 16.0;
 const _selectionHeadroomTolerance = 1.0;
+const _selectionDismissMoveAllowance = 36.0;
+const _selectionDismissTapAllowance = 48.0;
+final _selectionSpacerTimestamp =
+    DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 const _reactionQuickChoices = [
   '👍',
   '❤️',
@@ -251,14 +253,16 @@ class _ChatState extends State<Chat> {
     final origin = _dismissPointerDownPosition;
     if (origin == null) return;
     if (!_dismissPointerMoved &&
-        (event.position - origin).distance > kTouchSlop) {
+        (event.position - origin).distance > _selectionDismissMoveAllowance) {
       _dismissPointerMoved = true;
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
     if (_dismissPointer != event.pointer) return;
-    if (!_dismissPointerMoved) {
+    final origin = _dismissPointerDownPosition;
+    final travel = origin == null ? 0.0 : (event.position - origin).distance;
+    if (!_dismissPointerMoved || travel <= _selectionDismissTapAllowance) {
       _maybeDismissSelection(event.position);
     }
     _resetDismissPointer();
@@ -344,7 +348,6 @@ class _ChatState extends State<Chat> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _primeSelectionHeadroomIfNeeded();
       await _scrollSelectedMessageIntoView(messageId);
       await _scrollSelectionExtrasIntoView();
     });
@@ -365,9 +368,7 @@ class _ChatState extends State<Chat> {
 
   Future<void> _scrollSelectionExtrasIntoView() async {
     if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    final context = _selectionReferenceContext();
-    if (context == null) {
+    if (_selectionReferenceContext() == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _selectedMessageId == null) return;
         _scrollSelectionExtrasIntoView();
@@ -382,42 +383,17 @@ class _ChatState extends State<Chat> {
       });
       return;
     }
-
-    if (missingHeadroom > _selectionHeadroomTolerance) {
-      final availableShift = _availableSelectionShift(position);
-      final shortfall = missingHeadroom - availableShift;
-      if (shortfall > _selectionHeadroomTolerance) {
-        _ensureSelectionHeadroom(shortfall);
-        return;
-      }
-      await _shiftSelectionBy(missingHeadroom);
+    final position = _scrollController.position;
+    if (missingHeadroom <= _selectionHeadroomTolerance) {
+      _releaseSelectionHeadroomIfPossible(position);
       return;
     }
-
-    _releaseSelectionHeadroomIfPossible(position);
-
-    final renderObject = context.findRenderObject();
-    if (renderObject == null || !renderObject.attached) return;
-    final viewport = RenderAbstractViewport.of(renderObject);
-    final directionSign = _axisDirectionSign(position.axisDirection);
-    var target = viewport
-            .getOffsetToReveal(
-              renderObject,
-              directionSign > 0 ? 1.0 : 0.0,
-            )
-            .offset +
-        (_selectionExtrasViewportGap * directionSign);
-    final minExtent = position.minScrollExtent.toDouble();
-    final maxExtent = position.maxScrollExtent.toDouble();
-
-    target = target.clamp(minExtent, maxExtent);
-
-    if ((position.pixels - target).abs() < _selectionAutoscrollSlop) return;
-    await position.animateTo(
-      target,
-      duration: _bubbleFocusDuration,
-      curve: _bubbleFocusCurve,
-    );
+    final availableShift = _availableSelectionShift(position);
+    if (availableShift + _selectionHeadroomTolerance < missingHeadroom) {
+      _ensureSelectionHeadroom(missingHeadroom - availableShift);
+      return;
+    }
+    await _shiftSelectionBy(missingHeadroom);
   }
 
   double _axisDirectionSign(AxisDirection direction) {
@@ -531,27 +507,6 @@ class _ChatState extends State<Chat> {
     final selectedId = _selectedMessageId;
     if (selectedId == null) return null;
     return _messageKeys[selectedId]?.currentContext;
-  }
-
-  void _primeSelectionHeadroomIfNeeded() {
-    if (!_scrollController.hasClients) return;
-    final position = _scrollController.position;
-    final scrollRange =
-        (position.maxScrollExtent - position.minScrollExtent).abs();
-    final viewportExtent = position.viewportDimension;
-    final minRange = viewportExtent + _selectionExtrasViewportGap;
-    if (scrollRange >= minRange - _selectionHeadroomTolerance) return;
-    final deficit = minRange - scrollRange;
-    final desired = math.max(deficit, _selectionHeadroomTolerance);
-    if (_needsSelectionHeadroom &&
-        (_selectionSpacerHeight - desired).abs() <
-            _selectionHeadroomTolerance) {
-      return;
-    }
-    setState(() {
-      _needsSelectionHeadroom = true;
-      _selectionSpacerHeight = desired;
-    });
   }
 
   @override
@@ -826,15 +781,11 @@ class _ChatState extends State<Chat> {
                                 );
                               }
                               if (selectionHeadroomActive) {
-                                final spacerTimestamp = dashMessages.isNotEmpty
-                                    ? dashMessages.first.createdAt
-                                    : DateTime.now();
-                                dashMessages.insert(
-                                  0,
+                                dashMessages.add(
                                   ChatMessage(
                                     user: spacerUser,
-                                    createdAt: spacerTimestamp,
-                                    text: '',
+                                    createdAt: _selectionSpacerTimestamp,
+                                    text: ' ',
                                     customProperties: const {
                                       'id': _selectionSpacerMessageId,
                                       'selectionSpacer': true,
@@ -842,6 +793,74 @@ class _ChatState extends State<Chat> {
                                   ),
                                 );
                               }
+                              late final MessageListOptions
+                                  dashMessageListOptions;
+                              dashMessageListOptions = MessageListOptions(
+                                scrollController: _scrollController,
+                                scrollPhysics:
+                                    const AlwaysScrollableScrollPhysics(
+                                  parent: BouncingScrollPhysics(),
+                                ),
+                                separatorFrequency: SeparatorFrequency.days,
+                                dateSeparatorBuilder: (date) {
+                                  if (date.isAtSameMomentAs(
+                                    _selectionSpacerTimestamp,
+                                  )) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return DefaultDateSeparator(
+                                    date: date,
+                                    messageListOptions: dashMessageListOptions,
+                                  );
+                                },
+                                typingBuilder: (_) => const Padding(
+                                  padding: EdgeInsets.only(left: 16, top: 16),
+                                  child: TypingIndicator(),
+                                ),
+                                onLoadEarlier: state.items.length %
+                                            ChatBloc.messageBatchSize !=
+                                        0
+                                    ? null
+                                    : () async => context
+                                        .read<ChatBloc>()
+                                        .add(const ChatLoadEarlier()),
+                                loadEarlierBuilder: Container(
+                                  padding: const EdgeInsets.all(12.0),
+                                  alignment: Alignment.center,
+                                  child: CircularProgressIndicator(
+                                    color: context.colorScheme.primary,
+                                  ),
+                                ),
+                                chatFooterBuilder: () {
+                                  if (state.items.isEmpty &&
+                                      state.quoting == null) {
+                                    return Center(
+                                      child: Text(
+                                        'No messages',
+                                        style: context.textTheme.muted,
+                                      ),
+                                    );
+                                  }
+                                  final quoting = state.quoting;
+                                  if (quoting == null) {
+                                    return null;
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: _QuoteBanner(
+                                      message: quoting,
+                                      isSelf:
+                                          quoting.senderJid == currentUserId,
+                                      onClear: () => context
+                                          .read<ChatBloc>()
+                                          .add(const ChatQuoteCleared()),
+                                    ),
+                                  );
+                                }(),
+                              );
                               return Column(
                                 children: [
                                   Expanded(
@@ -1450,68 +1469,8 @@ class _ChatState extends State<Chat> {
                                             );
                                           },
                                         ),
-                                        messageListOptions: MessageListOptions(
-                                          scrollController: _scrollController,
-                                          scrollPhysics:
-                                              const AlwaysScrollableScrollPhysics(
-                                            parent: BouncingScrollPhysics(),
-                                          ),
-                                          separatorFrequency:
-                                              SeparatorFrequency.days,
-                                          typingBuilder: (_) => const Padding(
-                                            padding: EdgeInsets.only(
-                                                left: 16, top: 16),
-                                            child: TypingIndicator(),
-                                          ),
-                                          onLoadEarlier: state.items.length %
-                                                      ChatBloc
-                                                          .messageBatchSize !=
-                                                  0
-                                              ? null
-                                              : () async => context
-                                                  .read<ChatBloc>()
-                                                  .add(const ChatLoadEarlier()),
-                                          loadEarlierBuilder: Container(
-                                            padding: const EdgeInsets.all(12.0),
-                                            alignment: Alignment.center,
-                                            child: CircularProgressIndicator(
-                                              color:
-                                                  context.colorScheme.primary,
-                                            ),
-                                          ),
-                                          chatFooterBuilder: () {
-                                            if (state.items.isEmpty &&
-                                                state.quoting == null) {
-                                              return Center(
-                                                child: Text(
-                                                  'No messages',
-                                                  style:
-                                                      context.textTheme.muted,
-                                                ),
-                                              );
-                                            }
-                                            final quoting = state.quoting;
-                                            if (quoting == null) {
-                                              return null;
-                                            }
-                                            return Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 8,
-                                              ),
-                                              child: _QuoteBanner(
-                                                message: quoting,
-                                                isSelf: quoting.senderJid ==
-                                                    currentUserId,
-                                                onClear: () => context
-                                                    .read<ChatBloc>()
-                                                    .add(
-                                                        const ChatQuoteCleared()),
-                                              ),
-                                            );
-                                          }(),
-                                        ),
+                                        messageListOptions:
+                                            dashMessageListOptions,
                                         inputOptions: InputOptions(
                                           sendOnEnter: true,
                                           alwaysShowSend: true,
@@ -1921,6 +1880,27 @@ class _ReactionChip extends StatelessWidget {
   }
 }
 
+class _SelectionHeadroomSpacer extends StatelessWidget {
+  const _SelectionHeadroomSpacer({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final clampedHeight = math.max(0.0, height);
+    return IgnorePointer(
+      ignoring: true,
+      child: AnimatedSize(
+        duration: _bubbleFocusDuration,
+        curve: _bubbleFocusCurve,
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
+        child: SizedBox(height: clampedHeight),
+      ),
+    );
+  }
+}
+
 class _MessageActionBar extends StatelessWidget {
   const _MessageActionBar({
     required this.onReply,
@@ -2017,27 +1997,6 @@ class _MessageActionButton extends StatelessWidget {
         ],
       ),
     ).withTapBounce();
-  }
-}
-
-class _SelectionHeadroomSpacer extends StatelessWidget {
-  const _SelectionHeadroomSpacer({required this.height});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    final clampedHeight = math.max(0.0, height);
-    return IgnorePointer(
-      ignoring: true,
-      child: AnimatedSize(
-        duration: _bubbleFocusDuration,
-        curve: _bubbleFocusCurve,
-        alignment: Alignment.topCenter,
-        clipBehavior: Clip.none,
-        child: SizedBox(height: clampedHeight),
-      ),
-    );
   }
 }
 
