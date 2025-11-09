@@ -21,17 +21,6 @@ class CutoutSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (cutouts.isEmpty) {
-      return DecoratedBox(
-        decoration: ShapeDecoration(
-          color: backgroundColor,
-          shape: shape.copyWith(
-            side: BorderSide(color: borderColor),
-          ),
-        ),
-        child: child,
-      );
-    }
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -44,7 +33,8 @@ class CutoutSurface extends StatelessWidget {
           ),
           child: child,
         ),
-        for (final spec in cutouts) _CutoutAttachment(spec: spec),
+        if (cutouts.isNotEmpty)
+          for (final spec in cutouts) _CutoutAttachment(spec: spec),
       ],
     );
   }
