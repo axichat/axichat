@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -211,10 +209,10 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         ),
       ),
     );
-    if (isSheet) {
+    if (!isSheet) {
       content = SafeArea(
         top: true,
-        bottom: false,
+        bottom: true,
         child: content,
       );
     }
@@ -264,9 +262,11 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterLg,
-                vertical: calendarGutterMd,
+              padding: const EdgeInsets.fromLTRB(
+                calendarGutterSm,
+                calendarGutterMd,
+                calendarGutterSm,
+                calendarGutterMd,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,36 +280,20 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                   const SizedBox(height: calendarInsetSm),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      const double gap = 12;
-                      const double minChipWidth = 160;
-                      final double availableWidth = constraints.maxWidth.isFinite
+                      final double? width = constraints.maxWidth.isFinite
                           ? constraints.maxWidth
-                          : MediaQuery.sizeOf(context).width -
-                              (calendarGutterLg * 2);
-                      final double effectiveWidth = availableWidth.isFinite &&
-                              availableWidth > 0
-                          ? availableWidth
-                          : MediaQuery.sizeOf(context).width;
-                      final bool useTwoColumns = effectiveWidth >= 520;
-                      final double minWidth =
-                          math.min(minChipWidth, effectiveWidth);
-                      double chipWidth = useTwoColumns
-                          ? (effectiveWidth - gap) / 2
-                          : effectiveWidth;
-                      chipWidth = chipWidth.clamp(minWidth, effectiveWidth);
-
-                      return Wrap(
-                        spacing: gap,
-                        runSpacing: gap,
+                          : null;
+                      final Widget chipWrap = Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
                         children: actions
-                            .map(
-                              (action) => SizedBox(
-                                width: chipWidth,
-                                child: _buildInlineActionChip(action),
-                              ),
-                            )
-                            .toList(),
+                            .map(_buildInlineActionChip)
+                            .toList(growable: false),
                       );
+                      if (width == null) {
+                        return chipWrap;
+                      }
+                      return SizedBox(width: width, child: chipWrap);
                     },
                   ),
                 ],

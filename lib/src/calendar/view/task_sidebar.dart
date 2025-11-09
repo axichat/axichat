@@ -1896,46 +1896,57 @@ class TaskSidebarState extends State<TaskSidebar>
                 ),
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 160),
-                  firstChild: SizedBox(
-                    width: double.infinity,
-                    child: CalendarDragTargetRegion(
-                      onEnter: (_) => _handleSidebarSectionDragEnter(section),
-                      onMove: (_) => _handleSidebarSectionDragEnter(section),
-                      onDrop: (details) {
-                        _handleSidebarSectionDragEnter(section);
-                        _handleTaskDroppedIntoSidebar(details.payload.task);
-                      },
-                      builder: (context, isHovering, __) {
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _sidebarController.toggleSection(section),
-                          child: AnimatedContainer(
-                            key: ValueKey('${section.name}-collapsed'),
-                            duration: const Duration(milliseconds: 120),
-                            padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-                            constraints: const BoxConstraints(minHeight: 40),
-                            decoration: BoxDecoration(
-                              color: isHovering
-                                  ? calendarPrimaryColor
-                                      .withValues(alpha: 0.12)
-                                  : Colors.transparent,
-                              borderRadius:
-                                  BorderRadius.circular(calendarBorderRadius),
-                              border: isHovering
-                                  ? Border.all(
-                                      color: calendarPrimaryColor,
-                                      width: 1.5,
-                                    )
-                                  : null,
-                            ),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: collapsedChild,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                  firstChild: Row(
+                    children: [
+                      Expanded(
+                        child: CalendarDragTargetRegion(
+                          onEnter: (_) =>
+                              _handleSidebarSectionDragEnter(section),
+                          onMove: (_) =>
+                              _handleSidebarSectionDragEnter(section),
+                          onDrop: (details) {
+                            _handleSidebarSectionDragEnter(section);
+                            _handleTaskDroppedIntoSidebar(
+                              details.payload.task,
+                            );
+                          },
+                          builder: (context, isHovering, __) {
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () =>
+                                  _sidebarController.toggleSection(section),
+                              child: AnimatedContainer(
+                                key: ValueKey('${section.name}-collapsed'),
+                                duration: const Duration(milliseconds: 120),
+                                padding:
+                                    const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                                constraints:
+                                    const BoxConstraints(minHeight: 40),
+                                decoration: BoxDecoration(
+                                  color: isHovering
+                                      ? calendarPrimaryColor
+                                          .withValues(alpha: 0.12)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(
+                                    calendarBorderRadius,
+                                  ),
+                                  border: isHovering
+                                      ? Border.all(
+                                          color: calendarPrimaryColor,
+                                          width: 1.5,
+                                        )
+                                      : null,
+                                ),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: collapsedChild,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                   secondChild: const SizedBox.shrink(),
                   crossFadeState: isExpanded
