@@ -10,7 +10,7 @@ import '../resizable_task_widget.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_draggable.dart';
 
-typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder Function(
+typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder? Function(
   ShadPopoverController controller,
 );
 
@@ -61,6 +61,7 @@ class CalendarTaskEntryBindings {
     required this.hourHeight,
     required this.addGeometryListener,
     required this.removeGeometryListener,
+    required this.requiresLongPressToDrag,
   });
 
   final bool isSelectionMode;
@@ -82,6 +83,7 @@ class CalendarTaskEntryBindings {
   final double hourHeight;
   final void Function(VoidCallback listener) addGeometryListener;
   final void Function(VoidCallback listener) removeGeometryListener;
+  final bool requiresLongPressToDrag;
 }
 
 class CalendarTaskSurface extends StatefulWidget {
@@ -220,7 +222,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     final CalendarTask task = widget.task;
     final CalendarTaskEntryBindings bindings = widget.bindings;
 
-    final TaskContextMenuBuilder contextMenuBuilder =
+    final TaskContextMenuBuilder? contextMenuBuilder =
         bindings.contextMenuBuilderFactory(_menuController);
 
     final CalendarTaskGeometry geometry = _resolveGeometry();
@@ -318,6 +320,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 enabled: enableInteractions,
                 childWhenDragging: const SizedBox.shrink(),
                 child: resizable,
+                requiresLongPress: bindings.requiresLongPressToDrag,
               );
             }
 

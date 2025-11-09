@@ -15,6 +15,7 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
+import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
@@ -141,7 +142,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
   static const double _desktopHandleExtent = 8.0;
-  static const double _touchHandleExtent = 18.0;
+  static const double _touchHandleExtent = 20.0;
   Ticker? _edgeAutoScrollTicker;
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   final CalendarSurfaceController _surfaceController =
@@ -167,6 +168,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Offset? _contextMenuAnchor;
   bool _pendingPopoverGeometryUpdate = false;
   bool _dragSessionNotified = false;
+  bool _suppressNextEmptySlotTap = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -1065,72 +1067,71 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         final mediaQuery = MediaQuery.of(sheetContext);
         final double maxHeight =
             mediaQuery.size.height - mediaQuery.padding.top;
-        return SafeArea(
-          top: false,
-          child: EditTaskDropdown(
-            task: displayTask,
-            maxHeight: maxHeight,
-            isSheet: true,
-            inlineActionsBloc: bloc,
-            inlineActionsBuilder: (state) {
-              final CalendarTask? latest =
-                  state.model.tasks[displayTask.id] ??
-                      state.model.tasks[displayTask.baseId];
-              final CalendarTask resolved = latest ?? displayTask;
-              return _buildTaskContextActions(
-                task: resolved,
-                state: state,
-                onTaskDeleted: () => Navigator.of(sheetContext).pop(),
-              );
-            },
-            onClose: () => Navigator.of(sheetContext).pop(),
-            scaffoldMessenger: scaffoldMessenger,
-            onTaskUpdated: (updatedTask) {
-              bloc.add(
-                CalendarEvent.taskUpdated(
-                  task: updatedTask,
-                ),
-              );
-            },
-            onOccurrenceUpdated: shouldUpdateOccurrence
-                ? (updatedTask) {
+        return EditTaskDropdown(
+          task: displayTask,
+          maxHeight: maxHeight,
+          isSheet: true,
+          inlineActionsBloc: bloc,
+          inlineActionsBuilder: (state) {
+            final CalendarTask? latest =
+                state.model.tasks[displayTask.id] ??
+                    state.model.tasks[displayTask.baseId];
+            final CalendarTask resolved = latest ?? displayTask;
+            return _buildTaskContextActions(
+              task: resolved,
+              state: state,
+              onTaskDeleted: () => Navigator.of(sheetContext).pop(),
+              includeDeleteAction: false,
+            );
+          },
+          onClose: () => Navigator.of(sheetContext).pop(),
+          scaffoldMessenger: scaffoldMessenger,
+          locationHelper: LocationAutocompleteHelper.fromState(state),
+          onTaskUpdated: (updatedTask) {
+            bloc.add(
+              CalendarEvent.taskUpdated(
+                task: updatedTask,
+              ),
+            );
+          },
+          onOccurrenceUpdated: shouldUpdateOccurrence
+              ? (updatedTask) {
+                  bloc.add(
+                    CalendarEvent.taskOccurrenceUpdated(
+                      taskId: baseId,
+                      occurrenceId: task.id,
+                      scheduledTime: updatedTask.scheduledTime,
+                      duration: updatedTask.duration,
+                      endDate: updatedTask.endDate,
+                    ),
+                  );
+
+                  final CalendarTask seriesUpdate = latestTask.copyWith(
+                    title: updatedTask.title,
+                    description: updatedTask.description,
+                    location: updatedTask.location,
+                    deadline: updatedTask.deadline,
+                    priority: updatedTask.priority,
+                    isCompleted: updatedTask.isCompleted,
+                  );
+
+                  if (seriesUpdate != latestTask) {
                     bloc.add(
-                      CalendarEvent.taskOccurrenceUpdated(
-                        taskId: baseId,
-                        occurrenceId: task.id,
-                        scheduledTime: updatedTask.scheduledTime,
-                        duration: updatedTask.duration,
-                        endDate: updatedTask.endDate,
+                      CalendarEvent.taskUpdated(
+                        task: seriesUpdate,
                       ),
                     );
-
-                    final CalendarTask seriesUpdate = latestTask.copyWith(
-                      title: updatedTask.title,
-                      description: updatedTask.description,
-                      location: updatedTask.location,
-                      deadline: updatedTask.deadline,
-                      priority: updatedTask.priority,
-                      isCompleted: updatedTask.isCompleted,
-                    );
-
-                    if (seriesUpdate != latestTask) {
-                      bloc.add(
-                        CalendarEvent.taskUpdated(
-                          task: seriesUpdate,
-                        ),
-                      );
-                    }
                   }
-                : null,
-            onTaskDeleted: (taskId) {
-              bloc.add(
-                CalendarEvent.taskDeleted(
-                  taskId: taskId,
-                ),
-              );
-              Navigator.of(sheetContext).pop();
-            },
-          ),
+                }
+              : null,
+          onTaskDeleted: (taskId) {
+            bloc.add(
+              CalendarEvent.taskDeleted(
+                taskId: taskId,
+              ),
+            );
+            Navigator.of(sheetContext).pop();
+          },
         );
       },
     );
@@ -1602,6 +1603,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleSurfaceTap(CalendarSurfaceTapDetails details) {
+    if (_suppressNextEmptySlotTap) {
+      _suppressNextEmptySlotTap = false;
+      return;
+    }
     if (details.hitTask) {
       _scrollToSlot(details.slotStart, allowDeferral: false);
       return;
@@ -1640,6 +1645,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldEnableTouchGridMenu) {
       return;
     }
+    _suppressNextEmptySlotTap = true;
+    _taskInteractionController.suppressSurfaceTapOnce();
     _showGridContextMenuAt(details.globalPosition);
   }
 
@@ -1920,6 +1927,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required double hourHeight,
   }) {
     final bool hasMouse = _hasMouseInput;
+    final bool enableContextMenus = hasMouse;
     return CalendarTaskEntryBindings(
       isSelectionMode: _isSelectionMode,
       isSelected: _isTaskSelected(task),
@@ -1927,11 +1935,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       dragTargetKey: _taskPopoverController.keyForTask(task.id),
       splitPreviewAnimationDuration: _layoutTheme.splitPreviewAnimationDuration,
       contextMenuGroupId: _contextMenuGroupId,
-      contextMenuBuilderFactory: (menuController) =>
-          _buildTaskContextMenuBuilder(
-        task: task,
-        menuController: menuController,
-      ),
+      contextMenuBuilderFactory: enableContextMenus
+          ? (menuController) => _buildTaskContextMenuBuilder(
+                task: task,
+                menuController: menuController,
+              )
+          : (_) => null,
       enableContextMenuLongPress: hasMouse,
       resizeHandleExtent:
           hasMouse ? _desktopHandleExtent : _touchHandleExtent,
@@ -1945,6 +1954,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       hourHeight: hourHeight,
       addGeometryListener: _surfaceController.addGeometryListener,
       removeGeometryListener: _surfaceController.removeGeometryListener,
+      requiresLongPressToDrag: !hasMouse,
     );
   }
 
@@ -2208,6 +2218,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           onClose: () => _closeTaskPopover(taskId,
                               reason: 'dropdown-close'),
                           scaffoldMessenger: scaffoldMessenger,
+                          locationHelper:
+                              LocationAutocompleteHelper.fromState(state),
                           onTaskUpdated: (updatedTask) {
                             context.read<T>().add(
                                   CalendarEvent.taskUpdated(
@@ -2699,10 +2711,57 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _hasAutoScrolled = true;
   }
 
+  bool _taskHasImportantFlag(CalendarTask task) =>
+      task.isCritical || task.isImportant;
+
+  bool _taskHasUrgentFlag(CalendarTask task) =>
+      task.isCritical || task.isUrgent;
+
+  TaskPriority _priorityFromFlags({
+    required bool important,
+    required bool urgent,
+  }) {
+    if (important && urgent) {
+      return TaskPriority.critical;
+    }
+    if (important) {
+      return TaskPriority.important;
+    }
+    if (urgent) {
+      return TaskPriority.urgent;
+    }
+    return TaskPriority.none;
+  }
+
+  void _updateTaskPriority(
+    CalendarTask task, {
+    required bool important,
+    required bool urgent,
+  }) {
+    final TaskPriority next =
+        _priorityFromFlags(important: important, urgent: urgent);
+    _capturedBloc.add(
+      CalendarEvent.taskPriorityChanged(
+        taskId: task.baseId,
+        priority: next,
+      ),
+    );
+  }
+
+  void _toggleTaskCompletion(CalendarTask task) {
+    _capturedBloc.add(
+      CalendarEvent.taskCompleted(
+        taskId: task.baseId,
+        completed: !task.isCompleted,
+      ),
+    );
+  }
+
   List<TaskContextAction> _buildTaskContextActions({
     required CalendarTask task,
     required CalendarState state,
     VoidCallback? onTaskDeleted,
+    bool includeDeleteAction = true,
   }) {
     final List<TaskContextAction> actions = <TaskContextAction>[
       TaskContextAction(
@@ -2711,6 +2770,42 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         onSelected: () => _copyTask(task),
       ),
     ];
+
+    actions.add(
+      TaskContextAction(
+        icon: task.isCompleted ? Icons.undo : Icons.check_circle_outline,
+        label: task.isCompleted ? 'Mark Incomplete' : 'Mark Complete',
+        onSelected: () => _toggleTaskCompletion(task),
+      ),
+    );
+
+    final bool importantFlag = _taskHasImportantFlag(task);
+    final bool urgentFlag = _taskHasUrgentFlag(task);
+
+    actions.add(
+      TaskContextAction(
+        icon:
+            importantFlag ? Icons.label_off : Icons.label_important_outline,
+        label: importantFlag ? 'Remove Important Flag' : 'Mark as Important',
+        onSelected: () => _updateTaskPriority(
+          task,
+          important: !importantFlag,
+          urgent: urgentFlag,
+        ),
+      ),
+    );
+
+    actions.add(
+      TaskContextAction(
+        icon: urgentFlag ? Icons.flash_on : Icons.flash_off,
+        label: urgentFlag ? 'Remove Urgent Flag' : 'Mark as Urgent',
+        onSelected: () => _updateTaskPriority(
+          task,
+          important: importantFlag,
+          urgent: !urgentFlag,
+        ),
+      ),
+    );
 
     final CalendarTask? clipboardTemplate =
         _taskInteractionController.clipboardTemplate;
@@ -2818,19 +2913,21 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
     }
 
-    actions.add(
-      TaskContextAction(
-        icon: Icons.delete_outline,
-        label: 'Delete Task',
-        destructive: true,
-        onSelected: () {
-          _capturedBloc.add(
-            CalendarEvent.taskDeleted(taskId: task.baseId),
-          );
-          onTaskDeleted?.call();
-        },
-      ),
-    );
+    if (includeDeleteAction) {
+      actions.add(
+        TaskContextAction(
+          icon: Icons.delete_outline,
+          label: 'Delete Task',
+          destructive: true,
+          onSelected: () {
+            _capturedBloc.add(
+              CalendarEvent.taskDeleted(taskId: task.baseId),
+            );
+            onTaskDeleted?.call();
+          },
+        ),
+      );
+    }
 
     return actions;
   }

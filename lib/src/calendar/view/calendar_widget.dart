@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
@@ -7,6 +8,7 @@ import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
+import '../utils/location_autocomplete.dart';
 import '../utils/responsive_helper.dart';
 import 'calendar_grid.dart';
 import 'calendar_navigation.dart';
@@ -32,6 +34,12 @@ class _CalendarWidgetState extends State<CalendarWidget>
   late final Animation<double> _tasksTabPulse;
   DateTime? _lastSyncToastTime;
   bool _usesMobileLayout = false;
+  CalendarBloc? _calendarBloc;
+  final GlobalKey<TaskSidebarState> _sidebarKey =
+      GlobalKey<TaskSidebarState>();
+
+  bool get _hasMouseDevice =>
+      RendererBinding.instance.mouseTracker.mouseIsConnected;
 
   @override
   void initState() {
@@ -57,6 +65,12 @@ class _CalendarWidgetState extends State<CalendarWidget>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _calendarBloc ??= context.read<CalendarBloc>();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocConsumer<CalendarBloc, CalendarState>(
       listener: _handleStateChanges,
@@ -74,14 +88,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
           canUndo: state.canUndo,
           canRedo: state.canRedo,
           onUndo: () {
-            context
-                .read<CalendarBloc>()
-                .add(const CalendarEvent.undoRequested());
+            _calendarBloc?.add(const CalendarEvent.undoRequested());
           },
           onRedo: () {
-            context
-                .read<CalendarBloc>()
-                .add(const CalendarEvent.redoRequested());
+            _calendarBloc?.add(const CalendarEvent.redoRequested());
           },
           child: Scaffold(
             backgroundColor: calendarBackgroundColor,
@@ -124,12 +134,12 @@ class _CalendarWidgetState extends State<CalendarWidget>
       margin: calendarPaddingXl,
       child: ErrorDisplay(
         error: state.error!,
-        onRetry: () => context.read<CalendarBloc>().add(
-              const CalendarEvent.errorCleared(),
-            ),
-        onDismiss: () => context.read<CalendarBloc>().add(
-              const CalendarEvent.errorCleared(),
-            ),
+        onRetry: () => _calendarBloc?.add(
+          const CalendarEvent.errorCleared(),
+        ),
+        onDismiss: () => _calendarBloc?.add(
+          const CalendarEvent.errorCleared(),
+        ),
       ),
     );
   }
@@ -320,21 +330,18 @@ class _CalendarWidgetState extends State<CalendarWidget>
               CalendarNavigation(
                 state: state,
                 sidebarVisible: true, // Desktop layout has sidebar alongside
-                onDateSelected: (date) => context.read<CalendarBloc>().add(
-                      CalendarEvent.dateSelected(date: date),
-                    ),
-                onViewChanged: (view) => context.read<CalendarBloc>().add(
-                      CalendarEvent.viewChanged(view: view),
-                    ),
-                onErrorCleared: () => context.read<CalendarBloc>().add(
-                      const CalendarEvent.errorCleared(),
-                    ),
-                onUndo: () => context
-                    .read<CalendarBloc>()
-                    .add(const CalendarEvent.undoRequested()),
-                onRedo: () => context
-                    .read<CalendarBloc>()
-                    .add(const CalendarEvent.redoRequested()),
+                onDateSelected: (date) => _calendarBloc?.add(
+                  CalendarEvent.dateSelected(date: date),
+                ),
+                onViewChanged: (view) => _calendarBloc?.add(
+                  CalendarEvent.viewChanged(view: view),
+                ),
+                onErrorCleared: () =>
+                    _calendarBloc?.add(const CalendarEvent.errorCleared()),
+                onUndo: () =>
+                    _calendarBloc?.add(const CalendarEvent.undoRequested()),
+                onRedo: () =>
+                    _calendarBloc?.add(const CalendarEvent.redoRequested()),
                 canUndo: state.canUndo,
                 canRedo: state.canRedo,
               ),
@@ -354,9 +361,14 @@ class _CalendarWidgetState extends State<CalendarWidget>
   }
 
   Widget _buildSidebarWithProvider({double? height}) {
+    final CalendarBloc? bloc = _calendarBloc;
+    if (bloc == null) {
+      return const SizedBox.shrink();
+    }
     final sidebar = BlocProvider<BaseCalendarBloc>.value(
-      value: context.read<CalendarBloc>(),
+      value: bloc,
       child: TaskSidebar(
+        key: _sidebarKey,
         onDragSessionStarted: handleGridDragSessionStarted,
         onDragSessionEnded: handleGridDragSessionEnded,
         onDragGlobalPositionChanged: handleGridDragPositionChanged,
@@ -371,21 +383,40 @@ class _CalendarWidgetState extends State<CalendarWidget>
   }
 
   Widget _buildCalendarGridWithHandlers(CalendarState state) {
+    final CalendarBloc? bloc = _calendarBloc;
     return CalendarGrid<CalendarBloc>(
       state: state,
       onEmptySlotTapped: _onEmptySlotTapped,
       onTaskDragEnd: _onTaskDragEnd,
-      onDateSelected: (date) => context.read<CalendarBloc>().add(
-            CalendarEvent.dateSelected(date: date),
-          ),
-      onViewChanged: (view) => context.read<CalendarBloc>().add(
-            CalendarEvent.viewChanged(view: view),
-          ),
+      onDateSelected: (date) => bloc?.add(
+        CalendarEvent.dateSelected(date: date),
+      ),
+      onViewChanged: (view) => bloc?.add(
+        CalendarEvent.viewChanged(view: view),
+      ),
       focusRequest: state.pendingFocus,
-      onDragSessionStarted: handleGridDragSessionStarted,
-      onDragGlobalPositionChanged: handleGridDragPositionChanged,
-      onDragSessionEnded: handleGridDragSessionEnded,
+      onDragSessionStarted: _handleCalendarGridDragSessionStarted,
+      onDragGlobalPositionChanged: _handleCalendarGridDragPositionChanged,
+      onDragSessionEnded: _handleCalendarGridDragSessionEnded,
     );
+  }
+
+  void _handleCalendarGridDragSessionStarted() {
+    handleGridDragSessionStarted();
+    _sidebarKey.currentState?.handleExternalGridDragStarted(
+      isTouchMode: !_hasMouseDevice,
+    );
+  }
+
+  void _handleCalendarGridDragPositionChanged(Offset globalPosition) {
+    handleGridDragPositionChanged(globalPosition);
+    _sidebarKey.currentState
+        ?.handleExternalGridDragPosition(globalPosition);
+  }
+
+  void _handleCalendarGridDragSessionEnded() {
+    handleGridDragSessionEnded();
+    _sidebarKey.currentState?.handleExternalGridDragEnded();
   }
 
   void _onEmptySlotTapped(DateTime time, Offset position) {
@@ -393,16 +424,23 @@ class _CalendarWidgetState extends State<CalendarWidget>
   }
 
   void _onTaskDragEnd(CalendarTask task, DateTime newTime) {
-    final bloc = context.read<CalendarBloc>();
+    final CalendarBloc? bloc = _calendarBloc;
+    if (bloc == null) {
+      return;
+    }
     final CalendarTask normalized = task.normalizedForInteraction(newTime);
     bloc.commitTaskInteraction(normalized);
   }
 
   void _showQuickAddModal(Offset position, {required DateTime prefilledTime}) {
+    final LocationAutocompleteHelper helper = _calendarBloc != null
+        ? LocationAutocompleteHelper.fromState(_calendarBloc!.state)
+        : LocationAutocompleteHelper.fromSeeds(const <String>[]);
     showQuickAddModal(
       context: context,
       prefilledDateTime: prefilledTime,
-      onTaskAdded: (task) => context.read<CalendarBloc>().add(
+      locationHelper: helper,
+      onTaskAdded: (task) => _calendarBloc?.add(
             CalendarEvent.taskAdded(
               title: task.title,
               scheduledTime: task.scheduledTime,

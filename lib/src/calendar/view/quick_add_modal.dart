@@ -2,10 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-
 import '../../common/ui/ui.dart';
-import '../bloc/base_calendar_bloc.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/nl_parser_service.dart';
@@ -26,6 +23,7 @@ class QuickAddModal extends StatefulWidget {
   final VoidCallback? onDismiss;
   final void Function(CalendarTask task) onTaskAdded;
   final QuickAddModalSurface surface;
+  final LocationAutocompleteHelper locationHelper;
 
   const QuickAddModal({
     super.key,
@@ -33,6 +31,7 @@ class QuickAddModal extends StatefulWidget {
     this.onDismiss,
     required this.onTaskAdded,
     this.surface = QuickAddModalSurface.dialog,
+    required this.locationHelper,
   });
 
   @override
@@ -171,7 +170,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     final double maxWidth =
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
     final double maxHeight = responsive.quickAddMaxHeight;
-    final locationHelper = _resolveLocationHelper(context);
+    final LocationAutocompleteHelper locationHelper = widget.locationHelper;
     final BorderRadius borderRadius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(calendarBorderRadius);
@@ -567,14 +566,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
   }
 
-  LocationAutocompleteHelper _resolveLocationHelper(BuildContext context) {
-    final bloc = context.read<BaseCalendarBloc?>();
-    if (bloc == null) {
-      return LocationAutocompleteHelper.fromSeeds(const <String>[]);
-    }
-    return LocationAutocompleteHelper.fromState(bloc.state);
-  }
-
   Widget _buildScheduleSection() {
     return AnimatedBuilder(
       animation: _formController,
@@ -765,6 +756,7 @@ Future<void> showQuickAddModal({
   required BuildContext context,
   DateTime? prefilledDateTime,
   required void Function(CalendarTask task) onTaskAdded,
+  required LocationAutocompleteHelper locationHelper,
 }) {
   if (ResponsiveHelper.isCompact(context)) {
     return showModalBottomSheet<void>(
@@ -775,6 +767,7 @@ Future<void> showQuickAddModal({
         surface: QuickAddModalSurface.bottomSheet,
         prefilledDateTime: prefilledDateTime,
         onTaskAdded: onTaskAdded,
+        locationHelper: locationHelper,
       ),
     );
   }
@@ -785,6 +778,7 @@ Future<void> showQuickAddModal({
     builder: (context) => QuickAddModal(
       prefilledDateTime: prefilledDateTime,
       onTaskAdded: onTaskAdded,
+      locationHelper: locationHelper,
       onDismiss: () {
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();

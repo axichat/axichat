@@ -26,6 +26,7 @@ class EditTaskDropdown extends StatefulWidget {
     this.isSheet = false,
     this.inlineActionsBuilder,
     this.inlineActionsBloc,
+    required this.locationHelper,
   });
 
   final CalendarTask task;
@@ -39,6 +40,7 @@ class EditTaskDropdown extends StatefulWidget {
   final List<TaskContextAction> Function(CalendarState state)?
       inlineActionsBuilder;
   final BaseCalendarBloc? inlineActionsBloc;
+  final LocationAutocompleteHelper locationHelper;
 
   @override
   State<EditTaskDropdown> createState() => _EditTaskDropdownState();
@@ -187,7 +189,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         _buildActions(),
       ],
     );
-    return Material(
+    Widget content = Material(
       color: Colors.transparent,
       child: ClipRRect(
         borderRadius: radius,
@@ -207,6 +209,13 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
         ),
       ),
     );
+    if (isSheet) {
+      content = SafeArea(
+        top: false,
+        child: content,
+      );
+    }
+    return content;
   }
 
   Widget _buildHeader() {
@@ -327,22 +336,13 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   Widget _buildLocationField() {
-    final helper = _resolveLocationHelper(context);
     return TaskLocationField(
       controller: _locationController,
       hintText: 'Location (optional)',
       textCapitalization: TextCapitalization.words,
       contentPadding: calendarMenuItemPadding,
-      autocomplete: helper,
+      autocomplete: widget.locationHelper,
     );
-  }
-
-  LocationAutocompleteHelper _resolveLocationHelper(BuildContext context) {
-    final bloc = context.read<BaseCalendarBloc?>();
-    if (bloc == null) {
-      return LocationAutocompleteHelper.fromSeeds(const <String>[]);
-    }
-    return LocationAutocompleteHelper.fromState(bloc.state);
   }
 
   Widget _sectionDivider() {
