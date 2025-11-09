@@ -29,6 +29,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
 
   void _setPressed(bool value) {
     if (_pressed == value) return;
+    if (!mounted) return;
     setState(() {
       _pressed = value;
     });

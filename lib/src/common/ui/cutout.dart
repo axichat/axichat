@@ -87,12 +87,13 @@ class _CutoutPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    var path = Path()..addPath(shape.getOuterPath(rect), Offset.zero);
+    final outerPath = shape.getOuterPath(rect);
+    var fillPath = Path()..addPath(outerPath, Offset.zero);
     for (final spec in cutouts) {
       final rect = _cutoutRect(size, spec);
       final cutoutPath =
           SquircleBorder(cornerRadius: spec.cornerRadius).getOuterPath(rect);
-      path = Path.combine(PathOperation.difference, path, cutoutPath);
+      fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
     }
 
     if (shadowOpacity > 0 && shadows.isNotEmpty) {
@@ -114,7 +115,7 @@ class _CutoutPainter extends CustomPainter {
                 );
         canvas.save();
         canvas.translate(shadow.offset.dx, shadow.offset.dy);
-        canvas.drawPath(path, paint);
+        canvas.drawPath(fillPath, paint);
         canvas.restore();
       }
     }
@@ -128,8 +129,10 @@ class _CutoutPainter extends CustomPainter {
       ..strokeWidth = 1
       ..strokeJoin = StrokeJoin.round;
 
-    canvas.drawPath(path, fillPaint);
-    canvas.drawPath(path, strokePaint);
+    canvas.drawPath(fillPath, fillPaint);
+    if (borderColor.a > 0) {
+      canvas.drawPath(outerPath, strokePaint);
+    }
   }
 
   @override
