@@ -59,9 +59,8 @@ const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
 const _selectionAutoscrollSlop = 4.0;
-const _selectedBubbleHorizontalPadding = 20.0;
-const _selectedBubbleVerticalPadding = 6.0;
 const _selectionAttachmentBaseGap = 16.0;
+const _selectionAttachmentSelectedGap = 8.0;
 const _selectionExtrasViewportGap = 50.0;
 const _reactionManagerRadius = 18.0;
 const _reactionManagerQuickSpacing = 8.0;
@@ -81,6 +80,7 @@ const _reactionQuickChoices = [
   '🔥',
   '👏',
 ];
+const _selectionSpacerMessageId = '__selection_spacer__';
 
 List<BoxShadow> _selectedBubbleShadows(Color color) => [
       BoxShadow(
@@ -544,6 +544,10 @@ class _ChatState extends State<Chat> {
             id: currentUserId,
             firstName: profile?.username ?? '',
           );
+          final spacerUser = ChatUser(
+            id: _selectionSpacerMessageId,
+            firstName: '',
+          );
           return Container(
             decoration: BoxDecoration(
               color: context.colorScheme.background,
@@ -707,13 +711,11 @@ class _ChatState extends State<Chat> {
                                   _selectionSpacerHeight > 0;
                               final baseBubbleMaxWidth =
                                   contentWidth * (isCompact ? 0.8 : 0.7);
-                              final selectionMaxWidth = contentWidth;
                               final messageRowMaxWidth = contentWidth;
-                              final selectedBubbleMaxWidth = contentWidth;
                               final clampedBubbleWidth =
                                   baseBubbleMaxWidth.clamp(
                                 0.0,
-                                selectionMaxWidth,
+                                contentWidth,
                               );
                               final dashMessages = <ChatMessage>[];
                               for (var index = 0;
@@ -767,9 +769,21 @@ class _ChatState extends State<Chat> {
                                   ),
                                 );
                               }
-                              if (dashMessages.isNotEmpty) {
-                                (dashMessages.last.customProperties ??=
-                                    {})['isOldest'] = true;
+                              if (selectionHeadroomActive) {
+                                final spacerTimestamp = dashMessages.isNotEmpty
+                                    ? dashMessages.last.createdAt
+                                    : DateTime.now();
+                                dashMessages.add(
+                                  ChatMessage(
+                                    user: spacerUser,
+                                    createdAt: spacerTimestamp,
+                                    text: '',
+                                    customProperties: const {
+                                      'id': _selectionSpacerMessageId,
+                                      'selectionSpacer': true,
+                                    },
+                                  ),
+                                );
                               }
                               return Column(
                                 children: [
@@ -795,6 +809,10 @@ class _ChatState extends State<Chat> {
                                               Colors.transparent,
                                           containerColor: Colors.transparent,
                                           userNameBuilder: (user) {
+                                            if (user.id ==
+                                                _selectionSpacerMessageId) {
+                                              return const SizedBox.shrink();
+                                            }
                                             return Padding(
                                               padding: const EdgeInsets.only(
                                                 left: _chatHorizontalPadding,
@@ -813,6 +831,19 @@ class _ChatState extends State<Chat> {
                                             final colors = context.colorScheme;
                                             final chatTokens =
                                                 context.chatTheme;
+                                            final isSelectionSpacer =
+                                                message.customProperties?[
+                                                        'selectionSpacer'] ==
+                                                    true;
+                                            if (isSelectionSpacer) {
+                                              final spacerHeight =
+                                                  selectionHeadroomActive
+                                                      ? _selectionSpacerHeight
+                                                      : 0.0;
+                                              return _SelectionHeadroomSpacer(
+                                                height: spacerHeight,
+                                              );
+                                            }
                                             final extraStyle = context
                                                 .textTheme.muted
                                                 .copyWith(
@@ -940,10 +971,6 @@ class _ChatState extends State<Chat> {
                                                       package: iconPackage,
                                                     ),
                                                   );
-                                            final isOldest =
-                                                message.customProperties?[
-                                                        'isOldest'] ==
-                                                    true;
                                             final messageModel = message
                                                     .customProperties?['model']
                                                 as Message;
@@ -1098,9 +1125,8 @@ class _ChatState extends State<Chat> {
                                             final targetAlignment = isSelected
                                                 ? Alignment.center
                                                 : baseAlignment;
-                                            final bubbleMaxWidth = isSelected
-                                                ? selectedBubbleMaxWidth
-                                                : clampedBubbleWidth;
+                                            final bubbleMaxWidth =
+                                                clampedBubbleWidth;
                                             final bubbleConstraints =
                                                 BoxConstraints(
                                               maxWidth: bubbleMaxWidth,
@@ -1121,25 +1147,11 @@ class _ChatState extends State<Chat> {
                                               ),
                                               child: bubble,
                                             );
-                                            final paddedBubble =
-                                                AnimatedPadding(
-                                              duration: _bubbleFocusDuration,
-                                              curve: _bubbleFocusCurve,
-                                              padding: EdgeInsets.symmetric(
-                                                vertical: isSelected
-                                                    ? _selectedBubbleVerticalPadding
-                                                    : 0,
-                                                horizontal: isSelected
-                                                    ? _selectedBubbleHorizontalPadding
-                                                    : 0,
-                                              ),
-                                              child: shadowedBubble,
-                                            );
                                             final alignedBubble = AnimatedAlign(
                                               duration: _bubbleFocusDuration,
                                               curve: _bubbleFocusCurve,
                                               alignment: targetAlignment,
-                                              child: paddedBubble,
+                                              child: shadowedBubble,
                                             );
                                             final canResend = message.status ==
                                                 MessageStatus.failed;
@@ -1188,8 +1200,9 @@ class _ChatState extends State<Chat> {
                                             final attachmentsKey = isSelected
                                                 ? _activeSelectionExtrasKey
                                                 : null;
-                                            const attachmentTopPadding =
-                                                _selectionAttachmentBaseGap;
+                                            final attachmentTopPadding = isSelected
+                                                ? _selectionAttachmentSelectedGap
+                                                : _selectionAttachmentBaseGap;
                                             final attachmentBottomPadding =
                                                 _selectionExtrasViewportGap +
                                                     (showReactionManager
@@ -1331,27 +1344,6 @@ class _ChatState extends State<Chat> {
                                                 child: bubbleWithSlack,
                                               ),
                                             );
-                                            if (selectionHeadroomActive &&
-                                                isOldest) {
-                                              bubbleWithSlack = Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.center,
-                                                children: [
-                                                  AnimatedSize(
-                                                    duration:
-                                                        _bubbleFocusDuration,
-                                                    curve: _bubbleFocusCurve,
-                                                    clipBehavior: Clip.none,
-                                                    child: SizedBox(
-                                                      height:
-                                                          _selectionSpacerHeight,
-                                                    ),
-                                                  ),
-                                                  bubbleWithSlack,
-                                                ],
-                                              );
-                                            }
                                             return KeyedSubtree(
                                               key: messageKey,
                                               child: Padding(
@@ -1918,6 +1910,27 @@ class _MessageActionButton extends StatelessWidget {
         ],
       ),
     ).withTapBounce();
+  }
+}
+
+class _SelectionHeadroomSpacer extends StatelessWidget {
+  const _SelectionHeadroomSpacer({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final clampedHeight = math.max(0.0, height);
+    return IgnorePointer(
+      ignoring: true,
+      child: AnimatedSize(
+        duration: _bubbleFocusDuration,
+        curve: _bubbleFocusCurve,
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
+        child: SizedBox(height: clampedHeight),
+      ),
+    );
   }
 }
 
