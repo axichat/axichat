@@ -2576,6 +2576,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     final double y = localPosition.dy;
+    if (y < 0 || y > height) {
+      _stopEdgeAutoScroll();
+      return;
+    }
 
     final bool isResizing =
         _taskInteractionController.activeResizeInteraction != null;

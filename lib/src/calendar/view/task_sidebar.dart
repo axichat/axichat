@@ -2095,6 +2095,11 @@ class TaskSidebarState extends State<TaskSidebar>
       _stopSidebarAutoScroll();
       return;
     }
+    if (local.dy < 0 || local.dy > height) {
+      _stopSidebarAutoScroll();
+      return;
+    }
+
     final double fastBandHeight =
         math.min(_layoutTheme.edgeScrollFastBandHeight, height / 2);
     final double slowBandHeight =
