@@ -22,6 +22,7 @@ import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -225,7 +226,6 @@ class _ChatState extends State<Chat> {
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _reactionManagerKey;
   final _selectionActionButtonKeys = <GlobalKey>[];
-  bool _needsSelectionHeadroom = false;
   double _selectionSpacerHeight = 0;
   int? _dismissPointer;
   Offset? _dismissPointerDownPosition;
@@ -330,7 +330,6 @@ class _ChatState extends State<Chat> {
       _selectedMessageId = null;
       _activeSelectionExtrasKey = null;
       _reactionManagerKey = null;
-      _needsSelectionHeadroom = false;
       _selectionSpacerHeight = 0;
       _selectionActionButtonKeys.clear();
     });
@@ -342,12 +341,12 @@ class _ChatState extends State<Chat> {
       _selectedMessageId = messageId;
       _activeSelectionExtrasKey = null;
       _reactionManagerKey = null;
-      _needsSelectionHeadroom = false;
       _selectionSpacerHeight = 0;
       _selectionActionButtonKeys.clear();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      _primeSelectionHeadroomIfNeeded();
       await _scrollSelectedMessageIntoView(messageId);
       await _scrollSelectionExtrasIntoView();
     });
@@ -368,7 +367,8 @@ class _ChatState extends State<Chat> {
 
   Future<void> _scrollSelectionExtrasIntoView() async {
     if (!_scrollController.hasClients) return;
-    if (_selectionReferenceContext() == null) {
+    final referenceContext = _selectionReferenceContext();
+    if (referenceContext == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _selectedMessageId == null) return;
         _scrollSelectionExtrasIntoView();
@@ -384,16 +384,48 @@ class _ChatState extends State<Chat> {
       return;
     }
     final position = _scrollController.position;
-    if (missingHeadroom <= _selectionHeadroomTolerance) {
-      _releaseSelectionHeadroomIfPossible(position);
+
+    if (missingHeadroom > _selectionHeadroomTolerance) {
+      final availableShift = _availableSelectionShift(position);
+      final shortfall = missingHeadroom - availableShift;
+      if (shortfall > _selectionHeadroomTolerance) {
+        _ensureSelectionHeadroom(shortfall);
+        return;
+      }
+      await _shiftSelectionBy(missingHeadroom);
       return;
     }
-    final availableShift = _availableSelectionShift(position);
-    if (availableShift + _selectionHeadroomTolerance < missingHeadroom) {
-      _ensureSelectionHeadroom(missingHeadroom - availableShift);
+
+    _releaseSelectionHeadroomIfPossible(position);
+
+    final renderObject = referenceContext.findRenderObject();
+    if (renderObject == null || !renderObject.attached) return;
+    final viewport = RenderAbstractViewport.of(renderObject);
+    if (viewport == null) return;
+    final directionSign = _axisDirectionSign(position.axisDirection);
+    final reveal = viewport.getOffsetToReveal(
+      renderObject,
+      directionSign > 0 ? 1.0 : 0.0,
+    );
+    final rawTarget =
+        reveal.offset + (_selectionExtrasViewportGap * directionSign);
+    final minExtent = position.minScrollExtent.toDouble();
+    final maxExtent = position.maxScrollExtent.toDouble();
+    if (rawTarget > maxExtent + _selectionHeadroomTolerance) {
+      _ensureSelectionHeadroom(rawTarget - maxExtent);
       return;
     }
-    await _shiftSelectionBy(missingHeadroom);
+    if (rawTarget < minExtent - _selectionHeadroomTolerance) {
+      _ensureSelectionHeadroom(minExtent - rawTarget);
+      return;
+    }
+    final target = rawTarget.clamp(minExtent, maxExtent);
+    if ((position.pixels - target).abs() < _selectionAutoscrollSlop) return;
+    await position.animateTo(
+      target,
+      duration: _bubbleFocusDuration,
+      curve: _bubbleFocusCurve,
+    );
   }
 
   double _axisDirectionSign(AxisDirection direction) {
@@ -410,8 +442,8 @@ class _ChatState extends State<Chat> {
   }
 
   void _releaseSelectionHeadroomIfPossible(ScrollPosition position) {
-    if (!_needsSelectionHeadroom ||
-        _selectionSpacerHeight <= _selectionHeadroomTolerance) {
+    if (_selectedMessageId != null) return;
+    if (_selectionSpacerHeight <= _selectionHeadroomTolerance) {
       return;
     }
     final scrollRange =
@@ -424,7 +456,6 @@ class _ChatState extends State<Chat> {
       return;
     }
     setState(() {
-      _needsSelectionHeadroom = false;
       _selectionSpacerHeight = 0;
     });
   }
@@ -451,11 +482,9 @@ class _ChatState extends State<Chat> {
 
   void _ensureSelectionHeadroom(double amount) {
     final desired = math.max(amount, _selectionHeadroomTolerance);
-    if (!_needsSelectionHeadroom ||
-        (_selectionSpacerHeight - desired).abs() >
-            _selectionHeadroomTolerance) {
+    if ((_selectionSpacerHeight - desired).abs() >
+        _selectionHeadroomTolerance) {
       setState(() {
-        _needsSelectionHeadroom = true;
         _selectionSpacerHeight = desired;
       });
     }
@@ -507,6 +536,33 @@ class _ChatState extends State<Chat> {
     final selectedId = _selectedMessageId;
     if (selectedId == null) return null;
     return _messageKeys[selectedId]?.currentContext;
+  }
+
+  void _primeSelectionHeadroomIfNeeded() {
+    if (!_scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedMessageId == null) return;
+        _primeSelectionHeadroomIfNeeded();
+      });
+      return;
+    }
+    final position = _scrollController.position;
+    final viewportExtent = position.viewportDimension;
+    if (viewportExtent <= _selectionHeadroomTolerance) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedMessageId == null) return;
+        _primeSelectionHeadroomIfNeeded();
+      });
+      return;
+    }
+    final desired = math.max(viewportExtent, _selectionExtrasViewportGap);
+    if ((_selectionSpacerHeight - desired).abs() <
+        _selectionHeadroomTolerance) {
+      return;
+    }
+    setState(() {
+      _selectionSpacerHeight = desired;
+    });
   }
 
   @override
@@ -718,8 +774,8 @@ class _ChatState extends State<Chat> {
                               final selectionActive =
                                   _selectedMessageId != null;
                               final selectionHeadroomActive = selectionActive &&
-                                  _needsSelectionHeadroom &&
-                                  _selectionSpacerHeight > 0;
+                                  _selectionSpacerHeight >
+                                      _selectionHeadroomTolerance;
                               final baseBubbleMaxWidth =
                                   contentWidth * (isCompact ? 0.8 : 0.7);
                               final messageRowMaxWidth = contentWidth;
@@ -1499,6 +1555,7 @@ class _ChatState extends State<Chat> {
                                                       .colorScheme.border),
                                             ),
                                           ),
+                                          inputToolbarMargin: EdgeInsets.zero,
                                           leading: [
                                             ShadPopover(
                                               controller:
@@ -2486,6 +2543,7 @@ class _GuestChatState extends State<GuestChat> {
                   top: BorderSide(color: context.colorScheme.border),
                 ),
               ),
+              inputToolbarMargin: EdgeInsets.zero,
               leading: [
                 ShadPopover(
                   controller: _emojiPopoverController,

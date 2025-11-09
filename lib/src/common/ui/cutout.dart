@@ -131,7 +131,7 @@ class _CutoutPainter extends CustomPainter {
 
     canvas.drawPath(fillPath, fillPaint);
     if (borderColor.a > 0) {
-      canvas.drawPath(outerPath, strokePaint);
+      canvas.drawPath(fillPath, strokePaint);
     }
   }
 
