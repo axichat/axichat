@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -290,14 +291,13 @@ class _ChatState extends State<Chat> {
       }
     }
 
-    collect(_messageBubbleKeys[selectedId], padding: 0);
+    collect(_messageBubbleKeys[selectedId], padding: 12);
     for (final key in _selectionActionButtonKeys) {
       collect(key, padding: 0);
     }
     collect(_reactionManagerKey, padding: 4);
 
     if (hitRegions.isEmpty) {
-      _clearMessageSelection();
       return;
     }
     final tappedInside =
@@ -320,6 +320,7 @@ class _ChatState extends State<Chat> {
     if (_selectedMessageId == messageId) {
       _clearMessageSelection();
     } else {
+      _resetDismissPointer();
       _selectMessage(messageId);
     }
   }
@@ -346,7 +347,7 @@ class _ChatState extends State<Chat> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _primeSelectionHeadroomIfNeeded();
+      await _primeSelectionHeadroomIfNeeded();
       await _scrollSelectedMessageIntoView(messageId);
       await _scrollSelectionExtrasIntoView();
     });
@@ -538,22 +539,29 @@ class _ChatState extends State<Chat> {
     return _messageKeys[selectedId]?.currentContext;
   }
 
-  void _primeSelectionHeadroomIfNeeded() {
+  Future<void> _waitForPostFrame() async {
+    if (!mounted) return;
+    final completer = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    await completer.future;
+  }
+
+  Future<void> _primeSelectionHeadroomIfNeeded() async {
     if (!_scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedMessageId == null) return;
-        _primeSelectionHeadroomIfNeeded();
-      });
-      return;
+      await _waitForPostFrame();
+      if (!mounted || _selectedMessageId == null) return;
+      return _primeSelectionHeadroomIfNeeded();
     }
     final position = _scrollController.position;
     final viewportExtent = position.viewportDimension;
     if (viewportExtent <= _selectionHeadroomTolerance) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedMessageId == null) return;
-        _primeSelectionHeadroomIfNeeded();
-      });
-      return;
+      await _waitForPostFrame();
+      if (!mounted || _selectedMessageId == null) return;
+      return _primeSelectionHeadroomIfNeeded();
     }
     final desired = math.max(viewportExtent, _selectionExtrasViewportGap);
     if ((_selectionSpacerHeight - desired).abs() <
@@ -563,6 +571,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _selectionSpacerHeight = desired;
     });
+    await _waitForPostFrame();
   }
 
   @override
