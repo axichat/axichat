@@ -21,6 +21,7 @@ import 'guest_calendar_bloc.dart';
 import '../view/widgets/calendar_drag_tab_mixin.dart';
 import '../view/widgets/calendar_keyboard_scope.dart';
 import '../view/widgets/task_form_section.dart';
+import '../view/models/calendar_drag_payload.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({super.key});
@@ -369,11 +370,22 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
     required bool highlightTasksTab,
   }) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    return buildDragAwareTabBar(
+    final Widget tabBar = buildDragAwareTabBar(
       context: context,
       bottomInset: bottomInset,
       scheduleTabLabel: const Text('Schedule'),
       tasksTabLabel: _buildTasksTabLabel(highlightTasksTab),
+    );
+    final Widget cancelBucket = buildDragCancelBucket(
+      context: context,
+      bottomInset: bottomInset,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        tabBar,
+        cancelBucket,
+      ],
     );
   }
 
@@ -521,4 +533,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
 
   @override
   bool get isDragSwitcherEnabled => _usesMobileLayout;
+
+  @override
+  void onDragCancelRequested(CalendarDragPayload payload) {
+    FeedbackSystem.showInfo(context, 'Drag canceled');
+  }
 }
