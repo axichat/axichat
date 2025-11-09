@@ -11,6 +11,8 @@ class CutoutSurface extends StatelessWidget {
     required this.backgroundColor,
     required this.borderColor,
     required this.shape,
+    this.shadows = const [],
+    this.shadowOpacity = 0,
   });
 
   final Widget child;
@@ -18,9 +20,12 @@ class CutoutSurface extends StatelessWidget {
   final Color backgroundColor;
   final Color borderColor;
   final OutlinedBorder shape;
+  final List<BoxShadow> shadows;
+  final double shadowOpacity;
 
   @override
   Widget build(BuildContext context) {
+    final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -30,6 +35,8 @@ class CutoutSurface extends StatelessWidget {
             backgroundColor: backgroundColor,
             borderColor: borderColor,
             cutouts: cutouts,
+            shadows: shadows,
+            shadowOpacity: resolvedShadowOpacity,
           ),
           child: child,
         ),
@@ -66,21 +73,50 @@ class _CutoutPainter extends CustomPainter {
     required this.backgroundColor,
     required this.borderColor,
     required this.cutouts,
+    required this.shadows,
+    required this.shadowOpacity,
   });
 
   final OutlinedBorder shape;
   final Color backgroundColor;
   final Color borderColor;
   final List<CutoutSpec> cutouts;
+  final List<BoxShadow> shadows;
+  final double shadowOpacity;
 
   @override
   void paint(Canvas canvas, Size size) {
-    var path = shape.getOuterPath(Offset.zero & size);
+    final rect = Offset.zero & size;
+    var path = Path()..addPath(shape.getOuterPath(rect), Offset.zero);
     for (final spec in cutouts) {
       final rect = _cutoutRect(size, spec);
-      final cutout =
+      final cutoutPath =
           SquircleBorder(cornerRadius: spec.cornerRadius).getOuterPath(rect);
-      path = Path.combine(PathOperation.difference, path, cutout);
+      path = Path.combine(PathOperation.difference, path, cutoutPath);
+    }
+
+    if (shadowOpacity > 0 && shadows.isNotEmpty) {
+      for (final shadow in shadows) {
+        final baseAlpha = shadow.color.a;
+        if (baseAlpha <= 0) continue;
+        final shadowColor = shadow.color.withValues(
+          alpha: baseAlpha * shadowOpacity,
+        );
+        if (shadowColor.a <= 0) continue;
+        final paint = Paint()
+          ..color = shadowColor
+          ..style = PaintingStyle.fill
+          ..maskFilter = shadow.blurRadius <= 0
+              ? null
+              : MaskFilter.blur(
+                  BlurStyle.normal,
+                  _blurSigma(shadow.blurRadius),
+                );
+        canvas.save();
+        canvas.translate(shadow.offset.dx, shadow.offset.dy);
+        canvas.drawPath(path, paint);
+        canvas.restore();
+      }
     }
 
     final fillPaint = Paint()
@@ -248,4 +284,9 @@ Offset _insideNormal(CutoutEdge edge) {
     case CutoutEdge.bottom:
       return const Offset(0, -1);
   }
+}
+
+double _blurSigma(double radius) {
+  if (radius <= 0) return 0;
+  return radius * 0.57735 + 0.5;
 }
