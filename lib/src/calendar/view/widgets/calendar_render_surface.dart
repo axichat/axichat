@@ -1797,6 +1797,17 @@ class RenderCalendarSurface extends RenderBox
       return;
     }
 
+    final RRect fillRect = RRect.fromRectAndRadius(
+      previewRect.deflate(0.5),
+      const Radius.circular(calendarBorderRadius),
+    );
+    final Paint fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = calendarPrimaryColor.withValues(
+        alpha: calendarSlotPreviewOpacity,
+      );
+    canvas.drawRRect(fillRect, fillPaint);
+
     final RRect outlineRect = RRect.fromRectAndRadius(
       previewRect.deflate(0.5),
       const Radius.circular(calendarBorderRadius),
@@ -2129,22 +2140,39 @@ class RenderCalendarSurface extends RenderBox
     TaskInteractionController controller,
     CalendarTask task,
   ) {
-    final Duration fallbackDuration = controller.draggingTaskSnapshot?.duration ??
+    final Duration? explicitDuration =
+        controller.draggingTaskSnapshot?.effectiveDuration ??
+            task.effectiveDuration;
+    if (explicitDuration != null && explicitDuration.inMinutes > 0) {
+      return explicitDuration;
+    }
+
+    final bool scheduledDrag =
+        controller.dragOriginSlot != null ||
+        controller.dragStartScheduledTime != null ||
+        controller.draggingTaskSnapshot?.scheduledTime != null;
+    if (scheduledDrag) {
+      final CalendarLayoutMetrics? metrics = _metrics;
+      final double? height = controller.draggingTaskHeight;
+      if (metrics != null &&
+          height != null &&
+          height.isFinite &&
+          height > 0 &&
+          metrics.slotHeight > 0) {
+        final double slots = height / metrics.slotHeight;
+        final int minutes = math.max<int>(
+          metrics.minutesPerSlot,
+          (slots * metrics.minutesPerSlot).round(),
+        );
+        if (minutes > 0) {
+          return Duration(minutes: minutes);
+        }
+      }
+    }
+
+    return controller.draggingTaskSnapshot?.duration ??
         task.duration ??
         const Duration(hours: 1);
-    final CalendarLayoutMetrics? metrics = _metrics;
-    final double? height = controller.draggingTaskHeight;
-    if (metrics != null &&
-        height != null &&
-        height.isFinite &&
-        height > 0 &&
-        metrics.slotHeight > 0) {
-      final double slots = height / metrics.slotHeight;
-      final int minutes = math.max<int>(
-          metrics.minutesPerSlot, (slots * metrics.minutesPerSlot).round());
-      return Duration(minutes: minutes);
-    }
-    return fallbackDuration;
   }
 
   double _pointerOffsetForDrag(TaskInteractionController controller) {

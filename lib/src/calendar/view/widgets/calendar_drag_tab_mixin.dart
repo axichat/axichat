@@ -7,10 +7,10 @@ import '../models/calendar_drag_payload.dart';
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
-  static const double _leftEdgeHotZoneWidth = 48.0;
-  static const double _rightEdgeHotZoneWidth = 28.0;
-  static const double _pointerHotZoneMinLeft = 32.0;
-  static const double _pointerHotZoneMinRight = 18.0;
+  static const double _leftEdgeHotZoneWidth = 60.0;
+  static const double _rightEdgeHotZoneWidth = 24.0;
+  static const double _pointerHotZoneMinLeft = 34.0;
+  static const double _pointerHotZoneMinRight = 14.0;
   static const double _pointerHotZoneMax = 40.0;
   static const double _pointerHotZoneFraction = 0.04;
   static const Duration _switchDelay = Duration(milliseconds: 320);

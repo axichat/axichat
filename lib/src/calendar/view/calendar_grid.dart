@@ -1175,6 +1175,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 includeCompletionAction: false,
                 includePriorityActions: false,
                 includeSplitAction: true,
+                stripTaskKeyword: true,
               );
             },
             onClose: () => Navigator.of(sheetContext).pop(),
@@ -2861,6 +2862,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     bool includeCompletionAction = true,
     bool includePriorityActions = true,
     bool includeSplitAction = false,
+    bool stripTaskKeyword = false,
   }) {
     final List<TaskContextAction> actions = <TaskContextAction>[
       TaskContextAction(
@@ -3042,7 +3044,28 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
     }
 
-    return actions;
+    if (!stripTaskKeyword) {
+      return actions;
+    }
+    return actions
+        .map(
+          (action) => TaskContextAction(
+            icon: action.icon,
+            label: _stripTaskKeyword(action.label),
+            onSelected: action.onSelected,
+            destructive: action.destructive,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String _stripTaskKeyword(String label) {
+    final RegExp keyword = RegExp(r'\b[Tt]ask\b');
+    final String stripped = label
+        .replaceAll(keyword, '')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .trim();
+    return stripped.isEmpty ? label : stripped;
   }
 
   TaskContextMenuBuilder _buildTaskContextMenuBuilder({

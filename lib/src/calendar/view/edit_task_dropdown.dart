@@ -262,11 +262,9 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                calendarGutterSm,
-                calendarGutterMd,
-                calendarGutterSm,
-                calendarGutterMd,
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterLg,
+                vertical: calendarGutterMd,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
