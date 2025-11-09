@@ -8,10 +8,11 @@ import '../models/calendar_drag_payload.dart';
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
   static const double _edgeHotZoneWidth = 44.0;
-  static const double _pointerHotZoneMin = 40.0;
-  static const double _pointerHotZoneMax = 40.0;
-  static const double _pointerHotZoneFraction = 0.04;
-  static const Duration _switchDelay = Duration(milliseconds: 220);
+  static const double _pointerHotZoneMinLeft = 32.0;
+  static const double _pointerHotZoneMinRight = 32.0;
+  static const double _pointerHotZoneMax = 56.0;
+  static const double _pointerHotZoneFraction = 0.06;
+  static const Duration _switchDelay = Duration(milliseconds: 320);
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
   bool _evaluatingSwitch = false;
@@ -325,15 +326,19 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
     final Offset localPosition = box.globalToLocal(globalPosition);
     final double width = box.size.width;
-    double pointerThreshold = width * _pointerHotZoneFraction;
-    pointerThreshold = pointerThreshold.clamp(
-      _pointerHotZoneMin,
+    final double baseThreshold = width * _pointerHotZoneFraction;
+    final double leftThreshold = baseThreshold.clamp(
+      _pointerHotZoneMinLeft,
+      _pointerHotZoneMax,
+    );
+    final double rightThreshold = baseThreshold.clamp(
+      _pointerHotZoneMinRight,
       _pointerHotZoneMax,
     );
     int? cueIndex;
-    final bool pointerInLeftZone = localPosition.dx <= pointerThreshold;
+    final bool pointerInLeftZone = localPosition.dx <= leftThreshold;
     final bool pointerInRightZone =
-        localPosition.dx >= width - pointerThreshold;
+        localPosition.dx >= width - rightThreshold;
     if (pointerInLeftZone) {
       cueIndex = 0;
     } else if (pointerInRightZone) {

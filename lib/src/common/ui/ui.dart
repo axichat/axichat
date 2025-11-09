@@ -120,6 +120,7 @@ const calendarSlotSplashOpacity = 0.2;
 const calendarSlotHighlightOpacity = 0.1;
 const calendarTaskGhostOpacity = 0.45;
 const calendarSplitPreviewGhostOpacity = 0.55;
+const calendarSplitPreviewBaseFadeOpacity = 0.28;
 const calendarZoomControlsBackgroundOpacity = 0.95;
 const calendarDayHeaderHighlightOpacity = 0.05;
 const calendarTimeDividerOpacity = 0.3;

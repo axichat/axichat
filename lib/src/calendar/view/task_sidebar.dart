@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter/rendering.dart' show RendererBinding;
+import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
 import 'package:flutter/scheduler.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -68,6 +68,12 @@ class TaskSidebarState extends State<TaskSidebar>
   static const Duration _selectionTimeStep = Duration(minutes: 15);
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewportKey = GlobalKey();
+  final Map<CalendarSidebarSection, GlobalKey> _sectionKeys = {
+    CalendarSidebarSection.unscheduled:
+        GlobalKey(debugLabel: 'sidebar-unscheduled-section'),
+    CalendarSidebarSection.reminders:
+        GlobalKey(debugLabel: 'sidebar-reminders-section'),
+  };
   Ticker? _sidebarAutoScrollTicker;
   double _sidebarAutoScrollOffsetPerFrame = 0;
   static const double _autoScrollHorizontalSlop = 32.0;
@@ -145,7 +151,18 @@ class TaskSidebarState extends State<TaskSidebar>
     if (!_externalGridDragActive) {
       return;
     }
-    // Reserved for future hover-driven expansions.
+    if (!_isTouchOnlyInput) {
+      return;
+    }
+    final CalendarSidebarSection? hoveredSection =
+        _sectionForGlobalPosition(globalPosition);
+    if (hoveredSection == null) {
+      return;
+    }
+    if (_sidebarController.state.expandedSection == hoveredSection) {
+      return;
+    }
+    _sidebarController.expandSection(hoveredSection);
   }
 
   void handleExternalGridDragEnded() {
@@ -153,6 +170,33 @@ class TaskSidebarState extends State<TaskSidebar>
       return;
     }
     _externalGridDragActive = false;
+  }
+
+  CalendarSidebarSection? _sectionForGlobalPosition(Offset globalPosition) {
+    for (final MapEntry<CalendarSidebarSection, GlobalKey> entry
+        in _sectionKeys.entries) {
+      final BuildContext? context = entry.value.currentContext;
+      if (context == null) {
+        continue;
+      }
+      final RenderBox? box = context.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) {
+        continue;
+      }
+      final Size size = box.size;
+      final bool hasSize = size.isFinite &&
+          size.width > 0 &&
+          size.height > 0;
+      if (!hasSize) {
+        continue;
+      }
+      final Offset origin = box.localToGlobal(Offset.zero);
+      final Rect rect = origin & size;
+      if (rect.contains(globalPosition)) {
+        return entry.key;
+      }
+    }
+    return null;
   }
 
   void _handleQuickTaskInputChanged(String value) {
@@ -1744,7 +1788,9 @@ class TaskSidebarState extends State<TaskSidebar>
           itemCount: unscheduledTasks.length,
           expandedChild: Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterSm, vertical: calendarInsetMd),
+              horizontal: calendarGutterSm,
+              vertical: calendarInsetMd,
+            ),
             child: _buildTaskList(
               unscheduledTasks,
               emptyLabel: 'No unscheduled tasks',
@@ -1762,7 +1808,9 @@ class TaskSidebarState extends State<TaskSidebar>
           itemCount: reminderTasks.length,
           expandedChild: Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterSm, vertical: calendarInsetMd),
+              horizontal: calendarGutterSm,
+              vertical: calendarInsetMd,
+            ),
             child: _buildReminderList(reminderTasks, uiState),
           ),
           collapsedChild: _buildCollapsedPreview(reminderTasks),
@@ -1779,120 +1827,137 @@ class TaskSidebarState extends State<TaskSidebar>
     required Widget collapsedChild,
     required CalendarSidebarState uiState,
   }) {
-    final isExpanded = uiState.expandedSection == section;
+    final bool isExpanded = uiState.expandedSection == section;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: sidebarBackgroundColor,
-            border: Border(
-              bottom: section == CalendarSidebarSection.unscheduled
-                  ? const BorderSide(
-                      color: calendarBorderColor,
-                      width: calendarBorderStroke,
-                    )
-                  : BorderSide.none,
+    Widget buildContent() {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: sidebarBackgroundColor,
+              border: Border(
+                bottom: section == CalendarSidebarSection.unscheduled
+                    ? const BorderSide(
+                        color: calendarBorderColor,
+                        width: calendarBorderStroke,
+                      )
+                    : BorderSide.none,
+              ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              InkWell(
-                onTap: () => _sidebarController.toggleSection(section),
-                child: Padding(
-                  padding: calendarFieldPadding,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: calendarSubtitleColor,
-                            letterSpacing: 0.5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                InkWell(
+                  onTap: () => _sidebarController.toggleSection(section),
+                  child: Padding(
+                    padding: calendarFieldPadding,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: calendarSubtitleColor,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
-                      ),
-                      _buildCountBadge(itemCount, isExpanded),
-                      const SizedBox(width: calendarGutterSm),
-                      Icon(
-                        isExpanded
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        size: 18,
-                        color: calendarSubtitleColor,
-                      ),
-                    ],
+                        _buildCountBadge(itemCount, isExpanded),
+                        const SizedBox(width: calendarGutterSm),
+                        Icon(
+                          isExpanded
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 18,
+                          color: calendarSubtitleColor,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              ClipRect(
-                child: AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 220),
-                  firstChild: const SizedBox.shrink(),
-                  secondChild: Container(
-                    padding: calendarAccordionPadding,
-                    child: expandedChild,
+                ClipRect(
+                  child: AnimatedCrossFade(
+                    duration: const Duration(milliseconds: 220),
+                    firstChild: const SizedBox.shrink(),
+                    secondChild: Container(
+                      padding: calendarAccordionPadding,
+                      child: expandedChild,
+                    ),
+                    crossFadeState: isExpanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    sizeCurve: Curves.easeInOutCubic,
+                    alignment: Alignment.topCenter,
                   ),
+                ),
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 160),
+                  firstChild: SizedBox(
+                    width: double.infinity,
+                    child: CalendarDragTargetRegion(
+                      onEnter: (_) => _handleSidebarSectionDragEnter(section),
+                      onMove: (_) => _handleSidebarSectionDragEnter(section),
+                      onDrop: (details) {
+                        _handleSidebarSectionDragEnter(section);
+                        _handleTaskDroppedIntoSidebar(details.payload.task);
+                      },
+                      builder: (context, isHovering, __) {
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _sidebarController.toggleSection(section),
+                          child: AnimatedContainer(
+                            key: ValueKey('${section.name}-collapsed'),
+                            duration: const Duration(milliseconds: 120),
+                            padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                            constraints: const BoxConstraints(minHeight: 40),
+                            decoration: BoxDecoration(
+                              color: isHovering
+                                  ? calendarPrimaryColor
+                                      .withValues(alpha: 0.12)
+                                  : Colors.transparent,
+                              borderRadius:
+                                  BorderRadius.circular(calendarBorderRadius),
+                              border: isHovering
+                                  ? Border.all(
+                                      color: calendarPrimaryColor,
+                                      width: 1.5,
+                                    )
+                                  : null,
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: collapsedChild,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  secondChild: const SizedBox.shrink(),
                   crossFadeState: isExpanded
                       ? CrossFadeState.showSecond
                       : CrossFadeState.showFirst,
-                  sizeCurve: Curves.easeInOutCubic,
-                  alignment: Alignment.topCenter,
+                  sizeCurve: Curves.easeInOut,
                 ),
-              ),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 160),
-                firstChild: CalendarDragTargetRegion(
-                  onEnter: (_) => _handleSidebarSectionDragEnter(section),
-                  onMove: (_) => _handleSidebarSectionDragEnter(section),
-                  onDrop: (details) {
-                    _handleSidebarSectionDragEnter(section);
-                    _handleTaskDroppedIntoSidebar(details.payload.task);
-                  },
-                  builder: (context, isHovering, __) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _sidebarController.toggleSection(section),
-                      child: AnimatedContainer(
-                        key: ValueKey('${section.name}-collapsed'),
-                        duration: const Duration(milliseconds: 120),
-                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-                        constraints: const BoxConstraints(minHeight: 40),
-                        decoration: BoxDecoration(
-                          color: isHovering
-                              ? calendarPrimaryColor.withValues(alpha: 0.12)
-                              : Colors.transparent,
-                          borderRadius:
-                              BorderRadius.circular(calendarBorderRadius),
-                          border: isHovering
-                              ? Border.all(
-                                  color: calendarPrimaryColor,
-                                  width: 1.5,
-                                )
-                              : null,
-                        ),
-                        child: collapsedChild,
-                      ),
-                    );
-                  },
-                ),
-                secondChild: const SizedBox.shrink(),
-                crossFadeState: isExpanded
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                sizeCurve: Curves.easeInOut,
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    }
+
+    final content = buildContent();
+    final GlobalKey? key = _sectionKeys[section];
+    if (key == null) {
+      return content;
+    }
+    return KeyedSubtree(key: key, child: content);
   }
+
 
   Widget _buildCollapsedPreview(List<CalendarTask> tasks) {
     if (tasks.isEmpty) {

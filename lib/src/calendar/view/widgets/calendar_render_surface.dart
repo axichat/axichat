@@ -1797,25 +1797,39 @@ class RenderCalendarSurface extends RenderBox
       return;
     }
 
-    final Paint previewPaint = Paint()
+    final RRect outlineRect = RRect.fromRectAndRadius(
+      previewRect.deflate(0.5),
+      const Radius.circular(calendarBorderRadius),
+    );
+    final Paint outlinePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
       ..color = calendarPrimaryColor.withValues(
         alpha: calendarSlotPreviewOpacity,
       );
-    canvas.drawRect(previewRect, previewPaint);
+    canvas.drawRRect(outlineRect, outlinePaint);
 
     final double anchorHeight =
         math.min(metrics.slotHeight, previewRect.height);
-    final Rect anchorRect = Rect.fromLTWH(
-      previewRect.left,
-      previewRect.top,
-      previewRect.width,
+    final Rect anchorBounds = Rect.fromLTWH(
+      previewRect.left + 1,
+      previewRect.top + 1,
+      math.max(0.0, previewRect.width - 2),
       anchorHeight,
     );
     final Paint anchorPaint = Paint()
+      ..style = PaintingStyle.fill
       ..color = calendarPrimaryColor.withValues(
         alpha: calendarSlotPreviewAnchorOpacity,
       );
-    canvas.drawRect(anchorRect, anchorPaint);
+    final RRect anchorRect = RRect.fromRectAndCorners(
+      anchorBounds,
+      topLeft: const Radius.circular(calendarBorderRadius - 1),
+      topRight: const Radius.circular(calendarBorderRadius - 1),
+      bottomLeft: const Radius.circular(2),
+      bottomRight: const Radius.circular(2),
+    );
+    canvas.drawRRect(anchorRect, anchorPaint);
   }
 
   void _paintHoverHighlight(

@@ -30,6 +30,7 @@ class CalendarTaskDraggable extends StatefulWidget {
     this.snapshotBuilder,
     this.childWhenDragging,
     this.requiresLongPress = false,
+    this.longPressDelay,
   });
 
   final CalendarTask task;
@@ -49,6 +50,7 @@ class CalendarTaskDraggable extends StatefulWidget {
   final Widget? childWhenDragging;
   final bool enabled;
   final bool requiresLongPress;
+  final Duration? longPressDelay;
 
   @override
   State<CalendarTaskDraggable> createState() => _CalendarTaskDraggableState();
@@ -141,6 +143,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         onDragEnd: (details) => _handleDragFinished(cancelled: false),
         onDraggableCanceled: (_, __) =>
             _handleDragFinished(cancelled: true),
+        delay: widget.longPressDelay ?? kLongPressTimeout,
         child: interactiveChild,
       );
     }

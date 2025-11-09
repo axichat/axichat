@@ -668,6 +668,7 @@ CalendarTaskEntryBindings _buildTestBindings({
     addGeometryListener: (_) {},
     removeGeometryListener: (_) {},
     requiresLongPressToDrag: false,
+    longPressToDragDelay: Duration.zero,
   );
 }
 
