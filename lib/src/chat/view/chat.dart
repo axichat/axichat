@@ -222,6 +222,7 @@ class _ChatState extends State<Chat> {
   final _messageListKey = GlobalKey();
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _reactionManagerKey;
+  final _selectionActionButtonKeys = <GlobalKey>[];
   bool _needsSelectionHeadroom = false;
   double _selectionSpacerHeight = 0;
   int? _dismissPointer;
@@ -285,8 +286,10 @@ class _ChatState extends State<Chat> {
       }
     }
 
-    collect(_messageBubbleKeys[selectedId]);
-    collect(_activeSelectionExtrasKey, padding: 4);
+    collect(_messageBubbleKeys[selectedId], padding: 0);
+    for (final key in _selectionActionButtonKeys) {
+      collect(key, padding: 0);
+    }
     collect(_reactionManagerKey, padding: 4);
 
     if (hitRegions.isEmpty) {
@@ -325,6 +328,7 @@ class _ChatState extends State<Chat> {
       _reactionManagerKey = null;
       _needsSelectionHeadroom = false;
       _selectionSpacerHeight = 0;
+      _selectionActionButtonKeys.clear();
     });
   }
 
@@ -336,6 +340,7 @@ class _ChatState extends State<Chat> {
       _reactionManagerKey = null;
       _needsSelectionHeadroom = false;
       _selectionSpacerHeight = 0;
+      _selectionActionButtonKeys.clear();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -360,6 +365,7 @@ class _ChatState extends State<Chat> {
 
   Future<void> _scrollSelectionExtrasIntoView() async {
     if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
     final context = _selectionReferenceContext();
     if (context == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -368,52 +374,109 @@ class _ChatState extends State<Chat> {
       });
       return;
     }
+    final missingHeadroom = _measureSelectionHeadroom();
+    if (missingHeadroom == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _selectedMessageId == null) return;
+        _scrollSelectionExtrasIntoView();
+      });
+      return;
+    }
+
+    if (missingHeadroom > _selectionHeadroomTolerance) {
+      final availableShift = _availableSelectionShift(position);
+      final shortfall = missingHeadroom - availableShift;
+      if (shortfall > _selectionHeadroomTolerance) {
+        _ensureSelectionHeadroom(shortfall);
+        return;
+      }
+      await _shiftSelectionBy(missingHeadroom);
+      return;
+    }
+
+    _releaseSelectionHeadroomIfPossible(position);
+
     final renderObject = context.findRenderObject();
     if (renderObject == null || !renderObject.attached) return;
     final viewport = RenderAbstractViewport.of(renderObject);
-    final position = _scrollController.position;
-    final reveal = viewport.getOffsetToReveal(renderObject, 1.0);
-    final axisDirection = position.axisDirection;
-    final directionSign =
-        axisDirection == AxisDirection.up || axisDirection == AxisDirection.left
-            ? -1.0
-            : 1.0;
-    var target = reveal.offset + (_selectionExtrasViewportGap * directionSign);
+    final directionSign = _axisDirectionSign(position.axisDirection);
+    var target = viewport
+            .getOffsetToReveal(
+              renderObject,
+              directionSign > 0 ? 1.0 : 0.0,
+            )
+            .offset +
+        (_selectionExtrasViewportGap * directionSign);
     final minExtent = position.minScrollExtent.toDouble();
     final maxExtent = position.maxScrollExtent.toDouble();
-    final scrollRange = (maxExtent - minExtent).abs();
-    final viewportExtent = position.viewportDimension;
-    final minRange = viewportExtent + _selectionExtrasViewportGap;
-    if (scrollRange < minRange - _selectionHeadroomTolerance) {
-      _ensureSelectionHeadroom(minRange - scrollRange);
-      return;
-    }
 
-    if (target > maxExtent + _selectionHeadroomTolerance) {
-      _ensureSelectionHeadroom(target - maxExtent);
-      return;
-    }
-    if (target < minExtent - _selectionHeadroomTolerance) {
-      target = minExtent;
-    } else if (_needsSelectionHeadroom) {
-      setState(() {
-        _needsSelectionHeadroom = false;
-        _selectionSpacerHeight = 0;
-      });
-    }
+    target = target.clamp(minExtent, maxExtent);
 
     if ((position.pixels - target).abs() < _selectionAutoscrollSlop) return;
     await position.animateTo(
-      target.clamp(minExtent, maxExtent),
+      target,
       duration: _bubbleFocusDuration,
       curve: _bubbleFocusCurve,
     );
   }
 
-  void _ensureSelectionHeadroom(double amount) {
-    final desired = _resolvedHeadroomAmount(amount);
+  double _axisDirectionSign(AxisDirection direction) {
+    return direction == AxisDirection.up || direction == AxisDirection.left
+        ? -1.0
+        : 1.0;
+  }
+
+  double _availableSelectionShift(ScrollPosition position) {
+    final directionSign = _axisDirectionSign(position.axisDirection);
+    return directionSign > 0
+        ? position.maxScrollExtent - position.pixels
+        : position.pixels - position.minScrollExtent;
+  }
+
+  void _releaseSelectionHeadroomIfPossible(ScrollPosition position) {
     if (!_needsSelectionHeadroom ||
-        (desired - _selectionSpacerHeight).abs() >
+        _selectionSpacerHeight <= _selectionHeadroomTolerance) {
+      return;
+    }
+    final scrollRange =
+        (position.maxScrollExtent - position.minScrollExtent).abs();
+    final intrinsicRange = math.max(
+      0.0,
+      scrollRange - _selectionSpacerHeight,
+    );
+    if (intrinsicRange <= _selectionHeadroomTolerance) {
+      return;
+    }
+    setState(() {
+      _needsSelectionHeadroom = false;
+      _selectionSpacerHeight = 0;
+    });
+  }
+
+  Future<void> _shiftSelectionBy(double extent) async {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final directionSign = _axisDirectionSign(position.axisDirection);
+    final target = (position.pixels + (extent * directionSign)).clamp(
+      position.minScrollExtent.toDouble(),
+      position.maxScrollExtent.toDouble(),
+    );
+    if ((position.pixels - target).abs() < _selectionAutoscrollSlop) return;
+    await position.animateTo(
+      target,
+      duration: _bubbleFocusDuration,
+      curve: _bubbleFocusCurve,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedMessageId == null) return;
+      _scrollSelectionExtrasIntoView();
+    });
+  }
+
+  void _ensureSelectionHeadroom(double amount) {
+    final desired = math.max(amount, _selectionHeadroomTolerance);
+    if (!_needsSelectionHeadroom ||
+        (_selectionSpacerHeight - desired).abs() >
             _selectionHeadroomTolerance) {
       setState(() {
         _needsSelectionHeadroom = true;
@@ -421,16 +484,9 @@ class _ChatState extends State<Chat> {
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _selectedMessageId == null) return;
       _scrollSelectionExtrasIntoView();
     });
-  }
-
-  double _resolvedHeadroomAmount(double fallback) {
-    final measured = _measureSelectionHeadroom();
-    final clampedFallback = math.max(fallback, _selectionHeadroomTolerance);
-    if (measured == null) return clampedFallback;
-    return math.max(measured, clampedFallback);
   }
 
   double? _measureSelectionHeadroom() {
@@ -486,15 +542,15 @@ class _ChatState extends State<Chat> {
     final minRange = viewportExtent + _selectionExtrasViewportGap;
     if (scrollRange >= minRange - _selectionHeadroomTolerance) return;
     final deficit = minRange - scrollRange;
+    final desired = math.max(deficit, _selectionHeadroomTolerance);
     if (_needsSelectionHeadroom &&
-        (_selectionSpacerHeight - deficit).abs() <
+        (_selectionSpacerHeight - desired).abs() <
             _selectionHeadroomTolerance) {
       return;
     }
-    final resolved = _resolvedHeadroomAmount(deficit);
     setState(() {
       _needsSelectionHeadroom = true;
-      _selectionSpacerHeight = resolved;
+      _selectionSpacerHeight = desired;
     });
   }
 
@@ -771,9 +827,10 @@ class _ChatState extends State<Chat> {
                               }
                               if (selectionHeadroomActive) {
                                 final spacerTimestamp = dashMessages.isNotEmpty
-                                    ? dashMessages.last.createdAt
+                                    ? dashMessages.first.createdAt
                                     : DateTime.now();
-                                dashMessages.add(
+                                dashMessages.insert(
+                                  0,
                                   ChatMessage(
                                     user: spacerUser,
                                     createdAt: spacerTimestamp,
@@ -1075,6 +1132,19 @@ class _ChatState extends State<Chat> {
                                               chainedNext: chainedNext,
                                               isSelected: isSelected,
                                             );
+                                            final bubbleKey =
+                                                _messageBubbleKeys.putIfAbsent(
+                                              messageModel.stanzaID,
+                                              () => GlobalKey(),
+                                            );
+                                            final bubbleMaxWidth =
+                                                clampedBubbleWidth;
+                                            final bubbleConstraints =
+                                                BoxConstraints(
+                                              maxWidth: bubbleMaxWidth,
+                                            );
+                                            final bubbleHighlightColor =
+                                                context.colorScheme.primary;
                                             final bubbleContent = Padding(
                                               padding: bubblePadding,
                                               child: Column(
@@ -1086,9 +1156,9 @@ class _ChatState extends State<Chat> {
                                             );
                                             final bubble = LayoutBuilder(
                                               builder:
-                                                  (context, bubbleConstraints) {
+                                                  (context, innerConstraints) {
                                                 final width =
-                                                    bubbleConstraints.maxWidth;
+                                                    innerConstraints.maxWidth;
                                                 final bubbleWidth =
                                                     width.isFinite
                                                         ? width
@@ -1106,16 +1176,41 @@ class _ChatState extends State<Chat> {
                                                                 bubbleWidth,
                                                           )
                                                         : const [];
-                                                return CutoutSurface(
-                                                  backgroundColor: bubbleColor,
-                                                  borderColor: borderColor,
-                                                  shape:
-                                                      ContinuousRectangleBorder(
-                                                    borderRadius:
-                                                        bubbleBorderRadius,
+                                                return TweenAnimationBuilder<
+                                                    double>(
+                                                  tween: Tween<double>(
+                                                    begin: 0,
+                                                    end: isSelected ? 1.0 : 0.0,
                                                   ),
-                                                  cutouts: cutouts,
+                                                  duration:
+                                                      _bubbleFocusDuration,
+                                                  curve: _bubbleFocusCurve,
                                                   child: bubbleContent,
+                                                  builder: (
+                                                    context,
+                                                    shadowValue,
+                                                    child,
+                                                  ) {
+                                                    return CutoutSurface(
+                                                      key: bubbleKey,
+                                                      backgroundColor:
+                                                          bubbleColor,
+                                                      borderColor: borderColor,
+                                                      shape:
+                                                          ContinuousRectangleBorder(
+                                                        borderRadius:
+                                                            bubbleBorderRadius,
+                                                      ),
+                                                      cutouts: cutouts,
+                                                      shadows:
+                                                          _selectedBubbleShadows(
+                                                        bubbleHighlightColor,
+                                                      ),
+                                                      shadowOpacity:
+                                                          shadowValue,
+                                                      child: child!,
+                                                    );
+                                                  },
                                                 );
                                               },
                                             );
@@ -1125,26 +1220,9 @@ class _ChatState extends State<Chat> {
                                             final targetAlignment = isSelected
                                                 ? Alignment.center
                                                 : baseAlignment;
-                                            final bubbleMaxWidth =
-                                                clampedBubbleWidth;
-                                            final bubbleConstraints =
-                                                BoxConstraints(
-                                              maxWidth: bubbleMaxWidth,
-                                            );
-                                            final bubbleHighlightColor =
-                                                context.colorScheme.primary;
                                             final shadowedBubble =
-                                                AnimatedContainer(
-                                              duration: _bubbleFocusDuration,
-                                              curve: _bubbleFocusCurve,
+                                                ConstrainedBox(
                                               constraints: bubbleConstraints,
-                                              decoration: BoxDecoration(
-                                                boxShadow: isSelected
-                                                    ? _selectedBubbleShadows(
-                                                        bubbleHighlightColor,
-                                                      )
-                                                    : const [],
-                                              ),
                                               child: bubble,
                                             );
                                             final alignedBubble = AnimatedAlign(
@@ -1155,6 +1233,21 @@ class _ChatState extends State<Chat> {
                                             );
                                             final canResend = message.status ==
                                                 MessageStatus.failed;
+                                            List<GlobalKey>? actionButtonKeys;
+                                            if (isSelected) {
+                                              final actionCount =
+                                                  canResend ? 5 : 4;
+                                              actionButtonKeys = List.generate(
+                                                  actionCount,
+                                                  (_) => GlobalKey());
+                                              _selectionActionButtonKeys
+                                                ..clear()
+                                                ..addAll(actionButtonKeys);
+                                            } else if (_selectedMessageId ==
+                                                messageModel.stanzaID) {
+                                              _selectionActionButtonKeys
+                                                  .clear();
+                                            }
                                             final actionBar = _MessageActionBar(
                                               onReply: () {
                                                 context.read<ChatBloc>().add(
@@ -1182,6 +1275,7 @@ class _ChatState extends State<Chat> {
                                                         ),
                                                       )
                                                   : null,
+                                              hitRegionKeys: actionButtonKeys,
                                             );
                                             if (isSelected) {
                                               _activeSelectionExtrasKey ??=
@@ -1221,17 +1315,21 @@ class _ChatState extends State<Chat> {
                                               switchInCurve: _bubbleFocusCurve,
                                               switchOutCurve:
                                                   Curves.easeInCubic,
-                                              layoutBuilder: (currentChild,
-                                                      previousChildren) =>
-                                                  Stack(
-                                                clipBehavior: Clip.none,
-                                                alignment: Alignment.topCenter,
-                                                children: [
-                                                  ...previousChildren,
-                                                  if (currentChild != null)
-                                                    currentChild,
-                                                ],
-                                              ),
+                                              layoutBuilder: (
+                                                currentChild,
+                                                previousChildren,
+                                              ) {
+                                                return Stack(
+                                                  clipBehavior: Clip.none,
+                                                  alignment:
+                                                      Alignment.topCenter,
+                                                  children: [
+                                                    ...previousChildren,
+                                                    if (currentChild != null)
+                                                      currentChild,
+                                                  ],
+                                                );
+                                              },
                                               transitionBuilder:
                                                   (child, animation) {
                                                 final slideAnimation =
@@ -1300,14 +1398,8 @@ class _ChatState extends State<Chat> {
                                               messageModel.stanzaID,
                                               () => GlobalKey(),
                                             );
-                                            final bubbleKey =
-                                                _messageBubbleKeys.putIfAbsent(
-                                              messageModel.stanzaID,
-                                              () => GlobalKey(),
-                                            );
                                             final selectableBubble =
                                                 GestureDetector(
-                                              key: bubbleKey,
                                               behavior:
                                                   HitTestBehavior.translucent,
                                               onTap: () {
@@ -1836,6 +1928,7 @@ class _MessageActionBar extends StatelessWidget {
     required this.onCopy,
     required this.onDetails,
     this.onResend,
+    this.hitRegionKeys,
   });
 
   final VoidCallback onReply;
@@ -1843,16 +1936,26 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback onCopy;
   final VoidCallback onDetails;
   final VoidCallback? onResend;
+  final List<GlobalKey>? hitRegionKeys;
 
   @override
   Widget build(BuildContext context) {
+    var keyIndex = 0;
+    GlobalKey? nextKey() {
+      if (hitRegionKeys == null) return null;
+      if (keyIndex >= hitRegionKeys!.length) return null;
+      return hitRegionKeys![keyIndex++];
+    }
+
     final actions = <Widget>[
       _MessageActionButton(
+        key: nextKey(),
         icon: const Icon(LucideIcons.reply, size: 16),
         label: 'Reply',
         onPressed: onReply,
       ),
       _MessageActionButton(
+        key: nextKey(),
         icon: Transform.scale(
           scaleX: -1,
           child: const Icon(LucideIcons.reply, size: 16),
@@ -1862,16 +1965,19 @@ class _MessageActionBar extends StatelessWidget {
       ),
       if (onResend != null)
         _MessageActionButton(
+          key: nextKey(),
           icon: const Icon(LucideIcons.repeat, size: 16),
           label: 'Resend',
           onPressed: onResend!,
         ),
       _MessageActionButton(
+        key: nextKey(),
         icon: const Icon(LucideIcons.copy, size: 16),
         label: 'Copy',
         onPressed: onCopy,
       ),
       _MessageActionButton(
+        key: nextKey(),
         icon: const Icon(LucideIcons.info, size: 16),
         label: 'Details',
         onPressed: onDetails,
@@ -1888,6 +1994,7 @@ class _MessageActionBar extends StatelessWidget {
 
 class _MessageActionButton extends StatelessWidget {
   const _MessageActionButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.onPressed,
