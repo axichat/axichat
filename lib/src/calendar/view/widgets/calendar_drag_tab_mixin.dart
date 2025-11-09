@@ -7,11 +7,12 @@ import '../models/calendar_drag_payload.dart';
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
-  static const double _edgeHotZoneWidth = 44.0;
+  static const double _leftEdgeHotZoneWidth = 48.0;
+  static const double _rightEdgeHotZoneWidth = 28.0;
   static const double _pointerHotZoneMinLeft = 32.0;
-  static const double _pointerHotZoneMinRight = 32.0;
-  static const double _pointerHotZoneMax = 56.0;
-  static const double _pointerHotZoneFraction = 0.06;
+  static const double _pointerHotZoneMinRight = 18.0;
+  static const double _pointerHotZoneMax = 40.0;
+  static const double _pointerHotZoneFraction = 0.04;
   static const Duration _switchDelay = Duration(milliseconds: 320);
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
@@ -99,6 +100,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         Positioned.fill(
           child: _buildEdgeTarget(
             alignment: Alignment.centerLeft,
+            width: _leftEdgeHotZoneWidth,
             showCue: _showLeftEdgeCue,
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
@@ -110,6 +112,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         Positioned.fill(
           child: _buildEdgeTarget(
             alignment: Alignment.centerRight,
+            width: _rightEdgeHotZoneWidth,
             showCue: _showRightEdgeCue,
             gradient: LinearGradient(
               begin: Alignment.centerRight,
@@ -223,13 +226,14 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   Widget _buildEdgeTarget({
     required Alignment alignment,
+    required double width,
     required bool showCue,
     required Gradient gradient,
   }) {
     return Align(
       alignment: alignment,
       child: SizedBox(
-        width: _edgeHotZoneWidth,
+        width: width,
         child: IgnorePointer(
           ignoring: !_isAnyDragActive,
           child: DragTarget<CalendarDragPayload>(

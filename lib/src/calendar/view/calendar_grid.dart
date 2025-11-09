@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -1134,36 +1135,47 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final bool shouldUpdateOccurrence =
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+    final MediaQueryData hostMediaQuery = MediaQuery.of(context);
+    final MediaQueryData viewMedia = MediaQueryData.fromView(View.of(context));
+    final double safeTopInset = viewMedia.viewPadding.top;
+    final double safeBottomInset = viewMedia.viewPadding.bottom;
+    final double maxSheetHeight =
+        hostMediaQuery.size.height - safeTopInset - safeBottomInset;
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        final mediaQuery = MediaQuery.of(sheetContext);
-        final double topInset = mediaQuery.viewPadding.top;
-        final double maxHeight = mediaQuery.size.height - topInset;
-        return Padding(
-          padding: EdgeInsets.only(top: topInset),
+        final double keyboardInset =
+            MediaQuery.of(sheetContext).viewInsets.bottom;
+        final double bottomInset = math.max(safeBottomInset, keyboardInset);
+        return AnimatedPadding(
+          padding: EdgeInsets.only(
+            top: safeTopInset,
+            bottom: bottomInset,
+          ),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
           child: EditTaskDropdown(
             task: displayTask,
-            maxHeight: maxHeight,
+            maxHeight: maxSheetHeight,
             isSheet: true,
             inlineActionsBloc: bloc,
             inlineActionsBuilder: (state) {
-            final CalendarTask? latest =
-                state.model.tasks[displayTask.id] ??
-                    state.model.tasks[displayTask.baseId];
-            final CalendarTask resolved = latest ?? displayTask;
-            return _buildTaskContextActions(
-              task: resolved,
-              state: state,
-              onTaskDeleted: () => Navigator.of(sheetContext).pop(),
-              includeDeleteAction: false,
-              includeCompletionAction: false,
-              includePriorityActions: false,
-              includeSplitAction: true,
-            );
+              final CalendarTask? latest =
+                  state.model.tasks[displayTask.id] ??
+                      state.model.tasks[displayTask.baseId];
+              final CalendarTask resolved = latest ?? displayTask;
+              return _buildTaskContextActions(
+                task: resolved,
+                state: state,
+                onTaskDeleted: () => Navigator.of(sheetContext).pop(),
+                includeDeleteAction: false,
+                includeCompletionAction: false,
+                includePriorityActions: false,
+                includeSplitAction: true,
+              );
             },
             onClose: () => Navigator.of(sheetContext).pop(),
             scaffoldMessenger: scaffoldMessenger,
