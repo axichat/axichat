@@ -25,9 +25,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart' hide DateFormat;
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 extension on MessageStatus {
   IconData get icon => switch (this) {
@@ -72,7 +71,6 @@ const _reactionManagerPadding = EdgeInsets.symmetric(
 );
 const _reactionManagerShadowGap = 16.0;
 const _selectionHeadroomTolerance = 1.0;
-const _messageChainMaxGap = Duration(minutes: 4);
 const _reactionQuickChoices = [
   '👍',
   '❤️',
@@ -142,34 +140,23 @@ BorderRadius _bubbleBorderRadius({
   );
 }
 
-bool _messagesShouldChain(Message? a, Message? b) {
-  if (a == null || b == null) return false;
-  if (a.senderJid != b.senderJid) return false;
-  final aTime = a.timestamp;
-  final bTime = b.timestamp;
-  if (aTime == null || bTime == null) return false;
-  if (!DateUtils.isSameDay(aTime, bTime)) return false;
-  final difference = aTime.difference(bTime).abs();
-  return difference <= _messageChainMaxGap;
-}
-
-bool _needsDateDivider(Message? previous, Message current) {
-  final currentTime = current.timestamp;
-  if (currentTime == null) return false;
-  final prevTime = previous?.timestamp;
-  if (prevTime == null) return true;
-  return !DateUtils.isSameDay(prevTime, currentTime);
-}
-
-String _formatDateDividerLabel(DateTime date) {
-  final now = DateTime.now();
-  if (DateUtils.isSameDay(date, now)) {
-    return 'Today';
-  }
-  if (DateUtils.isSameDay(date, now.subtract(const Duration(days: 1)))) {
-    return 'Yesterday';
-  }
-  return DateFormat.yMMMMd().format(date);
+bool _chatMessagesShouldChain(
+  ChatMessage current,
+  ChatMessage? neighbor,
+) {
+  if (neighbor == null) return false;
+  if (neighbor.user.id != current.user.id) return false;
+  final neighborDate = DateTime(
+    neighbor.createdAt.year,
+    neighbor.createdAt.month,
+    neighbor.createdAt.day,
+  );
+  final currentDate = DateTime(
+    current.createdAt.year,
+    current.createdAt.month,
+    current.createdAt.day,
+  );
+  return neighborDate == currentDate;
 }
 
 InputDecoration _chatInputDecoration(
@@ -231,6 +218,7 @@ class _ChatState extends State<Chat> {
   var _chatRoute = _ChatRoute.main;
   String? _selectedMessageId;
   final _messageKeys = <String, GlobalKey>{};
+  final _messageBubbleKeys = <String, GlobalKey>{};
   final _messageListKey = GlobalKey();
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _reactionManagerKey;
@@ -241,8 +229,12 @@ class _ChatState extends State<Chat> {
   bool _dismissPointerMoved = false;
 
   void _typingListener() {
+    final hasText = _textController.text.isNotEmpty;
+    if (hasText && _selectedMessageId != null) {
+      _clearMessageSelection();
+    }
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
-    if (_textController.text.isEmpty) return;
+    if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
@@ -285,23 +277,36 @@ class _ChatState extends State<Chat> {
   void _maybeDismissSelection(Offset globalPosition) {
     final selectedId = _selectedMessageId;
     if (selectedId == null) return;
-    final key = _messageKeys[selectedId];
+    final hitRegions = <Rect>[];
+    void collect(GlobalKey? key, {double padding = 12.0}) {
+      final rect = _globalRectForKey(key);
+      if (rect != null) {
+        hitRegions.add(rect.inflate(padding));
+      }
+    }
+
+    collect(_messageBubbleKeys[selectedId]);
+    collect(_activeSelectionExtrasKey, padding: 4);
+    collect(_reactionManagerKey, padding: 4);
+
+    if (hitRegions.isEmpty) {
+      _clearMessageSelection();
+      return;
+    }
+    final tappedInside =
+        hitRegions.any((rect) => rect.contains(globalPosition));
+    if (!tappedInside) {
+      _clearMessageSelection();
+    }
+  }
+
+  Rect? _globalRectForKey(GlobalKey? key) {
     final context = key?.currentContext;
-    if (context == null) {
-      _clearMessageSelection();
-      return;
-    }
+    if (context == null) return null;
     final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.attached) {
-      _clearMessageSelection();
-      return;
-    }
+    if (renderBox == null || !renderBox.attached) return null;
     final origin = renderBox.localToGlobal(Offset.zero);
-    final rect = origin & renderBox.size;
-    const padding = 12.0;
-    if (!rect.inflate(padding).contains(globalPosition)) {
-      _clearMessageSelection();
-    }
+    return origin & renderBox.size;
   }
 
   void _toggleMessageSelection(String messageId) {
@@ -355,7 +360,7 @@ class _ChatState extends State<Chat> {
 
   Future<void> _scrollSelectionExtrasIntoView() async {
     if (!_scrollController.hasClients) return;
-    final context = _activeSelectionExtrasKey?.currentContext;
+    final context = _selectionReferenceContext();
     if (context == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _selectedMessageId == null) return;
@@ -429,7 +434,8 @@ class _ChatState extends State<Chat> {
   }
 
   double? _measureSelectionHeadroom() {
-    final reactionContext = _reactionManagerKey?.currentContext;
+    final reactionContext = _reactionManagerKey?.currentContext ??
+        _activeSelectionExtrasKey?.currentContext;
     final inputContext = _focusNode.context;
     if (reactionContext == null || inputContext == null) {
       return null;
@@ -455,6 +461,20 @@ class _ChatState extends State<Chat> {
       return 0;
     }
     return missingGap;
+  }
+
+  BuildContext? _selectionReferenceContext() {
+    final managerContext = _reactionManagerKey?.currentContext;
+    if (managerContext != null) {
+      return managerContext;
+    }
+    final extrasContext = _activeSelectionExtrasKey?.currentContext;
+    if (extrasContext != null) {
+      return extrasContext;
+    }
+    final selectedId = _selectedMessageId;
+    if (selectedId == null) return null;
+    return _messageKeys[selectedId]?.currentContext;
   }
 
   void _primeSelectionHeadroomIfNeeded() {
@@ -700,25 +720,10 @@ class _ChatState extends State<Chat> {
                                   index < filteredItems.length;
                                   index++) {
                                 final e = filteredItems[index];
-                                final prev =
-                                    index > 0 ? filteredItems[index - 1] : null;
-                                final next = index < filteredItems.length - 1
-                                    ? filteredItems[index + 1]
-                                    : null;
                                 final isSelfXmpp = e.senderJid == profile?.jid;
                                 final isSelfEmail = emailSelfJid != null &&
                                     e.senderJid == emailSelfJid;
                                 final isSelf = isSelfXmpp || isSelfEmail;
-                                final chainsPrev =
-                                    _messagesShouldChain(prev, e);
-                                final chainsNext =
-                                    _messagesShouldChain(next, e);
-                                final needsDateDivider =
-                                    _needsDateDivider(prev, e);
-                                final dateLabel =
-                                    needsDateDivider && e.timestamp != null
-                                        ? _formatDateDividerLabel(e.timestamp!)
-                                        : null;
                                 final author = isSelf
                                     ? user
                                     : ChatUser(
@@ -758,9 +763,6 @@ class _ChatState extends State<Chat> {
                                       'model': e,
                                       'quoted': quotedMessage,
                                       'reactions': e.reactionsPreview,
-                                      'chainsPrev': chainsNext,
-                                      'chainsNext': chainsPrev,
-                                      'dateLabel': dateLabel,
                                     },
                                   ),
                                 );
@@ -795,7 +797,10 @@ class _ChatState extends State<Chat> {
                                           userNameBuilder: (user) {
                                             return Padding(
                                               padding: const EdgeInsets.only(
-                                                  left: 2.0, bottom: 2.0),
+                                                left: _chatHorizontalPadding,
+                                                right: _chatHorizontalPadding,
+                                                bottom: 4,
+                                              ),
                                               child: Text(
                                                 user.getFullName(),
                                                 style: context.textTheme.muted
@@ -803,7 +808,8 @@ class _ChatState extends State<Chat> {
                                               ),
                                             );
                                           },
-                                          messageTextBuilder: (message, _, __) {
+                                          messageTextBuilder:
+                                              (message, previous, next) {
                                             final colors = context.colorScheme;
                                             final chatTokens =
                                                 context.chatTheme;
@@ -846,13 +852,15 @@ class _ChatState extends State<Chat> {
                                             final iconPackage = message
                                                 .status!.icon.fontPackage;
                                             final chainedPrev =
-                                                message.customProperties?[
-                                                        'chainsPrev'] ==
-                                                    true;
+                                                _chatMessagesShouldChain(
+                                              message,
+                                              previous,
+                                            );
                                             final chainedNext =
-                                                message.customProperties?[
-                                                        'chainsNext'] ==
-                                                    true;
+                                                _chatMessagesShouldChain(
+                                              message,
+                                              next,
+                                            );
                                             final text = TextSpan(
                                               text: message.text,
                                               style: context.textTheme.small
@@ -957,7 +965,7 @@ class _ChatState extends State<Chat> {
                                             final showCompactReactions =
                                                 reactions.isNotEmpty &&
                                                     !showReactionManager;
-                                            final bubbleKey = message
+                                            final bubbleContentKey = message
                                                     .customProperties?['id'] ??
                                                 '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
                                             final bubbleChildren = <Widget>[];
@@ -982,7 +990,8 @@ class _ChatState extends State<Chat> {
                                                   ),
                                                 ),
                                                 DynamicInlineText(
-                                                  key: ValueKey(bubbleKey),
+                                                  key: ValueKey(
+                                                      bubbleContentKey),
                                                   text: text,
                                                   details: [time],
                                                 ),
@@ -990,7 +999,8 @@ class _ChatState extends State<Chat> {
                                             } else {
                                               bubbleChildren.add(
                                                 DynamicInlineText(
-                                                  key: ValueKey(bubbleKey),
+                                                  key: ValueKey(
+                                                      bubbleContentKey),
                                                   text: text,
                                                   details: [
                                                     time,
@@ -1141,6 +1151,7 @@ class _ChatState extends State<Chat> {
                                                       ),
                                                     );
                                                 _focusNode.requestFocus();
+                                                _clearMessageSelection();
                                               },
                                               onForward: () =>
                                                   _handleForward(messageModel),
@@ -1276,8 +1287,14 @@ class _ChatState extends State<Chat> {
                                               messageModel.stanzaID,
                                               () => GlobalKey(),
                                             );
+                                            final bubbleKey =
+                                                _messageBubbleKeys.putIfAbsent(
+                                              messageModel.stanzaID,
+                                              () => GlobalKey(),
+                                            );
                                             final selectableBubble =
                                                 GestureDetector(
+                                              key: bubbleKey,
                                               behavior:
                                                   HitTestBehavior.translucent,
                                               onTap: () {
@@ -1314,39 +1331,27 @@ class _ChatState extends State<Chat> {
                                                 child: bubbleWithSlack,
                                               ),
                                             );
-                                            final dateLabel =
-                                                message.customProperties?[
-                                                    'dateLabel'] as String?;
-                                            final entryChildren = <Widget>[];
                                             if (selectionHeadroomActive &&
                                                 isOldest) {
-                                              entryChildren.add(
-                                                AnimatedSize(
-                                                  duration:
-                                                      _bubbleFocusDuration,
-                                                  curve: _bubbleFocusCurve,
-                                                  clipBehavior: Clip.none,
-                                                  child: SizedBox(
-                                                    height:
-                                                        _selectionSpacerHeight,
+                                              bubbleWithSlack = Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: [
+                                                  AnimatedSize(
+                                                    duration:
+                                                        _bubbleFocusDuration,
+                                                    curve: _bubbleFocusCurve,
+                                                    clipBehavior: Clip.none,
+                                                    child: SizedBox(
+                                                      height:
+                                                          _selectionSpacerHeight,
+                                                    ),
                                                   ),
-                                                ),
+                                                  bubbleWithSlack,
+                                                ],
                                               );
                                             }
-                                            if (dateLabel != null) {
-                                              entryChildren.add(
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                    bottom: 12,
-                                                  ),
-                                                  child: _DateDivider(
-                                                    label: dateLabel,
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                            entryChildren.add(bubbleWithSlack);
                                             return KeyedSubtree(
                                               key: messageKey,
                                               child: Padding(
@@ -1356,13 +1361,7 @@ class _ChatState extends State<Chat> {
                                                   horizontal:
                                                       _chatHorizontalPadding,
                                                 ),
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.center,
-                                                  children: entryChildren,
-                                                ),
+                                                child: bubbleWithSlack,
                                               ),
                                             );
                                           },
@@ -1373,6 +1372,8 @@ class _ChatState extends State<Chat> {
                                               const AlwaysScrollableScrollPhysics(
                                             parent: BouncingScrollPhysics(),
                                           ),
+                                          separatorFrequency:
+                                              SeparatorFrequency.days,
                                           typingBuilder: (_) => const Padding(
                                             padding: EdgeInsets.only(
                                                 left: 16, top: 16),
@@ -1559,6 +1560,7 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleForward(Message message) async {
+    _clearMessageSelection();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
     context.read<ChatBloc>().add(
@@ -1578,6 +1580,7 @@ class _ChatState extends State<Chat> {
     await Clipboard.setData(
       ClipboardData(text: copiedText),
     );
+    _clearMessageSelection();
   }
 
   void _showMessageDetails(ChatMessage message) {
@@ -1754,33 +1757,6 @@ class _ChatState extends State<Chat> {
     final targetCenter = isSelf ? minCenter : maxCenter;
     final fraction = (targetCenter / bubbleWidth).clamp(0.0, 1.0);
     return (fraction * 2) - 1;
-  }
-}
-
-class _DateDivider extends StatelessWidget {
-  const _DateDivider({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final dividerColor = colors.border.withValues(alpha: 0.8);
-    final textStyle = context.textTheme.small.copyWith(
-      color: colors.mutedForeground,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-    return Row(
-      children: [
-        Expanded(child: Divider(color: dividerColor, thickness: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(label, style: textStyle),
-        ),
-        Expanded(child: Divider(color: dividerColor, thickness: 1)),
-      ],
-    );
   }
 }
 
