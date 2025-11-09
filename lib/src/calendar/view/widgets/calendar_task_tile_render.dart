@@ -143,6 +143,11 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   double _handleExtent;
   static const double _tapSlop = 3.0;
+  static const Duration _touchResizeLongPressDelay =
+      Duration(milliseconds: 260);
+  static const double _touchHandleHorizontalFraction = 0.45;
+  static const double _touchHandleHorizontalMax = 56.0;
+  static const double _touchHandleHorizontalMin = 28.0;
 
   CalendarTask _task;
   TaskInteractionController _interactionController;
@@ -450,7 +455,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   bool _shouldDelayResizeForPointer(PointerDeviceKind kind) {
     return kind == PointerDeviceKind.touch ||
-        kind == PointerDeviceKind.stylus;
+        kind == PointerDeviceKind.stylus ||
+        kind == PointerDeviceKind.invertedStylus ||
+        kind == PointerDeviceKind.unknown;
   }
 
   void _startResizeLongPressRecognizer(
@@ -458,7 +465,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     PointerDownEvent event,
   ) {
     _pendingResizeHandle = handle;
-    final LongPressGestureRecognizer recognizer = LongPressGestureRecognizer()
+    final LongPressGestureRecognizer recognizer =
+        LongPressGestureRecognizer(
+      duration: _touchResizeLongPressDelay,
+    )
       ..onLongPressStart = (_) {
         if (_pendingResizeHandle != null && !_resizeActive) {
           _beginResize(_pendingResizeHandle!);
@@ -620,6 +630,19 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   String? _hitHandle(Offset localPosition) {
     if (!_showHandles) {
       return null;
+    }
+    final double width = size.width;
+    if (_handleExtent > 10 && width.isFinite && width > 0) {
+      final double handleWidth = math.max(
+        _touchHandleHorizontalMin,
+        math.min(width * _touchHandleHorizontalFraction,
+            _touchHandleHorizontalMax),
+      );
+      final double left = (width - handleWidth) / 2;
+      final double right = left + handleWidth;
+      if (localPosition.dx < left || localPosition.dx > right) {
+        return null;
+      }
     }
     if (localPosition.dy <= _handleExtent) {
       return 'top';

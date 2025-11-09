@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -211,7 +213,8 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
     );
     if (isSheet) {
       content = SafeArea(
-        top: false,
+        top: true,
+        bottom: false,
         child: content,
       );
     }
@@ -275,12 +278,39 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                         ),
                   ),
                   const SizedBox(height: calendarInsetSm),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: actions
-                        .map((action) => _buildInlineActionChip(action))
-                        .toList(),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const double gap = 12;
+                      const double minChipWidth = 160;
+                      final double availableWidth = constraints.maxWidth.isFinite
+                          ? constraints.maxWidth
+                          : MediaQuery.sizeOf(context).width -
+                              (calendarGutterLg * 2);
+                      final double effectiveWidth = availableWidth.isFinite &&
+                              availableWidth > 0
+                          ? availableWidth
+                          : MediaQuery.sizeOf(context).width;
+                      final bool useTwoColumns = effectiveWidth >= 520;
+                      final double minWidth =
+                          math.min(minChipWidth, effectiveWidth);
+                      double chipWidth = useTwoColumns
+                          ? (effectiveWidth - gap) / 2
+                          : effectiveWidth;
+                      chipWidth = chipWidth.clamp(minWidth, effectiveWidth);
+
+                      return Wrap(
+                        spacing: gap,
+                        runSpacing: gap,
+                        children: actions
+                            .map(
+                              (action) => SizedBox(
+                                width: chipWidth,
+                                child: _buildInlineActionChip(action),
+                              ),
+                            )
+                            .toList(),
+                      );
+                    },
                   ),
                 ],
               ),

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -62,6 +64,7 @@ class CalendarTaskEntryBindings {
     required this.addGeometryListener,
     required this.removeGeometryListener,
     required this.requiresLongPressToDrag,
+    required this.longPressToDragDelay,
   });
 
   final bool isSelectionMode;
@@ -84,6 +87,7 @@ class CalendarTaskEntryBindings {
   final void Function(VoidCallback listener) addGeometryListener;
   final void Function(VoidCallback listener) removeGeometryListener;
   final bool requiresLongPressToDrag;
+  final Duration longPressToDragDelay;
 }
 
 class CalendarTaskSurface extends StatefulWidget {
@@ -109,6 +113,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   String? _lastDraggingTaskId;
   late final VoidCallback _geometryListener;
   CalendarTaskEntryBindings? _geometryBindings;
+  static const double _splitOverlayFallbackThreshold = 0.98;
+  static const double _minSideBySideGhostWidth = 36.0;
 
   TaskInteractionController get _interactionController =>
       widget.bindings.interactionController;
@@ -321,6 +327,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 childWhenDragging: const SizedBox.shrink(),
                 child: resizable,
                 requiresLongPress: bindings.requiresLongPressToDrag,
+                longPressDelay: bindings.longPressToDragDelay,
               );
             }
 
@@ -335,48 +342,76 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
             }
 
             if (previewTaskCandidate != null && !isDraggingTask) {
-              baseTask = SizedBox.expand(
-                child: Stack(
+              final double occupantWidth =
+                  math.min(primaryWidth, geometry.rect.width);
+              final double ghostWidth =
+                  math.max(geometry.rect.width - occupantWidth, 0.0);
+              final bool widthAllowsSplit =
+                  ghostWidth >= _minSideBySideGhostWidth &&
+                  occupantWidth >= _minSideBySideGhostWidth;
+              final bool useSideBySide =
+                  widthAllowsSplit &&
+                      geometry.splitWidthFactor < _splitOverlayFallbackThreshold;
+
+              final Widget previewGhost = _buildPreviewGhost(
+                previewTaskCandidate: previewTaskCandidate,
+                bindings: bindings,
+                height: height,
+                width: useSideBySide ? ghostWidth : width,
+                keySuffix: '-preview',
+              );
+
+              if (useSideBySide) {
+                final Widget occupant = SizedBox(
+                  width: occupantWidth,
+                  child: baseTask,
+                );
+                final Widget ghost = SizedBox(
+                  width: ghostWidth,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: calendarSplitPreviewGhostOpacity,
+                      child: previewGhost,
+                    ),
+                  ),
+                );
+
+                baseTask = SizedBox.expand(
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        width: occupantWidth,
+                        child: occupant,
+                      ),
+                      Positioned(
+                        right: 0,
+                        width: ghostWidth,
+                        child: ghost,
+                      ),
+                    ],
+                  ),
+                );
+              } else {
+                baseTask = Stack(
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: geometry.splitWidthFactor,
-                        alignment: Alignment.centerLeft,
+                    Positioned.fill(
+                      child: Opacity(
+                        opacity: calendarSplitPreviewBaseFadeOpacity,
                         child: baseTask,
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FractionallySizedBox(
-                        widthFactor: geometry.splitWidthFactor,
-                        alignment: Alignment.centerRight,
-                        child: IgnorePointer(
-                          child: Opacity(
-                            opacity: calendarSplitPreviewGhostOpacity,
-                            child: ResizableTaskWidget(
-                              key: ValueKey('${task.id}-preview'),
-                              interactionController: _interactionController,
-                              task: previewTaskCandidate,
-                              onResizePreview: null,
-                              onResizeEnd: null,
-                              hourHeight: bindings.hourHeight,
-                              stepHeight: bindings.stepHeight,
-                              minutesPerStep: bindings.minutesPerStep,
-                              width: geometry.narrowedWidth,
-                              height: height,
-                              isDayView: widget.isDayView,
-                              enableInteractions: false,
-                              isSelectionMode: false,
-                              isSelected: false,
-                            ),
-                          ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Opacity(
+                          opacity: calendarSplitPreviewGhostOpacity,
+                          child: previewGhost,
                         ),
                       ),
                     ),
                   ],
-                ),
-              );
+                );
+              }
             }
 
             final bool paintSplitBorder = showSplitPreview && !isDraggingTask;
@@ -422,6 +457,31 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
       return null;
     }
     return _previewIntersectsTask(preview, task) ? dragging : null;
+  }
+
+  Widget _buildPreviewGhost({
+    required CalendarTask previewTaskCandidate,
+    required CalendarTaskEntryBindings bindings,
+    required double width,
+    required double height,
+    required String keySuffix,
+  }) {
+    return ResizableTaskWidget(
+      key: ValueKey('${previewTaskCandidate.id}$keySuffix'),
+      interactionController: _interactionController,
+      task: previewTaskCandidate,
+      onResizePreview: null,
+      onResizeEnd: null,
+      hourHeight: bindings.hourHeight,
+      stepHeight: bindings.stepHeight,
+      minutesPerStep: bindings.minutesPerStep,
+      width: width,
+      height: height,
+      isDayView: widget.isDayView,
+      enableInteractions: false,
+      isSelectionMode: false,
+      isSelected: false,
+    );
   }
 
   bool _previewIntersectsTask(DragPreview preview, CalendarTask task) {

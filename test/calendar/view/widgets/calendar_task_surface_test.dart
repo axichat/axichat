@@ -58,6 +58,7 @@ void main() {
           addGeometryListener: (_) {},
           removeGeometryListener: (_) {},
           requiresLongPressToDrag: false,
+          longPressToDragDelay: Duration.zero,
         );
 
     await tester.pumpWidget(
@@ -157,6 +158,7 @@ void main() {
                     addGeometryListener: (_) {},
                     removeGeometryListener: (_) {},
                     requiresLongPressToDrag: false,
+                    longPressToDragDelay: Duration.zero,
                   ),
                 ),
               );

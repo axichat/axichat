@@ -36,6 +36,8 @@ import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_surface_drag_target.dart';
 import 'widgets/calendar_task_surface.dart';
 import 'widgets/calendar_task_geometry.dart';
+import 'widgets/deadline_picker_field.dart';
+import 'widgets/task_form_section.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
@@ -142,7 +144,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const ValueKey<String> _contextMenuGroupId =
       ValueKey<String>('calendar-grid-context');
   static const double _desktopHandleExtent = 8.0;
-  static const double _touchHandleExtent = 20.0;
+  static const double _touchHandleExtent = 28.0;
+  static const Duration _touchDragLongPressDelay =
+      Duration(milliseconds: 260);
   Ticker? _edgeAutoScrollTicker;
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   final CalendarSurfaceController _surfaceController =
@@ -900,6 +904,78 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
+  Future<void> _promptSplitTask(CalendarTask task) async {
+    final DateTime? start = task.scheduledTime;
+    DateTime? end = task.effectiveEndDate ??
+        (start != null && task.duration != null
+            ? start.add(task.duration!)
+            : null);
+    if (start == null || end == null || !end.isAfter(start)) {
+      _showSplitError('Task must be scheduled to use split.');
+      return;
+    }
+    final int totalMinutes = end.difference(start).inMinutes;
+    final int minimumStep = math.max(_minutesPerStep, 15);
+    if (totalMinutes < minimumStep * 2) {
+      _showSplitError('Task is too short to split.');
+      return;
+    }
+    final DateTime minSelectable =
+        start.add(Duration(minutes: minimumStep));
+    final DateTime maxSelectable =
+        end.subtract(Duration(minutes: minimumStep));
+    if (!maxSelectable.isAfter(minSelectable)) {
+      _showSplitError('Task is too short to split.');
+      return;
+    }
+    final DateTime midpoint =
+        start.add(Duration(minutes: totalMinutes ~/ 2));
+    final DateTime initialCandidate = midpoint.isBefore(minSelectable)
+        ? minSelectable
+        : (midpoint.isAfter(maxSelectable) ? maxSelectable : midpoint);
+    final DateTime? picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final mediaQuery = MediaQuery.of(sheetContext);
+        return Padding(
+          padding: EdgeInsets.only(top: mediaQuery.viewPadding.top),
+          child: _SplitTaskPickerSheet(
+            initialValue: initialCandidate,
+            minTime: minSelectable,
+            maxTime: maxSelectable,
+          ),
+        );
+      },
+    );
+    if (picked == null) {
+      return;
+    }
+    final DateTime clamped = picked.isBefore(minSelectable)
+        ? minSelectable
+        : (picked.isAfter(maxSelectable) ? maxSelectable : picked);
+    final int elapsedMinutes = clamped.difference(start).inMinutes;
+    final double fraction =
+        totalMinutes <= 0 ? 0.5 : elapsedMinutes / totalMinutes;
+    final DateTime? splitTime = task.splitTimeForFraction(
+      fraction: fraction,
+      minutesPerStep: _minutesPerStep,
+    );
+    if (splitTime == null ||
+        !splitTime.isAfter(start) ||
+        !splitTime.isBefore(end)) {
+      _showSplitError('Unable to split task at that time.');
+      return;
+    }
+    _splitTask(task, splitTime);
+  }
+
+  void _showSplitError(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _handleTaskDragUpdate(DragUpdateDetails details) {
     final CalendarTask? draggingTask =
         _taskInteractionController.draggingTaskSnapshot;
@@ -1065,14 +1141,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final mediaQuery = MediaQuery.of(sheetContext);
-        final double maxHeight =
-            mediaQuery.size.height - mediaQuery.padding.top;
-        return EditTaskDropdown(
-          task: displayTask,
-          maxHeight: maxHeight,
-          isSheet: true,
-          inlineActionsBloc: bloc,
-          inlineActionsBuilder: (state) {
+        final double topInset = mediaQuery.viewPadding.top;
+        final double maxHeight = mediaQuery.size.height - topInset;
+        return Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: EditTaskDropdown(
+            task: displayTask,
+            maxHeight: maxHeight,
+            isSheet: true,
+            inlineActionsBloc: bloc,
+            inlineActionsBuilder: (state) {
             final CalendarTask? latest =
                 state.model.tasks[displayTask.id] ??
                     state.model.tasks[displayTask.baseId];
@@ -1082,56 +1160,60 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               state: state,
               onTaskDeleted: () => Navigator.of(sheetContext).pop(),
               includeDeleteAction: false,
+              includeCompletionAction: false,
+              includePriorityActions: false,
+              includeSplitAction: true,
             );
-          },
-          onClose: () => Navigator.of(sheetContext).pop(),
-          scaffoldMessenger: scaffoldMessenger,
-          locationHelper: LocationAutocompleteHelper.fromState(state),
-          onTaskUpdated: (updatedTask) {
-            bloc.add(
-              CalendarEvent.taskUpdated(
-                task: updatedTask,
-              ),
-            );
-          },
-          onOccurrenceUpdated: shouldUpdateOccurrence
-              ? (updatedTask) {
-                  bloc.add(
-                    CalendarEvent.taskOccurrenceUpdated(
-                      taskId: baseId,
-                      occurrenceId: task.id,
-                      scheduledTime: updatedTask.scheduledTime,
-                      duration: updatedTask.duration,
-                      endDate: updatedTask.endDate,
-                    ),
-                  );
-
-                  final CalendarTask seriesUpdate = latestTask.copyWith(
-                    title: updatedTask.title,
-                    description: updatedTask.description,
-                    location: updatedTask.location,
-                    deadline: updatedTask.deadline,
-                    priority: updatedTask.priority,
-                    isCompleted: updatedTask.isCompleted,
-                  );
-
-                  if (seriesUpdate != latestTask) {
+            },
+            onClose: () => Navigator.of(sheetContext).pop(),
+            scaffoldMessenger: scaffoldMessenger,
+            locationHelper: LocationAutocompleteHelper.fromState(state),
+            onTaskUpdated: (updatedTask) {
+              bloc.add(
+                CalendarEvent.taskUpdated(
+                  task: updatedTask,
+                ),
+              );
+            },
+            onOccurrenceUpdated: shouldUpdateOccurrence
+                ? (updatedTask) {
                     bloc.add(
-                      CalendarEvent.taskUpdated(
-                        task: seriesUpdate,
+                      CalendarEvent.taskOccurrenceUpdated(
+                        taskId: baseId,
+                        occurrenceId: task.id,
+                        scheduledTime: updatedTask.scheduledTime,
+                        duration: updatedTask.duration,
+                        endDate: updatedTask.endDate,
                       ),
                     );
+
+                    final CalendarTask seriesUpdate = latestTask.copyWith(
+                      title: updatedTask.title,
+                      description: updatedTask.description,
+                      location: updatedTask.location,
+                      deadline: updatedTask.deadline,
+                      priority: updatedTask.priority,
+                      isCompleted: updatedTask.isCompleted,
+                    );
+
+                    if (seriesUpdate != latestTask) {
+                      bloc.add(
+                        CalendarEvent.taskUpdated(
+                          task: seriesUpdate,
+                        ),
+                      );
+                    }
                   }
-                }
-              : null,
-          onTaskDeleted: (taskId) {
-            bloc.add(
-              CalendarEvent.taskDeleted(
-                taskId: taskId,
-              ),
-            );
-            Navigator.of(sheetContext).pop();
-          },
+                : null,
+            onTaskDeleted: (taskId) {
+              bloc.add(
+                CalendarEvent.taskDeleted(
+                  taskId: taskId,
+                ),
+              );
+              Navigator.of(sheetContext).pop();
+            },
+          ),
         );
       },
     );
@@ -1955,6 +2037,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       addGeometryListener: _surfaceController.addGeometryListener,
       removeGeometryListener: _surfaceController.removeGeometryListener,
       requiresLongPressToDrag: !hasMouse,
+      longPressToDragDelay:
+          hasMouse ? kLongPressTimeout : _touchDragLongPressDelay,
     );
   }
 
@@ -2762,6 +2846,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required CalendarState state,
     VoidCallback? onTaskDeleted,
     bool includeDeleteAction = true,
+    bool includeCompletionAction = true,
+    bool includePriorityActions = true,
+    bool includeSplitAction = false,
   }) {
     final List<TaskContextAction> actions = <TaskContextAction>[
       TaskContextAction(
@@ -2771,41 +2858,45 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ),
     ];
 
-    actions.add(
-      TaskContextAction(
-        icon: task.isCompleted ? Icons.undo : Icons.check_circle_outline,
-        label: task.isCompleted ? 'Mark Incomplete' : 'Mark Complete',
-        onSelected: () => _toggleTaskCompletion(task),
-      ),
-    );
-
-    final bool importantFlag = _taskHasImportantFlag(task);
-    final bool urgentFlag = _taskHasUrgentFlag(task);
-
-    actions.add(
-      TaskContextAction(
-        icon:
-            importantFlag ? Icons.label_off : Icons.label_important_outline,
-        label: importantFlag ? 'Remove Important Flag' : 'Mark as Important',
-        onSelected: () => _updateTaskPriority(
-          task,
-          important: !importantFlag,
-          urgent: urgentFlag,
+    if (includeCompletionAction) {
+      actions.add(
+        TaskContextAction(
+          icon: task.isCompleted ? Icons.undo : Icons.check_circle_outline,
+          label: task.isCompleted ? 'Mark Incomplete' : 'Mark Complete',
+          onSelected: () => _toggleTaskCompletion(task),
         ),
-      ),
-    );
+      );
+    }
 
-    actions.add(
-      TaskContextAction(
-        icon: urgentFlag ? Icons.flash_on : Icons.flash_off,
-        label: urgentFlag ? 'Remove Urgent Flag' : 'Mark as Urgent',
-        onSelected: () => _updateTaskPriority(
-          task,
-          important: importantFlag,
-          urgent: !urgentFlag,
+    if (includePriorityActions) {
+      final bool importantFlag = _taskHasImportantFlag(task);
+      final bool urgentFlag = _taskHasUrgentFlag(task);
+
+      actions.add(
+        TaskContextAction(
+          icon:
+              importantFlag ? Icons.label_off : Icons.label_important_outline,
+          label: importantFlag ? 'Remove Important Flag' : 'Mark as Important',
+          onSelected: () => _updateTaskPriority(
+            task,
+            important: !importantFlag,
+            urgent: urgentFlag,
+          ),
         ),
-      ),
-    );
+      );
+
+      actions.add(
+        TaskContextAction(
+          icon: urgentFlag ? Icons.flash_on : Icons.flash_off,
+          label: urgentFlag ? 'Remove Urgent Flag' : 'Mark as Urgent',
+          onSelected: () => _updateTaskPriority(
+            task,
+            important: importantFlag,
+            urgent: !urgentFlag,
+          ),
+        ),
+      );
+    }
 
     final CalendarTask? clipboardTemplate =
         _taskInteractionController.clipboardTemplate;
@@ -2899,6 +2990,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           icon: Icons.highlight_off,
           label: 'Exit Selection Mode',
           onSelected: _clearSelectionMode,
+        ),
+      );
+    }
+
+    if (includeSplitAction) {
+      actions.add(
+        TaskContextAction(
+          icon: Icons.call_split,
+          label: 'Split Task',
+          onSelected: () => _promptSplitTask(task),
         ),
       );
     }
@@ -3106,6 +3207,118 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _lastHandledFocusToken = request.token;
     _pendingFocusRequest = request;
     _fulfillFocusRequestIfReady();
+  }
+}
+
+class _SplitTaskPickerSheet extends StatefulWidget {
+  const _SplitTaskPickerSheet({
+    required this.initialValue,
+    required this.minTime,
+    required this.maxTime,
+  });
+
+  final DateTime initialValue;
+  final DateTime minTime;
+  final DateTime maxTime;
+
+  @override
+  State<_SplitTaskPickerSheet> createState() => _SplitTaskPickerSheetState();
+}
+
+class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
+  late DateTime _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = _clamp(widget.initialValue);
+  }
+
+  DateTime _clamp(DateTime value) {
+    if (value.isBefore(widget.minTime)) {
+      return widget.minTime;
+    }
+    if (value.isAfter(widget.maxTime)) {
+      return widget.maxTime;
+    }
+    return value;
+  }
+
+  void _handleSubmit() {
+    Navigator.of(context).pop(_selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Material(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            calendarGutterLg,
+            calendarGutterLg,
+            calendarGutterLg,
+            calendarGutterLg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: scheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: calendarGutterLg),
+              const TaskSectionHeader(title: 'Split task at'),
+              const SizedBox(height: calendarInsetMd),
+              DeadlinePickerField(
+                value: _selected,
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _selected = _clamp(value);
+                  });
+                },
+                placeholder: 'Select split time',
+                showStatusColors: false,
+                minDate: widget.minTime,
+                maxDate: widget.maxTime,
+              ),
+              const SizedBox(height: calendarGutterLg),
+              TaskFormActionsRow(
+                padding: EdgeInsets.zero,
+                gap: 12,
+                children: [
+                  Expanded(
+                    child: TaskSecondaryButton(
+                      label: 'Cancel',
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                  Expanded(
+                    child: TaskPrimaryButton(
+                      label: 'Split Task',
+                      onPressed: _handleSubmit,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
