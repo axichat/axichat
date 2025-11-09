@@ -49,6 +49,8 @@ class CalendarTaskEntryBindings {
     required this.splitPreviewAnimationDuration,
     required this.contextMenuGroupId,
     required this.contextMenuBuilderFactory,
+    required this.enableContextMenuLongPress,
+    required this.resizeHandleExtent,
     required this.interactionController,
     required this.dragFeedbackHint,
     required this.callbacks,
@@ -68,6 +70,8 @@ class CalendarTaskEntryBindings {
   final Duration splitPreviewAnimationDuration;
   final ValueKey<String> contextMenuGroupId;
   final CalendarTaskContextMenuBuilderFactory contextMenuBuilderFactory;
+  final bool enableContextMenuLongPress;
+  final double resizeHandleExtent;
   final TaskInteractionController interactionController;
   final ValueListenable<DragFeedbackHint> dragFeedbackHint;
   final CalendarTaskTileCallbacks callbacks;
@@ -273,6 +277,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 contextMenuController: _menuController,
                 contextMenuGroupId: bindings.contextMenuGroupId,
                 contextMenuBuilder: contextMenuBuilder,
+                contextMenuLongPressEnabled:
+                    bindings.enableContextMenuLongPress,
+                resizeHandleExtent: bindings.resizeHandleExtent,
                 onDragPointerDown:
                     enableInteractions ? _callbacks.onDragPointerDown : null,
                 onToggleSelection: enableInteractions

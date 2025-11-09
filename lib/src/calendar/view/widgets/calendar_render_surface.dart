@@ -206,6 +206,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
     required this.layoutCalculator,
     required this.layoutTheme,
     required this.controller,
+    required this.verticalScrollController,
     required this.minutesPerStep,
     required this.interactionController,
     this.hoveredSlot,
@@ -230,6 +231,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
   final CalendarLayoutCalculator layoutCalculator;
   final CalendarLayoutTheme layoutTheme;
   final CalendarSurfaceController controller;
+  final ScrollController verticalScrollController;
   final int minutesPerStep;
   final TaskInteractionController interactionController;
   final DateTime? hoveredSlot;
@@ -256,6 +258,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       layoutCalculator: layoutCalculator,
       layoutTheme: layoutTheme,
       controller: controller,
+      verticalScrollController: verticalScrollController,
       minutesPerStep: minutesPerStep,
       interactionController: interactionController,
       hoveredSlot: hoveredSlot,
@@ -288,6 +291,7 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       ..layoutCalculator = layoutCalculator
       ..layoutTheme = layoutTheme
       ..controller = controller
+      ..verticalScrollController = verticalScrollController
       ..minutesPerStep = minutesPerStep
       ..interactionController = interactionController
       ..hoveredSlot = hoveredSlot
@@ -413,6 +417,7 @@ class RenderCalendarSurface extends RenderBox
     required CalendarLayoutCalculator layoutCalculator,
     required CalendarLayoutTheme layoutTheme,
     required CalendarSurfaceController controller,
+    required ScrollController verticalScrollController,
     required int minutesPerStep,
     required TaskInteractionController interactionController,
     DateTime? hoveredSlot,
@@ -436,6 +441,7 @@ class RenderCalendarSurface extends RenderBox
         _layoutCalculator = layoutCalculator,
         _layoutTheme = layoutTheme,
         _controller = controller,
+        _verticalScrollController = verticalScrollController,
         _minutesPerStep = minutesPerStep,
         _interactionController = interactionController,
         _hoveredSlot = hoveredSlot,
@@ -527,6 +533,15 @@ class RenderCalendarSurface extends RenderBox
     _controller?._attach(this);
   }
 
+  ScrollController? get verticalScrollController => _verticalScrollController;
+  ScrollController? _verticalScrollController;
+  set verticalScrollController(ScrollController? value) {
+    if (identical(_verticalScrollController, value)) {
+      return;
+    }
+    _verticalScrollController = value;
+  }
+
   int get minutesPerStep => _minutesPerStep;
   int _minutesPerStep;
   set minutesPerStep(int value) {
@@ -591,12 +606,14 @@ class RenderCalendarSurface extends RenderBox
       <String, CalendarTaskGeometry>{};
   final List<_DayColumnGeometry> _dayGeometries = <_DayColumnGeometry>[];
   static const double _tapTolerance = 12.0;
+  static const double _scrollTapSuppressionThreshold = 1.0;
   int? _activePointerId;
   Offset? _pointerDownLocal;
   DateTime? _pointerDownSlot;
   bool _pointerDownHitTask = false;
   bool _pointerDownIsPrimary = false;
   bool _pointerDragSessionActive = false;
+  double? _pointerDownScrollOffset;
   String? _currentHoverTaskId;
   String? _externalDragTaskId;
 
@@ -1180,6 +1197,23 @@ class RenderCalendarSurface extends RenderBox
     }
   }
 
+  double _currentScrollOffset() {
+    final ScrollController? controller = _verticalScrollController;
+    if (controller == null || !controller.hasClients) {
+      return 0.0;
+    }
+    return controller.position.pixels;
+  }
+
+  bool _didScrollDuringPointerGesture() {
+    final double? start = _pointerDownScrollOffset;
+    if (start == null) {
+      return false;
+    }
+    final double delta = (_currentScrollOffset() - start).abs();
+    return delta > _scrollTapSuppressionThreshold;
+  }
+
   void _handlePointerUp(Offset localPosition, Offset globalPosition) {
     final bool dragActive = _isDragInProgress;
     final bool dragSessionActive = dragActive || _pointerDragSessionActive;
@@ -1227,8 +1261,9 @@ class RenderCalendarSurface extends RenderBox
 
     final bool suppressTap =
         _interactionController?.consumeSurfaceTapSuppression() ?? false;
+    final bool scrolledDuringGesture = _didScrollDuringPointerGesture();
 
-    if (dragSessionActive || suppressTap) {
+    if (dragSessionActive || suppressTap || scrolledDuringGesture) {
       onDragAutoScrollStop?.call();
       _resetPointerState();
       return;
@@ -1269,6 +1304,7 @@ class RenderCalendarSurface extends RenderBox
     _pointerDownHitTask = false;
     _pointerDownIsPrimary = false;
     _pointerDragSessionActive = false;
+    _pointerDownScrollOffset = null;
     _updateHoverTask(null);
   }
 
@@ -1850,6 +1886,7 @@ class RenderCalendarSurface extends RenderBox
         _pointerDownHitTask = false;
         _pointerDownIsPrimary = false;
         _pointerDragSessionActive = false;
+        _pointerDownScrollOffset = null;
       }
       return;
     }
@@ -1861,6 +1898,7 @@ class RenderCalendarSurface extends RenderBox
         _pointerDownLocal = null;
         _pointerDownSlot = null;
         _pointerDownHitTask = false;
+        _pointerDownScrollOffset = null;
         return;
       }
       _activePointerId ??= event.pointer;
@@ -1868,6 +1906,7 @@ class RenderCalendarSurface extends RenderBox
         _pointerDownLocal = entry.localPosition;
         _pointerDownSlot = slotForOffset(entry.localPosition);
         _pointerDownHitTask = containsTaskAt(entry.localPosition);
+        _pointerDownScrollOffset = _currentScrollOffset();
       }
       return;
     }
