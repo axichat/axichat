@@ -69,6 +69,7 @@ const _reactionManagerPadding = EdgeInsets.symmetric(
 );
 const _reactionManagerShadowGap = 16.0;
 const _selectionHeadroomTolerance = 1.0;
+const _selectionControlsChangeThreshold = 8.0;
 const _selectionDismissMoveAllowance = 36.0;
 const _selectionDismissTapAllowance = 48.0;
 final _selectionSpacerTimestamp =
@@ -232,6 +233,7 @@ class _ChatState extends State<Chat> {
   bool _selectionAutoscrollActive = false;
   bool _selectionAutoscrollScheduled = false;
   bool _selectionAutoscrollInProgress = false;
+  bool _selectionAutoscrollSatisfied = false;
   bool _selectionControlsMeasurementPending = false;
   int? _dismissPointer;
   Offset? _dismissPointerDownPosition;
@@ -343,6 +345,7 @@ class _ChatState extends State<Chat> {
       _selectionAutoscrollActive = false;
       _selectionAutoscrollScheduled = false;
       _selectionAutoscrollInProgress = false;
+      _selectionAutoscrollSatisfied = false;
     });
   }
 
@@ -363,6 +366,7 @@ class _ChatState extends State<Chat> {
           baseHeadroom > _selectionHeadroomTolerance ? baseHeadroom : 0.0;
       _selectionActionButtonKeys.clear();
       _selectionAutoscrollActive = true;
+      _selectionAutoscrollSatisfied = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -410,6 +414,7 @@ class _ChatState extends State<Chat> {
           });
         }
         _selectionAutoscrollActive = false;
+        _selectionAutoscrollSatisfied = true;
         return;
       }
       await _shiftSelectionBy(gapDelta);
@@ -433,6 +438,7 @@ class _ChatState extends State<Chat> {
     if (!_scrollController.hasClients) return;
     if (gapDelta.abs() <= _selectionHeadroomTolerance) {
       _selectionAutoscrollActive = false;
+      _selectionAutoscrollSatisfied = true;
       return;
     }
     final position = _scrollController.position;
@@ -452,6 +458,7 @@ class _ChatState extends State<Chat> {
     final target = rawTarget.clamp(minExtent, maxExtent);
     if ((position.pixels - target).abs() < _selectionAutoscrollSlop) {
       _selectionAutoscrollActive = false;
+      _selectionAutoscrollSatisfied = true;
       return;
     }
     await position.animateTo(
@@ -530,6 +537,7 @@ class _ChatState extends State<Chat> {
               additional;
       if (_selectedMessageId != null) {
         _selectionAutoscrollActive = true;
+        _selectionAutoscrollSatisfied = false;
       }
     });
     _scheduleSelectionAutoscroll();
@@ -558,15 +566,16 @@ class _ChatState extends State<Chat> {
     }
     final height = renderBox.size.height;
     if ((height - _selectionControlsHeight).abs() <
-        _selectionHeadroomTolerance) {
+        _selectionControlsChangeThreshold) {
       return;
     }
-    final shouldReactivate =
-        _selectedMessageId != null && !_selectionAutoscrollActive;
+    final selectionActive = _selectedMessageId != null;
+    final shouldRearm = selectionActive && _selectionAutoscrollSatisfied;
     setState(() {
       _selectionControlsHeight = height;
-      if (shouldReactivate) {
+      if (shouldRearm) {
         _selectionAutoscrollActive = true;
+        _selectionAutoscrollSatisfied = false;
       }
     });
     if (_scrollController.hasClients) {
@@ -1836,6 +1845,7 @@ class _ChatState extends State<Chat> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _selectedMessageId == null) return;
       _selectionAutoscrollActive = true;
+      _selectionAutoscrollSatisfied = false;
       _scheduleSelectionAutoscroll();
     });
   }
