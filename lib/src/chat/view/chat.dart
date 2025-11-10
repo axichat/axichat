@@ -343,7 +343,12 @@ class _ChatState extends State<Chat> {
       _selectedMessageId = messageId;
       _activeSelectionExtrasKey = null;
       _reactionManagerKey = null;
-      _selectionSpacerHeight = 0;
+      final baseHeadroom =
+          _selectionSpacerBaseHeight > _selectionHeadroomTolerance
+              ? _selectionSpacerBaseHeight
+              : _selectionExtrasViewportGap;
+      _selectionSpacerHeight =
+          baseHeadroom > _selectionHeadroomTolerance ? baseHeadroom : 0.0;
       _selectionActionButtonKeys.clear();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -465,14 +470,15 @@ class _ChatState extends State<Chat> {
       duration: _bubbleFocusDuration,
       curve: _bubbleFocusCurve,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectedMessageId == null) return;
-      _scrollSelectionExtrasIntoView();
-    });
   }
 
   void _ensureSelectionHeadroom(double amount) {
-    final desired = math.max(amount, _selectionHeadroomTolerance);
+    final additional = math.max(amount, 0);
+    final baseline = math.max(
+      _selectionSpacerHeight,
+      _selectionSpacerBaseHeight,
+    );
+    final desired = baseline + additional;
     if ((_selectionSpacerHeight - desired).abs() >
         _selectionHeadroomTolerance) {
       setState(() {
@@ -556,7 +562,7 @@ class _ChatState extends State<Chat> {
     if (viewportExtent <= _selectionHeadroomTolerance) {
       return;
     }
-    final desired = math.max(viewportExtent, _selectionExtrasViewportGap);
+    final desired = _selectionExtrasViewportGap;
     if ((_selectionSpacerBaseHeight - desired).abs() <
         _selectionHeadroomTolerance) {
       return;
@@ -795,13 +801,12 @@ class _ChatState extends State<Chat> {
                               final selectionActive =
                                   _selectedMessageId != null;
                               final selectionSpacerVisibleHeight =
-                                  math.max(0.0, _selectionSpacerBaseHeight) +
-                                      (selectionActive
-                                          ? math.max(
-                                              0.0,
-                                              _selectionSpacerHeight,
-                                            )
-                                          : 0.0);
+                                  selectionActive
+                                      ? math.max(
+                                          0.0,
+                                          _selectionSpacerHeight,
+                                        )
+                                      : 0.0;
                               final selectionHeadroomActive =
                                   selectionSpacerVisibleHeight >
                                       _selectionHeadroomTolerance;
