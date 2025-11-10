@@ -238,7 +238,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
     BuildContext context, {
     required bool highlightTasksTab,
   }) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
     final Widget tabBar = buildDragAwareTabBar(
       context: context,
       bottomInset: bottomInset,
@@ -474,6 +474,24 @@ class _CalendarWidgetState extends State<CalendarWidget>
 
   @override
   void onDragCancelRequested(CalendarDragPayload payload) {
+    final CalendarBloc? bloc = _calendarBloc;
+    final DateTime? originalStart = payload.pickupScheduledTime ??
+        payload.snapshot.scheduledTime ??
+        payload.originSlot;
+    debugPrint(
+      '[calendar] cancel drag task=${payload.task.id} '
+      'pickup=${payload.pickupScheduledTime} '
+      'snapshot=${payload.snapshot.scheduledTime} '
+      'origin=${payload.originSlot}',
+    );
+    if (bloc != null && originalStart != null) {
+      final CalendarTask restored = payload.snapshot.withScheduled(
+        scheduledTime: originalStart,
+        duration: payload.snapshot.duration,
+        endDate: payload.snapshot.endDate,
+      );
+      bloc.commitTaskInteraction(restored);
+    }
     FeedbackSystem.showInfo(context, 'Drag canceled');
   }
 }

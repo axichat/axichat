@@ -333,7 +333,8 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         (_geometry.rect.height.isFinite && _geometry.rect.height > 0
             ? _geometry.rect.height / 2
             : 0.0);
-    final CalendarTask snapshot = widget.snapshotBuilder?.call() ?? widget.task;
+    final CalendarTask snapshot =
+        widget.snapshotBuilder?.call() ?? widget.task.copyWith();
 
     return CalendarDragPayload(
       task: widget.task,
@@ -342,6 +343,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       pointerNormalizedX: pointerNormalized,
       pointerOffsetY: pointerOffsetY,
       originSlot: widget.task.scheduledTime,
+      pickupScheduledTime: widget.task.scheduledTime,
     );
   }
 

@@ -11,6 +11,7 @@ class CalendarDragPayload {
     this.pointerNormalizedX,
     this.pointerOffsetY,
     this.originSlot,
+    this.pickupScheduledTime,
   });
 
   /// Task currently being dragged.
@@ -30,4 +31,7 @@ class CalendarDragPayload {
 
   /// Slot anchoring the drag when the task originated from the grid.
   final DateTime? originSlot;
+
+  /// Exact scheduled start when the drag began (before previews mutate state).
+  final DateTime? pickupScheduledTime;
 }
