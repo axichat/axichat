@@ -1,6 +1,6 @@
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';

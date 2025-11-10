@@ -1,0 +1,122 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:hive/hive.dart';
+
+import '../utils/recurrence_utils.dart';
+import 'calendar_task.dart';
+
+part 'calendar_model.freezed.dart';
+part 'calendar_model.g.dart';
+
+@freezed
+@HiveType(typeId: 33)
+class CalendarModel with _$CalendarModel {
+  const factory CalendarModel({
+    @HiveField(0) @Default({}) Map<String, CalendarTask> tasks,
+    @HiveField(1) required DateTime lastModified,
+    @HiveField(3) required String checksum,
+  }) = _CalendarModel;
+
+  factory CalendarModel.fromJson(Map<String, dynamic> json) =>
+      _$CalendarModelFromJson(json);
+
+  factory CalendarModel.empty() {
+    final now = DateTime.now();
+    final model = CalendarModel(
+      lastModified: now,
+      checksum: '',
+    );
+    return model.copyWith(checksum: model.calculateChecksum());
+  }
+
+  const CalendarModel._();
+
+  String calculateChecksum() {
+    final sortedTasks = Map.fromEntries(
+      tasks.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    final content = jsonEncode({
+      'tasks': sortedTasks.map((k, v) => MapEntry(k, v.toJson())),
+      'lastModified': lastModified.toIso8601String(),
+    });
+    return sha256.convert(utf8.encode(content)).toString();
+  }
+
+  CalendarModel addTask(CalendarTask task) {
+    final updatedTasks = {...tasks, task.id: task};
+    final now = DateTime.now();
+    final updated = copyWith(
+      tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel updateTask(CalendarTask task) {
+    if (!tasks.containsKey(task.id)) return this;
+    return addTask(task);
+  }
+
+  CalendarModel deleteTask(String taskId) {
+    if (!tasks.containsKey(taskId)) return this;
+    final updatedTasks = Map<String, CalendarTask>.from(tasks)..remove(taskId);
+    final now = DateTime.now();
+    final updated = copyWith(
+      tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel replaceTasks(Map<String, CalendarTask> replacements) {
+    if (replacements.isEmpty) {
+      return this;
+    }
+    final updatedTasks = {...tasks}..addAll(replacements);
+    final now = DateTime.now();
+    final updated = copyWith(
+      tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel removeTasks(Iterable<String> taskIds) {
+    final updatedTasks = Map<String, CalendarTask>.from(tasks);
+    var modified = false;
+    for (final id in taskIds) {
+      if (updatedTasks.remove(id) != null) {
+        modified = true;
+      }
+    }
+    if (!modified) {
+      return this;
+    }
+    final now = DateTime.now();
+    final updated = copyWith(
+      tasks: updatedTasks,
+      lastModified: now,
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+}
+
+extension CalendarModelX on CalendarModel {
+  CalendarTask? resolveTaskInstance(String taskId) {
+    final CalendarTask? direct = tasks[taskId];
+    if (direct != null) {
+      return direct;
+    }
+    final String baseId = baseTaskIdFrom(taskId);
+    final CalendarTask? baseTask = tasks[baseId];
+    if (baseTask == null) {
+      return null;
+    }
+    if (taskId == baseId) {
+      return baseTask;
+    }
+    return baseTask.occurrenceForId(taskId);
+  }
+}
