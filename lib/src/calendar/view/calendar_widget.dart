@@ -38,6 +38,8 @@ class _CalendarWidgetState extends State<CalendarWidget>
   CalendarBloc? _calendarBloc;
   final GlobalKey<TaskSidebarState> _sidebarKey =
       GlobalKey<TaskSidebarState>();
+  final ValueNotifier<bool> _cancelBucketHoverNotifier =
+      ValueNotifier<bool>(false);
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -62,6 +64,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
     disposeCalendarDragTabMixin();
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
+    _cancelBucketHoverNotifier.dispose();
     super.dispose();
   }
 
@@ -410,6 +413,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
       onDragSessionStarted: _handleCalendarGridDragSessionStarted,
       onDragGlobalPositionChanged: _handleCalendarGridDragPositionChanged,
       onDragSessionEnded: _handleCalendarGridDragSessionEnded,
+      cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
     );
   }
 
@@ -473,25 +477,23 @@ class _CalendarWidgetState extends State<CalendarWidget>
   bool get isDragSwitcherEnabled => _usesMobileLayout;
 
   @override
+  void onCancelBucketHoverChanged(bool isHovering) {
+    _cancelBucketHoverNotifier.value = isHovering;
+  }
+
+  @override
   void onDragCancelRequested(CalendarDragPayload payload) {
     final CalendarBloc? bloc = _calendarBloc;
-    final DateTime? originalStart = payload.pickupScheduledTime ??
-        payload.snapshot.scheduledTime ??
-        payload.originSlot;
     debugPrint(
       '[calendar] cancel drag task=${payload.task.id} '
       'pickup=${payload.pickupScheduledTime} '
       'snapshot=${payload.snapshot.scheduledTime} '
       'origin=${payload.originSlot}',
     );
-    if (bloc != null && originalStart != null) {
-      final CalendarTask restored = payload.snapshot.withScheduled(
-        scheduledTime: originalStart,
-        duration: payload.snapshot.duration,
-        endDate: payload.snapshot.endDate,
-      );
-      bloc.commitTaskInteraction(restored);
+    if (bloc != null) {
+      final CalendarTask restored = restoreTaskFromPayload(payload);
+      bloc.add(CalendarEvent.taskUpdated(task: restored));
+      FeedbackSystem.showInfo(context, 'Drag canceled');
     }
-    FeedbackSystem.showInfo(context, 'Drag canceled');
   }
 }

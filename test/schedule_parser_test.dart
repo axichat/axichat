@@ -261,6 +261,41 @@ void main() {
       expect(result.bucket, TaskBucket.unscheduled);
       expect(result.task, 'come up with 5 reasons');
     });
+
+    test('"by next week" becomes Monday deadline and keeps "to"', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result = parser.parse('need to pay bills by next week');
+
+      expect(result.deadline, isNotNull);
+      final expectedDeadline = tz.TZDateTime(location, 2024, 5, 6, 17);
+      expect(result.deadline!.isAtSameMomentAs(expectedDeadline), isTrue);
+      expect(result.bucket, TaskBucket.reminder);
+      expect(result.task, 'need to pay bills');
+    });
+
+    test('removes temporal words only when parser consumed them', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result = parser.parse('call tomorrow at 2pm');
+
+      expect(result.start, isNotNull);
+      expect(result.task, 'call');
+    });
+
+    test('keeps temporal phrases when they were ignored', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result = parser.parse('call on Friday at 2pm');
+
+      expect(result.task, 'call on Friday');
+    });
+
+    test('keeps connector when no temporal metadata was consumed', () {
+      final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
+      final result = parser.parse('focus on design backlog');
+
+      expect(result.start, isNull);
+      expect(result.bucket, TaskBucket.unscheduled);
+      expect(result.task, 'focus on design backlog');
+    });
   });
 
   group('ScheduleParser recurrence parsing', () {

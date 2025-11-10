@@ -164,6 +164,17 @@ final RegExp _unitPattern = RegExp(
   caseSensitive: false,
 );
 
+const Set<String> _metadataConnectorWords = {
+  'on',
+  'at',
+  'in',
+  'this',
+  'next',
+  'coming',
+  'around',
+  'about',
+};
+
 bool _looksLikeLocationCandidate(String candidate, FuzzyPolicy policy) {
   final trimmed = candidate.trim();
   if (trimmed.isEmpty) return false;
@@ -603,32 +614,58 @@ class ScheduleParser {
             'No explicit date; used ${DateFormat('y-MM-dd').format(start)} for "${vague.hit}".');
       }
       confidence -= 0.1;
+      final vaguePattern =
+          RegExp(RegExp.escape(vague.hit), caseSensitive: false);
+      if (vaguePattern.hasMatch(s)) {
+        s = s.replaceFirst(vaguePattern, ' ');
+      }
+      consumed.add(vague.hit);
     }
 
     // Weekend shorthand
-    if (RegExp(r'\b(this|next)?\s*weekend\b', caseSensitive: false)
-        .hasMatch(original)) {
+    final weekendPattern =
+        RegExp(r'\b(?:(this|next)\s+)?weekend\b', caseSensitive: false);
+    final weekendMatch = weekendPattern.firstMatch(s);
+    if (weekendMatch != null) {
       flags.add(AmbiguityFlag.relativeDate);
       final addAWeek =
-          RegExp(r'\bnext weekend\b', caseSensitive: false).hasMatch(original);
+          (weekendMatch.group(1)?.toLowerCase() == 'next');
       final sat =
           _startOfWeekend(base, opts.policy.weekendDefaultDay, addAWeek);
       start ??= sat;
+      final weekendStart = start!;
       if (allDay) allDay = false;
       assumptions.add(
-          'Interpreted "weekend" as ${DateFormat('EEE HH:mm').format(start)}.');
+          'Interpreted "${weekendMatch.group(0)}" as '
+          '${DateFormat('EEE HH:mm').format(weekendStart)}.');
       confidence -= 0.1;
+      s = s.replaceRange(weekendMatch.start, weekendMatch.end, ' ');
+      consumed.add(weekendMatch.group(0));
     }
 
     // Approximate "ish"/"around"
     bool approximate = false;
-    if (RegExp(r'\bish\b|\baround\b', caseSensitive: false)
-            .hasMatch(original) &&
-        start != null) {
+    final approxPattern = RegExp(r'\b(?:ish|around)\b', caseSensitive: false);
+    Match? approxMatchInWorking;
+    Match? approxMatchInOriginal;
+    if (start != null) {
+      approxMatchInWorking = approxPattern.firstMatch(s);
+      approxMatchInOriginal =
+          approxMatchInWorking ?? approxPattern.firstMatch(original);
+    }
+    if (start != null && approxMatchInOriginal != null) {
       approximate = true;
       flags.add(AmbiguityFlag.approximateTime);
       assumptions.add('Time marked approximate ("ish"/"around").');
       confidence -= 0.05;
+      if (approxMatchInWorking != null) {
+        s = s.replaceRange(
+          approxMatchInWorking.start,
+          approxMatchInWorking.end,
+          ' ',
+        );
+      }
+      consumed.add(approxMatchInOriginal.group(0));
     }
 
     // Location: at/in/to …, @ …, or trailing hint
@@ -815,10 +852,7 @@ class ScheduleParser {
     );
 
     // Title cleanup
-    var title = s
-        .replaceAll(RegExp(r'\b(on|at|in|to)\b', caseSensitive: false), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    var title = s.trim();
     title = _stripPriorityMarkers(title, pr.triggerTokens);
     title = _stripAppliedMetadata(
       title,
@@ -828,6 +862,7 @@ class ScheduleParser {
       location: location,
       consumedPhrases: consumed.phrases,
     );
+    title = title.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (title.isEmpty) {
       title = _stripAppliedMetadata(
         original,
@@ -1028,19 +1063,38 @@ class ScheduleParser {
     if (m != null) {
       final st = m.start, en = m.end;
       final target = m.group(1)!.trim();
+      final normalizedTarget =
+          target.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+      bool interpretedDeadline = false;
 
-      final ref =
-          ParsingReference(instant: base.toUtc(), timezone: opts.tzName);
-      final rs = Chrono.parse(' $target ',
-          ref: ref, option: ParsingOption(forwardDate: true));
-      if (rs.isNotEmpty) {
-        var dt = tz.TZDateTime.from(rs.last.date(), opts.tzLocation);
-        final hadTime = rs.last.start.isCertain(Component.hour);
-        if (!hadTime) dt = _eod(dt);
-        deadline = dt;
+      if (_isBareNextWeekPhrase(normalizedTarget)) {
+        final tz.TZDateTime nextWeekMonday =
+            _nextWeekMondayDeadline(base);
+        deadline = nextWeekMonday;
         flags.add(AmbiguityFlag.deadline);
         assumptions.add(
-            'Interpreted "${m.group(0)}" as deadline ${dt.toIso8601String()}.');
+          'Interpreted "${m.group(0)}" as deadline '
+          '${nextWeekMonday.toIso8601String()}.',
+        );
+        interpretedDeadline = true;
+      }
+
+      if (!interpretedDeadline) {
+        final ref =
+            ParsingReference(instant: base.toUtc(), timezone: opts.tzName);
+        final rs = Chrono.parse(' $target ',
+            ref: ref, option: ParsingOption(forwardDate: true));
+        if (rs.isNotEmpty) {
+          var dt = tz.TZDateTime.from(rs.last.date(), opts.tzLocation);
+          final hadTime = rs.last.start.isCertain(Component.hour);
+          if (!hadTime) dt = _eod(dt);
+          deadline = dt;
+          flags.add(AmbiguityFlag.deadline);
+          assumptions.add(
+            'Interpreted "${m.group(0)}" as deadline '
+            '${dt.toIso8601String()}.',
+          );
+        }
       }
 
       text = (text.substring(0, st) + ' ' + text.substring(en))
@@ -1105,6 +1159,29 @@ class ScheduleParser {
     }
 
     return _DeadlineParse(text, deadline, flags, assumptions);
+  }
+
+  bool _isBareNextWeekPhrase(String target) {
+    if (target.isEmpty) return false;
+    return RegExp(r'^(?:the\s+)?next\s+(?:week|wk)$').hasMatch(target);
+  }
+
+  tz.TZDateTime _nextWeekMondayDeadline(tz.TZDateTime base) {
+    final tz.TZDateTime anchor =
+        tz.TZDateTime(opts.tzLocation, base.year, base.month, base.day);
+    var daysUntilMonday = (DateTime.monday - anchor.weekday + 7) % 7;
+    if (daysUntilMonday == 0) {
+      daysUntilMonday = 7;
+    }
+    final tz.TZDateTime nextMonday =
+        anchor.add(Duration(days: daysUntilMonday));
+    return tz.TZDateTime(
+      opts.tzLocation,
+      nextMonday.year,
+      nextMonday.month,
+      nextMonday.day,
+      opts.policy.endOfDayHour,
+    );
   }
 
   _RecurrenceParse _parseRecurrence(String s, tz.TZDateTime base) {
@@ -1959,51 +2036,6 @@ class ScheduleParser {
       );
     }
 
-    if (hasStart) {
-      cleaned = cleaned.replaceAll(
-        RegExp(_timeSnippetPattern, caseSensitive: false),
-        ' ',
-      );
-      cleaned = cleaned.replaceAll(
-        RegExp(
-          r'\b(today|tonight|tomorrow|tmrw|day after tomorrow|next week|next weekend|this weekend|this morning|this afternoon|this evening|this night|next month|next year|next monday|next tuesday|next wednesday|next thursday|next friday|next saturday|next sunday)\b',
-          caseSensitive: false,
-        ),
-        ' ',
-      );
-      cleaned = cleaned.replaceAll(
-        RegExp(
-          '\\b(?:$_weekdayWordPattern)\\b',
-          caseSensitive: false,
-        ),
-        ' ',
-      );
-      cleaned = cleaned.replaceAll(
-        RegExp(r'\b(?:this|next)\s+week\b', caseSensitive: false),
-        ' ',
-      );
-    }
-
-    if (hasDeadline) {
-      cleaned = cleaned.replaceAll(
-        RegExp(
-          r'\b(by|before|no\s+later\s+than|not\s+later\s+than|due|deadline)\b',
-          caseSensitive: false,
-        ),
-        ' ',
-      );
-    }
-
-    if (hasRecurrence) {
-      cleaned = cleaned.replaceAll(
-        RegExp(
-          r'\b(every|each|everyday|daily|weekly|monthly|annually|yearly|weekday|weekdays|weekend|weekends|biweekly|mwf|tth|mon-fri|mon thru fri)\b',
-          caseSensitive: false,
-        ),
-        ' ',
-      );
-    }
-
     for (final phrase in consumedPhrases) {
       final normalized = phrase.trim();
       if (normalized.isEmpty) continue;
@@ -2119,7 +2151,55 @@ class ScheduleParser {
 
   String _removeSpanByIndex(String s, int index, int length) {
     if (index < 0 || index + length > s.length) return s;
-    return s.replaceRange(index, index + length, ' ');
+
+    bool _isLetter(int codeUnit) {
+      return (codeUnit >= 65 && codeUnit <= 90) ||
+          (codeUnit >= 97 && codeUnit <= 122);
+    }
+
+    bool _isWhitespace(int codeUnit) => codeUnit <= 32;
+
+    var start = index;
+    var end = index + length;
+
+    // Consume trailing whitespace to avoid leaving double spaces.
+    while (end < s.length && _isWhitespace(s.codeUnitAt(end))) {
+      end++;
+    }
+
+    // Step back to include whitespace between the matched phrase and
+    // any connector words we may choose to remove below.
+    while (start > 0 && _isWhitespace(s.codeUnitAt(start - 1))) {
+      start--;
+    }
+
+    var cursor = start;
+    while (cursor > 0) {
+      var wordEnd = cursor;
+      // Skip whitespace directly before the current cursor.
+      while (wordEnd > 0 && _isWhitespace(s.codeUnitAt(wordEnd - 1))) {
+        wordEnd--;
+      }
+      if (wordEnd == 0) break;
+
+      var wordStart = wordEnd;
+      while (wordStart > 0 && _isLetter(s.codeUnitAt(wordStart - 1))) {
+        wordStart--;
+      }
+      if (wordStart == wordEnd) {
+        break;
+      }
+
+      final word = s.substring(wordStart, wordEnd).toLowerCase();
+      if (!_metadataConnectorWords.contains(word)) {
+        break;
+      }
+
+      start = wordStart;
+      cursor = wordStart;
+    }
+
+    return s.replaceRange(start, end, ' ');
   }
 
   String _hhmm(int hour) =>
