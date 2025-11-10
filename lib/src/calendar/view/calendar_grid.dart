@@ -40,6 +40,7 @@ import 'widgets/calendar_task_surface.dart';
 import 'widgets/calendar_task_geometry.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/task_form_section.dart';
+import 'feedback_system.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
@@ -151,8 +152,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       ValueKey<String>('calendar-grid-context');
   static const double _desktopHandleExtent = 8.0;
   static const double _touchHandleExtent = 28.0;
-  static const Duration _touchDragLongPressDelay =
-      Duration(milliseconds: 260);
+  static const Duration _touchDragLongPressDelay = Duration(milliseconds: 260);
   static const ValueListenable<bool> _defaultCancelBucketHoverNotifier =
       AlwaysStoppedAnimation<bool>(false);
   Ticker? _edgeAutoScrollTicker;
@@ -933,16 +933,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _showSplitError('Task is too short to split.');
       return;
     }
-    final DateTime minSelectable =
-        start.add(Duration(minutes: minimumStep));
-    final DateTime maxSelectable =
-        end.subtract(Duration(minutes: minimumStep));
+    final DateTime minSelectable = start.add(Duration(minutes: minimumStep));
+    final DateTime maxSelectable = end.subtract(Duration(minutes: minimumStep));
     if (!maxSelectable.isAfter(minSelectable)) {
       _showSplitError('Task is too short to split.');
       return;
     }
-    final DateTime midpoint =
-        start.add(Duration(minutes: totalMinutes ~/ 2));
+    final DateTime midpoint = start.add(Duration(minutes: totalMinutes ~/ 2));
     final DateTime initialCandidate = midpoint.isBefore(minSelectable)
         ? minSelectable
         : (midpoint.isAfter(maxSelectable) ? maxSelectable : midpoint);
@@ -1175,9 +1172,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             isSheet: true,
             inlineActionsBloc: bloc,
             inlineActionsBuilder: (state) {
-              final CalendarTask? latest =
-                  state.model.tasks[displayTask.id] ??
-                      state.model.tasks[displayTask.baseId];
+              final CalendarTask? latest = state.model.tasks[displayTask.id] ??
+                  state.model.tasks[displayTask.baseId];
               final CalendarTask resolved = latest ?? displayTask;
               return _buildTaskContextActions(
                 task: resolved,
@@ -2039,7 +2035,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       isSelectionMode: _isSelectionMode,
       isSelected: _isTaskSelected(task),
       isPopoverOpen: _taskPopoverController.isPopoverOpen(task.id),
-      dragTargetKey: _taskPopoverController.keyForTask(task.id),
       splitPreviewAnimationDuration: _layoutTheme.splitPreviewAnimationDuration,
       contextMenuGroupId: _contextMenuGroupId,
       contextMenuBuilderFactory: enableContextMenus
@@ -2049,8 +2044,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               )
           : (_) => null,
       enableContextMenuLongPress: hasMouse,
-      resizeHandleExtent:
-          hasMouse ? _desktopHandleExtent : _touchHandleExtent,
+      resizeHandleExtent: hasMouse ? _desktopHandleExtent : _touchHandleExtent,
       interactionController: _taskInteractionController,
       dragFeedbackHint: _taskInteractionController.feedbackHint,
       cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
@@ -2774,10 +2768,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleTaskDrop(CalendarTask task, DateTime dropTime) {
-    _handleTaskDragEnded(task);
-    final bool handled = _applySelectionDrag(task, dropTime);
+    final CalendarTask? resolved =
+        _resolveTaskForId(task.id, widget.state) ?? _visibleTasks[task.id];
+    if (resolved == null) {
+      debugPrint(
+        '[calendar] drop ignored – unable to resolve task ${task.id}',
+      );
+      FeedbackSystem.showError(context, 'Task not found');
+      _handleTaskDragEnded(task);
+      return;
+    }
+    _handleTaskDragEnded(resolved);
+    final bool handled = _applySelectionDrag(resolved, dropTime);
     if (!handled) {
-      widget.onTaskDragEnd?.call(task, dropTime);
+      widget.onTaskDragEnd?.call(resolved, dropTime);
     }
   }
 
@@ -2905,8 +2909,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
       actions.add(
         TaskContextAction(
-          icon:
-              importantFlag ? Icons.label_off : Icons.label_important_outline,
+          icon: importantFlag ? Icons.label_off : Icons.label_important_outline,
           label: importantFlag ? 'Remove Important Flag' : 'Mark as Important',
           onSelected: () => _updateTaskPriority(
             task,
@@ -2941,14 +2944,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
     }
 
-    final Set<String> seriesIds =
-        _seriesIdsForTask(task, stateSnapshot: state);
+    final Set<String> seriesIds = _seriesIdsForTask(task, stateSnapshot: state);
     final bool selectionModeActive = state.isSelectionMode;
     final Set<String> selectedIds = state.selectedTaskIds;
     final bool hasSeriesGroup = seriesIds.length > 1;
-    final bool isSeriesTask = hasSeriesGroup ||
-        task.isOccurrence ||
-        !task.effectiveRecurrence.isNone;
+    final bool isSeriesTask =
+        hasSeriesGroup || task.isOccurrence || !task.effectiveRecurrence.isNone;
     final bool isOccurrenceSelected = selectedIds.contains(task.id);
     final bool isSeriesSelected =
         hasSeriesGroup && seriesIds.every(selectedIds.contains);
@@ -3078,10 +3079,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   String _stripTaskKeyword(String label) {
     final RegExp keyword = RegExp(r'\b[Tt]ask\b');
-    final String stripped = label
-        .replaceAll(keyword, '')
-        .replaceAll(RegExp(r'\s{2,}'), ' ')
-        .trim();
+    final String stripped =
+        label.replaceAll(keyword, '').replaceAll(RegExp(r'\s{2,}'), ' ').trim();
     return stripped.isEmpty ? label : stripped;
   }
 
@@ -3100,8 +3099,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
             (action) => ShadContextMenuItem(
               leading: Icon(
                 action.icon,
-                color:
-                    action.destructive ? theme.colorScheme.error : null,
+                color: action.destructive ? theme.colorScheme.error : null,
               ),
               onPressed: () {
                 request.markCloseIntent();

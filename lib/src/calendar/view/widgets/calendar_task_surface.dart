@@ -12,7 +12,8 @@ import '../resizable_task_widget.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_draggable.dart';
 
-typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder? Function(
+typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder?
+    Function(
   ShadPopoverController controller,
 );
 
@@ -47,7 +48,6 @@ class CalendarTaskEntryBindings {
     required this.isSelectionMode,
     required this.isSelected,
     required this.isPopoverOpen,
-    required this.dragTargetKey,
     required this.splitPreviewAnimationDuration,
     required this.contextMenuGroupId,
     required this.contextMenuBuilderFactory,
@@ -71,7 +71,6 @@ class CalendarTaskEntryBindings {
   final bool isSelectionMode;
   final bool isSelected;
   final bool isPopoverOpen;
-  final GlobalKey dragTargetKey;
   final Duration splitPreviewAnimationDuration;
   final ValueKey<String> contextMenuGroupId;
   final CalendarTaskContextMenuBuilderFactory contextMenuBuilderFactory;
@@ -350,10 +349,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                   math.max(geometry.rect.width - occupantWidth, 0.0);
               final bool widthAllowsSplit =
                   ghostWidth >= _minSideBySideGhostWidth &&
-                  occupantWidth >= _minSideBySideGhostWidth;
-              final bool useSideBySide =
-                  widthAllowsSplit &&
-                      geometry.splitWidthFactor < _splitOverlayFallbackThreshold;
+                      occupantWidth >= _minSideBySideGhostWidth;
+              final bool useSideBySide = widthAllowsSplit &&
+                  geometry.splitWidthFactor < _splitOverlayFallbackThreshold;
 
               final Widget previewGhost = _buildPreviewGhost(
                 previewTaskCandidate: previewTaskCandidate,
@@ -419,7 +417,6 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
             final bool paintSplitBorder = showSplitPreview && !isDraggingTask;
 
             return AnimatedContainer(
-              key: bindings.dragTargetKey,
               duration: bindings.splitPreviewAnimationDuration,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(calendarEventRadius),

@@ -112,6 +112,7 @@ extension CalendarStateExtensions on CalendarState {
     );
 
     final results = <CalendarTask>[];
+    final emittedIds = <String>{};
 
     for (final task in model.tasks.values) {
       final baseInstance = task.baseOccurrenceInstance();
@@ -121,6 +122,7 @@ extension CalendarStateExtensions on CalendarState {
         if (_overlapsRange(
             baseStart, baseEnd, normalizedStart, normalizedEnd)) {
           results.add(baseInstance);
+          emittedIds.add(baseInstance.id);
         }
       }
 
@@ -140,6 +142,45 @@ extension CalendarStateExtensions on CalendarState {
           normalizedEnd,
         )) {
           results.add(occurrence);
+          emittedIds.add(occurrence.id);
+        }
+      }
+
+      if (task.occurrenceOverrides.isNotEmpty) {
+        for (final MapEntry<String, TaskOccurrenceOverride> entry
+            in task.occurrenceOverrides.entries) {
+          final override = entry.value;
+          if (override.isCancelled == true) {
+            continue;
+          }
+          final DateTime? originalStart =
+              task.originalStartForOccurrenceKey(entry.key);
+          if (originalStart == null) {
+            continue;
+          }
+          final CalendarTask instance = task.createOccurrenceInstance(
+            originalStart: originalStart,
+            occurrenceKey: entry.key,
+            override: override,
+          );
+          if (emittedIds.contains(instance.id)) {
+            continue;
+          }
+          final DateTime? overrideStart = instance.scheduledTime;
+          if (overrideStart == null) {
+            continue;
+          }
+          final DateTime overrideEnd =
+              instance.effectiveEndDate ?? overrideStart;
+          if (_overlapsRange(
+            overrideStart,
+            overrideEnd,
+            normalizedStart,
+            normalizedEnd,
+          )) {
+            results.add(instance);
+            emittedIds.add(instance.id);
+          }
         }
       }
     }
