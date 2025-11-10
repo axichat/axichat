@@ -438,10 +438,18 @@ class _ChatState extends State<Chat> {
     final position = _scrollController.position;
     final directionSign = _axisDirectionSign(position.axisDirection);
     final scrollDelta = gapDelta * directionSign;
-    final target = (position.pixels + scrollDelta).clamp(
-      position.minScrollExtent.toDouble(),
-      position.maxScrollExtent.toDouble(),
-    );
+    final rawTarget = position.pixels + scrollDelta;
+    final minExtent = position.minScrollExtent.toDouble();
+    final maxExtent = position.maxScrollExtent.toDouble();
+    if (rawTarget > maxExtent + _selectionHeadroomTolerance) {
+      _extendSelectionHeadroom(rawTarget - maxExtent);
+      return;
+    }
+    if (rawTarget < minExtent - _selectionHeadroomTolerance) {
+      _extendSelectionHeadroom(minExtent - rawTarget);
+      return;
+    }
+    final target = rawTarget.clamp(minExtent, maxExtent);
     if ((position.pixels - target).abs() < _selectionAutoscrollSlop) {
       _selectionAutoscrollActive = false;
       return;
@@ -505,12 +513,26 @@ class _ChatState extends State<Chat> {
     }
     _selectionAutoscrollScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionAutoscrollScheduled = false;
       if (!mounted || !_selectionAutoscrollActive) {
-        _selectionAutoscrollScheduled = false;
         return;
       }
       _scrollSelectionExtrasIntoView();
     });
+  }
+
+  void _extendSelectionHeadroom(double amount) {
+    final additional = math.max(amount, 0.0);
+    if (additional <= _selectionHeadroomTolerance) return;
+    setState(() {
+      _selectionSpacerHeight =
+          math.max(_selectionSpacerHeight, _selectionSpacerBaseHeight) +
+              additional;
+      if (_selectedMessageId != null) {
+        _selectionAutoscrollActive = true;
+      }
+    });
+    _scheduleSelectionAutoscroll();
   }
 
   void _requestSelectionControlsMeasurement() {
@@ -539,8 +561,13 @@ class _ChatState extends State<Chat> {
         _selectionHeadroomTolerance) {
       return;
     }
+    final shouldReactivate =
+        _selectedMessageId != null && !_selectionAutoscrollActive;
     setState(() {
       _selectionControlsHeight = height;
+      if (shouldReactivate) {
+        _selectionAutoscrollActive = true;
+      }
     });
     if (_scrollController.hasClients) {
       _updateSelectionSpacerBase(_scrollController.position.viewportDimension);
