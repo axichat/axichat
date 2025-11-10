@@ -116,6 +116,10 @@ extension CalendarTaskInstanceX on CalendarTask {
     );
   }
 
+  /// Resolves the original scheduled start for a given occurrence key.
+  DateTime? originalStartForOccurrenceKey(String key) =>
+      _originalStartForKey(key);
+
   /// Creates a concrete occurrence instance for UI/state consumption.
   CalendarTask createOccurrenceInstance({
     required DateTime originalStart,

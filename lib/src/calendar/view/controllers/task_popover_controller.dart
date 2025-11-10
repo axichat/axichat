@@ -21,7 +21,6 @@ TaskPopoverLayout defaultTaskPopoverLayout() => const TaskPopoverLayout(
 
 class TaskPopoverController extends ChangeNotifier {
   final Map<String, TaskPopoverLayout> _layouts = {};
-  final Map<String, GlobalKey> _taskKeys = {};
 
   String? _activeTaskId;
   bool _dismissArmed = false;
@@ -30,15 +29,6 @@ class TaskPopoverController extends ChangeNotifier {
       UnmodifiableMapView(_layouts);
   String? get activeTaskId => _activeTaskId;
   bool get dismissArmed => _dismissArmed;
-
-  GlobalKey keyForTask(String taskId) =>
-      _taskKeys.putIfAbsent(taskId, () => GlobalKey());
-
-  void removeKey(String taskId) {
-    _taskKeys.remove(taskId);
-  }
-
-  GlobalKey? getKey(String taskId) => _taskKeys[taskId];
 
   TaskPopoverLayout layoutFor(String taskId) =>
       _layouts[taskId] ?? defaultTaskPopoverLayout();
@@ -107,7 +97,6 @@ class TaskPopoverController extends ChangeNotifier {
   @override
   void dispose() {
     _layouts.clear();
-    _taskKeys.clear();
     _activeTaskId = null;
     _dismissArmed = false;
     super.dispose();

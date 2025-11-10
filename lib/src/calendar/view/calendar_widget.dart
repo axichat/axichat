@@ -36,8 +36,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
   DateTime? _lastSyncToastTime;
   bool _usesMobileLayout = false;
   CalendarBloc? _calendarBloc;
-  final GlobalKey<TaskSidebarState> _sidebarKey =
-      GlobalKey<TaskSidebarState>();
+  final GlobalKey<TaskSidebarState> _sidebarKey = GlobalKey<TaskSidebarState>();
   final ValueNotifier<bool> _cancelBucketHoverNotifier =
       ValueNotifier<bool>(false);
 
@@ -229,9 +228,9 @@ class _CalendarWidgetState extends State<CalendarWidget>
             ),
           ),
           _buildMobileTabBar(
-          context,
-          highlightTasksTab: highlightTasksTab,
-        ),
+            context,
+            highlightTasksTab: highlightTasksTab,
+          ),
         ],
       ),
     );
@@ -241,7 +240,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
     BuildContext context, {
     required bool highlightTasksTab,
   }) {
-    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+    final mediaQuery = MediaQuery.of(context);
+    final double keyboardInset = mediaQuery.viewInsets.bottom;
+    final double bottomInset =
+        keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
     final Widget tabBar = buildDragAwareTabBar(
       context: context,
       bottomInset: bottomInset,
@@ -426,8 +428,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
 
   void _handleCalendarGridDragPositionChanged(Offset globalPosition) {
     handleGridDragPositionChanged(globalPosition);
-    _sidebarKey.currentState
-        ?.handleExternalGridDragPosition(globalPosition);
+    _sidebarKey.currentState?.handleExternalGridDragPosition(globalPosition);
   }
 
   void _handleCalendarGridDragSessionEnded() {
@@ -457,16 +458,16 @@ class _CalendarWidgetState extends State<CalendarWidget>
       prefilledDateTime: prefilledTime,
       locationHelper: helper,
       onTaskAdded: (task) => _calendarBloc?.add(
-            CalendarEvent.taskAdded(
-              title: task.title,
-              scheduledTime: task.scheduledTime,
-              description: task.description,
-              duration: task.duration,
-              priority: task.priority ?? TaskPriority.none,
-              recurrence: task.recurrence,
-              startHour: task.startHour,
-            ),
-          ),
+        CalendarEvent.taskAdded(
+          title: task.title,
+          scheduledTime: task.scheduledTime,
+          description: task.description,
+          duration: task.duration,
+          priority: task.priority ?? TaskPriority.none,
+          recurrence: task.recurrence,
+          startHour: task.startHour,
+        ),
+      ),
     );
   }
 

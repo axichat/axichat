@@ -280,6 +280,20 @@ class CalendarLayoutCalculator {
     return narrowed.clamp(minimumAllowed, baselineWidth);
   }
 
+  DateTime _normalizeEndBoundary(DateTime start, DateTime candidate) {
+    if (_isExactMidnight(candidate) && candidate.isAfter(start)) {
+      return candidate.subtract(const Duration(microseconds: 1));
+    }
+    return candidate;
+  }
+
+  bool _isExactMidnight(DateTime value) =>
+      value.hour == 0 &&
+      value.minute == 0 &&
+      value.second == 0 &&
+      value.millisecond == 0 &&
+      value.microsecond == 0;
+
   CalendarTaskLayout? resolveTaskLayout({
     required CalendarTask task,
     required DateTime dayDate,
@@ -305,10 +319,13 @@ class CalendarLayoutCalculator {
     DateTime? effectiveEnd = task.effectiveEndDate;
     effectiveEnd ??=
         task.duration != null ? scheduledTime.add(task.duration!) : null;
+    final DateTime layoutEndReference = effectiveEnd == null
+        ? scheduledTime
+        : _normalizeEndBoundary(scheduledTime, effectiveEnd);
     final DateTime eventEndDate = DateTime(
-      (effectiveEnd ?? scheduledTime).year,
-      (effectiveEnd ?? scheduledTime).month,
-      (effectiveEnd ?? scheduledTime).day,
+      layoutEndReference.year,
+      layoutEndReference.month,
+      layoutEndReference.day,
     );
 
     final DateTime clampedWeekStart =

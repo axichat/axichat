@@ -651,7 +651,6 @@ CalendarTaskEntryBindings _buildTestBindings({
     isSelectionMode: false,
     isSelected: false,
     isPopoverOpen: false,
-    dragTargetKey: GlobalKey(),
     splitPreviewAnimationDuration: Duration.zero,
     contextMenuGroupId: groupId,
     contextMenuBuilderFactory: builderFactory,

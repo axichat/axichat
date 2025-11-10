@@ -163,6 +163,9 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
                 horizontal: calendarGutterLg, vertical: calendarGutterMd),
+            keyboardDismissBehavior: _supportsDragDismiss(context)
+                ? ScrollViewKeyboardDismissBehavior.onDrag
+                : ScrollViewKeyboardDismissBehavior.manual,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -181,12 +184,14 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                 _buildRecurrenceSection(),
                 _sectionDivider(),
                 _buildCompletedCheckbox(),
+                const SizedBox(height: calendarFormGap),
+                const Divider(height: 1),
+                const SizedBox(height: calendarFormGap),
+                _buildActions(),
               ],
             ),
           ),
         ),
-        const Divider(height: 1),
-        _buildActions(),
       ],
     );
     Widget content = Material(
@@ -217,6 +222,11 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       );
     }
     return content;
+  }
+
+  bool _supportsDragDismiss(BuildContext context) {
+    final TargetPlatform platform = Theme.of(context).platform;
+    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
   }
 
   Widget _buildHeader() {

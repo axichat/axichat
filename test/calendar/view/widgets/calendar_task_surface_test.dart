@@ -40,7 +40,6 @@ void main() {
           isSelectionMode: false,
           isSelected: false,
           isPopoverOpen: isPopoverOpen,
-          dragTargetKey: GlobalKey(),
           splitPreviewAnimationDuration: Duration.zero,
           contextMenuGroupId: const ValueKey<String>('calendar-menu'),
           contextMenuBuilderFactory: (_) =>
@@ -129,7 +128,6 @@ void main() {
                     isSelectionMode: false,
                     isSelected: false,
                     isPopoverOpen: false,
-                    dragTargetKey: GlobalKey(),
                     splitPreviewAnimationDuration: Duration.zero,
                     contextMenuGroupId: const ValueKey<String>('geometry-menu'),
                     contextMenuBuilderFactory: (_) =>

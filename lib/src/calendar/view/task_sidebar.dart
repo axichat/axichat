@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -185,9 +186,7 @@ class TaskSidebarState extends State<TaskSidebar>
         continue;
       }
       final Size size = box.size;
-      final bool hasSize = size.isFinite &&
-          size.width > 0 &&
-          size.height > 0;
+      final bool hasSize = size.isFinite && size.width > 0 && size.height > 0;
       if (!hasSize) {
         continue;
       }
@@ -484,6 +483,12 @@ class TaskSidebarState extends State<TaskSidebar>
       animation: _sidebarController,
       builder: (context, _) {
         final CalendarSidebarState uiState = _sidebarController.state;
+        final mediaQuery = MediaQuery.of(context);
+        final double keyboardInset = mediaQuery.viewInsets.bottom;
+        final EdgeInsetsGeometry scrollPadding =
+            calendarSidebarScrollPadding.add(
+          EdgeInsets.only(bottom: keyboardInset),
+        );
         final BaseCalendarBloc calendarBloc = _bloc;
         return Container(
           width: uiState.width,
@@ -517,6 +522,8 @@ class TaskSidebarState extends State<TaskSidebar>
                         : state.unscheduledTasks.map((task) => task.id).toSet();
                     _pruneTaskPopoverControllers(activeTaskIds);
 
+                    final bool enableKeyboardDismiss =
+                        _supportsDragDismiss(context);
                     return Scrollbar(
                       controller: _scrollController,
                       radius:
@@ -525,7 +532,10 @@ class TaskSidebarState extends State<TaskSidebar>
                       child: SingleChildScrollView(
                         key: _scrollViewportKey,
                         controller: _scrollController,
-                        padding: calendarSidebarScrollPadding,
+                        padding: scrollPadding,
+                        keyboardDismissBehavior: enableKeyboardDismiss
+                            ? ScrollViewKeyboardDismissBehavior.onDrag
+                            : ScrollViewKeyboardDismissBehavior.manual,
                         physics: const ClampingScrollPhysics(),
                         child: content,
                       ),
@@ -540,6 +550,11 @@ class TaskSidebarState extends State<TaskSidebar>
         );
       },
     );
+  }
+
+  bool _supportsDragDismiss(BuildContext context) {
+    final TargetPlatform platform = Theme.of(context).platform;
+    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
   }
 
   @override
@@ -1536,8 +1551,8 @@ class TaskSidebarState extends State<TaskSidebar>
 
   void _focusTask(CalendarTask task) {
     _bloc.add(
-          CalendarEvent.taskFocusRequested(taskId: task.id),
-        );
+      CalendarEvent.taskFocusRequested(taskId: task.id),
+    );
   }
 
   String _selectionScheduleLabel(CalendarTask task) {
@@ -1925,8 +1940,8 @@ class TaskSidebarState extends State<TaskSidebar>
                                     const BoxConstraints(minHeight: 40),
                                 decoration: BoxDecoration(
                                   color: isHovering
-                                      ? calendarPrimaryColor
-                                          .withValues(alpha: 0.12)
+                                      ? calendarPrimaryColor.withValues(
+                                          alpha: 0.12)
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(
                                     calendarBorderRadius,
@@ -1969,7 +1984,6 @@ class TaskSidebarState extends State<TaskSidebar>
     }
     return KeyedSubtree(key: key, child: content);
   }
-
 
   Widget _buildCollapsedPreview(List<CalendarTask> tasks) {
     if (tasks.isEmpty) {
@@ -2527,24 +2541,23 @@ class TaskSidebarState extends State<TaskSidebar>
                                     LocationAutocompleteHelper.fromState(state),
                                 onTaskUpdated: (updatedTask) {
                                   _bloc.add(
-                                        CalendarEvent.taskUpdated(
-                                          task: updatedTask,
-                                        ),
-                                      );
+                                    CalendarEvent.taskUpdated(
+                                      task: updatedTask,
+                                    ),
+                                  );
                                 },
                                 onOccurrenceUpdated: shouldUpdateOccurrence
                                     ? (updatedTask) {
                                         _bloc.add(
-                                              CalendarEvent
-                                                  .taskOccurrenceUpdated(
-                                                taskId: baseId,
-                                                occurrenceId: task.id,
-                                                scheduledTime:
-                                                    updatedTask.scheduledTime,
-                                                duration: updatedTask.duration,
-                                                endDate: updatedTask.endDate,
-                                              ),
-                                            );
+                                          CalendarEvent.taskOccurrenceUpdated(
+                                            taskId: baseId,
+                                            occurrenceId: task.id,
+                                            scheduledTime:
+                                                updatedTask.scheduledTime,
+                                            duration: updatedTask.duration,
+                                            endDate: updatedTask.endDate,
+                                          ),
+                                        );
 
                                         final seriesUpdate =
                                             latestTask.copyWith(
@@ -2558,19 +2571,19 @@ class TaskSidebarState extends State<TaskSidebar>
 
                                         if (seriesUpdate != latestTask) {
                                           _bloc.add(
-                                                CalendarEvent.taskUpdated(
-                                                  task: seriesUpdate,
-                                                ),
-                                              );
+                                            CalendarEvent.taskUpdated(
+                                              task: seriesUpdate,
+                                            ),
+                                          );
                                         }
                                       }
                                     : null,
                                 onTaskDeleted: (taskId) {
                                   _bloc.add(
-                                        CalendarEvent.taskDeleted(
-                                          taskId: taskId,
-                                        ),
-                                      );
+                                    CalendarEvent.taskDeleted(
+                                      taskId: taskId,
+                                    ),
+                                  );
                                   _closeTaskPopover(task.id);
                                   _taskPopoverControllers
                                       .remove(task.id)
@@ -2614,24 +2627,12 @@ class TaskSidebarState extends State<TaskSidebar>
     );
   }
 
-  List<TaskContextAction> _buildSidebarInlineActions(
-    CalendarTask task, {
-    VoidCallback? onClose,
-  }) {
+  List<TaskContextAction> _buildSidebarInlineActions(CalendarTask task) {
     return [
       TaskContextAction(
         icon: Icons.copy_outlined,
         label: 'Copy',
         onSelected: () => _copyTaskDetails(task),
-      ),
-      TaskContextAction(
-        icon: Icons.delete_outline,
-        label: 'Delete',
-        destructive: true,
-        onSelected: () {
-          _deleteSidebarTask(task);
-          onClose?.call();
-        },
       ),
     ];
   }
@@ -2817,6 +2818,10 @@ class TaskSidebarState extends State<TaskSidebar>
     final bool shouldUpdateOccurrence =
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+    final MediaQueryData hostMediaQuery = MediaQuery.of(context);
+    final MediaQueryData viewMedia = MediaQueryData.fromView(View.of(context));
+    final double safeTopInset = viewMedia.viewPadding.top;
+    final double safeBottomInset = viewMedia.viewPadding.bottom;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -2824,21 +2829,33 @@ class TaskSidebarState extends State<TaskSidebar>
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final mediaQuery = MediaQuery.of(sheetContext);
-        final double maxHeight =
-            mediaQuery.size.height - mediaQuery.padding.top;
+        final double keyboardInset = mediaQuery.viewInsets.bottom;
+        final double bottomInset = math.max(safeBottomInset, keyboardInset);
+        final double availableHeight =
+            hostMediaQuery.size.height - safeTopInset - bottomInset;
+        final double maxHeight = availableHeight > 0
+            ? availableHeight
+            : hostMediaQuery.size.height - safeTopInset;
         final VoidCallback closeSheet = () {
           _sidebarController.setActivePopoverTaskId(null);
           Navigator.of(sheetContext).pop();
         };
-        return SafeArea(
-          top: false,
+        return AnimatedPadding(
+          padding: EdgeInsets.only(
+            top: safeTopInset,
+            bottom: bottomInset,
+            left: hostMediaQuery.padding.left,
+            right: hostMediaQuery.padding.right,
+          ),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
           child: EditTaskDropdown(
             task: displayTask,
             maxHeight: maxHeight,
             isSheet: true,
             inlineActionsBloc: bloc,
             inlineActionsBuilder: (_) =>
-                _buildSidebarInlineActions(displayTask, onClose: closeSheet),
+                _buildSidebarInlineActions(displayTask),
             onClose: closeSheet,
             scaffoldMessenger: scaffoldMessenger,
             locationHelper: LocationAutocompleteHelper.fromState(state),
@@ -3034,15 +3051,15 @@ class TaskSidebarState extends State<TaskSidebar>
 
     if (!hasLocation && !hasSchedule && !hasRecurrence) {
       _bloc.add(
-            CalendarEvent.quickTaskAdded(
-              text: title,
-              description: _descriptionController.text.trim().isNotEmpty
-                  ? _descriptionController.text.trim()
-                  : null,
-              deadline: _draftController.deadline,
-              priority: priority,
-            ),
-          );
+        CalendarEvent.quickTaskAdded(
+          text: title,
+          description: _descriptionController.text.trim().isNotEmpty
+              ? _descriptionController.text.trim()
+              : null,
+          deadline: _draftController.deadline,
+          priority: priority,
+        ),
+      );
     } else {
       final DateTime? scheduledTime = _draftController.startTime;
       final Duration? duration = hasSchedule
@@ -3056,19 +3073,19 @@ class TaskSidebarState extends State<TaskSidebar>
       }
 
       _bloc.add(
-            CalendarEvent.taskAdded(
-              title: title,
-              description: _descriptionController.text.trim().isNotEmpty
-                  ? _descriptionController.text.trim()
-                  : null,
-              scheduledTime: scheduledTime,
-              duration: duration,
-              deadline: _draftController.deadline,
-              location: hasLocation ? _locationController.text.trim() : null,
-              priority: priority,
-              recurrence: recurrence,
-            ),
-          );
+        CalendarEvent.taskAdded(
+          title: title,
+          description: _descriptionController.text.trim().isNotEmpty
+              ? _descriptionController.text.trim()
+              : null,
+          scheduledTime: scheduledTime,
+          duration: duration,
+          deadline: _draftController.deadline,
+          location: hasLocation ? _locationController.text.trim() : null,
+          priority: priority,
+          recurrence: recurrence,
+        ),
+      );
     }
 
     _resetForm();
