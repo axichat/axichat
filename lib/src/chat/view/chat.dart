@@ -23,7 +23,6 @@ import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -229,6 +228,11 @@ class _ChatState extends State<Chat> {
   final _selectionActionButtonKeys = <GlobalKey>[];
   double _selectionSpacerBaseHeight = 0;
   double _selectionSpacerHeight = 0;
+  double _selectionControlsHeight = 0;
+  bool _selectionAutoscrollActive = false;
+  bool _selectionAutoscrollScheduled = false;
+  bool _selectionAutoscrollInProgress = false;
+  bool _selectionControlsMeasurementPending = false;
   int? _dismissPointer;
   Offset? _dismissPointerDownPosition;
   bool _dismissPointerMoved = false;
@@ -334,11 +338,19 @@ class _ChatState extends State<Chat> {
       _reactionManagerKey = null;
       _selectionSpacerHeight = 0;
       _selectionActionButtonKeys.clear();
+      _selectionControlsHeight = 0;
+      _selectionControlsMeasurementPending = false;
+      _selectionAutoscrollActive = false;
+      _selectionAutoscrollScheduled = false;
+      _selectionAutoscrollInProgress = false;
     });
   }
 
   void _selectMessage(String messageId) {
     if (_selectedMessageId == messageId) return;
+    if (_scrollController.hasClients) {
+      _updateSelectionSpacerBase(_scrollController.position.viewportDimension);
+    }
     setState(() {
       _selectedMessageId = messageId;
       _activeSelectionExtrasKey = null;
@@ -350,12 +362,13 @@ class _ChatState extends State<Chat> {
       _selectionSpacerHeight =
           baseHeadroom > _selectionHeadroomTolerance ? baseHeadroom : 0.0;
       _selectionActionButtonKeys.clear();
+      _selectionAutoscrollActive = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await _primeSelectionHeadroomIfNeeded();
       await _scrollSelectedMessageIntoView(messageId);
-      await _scrollSelectionExtrasIntoView();
+      _scheduleSelectionAutoscroll();
     });
   }
 
@@ -373,125 +386,77 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _scrollSelectionExtrasIntoView() async {
-    if (!_scrollController.hasClients) return;
-    final referenceContext = _selectionReferenceContext();
-    if (referenceContext == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedMessageId == null) return;
-        _scrollSelectionExtrasIntoView();
-      });
-      return;
-    }
-    final missingHeadroom = _measureSelectionHeadroom();
-    if (missingHeadroom == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _selectedMessageId == null) return;
-        _scrollSelectionExtrasIntoView();
-      });
-      return;
-    }
-    final position = _scrollController.position;
-
-    if (missingHeadroom > _selectionHeadroomTolerance) {
-      final availableShift = _availableSelectionShift(position);
-      final shortfall = missingHeadroom - availableShift;
-      if (shortfall > _selectionHeadroomTolerance) {
-        _ensureSelectionHeadroom(shortfall);
+    if (_selectionAutoscrollInProgress) return;
+    _selectionAutoscrollInProgress = true;
+    _selectionAutoscrollScheduled = false;
+    try {
+      if (!_selectionAutoscrollActive || _selectedMessageId == null) return;
+      await _waitForPostFrame();
+      if (!_selectionAutoscrollActive || _selectedMessageId == null) return;
+      if (!_scrollController.hasClients) {
+        _scheduleSelectionAutoscroll();
         return;
       }
-      await _shiftSelectionBy(missingHeadroom);
-      return;
+      final gapDelta = _selectionGapDelta();
+      if (gapDelta == null) {
+        _scheduleSelectionAutoscroll();
+        return;
+      }
+      if (gapDelta.abs() <= _selectionHeadroomTolerance) {
+        if ((_selectionSpacerHeight - _selectionSpacerBaseHeight).abs() >
+            _selectionHeadroomTolerance) {
+          setState(() {
+            _selectionSpacerHeight = _selectionSpacerBaseHeight;
+          });
+        }
+        _selectionAutoscrollActive = false;
+        return;
+      }
+      await _shiftSelectionBy(gapDelta);
+    } finally {
+      _selectionAutoscrollInProgress = false;
     }
-
-    _releaseSelectionHeadroomIfPossible(position);
-
-    final renderObject = referenceContext.findRenderObject();
-    if (renderObject == null || !renderObject.attached) return;
-    final viewport = RenderAbstractViewport.of(renderObject);
-    if (viewport == null) return;
-    final directionSign = _axisDirectionSign(position.axisDirection);
-    final reveal = viewport.getOffsetToReveal(
-      renderObject,
-      directionSign > 0 ? 1.0 : 0.0,
-    );
-    final rawTarget =
-        reveal.offset + (_selectionExtrasViewportGap * directionSign);
-    final minExtent = position.minScrollExtent.toDouble();
-    final maxExtent = position.maxScrollExtent.toDouble();
-    if (rawTarget > maxExtent + _selectionHeadroomTolerance) {
-      _ensureSelectionHeadroom(rawTarget - maxExtent);
-      return;
-    }
-    if (rawTarget < minExtent - _selectionHeadroomTolerance) {
-      _ensureSelectionHeadroom(minExtent - rawTarget);
-      return;
-    }
-    final target = rawTarget.clamp(minExtent, maxExtent);
-    if ((position.pixels - target).abs() < _selectionAutoscrollSlop) return;
-    await position.animateTo(
-      target,
-      duration: _bubbleFocusDuration,
-      curve: _bubbleFocusCurve,
-    );
   }
 
   double _axisDirectionSign(AxisDirection direction) {
-    return direction == AxisDirection.up || direction == AxisDirection.left
-        ? -1.0
-        : 1.0;
+    switch (direction) {
+      case AxisDirection.up:
+      case AxisDirection.left:
+        return 1.0;
+      case AxisDirection.down:
+      case AxisDirection.right:
+        return -1.0;
+    }
   }
 
-  double _availableSelectionShift(ScrollPosition position) {
-    final directionSign = _axisDirectionSign(position.axisDirection);
-    return directionSign > 0
-        ? position.maxScrollExtent - position.pixels
-        : position.pixels - position.minScrollExtent;
-  }
-
-  void _releaseSelectionHeadroomIfPossible(ScrollPosition position) {
-    if (_selectedMessageId != null) return;
-    if (_selectionSpacerHeight <= _selectionHeadroomTolerance) return;
-    setState(() {
-      _selectionSpacerHeight = 0;
-    });
-  }
-
-  Future<void> _shiftSelectionBy(double extent) async {
+  Future<void> _shiftSelectionBy(double gapDelta) async {
     if (!_scrollController.hasClients) return;
+    if (gapDelta.abs() <= _selectionHeadroomTolerance) {
+      _selectionAutoscrollActive = false;
+      return;
+    }
     final position = _scrollController.position;
     final directionSign = _axisDirectionSign(position.axisDirection);
-    final target = (position.pixels + (extent * directionSign)).clamp(
+    final scrollDelta = gapDelta * directionSign;
+    final target = (position.pixels + scrollDelta).clamp(
       position.minScrollExtent.toDouble(),
       position.maxScrollExtent.toDouble(),
     );
-    if ((position.pixels - target).abs() < _selectionAutoscrollSlop) return;
+    if ((position.pixels - target).abs() < _selectionAutoscrollSlop) {
+      _selectionAutoscrollActive = false;
+      return;
+    }
     await position.animateTo(
       target,
       duration: _bubbleFocusDuration,
       curve: _bubbleFocusCurve,
     );
-  }
-
-  void _ensureSelectionHeadroom(double amount) {
-    final additional = math.max(amount, 0);
-    final baseline = math.max(
-      _selectionSpacerHeight,
-      _selectionSpacerBaseHeight,
-    );
-    final desired = baseline + additional;
-    if ((_selectionSpacerHeight - desired).abs() >
-        _selectionHeadroomTolerance) {
-      setState(() {
-        _selectionSpacerHeight = desired;
-      });
+    if (_selectionAutoscrollActive) {
+      _scheduleSelectionAutoscroll();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectedMessageId == null) return;
-      _scrollSelectionExtrasIntoView();
-    });
   }
 
-  double? _measureSelectionHeadroom() {
+  double? _selectionGapDelta() {
     final reactionContext = _reactionManagerKey?.currentContext ??
         _activeSelectionExtrasKey?.currentContext;
     final inputContext = _focusNode.context;
@@ -514,25 +479,11 @@ class _ChatState extends State<Chat> {
     final inputOrigin = inputBox.localToGlobal(Offset.zero);
     final inputTop = inputOrigin.dy;
     final currentGap = inputTop - reactionBottom;
-    final missingGap = _selectionExtrasViewportGap - currentGap;
-    if (missingGap <= _selectionHeadroomTolerance) {
+    final gapDelta = currentGap - _selectionExtrasViewportGap;
+    if (gapDelta.abs() <= _selectionHeadroomTolerance) {
       return 0;
     }
-    return missingGap;
-  }
-
-  BuildContext? _selectionReferenceContext() {
-    final managerContext = _reactionManagerKey?.currentContext;
-    if (managerContext != null) {
-      return managerContext;
-    }
-    final extrasContext = _activeSelectionExtrasKey?.currentContext;
-    if (extrasContext != null) {
-      return extrasContext;
-    }
-    final selectedId = _selectedMessageId;
-    if (selectedId == null) return null;
-    return _messageKeys[selectedId]?.currentContext;
+    return gapDelta;
   }
 
   Future<void> _waitForPostFrame() async {
@@ -544,6 +495,59 @@ class _ChatState extends State<Chat> {
       }
     });
     await completer.future;
+  }
+
+  void _scheduleSelectionAutoscroll() {
+    if (!_selectionAutoscrollActive ||
+        !mounted ||
+        _selectionAutoscrollScheduled) {
+      return;
+    }
+    _selectionAutoscrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_selectionAutoscrollActive) {
+        _selectionAutoscrollScheduled = false;
+        return;
+      }
+      _scrollSelectionExtrasIntoView();
+    });
+  }
+
+  void _requestSelectionControlsMeasurement() {
+    if (_selectionControlsMeasurementPending || !mounted) return;
+    if (_selectedMessageId == null) return;
+    _selectionControlsMeasurementPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionControlsMeasurementPending = false;
+      if (!mounted || _selectedMessageId == null) return;
+      _captureSelectionControlsHeight();
+    });
+  }
+
+  void _captureSelectionControlsHeight() {
+    final extrasContext = _activeSelectionExtrasKey?.currentContext;
+    if (extrasContext == null) return;
+    final renderBox = extrasContext.findRenderObject() as RenderBox?;
+    if (renderBox == null ||
+        !renderBox.attached ||
+        !renderBox.hasSize ||
+        renderBox.size.isEmpty) {
+      return;
+    }
+    final height = renderBox.size.height;
+    if ((height - _selectionControlsHeight).abs() <
+        _selectionHeadroomTolerance) {
+      return;
+    }
+    setState(() {
+      _selectionControlsHeight = height;
+    });
+    if (_scrollController.hasClients) {
+      _updateSelectionSpacerBase(_scrollController.position.viewportDimension);
+    }
+    if (_selectionAutoscrollActive) {
+      _scheduleSelectionAutoscroll();
+    }
   }
 
   void _captureBaseSelectionHeadroom() {
@@ -562,13 +566,24 @@ class _ChatState extends State<Chat> {
     if (viewportExtent <= _selectionHeadroomTolerance) {
       return;
     }
-    final desired = _selectionExtrasViewportGap;
-    if ((_selectionSpacerBaseHeight - desired).abs() <
-        _selectionHeadroomTolerance) {
+    final desired = math.max(
+      viewportExtent - _selectionControlsHeight,
+      _selectionExtrasViewportGap,
+    );
+    final baseChanged = (_selectionSpacerBaseHeight - desired).abs() >
+        _selectionHeadroomTolerance;
+    final shouldSyncSpacer = _selectedMessageId != null &&
+        (_selectionSpacerHeight - desired).abs() > _selectionHeadroomTolerance;
+    if (!baseChanged && !shouldSyncSpacer) {
       return;
     }
     setState(() {
-      _selectionSpacerBaseHeight = desired;
+      if (baseChanged) {
+        _selectionSpacerBaseHeight = desired;
+      }
+      if (_selectedMessageId != null) {
+        _selectionSpacerHeight = desired;
+      }
     });
   }
 
@@ -807,9 +822,6 @@ class _ChatState extends State<Chat> {
                                           _selectionSpacerHeight,
                                         )
                                       : 0.0;
-                              final selectionHeadroomActive =
-                                  selectionSpacerVisibleHeight >
-                                      _selectionHeadroomTolerance;
                               final baseBubbleMaxWidth =
                                   contentWidth * (isCompact ? 0.8 : 0.7);
                               final messageRowMaxWidth = contentWidth;
@@ -870,19 +882,17 @@ class _ChatState extends State<Chat> {
                                   ),
                                 );
                               }
-                              if (selectionHeadroomActive) {
-                                dashMessages.add(
-                                  ChatMessage(
-                                    user: spacerUser,
-                                    createdAt: _selectionSpacerTimestamp,
-                                    text: ' ',
-                                    customProperties: const {
-                                      'id': _selectionSpacerMessageId,
-                                      'selectionSpacer': true,
-                                    },
-                                  ),
-                                );
-                              }
+                              dashMessages.add(
+                                ChatMessage(
+                                  user: spacerUser,
+                                  createdAt: _selectionSpacerTimestamp,
+                                  text: ' ',
+                                  customProperties: const {
+                                    'id': _selectionSpacerMessageId,
+                                    'selectionSpacer': true,
+                                  },
+                                ),
+                              );
                               late final MessageListOptions
                                   dashMessageListOptions;
                               dashMessageListOptions = MessageListOptions(
@@ -1387,11 +1397,8 @@ class _ChatState extends State<Chat> {
                                             if (isSelected) {
                                               _activeSelectionExtrasKey ??=
                                                   GlobalKey();
-                                              WidgetsBinding.instance
-                                                  .addPostFrameCallback((_) {
-                                                if (!mounted) return;
-                                                _scrollSelectionExtrasIntoView();
-                                              });
+                                              _scheduleSelectionAutoscroll();
+                                              _requestSelectionControlsMeasurement();
                                             } else if (_activeSelectionExtrasKey !=
                                                     null &&
                                                 _selectedMessageId ==
@@ -1800,8 +1807,9 @@ class _ChatState extends State<Chat> {
           ),
         );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _scrollSelectionExtrasIntoView();
+      if (!mounted || _selectedMessageId == null) return;
+      _selectionAutoscrollActive = true;
+      _scheduleSelectionAutoscroll();
     });
   }
 
