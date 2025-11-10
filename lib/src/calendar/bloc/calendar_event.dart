@@ -1,0 +1,176 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+import '../models/calendar_model.dart';
+import '../models/calendar_task.dart';
+
+part 'calendar_event.freezed.dart';
+
+@freezed
+class CalendarEvent with _$CalendarEvent {
+  const factory CalendarEvent.started() = CalendarStarted;
+
+  const factory CalendarEvent.dataChanged() = CalendarDataChanged;
+
+  const factory CalendarEvent.taskAdded({
+    required String title,
+    DateTime? scheduledTime,
+    String? description,
+    Duration? duration,
+    DateTime? deadline,
+    String? location,
+    DateTime? endDate,
+    @Default(TaskPriority.none) TaskPriority priority,
+    double? startHour,
+    RecurrenceRule? recurrence,
+  }) = CalendarTaskAdded;
+
+  const factory CalendarEvent.taskUpdated({
+    required CalendarTask task,
+  }) = CalendarTaskUpdated;
+
+  const factory CalendarEvent.taskDeleted({
+    required String taskId,
+  }) = CalendarTaskDeleted;
+
+  const factory CalendarEvent.taskCompleted({
+    required String taskId,
+    required bool completed,
+  }) = CalendarTaskCompleted;
+
+  const factory CalendarEvent.syncRequested() = CalendarSyncRequested;
+
+  const factory CalendarEvent.syncPushed() = CalendarSyncPushed;
+
+  const factory CalendarEvent.remoteModelApplied({
+    required CalendarModel model,
+  }) = CalendarRemoteModelApplied;
+
+  const factory CalendarEvent.remoteTaskApplied({
+    required CalendarTask task,
+    required String operation,
+  }) = CalendarRemoteTaskApplied;
+
+  const factory CalendarEvent.viewChanged({
+    required CalendarView view,
+  }) = CalendarViewChanged;
+
+  const factory CalendarEvent.dateSelected({
+    required DateTime date,
+  }) = CalendarDateSelected;
+
+  const factory CalendarEvent.errorCleared() = CalendarErrorCleared;
+
+  // Enhanced events for weekly schedule
+  const factory CalendarEvent.dayViewSelected({
+    required int dayIndex,
+  }) = CalendarDayViewSelected;
+
+  const factory CalendarEvent.taskDragStarted({
+    required String taskId,
+  }) = CalendarTaskDragStarted;
+
+  const factory CalendarEvent.taskDropped({
+    required String taskId,
+    required DateTime time,
+    int? dayIndex,
+  }) = CalendarTaskDropped;
+
+  const factory CalendarEvent.taskResized({
+    required String taskId,
+    DateTime? scheduledTime,
+    Duration? duration,
+    DateTime? endDate,
+  }) = CalendarTaskResized;
+
+  const factory CalendarEvent.taskOccurrenceUpdated({
+    required String taskId,
+    required String occurrenceId,
+    DateTime? scheduledTime,
+    Duration? duration,
+    DateTime? endDate,
+    bool? isCancelled,
+  }) = CalendarTaskOccurrenceUpdated;
+
+  const factory CalendarEvent.taskPriorityChanged({
+    required String taskId,
+    required TaskPriority priority,
+  }) = CalendarTaskPriorityChanged;
+
+  const factory CalendarEvent.taskSplit({
+    required CalendarTask target,
+    required DateTime splitTime,
+  }) = CalendarTaskSplit;
+
+  const factory CalendarEvent.taskRepeated({
+    required CalendarTask template,
+    required DateTime scheduledTime,
+  }) = CalendarTaskRepeated;
+
+  const factory CalendarEvent.quickTaskAdded({
+    required String text,
+    String? description,
+    DateTime? deadline,
+    @Default(TaskPriority.none) TaskPriority priority,
+  }) = CalendarQuickTaskAdded;
+
+  const factory CalendarEvent.selectionModeEntered({
+    String? taskId,
+  }) = CalendarSelectionModeEntered;
+
+  const factory CalendarEvent.selectionToggled({
+    required String taskId,
+  }) = CalendarSelectionToggled;
+
+  const factory CalendarEvent.selectionCleared() = CalendarSelectionCleared;
+
+  const factory CalendarEvent.selectionPriorityChanged({
+    required TaskPriority priority,
+  }) = CalendarSelectionPriorityChanged;
+
+  const factory CalendarEvent.selectionCompletedToggled({
+    required bool completed,
+  }) = CalendarSelectionCompletedToggled;
+
+  const factory CalendarEvent.selectionDeleted() = CalendarSelectionDeleted;
+
+  const factory CalendarEvent.selectionRecurrenceChanged({
+    RecurrenceRule? recurrence,
+  }) = CalendarSelectionRecurrenceChanged;
+
+  const factory CalendarEvent.selectionTitleChanged({
+    required String title,
+  }) = CalendarSelectionTitleChanged;
+
+  const factory CalendarEvent.selectionDescriptionChanged({
+    String? description,
+  }) = CalendarSelectionDescriptionChanged;
+
+  const factory CalendarEvent.selectionLocationChanged({
+    String? location,
+  }) = CalendarSelectionLocationChanged;
+
+  const factory CalendarEvent.selectionTimeShifted({
+    Duration? startDelta,
+    Duration? endDelta,
+  }) = CalendarSelectionTimeShifted;
+
+  const factory CalendarEvent.selectionIdsAdded({
+    required Set<String> taskIds,
+  }) = CalendarSelectionIdsAdded;
+
+  const factory CalendarEvent.selectionIdsRemoved({
+    required Set<String> taskIds,
+  }) = CalendarSelectionIdsRemoved;
+
+  const factory CalendarEvent.undoRequested() = CalendarUndoRequested;
+
+  const factory CalendarEvent.redoRequested() = CalendarRedoRequested;
+
+  const factory CalendarEvent.taskFocusRequested({
+    required String taskId,
+  }) = CalendarTaskFocusRequested;
+
+  const factory CalendarEvent.taskFocusCleared() = CalendarTaskFocusCleared;
+}
+
+enum CalendarView { week, day, month }

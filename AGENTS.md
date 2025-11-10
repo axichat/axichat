@@ -1,34 +1,66 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Flutter sources live in `lib/`; domain layers such as `lib/src/xmpp`, `lib/src/chat`, and `lib/src/storage` mirror the mixin architecture used by `XmppService`.
-- Database models and query accessors are defined under `lib/src/storage/models`; rerun `dart run build_runner build --delete-conflicting-outputs` whenever you touch these types so generated files stay in sync.
-- UI elements that teammates monitor (operation overlays, notifications) sit in `lib/src/notifications` and are surfaced through `lib/src/app.dart`.
+
+- `lib/` contains the Flutter app; feature folders under `lib/src/` (chat, calendar, notifications, storage, xmpp) own UI and services, and mirror the mixin architecture already used inside `XmppService`.
+- Tests mirror the source tree (`test/` for unit/widget, `integration_test/` for end-to-end, `test_driver/` legacy harness); keep new specs beside the features they exercise.
+- Platform shells (`android/`, `ios/`, `linux/`, `macos/`, `windows/`, `web/`) and shared assets (`assets/images/`) mirror lib features so design tokens stay consistent.
+- Database models and query accessors live in `lib/src/storage/models`; rerun `dart run build_runner build --delete-conflicting-outputs` whenever you touch these types to keep generated Drift/Freezed files in sync.
+- Calendar UI, storage, and sync helpers stay under `lib/src/calendar`; deadline/date picking should always reuse `DeadlinePickerField`.
+- UI elements that the team monitors globally (operation overlays, notifications) sit in `lib/src/notifications` and are surfaced through `lib/src/app.dart`.
+- Read every `CLAUDE.md` in the current directory and its parents before editing; they override defaults. Keep `analysis_options.yaml`, `l10n.yaml`, `shorebird.yaml`, and `build.yaml` aligned with tooling or release updates.
 
 ## Build, Test, and Development Commands
-- USE THE DART MCP, if that is broken then use the following as fallbacks:
-- `flutter run` spins up the app; pass `--flavor dev` if you need the staging config.
-- `dart format .` then `dart analyze` before sending patches to keep lints predictable.
-- `dart test` runs the full suite; scope to a module with `dart test test/xmpp/chats_service_test.dart` for quicker iteration.
-- When storage models change, run `dart run build_runner build --delete-conflicting-outputs` to refresh Drift and Freezed outputs.
+
+- USE THE DART MCP; if it is unavailable fall back to the commands below.
+- `flutter pub get` — install dependencies after modifying `pubspec.yaml`.
+- `dart run build_runner build --delete-conflicting-outputs` — regenerate Drift, Freezed, router, or other annotated artifacts whenever schemas/models change.
+- `flutter run` (add `--flavor dev` for staging) powers manual smoke tests.
+- Always run `dart format .` followed by `dart analyze` (or equivalent IDE actions) before sharing patches to keep the lint suite predictable.
+- `flutter test` — execute unit and widget suites; scope with `flutter test test/chat`.
+- `flutter test integration_test` — run integration coverage on an attached emulator/device.
+- `dart test` — useful for pure Dart targets (storage/xmpp) when you want CLI output and tighter filters.
 
 ## Coding Style & Naming Conventions
-- Always read every `CLAUDE.md` in your working directory and its parents before editing; they override defaults.
-- Prefer explicit types, exhaustive `switch` statements, and intent-revealing names (`checkOmemoSupport`, `startOmemoOperation`).
-- Keep logging consistent by using the existing `Logger` instances; never drop `print` calls into production code.
-- UI widgets should remain stateless where possible; promote shared styling through the theme extensions already defined in `lib/src/app.dart`.
+
+- Use 2-space indentation, trailing commas to aid `dart format`, and snake_case file names; classes/enums remain in PascalCase.
+- Name BLoC layers consistently (`FeatureBloc`, `FeatureState`, `FeatureEvent`) inside their owning feature folders.
+- Prefer explicit types, exhaustive `switch` statements, cascade operators, and intent-revealing names (`checkOmemoSupport`, `startOmemoOperation`).
+- Keep logging consistent by reusing the existing `Logger` instances—never leave `print` in production paths—and avoid leaking sensitive data.
+- Widgets should remain declarative/stateless whenever reasonable; move business logic into blocs/services per `BLOC_GUIDE.md`.
+- Follow the design tokens and UI helpers exported by `lib/src/common/ui/ui.dart` and `lib/src/app.dart`.
+
+### Shared UI Components
+
+- Apply DRY aggressively: build small, composable widgets and reuse them everywhere rather than branching inside “super widgets.”
+- For complex animated shells (calendar cards, tabbed panels, etc.) prefer extracting layout + painting into a custom `RenderObject` instead of layering `addPostFrameCallback`/`findRenderObject` hacks—use the render-object-driven pattern documented in `docs/tab_container_study.md`.
+- Treat `DeadlinePickerField` as the single source of truth for calendar/date picking. Update it once and only adjust parameters (e.g., `showTimeSelectors`) per use-case.
+- When a screen needs a unique tweak, factor that logic into reusable helpers or slots (header/body/footer builders) instead of forking the widget. Before creating a variant, diff against the original implementation (scheduled task editor) to confirm behaviour alignment.
 
 ## Testing Guidelines
-- Exercise both encrypted and plaintext messaging flows: assert badge text, message persistence, and fallback behaviour in `test/xmpp` and `test/chat` suites.
-- Add coverage for new persistence fields by round-tripping through the Drift DAO helpers, and ensure migrations run cleanly against an existing database file.
-- Manual smoke tests still matter: after OMEMO changes, open a chat on device/emulator to confirm notifier overlays progress from “Setting up encryption…” to completion.
+
+- Co-locate tests with their feature folders (`lib/src/chat` ↔ `test/chat`, calendar ↔ `test/calendar`, etc.).
+- Use `bloc_test` for deterministic bloc specs, `mocktail` for stubs, and prefer golden/widget tests for UI states.
+- Integration coverage should lock down sign-in, roster sync, messaging, and calendar interactions with visible assertions.
+- Exercise both encrypted and plaintext messaging flows: assert badge text, message persistence, OMEMO setup progress, and fallback behaviour in `test/xmpp` and `test/chat` suites.
+- Add coverage for storage fields by round-tripping through Drift DAO helpers, and ensure migrations run cleanly against existing database files.
+- After OMEMO or notification changes, perform manual smoke tests on a device/emulator to confirm overlays progress through their expected states.
 
 ## Commit & Pull Request Guidelines
-- Write imperative commit subjects under 72 characters (e.g., `Fix OMEMO device migration handling`).
-- PR descriptions should summarise user-facing impact, database migrations, and any outstanding analyzer warnings; attach screenshots for UI tweaks.
-- Call out follow-up work explicitly—especially remaining tasks in `.claude/plans`—so the next contributor knows what to tackle.
+
+- Match the existing history: concise, present-tense subjects under 72 characters (e.g., `Add calendar sync`, `Fix OMEMO device migration handling`).
+- PRs should summarize user-facing impact, database or notification key migrations, screenshots/GIFs for UI tweaks, and a checklist of local `flutter analyze` / `flutter test` runs.
+- Call out follow-up work explicitly—especially items tracked in `.claude/plans`—so the next contributor knows what to tackle.
+
+## State Management & Configuration Notes
+
+- Hydrated BLoC persists critical state; when introducing new storage, update `lib/src/storage` helpers and migration enums.
+- XMPP protocol work belongs in `lib/src/xmpp`; consult `XMPP_STYLE_GUIDE.md` before altering stanza builders or parsers.
+- Keep secrets out of source control and rely on platform secure storage for environment values.
+- Database access must continue to use SQLCipher with the registered credential key system.
 
 ## Agent Operating Notes
+
 - Document temporary vendor edits in `VENDOR_NOTES.md` (create it if absent) so upstream patches remain traceable.
-- If sandbox restrictions block a command, ask for approval or prefer the provided Dart tooling daemon helpers.
-- Record validation steps you could not run (e.g., emulator tests) in your hand-off message to keep the incident log accurate.
+- If sandbox restrictions block a command, request approval or prefer the provided Dart MCP tooling helpers.
+- Record validation steps you could not run (e.g., emulator tests) in your hand-off so incident logs stay accurate.

@@ -36,6 +36,7 @@ class CredentialStore
 
   late final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
     aOptions: policy.getFssAndroidOptions(),
+    mOptions: policy.getFssMacOsOptions(),
   );
 
   static RegisteredCredentialKey registerKey(String key) =>

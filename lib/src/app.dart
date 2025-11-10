@@ -1,7 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -20,33 +27,66 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'localization/app_localizations.dart';
 
-class Axichat extends StatelessWidget {
+class Axichat extends StatefulWidget {
   Axichat({
     super.key,
     XmppService? xmppService,
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
+    Box<CalendarModel>? guestCalendarBox,
+    required CalendarStorageManager storageManager,
   })  : _xmppService = xmppService,
         _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
-        _policy = policy ?? const Policy();
+        _policy = policy ?? const Policy(),
+        _guestCalendarBox = guestCalendarBox,
+        _storageManager = storageManager;
 
   final XmppService? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
+  final Box<CalendarModel>? _guestCalendarBox;
+  final CalendarStorageManager _storageManager;
+
+  @override
+  State<Axichat> createState() => _AxichatState();
+}
+
+class _AxichatState extends State<Axichat> {
+  Storage? _authStorage;
+  late final CalendarReminderController _reminderController =
+      CalendarReminderController(
+    notificationService: widget._notificationService,
+  );
+
+  @override
+  void dispose() {
+    unawaited(_reminderController.clearAll());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        if (_xmppService == null)
+        if (widget._guestCalendarBox != null)
+          RepositoryProvider<Box<CalendarModel>>(
+            create: (_) => widget._guestCalendarBox!,
+            key: const Key('guest_calendar_box'),
+          ),
+        RepositoryProvider<Storage?>.value(
+          value: _authStorage,
+          key: const Key('calendar_storage'),
+        ),
+        if (widget._xmppService == null)
           RepositoryProvider<XmppService>(
             create: (context) => XmppService(
               buildConnection: () =>
@@ -60,10 +100,26 @@ class Axichat extends StatelessWidget {
                 if (!Hive.isAdapterRegistered(1)) {
                   Hive.registerAdapter(PresenceAdapter());
                 }
+                registerCalendarHiveAdapters(Hive);
                 await Hive.openBox(
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
                 );
+                final calendarBox = await Hive.openBox<CalendarModel>(
+                  'calendar',
+                  encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
+                );
+                final legacyModel = calendarBox.get('calendar');
+                final storage = await widget._storageManager.ensureAuthStorage(
+                  passphrase: passphrase,
+                  legacyModel: legacyModel,
+                );
+
+                await calendarBox.close();
+
+                setState(() {
+                  _authStorage = storage;
+                });
                 return XmppStateStore();
               },
               buildDatabase: (prefix, passphrase) async {
@@ -72,15 +128,18 @@ class Axichat extends StatelessWidget {
                   passphrase: passphrase,
                 );
               },
-              notificationService: _notificationService,
-              capability: _capability,
+              notificationService: widget._notificationService,
+              capability: widget._capability,
             ),
           )
         else
-          RepositoryProvider<XmppService>.value(value: _xmppService),
-        RepositoryProvider.value(value: _notificationService),
-        RepositoryProvider.value(value: _capability),
-        RepositoryProvider.value(value: _policy),
+          RepositoryProvider<XmppService>.value(
+            value: widget._xmppService!,
+          ),
+        RepositoryProvider.value(value: widget._notificationService),
+        RepositoryProvider.value(value: widget._capability),
+        RepositoryProvider.value(value: widget._policy),
+        RepositoryProvider.value(value: _reminderController),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -102,6 +161,14 @@ class Axichat extends StatelessWidget {
               xmppBase: context.read<XmppService>(),
             ),
           ),
+          if (widget._storageManager.guestStorage != null)
+            BlocProvider(
+              create: (context) => GuestCalendarBloc(
+                storage: widget._storageManager.guestStorage!,
+                reminderController: _reminderController,
+              )..add(const CalendarStarted()),
+              key: const Key('guest_calendar_bloc'),
+            ),
         ],
         child: MaterialAxichat(),
       ),
@@ -117,6 +184,11 @@ class MaterialAxichat extends StatelessWidget {
     redirect: (context, routerState) {
       if (context.read<AuthenticationCubit>().state
           is! AuthenticationComplete) {
+        // Check if the current route allows guest access
+        final location = routeLocations[routerState.matchedLocation];
+        if (location?.authenticationRequired == false) {
+          return null; // Allow access to guest routes
+        }
         return const LoginRoute().location;
       }
       return null;
@@ -190,13 +262,12 @@ class MaterialAxichat extends StatelessWidget {
           builder: (context, child) {
             return BlocListener<AuthenticationCubit, AuthenticationState>(
               listener: (context, state) {
+                final location = routeLocations[_router.state.matchedLocation]!;
                 if (state is AuthenticationNone &&
-                    routeLocations[_router.state.matchedLocation]!
-                        .authenticationRequired) {
+                    location.authenticationRequired) {
                   _router.go(const LoginRoute().location);
                 } else if (state is AuthenticationComplete &&
-                    !routeLocations[_router.state.matchedLocation]!
-                        .authenticationRequired) {
+                    !location.authenticationRequired) {
                   _router.go(const HomeRoute().location);
                 }
               },

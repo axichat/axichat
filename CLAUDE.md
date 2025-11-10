@@ -246,7 +246,16 @@ const mobileHoverStrategies = ShadHoverStrategies(
 
 ### Component Prefix: Axi
 
-All custom UI components use `Axi` prefix: `AxiAppBar`, `AxiAvatar`, `AxiMessageTile`
+**IMPORTANT:** The `Axi` prefix is ONLY for custom versions of existing widgets, not for entirely new widgets.
+
+Examples:
+- ✅ `AxiAppBar` - Custom version of standard AppBar
+- ✅ `AxiAvatar` - Custom version of Avatar widget
+- ✅ `AxiMessageTile` - Custom version of ListTile for messages
+- ❌ `AxiCalendarWidget` - Wrong! Calendar is a new widget, use `CalendarWidget`
+- ❌ `AxiTaskTile` - Wrong! TaskTile is a new widget, use `TaskTile`
+
+- Calendar screens stay declarative—wire interactions into bloc helpers (for example `commitTaskInteraction`) and never mutate calendar models from widgets or controllers.
 
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`
 - NEVER read from .pub-cache

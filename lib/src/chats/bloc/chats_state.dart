@@ -4,6 +4,7 @@ part of 'chats_cubit.dart';
 class ChatsState with _$ChatsState {
   const factory ChatsState({
     required String? openJid,
+    required bool openCalendar,
     required List<Chat>? items,
     required bool Function(Chat) filter,
     required RequestStatus creationStatus,

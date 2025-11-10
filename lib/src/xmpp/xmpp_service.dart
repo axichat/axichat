@@ -15,6 +15,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
@@ -207,7 +208,6 @@ class XmppService extends XmppBase
       );
 
   final Logger _xmppLogger = Logger('XmppService');
-
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
 
@@ -216,6 +216,9 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
   final NotificationService _notificationService;
   final Capability _capability;
+
+  // Calendar sync message callback
+  Future<void> Function(CalendarSyncMessage)? _calendarSyncCallback;
 
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
@@ -742,6 +745,12 @@ class XmppService extends XmppBase
       _xmppLogger.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
     }
+  }
+
+  /// Register a callback to handle calendar sync messages
+  void setCalendarSyncCallback(
+      Future<void> Function(CalendarSyncMessage) callback) {
+    _calendarSyncCallback = callback;
   }
 
   static String generateResource() => 'axi.${generateRandomString(
