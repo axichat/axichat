@@ -402,32 +402,41 @@ class _ChatState extends State<Chat> {
         _selectionAutoscrollActive = false;
         return;
       }
-      final requiredSpacer = _calculateRequiredSpacer();
-      if ((_selectionSpacerHeight - requiredSpacer).abs() >
-          _selectionHeadroomTolerance) {
-        setState(() {
-          _selectionSpacerHeight = requiredSpacer;
-        });
+      var gapDelta = _selectionGapDelta();
+      if (gapDelta == null) return;
+      var shortfall = _scrollShortfallForGap(gapDelta);
+      if (shortfall > _selectionHeadroomTolerance) {
+        _extendSpacerBy(shortfall);
         await _waitForPostFrame();
         if (!_selectionAutoscrollActive ||
             _selectedMessageId == null ||
             !_scrollController.hasClients) {
           return;
         }
+        gapDelta = _selectionGapDelta();
+        if (gapDelta == null) return;
+        shortfall = _scrollShortfallForGap(gapDelta);
+        if (shortfall > _selectionHeadroomTolerance) {
+          _extendSpacerBy(shortfall);
+          await _waitForPostFrame();
+          gapDelta = _selectionGapDelta();
+          if (gapDelta == null) return;
+        }
       }
-      final gapDelta = _selectionGapDelta();
-      if (gapDelta == null) return;
       if (gapDelta.abs() <= _selectionHeadroomTolerance) {
         _selectionAutoscrollActive = false;
+        _selectionAutoscrollScheduled = false;
+        await _settleResidualSelectionGap();
         return;
       }
       final outcome = await _shiftSelectionBy(gapDelta);
       if (outcome != _SelectionShiftOutcome.awaitingHeadroom) {
         _selectionAutoscrollActive = false;
+        _selectionAutoscrollScheduled = false;
+        await _settleResidualSelectionGap();
       }
     } finally {
       _selectionAutoscrollInProgress = false;
-      _selectionAutoscrollScheduled = false;
     }
   }
 
@@ -530,23 +539,54 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  double _calculateRequiredSpacer() {
-    if (!_scrollController.hasClients) {
-      return _selectionSpacerBaseHeight;
-    }
-    final viewportExtent = _scrollController.position.viewportDimension;
-    final base = math.max(
-      viewportExtent - _selectionControlsHeight,
-      _selectionExtrasViewportGap,
-    );
+  double _scrollShortfallForGap(double gapDelta) {
     final position = _scrollController.position;
     final directionSign = _axisDirectionSign(position.axisDirection);
-    final towardEnd = directionSign > 0
-        ? position.maxScrollExtent - position.pixels
-        : position.pixels - position.minScrollExtent;
-    final needsHeadroom = towardEnd < _selectionHeadroomTolerance;
-    final headroomShortfall = needsHeadroom ? viewportExtent : 0.0;
-    return math.max(base + headroomShortfall, _selectionSpacerBaseHeight);
+    final scrollDelta = gapDelta * directionSign;
+    final rawTarget = position.pixels + scrollDelta;
+    if (rawTarget > position.maxScrollExtent + _selectionHeadroomTolerance) {
+      return rawTarget - position.maxScrollExtent;
+    }
+    if (rawTarget < position.minScrollExtent - _selectionHeadroomTolerance) {
+      return position.minScrollExtent - rawTarget;
+    }
+    return 0;
+  }
+
+  void _extendSpacerBy(double amount) {
+    final additional = math.max(amount, 0.0);
+    if (additional <= _selectionHeadroomTolerance) return;
+    setState(() {
+      _selectionSpacerHeight =
+          math.max(_selectionSpacerHeight, _selectionSpacerBaseHeight) +
+              additional;
+    });
+  }
+
+  Future<void> _settleResidualSelectionGap() async {
+    if (!_scrollController.hasClients || _selectedMessageId == null) return;
+    await _waitForPostFrame();
+    final residual = _selectionGapDelta();
+    if (residual == null ||
+        residual.abs() <= _selectionAutoscrollSlop ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    final directionSign = _axisDirectionSign(position.axisDirection);
+    final target = (position.pixels + (residual * directionSign)).clamp(
+      position.minScrollExtent.toDouble(),
+      position.maxScrollExtent.toDouble(),
+    );
+    if ((position.pixels - target).abs() < (_selectionAutoscrollSlop / 2)) {
+      position.jumpTo(target);
+      return;
+    }
+    await position.animateTo(
+      target,
+      duration: _bubbleFocusDuration ~/ 2,
+      curve: _bubbleFocusCurve,
+    );
   }
 
   void _requestSelectionControlsMeasurement() {
@@ -930,10 +970,13 @@ class _ChatState extends State<Chat> {
                                   dashMessageListOptions;
                               dashMessageListOptions = MessageListOptions(
                                 scrollController: _scrollController,
-                                scrollPhysics:
-                                    const AlwaysScrollableScrollPhysics(
-                                  parent: BouncingScrollPhysics(),
-                                ),
+                                scrollPhysics: _selectionAutoscrollActive
+                                    ? const AlwaysScrollableScrollPhysics(
+                                        parent: ClampingScrollPhysics(),
+                                      )
+                                    : const AlwaysScrollableScrollPhysics(
+                                        parent: BouncingScrollPhysics(),
+                                      ),
                                 separatorFrequency: SeparatorFrequency.days,
                                 dateSeparatorBuilder: (date) {
                                   if (date.isAtSameMomentAs(
