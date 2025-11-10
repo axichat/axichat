@@ -90,7 +90,9 @@ const _reactionQuickChoices = [
 ];
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _composerBottomGap = 12.0;
-const _composerStackPadding = 20.0;
+const _composerStackPadding = 0.0;
+const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
+const _messageListTailSpacer = 8.0;
 
 List<BoxShadow> _selectedBubbleShadows(Color color) => [
       BoxShadow(
@@ -447,8 +449,8 @@ class _ChatState extends State<Chat> {
     required bool isEmailTransport,
     required String hintText,
   }) {
+    final colors = context.colorScheme;
     final composer = ChatCutoutComposer(
-      key: _composerKey,
       controller: _textController,
       focusNode: _focusNode,
       hintText: hintText,
@@ -457,9 +459,36 @@ class _ChatState extends State<Chat> {
       sendEnabled: _composerHasText,
     );
     _scheduleComposerMeasurement();
-    return SafeArea(
-      top: false,
-      child: composer,
+    const horizontalPadding = _composerHorizontalInset;
+    return KeyedSubtree(
+      key: _composerKey,
+      child: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        child: SizedBox(
+          width: double.infinity,
+          child: ColoredBox(
+            color: colors.background,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: colors.border, width: 1),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  18,
+                  horizontalPadding,
+                  10,
+                ),
+                child: composer,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -534,14 +563,14 @@ class _ChatState extends State<Chat> {
         ? colors.mutedForeground
         : (activeColor ?? colors.foreground);
     final button = IconButton(
-      icon: Icon(icon, size: 20, color: iconColor),
+      icon: Icon(icon, size: 24, color: iconColor),
       tooltip: tooltip,
       onPressed: onPressed,
-      splashRadius: 22,
+      splashRadius: 24,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(
-        minWidth: 40,
-        minHeight: 40,
+        minWidth: 50,
+        minHeight: 50,
       ),
       visualDensity: VisualDensity.compact,
     );
@@ -1309,32 +1338,47 @@ class _ChatState extends State<Chat> {
                                   ),
                                 ),
                                 chatFooterBuilder: () {
+                                  const spacer = SizedBox(
+                                    height: _messageListTailSpacer,
+                                  );
                                   if (state.items.isEmpty &&
                                       state.quoting == null) {
-                                    return Center(
-                                      child: Text(
-                                        'No messages',
-                                        style: context.textTheme.muted,
-                                      ),
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Center(
+                                          child: Text(
+                                            'No messages',
+                                            style: context.textTheme.muted,
+                                          ),
+                                        ),
+                                        spacer,
+                                      ],
                                     );
                                   }
                                   final quoting = state.quoting;
                                   if (quoting == null) {
-                                    return null;
+                                    return spacer;
                                   }
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 8,
-                                    ),
-                                    child: _QuoteBanner(
-                                      message: quoting,
-                                      isSelf:
-                                          quoting.senderJid == currentUserId,
-                                      onClear: () => context
-                                          .read<ChatBloc>()
-                                          .add(const ChatQuoteCleared()),
-                                    ),
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        child: _QuoteBanner(
+                                          message: quoting,
+                                          isSelf: quoting.senderJid ==
+                                              currentUserId,
+                                          onClear: () => context
+                                              .read<ChatBloc>()
+                                              .add(const ChatQuoteCleared()),
+                                        ),
+                                      ),
+                                      spacer,
+                                    ],
                                   );
                                 }(),
                               );
@@ -2135,8 +2179,8 @@ class _ChatState extends State<Chat> {
                                           ),
                                         ),
                                         Positioned(
-                                          left: _chatHorizontalPadding,
-                                          right: _chatHorizontalPadding,
+                                          left: 0,
+                                          right: 0,
                                           bottom: _composerBottomInset(context),
                                           child: _buildComposer(
                                             isEmailTransport: isEmailTransport,
