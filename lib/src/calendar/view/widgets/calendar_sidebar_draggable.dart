@@ -110,11 +110,12 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
 
     return CalendarDragPayload(
       task: widget.task,
-      snapshot: widget.task,
+      snapshot: widget.task.copyWith(),
       sourceBounds: bounds,
       pointerNormalizedX: pointerNormalized,
       pointerOffsetY: pointerOffsetY,
       originSlot: null,
+      pickupScheduledTime: widget.task.scheduledTime,
     );
   }
 

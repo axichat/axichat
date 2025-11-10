@@ -314,7 +314,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 onDragStarted: _callbacks.onDragStarted,
                 onDragUpdate: _callbacks.onDragUpdate,
                 onDragEnded: _callbacks.onDragEnded,
-                snapshotBuilder: () => task,
+                snapshotBuilder: () => task.copyWith(),
                 feedbackBuilder: (context, dragTask, dragGeometry) =>
                     _buildDragFeedback(
                   context: context,

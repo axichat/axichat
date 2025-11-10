@@ -774,6 +774,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       pointerGlobalX: pickupGlobalX,
       originSlot: _computeOriginSlot(task.scheduledTime),
     );
+    debugPrint(
+      '[calendar] drag start task=${task.id} '
+      'scheduled=${task.scheduledTime} '
+      'origin=${_taskInteractionController.dragOriginSlot}',
+    );
     _notifyDragSessionStarted();
     final double? globalX = _taskInteractionController.dragPointerGlobalX;
     final double? globalY = _taskInteractionController.dragPointerGlobalY;

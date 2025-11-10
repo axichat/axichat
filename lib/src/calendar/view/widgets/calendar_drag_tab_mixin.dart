@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/axi_tab_bar.dart';
 import 'package:flutter/material.dart';
@@ -9,15 +10,17 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
   static const double _leftEdgeHotZoneWidth = 66.0;
   static const double _rightEdgeHotZoneWidth = 28.8;
-  static const double _pointerHotZoneMinLeft = 36.0;
-  static const double _pointerHotZoneMinRight = 30.0;
-  static const double _pointerHotZoneMax = 40.0;
-  static const double _pointerHotZoneFraction = 0.04;
   static const Duration _switchDelay = Duration(milliseconds: 320);
+  static const double _edgeActivationSlop = 12.0;
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
   bool _evaluatingSwitch = false;
   Offset? _lastGlobalPosition;
+  Offset? _dragStartGlobalPosition;
+  double? _dragStartLocalDx;
+  bool _dragStartInLeftZone = false;
+  bool _dragStartInRightZone = false;
+  bool _edgeActivationUnlocked = false;
   bool _gridDragActive = false;
   bool _edgeDragActive = false;
   bool _showLeftEdgeCue = false;
@@ -69,6 +72,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   void handleGridDragSessionStarted() {
     _setGridDragActive(true);
     _lastGlobalPosition = null;
+    _dragStartGlobalPosition = null;
+    _dragStartLocalDx = null;
+    _dragStartInLeftZone = false;
+    _dragStartInRightZone = false;
+    _edgeActivationUnlocked = false;
     _evaluateEdgeAutoSwitch();
   }
 
@@ -83,6 +91,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     if (!_edgeDragActive) {
       _lastGlobalPosition = null;
     }
+    _dragStartGlobalPosition = null;
+    _dragStartLocalDx = null;
+    _dragStartInLeftZone = false;
+    _dragStartInRightZone = false;
+    _edgeActivationUnlocked = false;
     _updateEdgeCue(null);
     _cancelSwitchTimer();
   }
@@ -194,16 +207,19 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final bool visible = _isAnyDragActive;
     final Duration duration = const Duration(milliseconds: 200);
     final Curve curve = Curves.easeInOutCubic;
-    final double safeBottomPadding = bottomInset;
+    final double safeBottomPadding = math.max(bottomInset, 0.0);
+    const double bucketHeight = 48.0;
+    final double totalHeight = bucketHeight + safeBottomPadding;
     return AnimatedSwitcher(
       duration: duration,
       switchInCurve: curve,
       switchOutCurve: curve,
       child: !visible
           ? const SizedBox.shrink()
-          : Padding(
+          : SizedBox(
               key: const ValueKey('calendar.drag.cancel-bucket'),
-              padding: EdgeInsets.only(bottom: safeBottomPadding),
+              width: double.infinity,
+              height: totalHeight,
               child: DragTarget<CalendarDragPayload>(
                 hitTestBehavior: HitTestBehavior.translucent,
                 onWillAcceptWithDetails: (details) {
@@ -220,39 +236,35 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   final bool hovering =
                       _cancelBucketHovering || candidate.isNotEmpty;
                   final Color fillColor = scheme.error.withValues(
-                    alpha: hovering ? 0.14 : 0.07,
+                    alpha: hovering ? 0.18 : 0.09,
                   );
                   final Color iconColor = scheme.error.withValues(
-                    alpha: hovering ? 0.95 : 0.72,
+                    alpha: hovering ? 0.95 : 0.78,
                   );
-                  return SizedBox(
+                  return Container(
                     width: double.infinity,
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: fillColor,
-                        borderRadius: BorderRadius.zero,
-                      ),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.close_rounded,
+                    height: totalHeight,
+                    padding: EdgeInsets.only(bottom: safeBottomPadding),
+                    color: fillColor,
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.close_rounded,
+                            color: iconColor,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Cancel drag',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
                               color: iconColor,
-                              size: 16,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Cancel drag',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
-                                color: iconColor,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -329,13 +341,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
             onLeave: (_) => _handleEdgeDragLeave(),
             onAcceptWithDetails: (_) => _handleEdgeDragLeave(),
             builder: (context, _, __) {
-              return AnimatedOpacity(
-                opacity: showCue ? 1 : 0,
+              return AnimatedContainer(
                 duration: const Duration(milliseconds: 120),
-                child: Container(
-                  height: double.infinity,
-                  decoration: BoxDecoration(gradient: gradient),
-                ),
+                height: double.infinity,
+                color: showCue
+                    ? Colors.deepOrange.withOpacity(0.3)
+                    : Colors.deepOrange.withOpacity(0.15),
               );
             },
           ),
@@ -360,14 +371,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   void _handleEdgeDragEvent(DragTargetDetails<CalendarDragPayload> details) {
     _setEdgeDragActive(true);
-    if (_lastGlobalPosition == null) {
-      final Offset? fallbackPosition = _pointerPositionForDetails(details);
-      if (fallbackPosition == null) {
-        _updateEdgeCue(null);
-        _cancelSwitchTimer();
-        return;
-      }
-      _recordPointerUpdate(fallbackPosition);
+    final Offset? pointer = _pointerPositionForDetails(details);
+    if (pointer != null) {
+      _recordPointerUpdate(pointer);
+    } else if (_lastGlobalPosition == null) {
+      _updateEdgeCue(null);
+      _cancelSwitchTimer();
+      return;
     }
     _evaluateEdgeAutoSwitch();
     _tryPerformPendingSwitch();
@@ -423,23 +433,54 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final Offset? globalPosition = _lastGlobalPosition;
     if (box == null || !box.hasSize || globalPosition == null) {
       _updateEdgeCue(null);
+      _cancelSwitchTimer();
       return;
     }
     final Offset localPosition = box.globalToLocal(globalPosition);
     final double width = box.size.width;
-    final double baseThreshold = width * _pointerHotZoneFraction;
-    final double leftThreshold = baseThreshold.clamp(
-      _pointerHotZoneMinLeft,
-      _pointerHotZoneMax,
-    );
-    final double rightThreshold = baseThreshold.clamp(
-      _pointerHotZoneMinRight,
-      _pointerHotZoneMax,
-    );
-    int? cueIndex;
-    final bool pointerInLeftZone = localPosition.dx <= leftThreshold;
-    final bool pointerInRightZone =
+    final double leftThreshold = width <= 0
+        ? 0
+        : math.min(_leftEdgeHotZoneWidth, width * 0.5);
+    final double rightThreshold = width <= 0
+        ? 0
+        : math.min(_rightEdgeHotZoneWidth, width * 0.5);
+    _dragStartLocalDx ??= localPosition.dx;
+    if (_dragStartLocalDx != null &&
+        !_dragStartInLeftZone &&
+        !_dragStartInRightZone) {
+      _dragStartInLeftZone = _dragStartLocalDx! <= leftThreshold;
+      _dragStartInRightZone =
+          _dragStartLocalDx! >= width - rightThreshold;
+    }
+
+    final double horizontalTravel = _dragStartLocalDx == null
+        ? 0
+        : (localPosition.dx - _dragStartLocalDx!).abs();
+    if (!_edgeActivationUnlocked &&
+        horizontalTravel >= _edgeActivationSlop) {
+      _edgeActivationUnlocked = true;
+    }
+
+    if (!_edgeDragActive) {
+      _updateEdgeCue(null);
+      _cancelSwitchTimer();
+      return;
+    }
+
+    bool pointerInLeftZone = localPosition.dx <= leftThreshold;
+    bool pointerInRightZone =
         localPosition.dx >= width - rightThreshold;
+
+    if (!_edgeActivationUnlocked) {
+      if (_dragStartInLeftZone && pointerInLeftZone) {
+        pointerInLeftZone = false;
+      }
+      if (_dragStartInRightZone && pointerInRightZone) {
+        pointerInRightZone = false;
+      }
+    }
+
+    int? cueIndex;
     if (pointerInLeftZone) {
       cueIndex = 0;
     } else if (pointerInRightZone) {
@@ -566,6 +607,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   void _recordPointerUpdate(Offset position) {
     _lastGlobalPosition = position;
+    _dragStartGlobalPosition ??= position;
   }
 
   bool _canSwitchTo(int index) {
