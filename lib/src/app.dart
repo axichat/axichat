@@ -18,6 +18,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -307,7 +308,9 @@ class MaterialAxichat extends StatelessWidget {
           },
           routerConfig: _router,
           builder: (context, child) {
-            return BlocListener<AuthenticationCubit, AuthenticationState>(
+            final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
+            final routedContent =
+                BlocListener<AuthenticationCubit, AuthenticationState>(
               listener: (context, state) {
                 if (state is AuthenticationNone &&
                     routeLocations[_router.state.matchedLocation]!
@@ -325,6 +328,10 @@ class MaterialAxichat extends StatelessWidget {
                   const OmemoOperationOverlay(),
                 ],
               ),
+            );
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: overlayStyle,
+              child: routedContent,
             );
           },
         );
@@ -347,4 +354,19 @@ extension ThemeExtension on BuildContext {
       AppTheme.tokens(
         brightness: Theme.of(this).brightness,
       );
+}
+
+SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  final baseStyle =
+      isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
+  final iconBrightness = isDark ? Brightness.light : Brightness.dark;
+  return baseStyle.copyWith(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: iconBrightness,
+    statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: iconBrightness,
+    systemNavigationBarDividerColor: Colors.transparent,
+  );
 }
