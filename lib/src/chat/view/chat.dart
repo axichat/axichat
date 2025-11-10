@@ -561,18 +561,11 @@ class _ChatState extends State<Chat> {
         _selectionHeadroomTolerance) {
       return;
     }
-    final selectionActive = _selectedMessageId != null;
     setState(() {
       _selectionControlsHeight = height;
-      if (selectionActive) {
-        _selectionAutoscrollActive = true;
-      }
     });
     if (_scrollController.hasClients) {
       _updateSelectionSpacerBase(_scrollController.position.viewportDimension);
-    }
-    if (_selectionAutoscrollActive) {
-      _scheduleSelectionAutoscroll();
     }
   }
 
@@ -1832,11 +1825,6 @@ class _ChatState extends State<Chat> {
             emoji: emoji,
           ),
         );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _selectedMessageId == null) return;
-      _selectionAutoscrollActive = true;
-      _scheduleSelectionAutoscroll();
-    });
   }
 
   List<CutoutSpec> _buildReactionCutouts({
