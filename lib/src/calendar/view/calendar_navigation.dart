@@ -411,7 +411,9 @@ class _DateLabel extends StatefulWidget {
 class _DateLabelState extends State<_DateLabel> {
   final LayerLink _link = LayerLink();
   OverlayEntry? _overlayEntry;
+  bool _isBottomSheetOpen = false;
   late DateTime _visibleMonth;
+  bool get _isPickerOpen => _overlayEntry != null || _isBottomSheetOpen;
 
   @override
   void initState() {
@@ -450,7 +452,7 @@ class _DateLabelState extends State<_DateLabel> {
     };
     final bool hideText =
         widget.collapseText || MediaQuery.of(context).size.width < 420;
-    final bool isOpen = _overlayEntry != null;
+    final bool isOpen = _isPickerOpen;
     final Color iconColor =
         isOpen ? calendarPrimaryColor : calendarSubtitleColor;
     final Color textColor = isOpen ? calendarPrimaryColor : calendarTitleColor;
@@ -507,12 +509,19 @@ class _DateLabelState extends State<_DateLabel> {
   void _toggleOverlay() {
     if (_overlayEntry != null) {
       _removeOverlay();
-    } else {
-      _showOverlay();
+      return;
     }
+    if (_isBottomSheetOpen) {
+      return;
+    }
+    _showOverlay();
   }
 
   void _showOverlay() {
+    if (ResponsiveHelper.isCompact(context)) {
+      _showBottomSheet();
+      return;
+    }
     final overlay = Overlay.of(context);
 
     final renderBox = context.findRenderObject() as RenderBox?;
@@ -567,6 +576,84 @@ class _DateLabelState extends State<_DateLabel> {
     overlay.insert(entry);
   }
 
+  Future<void> _showBottomSheet() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isBottomSheetOpen = true);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var sheetMonth = _visibleMonth;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final spec = ResponsiveHelper.spec(sheetContext);
+            final media = MediaQuery.of(sheetContext);
+            final EdgeInsets modalMargin = spec.modalMargin;
+            final double topPadding = modalMargin.top > media.viewPadding.top
+                ? modalMargin.top
+                : media.viewPadding.top;
+            final double leftPadding = modalMargin.left > media.viewPadding.left
+                ? modalMargin.left
+                : media.viewPadding.left;
+            final double rightPadding =
+                modalMargin.right > media.viewPadding.right
+                    ? modalMargin.right
+                    : media.viewPadding.right;
+            final double safeBottom = media.viewPadding.bottom;
+            final double keyboardInset = media.viewInsets.bottom;
+            final double bottomInset =
+                keyboardInset > safeBottom ? keyboardInset : safeBottom;
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(
+                left: leftPadding,
+                right: rightPadding,
+                top: topPadding,
+                bottom: modalMargin.bottom + bottomInset,
+              ),
+              child: _CalendarDropdown(
+                margin: EdgeInsets.zero,
+                month: sheetMonth,
+                selectedWeekStart: widget.state.weekStart,
+                selectedDate: widget.state.selectedDate,
+                onClose: () {
+                  _handleBottomSheetClosed();
+                  Navigator.of(sheetContext).maybePop();
+                },
+                onMonthChanged: (month) {
+                  setSheetState(() => sheetMonth = month);
+                  if (mounted) {
+                    setState(() => _visibleMonth = month);
+                  }
+                },
+                onDateSelected: (date) {
+                  widget.onDateSelected(date);
+                  _handleBottomSheetClosed();
+                  Navigator.of(sheetContext).maybePop();
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+    _handleBottomSheetClosed();
+  }
+
+  void _handleBottomSheetClosed() {
+    if (!mounted) {
+      _isBottomSheetOpen = false;
+      return;
+    }
+    if (_isBottomSheetOpen) {
+      setState(() => _isBottomSheetOpen = false);
+    }
+  }
+
   void _removeOverlay({bool requestRebuild = true}) {
     final entry = _overlayEntry;
     if (entry == null) {
@@ -591,6 +678,7 @@ class _CalendarDropdown extends StatelessWidget {
     required this.onClose,
     required this.onMonthChanged,
     required this.onDateSelected,
+    this.margin = const EdgeInsets.only(top: calendarGutterSm),
   });
 
   final DateTime month;
@@ -599,19 +687,22 @@ class _CalendarDropdown extends StatelessWidget {
   final VoidCallback onClose;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onDateSelected;
+  final EdgeInsetsGeometry margin;
 
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
     final days = _buildDays(month);
     final now = DateTime.now();
-    final dropdownWidth =
+    final bool fillWidth = ResponsiveHelper.isCompact(context);
+    final double dropdownWidth =
         spec.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
+    final double width = fillWidth ? double.infinity : dropdownWidth;
 
     return Container(
-      width: dropdownWidth,
+      width: width,
       padding: spec.contentPadding,
-      margin: const EdgeInsets.only(top: calendarGutterSm),
+      margin: margin,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(calendarBorderRadius),
