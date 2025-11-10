@@ -95,7 +95,7 @@ mixin MessageService on XmppBase, BaseStreamService {
       final reactionOnly = await _handleReactions(event);
       if (reactionOnly) return;
 
-      final message = Message.fromMox(event);
+      var message = Message.fromMox(event);
 
       await _handleChatState(event, message.chatJid);
 
@@ -113,15 +113,16 @@ mixin MessageService on XmppBase, BaseStreamService {
 
       unawaited(_acknowledgeMessage(event));
 
-      await _handleFile(event, message.senderJid);
-
       final metadata = _extractFileMetadata(event);
 
       if (metadata != null) {
         await _dbOp<XmppDatabase>(
           (db) => db.saveFileMetadata(metadata),
         );
+        message = message.copyWith(fileMetadataID: metadata.id);
       }
+
+      await _handleFile(event, message.senderJid);
 
       if (event.get<mox.OmemoData>() case final data?) {
         final newRatchets = data.newRatchets.values.map((e) => e.length);

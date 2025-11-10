@@ -148,6 +148,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> saveFileMetadata(FileMetadataData metadata);
 
+  Future<FileMetadataData?> getFileMetadata(String id);
+
   Stream<List<Chat>> watchChats({required int start, required int end});
 
   Future<List<Chat>> getChats({required int start, required int end});
@@ -535,10 +537,9 @@ class FileMetadataAccessor
   $FileMetadataTable get table => fileMetadata;
 
   @override
-  Future<FileMetadataData?> selectOne(Object value) {
-    // TODO: implement selectOne
-    throw UnimplementedError();
-  }
+  Future<FileMetadataData?> selectOne(Object value) =>
+      (select(table)..where((table) => table.id.equals(value as String)))
+          .getSingleOrNull();
 
   Future<FileMetadataData?> selectOneByPlaintextHashes(
           Map<HashFunction, String> hashes) =>
@@ -1130,6 +1131,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> saveFileMetadata(FileMetadataData metadata) async {
     await fileMetadataAccessor.insertOne(metadata);
   }
+
+  @override
+  Future<FileMetadataData?> getFileMetadata(String id) =>
+      fileMetadataAccessor.selectOne(id);
 
   @override
   Stream<List<Chat>> watchChats({required int start, required int end}) {
