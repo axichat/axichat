@@ -227,6 +227,7 @@ class _ChatState extends State<Chat> {
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _reactionManagerKey;
   final _selectionActionButtonKeys = <GlobalKey>[];
+  double _selectionSpacerBaseHeight = 0;
   double _selectionSpacerHeight = 0;
   int? _dismissPointer;
   Offset? _dismissPointerDownPosition;
@@ -444,18 +445,7 @@ class _ChatState extends State<Chat> {
 
   void _releaseSelectionHeadroomIfPossible(ScrollPosition position) {
     if (_selectedMessageId != null) return;
-    if (_selectionSpacerHeight <= _selectionHeadroomTolerance) {
-      return;
-    }
-    final scrollRange =
-        (position.maxScrollExtent - position.minScrollExtent).abs();
-    final intrinsicRange = math.max(
-      0.0,
-      scrollRange - _selectionSpacerHeight,
-    );
-    if (intrinsicRange <= _selectionHeadroomTolerance) {
-      return;
-    }
+    if (_selectionSpacerHeight <= _selectionHeadroomTolerance) return;
     setState(() {
       _selectionSpacerHeight = 0;
     });
@@ -550,6 +540,32 @@ class _ChatState extends State<Chat> {
     await completer.future;
   }
 
+  void _captureBaseSelectionHeadroom() {
+    if (!mounted) return;
+    if (!_scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _captureBaseSelectionHeadroom();
+      });
+      return;
+    }
+    final viewportExtent = _scrollController.position.viewportDimension;
+    _updateSelectionSpacerBase(viewportExtent);
+  }
+
+  void _updateSelectionSpacerBase(double viewportExtent) {
+    if (viewportExtent <= _selectionHeadroomTolerance) {
+      return;
+    }
+    final desired = math.max(viewportExtent, _selectionExtrasViewportGap);
+    if ((_selectionSpacerBaseHeight - desired).abs() <
+        _selectionHeadroomTolerance) {
+      return;
+    }
+    setState(() {
+      _selectionSpacerBaseHeight = desired;
+    });
+  }
+
   Future<void> _primeSelectionHeadroomIfNeeded() async {
     if (!_scrollController.hasClients) {
       await _waitForPostFrame();
@@ -563,14 +579,7 @@ class _ChatState extends State<Chat> {
       if (!mounted || _selectedMessageId == null) return;
       return _primeSelectionHeadroomIfNeeded();
     }
-    final desired = math.max(viewportExtent, _selectionExtrasViewportGap);
-    if ((_selectionSpacerHeight - desired).abs() <
-        _selectionHeadroomTolerance) {
-      return;
-    }
-    setState(() {
-      _selectionSpacerHeight = desired;
-    });
+    _updateSelectionSpacerBase(viewportExtent);
     await _waitForPostFrame();
   }
 
@@ -582,6 +591,9 @@ class _ChatState extends State<Chat> {
     _textController = TextEditingController();
     _scrollController = ScrollController();
     _textController.addListener(_typingListener);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _captureBaseSelectionHeadroom();
+    });
   }
 
   @override
@@ -782,8 +794,16 @@ class _ChatState extends State<Chat> {
                                   .toList();
                               final selectionActive =
                                   _selectedMessageId != null;
-                              final selectionHeadroomActive = selectionActive &&
-                                  _selectionSpacerHeight >
+                              final selectionSpacerVisibleHeight =
+                                  math.max(0.0, _selectionSpacerBaseHeight) +
+                                      (selectionActive
+                                          ? math.max(
+                                              0.0,
+                                              _selectionSpacerHeight,
+                                            )
+                                          : 0.0);
+                              final selectionHeadroomActive =
+                                  selectionSpacerVisibleHeight >
                                       _selectionHeadroomTolerance;
                               final baseBubbleMaxWidth =
                                   contentWidth * (isCompact ? 0.8 : 0.7);
@@ -978,9 +998,7 @@ class _ChatState extends State<Chat> {
                                                     true;
                                             if (isSelectionSpacer) {
                                               final spacerHeight =
-                                                  selectionHeadroomActive
-                                                      ? _selectionSpacerHeight
-                                                      : 0.0;
+                                                  selectionSpacerVisibleHeight;
                                               return _SelectionHeadroomSpacer(
                                                 height: spacerHeight,
                                               );
