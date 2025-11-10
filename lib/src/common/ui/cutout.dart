@@ -26,6 +26,8 @@ class CutoutSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
+    final clipper = _CutoutClipper(shape: shape, cutouts: cutouts);
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -38,7 +40,10 @@ class CutoutSurface extends StatelessWidget {
             shadows: shadows,
             shadowOpacity: resolvedShadowOpacity,
           ),
-          child: child,
+          child: ClipPath(
+            clipper: clipper,
+            child: child,
+          ),
         ),
         if (cutouts.isNotEmpty)
           for (final spec in cutouts) _CutoutAttachment(spec: spec),
@@ -86,15 +91,7 @@ class _CutoutPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final outerPath = shape.getOuterPath(rect);
-    var fillPath = Path()..addPath(outerPath, Offset.zero);
-    for (final spec in cutouts) {
-      final rect = _cutoutRect(size, spec);
-      final cutoutPath =
-          SquircleBorder(cornerRadius: spec.cornerRadius).getOuterPath(rect);
-      fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
-    }
+    final fillPath = _buildCutoutPath(size, shape, cutouts);
 
     if (shadowOpacity > 0 && shadows.isNotEmpty) {
       for (final shadow in shadows) {
@@ -137,6 +134,40 @@ class _CutoutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CutoutPainter oldDelegate) => true;
+}
+
+class _CutoutClipper extends CustomClipper<Path> {
+  const _CutoutClipper({required this.shape, required this.cutouts});
+
+  final OutlinedBorder shape;
+  final List<CutoutSpec> cutouts;
+
+  @override
+  Path getClip(Size size) => _buildCutoutPath(size, shape, cutouts);
+
+  @override
+  bool shouldReclip(covariant _CutoutClipper oldClipper) {
+    return oldClipper.shape != shape || oldClipper.cutouts != cutouts;
+  }
+}
+
+Path _buildCutoutPath(
+  Size size,
+  OutlinedBorder shape,
+  List<CutoutSpec> cutouts,
+) {
+  final rect = Offset.zero & size;
+  final outerPath = shape.getOuterPath(rect);
+  var fillPath = Path()..addPath(outerPath, Offset.zero);
+  for (final spec in cutouts) {
+    final cutoutRect = _cutoutRect(size, spec);
+    final cutoutPath =
+        SquircleBorder(cornerRadius: spec.cornerRadius).getOuterPath(
+      cutoutRect,
+    );
+    fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
+  }
+  return fillPath;
 }
 
 class _CutoutAttachment extends StatelessWidget {
