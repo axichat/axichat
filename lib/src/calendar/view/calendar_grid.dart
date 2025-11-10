@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
@@ -64,6 +65,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final VoidCallback? onDragSessionStarted;
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
   final VoidCallback? onDragSessionEnded;
+  final ValueListenable<bool>? cancelBucketHoverNotifier;
 
   const CalendarGrid({
     super.key,
@@ -76,6 +78,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
     this.onDragSessionStarted,
     this.onDragGlobalPositionChanged,
     this.onDragSessionEnded,
+    this.cancelBucketHoverNotifier,
   });
 
   @override
@@ -112,6 +115,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double get _zoomControlsLabelPaddingHorizontal =>
       _layoutTheme.zoomControlsLabelPaddingHorizontal;
   double get _zoomControlsIconSize => _layoutTheme.zoomControlsIconSize;
+  ValueListenable<bool> get _cancelBucketHoverNotifier =>
+      widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
 
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
@@ -148,6 +153,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const double _touchHandleExtent = 28.0;
   static const Duration _touchDragLongPressDelay =
       Duration(milliseconds: 260);
+  static const ValueListenable<bool> _defaultCancelBucketHoverNotifier =
+      AlwaysStoppedAnimation<bool>(false);
   Ticker? _edgeAutoScrollTicker;
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   final CalendarSurfaceController _surfaceController =
@@ -768,7 +775,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.clearPreview();
     _taskInteractionController.beginDrag(
       task: task,
-      snapshot: task,
+      snapshot: task.copyWith(),
       bounds: bounds,
       pointerNormalized: pickupNormalizedX,
       pointerGlobalX: pickupGlobalX,
@@ -2046,6 +2053,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           hasMouse ? _desktopHandleExtent : _touchHandleExtent,
       interactionController: _taskInteractionController,
       dragFeedbackHint: _taskInteractionController.feedbackHint,
+      cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
       callbacks: _buildTaskCallbacks(task),
       geometryProvider: _surfaceController.geometryForTask,
       globalRectProvider: _surfaceController.globalRectForTask,

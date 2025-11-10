@@ -4,12 +4,13 @@ import 'dart:math' as math;
 import 'package:axichat/src/common/ui/axi_tab_bar.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/calendar_task.dart';
 import '../models/calendar_drag_payload.dart';
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
   static const double _leftEdgeHotZoneWidth = 66.0;
-  static const double _rightEdgeHotZoneWidth = 28.8;
+  static const double _rightEdgeHotZoneWidth = _leftEdgeHotZoneWidth;
   static const Duration _switchDelay = Duration(milliseconds: 320);
   static const double _edgeActivationSlop = 12.0;
   Timer? _switchTimer;
@@ -25,8 +26,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   bool _edgeDragActive = false;
   bool _showLeftEdgeCue = false;
   bool _showRightEdgeCue = false;
-  int? _tabCueIndex;
   bool _cancelBucketHovering = false;
+  final GlobalKey _cancelBucketKey =
+      GlobalKey(debugLabel: 'calendarDragCancelBucket');
 
   TabController get mobileTabController;
 
@@ -146,50 +148,34 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     required Widget tasksTabLabel,
   }) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final bool scheduleCueActive = _tabCueIndex == 0 && _isAnyDragActive;
-    final bool tasksCueActive = _tabCueIndex == 1 && _isAnyDragActive;
+    final bool scheduleCueActive = _showLeftEdgeCue && _isAnyDragActive;
+    final bool tasksCueActive = _showRightEdgeCue && _isAnyDragActive;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
     final double height = _tabBarHeight + safeInset;
 
     final Widget tabContent = SizedBox(
       height: height,
-      child: Stack(
-        children: [
-          AxiTabBar(
-            controller: mobileTabController,
-            padding: EdgeInsets.only(bottom: safeInset),
-            indicatorColor: scheme.primary,
-            indicatorWeight: 3,
-            indicatorSize: TabBarIndicatorSize.label,
-            tabs: <Widget>[
-              Tab(
-                child: _buildTabLabel(
-                  label: scheduleTabLabel,
-                  scheme: scheme,
-                  showCue: scheduleCueActive,
-                ),
-              ),
-              Tab(
-                child: _buildTabLabel(
-                  label: tasksTabLabel,
-                  scheme: scheme,
-                  showCue: tasksCueActive,
-                ),
-              ),
-            ],
-          ),
-          if (isDragSwitcherEnabled)
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: !_isAnyDragActive,
-                child: Row(
-                  children: [
-                    Expanded(child: _buildTabDragTarget(tabIndex: 0)),
-                    Expanded(child: _buildTabDragTarget(tabIndex: 1)),
-                  ],
-                ),
-              ),
+          child: AxiTabBar(
+        controller: mobileTabController,
+        padding: EdgeInsets.only(bottom: safeInset),
+        indicatorColor: scheme.primary,
+        indicatorWeight: 3,
+        indicatorSize: TabBarIndicatorSize.label,
+        tabs: <Widget>[
+          Tab(
+            child: _buildTabLabel(
+              label: scheduleTabLabel,
+              scheme: scheme,
+              showCue: scheduleCueActive,
             ),
+          ),
+          Tab(
+            child: _buildTabLabel(
+              label: tasksTabLabel,
+              scheme: scheme,
+              showCue: tasksCueActive,
+            ),
+          ),
         ],
       ),
     );
@@ -210,81 +196,94 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final double safeBottomPadding = math.max(bottomInset, 0.0);
     const double bucketHeight = 48.0;
     final double totalHeight = bucketHeight + safeBottomPadding;
-    return AnimatedSwitcher(
+    final double targetHeight = visible ? totalHeight : 0;
+    return AnimatedContainer(
       duration: duration,
-      switchInCurve: curve,
-      switchOutCurve: curve,
-      child: !visible
-          ? const SizedBox.shrink()
-          : SizedBox(
-              key: const ValueKey('calendar.drag.cancel-bucket'),
-              width: double.infinity,
-              height: totalHeight,
-              child: DragTarget<CalendarDragPayload>(
-                hitTestBehavior: HitTestBehavior.translucent,
-                onWillAcceptWithDetails: (details) {
-                  _setCancelBucketHovering(true);
-                  return true;
-                },
-                onMove: (_) => _setCancelBucketHovering(true),
-                onLeave: (_) => _setCancelBucketHovering(false),
-                onAcceptWithDetails: (details) {
-                  _handleCancelBucketDrop(details.data);
-                },
-                builder: (context, candidate, __) {
-                  final ColorScheme scheme = Theme.of(context).colorScheme;
-                  final bool hovering =
-                      _cancelBucketHovering || candidate.isNotEmpty;
-                  final Color fillColor = scheme.error.withValues(
-                    alpha: hovering ? 0.18 : 0.09,
-                  );
-                  final Color iconColor = scheme.error.withValues(
-                    alpha: hovering ? 0.95 : 0.78,
-                  );
-                  return Container(
-                    width: double.infinity,
-                    height: totalHeight,
-                    padding: EdgeInsets.only(bottom: safeBottomPadding),
-                    color: fillColor,
-                    child: Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.close_rounded,
-                            color: iconColor,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Cancel drag',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.2,
+      curve: curve,
+      height: targetHeight,
+      width: double.infinity,
+      clipBehavior: Clip.hardEdge,
+      decoration: const BoxDecoration(),
+      child: AnimatedSwitcher(
+        duration: duration,
+        switchInCurve: curve,
+        switchOutCurve: curve,
+        transitionBuilder: (child, animation) {
+          final Animation<Offset> offsetAnimation = Tween<Offset>(
+            begin: const Offset(0, 0.15),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: animation, curve: curve));
+          return SlideTransition(
+            position: offsetAnimation,
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        },
+        child: !visible
+            ? const SizedBox.shrink()
+            : SizedBox(
+                key: const ValueKey('calendar.drag.cancel-bucket'),
+                width: double.infinity,
+                height: totalHeight,
+                child: DragTarget<CalendarDragPayload>(
+                  key: _cancelBucketKey,
+                  hitTestBehavior: HitTestBehavior.translucent,
+                  onWillAcceptWithDetails: (details) {
+                    final bool inside =
+                        _isPointerInsideCancelBucket(details);
+                    _setCancelBucketHovering(inside);
+                    return inside;
+                  },
+                  onMove: (details) {
+                    final bool inside =
+                        _isPointerInsideCancelBucket(details);
+                    _setCancelBucketHovering(inside);
+                  },
+                  onLeave: (_) => _setCancelBucketHovering(false),
+                  onAcceptWithDetails: (details) {
+                    _setCancelBucketHovering(false);
+                    _handleCancelBucketDrop(details.data);
+                  },
+                  builder: (context, candidate, __) {
+                    final ColorScheme scheme = Theme.of(context).colorScheme;
+                    final bool hovering =
+                        _cancelBucketHovering || candidate.isNotEmpty;
+                    final Color fillColor = scheme.error.withValues(
+                      alpha: hovering ? 0.18 : 0.09,
+                    );
+                    final Color iconColor = scheme.error.withValues(
+                      alpha: hovering ? 0.95 : 0.78,
+                    );
+                    return Container(
+                      width: double.infinity,
+                      height: totalHeight,
+                      padding: EdgeInsets.only(bottom: safeBottomPadding),
+                      color: fillColor,
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.close_rounded,
                               color: iconColor,
+                              size: 16,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Text(
+                              'Cancel drag',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2,
+                                color: iconColor,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-    );
-  }
-
-  Widget _buildTabDragTarget({required int tabIndex}) {
-    return DragTarget<CalendarDragPayload>(
-      hitTestBehavior: HitTestBehavior.translucent,
-      onWillAcceptWithDetails: (details) {
-        _handleTabButtonDragEvent(tabIndex, details);
-        return true;
-      },
-      onMove: (details) => _handleTabButtonDragEvent(tabIndex, details),
-      onLeave: (_) => _handleTabButtonDragLeave(tabIndex),
-      onAcceptWithDetails: (_) => _handleTabButtonDragLeave(tabIndex),
-      builder: (context, _, __) => const SizedBox.expand(),
+      ),
     );
   }
 
@@ -342,11 +341,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
             onAcceptWithDetails: (_) => _handleEdgeDragLeave(),
             builder: (context, _, __) {
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
+                duration: const Duration(milliseconds: 160),
                 height: double.infinity,
-                color: showCue
-                    ? Colors.deepOrange.withOpacity(0.3)
-                    : Colors.deepOrange.withOpacity(0.15),
+                decoration: showCue
+                    ? BoxDecoration(gradient: gradient)
+                    : const BoxDecoration(color: Colors.transparent),
               );
             },
           ),
@@ -362,6 +361,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     setState(() {
       _cancelBucketHovering = value;
     });
+    onCancelBucketHoverChanged(value);
   }
 
   void _handleCancelBucketDrop(CalendarDragPayload payload) {
@@ -390,37 +390,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
     _updateEdgeCue(null);
     _cancelSwitchTimer();
-  }
-
-  void _handleTabButtonDragEvent(
-    int tabIndex,
-    DragTargetDetails<CalendarDragPayload> details,
-  ) {
-    if (!isDragSwitcherEnabled || !_isAnyDragActive) {
-      return;
-    }
-    final Offset? pointer = _pointerPositionForDetails(details);
-    if (pointer != null) {
-      _recordPointerUpdate(pointer);
-    }
-    _setEdgeCueVisibility(showLeft: false, showRight: false);
-    _updateTabCueOnly(tabIndex);
-    if (mobileTabController.index == tabIndex) {
-      _cancelSwitchTimer();
-      return;
-    }
-    _scheduleSwitch(tabIndex);
-  }
-
-  void _handleTabButtonDragLeave(int tabIndex) {
-    if (!_isAnyDragActive) {
-      return;
-    }
-    if (_tabCueIndex == tabIndex) {
-      _updateTabCueOnly(null);
-    }
-    _evaluateEdgeAutoSwitch();
-    _tryPerformPendingSwitch();
   }
 
   void _evaluateEdgeAutoSwitch() {
@@ -515,10 +484,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _pendingSwitchIndex = null;
   }
 
-  void _setEdgeCueVisibility({
-    required bool showLeft,
-    required bool showRight,
-  }) {
+  void _updateEdgeCue(int? cueIndex) {
+    final bool showLeft = cueIndex == 0;
+    final bool showRight = cueIndex == 1;
     if (!mounted ||
         (_showLeftEdgeCue == showLeft && _showRightEdgeCue == showRight)) {
       return;
@@ -526,31 +494,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     setState(() {
       _showLeftEdgeCue = showLeft;
       _showRightEdgeCue = showRight;
-    });
-  }
-
-  void _updateTabCueOnly(int? cueIndex) {
-    if (!mounted || _tabCueIndex == cueIndex) {
-      return;
-    }
-    setState(() {
-      _tabCueIndex = cueIndex;
-    });
-  }
-
-  void _updateEdgeCue(int? cueIndex) {
-    final bool showLeft = cueIndex == 0;
-    final bool showRight = cueIndex == 1;
-    if (!mounted ||
-        (_showLeftEdgeCue == showLeft &&
-            _showRightEdgeCue == showRight &&
-            _tabCueIndex == cueIndex)) {
-      return;
-    }
-    setState(() {
-      _showLeftEdgeCue = showLeft;
-      _showRightEdgeCue = showRight;
-      _tabCueIndex = cueIndex;
     });
   }
 
@@ -605,6 +548,33 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     return pointer;
   }
 
+  bool _isPointerInsideCancelBucket(
+    DragTargetDetails<CalendarDragPayload> details,
+  ) {
+    final BuildContext? bucketContext = _cancelBucketKey.currentContext;
+    final RenderBox? box =
+        bucketContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      return false;
+    }
+    final Offset? pointer = _pointerPositionForDetails(details);
+    if (pointer == null) {
+      return false;
+    }
+    final Offset local = box.globalToLocal(pointer);
+    if (!local.dx.isFinite || !local.dy.isFinite) {
+      return false;
+    }
+    final Size size = box.size;
+    if (!size.width.isFinite || !size.height.isFinite) {
+      return false;
+    }
+    return local.dx >= 0 &&
+        local.dx <= size.width &&
+        local.dy >= 0 &&
+        local.dy <= size.height;
+  }
+
   void _recordPointerUpdate(Offset position) {
     _lastGlobalPosition = position;
     _dragStartGlobalPosition ??= position;
@@ -637,6 +607,26 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     } finally {
       _evaluatingSwitch = false;
     }
+  }
+
+  void onCancelBucketHoverChanged(bool isHovering) {}
+
+  CalendarTask restoreTaskFromPayload(CalendarDragPayload payload) {
+    final CalendarTask snapshot = payload.snapshot;
+    final DateTime? originalStart = payload.pickupScheduledTime ??
+        snapshot.scheduledTime ??
+        payload.originSlot;
+    if (originalStart != null) {
+      return snapshot.withScheduled(
+        scheduledTime: originalStart,
+        duration: snapshot.duration,
+        endDate: snapshot.endDate,
+      );
+    }
+    return snapshot.copyWith(
+      scheduledTime: null,
+      endDate: snapshot.endDate,
+    );
   }
 
   void onDragCancelRequested(CalendarDragPayload payload);

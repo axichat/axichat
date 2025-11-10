@@ -55,6 +55,7 @@ class CalendarTaskEntryBindings {
     required this.resizeHandleExtent,
     required this.interactionController,
     required this.dragFeedbackHint,
+    required this.cancelBucketHoverNotifier,
     required this.callbacks,
     required this.geometryProvider,
     required this.globalRectProvider,
@@ -78,6 +79,7 @@ class CalendarTaskEntryBindings {
   final double resizeHandleExtent;
   final TaskInteractionController interactionController;
   final ValueListenable<DragFeedbackHint> dragFeedbackHint;
+  final ValueListenable<bool> cancelBucketHoverNotifier;
   final CalendarTaskTileCallbacks callbacks;
   final CalendarTaskGeometry? Function(String taskId) geometryProvider;
   final Rect? Function(String taskId) globalRectProvider;
@@ -504,7 +506,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   }) {
     final double width = geometry.rect.width;
     final double height = geometry.rect.height;
-    return Material(
+    final Widget feedback = Material(
       color: Colors.transparent,
       child: ResizableTaskWidget(
         key: ValueKey('${task.id}-drag-feedback'),
@@ -520,6 +522,17 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
         isSelectionMode: false,
         isSelected: false,
       ),
+    );
+    return ValueListenableBuilder<bool>(
+      valueListenable: bindings.cancelBucketHoverNotifier,
+      builder: (context, hovering, child) {
+        return AnimatedOpacity(
+          duration: const Duration(milliseconds: 120),
+          opacity: hovering ? 0.45 : 1.0,
+          child: child,
+        );
+      },
+      child: feedback,
     );
   }
 }
