@@ -2,7 +2,7 @@ enum MessageTransport { xmpp, email }
 
 extension MessageTransportDisplay on MessageTransport {
   String get label => switch (this) {
-        MessageTransport.xmpp => 'XMPP',
+        MessageTransport.xmpp => 'Chat',
         MessageTransport.email => 'Email',
       };
 }
