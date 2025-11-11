@@ -46,6 +46,7 @@ class CalendarNavigation extends StatelessWidget {
     final String unitLabel = _currentUnitLabel(viewMode);
     final List<Widget> navButtons = [
       _navButton(
+        context: context,
         label: '← Previous',
         icon: isCompact ? Icons.chevron_left : null,
         tooltip: 'Previous $unitLabel',
@@ -53,6 +54,7 @@ class CalendarNavigation extends StatelessWidget {
         onPressed: () => _jumpRelative(-1),
       ),
       _navButton(
+        context: context,
         label: 'Today',
         icon: null,
         highlighted: _isToday(state.selectedDate),
@@ -64,6 +66,7 @@ class CalendarNavigation extends StatelessWidget {
             : () => onDateSelected(DateTime.now()),
       ),
       _navButton(
+        context: context,
         label: 'Next →',
         icon: isCompact ? Icons.chevron_right : null,
         tooltip: 'Next $unitLabel',
@@ -74,6 +77,7 @@ class CalendarNavigation extends StatelessWidget {
     if (showBackToWeek) {
       navButtons.add(
         _navButton(
+          context: context,
           label: 'Back to week',
           onPressed: () => onViewChanged(CalendarView.week),
         ),
@@ -204,6 +208,7 @@ class CalendarNavigation extends StatelessWidget {
   }
 
   Widget _navButton({
+    required BuildContext context,
     required String label,
     required VoidCallback? onPressed,
     bool highlighted = false,
@@ -212,9 +217,11 @@ class CalendarNavigation extends StatelessWidget {
     String? tooltip,
     bool showLabelInCompact = false,
   }) {
+    final colors = context.colorScheme;
     final bool useCompactIconOnly = compact && !showLabelInCompact;
     if (useCompactIconOnly) {
       return _compactNavButton(
+        context: context,
         icon: icon ?? Icons.help_outline,
         tooltip: tooltip ?? label,
         onPressed: onPressed,
@@ -233,9 +240,10 @@ class CalendarNavigation extends StatelessWidget {
             label: label,
             onPressed: onPressed,
             icon: icon,
-            foregroundColor: calendarTitleColor,
-            hoverForegroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+            foregroundColor: colors.primary,
+            hoverForegroundColor: colors.primary,
+            hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
+            backgroundColor: colors.card,
           );
     if (!compact) {
       return button;
@@ -255,6 +263,7 @@ class CalendarNavigation extends StatelessWidget {
     if (onUndo != null) {
       controls.add(
         _iconControl(
+          context: context,
           icon: Icons.undo_rounded,
           tooltip: 'Undo',
           onPressed: canUndo ? onUndo : null,
@@ -268,6 +277,7 @@ class CalendarNavigation extends StatelessWidget {
       }
       controls.add(
         _iconControl(
+          context: context,
           icon: Icons.redo_rounded,
           tooltip: 'Redo',
           onPressed: canRedo ? onRedo : null,
@@ -282,6 +292,7 @@ class CalendarNavigation extends StatelessWidget {
   }
 
   Widget _iconControl({
+    required BuildContext context,
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
@@ -293,6 +304,7 @@ class CalendarNavigation extends StatelessWidget {
     final bool enabled = onPressed != null;
     if (compact) {
       return _compactNavButton(
+        context: context,
         icon: icon,
         tooltip: message,
         onPressed: onPressed,
@@ -300,15 +312,17 @@ class CalendarNavigation extends StatelessWidget {
         enabled: enabled,
       );
     }
+    final colors = context.colorScheme;
     Widget control = Tooltip(
       message: message,
       child: TaskSecondaryButton(
         label: tooltip,
         icon: icon,
         onPressed: onPressed,
-        foregroundColor: calendarTitleColor,
-        hoverForegroundColor: calendarPrimaryColor,
-        hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+        foregroundColor: colors.primary,
+        hoverForegroundColor: colors.primary,
+        hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
+        backgroundColor: colors.card,
       ),
     );
     if (!enabled) {
@@ -321,17 +335,19 @@ class CalendarNavigation extends StatelessWidget {
   }
 
   Widget _compactNavButton({
+    required BuildContext context,
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
     required bool highlighted,
     bool enabled = true,
   }) {
+    final colors = context.colorScheme;
     final Widget button = highlighted
         ? ShadButton(
             size: ShadButtonSize.sm,
-            backgroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryHoverColor,
+            backgroundColor: colors.primary,
+            hoverBackgroundColor: colors.primary.withValues(alpha: 0.85),
             foregroundColor: Colors.white,
             hoverForegroundColor: Colors.white,
             onPressed: onPressed,
@@ -340,9 +356,10 @@ class CalendarNavigation extends StatelessWidget {
         : ShadButton.outline(
             size: ShadButtonSize.sm,
             onPressed: onPressed,
-            foregroundColor: calendarTitleColor,
-            hoverForegroundColor: calendarPrimaryColor,
-            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+            foregroundColor: colors.primary,
+            hoverForegroundColor: colors.primary,
+            hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
+            backgroundColor: colors.card,
             child: Icon(icon, size: 16),
           );
     Widget control = Tooltip(
