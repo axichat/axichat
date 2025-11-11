@@ -24,9 +24,13 @@ class AxiIconButton extends StatelessWidget {
     final colors = context.colorScheme;
     final Color resolvedForeground = color ?? colors.foreground;
     final Color resolvedBorder = borderColor ?? colors.border;
+    final Color resolvedBackground = colors.card;
 
     Widget child = ShadIconButton.outline(
-      decoration: ShadDecoration(border: ShadBorder.all(color: resolvedBorder)),
+      decoration: ShadDecoration(
+        color: resolvedBackground,
+        border: ShadBorder.all(color: resolvedBorder),
+      ),
       height: 36.0,
       width: 36.0,
       foregroundColor: resolvedForeground,

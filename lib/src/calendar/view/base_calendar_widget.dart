@@ -142,7 +142,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
       preferredSize: const Size.fromHeight(80),
       child: Container(
         decoration: BoxDecoration(
-          color: colors.card,
+          color: colors.background,
           border: Border(
             bottom: BorderSide(color: colors.border),
           ),
