@@ -118,7 +118,7 @@ enum EncryptionProtocol {
   bool get isMls => this == mls;
 }
 
-enum PseudoMessageType { newDevice, changedDevice }
+enum PseudoMessageType { newDevice, changedDevice, calendarSync }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
 

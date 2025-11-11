@@ -821,28 +821,46 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
         message.body == null ? 'no body' : '${message.body!.length} chars';
     _log.fine('Persisting message ${message.stanzaID}; body=$bodyPreview');
     final hasBody = message.body != null;
+    final isCalendarSync =
+        message.pseudoMessageType == PseudoMessageType.calendarSync;
+    final chatTitle = mox.JID.fromString(message.chatJid).local;
     await transaction(() async {
-      await into(chats).insert(
-        ChatsCompanion.insert(
-          jid: message.chatJid,
-          title: mox.JID.fromString(message.chatJid).local,
-          type: ChatType.chat,
-          unreadCount: Value(hasBody.toBinary),
-          lastMessage: Value.absentIfNull(message.body),
-          lastChangeTimestamp: DateTime.timestamp(),
-          encryptionProtocol: Value(message.encryptionProtocol),
-        ),
-        onConflict: DoUpdate.withExcluded(
-          (old, excluded) => ChatsCompanion.custom(
-            unreadCount: const Constant(0).iif(
-              old.open.isValue(true),
-              old.unreadCount + Constant(hasBody.toBinary),
-            ),
-            lastMessage: excluded.lastMessage,
-            lastChangeTimestamp: excluded.lastChangeTimestamp,
+      if (isCalendarSync) {
+        await into(chats).insert(
+          ChatsCompanion.insert(
+            jid: message.chatJid,
+            title: chatTitle,
+            type: ChatType.chat,
+            unreadCount: const Value(0),
+            lastMessage: const Value(null),
+            lastChangeTimestamp: DateTime.timestamp(),
+            encryptionProtocol: Value(message.encryptionProtocol),
           ),
-        ),
-      );
+          mode: InsertMode.insertOrIgnore,
+        );
+      } else {
+        await into(chats).insert(
+          ChatsCompanion.insert(
+            jid: message.chatJid,
+            title: chatTitle,
+            type: ChatType.chat,
+            unreadCount: Value(hasBody.toBinary),
+            lastMessage: Value.absentIfNull(message.body),
+            lastChangeTimestamp: DateTime.timestamp(),
+            encryptionProtocol: Value(message.encryptionProtocol),
+          ),
+          onConflict: DoUpdate.withExcluded(
+            (old, excluded) => ChatsCompanion.custom(
+              unreadCount: const Constant(0).iif(
+                old.open.isValue(true),
+                old.unreadCount + Constant(hasBody.toBinary),
+              ),
+              lastMessage: excluded.lastMessage,
+              lastChangeTimestamp: excluded.lastChangeTimestamp,
+            ),
+          ),
+        );
+      }
       BTBVTrustState? trust;
       bool? trusted;
       if (message.deviceID case final int deviceID) {
