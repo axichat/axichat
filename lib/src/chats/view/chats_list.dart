@@ -259,10 +259,18 @@ double _measureLabelWidth(BuildContext context, String text) {
 
 double _measureUnreadBadgeWidth(BuildContext context, int count) {
   final textWidth = _measureLabelWidth(context, '$count');
-  const horizontalPadding = 20.0; // padding in _UnreadBadge
-  const minWidth = 36.0;
-  return math.max(minWidth, textWidth + horizontalPadding);
+  return math.max(
+    _unreadBadgeMinWidth,
+    textWidth +
+        (_unreadBadgeHorizontalPadding * 2) +
+        (_unreadBadgeBorderWidth * 2),
+  );
 }
+
+const double _unreadBadgeHorizontalPadding = 10.0;
+const double _unreadBadgeVerticalPadding = 4.0;
+const double _unreadBadgeBorderWidth = 2.0;
+const double _unreadBadgeMinWidth = 36.0;
 
 class _TransportAwareAvatar extends StatelessWidget {
   const _TransportAwareAvatar({
@@ -316,11 +324,17 @@ class _UnreadBadge extends StatelessWidget {
         color: colors.primary,
         shape: SquircleBorder(
           cornerRadius: 12,
-          side: BorderSide(color: colors.background, width: 2),
+          side: BorderSide(
+            color: colors.background,
+            width: _unreadBadgeBorderWidth,
+          ),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(
+          horizontal: _unreadBadgeHorizontalPadding,
+          vertical: _unreadBadgeVerticalPadding,
+        ),
         child: Text(
           '$count',
           maxLines: 1,

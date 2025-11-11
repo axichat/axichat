@@ -153,12 +153,14 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final bool tasksCueActive = _showRightEdgeCue && _isAnyDragActive;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
     final double height = _tabBarHeight + safeInset;
+    final Color backgroundColor = context.colorScheme.card;
 
     final Widget tabContent = SizedBox(
       height: height,
       child: AxiTabBar(
         controller: mobileTabController,
         padding: EdgeInsets.only(bottom: safeInset),
+        backgroundColor: backgroundColor,
         indicatorColor: scheme.primary,
         indicatorWeight: 3,
         indicatorSize: TabBarIndicatorSize.label,
@@ -181,15 +183,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       ),
     );
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.colorScheme.card,
-        border: Border(
-          top: BorderSide(color: context.colorScheme.border),
-        ),
-      ),
-      child: tabContent,
-    );
+    return tabContent;
   }
 
   Widget buildDragCancelBucket({
