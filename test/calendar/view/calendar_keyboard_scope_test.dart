@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_keyboard_scope.dart';
 
 void main() {
-  Future<void> _sendShortcut(
+  Future<void> sendShortcut(
     WidgetTester tester,
     List<LogicalKeyboardKey> modifiers,
     LogicalKeyboardKey key,
@@ -38,17 +38,17 @@ void main() {
       ),
     );
 
-    await _sendShortcut(
+    await sendShortcut(
       tester,
       const [LogicalKeyboardKey.controlLeft],
       LogicalKeyboardKey.keyZ,
     );
-    await _sendShortcut(
+    await sendShortcut(
       tester,
       const [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftLeft],
       LogicalKeyboardKey.keyZ,
     );
-    await _sendShortcut(
+    await sendShortcut(
       tester,
       const [LogicalKeyboardKey.controlLeft],
       LogicalKeyboardKey.keyY,
@@ -82,7 +82,7 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pump();
 
-    await _sendShortcut(
+    await sendShortcut(
       tester,
       const [LogicalKeyboardKey.controlLeft],
       LogicalKeyboardKey.keyZ,

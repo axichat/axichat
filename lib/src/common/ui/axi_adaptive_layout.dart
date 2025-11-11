@@ -20,6 +20,42 @@ class AxiAdaptiveLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final mediaQuery = MediaQuery.maybeOf(context);
+        final shortestSide = mediaQuery?.size.shortestSide;
+        final bool isCompactDevice =
+            shortestSide != null && shortestSide < compactDeviceBreakpoint;
+        final bool allowSplitView =
+            !isCompactDevice && constraints.maxWidth >= smallScreen;
+
+        if (!allowSplitView) {
+          return ConstrainedBox(
+            constraints: constraints,
+            child: Center(
+              child: PageTransitionSwitcher(
+                reverse: !invertPriority,
+                duration: context.watch<SettingsCubit>().animationDuration,
+                transitionBuilder: (
+                  child,
+                  primaryAnimation,
+                  secondaryAnimation,
+                ) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1.0, 0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: primaryAnimation,
+                      curve: Curves.easeIn,
+                    )),
+                    child: child,
+                  );
+                },
+                child: invertPriority ? secondaryChild : primaryChild,
+              ),
+            ),
+          );
+        }
+
         final primaryFlex = switch (constraints.maxWidth) {
           < smallScreen => 10,
           < mediumScreen => 5,
@@ -27,50 +63,25 @@ class AxiAdaptiveLayout extends StatelessWidget {
           _ => 3,
         };
         final secondaryFlex = 10 - primaryFlex;
-        final secondaryVisible = secondaryFlex > 0;
         return ConstrainedBox(
           constraints: constraints,
-          child: !secondaryVisible
-              ? Center(
-                  child: PageTransitionSwitcher(
-                    reverse: !invertPriority,
-                    duration: context.watch<SettingsCubit>().animationDuration,
-                    transitionBuilder: (
-                      child,
-                      primaryAnimation,
-                      secondaryAnimation,
-                    ) {
-                      return SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(1.0, 0),
-                          end: Offset.zero,
-                        ).animate(CurvedAnimation(
-                          parent: primaryAnimation,
-                          curve: Curves.easeIn,
-                        )),
-                        child: child,
-                      );
-                    },
-                    child: invertPriority ? secondaryChild : primaryChild,
-                  ),
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      flex: primaryFlex,
-                      child: Center(
-                        child: primaryChild,
-                      ),
-                    ),
-                    Flexible(
-                      flex: secondaryFlex,
-                      child: Center(
-                        child: secondaryChild,
-                      ),
-                    ),
-                  ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                flex: primaryFlex,
+                child: Center(
+                  child: primaryChild,
                 ),
+              ),
+              Flexible(
+                flex: secondaryFlex,
+                child: Center(
+                  child: secondaryChild,
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

@@ -108,11 +108,11 @@ class CalendarTestData {
   }
 
   static CalendarModel buildModel() {
-    final recurrence = RecurrenceRule(
+    const RecurrenceRule recurrence = RecurrenceRule(
       frequency: RecurrenceFrequency.daily,
       interval: 1,
       count: 5,
-      byWeekdays: const [
+      byWeekdays: [
         DateTime.monday,
         DateTime.tuesday,
         DateTime.wednesday,
@@ -432,11 +432,11 @@ class CalendarWidgetHarness {
     CalendarState? state,
     Size size = const Size(1280, 860),
   }) async {
-    tester.binding.window.physicalSizeTestValue = Size(size.width, size.height);
-    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
 
     final resolvedState = state ?? CalendarTestData.weekView();

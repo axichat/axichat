@@ -1,6 +1,5 @@
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
@@ -27,7 +26,8 @@ class _GridHarness extends StatelessWidget {
   Widget build(BuildContext context) {
     final bloc = _MockCalendarBloc();
     when(() => bloc.state).thenReturn(state);
-    when(() => bloc.stream).thenAnswer((_) => Stream<CalendarState>.empty());
+    when(() => bloc.stream)
+        .thenAnswer((_) => const Stream<CalendarState>.empty());
     when(() => bloc.add(any())).thenReturn(null);
 
     return MultiBlocProvider(
@@ -37,7 +37,7 @@ class _GridHarness extends StatelessWidget {
       child: MaterialApp(
         home: ShadTheme(
           data: ShadThemeData(
-            colorScheme: ShadSlateColorScheme.light(),
+            colorScheme: const ShadSlateColorScheme.light(),
             brightness: Brightness.light,
           ),
           child: MediaQuery(

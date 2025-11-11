@@ -2124,14 +2124,12 @@ abstract class BaseCalendarBloc
 
   List<CalendarTask> _getDueReminders(CalendarModel model) {
     final now = _now();
-    final dueSoonCutoff = now.add(const Duration(hours: 2));
 
     return model.tasks.values.where((task) {
       if (task.isCompleted || task.scheduledTime == null) {
         return false;
       }
-      final scheduled = task.scheduledTime!;
-      return scheduled.isBefore(now) || scheduled.isBefore(dueSoonCutoff);
+      return task.scheduledTime!.isBefore(now);
     }).toList()
       ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
   }

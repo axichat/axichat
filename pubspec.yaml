@@ -118,5 +118,5 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/licenses/
+    - assets/licenses/delta_chat_core_mpl.txt
     - shorebird.yaml

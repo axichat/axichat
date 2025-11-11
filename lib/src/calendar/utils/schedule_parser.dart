@@ -180,10 +180,8 @@ bool _looksLikeLocationCandidate(String candidate, FuzzyPolicy policy) {
   if (trimmed.isEmpty) return false;
 
   final lower = trimmed.toLowerCase();
-  final rawTokens = trimmed
-      .split(RegExp(r'\s+'))
-      .where((token) => token.isNotEmpty)
-      .toList();
+  final rawTokens =
+      trimmed.split(RegExp(r'\s+')).where((token) => token.isNotEmpty).toList();
   if (rawTokens.isEmpty) return false;
   final lowerTokens = rawTokens.map((token) => token.toLowerCase()).toList();
 
@@ -492,7 +490,6 @@ class ScheduleParser {
     final flags = <AmbiguityFlag>{...normal.flags};
     final assumptions = <String>[...normal.assumptions];
     var confidence = 1.0;
-    bool usedRelativeFallback = false;
     final _ConsumedPhraseTracker consumed = _ConsumedPhraseTracker();
 
     // DEADLINE: extract and strip from sentence
@@ -547,9 +544,10 @@ class ScheduleParser {
       }
 
       start = local;
+      final matchIndex = best.index.toInt();
       s = _removeSpanByIndex(
         s,
-        best.index?.toInt() ?? 0,
+        matchIndex,
         best.text.length,
       );
       consumed.add(best.text);
@@ -558,7 +556,6 @@ class ScheduleParser {
       if (normal.relativeFallback != null) {
         start = normal.relativeFallback;
         allDay = false;
-        usedRelativeFallback = true;
         flags.add(AmbiguityFlag.relativeDate);
         assumptions.add(
             'Interpreted relative duration "${normal.relativeFallbackLabel}".');
@@ -628,15 +625,13 @@ class ScheduleParser {
     final weekendMatch = weekendPattern.firstMatch(s);
     if (weekendMatch != null) {
       flags.add(AmbiguityFlag.relativeDate);
-      final addAWeek =
-          (weekendMatch.group(1)?.toLowerCase() == 'next');
+      final addAWeek = (weekendMatch.group(1)?.toLowerCase() == 'next');
       final sat =
           _startOfWeekend(base, opts.policy.weekendDefaultDay, addAWeek);
-      start ??= sat;
-      final weekendStart = start!;
+      final weekendStart = start ?? sat;
+      start = weekendStart;
       if (allDay) allDay = false;
-      assumptions.add(
-          'Interpreted "${weekendMatch.group(0)}" as '
+      assumptions.add('Interpreted "${weekendMatch.group(0)}" as '
           '${DateFormat('EEE HH:mm').format(weekendStart)}.');
       confidence -= 0.1;
       s = s.replaceRange(weekendMatch.start, weekendMatch.end, ' ');
@@ -716,8 +711,8 @@ class ScheduleParser {
           final normalized = _normalizeLocation(_clean(word));
           if (normalized != null && !consumed.overlaps(normalized)) {
             location = normalized;
-          flags.add(AmbiguityFlag.locationGuessed);
-          assumptions.add('Guessed trailing word as location.');
+            flags.add(AmbiguityFlag.locationGuessed);
+            assumptions.add('Guessed trailing word as location.');
             consumed.add(normalized);
             s = s.replaceRange(trailing.start, trailing.end, ' ');
           }
@@ -1051,7 +1046,7 @@ class ScheduleParser {
     final flags = <AmbiguityFlag>{};
     final assumptions = <String>[];
 
-    tz.TZDateTime _eod(tz.TZDateTime d) => tz.TZDateTime(
+    tz.TZDateTime endOfDayFor(tz.TZDateTime d) => tz.TZDateTime(
         opts.tzLocation, d.year, d.month, d.day, opts.policy.endOfDayHour);
 
     // Explicit phrases: by/before/no later than/due
@@ -1068,8 +1063,7 @@ class ScheduleParser {
       bool interpretedDeadline = false;
 
       if (_isBareNextWeekPhrase(normalizedTarget)) {
-        final tz.TZDateTime nextWeekMonday =
-            _nextWeekMondayDeadline(base);
+        final tz.TZDateTime nextWeekMonday = _nextWeekMondayDeadline(base);
         deadline = nextWeekMonday;
         flags.add(AmbiguityFlag.deadline);
         assumptions.add(
@@ -1087,17 +1081,16 @@ class ScheduleParser {
         if (rs.isNotEmpty) {
           var dt = tz.TZDateTime.from(rs.last.date(), opts.tzLocation);
           final hadTime = rs.last.start.isCertain(Component.hour);
-          if (!hadTime) dt = _eod(dt);
+          if (!hadTime) dt = endOfDayFor(dt);
           deadline = dt;
           flags.add(AmbiguityFlag.deadline);
           assumptions.add(
-            'Interpreted "${m.group(0)}" as deadline '
-            '${dt.toIso8601String()}.',
+            'Interpreted "${m.group(0)}" as deadline ${dt.toIso8601String()}.',
           );
         }
       }
 
-      text = (text.substring(0, st) + ' ' + text.substring(en))
+      text = ('${text.substring(0, st)} ${text.substring(en)}')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
     } else {
@@ -1152,7 +1145,7 @@ class ScheduleParser {
         flags.add(AmbiguityFlag.deadline);
         flags.add(AmbiguityFlag.eoxShortcut);
         final st = eox.start, en = eox.end;
-        text = (text.substring(0, st) + ' ' + text.substring(en))
+        text = ('${text.substring(0, st)} ${text.substring(en)}')
             .replaceAll(RegExp(r'\s+'), ' ')
             .trim();
       }
@@ -1243,10 +1236,9 @@ class ScheduleParser {
     List<String> byday = [];
     int? bymonthday;
     int? bysetpos;
-    tz.TZDateTime? until;
     int? count;
 
-    String _dowToIcs(String w) {
+    String dowToIcs(String w) {
       final w0 = w.toLowerCase();
       if (w0.startsWith('mo')) return 'MO';
       if (w0.startsWith('tu')) return 'TU';
@@ -1257,7 +1249,7 @@ class ScheduleParser {
       return 'SU';
     }
 
-    void _ensureWeekly() {
+    void ensureWeekly() {
       if (freq.isEmpty) freq = 'WEEKLY';
     }
 
@@ -1267,16 +1259,21 @@ class ScheduleParser {
       freq = 'WEEKLY';
       interval = 2;
     }
-    if (RegExp(r'\bmonthly\b').hasMatch(phrase)) freq = 'MONTHLY';
-    if (RegExp(r'\byearly\b|\bannually\b').hasMatch(phrase)) freq = 'YEARLY';
+    if (RegExp(r'\bmonthly\b').hasMatch(phrase)) {
+      freq = 'MONTHLY';
+    }
+    if (RegExp(r'\byearly\b|\bannually\b').hasMatch(phrase)) {
+      freq = 'YEARLY';
+    }
 
     final mEveryN =
         RegExp(r'\b(?:every|each)\s+(other|\d+)\b').firstMatch(phrase);
     if (mEveryN != null) {
-      if (mEveryN.group(1)!.toLowerCase() == 'other')
+      if (mEveryN.group(1)!.toLowerCase() == 'other') {
         interval = 2;
-      else
+      } else {
         interval = int.tryParse(mEveryN.group(1)!) ?? 1;
+      }
     }
     final mEveryNUnits = RegExp(
             r'\b(?:every|each)\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)\b')
@@ -1285,14 +1282,15 @@ class ScheduleParser {
       final n = int.parse(mEveryNUnits.group(1)!);
       final unit = mEveryNUnits.group(2)!.toLowerCase();
       interval = n;
-      if (unit.startsWith('day'))
+      if (unit.startsWith('day')) {
         freq = 'DAILY';
-      else if (unit.startsWith('week'))
+      } else if (unit.startsWith('week')) {
         freq = 'WEEKLY';
-      else if (unit.startsWith('month'))
+      } else if (unit.startsWith('month')) {
         freq = 'MONTHLY';
-      else
+      } else {
         freq = 'YEARLY';
+      }
     }
 
     final bool mentionsDailyUnit = RegExp(
@@ -1323,28 +1321,28 @@ class ScheduleParser {
     }
 
     if (RegExp(r'\bweekday(s)?\b', caseSensitive: false).hasMatch(phrase)) {
-      _ensureWeekly();
+      ensureWeekly();
       byday = ['MO', 'TU', 'WE', 'TH', 'FR'];
     }
     if (RegExp(r'\bweekend(s)?\b', caseSensitive: false).hasMatch(phrase)) {
-      _ensureWeekly();
+      ensureWeekly();
       byday = ['SA', 'SU'];
     }
     if (RegExp(r'\bmwf\b', caseSensitive: false).hasMatch(phrase)) {
-      _ensureWeekly();
+      ensureWeekly();
       byday = ['MO', 'WE', 'FR'];
     }
     if (RegExp(r'\btth\b', caseSensitive: false).hasMatch(phrase)) {
-      _ensureWeekly();
+      ensureWeekly();
       byday = ['TU', 'TH'];
     }
 
     final dayMatches = weekdayMatcher.allMatches(phrase).toList();
     if (dayMatches.isNotEmpty) {
-      _ensureWeekly();
+      ensureWeekly();
       final seen = <String>{};
       for (final m in dayMatches) {
-        final code = _dowToIcs(m.group(0)!);
+        final code = dowToIcs(m.group(0)!);
         if (seen.add(code)) byday.add(code);
       }
     }
@@ -1357,7 +1355,7 @@ class ScheduleParser {
       freq = 'MONTHLY';
       final ord = mOrd.group(1)!.toLowerCase();
       final day = mOrd.group(2)!;
-      byday = [_dowToIcs(day)];
+      byday = [dowToIcs(day)];
       bysetpos = switch (ord) {
         'first' => 1,
         'second' => 2,
@@ -1376,7 +1374,7 @@ class ScheduleParser {
       final ordValue = int.tryParse(mNumericOrd.group(1)!);
       final day = mNumericOrd.group(3)!;
       if (ordValue != null && ordValue > 0) {
-        byday = [_dowToIcs(day)];
+        byday = [dowToIcs(day)];
         final capped = ordValue > 4 ? 4 : ordValue;
         bysetpos = capped;
       }
@@ -1448,11 +1446,10 @@ class ScheduleParser {
       caseSensitive: false,
     ).firstMatch(phrase);
     int? limitCount;
-    String? limitUnit;
     if (mDurationLimit != null) {
       limitCount = int.tryParse(mDurationLimit.group(1)!);
-      limitUnit = mDurationLimit.group(2)!.toLowerCase();
-      if (freq.isEmpty && limitUnit != null) {
+      final limitUnit = mDurationLimit.group(2)!.toLowerCase();
+      if (freq.isEmpty) {
         freq = switch (limitUnit) {
           'day' || 'days' => 'DAILY',
           'week' || 'weeks' => 'WEEKLY',
@@ -1502,7 +1499,7 @@ class ScheduleParser {
         : '';
     String anchorText = anchorTextBase;
     final timeAnchorMatch = RegExp(
-      r'\b(?:at|@|around)\s+' + _timeSnippetPattern,
+      '\\b(?:at|@|around)\\s+$_timeSnippetPattern',
       caseSensitive: false,
     ).firstMatch(phrase);
     if (timeAnchorMatch != null) {
@@ -1515,11 +1512,8 @@ class ScheduleParser {
       }
     }
 
-    final cleaned = (s.substring(0, spanStart) +
-            ' ' +
-            (anchorText.isEmpty ? '' : anchorText) +
-            ' ' +
-            s.substring(spanEnd))
+    final cleaned = ('${s.substring(0, spanStart)} '
+            '${anchorText.isEmpty ? '' : anchorText} ${s.substring(spanEnd)}')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
@@ -1729,7 +1723,7 @@ class ScheduleParser {
       }
     }
 
-    void _consumeAnchor(RegExp pattern) {
+    void consumeAnchor(RegExp pattern) {
       final m = pattern.firstMatch(text);
       if (m != null) {
         anchorExplicit = true;
@@ -1737,9 +1731,9 @@ class ScheduleParser {
       }
     }
 
-    _consumeAnchor(RegExp(r'\btoday\b', caseSensitive: false));
-    _consumeAnchor(RegExp(r'\btonight\b', caseSensitive: false));
-    _consumeAnchor(
+    consumeAnchor(RegExp(r'\btoday\b', caseSensitive: false));
+    consumeAnchor(RegExp(r'\btonight\b', caseSensitive: false));
+    consumeAnchor(
       RegExp(r'\bthis\s+(morning|afternoon|evening|night)\b',
           caseSensitive: false),
     );
@@ -1750,12 +1744,10 @@ class ScheduleParser {
     ).firstMatch(text);
 
     var explicit24h = false;
-    if (timeMatch == null) {
-      timeMatch = RegExp(
-        r'\b(\d{1,2})(?::(\d{2}))?\s*((?:a\.?m\.?|p\.?m\.?|am|pm))\b',
-        caseSensitive: false,
-      ).firstMatch(text);
-    }
+    timeMatch ??= RegExp(
+      r'\b(\d{1,2})(?::(\d{2}))?\s*((?:a\.?m\.?|p\.?m\.?|am|pm))\b',
+      caseSensitive: false,
+    ).firstMatch(text);
     if (timeMatch == null) {
       timeMatch = RegExp(r'\b(\d{1,2}):(\d{2})\b').firstMatch(text);
       explicit24h = timeMatch != null;
@@ -1796,10 +1788,10 @@ class ScheduleParser {
           hour = value;
           minute = 0;
           ambiguousNoMeridiem = true;
-          text =
-              text.replaceRange(simpleHourMatch.start, simpleHourMatch.end, ' ');
+          text = text.replaceRange(
+              simpleHourMatch.start, simpleHourMatch.end, ' ');
           assumptions.add(
-              'Interpreted "${simpleHourMatch.group(0)}" as ${_hhmm(hour!)}.');
+              'Interpreted "${simpleHourMatch.group(0)}" as ${_hhmm(value)}.');
         }
       }
     }
@@ -1839,21 +1831,22 @@ class ScheduleParser {
     }
 
     if (ambiguousNoMeridiem && hour != null) {
+      final int resolvedHour = hour;
       final int minutes = minute ?? 0;
       final tz.TZDateTime sameDayCandidate = tz.TZDateTime(
         opts.tzLocation,
         anchor.year,
         anchor.month,
         anchor.day,
-        hour!,
+        resolvedHour,
         minutes,
       );
-      final bool shouldShiftToPm = hour! < 12 &&
+      final bool shouldShiftToPm = resolvedHour < 12 &&
           !hasMorningCue &&
           (hasEveningCue ||
               (!anchorExplicit && sameDayCandidate.isBefore(base)));
       if (shouldShiftToPm) {
-        hour = (hour! + 12) % 24;
+        hour = (resolvedHour + 12) % 24;
       }
     }
 
@@ -1958,21 +1951,26 @@ class ScheduleParser {
 
   _Vague? _resolveVaguePartOfDay(String original) {
     final lower = original.toLowerCase();
-    if (lower.contains('tonight'))
+    if (lower.contains('tonight')) {
       return _Vague('tonight', opts.policy.defaultEveningHour, isTonight: true);
-    if (lower.contains('morning'))
+    }
+    if (lower.contains('morning')) {
       return _Vague('morning', opts.policy.defaultMorningHour);
-    if (lower.contains('afternoon'))
+    }
+    if (lower.contains('afternoon')) {
       return _Vague('afternoon', opts.policy.defaultAfternoonHour);
-    if (lower.contains('evening'))
+    }
+    if (lower.contains('evening')) {
       return _Vague('evening', opts.policy.defaultEveningHour);
+    }
     if (lower.contains('lunchtime') ||
         lower.contains('lunch time') ||
         lower.contains('lunch')) {
       return _Vague('lunch', opts.policy.lunchHour);
     }
-    if (lower.contains('after work'))
+    if (lower.contains('after work')) {
       return _Vague('after work', opts.policy.afterWorkHour);
+    }
     return null;
   }
 
@@ -2152,24 +2150,24 @@ class ScheduleParser {
   String _removeSpanByIndex(String s, int index, int length) {
     if (index < 0 || index + length > s.length) return s;
 
-    bool _isLetter(int codeUnit) {
+    bool isLetter(int codeUnit) {
       return (codeUnit >= 65 && codeUnit <= 90) ||
           (codeUnit >= 97 && codeUnit <= 122);
     }
 
-    bool _isWhitespace(int codeUnit) => codeUnit <= 32;
+    bool isWhitespace(int codeUnit) => codeUnit <= 32;
 
     var start = index;
     var end = index + length;
 
     // Consume trailing whitespace to avoid leaving double spaces.
-    while (end < s.length && _isWhitespace(s.codeUnitAt(end))) {
+    while (end < s.length && isWhitespace(s.codeUnitAt(end))) {
       end++;
     }
 
     // Step back to include whitespace between the matched phrase and
     // any connector words we may choose to remove below.
-    while (start > 0 && _isWhitespace(s.codeUnitAt(start - 1))) {
+    while (start > 0 && isWhitespace(s.codeUnitAt(start - 1))) {
       start--;
     }
 
@@ -2177,13 +2175,13 @@ class ScheduleParser {
     while (cursor > 0) {
       var wordEnd = cursor;
       // Skip whitespace directly before the current cursor.
-      while (wordEnd > 0 && _isWhitespace(s.codeUnitAt(wordEnd - 1))) {
+      while (wordEnd > 0 && isWhitespace(s.codeUnitAt(wordEnd - 1))) {
         wordEnd--;
       }
       if (wordEnd == 0) break;
 
       var wordStart = wordEnd;
-      while (wordStart > 0 && _isLetter(s.codeUnitAt(wordStart - 1))) {
+      while (wordStart > 0 && isLetter(s.codeUnitAt(wordStart - 1))) {
         wordStart--;
       }
       if (wordStart == wordEnd) {
@@ -2228,11 +2226,11 @@ class _ExplicitRange {
 _ExplicitRange? _extractExplicitRange(String text) {
   final patterns = <RegExp>[
     RegExp(
-      '\\bfrom\\s+(?<start>${_timeSnippetPattern})\\s+(?:to|till|til|until|through)\\s+(?<end>${_timeSnippetPattern})',
+      '\\bfrom\\s+(?<start>$_timeSnippetPattern)\\s+(?:to|till|til|until|through)\\s+(?<end>$_timeSnippetPattern)',
       caseSensitive: false,
     ),
     RegExp(
-      '\\b(?<start>${_timeSnippetPattern})\\s+(?:to|till|til|until|through)\\s+(?<end>${_timeSnippetPattern})',
+      '\\b(?<start>$_timeSnippetPattern)\\s+(?:to|till|til|until|through)\\s+(?<end>$_timeSnippetPattern)',
       caseSensitive: false,
     ),
   ];

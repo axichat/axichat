@@ -222,8 +222,7 @@ void main() {
 
     test('does not treat feature phrases after "in" as locations', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result =
-          parser.parse('polish contact list tiles in chat composer');
+      final result = parser.parse('polish contact list tiles in chat composer');
 
       expect(result.location, isNull);
       expect(result.bucket, TaskBucket.unscheduled);
@@ -233,8 +232,7 @@ void main() {
 
     test('still captures obvious standalone place names', () {
       final parser = buildParser(DateTime.utc(2024, 5, 1, 12));
-      final result =
-          parser.parse('coffee sync tomorrow at 3pm at Starbucks');
+      final result = parser.parse('coffee sync tomorrow at 3pm at Starbucks');
 
       expect(result.location, 'Starbucks');
       expect(result.start, isNotNull);

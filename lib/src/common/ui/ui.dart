@@ -40,6 +40,7 @@ const androidIconPath = 'app_icon';
 const smallScreen = 820.0;
 const mediumScreen = 900.0;
 const largeScreen = 1200.0;
+const compactDeviceBreakpoint = 600.0;
 
 const baseAnimationDuration = Duration(milliseconds: 300);
 

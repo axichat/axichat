@@ -465,8 +465,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     PointerDownEvent event,
   ) {
     _pendingResizeHandle = handle;
-    final LongPressGestureRecognizer recognizer =
-        LongPressGestureRecognizer(
+    final LongPressGestureRecognizer recognizer = LongPressGestureRecognizer(
       duration: _touchResizeLongPressDelay,
     )
       ..onLongPressStart = (_) {
@@ -635,8 +634,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     if (_handleExtent > 10 && width.isFinite && width > 0) {
       final double handleWidth = math.max(
         _touchHandleHorizontalMin,
-        math.min(width * _touchHandleHorizontalFraction,
-            _touchHandleHorizontalMax),
+        math.min(
+            width * _touchHandleHorizontalFraction, _touchHandleHorizontalMax),
       );
       final double left = (width - handleWidth) / 2;
       final double right = left + handleWidth;

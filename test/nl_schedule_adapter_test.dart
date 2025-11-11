@@ -120,8 +120,8 @@ void main() {
     });
 
     test('uses default duration when only start provided', () {
-      final adapter = NlScheduleAdapter(
-        config: const NlAdapterConfig(
+      const adapter = NlScheduleAdapter(
+        config: NlAdapterConfig(
           defaultDuration: Duration(minutes: 90),
         ),
       );
@@ -133,8 +133,8 @@ void main() {
     });
 
     test('all-day items get allDaySpan duration', () {
-      final adapter = NlScheduleAdapter(
-        config: const NlAdapterConfig(allDaySpan: Duration(hours: 36)),
+      const adapter = NlScheduleAdapter(
+        config: NlAdapterConfig(allDaySpan: Duration(hours: 36)),
       );
       final item = buildItem(
         start: zoned(2024, 12, 24),
@@ -191,7 +191,7 @@ void main() {
     });
 
     test('detects weekday-only recurrence', () {
-      final recurrence = Recurrence(
+      const recurrence = Recurrence(
         rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
         text: 'Weekdays',
       );
@@ -201,7 +201,7 @@ void main() {
     });
 
     test('parses UNTIL/count from ICS string when tz until missing', () {
-      final recurrence = Recurrence(
+      const recurrence = Recurrence(
         rrule: 'FREQ=MONTHLY;UNTIL=20241231T235959Z;COUNT=10',
         text: 'Through 2024',
       );

@@ -20,6 +20,7 @@ enum QuickAddModalSurface { dialog, bottomSheet }
 
 class QuickAddModal extends StatefulWidget {
   final DateTime? prefilledDateTime;
+  final String? prefilledText;
   final VoidCallback? onDismiss;
   final void Function(CalendarTask task) onTaskAdded;
   final QuickAddModalSurface surface;
@@ -28,6 +29,7 @@ class QuickAddModal extends StatefulWidget {
   const QuickAddModal({
     super.key,
     this.prefilledDateTime,
+    this.prefilledText,
     this.onDismiss,
     required this.onTaskAdded,
     this.surface = QuickAddModalSurface.dialog,
@@ -104,6 +106,18 @@ class _QuickAddModalState extends State<QuickAddModal>
     _resetParserLocks();
     if (prefilled != null) {
       _scheduleLocked = true;
+    }
+
+    final seededText = widget.prefilledText?.trim();
+    if (seededText != null && seededText.isNotEmpty) {
+      _taskNameController.value = TextEditingValue(
+        text: seededText,
+        selection: TextSelection.collapsed(offset: seededText.length),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _handleTaskNameChanged(seededText);
+      });
     }
   }
 
@@ -755,6 +769,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 Future<void> showQuickAddModal({
   required BuildContext context,
   DateTime? prefilledDateTime,
+  String? prefilledText,
   required void Function(CalendarTask task) onTaskAdded,
   required LocationAutocompleteHelper locationHelper,
 }) {
@@ -766,6 +781,7 @@ Future<void> showQuickAddModal({
       builder: (sheetContext) => QuickAddModal(
         surface: QuickAddModalSurface.bottomSheet,
         prefilledDateTime: prefilledDateTime,
+        prefilledText: prefilledText,
         onTaskAdded: onTaskAdded,
         locationHelper: locationHelper,
       ),
@@ -777,6 +793,7 @@ Future<void> showQuickAddModal({
     barrierColor: Colors.transparent,
     builder: (context) => QuickAddModal(
       prefilledDateTime: prefilledDateTime,
+      prefilledText: prefilledText,
       onTaskAdded: onTaskAdded,
       locationHelper: locationHelper,
       onDismiss: () {

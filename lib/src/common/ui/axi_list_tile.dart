@@ -19,6 +19,7 @@ class AxiListTile extends StatelessWidget {
     this.paintSurface = true,
     this.contentPadding,
     this.tapBounce = true,
+    this.minTileHeight,
   });
 
   final Widget? leading;
@@ -35,6 +36,7 @@ class AxiListTile extends StatelessWidget {
   final bool paintSurface;
   final EdgeInsetsGeometry? contentPadding;
   final bool tapBounce;
+  final double? minTileHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +60,7 @@ class AxiListTile extends StatelessWidget {
       horizontalTitleGap: 16.0,
       contentPadding:
           contentPadding ?? const EdgeInsets.only(left: 16.0, right: 16.0),
-      minTileHeight: 84.0,
+      minTileHeight: minTileHeight ?? 84.0,
       selected: selected,
       selectedTileColor: Colors.transparent,
       hoverColor: selectionOverlay,

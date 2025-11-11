@@ -149,20 +149,10 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
             child: Row(
               children: [
                 if (Navigator.canPop(context))
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.pop(context),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: calendarPaddingMd,
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: calendarTitleColor,
-                          size: 20,
-                        ),
-                      ),
-                    ),
+                  AxiIconButton(
+                    iconData: LucideIcons.arrowLeft,
+                    tooltip: 'Back',
+                    onPressed: () => Navigator.pop(context),
                   ),
                 const SizedBox(width: calendarGutterSm),
                 Expanded(

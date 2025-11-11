@@ -142,6 +142,8 @@ class HomeScreen extends StatelessWidget {
                             await xmppService.sendMessage(
                               jid: jid,
                               text: message,
+                              persistLocally: false,
+                              markNoStore: true,
                             );
                           }
                         },
@@ -204,10 +206,11 @@ class HomeScreen extends StatelessWidget {
                                                     context.read<XmppService>(),
                                                 chatsService:
                                                     context.read<XmppService>(),
-                                                notificationService: context
-                                                    .read<NotificationService>(),
-                                                emailService:
-                                                    context.read<EmailService>(),
+                                                notificationService:
+                                                    context.read<
+                                                        NotificationService>(),
+                                                emailService: context
+                                                    .read<EmailService>(),
                                                 omemoService: isOmemo
                                                     ? context
                                                         .read<XmppService>()

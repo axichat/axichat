@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/axi_tab_bar.dart';
 import 'package:flutter/material.dart';
 
@@ -155,7 +156,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
     final Widget tabContent = SizedBox(
       height: height,
-          child: AxiTabBar(
+      child: AxiTabBar(
         controller: mobileTabController,
         padding: EdgeInsets.only(bottom: safeInset),
         indicatorColor: scheme.primary,
@@ -180,7 +181,15 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       ),
     );
 
-    return tabContent;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.colorScheme.card,
+        border: Border(
+          top: BorderSide(color: context.colorScheme.border),
+        ),
+      ),
+      child: tabContent,
+    );
   }
 
   Widget buildDragCancelBucket({
@@ -228,14 +237,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   key: _cancelBucketKey,
                   hitTestBehavior: HitTestBehavior.translucent,
                   onWillAcceptWithDetails: (details) {
-                    final bool inside =
-                        _isPointerInsideCancelBucket(details);
+                    final bool inside = _isPointerInsideCancelBucket(details);
                     _setCancelBucketHovering(inside);
                     return inside;
                   },
                   onMove: (details) {
-                    final bool inside =
-                        _isPointerInsideCancelBucket(details);
+                    final bool inside = _isPointerInsideCancelBucket(details);
                     _setCancelBucketHovering(inside);
                   },
                   onLeave: (_) => _setCancelBucketHovering(false),
@@ -316,7 +323,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       ),
     );
   }
-
 
   Widget _buildEdgeTarget({
     required Alignment alignment,
@@ -407,26 +413,22 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
     final Offset localPosition = box.globalToLocal(globalPosition);
     final double width = box.size.width;
-    final double leftThreshold = width <= 0
-        ? 0
-        : math.min(_leftEdgeHotZoneWidth, width * 0.5);
-    final double rightThreshold = width <= 0
-        ? 0
-        : math.min(_rightEdgeHotZoneWidth, width * 0.5);
+    final double leftThreshold =
+        width <= 0 ? 0 : math.min(_leftEdgeHotZoneWidth, width * 0.5);
+    final double rightThreshold =
+        width <= 0 ? 0 : math.min(_rightEdgeHotZoneWidth, width * 0.5);
     _dragStartLocalDx ??= localPosition.dx;
     if (_dragStartLocalDx != null &&
         !_dragStartInLeftZone &&
         !_dragStartInRightZone) {
       _dragStartInLeftZone = _dragStartLocalDx! <= leftThreshold;
-      _dragStartInRightZone =
-          _dragStartLocalDx! >= width - rightThreshold;
+      _dragStartInRightZone = _dragStartLocalDx! >= width - rightThreshold;
     }
 
     final double horizontalTravel = _dragStartLocalDx == null
         ? 0
         : (localPosition.dx - _dragStartLocalDx!).abs();
-    if (!_edgeActivationUnlocked &&
-        horizontalTravel >= _edgeActivationSlop) {
+    if (!_edgeActivationUnlocked && horizontalTravel >= _edgeActivationSlop) {
       _edgeActivationUnlocked = true;
     }
 
@@ -437,8 +439,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
 
     bool pointerInLeftZone = localPosition.dx <= leftThreshold;
-    bool pointerInRightZone =
-        localPosition.dx >= width - rightThreshold;
+    bool pointerInRightZone = localPosition.dx >= width - rightThreshold;
 
     if (!_edgeActivationUnlocked) {
       if (_dragStartInLeftZone && pointerInLeftZone) {
@@ -552,8 +553,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     DragTargetDetails<CalendarDragPayload> details,
   ) {
     final BuildContext? bucketContext = _cancelBucketKey.currentContext;
-    final RenderBox? box =
-        bucketContext?.findRenderObject() as RenderBox?;
+    final RenderBox? box = bucketContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) {
       return false;
     }

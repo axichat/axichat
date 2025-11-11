@@ -36,6 +36,8 @@ void main() {
       splitWidthFactor: 200 / 240,
     );
 
+    final ValueNotifier<bool> cancelHoverNotifier = ValueNotifier(false);
+
     CalendarTaskEntryBindings buildBindings() => CalendarTaskEntryBindings(
           isSelectionMode: false,
           isSelected: false,
@@ -48,6 +50,7 @@ void main() {
           resizeHandleExtent: 12,
           interactionController: interactionController,
           dragFeedbackHint: interactionController.feedbackHint,
+          cancelBucketHoverNotifier: cancelHoverNotifier,
           callbacks: callbacks,
           geometryProvider: (_) => geometry,
           globalRectProvider: (_) => geometry.rect,
@@ -64,7 +67,7 @@ void main() {
       MaterialApp(
         home: ShadTheme(
           data: ShadThemeData(
-            colorScheme: ShadSlateColorScheme.light(),
+            colorScheme: const ShadSlateColorScheme.light(),
             brightness: Brightness.light,
           ),
           child: StatefulBuilder(
@@ -107,6 +110,7 @@ void main() {
     CalendarTaskGeometry geometry = CalendarTaskGeometry.empty;
 
     late void Function(void Function()) triggerRebuild;
+    final ValueNotifier<bool> cancelHoverNotifier = ValueNotifier(false);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -136,6 +140,7 @@ void main() {
                     resizeHandleExtent: 12,
                     interactionController: interactionController,
                     dragFeedbackHint: interactionController.feedbackHint,
+                    cancelBucketHoverNotifier: cancelHoverNotifier,
                     callbacks: CalendarTaskTileCallbacks(
                       onResizePreview: (_) {},
                       onResizeEnd: (_) {},

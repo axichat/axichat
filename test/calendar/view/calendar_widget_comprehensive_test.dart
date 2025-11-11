@@ -90,7 +90,8 @@ Future<MockCalendarBloc> _pumpCalendarHarness(
 
   final bloc = MockCalendarBloc();
   when(() => bloc.state).thenReturn(state);
-  when(() => bloc.stream).thenAnswer((_) => Stream<CalendarState>.empty());
+  when(() => bloc.stream)
+      .thenAnswer((_) => const Stream<CalendarState>.empty());
   when(() => bloc.add(any<CalendarEvent>())).thenReturn(null);
   when(() => bloc.close()).thenAnswer((_) async {});
 
@@ -184,8 +185,8 @@ void main() {
         tester,
         state: state,
         size: const Size(1280, 860),
-        child: Row(
-          children: const [
+        child: const Row(
+          children: [
             TaskSidebar(),
             Expanded(child: SizedBox()),
           ],
