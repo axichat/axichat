@@ -2126,12 +2126,12 @@ abstract class BaseCalendarBloc
     final now = _now();
 
     return model.tasks.values.where((task) {
-      if (task.isCompleted || task.scheduledTime == null) {
+      if (task.isCompleted || task.deadline == null) {
         return false;
       }
-      return task.scheduledTime!.isBefore(now);
+      return task.deadline!.isBefore(now);
     }).toList()
-      ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
+      ..sort((a, b) => a.deadline!.compareTo(b.deadline!));
   }
 
   CalendarTask? _getNextTask(CalendarModel model) {

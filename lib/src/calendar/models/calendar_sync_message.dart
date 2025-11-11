@@ -132,4 +132,23 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       operation: operation,
     );
   }
+
+  static CalendarSyncMessage? tryParseEnvelope(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+      final payload = decoded['calendar_sync'];
+      if (payload is! Map<String, dynamic>) {
+        return null;
+      }
+      return CalendarSyncMessage.fromJson(payload);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool isCalendarSyncEnvelope(String raw) =>
+      tryParseEnvelope(raw) != null;
 }
