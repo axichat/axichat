@@ -338,6 +338,7 @@ class Nexus extends StatelessWidget {
           ),
         ),
         AxiTabBar(
+          backgroundColor: context.colorScheme.background,
           tabs: tabs.map((e) {
             final (label, _, _) = e;
             if (label == 'New') {

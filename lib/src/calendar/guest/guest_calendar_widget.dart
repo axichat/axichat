@@ -468,7 +468,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
     );
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.card,
+        color: colors.background,
         border: Border(
           top: BorderSide(color: colors.border),
         ),

@@ -158,7 +158,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
   Widget _buildCalendarAppBar(CalendarState state) {
     final colors = context.colorScheme;
     return Material(
-      color: colors.card,
+      color: colors.background,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -328,7 +328,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
       bottomInset: bottomInset,
     );
     return Container(
-      color: colors.card,
+      color: colors.background,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

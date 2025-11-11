@@ -84,17 +84,27 @@ class _ChatListTile extends StatelessWidget {
     final colors = context.colorScheme;
     final transport = item.transport;
     final int unreadCount = math.max(0, item.unreadCount);
-    final bool highlightUnreadBadge = unreadCount > 0;
-    final double unreadThickness = _measureUnreadBadgeWidth(
-      context,
-      unreadCount,
-    );
-    final double unreadHeight = _measureUnreadBadgeHeight(
-      context,
-      unreadCount,
-    );
-    final double unreadDepth =
-        (unreadHeight / 2) + _unreadBadgeCutoutVerticalClearance;
+    final bool showUnreadBadge = unreadCount > 0;
+    final double unreadThickness = showUnreadBadge
+        ? _measureUnreadBadgeWidth(
+            context,
+            unreadCount,
+          )
+        : 0.0;
+    final double unreadHeight = showUnreadBadge
+        ? _measureUnreadBadgeHeight(
+            context,
+            unreadCount,
+          )
+        : 0.0;
+    final double unreadDepth = showUnreadBadge
+        ? math.max(
+            _unreadBadgeMinDepth,
+            (unreadHeight / 2) +
+                _unreadBadgeCutoutVerticalClearance +
+                _unreadBadgeCutoutDepthAdjustment,
+          )
+        : 0.0;
     final timestampLabel = item.lastMessage == null
         ? null
         : formatTimeSinceLabel(DateTime.now(), item.lastChangeTimestamp);
@@ -190,17 +200,21 @@ class _ChatListTile extends StatelessWidget {
     );
 
     final cutouts = <CutoutSpec>[
-      CutoutSpec(
-        edge: CutoutEdge.top,
-        alignment: const Alignment(0.84, -1),
-        depth: unreadDepth,
-        thickness: unreadThickness,
-        cornerRadius: _unreadBadgeCornerRadius,
-        child: _UnreadBadge(
-          count: unreadCount,
-          highlight: highlightUnreadBadge,
+      if (showUnreadBadge)
+        CutoutSpec(
+          edge: CutoutEdge.top,
+          alignment: const Alignment(0.84, -1),
+          depth: unreadDepth,
+          thickness: unreadThickness,
+          cornerRadius: _unreadBadgeCornerRadius,
+          child: Transform.translate(
+            offset: const Offset(0, _unreadBadgeCutoutChildVerticalOffset),
+            child: _UnreadBadge(
+              count: unreadCount,
+              highlight: showUnreadBadge,
+            ),
+          ),
         ),
-      ),
       CutoutSpec(
         edge: CutoutEdge.right,
         alignment: const Alignment(1.02, 0),
@@ -288,9 +302,12 @@ const double _unreadBadgeHorizontalPadding = 10.0;
 const double _unreadBadgeVerticalPadding = 4.0;
 const double _unreadBadgeBorderWidth = 2.0;
 const double _unreadBadgeMinWidth = 36.0;
-const double _unreadBadgeCutoutClearance = 4.0;
-const double _unreadBadgeCutoutVerticalClearance = 6.0;
+const double _unreadBadgeCutoutClearance = 0.0;
+const double _unreadBadgeCutoutVerticalClearance = 1.0;
+const double _unreadBadgeMinDepth = 10.0;
 const double _unreadBadgeCornerRadius = 12.0;
+const double _unreadBadgeCutoutChildVerticalOffset = -2.0;
+const double _unreadBadgeCutoutDepthAdjustment = -2.0;
 
 double _measureUnreadBadgeHeight(BuildContext context, int count) {
   final textPainter = TextPainter(

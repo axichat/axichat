@@ -13,6 +13,7 @@ class AxiAppBar extends StatelessWidget {
       height: 56.0,
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       decoration: BoxDecoration(
+        color: context.colorScheme.background,
         border: Border(
           bottom: BorderSide(color: context.colorScheme.border),
         ),

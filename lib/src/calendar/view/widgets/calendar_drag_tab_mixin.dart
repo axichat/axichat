@@ -153,7 +153,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final bool tasksCueActive = _showRightEdgeCue && _isAnyDragActive;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
     final double height = _tabBarHeight + safeInset;
-    final Color backgroundColor = context.colorScheme.card;
+    final Color backgroundColor = context.colorScheme.background;
 
     final Widget tabContent = SizedBox(
       height: height,

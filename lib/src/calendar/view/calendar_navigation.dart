@@ -115,7 +115,7 @@ class CalendarNavigation extends StatelessWidget {
             verticalPadding,
           ),
           decoration: BoxDecoration(
-            color: colors.card,
+            color: colors.background,
             border: Border(
               bottom: BorderSide(color: colors.border),
             ),
