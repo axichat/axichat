@@ -101,6 +101,7 @@ class GuestCalendarRoute extends TransitionGoRouteData
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       const GuestCalendarWidget();
+}
 
 @TypedGoRoute<EmailDemoRoute>(path: '/email-demo')
 class EmailDemoRoute extends TransitionGoRouteData

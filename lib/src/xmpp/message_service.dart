@@ -224,6 +224,8 @@ mixin MessageService on XmppBase, BaseStreamService {
     required String text,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     Message? quotedMessage,
+    bool persistLocally = true,
+    bool markNoStore = false,
   }) async {
     final message = Message(
       stanzaID: _connection.generateId(),
@@ -233,13 +235,16 @@ mixin MessageService on XmppBase, BaseStreamService {
       body: text,
       encryptionProtocol: encryptionProtocol,
       quoting: quotedMessage?.stanzaID,
+      noStore: markNoStore,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${text.length} chars)',
     );
-    await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(message),
-    );
+    if (persistLocally) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveMessage(message),
+      );
+    }
 
     try {
       final quotedJid = quotedMessage == null
@@ -252,7 +257,9 @@ mixin MessageService on XmppBase, BaseStreamService {
         ),
       );
       if (!sent) {
-        await _handleMessageSendFailure(message.stanzaID);
+        if (persistLocally) {
+          await _handleMessageSendFailure(message.stanzaID);
+        }
         throw XmppMessageException();
       }
     } catch (error, stackTrace) {
@@ -261,7 +268,9 @@ mixin MessageService on XmppBase, BaseStreamService {
         error,
         stackTrace,
       );
-      await _handleMessageSendFailure(message.stanzaID);
+      if (persistLocally) {
+        await _handleMessageSendFailure(message.stanzaID);
+      }
       throw XmppMessageException();
     }
   }

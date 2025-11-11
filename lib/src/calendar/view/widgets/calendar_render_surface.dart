@@ -991,9 +991,8 @@ class RenderCalendarSurface extends RenderBox
         controller.activeDragWidth ??
         controller.dragInitialWidth ??
         0.0;
-    final double overlayHeight = payload.sourceBounds?.height ??
-        controller.draggingTaskHeight ??
-        0.0;
+    final double overlayHeight =
+        payload.sourceBounds?.height ?? controller.draggingTaskHeight ?? 0.0;
 
     double anchorDx;
     if (payload.pointerNormalizedX != null && overlayWidth > 0) {
@@ -2147,8 +2146,7 @@ class RenderCalendarSurface extends RenderBox
       return explicitDuration;
     }
 
-    final bool scheduledDrag =
-        controller.dragOriginSlot != null ||
+    final bool scheduledDrag = controller.dragOriginSlot != null ||
         controller.dragStartScheduledTime != null ||
         controller.draggingTaskSnapshot?.scheduledTime != null;
     if (scheduledDrag) {

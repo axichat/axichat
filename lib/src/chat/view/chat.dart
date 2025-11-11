@@ -2,6 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
@@ -1837,8 +1842,10 @@ class _ChatState extends State<Chat> {
                                                 MessageStatus.failed;
                                             List<GlobalKey>? actionButtonKeys;
                                             if (isSelected) {
+                                              const baseActionCount = 5;
                                               final actionCount =
-                                                  canResend ? 5 : 4;
+                                                  baseActionCount +
+                                                      (canResend ? 1 : 0);
                                               actionButtonKeys = List.generate(
                                                   actionCount,
                                                   (_) => GlobalKey());
@@ -1863,6 +1870,11 @@ class _ChatState extends State<Chat> {
                                               onForward: () =>
                                                   _handleForward(messageModel),
                                               onCopy: () => _copyMessage(
+                                                dashMessage: message,
+                                                model: messageModel,
+                                              ),
+                                              onAddToCalendar: () =>
+                                                  _handleAddToCalendar(
                                                 dashMessage: message,
                                                 model: messageModel,
                                               ),
@@ -2121,6 +2133,50 @@ class _ChatState extends State<Chat> {
       ClipboardData(text: copiedText),
     );
     _clearMessageSelection();
+  }
+
+  Future<void> _handleAddToCalendar({
+    required ChatMessage dashMessage,
+    required Message model,
+  }) async {
+    _clearMessageSelection();
+    final seededText = (model.body ?? dashMessage.text).trim();
+    if (seededText.isEmpty) {
+      _showSnackbar('Message has no text to add to calendar');
+      return;
+    }
+
+    final calendarBloc = context.read<CalendarBloc?>();
+    if (calendarBloc == null) {
+      _showSnackbar('Calendar is unavailable right now');
+      return;
+    }
+    final CalendarBloc availableCalendarBloc = calendarBloc;
+
+    final locationHelper =
+        LocationAutocompleteHelper.fromState(availableCalendarBloc.state);
+
+    await showQuickAddModal(
+      context: context,
+      prefilledText: seededText,
+      locationHelper: locationHelper,
+      onTaskAdded: (task) {
+        availableCalendarBloc.add(
+          CalendarEvent.taskAdded(
+            title: task.title,
+            scheduledTime: task.scheduledTime,
+            description: task.description,
+            duration: task.duration,
+            deadline: task.deadline,
+            location: task.location,
+            endDate: task.endDate,
+            priority: task.priority ?? TaskPriority.none,
+            startHour: task.startHour,
+            recurrence: task.recurrence,
+          ),
+        );
+      },
+    );
   }
 
   void _showMessageDetails(ChatMessage message) {
@@ -2405,6 +2461,7 @@ class _MessageActionBar extends StatelessWidget {
     required this.onReply,
     required this.onForward,
     required this.onCopy,
+    required this.onAddToCalendar,
     required this.onDetails,
     this.onResend,
     this.hitRegionKeys,
@@ -2413,6 +2470,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback onReply;
   final VoidCallback onForward;
   final VoidCallback onCopy;
+  final VoidCallback onAddToCalendar;
   final VoidCallback onDetails;
   final VoidCallback? onResend;
   final List<GlobalKey>? hitRegionKeys;
@@ -2454,6 +2512,12 @@ class _MessageActionBar extends StatelessWidget {
         icon: const Icon(LucideIcons.copy, size: 16),
         label: 'Copy',
         onPressed: onCopy,
+      ),
+      _MessageActionButton(
+        key: nextKey(),
+        icon: const Icon(LucideIcons.calendarPlus, size: 16),
+        label: 'Add to calendar',
+        onPressed: onAddToCalendar,
       ),
       _MessageActionButton(
         key: nextKey(),

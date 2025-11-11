@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_declarations, prefer_const_constructors
+
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_draft_controller.dart';
 import 'package:axichat/src/calendar/view/widgets/recurrence_editor.dart';

@@ -1,7 +1,10 @@
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_bloc.dart';
@@ -15,11 +18,12 @@ import 'calendar_navigation.dart';
 import 'error_display.dart';
 import 'feedback_system.dart';
 import 'loading_indicator.dart';
+import 'models/calendar_drag_payload.dart';
 import 'quick_add_modal.dart';
+import 'sync_controls.dart';
 import 'task_sidebar.dart';
 import 'widgets/calendar_drag_tab_mixin.dart';
 import 'widgets/calendar_keyboard_scope.dart';
-import 'models/calendar_drag_payload.dart';
 
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});
@@ -78,6 +82,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
     return BlocConsumer<CalendarBloc, CalendarState>(
       listener: _handleStateChanges,
       builder: (context, state) {
+        final colors = context.colorScheme;
         final spec = ResponsiveHelper.spec(context);
         final bool usesMobileLayout =
             spec.sizeClass != CalendarSizeClass.expanded;
@@ -97,16 +102,27 @@ class _CalendarWidgetState extends State<CalendarWidget>
             _calendarBloc?.add(const CalendarEvent.redoRequested());
           },
           child: Scaffold(
-            backgroundColor: calendarBackgroundColor,
+            backgroundColor: colors.background,
             body: Stack(
               children: [
-                ResponsiveHelper.layoutBuilder(
-                  context,
-                  mobile: _buildMobileLayout(state, highlightTasksTab),
-                  tablet: _buildTabletLayout(state, highlightTasksTab),
-                  desktop: _buildDesktopLayout(state),
+                Column(
+                  children: [
+                    _buildCalendarAppBar(state),
+                    Divider(
+                      height: 1,
+                      color: colors.border,
+                    ),
+                    Expanded(
+                      child: ResponsiveHelper.layoutBuilder(
+                        context,
+                        mobile: _buildMobileLayout(state, highlightTasksTab),
+                        tablet: _buildTabletLayout(state, highlightTasksTab),
+                        desktop: _buildDesktopLayout(state),
+                      ),
+                    ),
+                  ],
                 ),
-                if (state.isLoading) _buildLoadingOverlay(),
+                if (state.isLoading) _buildLoadingOverlay(context),
               ],
             ),
           ),
@@ -132,6 +148,66 @@ class _CalendarWidgetState extends State<CalendarWidget>
     }
   }
 
+  Widget _buildCalendarAppBar(CalendarState state) {
+    final colors = context.colorScheme;
+    return Material(
+      color: colors.card,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: calendarMarginLarge,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              AxiIconButton(
+                iconData: LucideIcons.arrowLeft,
+                tooltip: 'Back to chats',
+                color: colors.foreground,
+                onPressed: _handleCalendarBackPressed,
+              ),
+              const SizedBox(width: calendarGutterMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Calendar',
+                      style: calendarTitleTextStyle,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: calendarGutterMd),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SyncControls(
+                    state: state,
+                    compact: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleCalendarBackPressed() {
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit != null && chatsCubit.state.openCalendar) {
+      chatsCubit.toggleCalendar();
+      return;
+    }
+
+    final navigator = Navigator.maybeOf(context);
+    if (navigator?.canPop() ?? false) {
+      navigator?.pop();
+    }
+  }
+
   Widget _buildErrorBanner(CalendarState state) {
     return Container(
       margin: calendarPaddingXl,
@@ -147,9 +223,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
     );
   }
 
-  Widget _buildLoadingOverlay() {
+  Widget _buildLoadingOverlay(BuildContext context) {
+    final colors = context.colorScheme;
     return Container(
-      color: Colors.black.withValues(alpha: 0.3),
+      color: colors.background.withValues(alpha: 0.6),
       child: const Center(
         child: CalendarLoadingIndicator(),
       ),
@@ -175,7 +252,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
     bool highlightTasksTab,
   ) {
     return SafeArea(
-      top: true,
+      top: false,
       bottom: false,
       child: Column(
         children: [
@@ -270,11 +347,12 @@ class _CalendarWidgetState extends State<CalendarWidget>
     return AnimatedBuilder(
       animation: _tasksTabPulse,
       builder: (context, _) {
+        final colors = context.colorScheme;
         final double t = _tasksTabPulse.value;
         final double scale = 0.85 + (0.25 * t);
         final Color badgeColor = Color.lerp(
-          calendarPrimaryColor.withValues(alpha: 0.55),
-          calendarPrimaryColor,
+          colors.primary.withValues(alpha: 0.55),
+          colors.primary,
           t,
         )!;
         final bool isRtl = Directionality.of(context) == TextDirection.rtl;

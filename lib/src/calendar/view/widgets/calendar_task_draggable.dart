@@ -141,8 +141,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         onDragStarted: _handleDragStarted,
         onDragUpdate: _handleDragUpdate,
         onDragEnd: (details) => _handleDragFinished(cancelled: false),
-        onDraggableCanceled: (_, __) =>
-            _handleDragFinished(cancelled: true),
+        onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
         delay: widget.longPressDelay ?? kLongPressTimeout,
         child: interactiveChild,
       );
@@ -217,12 +216,11 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     final Rect? centeredBounds = width > 0 && height > 0
         ? Rect.fromLTWH(fallbackTopLeft.dx, fallbackTopLeft.dy, width, height)
         : null;
-    final Rect? resolvedBounds =
-        centeredBounds ?? _resolveGlobalBounds(fallbackTopLeft: fallbackTopLeft);
+    final Rect? resolvedBounds = centeredBounds ??
+        _resolveGlobalBounds(fallbackTopLeft: fallbackTopLeft);
 
-    double normalizedX = width > 0 && anchorLocal.dx.isFinite
-        ? anchorLocal.dx / width
-        : 0.5;
+    double normalizedX =
+        width > 0 && anchorLocal.dx.isFinite ? anchorLocal.dx / width : 0.5;
     if (!normalizedX.isFinite) {
       normalizedX = 0.5;
     }

@@ -1,7 +1,6 @@
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

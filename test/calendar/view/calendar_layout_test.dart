@@ -17,7 +17,7 @@ void main() {
           modifiedAt: start,
         );
 
-        final calculator = const CalendarLayoutCalculator();
+        const calculator = CalendarLayoutCalculator();
         final metrics = calculator.resolveMetrics(
           zoomIndex: 0,
           isDayView: false,

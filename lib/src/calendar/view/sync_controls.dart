@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
 import '../bloc/calendar_bloc.dart';
@@ -47,19 +48,21 @@ class SyncControls extends StatelessWidget {
   }
 
   Widget _buildMobileControls(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    final disabled = state.isSyncing;
+    return Wrap(
+      spacing: calendarGutterSm,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _buildSyncStatusIcon(context),
-        IconButton(
-          onPressed: state.isSyncing ? null : () => _requestSync(context),
-          icon: const Icon(Icons.cloud_download),
-          tooltip: 'Request Update',
+        _CompactSyncButton(
+          label: 'Request',
+          icon: LucideIcons.cloudDownload,
+          onPressed: disabled ? null : () => _requestSync(context),
         ),
-        IconButton(
-          onPressed: state.isSyncing ? null : () => _pushSync(context),
-          icon: const Icon(Icons.cloud_upload),
-          tooltip: 'Push Update',
+        _CompactSyncButton(
+          label: 'Push',
+          icon: LucideIcons.cloudUpload,
+          onPressed: disabled ? null : () => _pushSync(context),
         ),
       ],
     );
@@ -84,7 +87,7 @@ class SyncControls extends StatelessWidget {
               Expanded(
                 child: TaskSecondaryButton(
                   label: 'Request',
-                  icon: Icons.cloud_download,
+                  icon: LucideIcons.cloudDownload,
                   onPressed:
                       state.isSyncing ? null : () => _requestSync(context),
                 ),
@@ -93,7 +96,7 @@ class SyncControls extends StatelessWidget {
               Expanded(
                 child: TaskSecondaryButton(
                   label: 'Push',
-                  icon: Icons.cloud_upload,
+                  icon: LucideIcons.cloudUpload,
                   onPressed: state.isSyncing ? null : () => _pushSync(context),
                 ),
               ),
@@ -127,14 +130,14 @@ class SyncControls extends StatelessWidget {
           const SizedBox(height: calendarGutterLg),
           TaskPrimaryButton(
             label: 'Request Update',
-            icon: Icons.cloud_download,
+            icon: LucideIcons.cloudDownload,
             onPressed: state.isSyncing ? null : () => _requestSync(context),
             isBusy: state.isSyncing,
           ),
           const SizedBox(height: calendarGutterSm),
           TaskSecondaryButton(
             label: 'Push Update',
-            icon: Icons.cloud_upload,
+            icon: LucideIcons.cloudUpload,
             onPressed: state.isSyncing ? null : () => _pushSync(context),
           ),
           if (state.syncError != null) ...[
@@ -143,7 +146,7 @@ class SyncControls extends StatelessWidget {
             const SizedBox(height: calendarGutterSm),
             TaskSecondaryButton(
               label: 'Retry',
-              icon: Icons.refresh,
+              icon: LucideIcons.refreshCcw,
               onPressed: () => _retrySync(context),
             ),
           ],
@@ -153,35 +156,7 @@ class SyncControls extends StatelessWidget {
   }
 
   Widget _buildSyncStatusIcon(BuildContext context) {
-    if (state.isSyncing) {
-      return const SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      );
-    }
-
-    if (state.syncError != null) {
-      return const Icon(
-        Icons.sync_problem,
-        color: Colors.red,
-        size: 20,
-      );
-    }
-
-    if (state.lastSyncTime != null) {
-      return const Icon(
-        Icons.cloud_done,
-        color: Colors.green,
-        size: 20,
-      );
-    }
-
-    return Icon(
-      Icons.cloud_off,
-      color: Theme.of(context).textTheme.bodySmall?.color,
-      size: 20,
-    );
+    return SyncStatusIndicator(state: state);
   }
 
   Widget _buildSyncStatus(BuildContext context) {
@@ -225,7 +200,7 @@ class SyncControls extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.red, size: 16),
+          const Icon(LucideIcons.triangleAlert, color: Colors.red, size: 16),
           const SizedBox(width: calendarGutterSm),
           Expanded(
             child: Text(
@@ -306,16 +281,46 @@ class SyncStatusIndicator extends StatelessWidget {
     Color? color;
 
     if (state.syncError != null) {
-      icon = Icons.sync_problem;
+      icon = LucideIcons.triangleAlert;
       color = Colors.red;
     } else if (state.lastSyncTime != null) {
-      icon = Icons.cloud_done;
+      icon = LucideIcons.cloudCheck;
       color = Colors.green;
     } else {
-      icon = Icons.cloud_off;
-      color = Colors.grey;
+      icon = LucideIcons.cloudOff;
+      color = Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
     }
 
     return Icon(icon, size: 16, color: color);
+  }
+}
+
+class _CompactSyncButton extends StatelessWidget {
+  const _CompactSyncButton({
+    required this.label,
+    required this.icon,
+    this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = ShadButton.outline(
+      onPressed: onPressed,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
+
+    return button.withTapBounce(enabled: onPressed != null);
   }
 }

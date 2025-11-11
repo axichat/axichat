@@ -308,6 +308,14 @@ class Message with _$Message implements Insertable<Message> {
       extensions.add(replyData);
     }
 
+    if (noStore) {
+      extensions.add(
+        mox.MessageProcessingHintData(
+          const [mox.MessageProcessingHint.noStore],
+        ),
+      );
+    }
+
     // Add OMEMO flag if encryption is requested
     if (encryptionProtocol == EncryptionProtocol.omemo) {
       // The OmemoManager will intercept based on _shouldEncryptStanza callback

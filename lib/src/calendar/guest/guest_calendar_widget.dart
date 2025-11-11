@@ -37,8 +37,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
   late final Animation<double> _tasksTabPulse;
   bool _usesMobileLayout = false;
   GuestCalendarBloc? _calendarBloc;
-  final GlobalKey<TaskSidebarState> _sidebarKey =
-      GlobalKey<TaskSidebarState>();
+  final GlobalKey<TaskSidebarState> _sidebarKey = GlobalKey<TaskSidebarState>();
   final ValueNotifier<bool> _cancelBucketHoverNotifier =
       ValueNotifier<bool>(false);
 
@@ -253,12 +252,12 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
                       onViewChanged: (view) => _calendarBloc?.add(
                         CalendarEvent.viewChanged(view: view),
                       ),
-                      onErrorCleared: () =>
-                          _calendarBloc?.add(const CalendarEvent.errorCleared()),
-                      onUndo: () =>
-                          _calendarBloc?.add(const CalendarEvent.undoRequested()),
-                      onRedo: () =>
-                          _calendarBloc?.add(const CalendarEvent.redoRequested()),
+                      onErrorCleared: () => _calendarBloc
+                          ?.add(const CalendarEvent.errorCleared()),
+                      onUndo: () => _calendarBloc
+                          ?.add(const CalendarEvent.undoRequested()),
+                      onRedo: () => _calendarBloc
+                          ?.add(const CalendarEvent.redoRequested()),
                       canUndo: state.canUndo,
                       canRedo: state.canRedo,
                     ),
@@ -486,8 +485,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
 
   void _handleCalendarGridDragPositionChanged(Offset globalPosition) {
     handleGridDragPositionChanged(globalPosition);
-    _sidebarKey.currentState
-        ?.handleExternalGridDragPosition(globalPosition);
+    _sidebarKey.currentState?.handleExternalGridDragPosition(globalPosition);
   }
 
   void _handleCalendarGridDragSessionEnded() {
@@ -520,15 +518,15 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
       prefilledDateTime: prefilledTime,
       locationHelper: helper,
       onTaskAdded: (task) => bloc.add(
-            CalendarEvent.taskAdded(
-              title: task.title,
-              scheduledTime: task.scheduledTime,
-              description: task.description,
-              duration: task.duration,
-              priority: task.priority ?? TaskPriority.none,
-              recurrence: task.recurrence,
-            ),
-          ),
+        CalendarEvent.taskAdded(
+          title: task.title,
+          scheduledTime: task.scheduledTime,
+          description: task.description,
+          duration: task.duration,
+          priority: task.priority ?? TaskPriority.none,
+          recurrence: task.recurrence,
+        ),
+      ),
     );
   }
 
