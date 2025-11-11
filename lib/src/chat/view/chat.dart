@@ -49,13 +49,12 @@ enum _ChatRoute {
 
 const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 const _bubbleRadius = 18.0;
-const _reactionBubbleInset = 20.0;
+const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
 const _reactionCutoutThickness = 34.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
-const _reactionCutoutPadding =
-    EdgeInsets.symmetric(horizontal: 16, vertical: 4);
+const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const _reactionChipSpacing = 3.0;
 const _reactionCutoutAlignment = 0.76;
 const _reactionCornerClearance = 12.0;
