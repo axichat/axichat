@@ -2146,10 +2146,10 @@ class _ChatState extends State<Chat> {
       return;
     }
 
+    String? initialValidationMessage;
     if (seededText.length > 200) {
-      _showSnackbar(
-        'Calendar task titles are limited to 200 characters. Consider trimming this message before saving.',
-      );
+      initialValidationMessage =
+          'Task titles are limited to 200 characters. Shorten this text or move details into the description before saving.';
     }
 
     final calendarBloc = context.read<CalendarBloc?>();
@@ -2166,6 +2166,7 @@ class _ChatState extends State<Chat> {
       context: context,
       prefilledText: seededText,
       locationHelper: locationHelper,
+      initialValidationMessage: initialValidationMessage,
       onTaskAdded: (task) {
         availableCalendarBloc.add(
           CalendarEvent.taskAdded(

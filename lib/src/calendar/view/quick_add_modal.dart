@@ -9,6 +9,7 @@ import '../utils/nl_parser_service.dart';
 import '../utils/nl_schedule_adapter.dart';
 import '../utils/responsive_helper.dart';
 import 'controllers/quick_add_controller.dart';
+import 'feedback_system.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/recurrence_editor.dart';
@@ -25,6 +26,7 @@ class QuickAddModal extends StatefulWidget {
   final void Function(CalendarTask task) onTaskAdded;
   final QuickAddModalSurface surface;
   final LocationAutocompleteHelper locationHelper;
+  final String? initialValidationMessage;
 
   const QuickAddModal({
     super.key,
@@ -34,6 +36,7 @@ class QuickAddModal extends StatefulWidget {
     required this.onTaskAdded,
     this.surface = QuickAddModalSurface.dialog,
     required this.locationHelper,
+    this.initialValidationMessage,
   });
 
   @override
@@ -64,10 +67,12 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _recurrenceLocked = false;
   bool _priorityLocked = false;
   NlAdapterResult? _lastParserResult;
+  String? _initialValidationMessage;
 
   @override
   void initState() {
     super.initState();
+    _initialValidationMessage = widget.initialValidationMessage;
 
     _animationController = AnimationController(
       duration: baseAnimationDuration,
@@ -221,6 +226,14 @@ class _QuickAddModalState extends State<QuickAddModal>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (_initialValidationMessage != null) ...[
+                      InlineFeedback(
+                        message: _initialValidationMessage!,
+                        type: FeedbackType.warning,
+                        onDismiss: _dismissInitialValidationMessage,
+                      ),
+                      const SizedBox(height: calendarGutterMd),
+                    ],
                     _buildTaskNameInput(locationHelper),
                     const SizedBox(height: calendarGutterMd),
                     _buildDescriptionInput(),
@@ -277,6 +290,15 @@ class _QuickAddModalState extends State<QuickAddModal>
     return keyboardInset + calendarGutterSm;
   }
 
+  void _dismissInitialValidationMessage() {
+    if (_initialValidationMessage == null) {
+      return;
+    }
+    setState(() {
+      _initialValidationMessage = null;
+    });
+  }
+
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -323,6 +345,9 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   void _handleTaskNameChanged(String value) {
     final trimmed = value.trim();
+    if (_initialValidationMessage != null && trimmed.length <= 200) {
+      _dismissInitialValidationMessage();
+    }
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
       _clearParserState(clearFields: true);
@@ -793,6 +818,7 @@ Future<void> showQuickAddModal({
   String? prefilledText,
   required void Function(CalendarTask task) onTaskAdded,
   required LocationAutocompleteHelper locationHelper,
+  String? initialValidationMessage,
 }) {
   if (ResponsiveHelper.isCompact(context)) {
     return showModalBottomSheet<void>(
@@ -805,6 +831,7 @@ Future<void> showQuickAddModal({
         prefilledText: prefilledText,
         onTaskAdded: onTaskAdded,
         locationHelper: locationHelper,
+        initialValidationMessage: initialValidationMessage,
       ),
     );
   }
@@ -817,6 +844,7 @@ Future<void> showQuickAddModal({
       prefilledText: prefilledText,
       onTaskAdded: onTaskAdded,
       locationHelper: locationHelper,
+      initialValidationMessage: initialValidationMessage,
       onDismiss: () {
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
