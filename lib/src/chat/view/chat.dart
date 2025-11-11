@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
@@ -2147,9 +2148,8 @@ class _ChatState extends State<Chat> {
     }
 
     String? initialValidationMessage;
-    if (seededText.length > 200) {
-      initialValidationMessage =
-          'Task titles are limited to 200 characters. Shorten this text or move details into the description before saving.';
+    if (seededText.length > calendarTaskTitleMaxLength) {
+      initialValidationMessage = calendarTaskTitleLimitWarning;
     }
 
     final calendarBloc = context.read<CalendarBloc?>();
