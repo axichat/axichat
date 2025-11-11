@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:uuid/uuid.dart';
 
+import '../constants.dart';
 import '../models/calendar_exceptions.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
@@ -329,10 +330,10 @@ abstract class BaseCalendarBloc
           'Title cannot be empty',
         );
       }
-      if (event.title.length > 200) {
+      if (event.title.length > calendarTaskTitleMaxLength) {
         throw const CalendarValidationException(
           'title',
-          'Title too long (max 200 characters)',
+          'Title too long (max $calendarTaskTitleMaxLength characters)',
         );
       }
       if (event.description != null && event.description!.length > 1000) {

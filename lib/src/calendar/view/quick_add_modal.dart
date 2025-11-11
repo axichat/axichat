@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../common/ui/ui.dart';
+import '../constants.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/nl_parser_service.dart';
@@ -67,12 +68,12 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _recurrenceLocked = false;
   bool _priorityLocked = false;
   NlAdapterResult? _lastParserResult;
-  String? _initialValidationMessage;
+  String? _titleValidationMessage;
 
   @override
   void initState() {
     super.initState();
-    _initialValidationMessage = widget.initialValidationMessage;
+    _titleValidationMessage = widget.initialValidationMessage;
 
     _animationController = AnimationController(
       duration: baseAnimationDuration,
@@ -226,11 +227,11 @@ class _QuickAddModalState extends State<QuickAddModal>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_initialValidationMessage != null) ...[
+                    if (_titleValidationMessage != null) ...[
                       InlineFeedback(
-                        message: _initialValidationMessage!,
+                        message: _titleValidationMessage!,
                         type: FeedbackType.warning,
-                        onDismiss: _dismissInitialValidationMessage,
+                        onDismiss: _clearTitleValidationMessage,
                       ),
                       const SizedBox(height: calendarGutterMd),
                     ],
@@ -282,20 +283,33 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   double _quickAddActionInset(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
+    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     if (keyboardInset <= 0) {
       return calendarGutterLg;
+    }
+    if (widget.surface == QuickAddModalSurface.bottomSheet) {
+      return calendarGutterSm;
     }
     return keyboardInset + calendarGutterSm;
   }
 
-  void _dismissInitialValidationMessage() {
-    if (_initialValidationMessage == null) {
+  void _clearTitleValidationMessage() {
+    if (_titleValidationMessage == null) {
       return;
     }
     setState(() {
-      _initialValidationMessage = null;
+      _titleValidationMessage = null;
+    });
+  }
+
+  void _updateTitleValidationMessage(String trimmedTitle) {
+    final bool exceeds = trimmedTitle.length > calendarTaskTitleMaxLength;
+    final String? nextMessage = exceeds ? calendarTaskTitleLimitWarning : null;
+    if (_titleValidationMessage == nextMessage) {
+      return;
+    }
+    setState(() {
+      _titleValidationMessage = nextMessage;
     });
   }
 
@@ -345,9 +359,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   void _handleTaskNameChanged(String value) {
     final trimmed = value.trim();
-    if (_initialValidationMessage != null && trimmed.length <= 200) {
-      _dismissInitialValidationMessage();
-    }
+    _updateTitleValidationMessage(trimmed);
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
       _clearParserState(clearFields: true);

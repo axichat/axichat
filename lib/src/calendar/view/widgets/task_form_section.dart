@@ -737,7 +737,6 @@ class TaskSecondaryButton extends StatelessWidget {
     this.foregroundColor = calendarSubtitleColor,
     this.hoverForegroundColor = calendarPrimaryColor,
     this.hoverBackgroundColor,
-    this.backgroundColor,
   });
 
   final String label;
@@ -748,7 +747,6 @@ class TaskSecondaryButton extends StatelessWidget {
   final Color foregroundColor;
   final Color hoverForegroundColor;
   final Color? hoverBackgroundColor;
-  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -758,7 +756,6 @@ class TaskSecondaryButton extends StatelessWidget {
       onPressed: disabled ? null : onPressed,
       foregroundColor: foregroundColor,
       hoverForegroundColor: hoverForegroundColor,
-      backgroundColor: backgroundColor,
       hoverBackgroundColor:
           hoverBackgroundColor ?? calendarPrimaryColor.withValues(alpha: 0.08),
       child: isBusy

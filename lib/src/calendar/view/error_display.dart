@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../common/ui/ui.dart';
+import '../constants.dart';
 
 class ErrorDisplay extends StatelessWidget {
   const ErrorDisplay({
@@ -86,7 +87,7 @@ class ErrorDisplay extends StatelessWidget {
         return 'Please enter a task title.';
       }
       if (error.contains('Title too long')) {
-        return 'Task title is too long. Please use fewer than 200 characters.';
+        return calendarTaskTitleFriendlyError;
       }
       if (error.contains('Description too long')) {
         return 'Task description is too long. Please use fewer than 1000 characters.';

@@ -243,7 +243,6 @@ class CalendarNavigation extends StatelessWidget {
             foregroundColor: colors.primary,
             hoverForegroundColor: colors.primary,
             hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
-            backgroundColor: colors.card,
           );
     if (!compact) {
       return button;
@@ -322,7 +321,6 @@ class CalendarNavigation extends StatelessWidget {
         foregroundColor: colors.primary,
         hoverForegroundColor: colors.primary,
         hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
-        backgroundColor: colors.card,
       ),
     );
     if (!enabled) {
@@ -359,7 +357,6 @@ class CalendarNavigation extends StatelessWidget {
             foregroundColor: colors.primary,
             hoverForegroundColor: colors.primary,
             hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
-            backgroundColor: colors.card,
             child: Icon(icon, size: 16),
           );
     Widget control = Tooltip(
