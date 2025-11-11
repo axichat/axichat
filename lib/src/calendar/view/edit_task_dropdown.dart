@@ -158,7 +158,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       children: [
         _buildHeader(),
         const Divider(height: 1),
-        _buildInlineActionsHost(),
         Flexible(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
@@ -167,6 +166,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _buildInlineActionsSection(),
                 _buildTitleField(),
                 const SizedBox(height: calendarFormGap),
                 _buildPriorityRow(),
@@ -312,6 +312,22 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildInlineActionsSection() {
+    final host = _buildInlineActionsHost();
+    final bool hasHostContent =
+        host is! SizedBox || !identical(host, const SizedBox.shrink());
+    if (!hasHostContent) {
+      return host;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        host,
+        const SizedBox(height: calendarFormGap),
+      ],
     );
   }
 
