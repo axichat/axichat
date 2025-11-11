@@ -9,12 +9,14 @@ import '../utils/location_autocomplete.dart';
 import '../utils/nl_parser_service.dart';
 import '../utils/nl_schedule_adapter.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/task_title_validation.dart';
 import 'controllers/quick_add_controller.dart';
 import 'feedback_system.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
+import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -227,14 +229,6 @@ class _QuickAddModalState extends State<QuickAddModal>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (_titleValidationMessage != null) ...[
-                      InlineFeedback(
-                        message: _titleValidationMessage!,
-                        type: FeedbackType.warning,
-                        onDismiss: _clearTitleValidationMessage,
-                      ),
-                      const SizedBox(height: calendarGutterMd),
-                    ],
                     _buildTaskNameInput(locationHelper),
                     const SizedBox(height: calendarGutterMd),
                     _buildDescriptionInput(),
@@ -293,24 +287,33 @@ class _QuickAddModalState extends State<QuickAddModal>
     return keyboardInset + calendarGutterSm;
   }
 
-  void _clearTitleValidationMessage() {
-    if (_titleValidationMessage == null) {
+  void _setTitleValidationMessage(String? message) {
+    if (_titleValidationMessage == message) {
       return;
     }
     setState(() {
-      _titleValidationMessage = null;
+      _titleValidationMessage = message;
     });
   }
 
-  void _updateTitleValidationMessage(String trimmedTitle) {
-    final bool exceeds = trimmedTitle.length > calendarTaskTitleMaxLength;
-    final String? nextMessage = exceeds ? calendarTaskTitleLimitWarning : null;
-    if (_titleValidationMessage == nextMessage) {
+  void _updateTitleValidationMessage(String raw) {
+    final bool exceeds = TaskTitleValidation.isTooLong(raw);
+    final bool hasContent = raw.trim().isNotEmpty;
+
+    if (exceeds) {
+      _setTitleValidationMessage(calendarTaskTitleFriendlyError);
       return;
     }
-    setState(() {
-      _titleValidationMessage = nextMessage;
-    });
+
+    if (!exceeds && _titleValidationMessage == calendarTaskTitleFriendlyError) {
+      _setTitleValidationMessage(null);
+      return;
+    }
+
+    if (hasContent &&
+        _titleValidationMessage == TaskTitleValidation.requiredMessage) {
+      _setTitleValidationMessage(null);
+    }
   }
 
   Widget _buildHeader() {
@@ -359,7 +362,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   void _handleTaskNameChanged(String value) {
     final trimmed = value.trim();
-    _updateTitleValidationMessage(trimmed);
+    _updateTitleValidationMessage(value);
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
       _clearParserState(clearFields: true);
@@ -585,10 +588,11 @@ class _QuickAddModalState extends State<QuickAddModal>
         textCapitalization: TextCapitalization.sentences,
         contentPadding: padding,
         onChanged: _handleTaskNameChanged,
+        errorText: _titleValidationMessage,
       ),
     );
 
-    return LocationInlineSuggestion(
+    final suggestionField = LocationInlineSuggestion(
       controller: _taskNameController,
       helper: helper,
       contentPadding: padding,
@@ -598,6 +602,14 @@ class _QuickAddModalState extends State<QuickAddModal>
       ),
       suggestionColor: calendarSubtitleColor,
       child: field,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        suggestionField,
+        TaskFieldCharacterHint(controller: _taskNameController),
+      ],
     );
   }
 
@@ -749,8 +761,15 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   void _submitTask() {
-    if (_formController.isSubmitting ||
-        _taskNameController.text.trim().isEmpty) {
+    if (_formController.isSubmitting) {
+      return;
+    }
+
+    final validationError =
+        TaskTitleValidation.validate(_taskNameController.text);
+    if (validationError != null) {
+      _setTitleValidationMessage(validationError);
+      FeedbackSystem.showWarning(context, validationError);
       return;
     }
 
@@ -789,6 +808,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     );
 
     widget.onTaskAdded(task);
+    _setTitleValidationMessage(null);
 
     _dismissModal();
   }

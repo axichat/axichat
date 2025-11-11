@@ -31,6 +31,10 @@ class TaskTextField extends StatelessWidget {
     this.focusBorderColor,
     this.fillColor,
     this.textStyle,
+    this.helperText,
+    this.helperStyle,
+    this.errorText,
+    this.errorStyle,
   }) : maxLines = maxLines ?? minLines;
 
   final TextEditingController controller;
@@ -55,6 +59,10 @@ class TaskTextField extends StatelessWidget {
   final Color? focusBorderColor;
   final Color? fillColor;
   final TextStyle? textStyle;
+  final String? helperText;
+  final TextStyle? helperStyle;
+  final String? errorText;
+  final TextStyle? errorStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +121,10 @@ class TaskTextField extends StatelessWidget {
         fillColor: effectiveFill,
         prefixIcon: prefix,
         suffixIcon: suffix,
+        helperText: helperText,
+        helperStyle: helperStyle,
+        errorText: errorText,
+        errorStyle: errorStyle,
       ),
     );
   }
