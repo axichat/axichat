@@ -32,8 +32,7 @@ void main() {
 
   test('overlapping tasks split columns evenly', () {
     final a = taskFactory(title: 'A', hour: 9, minute: 0, durationMinutes: 60);
-    final b =
-        taskFactory(title: 'B', hour: 9, minute: 30, durationMinutes: 60);
+    final b = taskFactory(title: 'B', hour: 9, minute: 30, durationMinutes: 60);
 
     final overlaps = calculateOverlapColumns([a, b]);
 
