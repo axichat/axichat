@@ -112,7 +112,58 @@ class _ChatListTile extends StatelessWidget {
     final tileBackgroundColor = item.open
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
-    final locate = context.read;
+    T locate<T>() => context.read<T>();
+    final menuItems = [
+      AxiDeleteMenuItem(
+        onPressed: () => showShadDialog<bool>(
+          context: context,
+          builder: (context) {
+            var deleteMessages = false;
+            return StatefulBuilder(builder: (context, setState) {
+              return ShadDialog(
+                title: const Text('Confirm'),
+                actions: [
+                  ShadButton.outline(
+                    onPressed: () => context.pop(),
+                    child: const Text('Cancel'),
+                  ).withTapBounce(),
+                  ShadButton.destructive(
+                    onPressed: () {
+                      if (deleteMessages) {
+                        locate<ChatsCubit?>()
+                            ?.deleteChatMessages(jid: item.jid);
+                      }
+                      locate<ChatsCubit?>()?.deleteChat(jid: item.jid);
+                      return context.pop();
+                    },
+                    child: const Text('Continue'),
+                  ).withTapBounce(),
+                ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Delete chat: ${item.title}',
+                      style: context.textTheme.small,
+                    ),
+                    const SizedBox.square(dimension: 10.0),
+                    ShadCheckbox(
+                      value: deleteMessages,
+                      onChanged: (value) =>
+                          setState(() => deleteMessages = value),
+                      label: Text(
+                        'Permanently delete messages',
+                        style: context.textTheme.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            });
+          },
+        ),
+      ),
+    ];
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: () => context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
@@ -120,60 +171,11 @@ class _ChatListTile extends StatelessWidget {
         maxWidth: 72,
         maxHeight: 80,
       ),
-      menuItems: [
-        AxiDeleteMenuItem(
-          onPressed: () => showShadDialog<bool>(
-            context: context,
-            builder: (context) {
-              var deleteMessages = false;
-              return StatefulBuilder(builder: (context, setState) {
-                return ShadDialog(
-                  title: const Text('Confirm'),
-                  actions: [
-                    ShadButton.outline(
-                      onPressed: () => context.pop(),
-                      child: const Text('Cancel'),
-                    ).withTapBounce(),
-                    ShadButton.destructive(
-                      onPressed: () {
-                        if (deleteMessages) {
-                          locate<ChatsCubit?>()
-                              ?.deleteChatMessages(jid: item.jid);
-                        }
-                        locate<ChatsCubit?>()?.deleteChat(jid: item.jid);
-                        return context.pop();
-                      },
-                      child: const Text('Continue'),
-                    ).withTapBounce(),
-                  ],
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Delete chat: ${item.title}',
-                        style: context.textTheme.small,
-                      ),
-                      const SizedBox.square(dimension: 10.0),
-                      ShadCheckbox(
-                        value: deleteMessages,
-                        onChanged: (value) =>
-                            setState(() => deleteMessages = value),
-                        label: Text(
-                          'Permanently delete messages',
-                          style: context.textTheme.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              });
-            },
-          ),
-        ),
-      ],
+      menuItems: menuItems,
       selected: item.open,
       paintSurface: false,
-      contentPadding: const EdgeInsets.only(left: 16.0, right: 80.0),
+      contentPadding: const EdgeInsets.only(left: 16.0, right: 40.0),
+      tapBounce: false,
       leading: _TransportAwareAvatar(
         jid: item.jid,
         transport: transport,
@@ -227,7 +229,7 @@ class _ChatListTile extends StatelessWidget {
         ),
     ];
 
-    return CutoutSurface(
+    final tileSurface = CutoutSurface(
       backgroundColor: tileBackgroundColor,
       borderColor: colors.border,
       cutouts: cutouts,
@@ -237,6 +239,8 @@ class _ChatListTile extends StatelessWidget {
       ),
       child: tile,
     );
+
+    return tileSurface.withTapBounce();
   }
 }
 
