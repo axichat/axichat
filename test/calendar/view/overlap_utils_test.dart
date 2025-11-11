@@ -5,7 +5,7 @@ import 'package:axichat/src/calendar/view/calendar_grid.dart'
     show calculateOverlapColumns;
 
 void main() {
-  CalendarTask _task({
+  CalendarTask taskFactory({
     required String title,
     required int hour,
     required int minute,
@@ -19,8 +19,8 @@ void main() {
   }
 
   test('non-overlapping tasks occupy full width', () {
-    final a = _task(title: 'A', hour: 9, minute: 0, durationMinutes: 30);
-    final b = _task(title: 'B', hour: 10, minute: 0, durationMinutes: 30);
+    final a = taskFactory(title: 'A', hour: 9, minute: 0, durationMinutes: 30);
+    final b = taskFactory(title: 'B', hour: 10, minute: 0, durationMinutes: 30);
 
     final overlaps = calculateOverlapColumns([a, b]);
 
@@ -31,8 +31,9 @@ void main() {
   });
 
   test('overlapping tasks split columns evenly', () {
-    final a = _task(title: 'A', hour: 9, minute: 0, durationMinutes: 60);
-    final b = _task(title: 'B', hour: 9, minute: 30, durationMinutes: 60);
+    final a = taskFactory(title: 'A', hour: 9, minute: 0, durationMinutes: 60);
+    final b =
+        taskFactory(title: 'B', hour: 9, minute: 30, durationMinutes: 60);
 
     final overlaps = calculateOverlapColumns([a, b]);
 
@@ -42,11 +43,14 @@ void main() {
   });
 
   test('sequential tasks stay full width when new overlaps occur', () {
-    final t1 = _task(title: 'T1', hour: 10, minute: 0, durationMinutes: 15);
-    final t2 = _task(title: 'T2', hour: 10, minute: 15, durationMinutes: 15);
-    final t3 = _task(title: 'T3', hour: 10, minute: 30, durationMinutes: 15);
+    final t1 =
+        taskFactory(title: 'T1', hour: 10, minute: 0, durationMinutes: 15);
+    final t2 =
+        taskFactory(title: 'T2', hour: 10, minute: 15, durationMinutes: 15);
+    final t3 =
+        taskFactory(title: 'T3', hour: 10, minute: 30, durationMinutes: 15);
     final split =
-        _task(title: 'Split', hour: 10, minute: 0, durationMinutes: 15);
+        taskFactory(title: 'Split', hour: 10, minute: 0, durationMinutes: 15);
 
     final overlaps = calculateOverlapColumns([t1, t2, t3, split]);
 

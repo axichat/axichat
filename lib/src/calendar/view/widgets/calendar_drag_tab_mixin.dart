@@ -200,8 +200,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       return const SizedBox.shrink();
     }
     final bool visible = _isAnyDragActive;
-    final Duration duration = const Duration(milliseconds: 200);
-    final Curve curve = Curves.easeInOutCubic;
+    const duration = Duration(milliseconds: 200);
+    const curve = Curves.easeInOutCubic;
     final double safeBottomPadding = math.max(bottomInset, 0.0);
     const double bucketHeight = 48.0;
     final double totalHeight = bucketHeight + safeBottomPadding;

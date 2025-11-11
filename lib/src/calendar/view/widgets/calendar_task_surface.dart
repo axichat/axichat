@@ -326,9 +326,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 ),
                 enabled: enableInteractions,
                 childWhenDragging: const SizedBox.shrink(),
-                child: resizable,
                 requiresLongPress: bindings.requiresLongPressToDrag,
                 longPressDelay: bindings.longPressToDragDelay,
+                child: resizable,
               );
             }
 

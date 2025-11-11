@@ -35,13 +35,13 @@ class AxiTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     assert(tabs.isNotEmpty, 'Tabs cannot be empty');
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final MaterialStateProperty<Color?> overlayColor =
-        MaterialStateColor.resolveWith((states) {
-      if (states.contains(MaterialState.pressed)) {
+    final WidgetStateProperty<Color?> overlayColor =
+        WidgetStateColor.resolveWith((states) {
+      if (states.contains(WidgetState.pressed)) {
         return scheme.primary.withValues(alpha: 0.14);
       }
-      if (states.contains(MaterialState.focused) ||
-          states.contains(MaterialState.hovered)) {
+      if (states.contains(WidgetState.focused) ||
+          states.contains(WidgetState.hovered)) {
         return scheme.primary.withValues(alpha: 0.08);
       }
       return Colors.transparent;

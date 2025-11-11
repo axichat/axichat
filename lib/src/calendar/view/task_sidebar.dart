@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -914,7 +912,7 @@ class TaskSidebarState extends State<TaskSidebar>
 
   RecurrenceFormValue _normalizeSelectionRecurrence(RecurrenceFormValue value) {
     final bloc = _bloc;
-    final DateTime? reference = bloc.state.selectedDate;
+    final DateTime reference = bloc.state.selectedDate;
     return value.resolveLinkedLimits(reference);
   }
 
@@ -2354,11 +2352,11 @@ class TaskSidebarState extends State<TaskSidebar>
       task: task,
       childWhenDragging: fadedTile,
       feedback: feedback,
-      child: baseTile,
       onDragSessionStarted: _handleSidebarDragSessionStarted,
       onDragSessionEnded: _handleSidebarDragSessionEnded,
       onDragGlobalPositionChanged: _forwardSidebarGlobalPosition,
       requiresLongPress: _isTouchOnlyInput,
+      child: baseTile,
     );
   }
 
@@ -2836,10 +2834,11 @@ class TaskSidebarState extends State<TaskSidebar>
         final double maxHeight = availableHeight > 0
             ? availableHeight
             : hostMediaQuery.size.height - safeTopInset;
-        final VoidCallback closeSheet = () {
+        void closeSheet() {
           _sidebarController.setActivePopoverTaskId(null);
           Navigator.of(sheetContext).pop();
-        };
+        }
+
         return AnimatedPadding(
           padding: EdgeInsets.only(
             top: safeTopInset,

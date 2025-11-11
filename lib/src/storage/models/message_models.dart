@@ -310,8 +310,8 @@ class Message with _$Message implements Insertable<Message> {
 
     if (noStore) {
       extensions.add(
-        mox.MessageProcessingHintData(
-          const [mox.MessageProcessingHint.noStore],
+        const mox.MessageProcessingHintData(
+          [mox.MessageProcessingHint.noStore],
         ),
       );
     }

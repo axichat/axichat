@@ -143,6 +143,7 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
         }
       }
 
+      if (!mounted) return;
       context.read<CalendarBloc>().add(
             CalendarEvent.taskAdded(
               title: task.title,
