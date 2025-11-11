@@ -7,10 +7,14 @@ import '../../common/ui/ui.dart';
 
 import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
+import '../constants.dart';
 import '../models/calendar_task.dart';
 import '../utils/nl_parser_service.dart';
 import '../utils/nl_schedule_adapter.dart';
+import '../utils/task_title_validation.dart';
 import 'controllers/inline_task_composer_controller.dart';
+import 'feedback_system.dart';
+import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -32,6 +36,7 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
   int _parserRequestId = 0;
   String _lastParserText = '';
   NlAdapterResult? _cachedParserResult;
+  String? _titleError;
 
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
 
   void _handleTextChanged(String value) {
     final trimmed = value.trim();
+    _updateTitleValidation(value);
     if (trimmed.isEmpty) {
       _resetParserState(clearSuggestions: true);
       return;
@@ -95,9 +101,45 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
     }
   }
 
+  void _updateTitleValidation(String raw) {
+    final bool tooLong = TaskTitleValidation.isTooLong(raw);
+    final bool hasContent = raw.trim().isNotEmpty;
+    String? nextError = _titleError;
+
+    if (tooLong) {
+      nextError = calendarTaskTitleFriendlyError;
+    } else {
+      if (_titleError == calendarTaskTitleFriendlyError) {
+        nextError = null;
+      }
+      if (_titleError == TaskTitleValidation.requiredMessage && hasContent) {
+        nextError = null;
+      }
+    }
+
+    if (nextError != _titleError) {
+      setState(() {
+        _titleError = nextError;
+      });
+    }
+  }
+
   Future<void> _handleSubmit() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _isSubmitting) return;
+    if (_isSubmitting) return;
+
+    final validationError = TaskTitleValidation.validate(_controller.text);
+    if (validationError != null) {
+      setState(() {
+        _titleError = validationError;
+      });
+      FeedbackSystem.showWarning(context, validationError);
+      return;
+    }
+
+    if (text.isEmpty) {
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -165,6 +207,9 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
       }
 
       _controller.clear();
+      setState(() {
+        _titleError = null;
+      });
       _composerController.resetSchedule();
       _resetParserState();
       _focusNode.requestFocus();
@@ -216,13 +261,20 @@ class _InlineTaskInputState extends State<InlineTaskInput> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TaskTextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _handleSubmit(),
-              onChanged: _handleTextChanged,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TaskTextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  hintText: 'Add task... (e.g., "Meeting tomorrow at 3pm")',
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _handleSubmit(),
+                  onChanged: _handleTextChanged,
+                  errorText: _titleError,
+                ),
+                TaskFieldCharacterHint(controller: _controller),
+              ],
             ),
             if (_composerController.isExpanded) ...[
               const SizedBox(height: calendarGutterSm),

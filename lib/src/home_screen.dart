@@ -15,12 +15,12 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
@@ -108,7 +108,9 @@ class HomeScreen extends StatelessWidget {
               BlocProvider(
                 create: (context) => ProfileCubit(
                   presenceService: context.read<XmppService>(),
-                  omemoService: isOmemo ? context.read<XmppService>() : null,
+                  omemoService: isOmemo
+                      ? context.read<XmppService>() as OmemoService
+                      : null,
                 ),
               ),
             if (isBlocking)
@@ -213,7 +215,8 @@ class HomeScreen extends StatelessWidget {
                                                     .read<EmailService>(),
                                                 omemoService: isOmemo
                                                     ? context
-                                                        .read<XmppService>()
+                                                            .read<XmppService>()
+                                                        as OmemoService
                                                     : null,
                                               ),
                                             ),
@@ -231,7 +234,8 @@ class HomeScreen extends StatelessWidget {
                                                     VerificationCubit(
                                                   jid: openJid,
                                                   omemoService: context
-                                                      .read<XmppService>(),
+                                                          .read<XmppService>()
+                                                      as OmemoService,
                                                 ),
                                               ),
                                           ],

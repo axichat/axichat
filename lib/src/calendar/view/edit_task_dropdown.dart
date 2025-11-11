@@ -4,12 +4,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_state.dart';
+import '../constants.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
+import '../utils/task_title_validation.dart';
 import 'models/task_context_action.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/recurrence_editor.dart';
+import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
 
@@ -50,6 +53,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
+  String? _titleError;
 
   bool _isImportant = false;
   bool _isUrgent = false;
@@ -127,6 +131,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       _deadline = task.deadline;
       _recurrence = RecurrenceFormValue.fromRule(task.recurrence)
           .resolveLinkedLimits(_startTime ?? task.scheduledTime);
+      _titleError = null;
     }
 
     if (rebuild && mounted) {
@@ -353,13 +358,44 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   Widget _buildTitleField() {
-    return TaskTextField(
-      controller: _titleController,
-      autofocus: true,
-      hintText: 'Task title',
-      textCapitalization: TextCapitalization.sentences,
-      contentPadding: calendarMenuItemPadding,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TaskTextField(
+          controller: _titleController,
+          autofocus: true,
+          hintText: 'Task title',
+          textCapitalization: TextCapitalization.sentences,
+          contentPadding: calendarMenuItemPadding,
+          onChanged: _handleTitleChanged,
+          errorText: _titleError,
+        ),
+        TaskFieldCharacterHint(controller: _titleController),
+      ],
     );
+  }
+
+  void _handleTitleChanged(String value) {
+    final bool tooLong = TaskTitleValidation.isTooLong(value);
+    final bool hasContent = value.trim().isNotEmpty;
+    String? nextError = _titleError;
+
+    if (tooLong) {
+      nextError = calendarTaskTitleFriendlyError;
+    } else {
+      if (_titleError == calendarTaskTitleFriendlyError) {
+        nextError = null;
+      }
+      if (_titleError == TaskTitleValidation.requiredMessage && hasContent) {
+        nextError = null;
+      }
+    }
+
+    if (nextError != _titleError) {
+      setState(() {
+        _titleError = nextError;
+      });
+    }
   }
 
   Widget _buildDescriptionField() {
@@ -520,11 +556,16 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   void _handleSave() {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) {
-      _showSnackBar('Title cannot be blank.');
+    final validationError = TaskTitleValidation.validate(_titleController.text);
+    if (validationError != null) {
+      setState(() {
+        _titleError = validationError;
+      });
+      _showSnackBar(validationError);
       return;
     }
+
+    final title = _titleController.text.trim();
 
     final priority = () {
       if (_isImportant && _isUrgent) return TaskPriority.critical;

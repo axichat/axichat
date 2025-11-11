@@ -8,9 +8,11 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/task_title_validation.dart';
 import '../utils/time_formatter.dart';
 import 'error_display.dart';
 import 'widgets/task_form_section.dart';
+import 'widgets/task_field_character_hint.dart';
 
 class UnifiedTaskInput<T extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask? editingTask;
@@ -183,19 +185,20 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   }
 
   Widget _buildTitleField() {
-    return TaskTextFormField(
-      controller: _titleController,
-      hintText: 'Task title',
-      textCapitalization: TextCapitalization.sentences,
-      focusBorderColor: calendarPrimaryColor,
-      borderRadius: calendarBorderRadius,
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Title is required';
-        }
-        return null;
-      },
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TaskTextFormField(
+          controller: _titleController,
+          hintText: 'Task title',
+          textCapitalization: TextCapitalization.sentences,
+          focusBorderColor: calendarPrimaryColor,
+          borderRadius: calendarBorderRadius,
+          validator: (value) => TaskTitleValidation.validate(value ?? ''),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+        ),
+        TaskFieldCharacterHint(controller: _titleController),
+      ],
     );
   }
 

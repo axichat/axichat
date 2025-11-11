@@ -12,9 +12,11 @@ import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_model.dart';
+import '../constants.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
+import '../utils/task_title_validation.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import '../utils/nl_parser_service.dart';
@@ -32,6 +34,7 @@ import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
+import 'widgets/task_field_character_hint.dart';
 import 'feedback_system.dart';
 
 class TaskSidebar extends StatefulWidget {
@@ -102,6 +105,7 @@ class TaskSidebarState extends State<TaskSidebar>
   bool _deadlineLocked = false;
   bool _recurrenceLocked = false;
   bool _priorityLocked = false;
+  String? _quickTaskError;
 
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
   RecurrenceFormValue get _selectionRecurrence =>
@@ -200,6 +204,7 @@ class TaskSidebarState extends State<TaskSidebar>
   void _handleQuickTaskInputChanged(String value) {
     _ensureAdvancedOptionsVisible();
     final trimmed = value.trim();
+    _updateQuickTaskValidation(value);
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
       _clearParserState(clearFields: true);
@@ -211,6 +216,30 @@ class TaskSidebarState extends State<TaskSidebar>
     _parserDebounce = Timer(const Duration(milliseconds: 350), () {
       _runParser(trimmed);
     });
+  }
+
+  void _updateQuickTaskValidation(String raw) {
+    final bool tooLong = TaskTitleValidation.isTooLong(raw);
+    final bool hasContent = raw.trim().isNotEmpty;
+    String? nextError = _quickTaskError;
+
+    if (tooLong) {
+      nextError = calendarTaskTitleFriendlyError;
+    } else {
+      if (_quickTaskError == calendarTaskTitleFriendlyError) {
+        nextError = null;
+      }
+      if (_quickTaskError == TaskTitleValidation.requiredMessage &&
+          hasContent) {
+        nextError = null;
+      }
+    }
+
+    if (nextError != _quickTaskError) {
+      setState(() {
+        _quickTaskError = nextError;
+      });
+    }
   }
 
   void _ensureAdvancedOptionsVisible() {
@@ -1625,9 +1654,10 @@ class TaskSidebarState extends State<TaskSidebar>
       onChanged: _handleQuickTaskInputChanged,
       onSubmitted: (_) => _addTask(),
       contentPadding: padding,
+      errorText: _quickTaskError,
     );
 
-    return LocationInlineSuggestion(
+    final suggestionField = LocationInlineSuggestion(
       controller: _titleController,
       helper: helper,
       contentPadding: padding,
@@ -1637,6 +1667,14 @@ class TaskSidebarState extends State<TaskSidebar>
       ),
       suggestionColor: calendarSubtitleColor,
       child: field,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        suggestionField,
+        TaskFieldCharacterHint(controller: _titleController),
+      ],
     );
   }
 
@@ -3038,6 +3076,15 @@ class TaskSidebarState extends State<TaskSidebar>
   }
 
   void _addTask() {
+    final validationError = TaskTitleValidation.validate(_titleController.text);
+    if (validationError != null) {
+      setState(() {
+        _quickTaskError = validationError;
+      });
+      FeedbackSystem.showWarning(context, validationError);
+      return;
+    }
+
     final rawTitle = _titleController.text.trim();
     if (rawTitle.isEmpty) return;
     final title = _effectiveParserTitle(rawTitle);
@@ -3093,6 +3140,11 @@ class TaskSidebarState extends State<TaskSidebar>
   void _resetForm() {
     _clearParserState(clearFields: true);
     _resetParserLocks();
+    if (_quickTaskError != null) {
+      setState(() {
+        _quickTaskError = null;
+      });
+    }
     if (_titleController.text.isNotEmpty) {
       _titleController.clear();
     }

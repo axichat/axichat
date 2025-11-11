@@ -4,19 +4,19 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:axichat/main.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/defer.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
-import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
@@ -178,7 +178,7 @@ class XmppService extends XmppBase
     with
         BaseStreamService,
         MessageService,
-        OmemoService,
+        // OmemoService,
         RosterService,
         PresenceService,
         ChatsService,
@@ -520,7 +520,7 @@ class XmppService extends XmppBase
     ]);
 
     // Initialize OMEMO manager before registering managers
-    await _completeOmemoManager();
+    // await _completeOmemoManager();
 
     await _connection.registerManagers(featureManagers);
 
@@ -559,21 +559,21 @@ class XmppService extends XmppBase
       },
     );
 
-    try {
-      await _initializeOmemoManagerIfNeeded();
-    } on mox.OmemoManagerNotInitializedError catch (error, stackTrace) {
-      _xmppLogger.severe(
-        'OMEMO manager refused to initialize after database unlock.',
-        error,
-        stackTrace,
-      );
-    } catch (error, stackTrace) {
-      _xmppLogger.severe(
-        'Failed to initialize OMEMO manager after database unlock.',
-        error,
-        stackTrace,
-      );
-    }
+    // try {
+    //   await _initializeOmemoManagerIfNeeded();
+    // } on mox.OmemoManagerNotInitializedError catch (error, stackTrace) {
+    //   _xmppLogger.severe(
+    //     'OMEMO manager refused to initialize after database unlock.',
+    //     error,
+    //     stackTrace,
+    //   );
+    // } catch (error, stackTrace) {
+    //   _xmppLogger.severe(
+    //     'Failed to initialize OMEMO manager after database unlock.',
+    //     error,
+    //     stackTrace,
+    //   );
+    // }
   }
 
   Future<void> burn() async {
@@ -668,7 +668,7 @@ class XmppService extends XmppBase
 
     final residuals = <String>[];
     if (_messageStream.hasListener) residuals.add('messageStream');
-    if (_omemoManager.isCompleted) residuals.add('omemoManager');
+    // if (_omemoManager.isCompleted) residuals.add('omemoManager');
     if (_myJid != null) residuals.add('myJid');
     if (_eventSubscription != null) residuals.add('eventSubscription');
     if (_messageSubscription != null) residuals.add('messageSubscription');
