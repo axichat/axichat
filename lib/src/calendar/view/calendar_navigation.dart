@@ -1,6 +1,6 @@
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
 import '../../common/ui/ui.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
@@ -81,6 +81,7 @@ class CalendarNavigation extends StatelessWidget {
     }
     const double verticalPadding = calendarInsetMd;
     final Widget undoRedoGroup = _buildUndoRedoGroup(context);
+    final colors = context.colorScheme;
 
     SystemMouseCursors.basic;
     return LayoutBuilder(
@@ -113,9 +114,24 @@ class CalendarNavigation extends StatelessWidget {
             horizontalPadding,
             verticalPadding,
           ),
-          color: Colors.white,
+          decoration: BoxDecoration(
+            color: colors.card,
+            border: Border(
+              bottom: BorderSide(color: colors.border),
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F000000),
+                blurRadius: 14,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
           child: DefaultTextStyle.merge(
-            style: const TextStyle(fontSize: 12),
+            style: TextStyle(
+              fontSize: 12,
+              color: colors.mutedForeground,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [

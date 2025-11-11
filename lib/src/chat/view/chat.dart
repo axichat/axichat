@@ -2146,6 +2146,12 @@ class _ChatState extends State<Chat> {
       return;
     }
 
+    if (seededText.length > 200) {
+      _showSnackbar(
+        'Calendar task titles are limited to 200 characters. Consider trimming this message before saving.',
+      );
+    }
+
     final calendarBloc = context.read<CalendarBloc?>();
     if (calendarBloc == null) {
       _showSnackbar('Calendar is unavailable right now');

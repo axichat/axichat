@@ -83,14 +83,18 @@ class _ChatListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final transport = item.transport;
-    final showUnreadBadge = item.unreadCount > 0;
-    final unreadCount = item.unreadCount;
-    final unreadThickness = showUnreadBadge
-        ? _measureUnreadBadgeWidth(
-            context,
-            unreadCount,
-          )
-        : 0.0;
+    final int unreadCount = math.max(0, item.unreadCount);
+    final bool highlightUnreadBadge = unreadCount > 0;
+    final double unreadThickness = _measureUnreadBadgeWidth(
+      context,
+      unreadCount,
+    );
+    final double unreadHeight = _measureUnreadBadgeHeight(
+      context,
+      unreadCount,
+    );
+    final double unreadDepth =
+        (unreadHeight / 2) + _unreadBadgeCutoutVerticalClearance;
     final timestampLabel = item.lastMessage == null
         ? null
         : formatTimeSinceLabel(DateTime.now(), item.lastChangeTimestamp);
@@ -186,15 +190,17 @@ class _ChatListTile extends StatelessWidget {
     );
 
     final cutouts = <CutoutSpec>[
-      if (showUnreadBadge)
-        CutoutSpec(
-          edge: CutoutEdge.top,
-          alignment: const Alignment(0.84, -1),
-          depth: 14,
-          thickness: unreadThickness,
-          cornerRadius: 18,
-          child: _UnreadBadge(count: unreadCount),
+      CutoutSpec(
+        edge: CutoutEdge.top,
+        alignment: const Alignment(0.84, -1),
+        depth: unreadDepth,
+        thickness: unreadThickness,
+        cornerRadius: _unreadBadgeCornerRadius,
+        child: _UnreadBadge(
+          count: unreadCount,
+          highlight: highlightUnreadBadge,
         ),
+      ),
       CutoutSpec(
         edge: CutoutEdge.right,
         alignment: const Alignment(1.02, 0),
@@ -283,6 +289,24 @@ const double _unreadBadgeVerticalPadding = 4.0;
 const double _unreadBadgeBorderWidth = 2.0;
 const double _unreadBadgeMinWidth = 36.0;
 const double _unreadBadgeCutoutClearance = 4.0;
+const double _unreadBadgeCutoutVerticalClearance = 6.0;
+const double _unreadBadgeCornerRadius = 12.0;
+
+double _measureUnreadBadgeHeight(BuildContext context, int count) {
+  final textPainter = TextPainter(
+    text: TextSpan(
+      text: '$count',
+      style: context.textTheme.small.copyWith(
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+      ),
+    ),
+    textDirection: Directionality.of(context),
+  )..layout();
+  return textPainter.height +
+      (_unreadBadgeVerticalPadding * 2) +
+      (_unreadBadgeBorderWidth * 2);
+}
 
 class _TransportAwareAvatar extends StatelessWidget {
   const _TransportAwareAvatar({
@@ -324,20 +348,30 @@ class _TransportAwareAvatar extends StatelessWidget {
 }
 
 class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count});
+  const _UnreadBadge({
+    required this.count,
+    required this.highlight,
+  });
 
   final int count;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final Color background =
+        highlight ? colors.primary : colors.secondary.withValues(alpha: 0.2);
+    final Color borderColor =
+        highlight ? colors.background : colors.border.withValues(alpha: 0.8);
+    final Color textColor =
+        highlight ? colors.primaryForeground : colors.mutedForeground;
     return DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.primary,
+        color: background,
         shape: SquircleBorder(
-          cornerRadius: 12,
+          cornerRadius: _unreadBadgeCornerRadius,
           side: BorderSide(
-            color: colors.background,
+            color: borderColor,
             width: _unreadBadgeBorderWidth,
           ),
         ),
@@ -351,7 +385,7 @@ class _UnreadBadge extends StatelessWidget {
           '$count',
           maxLines: 1,
           style: context.textTheme.small.copyWith(
-            color: colors.primaryForeground,
+            color: textColor,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
           ),
