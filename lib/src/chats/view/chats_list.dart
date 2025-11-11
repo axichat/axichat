@@ -258,12 +258,23 @@ double _measureLabelWidth(BuildContext context, String text) {
 }
 
 double _measureUnreadBadgeWidth(BuildContext context, int count) {
-  final textWidth = _measureLabelWidth(context, '$count');
+  final textPainter = TextPainter(
+    text: TextSpan(
+      text: '$count',
+      style: context.textTheme.small.copyWith(
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+      ),
+    ),
+    textDirection: Directionality.of(context),
+  )..layout();
+  final textWidth = textPainter.width;
   return math.max(
     _unreadBadgeMinWidth,
     textWidth +
         (_unreadBadgeHorizontalPadding * 2) +
-        (_unreadBadgeBorderWidth * 2),
+        (_unreadBadgeBorderWidth * 2) +
+        _unreadBadgeCutoutClearance,
   );
 }
 
@@ -271,6 +282,7 @@ const double _unreadBadgeHorizontalPadding = 10.0;
 const double _unreadBadgeVerticalPadding = 4.0;
 const double _unreadBadgeBorderWidth = 2.0;
 const double _unreadBadgeMinWidth = 36.0;
+const double _unreadBadgeCutoutClearance = 4.0;
 
 class _TransportAwareAvatar extends StatelessWidget {
   const _TransportAwareAvatar({

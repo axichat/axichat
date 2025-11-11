@@ -89,18 +89,18 @@ class _CalendarAvatar extends StatelessWidget {
       decoration: ShapeDecoration(
         color: background,
         shape: SquircleBorder(
-          cornerRadius: 18,
+          cornerRadius: 16,
           side: BorderSide(color: borderColor, width: 1.2),
         ),
       ),
       child: SizedBox(
-        width: 52,
-        height: 52,
+        width: 46,
+        height: 46,
         child: Center(
           child: Icon(
             LucideIcons.calendarClock,
             color: highlight ? colors.primary : colors.secondaryForeground,
-            size: 24,
+            size: 22,
           ),
         ),
       ),

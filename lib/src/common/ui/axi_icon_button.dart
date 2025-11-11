@@ -23,7 +23,7 @@ class AxiIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final Color resolvedForeground = color ?? colors.foreground;
-    final Color resolvedBorder = borderColor ?? resolvedForeground;
+    final Color resolvedBorder = borderColor ?? colors.border;
 
     Widget child = ShadIconButton.outline(
       decoration: ShadDecoration(border: ShadBorder.all(color: resolvedBorder)),

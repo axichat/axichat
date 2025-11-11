@@ -175,19 +175,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
               ),
               const SizedBox(width: calendarGutterMd),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Calendar',
-                      style: context.textTheme.h3,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: calendarGutterMd),
-              Flexible(
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: SyncControls(
@@ -340,16 +327,16 @@ class _CalendarWidgetState extends State<CalendarWidget>
       context: context,
       bottomInset: bottomInset,
     );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border(
-          top: BorderSide(color: colors.border),
-        ),
-      ),
+    return Container(
+      color: colors.card,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: colors.border,
+          ),
           tabBar,
           cancelBucket,
         ],
