@@ -269,29 +269,60 @@ class SyncStatusIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final (String label, Widget indicator) = _resolveVisual(context);
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        child: indicator,
+      ),
+    );
+  }
+
+  (String, Widget) _resolveVisual(BuildContext context) {
     if (state.isSyncing) {
-      return const SizedBox(
-        width: 16,
-        height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      return (
+        'Syncing…',
+        const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       );
     }
 
-    IconData icon;
-    Color? color;
-
     if (state.syncError != null) {
-      icon = LucideIcons.triangleAlert;
-      color = Colors.red;
-    } else if (state.lastSyncTime != null) {
-      icon = LucideIcons.cloudCheck;
-      color = Colors.green;
-    } else {
-      icon = LucideIcons.cloudOff;
-      color = Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
+      return (
+        'Sync failed',
+        const Icon(
+          LucideIcons.cloudAlert,
+          size: 16,
+          color: Colors.red,
+        ),
+      );
     }
 
-    return Icon(icon, size: 16, color: color);
+    if (state.lastSyncTime != null) {
+      return (
+        'Synced',
+        const Icon(
+          LucideIcons.cloudCheck,
+          size: 16,
+          color: Colors.green,
+        ),
+      );
+    }
+
+    final Color fallbackColor =
+        Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
+    return (
+      'Not synced yet',
+      Icon(
+        LucideIcons.cloud,
+        size: 16,
+        color: fallbackColor,
+      ),
+    );
   }
 }
 

@@ -1,7 +1,8 @@
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
@@ -152,6 +153,8 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                   AxiIconButton(
                     iconData: LucideIcons.arrowLeft,
                     tooltip: 'Back',
+                    color: context.colorScheme.foreground,
+                    borderColor: context.colorScheme.border,
                     onPressed: () => Navigator.pop(context),
                   ),
                 const SizedBox(width: calendarGutterSm),
@@ -162,7 +165,7 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                     children: [
                       Text(
                         widget.isGuestMode ? 'Guest Calendar' : 'Calendar',
-                        style: calendarTitleTextStyle,
+                        style: context.textTheme.h3,
                       ),
                       Text(
                         _formatDate(state.selectedDate, state.viewMode),
