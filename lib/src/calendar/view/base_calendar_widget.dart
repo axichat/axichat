@@ -137,12 +137,22 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context, CalendarState state) {
+    final colors = context.colorScheme;
     return PreferredSize(
       preferredSize: const Size.fromHeight(80),
       child: Container(
-        decoration: const BoxDecoration(
-          color: calendarContainerColor,
-          boxShadow: calendarMediumShadow,
+        decoration: BoxDecoration(
+          color: colors.card,
+          border: Border(
+            bottom: BorderSide(color: colors.border),
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 18,
+              offset: Offset(0, 6),
+            ),
+          ],
         ),
         child: SafeArea(
           child: Padding(
@@ -165,11 +175,15 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                     children: [
                       Text(
                         widget.isGuestMode ? 'Guest Calendar' : 'Calendar',
-                        style: context.textTheme.h3,
+                        style: context.textTheme.h3.copyWith(
+                          color: colors.foreground,
+                        ),
                       ),
                       Text(
                         _formatDate(state.selectedDate, state.viewMode),
-                        style: calendarSubtitleTextStyle,
+                        style: calendarSubtitleTextStyle.copyWith(
+                          color: colors.mutedForeground,
+                        ),
                       ),
                     ],
                   ),

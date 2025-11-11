@@ -216,6 +216,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             Flexible(
               child: SingleChildScrollView(
                 padding: responsive.contentPadding,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.manual,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -242,7 +244,17 @@ class _QuickAddModalState extends State<QuickAddModal>
             ),
 
             // Actions
-            _buildActions(),
+            AnimatedPadding(
+              duration: baseAnimationDuration,
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(
+                bottom: _quickAddActionInset(context),
+              ),
+              child: SafeArea(
+                top: false,
+                child: _buildActions(),
+              ),
+            ),
           ],
         ),
       ),
@@ -254,6 +266,15 @@ class _QuickAddModalState extends State<QuickAddModal>
       );
     }
     return shell;
+  }
+
+  double _quickAddActionInset(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final double keyboardInset = mediaQuery.viewInsets.bottom;
+    if (keyboardInset <= 0) {
+      return calendarGutterLg;
+    }
+    return keyboardInset + calendarGutterSm;
   }
 
   Widget _buildHeader() {

@@ -163,9 +163,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
                 horizontal: calendarGutterLg, vertical: calendarGutterMd),
-            keyboardDismissBehavior: _supportsDragDismiss(context)
-                ? ScrollViewKeyboardDismissBehavior.onDrag
-                : ScrollViewKeyboardDismissBehavior.manual,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -185,11 +183,19 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
                 _sectionDivider(),
                 _buildCompletedCheckbox(),
                 const SizedBox(height: calendarFormGap),
-                const Divider(height: 1),
-                const SizedBox(height: calendarFormGap),
-                _buildActions(),
               ],
             ),
+          ),
+        ),
+        AnimatedPadding(
+          duration: baseAnimationDuration,
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(
+            bottom: _actionBarBottomInset(context),
+          ),
+          child: SafeArea(
+            top: false,
+            child: _buildActions(),
           ),
         ),
       ],
@@ -222,11 +228,6 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       );
     }
     return content;
-  }
-
-  bool _supportsDragDismiss(BuildContext context) {
-    final TargetPlatform platform = Theme.of(context).platform;
-    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
   }
 
   Widget _buildHeader() {
@@ -470,6 +471,7 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
 
   Widget _buildActions() {
     return TaskFormActionsRow(
+      includeTopBorder: true,
       padding: calendarPaddingLg,
       gap: 8,
       children: [
@@ -572,6 +574,18 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
       widget.onTaskUpdated(updatedTask);
     }
     widget.onClose();
+  }
+
+  double _actionBarBottomInset(BuildContext context) {
+    if (widget.isSheet) {
+      return calendarGutterLg;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final double keyboardInset = mediaQuery.viewInsets.bottom;
+    if (keyboardInset <= 0) {
+      return calendarGutterLg;
+    }
+    return keyboardInset + calendarGutterSm;
   }
 
   void _showSnackBar(String message) {
