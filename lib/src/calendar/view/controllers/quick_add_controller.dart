@@ -5,21 +5,13 @@ import 'task_draft_controller.dart';
 /// controller with submission bookkeeping specific to the dialog.
 class QuickAddController extends TaskDraftController {
   QuickAddController({
-    DateTime? initialStart,
-    DateTime? initialEnd,
-    DateTime? initialDeadline,
-    RecurrenceFormValue initialRecurrence = const RecurrenceFormValue(),
-    bool initialImportant = false,
-    bool initialUrgent = false,
-  })  : _isSubmitting = false,
-        super(
-          initialStart: initialStart,
-          initialEnd: initialEnd,
-          initialDeadline: initialDeadline,
-          initialRecurrence: initialRecurrence,
-          initialImportant: initialImportant,
-          initialUrgent: initialUrgent,
-        );
+    super.initialStart,
+    super.initialEnd,
+    super.initialDeadline,
+    super.initialRecurrence = const RecurrenceFormValue(),
+    super.initialImportant = false,
+    super.initialUrgent = false,
+  }) : _isSubmitting = false;
 
   bool _isSubmitting;
 

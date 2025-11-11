@@ -166,7 +166,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
                 onPressed: _handleCalendarBackPressed,
               ),
               const SizedBox(width: calendarGutterMd),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,

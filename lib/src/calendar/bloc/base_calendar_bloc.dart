@@ -1923,7 +1923,7 @@ abstract class BaseCalendarBloc
             : event.recurrence;
     final Set<String> processedBaseIds = <String>{};
 
-    bool _recurrenceMatches(CalendarTask task) {
+    bool recurrenceMatches(CalendarTask task) {
       final RecurrenceRule? current =
           (task.recurrence == null || task.recurrence!.isNone)
               ? null
@@ -1937,8 +1937,8 @@ abstract class BaseCalendarBloc
       return false;
     }
 
-    void _queueUpdate(String taskId, CalendarTask task) {
-      if (_recurrenceMatches(task)) {
+    void queueUpdate(String taskId, CalendarTask task) {
+      if (recurrenceMatches(task)) {
         return;
       }
       updates[taskId] = task.copyWith(
@@ -1952,7 +1952,7 @@ abstract class BaseCalendarBloc
       final CalendarTask? direct = state.model.tasks[id];
       if (direct != null) {
         processedBaseIds.add(direct.id);
-        _queueUpdate(direct.id, direct);
+        queueUpdate(direct.id, direct);
         continue;
       }
 
@@ -1967,7 +1967,7 @@ abstract class BaseCalendarBloc
         continue;
       }
 
-      _queueUpdate(baseId, baseTask);
+      queueUpdate(baseId, baseTask);
     }
 
     if (updates.isEmpty) {

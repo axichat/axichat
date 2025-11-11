@@ -619,12 +619,6 @@ class RenderCalendarSurface extends RenderBox
 
   bool get _isDragInProgress => isTaskDragInProgress?.call() ?? false;
 
-  @override
-  bool get isAttached => attached;
-
-  @override
-  bool get canAcceptDrop => true;
-
   void _updateHoverTask(String? taskId) {
     if (_currentHoverTaskId == taskId) {
       return;
@@ -2539,10 +2533,9 @@ class RenderCalendarSurface extends RenderBox
     if (dy == null || !dy.isFinite) {
       dy = controller.dragPointerOffsetFromTop;
     }
-    if ((dy == null || !dy.isFinite) && height.isFinite && height > 0) {
-      dy = height / 2;
-    } else if (dy == null) {
-      dy = 0.0;
+    final bool dyInvalid = dy == null || !dy.isFinite;
+    if (dyInvalid) {
+      dy = (height.isFinite && height > 0) ? height / 2 : 0.0;
     }
     if (height.isFinite && height > 0) {
       dy = dy.clamp(0.0, height);

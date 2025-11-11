@@ -461,14 +461,16 @@ void main() {
     );
 
     final HitTestResult topResult = HitTestResult();
-    tester.binding.hitTest(topResult, sampleTop);
+    final int viewId =
+        RendererBinding.instance.renderViews.first.flutterView.viewId;
+    tester.binding.hitTestInView(topResult, sampleTop, viewId);
     debugPrint('Hit test entries near grid top:');
     for (final entry in topResult.path) {
       debugPrint('  ${entry.target.runtimeType}');
     }
 
     final HitTestResult bottomResult = HitTestResult();
-    tester.binding.hitTest(bottomResult, sampleBottom);
+    tester.binding.hitTestInView(bottomResult, sampleBottom, viewId);
     debugPrint('Hit test entries near grid bottom:');
     for (final entry in bottomResult.path) {
       debugPrint('  ${entry.target.runtimeType}');
@@ -658,6 +660,7 @@ CalendarTaskEntryBindings _buildTestBindings({
     resizeHandleExtent: 12,
     interactionController: controller,
     dragFeedbackHint: controller.feedbackHint,
+    cancelBucketHoverNotifier: const AlwaysStoppedAnimation(false),
     callbacks: _testTileCallbacks(),
     geometryProvider: (_) => geometry,
     globalRectProvider: (_) => geometry.rect,
@@ -674,14 +677,20 @@ CalendarTaskEntryBindings _buildTestBindings({
 Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
   WidgetTester tester,
 ) async {
-  final ValueKey<String> groupId = const ValueKey('test-task-menu');
-  final builderFactory = (ShadPopoverController controller) =>
-      (BuildContext context, TaskContextMenuRequest request) => [
-            ShadContextMenuItem(
-              onPressed: () => controller.hide(),
-              child: const Text('Copy Task'),
-            ),
-          ];
+  const ValueKey<String> groupId = ValueKey('test-task-menu');
+  TaskContextMenuBuilder? defaultContextMenuBuilder(
+    ShadPopoverController controller,
+  ) {
+    return (BuildContext context, TaskContextMenuRequest request) => [
+          ShadContextMenuItem(
+            onPressed: () => controller.hide(),
+            child: const Text('Copy Task'),
+          ),
+        ];
+  }
+
+  final CalendarTaskContextMenuBuilderFactory builderFactory =
+      defaultContextMenuBuilder;
 
   final TaskInteractionController topController = TaskInteractionController();
   final TaskInteractionController bottomController =
