@@ -116,39 +116,62 @@ class _ProfileBodyState extends State<_ProfileBody> {
                           Padding(
                             padding: const EdgeInsets.all(12.0),
                             child: BlocBuilder<ProfileCubit, ProfileState>(
-                              builder: (context, profileState) => ShadCard(
-                                rowMainAxisSize: MainAxisSize.max,
-                                columnCrossAxisAlignment:
-                                    CrossAxisAlignment.center,
-                                leading: Hero(
-                                  tag: 'avatar',
-                                  child: AxiAvatar(
-                                    jid: profileState.jid,
-                                    subscription: Subscription.both,
-                                    presence: profileState.presence,
-                                    status: profileState.status,
-                                    active: true,
-                                  ),
-                                ),
-                                title: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Hero(
-                                      tag: 'title',
-                                      child: Text(profileState.username),
+                              builder: (context, profileState) {
+                                final usernameStyle =
+                                    context.textTheme.large.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: context.colorScheme.foreground,
+                                );
+                                final subtitleStyle =
+                                    context.textTheme.muted.copyWith(
+                                  color: context.colorScheme.mutedForeground,
+                                );
+                                return ShadCard(
+                                  rowMainAxisSize: MainAxisSize.max,
+                                  columnCrossAxisAlignment:
+                                      CrossAxisAlignment.center,
+                                  leading: Hero(
+                                    tag: 'avatar',
+                                    child: AxiAvatar(
+                                      jid: profileState.jid,
+                                      subscription: Subscription.both,
+                                      presence: profileState.presence,
+                                      status: profileState.status,
+                                      active: true,
                                     ),
-                                  ],
-                                ),
-                                description: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Expanded(
-                                      child: Text.rich(
-                                        TextSpan(
-                                          children: [
-                                            WidgetSpan(
-                                              child: AxiTooltip(
+                                  ),
+                                  title: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Hero(
+                                        tag: 'title',
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: Text(
+                                            profileState.username,
+                                            style: usernameStyle,
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  description: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Expanded(
+                                        child: SelectionArea(
+                                          child: Wrap(
+                                            alignment: WrapAlignment.center,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            spacing: 0,
+                                            runSpacing: 2,
+                                            children: [
+                                              AxiTooltip(
                                                 builder: (_) => ConstrainedBox(
                                                   constraints:
                                                       const BoxConstraints(
@@ -162,16 +185,22 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                                 ),
                                                 child: Hero(
                                                   tag: 'subtitle',
-                                                  child: SelectableText(
-                                                    profileState.jid,
+                                                  child: Material(
+                                                    color: Colors.transparent,
+                                                    child: Text(
+                                                      profileState.jid,
+                                                      style: subtitleStyle,
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            if (profileState
-                                                .resource.isNotEmpty)
-                                              WidgetSpan(
-                                                child: AxiTooltip(
+                                              if (profileState
+                                                  .resource.isNotEmpty)
+                                                AxiTooltip(
                                                   builder: (_) =>
                                                       ConstrainedBox(
                                                     constraints:
@@ -187,68 +216,71 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                                   ),
                                                   child: Text(
                                                     '/${profileState.resource}',
+                                                    style: subtitleStyle,
                                                     overflow:
                                                         TextOverflow.ellipsis,
+                                                    maxLines: 1,
                                                   ),
                                                 ),
-                                              ),
-                                          ],
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                trailing: const LogoutButton(),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  spacing: 8.0,
-                                  children: [
-                                    ConstrainedBox(
-                                      constraints:
-                                          const BoxConstraints(maxWidth: 300.0),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: AxiTextFormField(
-                                          placeholder:
-                                              const Text('Status message'),
-                                          initialValue: profileState.status,
-                                          onSubmitted: (value) => context
-                                              .read<ProfileCubit?>()
-                                              ?.updatePresence(status: value),
-                                        ),
-                                      ),
-                                    ),
-                                    OverflowBar(
-                                      overflowAlignment:
-                                          OverflowBarAlignment.center,
-                                      spacing: 8.0,
-                                      overflowSpacing: 8.0,
-                                      children: [
-                                        ShadButton.secondary(
-                                          child: const Text('Change password'),
-                                          onPressed: () => setState(() {
-                                            _profileRoute =
-                                                _ProfileRoute.changePassword;
-                                          }),
-                                        ).withTapBounce(),
-                                        ShadButton.secondary(
-                                          child: Text(
-                                            'Delete account',
-                                            style: TextStyle(
-                                                color: context
-                                                    .colorScheme.destructive),
+                                            ],
                                           ),
-                                          onPressed: () => setState(() {
-                                            _profileRoute =
-                                                _ProfileRoute.delete;
-                                          }),
-                                        ).withTapBounce(),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  trailing: const LogoutButton(),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    spacing: 8.0,
+                                    children: [
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                            maxWidth: 300.0),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: AxiTextFormField(
+                                            placeholder:
+                                                const Text('Status message'),
+                                            initialValue: profileState.status,
+                                            onSubmitted: (value) => context
+                                                .read<ProfileCubit?>()
+                                                ?.updatePresence(status: value),
+                                          ),
+                                        ),
+                                      ),
+                                      OverflowBar(
+                                        overflowAlignment:
+                                            OverflowBarAlignment.center,
+                                        spacing: 8.0,
+                                        overflowSpacing: 8.0,
+                                        children: [
+                                          ShadButton.secondary(
+                                            child:
+                                                const Text('Change password'),
+                                            onPressed: () => setState(() {
+                                              _profileRoute =
+                                                  _ProfileRoute.changePassword;
+                                            }),
+                                          ).withTapBounce(),
+                                          ShadButton.secondary(
+                                            child: Text(
+                                              'Delete account',
+                                              style: TextStyle(
+                                                  color: context
+                                                      .colorScheme.destructive),
+                                            ),
+                                            onPressed: () => setState(() {
+                                              _profileRoute =
+                                                  _ProfileRoute.delete;
+                                            }),
+                                          ).withTapBounce(),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ),
                           const Padding(

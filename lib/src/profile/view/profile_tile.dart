@@ -17,47 +17,70 @@ class ProfileTile extends StatelessWidget {
       return const SizedBox();
     }
     return BlocBuilder<ProfileCubit, ProfileState>(
-      builder: (context, state) => ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
-        child: ListTile(
-          leading: Hero(
-            tag: 'avatar',
-            child: AxiAvatar(
-              jid: state.jid,
-              subscription: Subscription.both,
-              presence: state.presence,
-              status: state.status,
-              active: true,
+      builder: (context, state) {
+        final usernameStyle = context.textTheme.large.copyWith(
+          fontWeight: FontWeight.w700,
+          color: context.colorScheme.foreground,
+        );
+        final subtitleStyle = context.textTheme.muted.copyWith(
+          color: context.colorScheme.mutedForeground,
+        );
+        return ConstrainedBox(
+          constraints:
+              BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
+          child: ListTile(
+            leading: Hero(
+              tag: 'avatar',
+              child: AxiAvatar(
+                jid: state.jid,
+                subscription: Subscription.both,
+                presence: state.presence,
+                status: state.status,
+                active: true,
+              ),
+            ),
+            title: Hero(
+              tag: 'title',
+              child: Material(
+                color: Colors.transparent,
+                child: Text(
+                  state.username,
+                  style: usernameStyle,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            subtitle: Hero(
+              tag: 'subtitle',
+              child: Material(
+                color: Colors.transparent,
+                child: Text(
+                  state.jid,
+                  style: subtitleStyle,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            onTap: () => context.push(
+              const ProfileRoute().location,
+              extra: context.read,
+            ),
+            shape: Border(
+              top: BorderSide(color: context.colorScheme.border),
+            ),
+            trailing: AxiIconButton(
+              iconData: LucideIcons.bug,
+              onPressed: () => context.push(
+                const ComposeRoute().location,
+                extra: {
+                  'locate': context.read,
+                  'jids': ['feedback@axi.im'],
+                },
+              ),
             ),
           ),
-          title: Hero(
-            tag: 'title',
-            child: Text(state.username),
-          ),
-          subtitle: Hero(
-            tag: 'subtitle',
-            child: Text(
-              state.jid,
-              style: context.textTheme.muted,
-            ),
-          ),
-          onTap: () =>
-              context.push(const ProfileRoute().location, extra: context.read),
-          shape: Border(
-            top: BorderSide(color: context.colorScheme.border),
-          ),
-          trailing: AxiIconButton(
-            iconData: LucideIcons.bug,
-            onPressed: () => context.push(
-              const ComposeRoute().location,
-              extra: {
-                'locate': context.read,
-                'jids': ['feedback@axi.im'],
-              },
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
