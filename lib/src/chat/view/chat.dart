@@ -89,10 +89,9 @@ const _reactionQuickChoices = [
   '👏',
 ];
 const _selectionSpacerMessageId = '__selection_spacer__';
-const _composerBottomGap = 12.0;
-const _composerStackPadding = 0.0;
+const _emptyStateMessageId = '__empty_state__';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
-const _messageListTailSpacer = 8.0;
+const _messageListTailSpacer = 36.0;
 
 List<BoxShadow> _selectedBubbleShadows(Color color) => [
       BoxShadow(
@@ -226,9 +225,6 @@ class _ChatState extends State<Chat> {
   late final FocusNode _focusNode;
   late final TextEditingController _textController;
   late final ScrollController _scrollController;
-  final GlobalKey _composerKey = GlobalKey();
-  double _composerHeight = 0;
-  bool _composerHeightUpdateScheduled = false;
   bool _composerHasText = false;
   final _approvedAttachmentSenders = <String>{};
   final _fileMetadataFutures = <String, Future<FileMetadataData?>>{};
@@ -305,24 +301,6 @@ class _ChatState extends State<Chat> {
     _dismissPointer = null;
     _dismissPointerDownPosition = null;
     _dismissPointerMoved = false;
-  }
-
-  void _scheduleComposerMeasurement() {
-    if (_composerHeightUpdateScheduled) return;
-    _composerHeightUpdateScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _composerHeightUpdateScheduled = false;
-      if (!mounted) return;
-      final context = _composerKey.currentContext;
-      final renderBox = context?.findRenderObject() as RenderBox?;
-      final measuredHeight =
-          renderBox != null && renderBox.hasSize ? renderBox.size.height : 0.0;
-      if ((measuredHeight - _composerHeight).abs() > 0.5) {
-        setState(() {
-          _composerHeight = measuredHeight;
-        });
-      }
-    });
   }
 
   Future<FileMetadataData?> _metadataFutureFor(String id) {
@@ -435,55 +413,41 @@ class _ChatState extends State<Chat> {
     _focusNode.requestFocus();
   }
 
-  double _composerBottomInset(BuildContext context) =>
-      MediaQuery.of(context).padding.bottom + _composerBottomGap;
-
-  double _messageListBottomPadding(BuildContext context) {
-    final measuredHeight = _composerHeight > 0 ? _composerHeight : 84.0;
-    return measuredHeight +
-        _composerBottomInset(context) +
-        _composerStackPadding;
-  }
-
   Widget _buildComposer({
     required bool isEmailTransport,
     required String hintText,
   }) {
     final colors = context.colorScheme;
-    final composer = ChatCutoutComposer(
-      controller: _textController,
-      focusNode: _focusNode,
-      hintText: hintText,
-      onSend: _handleSendMessage,
-      actions: _buildComposerAccessories(isEmailTransport: isEmailTransport),
-      sendEnabled: _composerHasText,
-    );
-    _scheduleComposerMeasurement();
     const horizontalPadding = _composerHorizontalInset;
-    return KeyedSubtree(
-      key: _composerKey,
-      child: SafeArea(
-        top: false,
-        left: false,
-        right: false,
-        child: SizedBox(
-          width: double.infinity,
-          child: ColoredBox(
-            color: colors.background,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: colors.border, width: 1),
-                ),
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: SizedBox(
+        width: double.infinity,
+        child: ColoredBox(
+          color: colors.background,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: colors.border, width: 1),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  18,
-                  horizontalPadding,
-                  10,
-                ),
-                child: composer,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                horizontalPadding,
+                18,
+                horizontalPadding,
+                10,
+              ),
+              child: ChatCutoutComposer(
+                controller: _textController,
+                focusNode: _focusNode,
+                hintText: hintText,
+                onSend: _handleSendMessage,
+                actions: _buildComposerAccessories(
+                    isEmailTransport: isEmailTransport),
+                sendEnabled: _composerHasText,
               ),
             ),
           ),
@@ -1221,10 +1185,10 @@ class _ChatState extends State<Chat> {
                               final selectionSpacerVisibleHeight =
                                   selectionActive
                                       ? math.max(
-                                          0.0,
+                                          _messageListTailSpacer,
                                           _selectionSpacerHeight,
                                         )
-                                      : 0.0;
+                                      : _messageListTailSpacer;
                               final baseBubbleMaxWidth =
                                   contentWidth * (isCompact ? 0.8 : 0.7);
                               final messageRowMaxWidth = contentWidth;
@@ -1285,6 +1249,19 @@ class _ChatState extends State<Chat> {
                                   ),
                                 );
                               }
+                              if (filteredItems.isEmpty) {
+                                dashMessages.add(
+                                  ChatMessage(
+                                    user: spacerUser,
+                                    createdAt: _selectionSpacerTimestamp,
+                                    text: ' ',
+                                    customProperties: const {
+                                      'id': _emptyStateMessageId,
+                                      'emptyState': true,
+                                    },
+                                  ),
+                                );
+                              }
                               dashMessages.add(
                                 ChatMessage(
                                   user: spacerUser,
@@ -1320,7 +1297,12 @@ class _ChatState extends State<Chat> {
                                   );
                                 },
                                 typingBuilder: (_) => const Padding(
-                                  padding: EdgeInsets.only(left: 16, top: 16),
+                                  padding: EdgeInsets.fromLTRB(
+                                    _chatHorizontalPadding,
+                                    12,
+                                    _chatHorizontalPadding,
+                                    8,
+                                  ),
                                   child: TypingIndicator(),
                                 ),
                                 onLoadEarlier: state.items.length %
@@ -1337,858 +1319,742 @@ class _ChatState extends State<Chat> {
                                     color: context.colorScheme.primary,
                                   ),
                                 ),
-                                chatFooterBuilder: () {
-                                  const spacer = SizedBox(
-                                    height: _messageListTailSpacer,
-                                  );
-                                  if (state.items.isEmpty &&
-                                      state.quoting == null) {
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Center(
-                                          child: Text(
-                                            'No messages',
-                                            style: context.textTheme.muted,
-                                          ),
-                                        ),
-                                        spacer,
-                                      ],
-                                    );
-                                  }
-                                  final quoting = state.quoting;
-                                  if (quoting == null) {
-                                    return spacer;
-                                  }
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        child: _QuoteBanner(
-                                          message: quoting,
-                                          isSelf: quoting.senderJid ==
-                                              currentUserId,
-                                          onClear: () => context
-                                              .read<ChatBloc>()
-                                              .add(const ChatQuoteCleared()),
-                                        ),
-                                      ),
-                                      spacer,
-                                    ],
-                                  );
-                                }(),
                               );
                               final composerHintText = isEmailTransport
                                   ? 'Send email message'
                                   : 'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message';
+                              Widget quoteSection;
+                              final quoting = state.quoting;
+                              if (quoting == null) {
+                                quoteSection = const SizedBox.shrink();
+                              } else {
+                                quoteSection = Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  child: _QuoteBanner(
+                                    key: ValueKey<String?>(quoting.stanzaID),
+                                    message: quoting,
+                                    isSelf: quoting.senderJid == currentUserId,
+                                    onClear: () => context
+                                        .read<ChatBloc>()
+                                        .add(const ChatQuoteCleared()),
+                                  ),
+                                );
+                              }
+                              quoteSection = AnimatedSize(
+                                duration: _bubbleFocusDuration,
+                                curve: _bubbleFocusCurve,
+                                alignment: Alignment.topCenter,
+                                child: quoteSection,
+                              );
+                              final remoteTyping =
+                                  state.chat?.chatState?.name == 'composing'
+                                      ? ChatUser(
+                                          id: state.chat!.jid,
+                                          firstName: state.chat!.title,
+                                        )
+                                      : null;
+                              final typingUsers = <ChatUser>[
+                                if (state.typing == true) user,
+                                if (remoteTyping != null) remoteTyping,
+                              ];
                               return Column(
                                 children: [
                                   Expanded(
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        Positioned.fill(
-                                          child: Padding(
-                                            padding: EdgeInsets.only(
-                                              bottom: _messageListBottomPadding(
-                                                context,
+                                    child: KeyedSubtree(
+                                      key: _messageListKey,
+                                      child: DashChat(
+                                        currentUser: user,
+                                        onSend: (_) => _handleSendMessage(),
+                                        messages: dashMessages,
+                                        typingUsers:
+                                            typingUsers.take(1).toList(),
+                                        messageOptions: MessageOptions(
+                                          showOtherUsersAvatar: false,
+                                          borderRadius: 0,
+                                          maxWidth: messageRowMaxWidth,
+                                          messagePadding: EdgeInsets.zero,
+                                          spaceWhenAvatarIsHidden: 0,
+                                          currentUserContainerColor:
+                                              Colors.transparent,
+                                          containerColor: Colors.transparent,
+                                          userNameBuilder: (user) {
+                                            if (user.id ==
+                                                _selectionSpacerMessageId) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: _chatHorizontalPadding,
+                                                right: _chatHorizontalPadding,
+                                                bottom: 4,
                                               ),
-                                            ),
-                                            child: KeyedSubtree(
-                                              key: _messageListKey,
-                                              child: DashChat(
-                                                currentUser: user,
-                                                onSend: (_) =>
-                                                    _handleSendMessage(),
-                                                messages: dashMessages,
-                                                messageOptions: MessageOptions(
-                                                  showOtherUsersAvatar: false,
-                                                  borderRadius: 0,
-                                                  maxWidth: messageRowMaxWidth,
-                                                  messagePadding:
-                                                      EdgeInsets.zero,
-                                                  spaceWhenAvatarIsHidden: 0,
-                                                  currentUserContainerColor:
-                                                      Colors.transparent,
-                                                  containerColor:
-                                                      Colors.transparent,
-                                                  userNameBuilder: (user) {
-                                                    if (user.id ==
-                                                        _selectionSpacerMessageId) {
-                                                      return const SizedBox
-                                                          .shrink();
-                                                    }
-                                                    return Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                        left:
-                                                            _chatHorizontalPadding,
-                                                        right:
-                                                            _chatHorizontalPadding,
-                                                        bottom: 4,
-                                                      ),
-                                                      child: Text(
-                                                        user.getFullName(),
-                                                        style: context
-                                                            .textTheme.muted
-                                                            .copyWith(
-                                                                fontSize: 12.0),
-                                                      ),
-                                                    );
-                                                  },
-                                                  messageTextBuilder: (message,
-                                                      previous, next) {
-                                                    final colors =
-                                                        context.colorScheme;
-                                                    final chatTokens =
-                                                        context.chatTheme;
-                                                    final isSelectionSpacer =
-                                                        message.customProperties?[
-                                                                'selectionSpacer'] ==
-                                                            true;
-                                                    if (isSelectionSpacer) {
-                                                      final spacerHeight =
-                                                          selectionSpacerVisibleHeight;
-                                                      return _SelectionHeadroomSpacer(
-                                                        height: spacerHeight,
-                                                      );
-                                                    }
-                                                    final extraStyle = context
+                                              child: Text(
+                                                user.getFullName(),
+                                                style: context.textTheme.muted
+                                                    .copyWith(fontSize: 12.0),
+                                              ),
+                                            );
+                                          },
+                                          messageTextBuilder:
+                                              (message, previous, next) {
+                                            final colors = context.colorScheme;
+                                            final chatTokens =
+                                                context.chatTheme;
+                                            final isSelectionSpacer =
+                                                message.customProperties?[
+                                                        'selectionSpacer'] ==
+                                                    true;
+                                            if (isSelectionSpacer) {
+                                              final spacerHeight =
+                                                  selectionSpacerVisibleHeight;
+                                              return _SelectionHeadroomSpacer(
+                                                height: spacerHeight,
+                                              );
+                                            }
+                                            final extraStyle = context
+                                                .textTheme.muted
+                                                .copyWith(
+                                              fontStyle: FontStyle.italic,
+                                            );
+                                            final isEmptyState =
+                                                message.customProperties?[
+                                                        'emptyState'] ==
+                                                    true;
+                                            if (isEmptyState) {
+                                              return Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  vertical: 24,
+                                                  horizontal:
+                                                      _chatHorizontalPadding,
+                                                ),
+                                                child: Center(
+                                                  child: Text(
+                                                    'No messages',
+                                                    style:
+                                                        context.textTheme.muted,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            final self =
+                                                message.customProperties?[
+                                                        'isSelf'] as bool? ??
+                                                    (message.user.id ==
+                                                        profile?.jid);
+                                            final error = message
+                                                    .customProperties!['error']
+                                                as MessageError;
+                                            final isError = error.isNotNone;
+                                            final bubbleColor = isError
+                                                ? colors.destructive
+                                                : self
+                                                    ? colors.primary
+                                                    : colors.card;
+                                            final borderColor = self || isError
+                                                ? Colors.transparent
+                                                : chatTokens.recvEdge;
+                                            final textColor = isError
+                                                ? colors.destructiveForeground
+                                                : self
+                                                    ? colors.primaryForeground
+                                                    : colors.foreground;
+                                            final timestampColor =
+                                                chatTokens.timestamp;
+                                            final encrypted =
+                                                message.customProperties![
+                                                        'encrypted'] ==
+                                                    true;
+                                            const iconSize = 13.0;
+                                            final iconFamily =
+                                                message.status!.icon.fontFamily;
+                                            final iconPackage = message
+                                                .status!.icon.fontPackage;
+                                            final chainedPrev =
+                                                _chatMessagesShouldChain(
+                                              message,
+                                              previous,
+                                            );
+                                            final chainedNext =
+                                                _chatMessagesShouldChain(
+                                              message,
+                                              next,
+                                            );
+                                            final baseTextStyle = context
+                                                .textTheme.small
+                                                .copyWith(
+                                              color: textColor,
+                                              height: 1.3,
+                                            );
+                                            final linkStyle =
+                                                baseTextStyle.copyWith(
+                                              color: self
+                                                  ? colors.primaryForeground
+                                                  : colors.primary,
+                                              decoration:
+                                                  TextDecoration.underline,
+                                              fontWeight: FontWeight.w600,
+                                            );
+                                            final parsedText = parseMessageText(
+                                              text: message.text,
+                                              baseStyle: baseTextStyle,
+                                              linkStyle: linkStyle,
+                                            );
+                                            final timeColor = isError
+                                                ? textColor
+                                                : self
+                                                    ? colors.primaryForeground
+                                                    : timestampColor;
+                                            final time = TextSpan(
+                                              text:
+                                                  '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                                  '${message.createdAt.minute.toString().padLeft(2, '0')}',
+                                              style: context.textTheme.muted
+                                                  .copyWith(
+                                                color: timeColor,
+                                                fontSize: 11.0,
+                                              ),
+                                            );
+                                            final status = TextSpan(
+                                              text: String.fromCharCode(
+                                                message.status!.icon.codePoint,
+                                              ),
+                                              style: TextStyle(
+                                                color: self
+                                                    ? colors.primaryForeground
+                                                    : timestampColor,
+                                                fontSize: iconSize,
+                                                fontFamily: iconFamily,
+                                                package: iconPackage,
+                                              ),
+                                            );
+                                            final encryption = TextSpan(
+                                              text: String.fromCharCode(
+                                                (encrypted
+                                                        ? LucideIcons
+                                                            .lockKeyhole
+                                                        : LucideIcons
+                                                            .lockKeyholeOpen)
+                                                    .codePoint,
+                                              ),
+                                              style: context.textTheme.muted
+                                                  .copyWith(
+                                                color: encrypted
+                                                    ? (self
+                                                        ? colors
+                                                            .primaryForeground
+                                                        : colors.foreground)
+                                                    : colors.destructive,
+                                                fontSize: iconSize,
+                                                fontFamily: iconFamily,
+                                                package: iconPackage,
+                                              ),
+                                            );
+                                            final trusted =
+                                                message.customProperties![
+                                                    'trusted'] as bool?;
+                                            final verification = trusted == null
+                                                ? null
+                                                : TextSpan(
+                                                    text: String.fromCharCode(
+                                                      trusted.toShieldIcon
+                                                          .codePoint,
+                                                    ),
+                                                    style: context
                                                         .textTheme.muted
                                                         .copyWith(
-                                                      fontStyle:
-                                                          FontStyle.italic,
-                                                    );
-                                                    final self =
-                                                        message.customProperties?[
-                                                                    'isSelf']
-                                                                as bool? ??
-                                                            (message.user.id ==
-                                                                profile?.jid);
-                                                    final error = message
-                                                            .customProperties![
-                                                        'error'] as MessageError;
-                                                    final isError =
-                                                        error.isNotNone;
-                                                    final bubbleColor = isError
-                                                        ? colors.destructive
-                                                        : self
-                                                            ? colors.primary
-                                                            : colors.card;
-                                                    final borderColor = self ||
-                                                            isError
-                                                        ? Colors.transparent
-                                                        : chatTokens.recvEdge;
-                                                    final textColor = isError
-                                                        ? colors
-                                                            .destructiveForeground
-                                                        : self
-                                                            ? colors
-                                                                .primaryForeground
-                                                            : colors.foreground;
-                                                    final timestampColor =
-                                                        chatTokens.timestamp;
-                                                    final encrypted =
-                                                        message.customProperties![
-                                                                'encrypted'] ==
-                                                            true;
-                                                    const iconSize = 13.0;
-                                                    final iconFamily = message
-                                                        .status!
-                                                        .icon
-                                                        .fontFamily;
-                                                    final iconPackage = message
-                                                        .status!
-                                                        .icon
-                                                        .fontPackage;
-                                                    final chainedPrev =
-                                                        _chatMessagesShouldChain(
-                                                      message,
-                                                      previous,
-                                                    );
-                                                    final chainedNext =
-                                                        _chatMessagesShouldChain(
-                                                      message,
-                                                      next,
-                                                    );
-                                                    final baseTextStyle =
-                                                        context.textTheme.small
-                                                            .copyWith(
-                                                      color: textColor,
-                                                      height: 1.3,
-                                                    );
-                                                    final linkStyle =
-                                                        baseTextStyle.copyWith(
-                                                      color: self
-                                                          ? colors
-                                                              .primaryForeground
-                                                          : colors.primary,
-                                                      decoration: TextDecoration
-                                                          .underline,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    );
-                                                    final parsedText =
-                                                        parseMessageText(
-                                                      text: message.text,
-                                                      baseStyle: baseTextStyle,
-                                                      linkStyle: linkStyle,
-                                                    );
-                                                    final timeColor = isError
-                                                        ? textColor
-                                                        : self
-                                                            ? colors
-                                                                .primaryForeground
-                                                            : timestampColor;
-                                                    final time = TextSpan(
-                                                      text:
-                                                          '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                                                          '${message.createdAt.minute.toString().padLeft(2, '0')}',
-                                                      style: context
-                                                          .textTheme.muted
-                                                          .copyWith(
-                                                        color: timeColor,
-                                                        fontSize: 11.0,
-                                                      ),
-                                                    );
-                                                    final status = TextSpan(
-                                                      text: String.fromCharCode(
-                                                        message.status!.icon
-                                                            .codePoint,
-                                                      ),
-                                                      style: TextStyle(
-                                                        color: self
-                                                            ? colors
-                                                                .primaryForeground
-                                                            : timestampColor,
-                                                        fontSize: iconSize,
-                                                        fontFamily: iconFamily,
-                                                        package: iconPackage,
-                                                      ),
-                                                    );
-                                                    final encryption = TextSpan(
-                                                      text: String.fromCharCode(
-                                                        (encrypted
-                                                                ? LucideIcons
-                                                                    .lockKeyhole
-                                                                : LucideIcons
-                                                                    .lockKeyholeOpen)
-                                                            .codePoint,
-                                                      ),
-                                                      style: context
-                                                          .textTheme.muted
-                                                          .copyWith(
-                                                        color: encrypted
-                                                            ? (self
-                                                                ? colors
-                                                                    .primaryForeground
-                                                                : colors
-                                                                    .foreground)
-                                                            : colors
-                                                                .destructive,
-                                                        fontSize: iconSize,
-                                                        fontFamily: iconFamily,
-                                                        package: iconPackage,
-                                                      ),
-                                                    );
-                                                    final trusted = message
-                                                            .customProperties![
-                                                        'trusted'] as bool?;
-                                                    final verification =
-                                                        trusted == null
-                                                            ? null
-                                                            : TextSpan(
-                                                                text: String
-                                                                    .fromCharCode(
-                                                                  trusted
-                                                                      .toShieldIcon
-                                                                      .codePoint,
-                                                                ),
-                                                                style: context
-                                                                    .textTheme
-                                                                    .muted
-                                                                    .copyWith(
-                                                                  color: trusted
-                                                                      ? axiGreen
-                                                                      : colors
-                                                                          .destructive,
-                                                                  fontSize:
-                                                                      iconSize,
-                                                                  fontFamily:
-                                                                      iconFamily,
-                                                                  package:
-                                                                      iconPackage,
-                                                                ),
-                                                              );
-                                                    final messageModel = message
+                                                      color: trusted
+                                                          ? axiGreen
+                                                          : colors.destructive,
+                                                      fontSize: iconSize,
+                                                      fontFamily: iconFamily,
+                                                      package: iconPackage,
+                                                    ),
+                                                  );
+                                            final messageModel = message
+                                                    .customProperties?['model']
+                                                as Message;
+                                            final quotedModel = message
+                                                    .customProperties?['quoted']
+                                                as Message?;
+                                            final reactions = (message
                                                             .customProperties?[
-                                                        'model'] as Message;
-                                                    final quotedModel = message
-                                                            .customProperties?[
-                                                        'quoted'] as Message?;
-                                                    final reactions = (message
-                                                                    .customProperties?[
-                                                                'reactions']
-                                                            as List<
-                                                                ReactionPreview>?) ??
-                                                        const <ReactionPreview>[];
-                                                    final canReact =
-                                                        !isEmailTransport;
-                                                    final isSelected =
-                                                        _selectedMessageId ==
-                                                            messageModel
-                                                                .stanzaID;
-                                                    final showReactionManager =
-                                                        canReact && isSelected;
-                                                    final showCompactReactions =
-                                                        reactions.isNotEmpty &&
-                                                            !showReactionManager;
-                                                    final bubbleContentKey =
-                                                        message.customProperties?[
-                                                                'id'] ??
-                                                            '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
-                                                    final bubbleChildren =
-                                                        <Widget>[];
-                                                    if (quotedModel != null) {
-                                                      bubbleChildren.add(
-                                                        _QuotedMessagePreview(
-                                                          message: quotedModel,
-                                                          isSelf: quotedModel
-                                                                  .senderJid ==
-                                                              user.id,
-                                                        ),
-                                                      );
-                                                    }
-                                                    if (isError) {
-                                                      bubbleChildren.addAll([
-                                                        Text(
-                                                          'Error!',
-                                                          style: context
-                                                              .textTheme.small
-                                                              .copyWith(
-                                                            color: textColor,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                        DynamicInlineText(
-                                                          key: ValueKey(
-                                                            bubbleContentKey,
-                                                          ),
-                                                          text: parsedText.body,
-                                                          details: [time],
-                                                          links:
-                                                              parsedText.links,
-                                                          onLinkTap:
-                                                              _handleLinkTap,
-                                                        ),
-                                                      ]);
-                                                    } else {
-                                                      bubbleChildren.add(
-                                                        DynamicInlineText(
-                                                          key: ValueKey(
-                                                              bubbleContentKey),
-                                                          text: parsedText.body,
-                                                          details: [
-                                                            time,
-                                                            if (self) status,
-                                                            encryption,
-                                                            if (verification !=
-                                                                null)
-                                                              verification,
-                                                          ],
-                                                          links:
-                                                              parsedText.links,
-                                                          onLinkTap:
-                                                              _handleLinkTap,
-                                                        ),
-                                                      );
-                                                      if (message.customProperties?[
-                                                              'retracted'] ??
-                                                          false) {
-                                                        bubbleChildren.add(
-                                                          Text(
-                                                            '(retracted)',
-                                                            style: extraStyle,
-                                                          ),
-                                                        );
-                                                      } else if (message
-                                                                  .customProperties?[
-                                                              'edited'] ??
-                                                          false) {
-                                                        bubbleChildren.add(
-                                                          Text(
-                                                            '(edited)',
-                                                            style: extraStyle,
-                                                          ),
-                                                        );
-                                                      }
-                                                    }
-                                                    final metadataId =
-                                                        messageModel
-                                                            .fileMetadataID;
-                                                    if (metadataId != null &&
-                                                        metadataId.isNotEmpty) {
-                                                      if (bubbleChildren
-                                                          .isNotEmpty) {
-                                                        bubbleChildren.add(
-                                                          const SizedBox(
-                                                              height: 8),
-                                                        );
-                                                      }
-                                                      final allowAttachment =
-                                                          _shouldAllowAttachment(
-                                                        senderJid: messageModel
-                                                            .senderJid,
-                                                        isSelf: self,
-                                                        knownContacts:
-                                                            rosterContacts,
-                                                      );
-                                                      bubbleChildren.add(
-                                                        ChatAttachmentPreview(
-                                                          metadataFuture:
-                                                              _metadataFutureFor(
-                                                            metadataId,
-                                                          ),
-                                                          allowed:
-                                                              allowAttachment,
-                                                          onAllowPressed:
-                                                              allowAttachment
-                                                                  ? null
-                                                                  : () =>
-                                                                      _approveAttachment(
-                                                                        messageModel
-                                                                            .senderJid,
-                                                                      ),
-                                                        ),
-                                                      );
-                                                    }
-                                                    final bubblePadding =
-                                                        showCompactReactions
-                                                            ? _bubblePadding
-                                                                .add(
-                                                                const EdgeInsets
-                                                                    .only(
-                                                                  bottom:
-                                                                      _reactionBubbleInset,
-                                                                ),
-                                                              )
-                                                            : _bubblePadding;
-                                                    final bubbleBorderRadius =
-                                                        _bubbleBorderRadius(
-                                                      isSelf: self,
-                                                      chainedPrevious:
-                                                          chainedPrev,
-                                                      chainedNext: chainedNext,
-                                                      isSelected: isSelected,
-                                                    );
-                                                    final bubbleKey =
-                                                        _messageBubbleKeys
-                                                            .putIfAbsent(
-                                                      messageModel.stanzaID,
-                                                      () => GlobalKey(),
-                                                    );
-                                                    final bubbleMaxWidth =
-                                                        clampedBubbleWidth;
-                                                    final bubbleConstraints =
-                                                        BoxConstraints(
-                                                      maxWidth: bubbleMaxWidth,
-                                                    );
-                                                    final bubbleHighlightColor =
-                                                        context.colorScheme
-                                                            .primary;
-                                                    final bubbleContent =
-                                                        Padding(
-                                                      padding: bubblePadding,
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        spacing: 4,
-                                                        children:
-                                                            bubbleChildren,
-                                                      ),
-                                                    );
-                                                    final bubble =
-                                                        LayoutBuilder(
-                                                      builder: (context,
-                                                          innerConstraints) {
-                                                        final width =
-                                                            innerConstraints
-                                                                .maxWidth;
-                                                        final bubbleWidth =
-                                                            width.isFinite
-                                                                ? width
-                                                                : null;
-                                                        final List<CutoutSpec>
-                                                            cutouts =
-                                                            showCompactReactions
-                                                                ? _buildReactionCutouts(
-                                                                    reactions:
-                                                                        reactions,
-                                                                    message:
-                                                                        messageModel,
-                                                                    canReact:
-                                                                        canReact,
-                                                                    isSelf:
-                                                                        self,
-                                                                    bubbleWidth:
-                                                                        bubbleWidth,
-                                                                  )
-                                                                : const [];
-                                                        return TweenAnimationBuilder<
-                                                            double>(
-                                                          tween: Tween<double>(
-                                                            begin: 0,
-                                                            end: isSelected
-                                                                ? 1.0
-                                                                : 0.0,
-                                                          ),
-                                                          duration:
-                                                              _bubbleFocusDuration,
-                                                          curve:
-                                                              _bubbleFocusCurve,
-                                                          child: bubbleContent,
-                                                          builder: (
-                                                            context,
-                                                            shadowValue,
-                                                            child,
-                                                          ) {
-                                                            return CutoutSurface(
-                                                              key: bubbleKey,
-                                                              backgroundColor:
-                                                                  bubbleColor,
-                                                              borderColor:
-                                                                  borderColor,
-                                                              shape:
-                                                                  ContinuousRectangleBorder(
-                                                                borderRadius:
-                                                                    bubbleBorderRadius,
+                                                        'reactions']
+                                                    as List<
+                                                        ReactionPreview>?) ??
+                                                const <ReactionPreview>[];
+                                            final canReact = !isEmailTransport;
+                                            final isSelected =
+                                                _selectedMessageId ==
+                                                    messageModel.stanzaID;
+                                            final showReactionManager =
+                                                canReact && isSelected;
+                                            final showCompactReactions =
+                                                reactions.isNotEmpty &&
+                                                    !showReactionManager;
+                                            final bubbleContentKey = message
+                                                    .customProperties?['id'] ??
+                                                '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
+                                            final bubbleChildren = <Widget>[];
+                                            if (quotedModel != null) {
+                                              bubbleChildren.add(
+                                                _QuotedMessagePreview(
+                                                  message: quotedModel,
+                                                  isSelf:
+                                                      quotedModel.senderJid ==
+                                                          user.id,
+                                                ),
+                                              );
+                                            }
+                                            if (isError) {
+                                              bubbleChildren.addAll([
+                                                Text(
+                                                  'Error!',
+                                                  style: context.textTheme.small
+                                                      .copyWith(
+                                                    color: textColor,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                DynamicInlineText(
+                                                  key: ValueKey(
+                                                    bubbleContentKey,
+                                                  ),
+                                                  text: parsedText.body,
+                                                  details: [time],
+                                                  links: parsedText.links,
+                                                  onLinkTap: _handleLinkTap,
+                                                ),
+                                              ]);
+                                            } else {
+                                              bubbleChildren.add(
+                                                DynamicInlineText(
+                                                  key: ValueKey(
+                                                      bubbleContentKey),
+                                                  text: parsedText.body,
+                                                  details: [
+                                                    time,
+                                                    if (self) status,
+                                                    encryption,
+                                                    if (verification != null)
+                                                      verification,
+                                                  ],
+                                                  links: parsedText.links,
+                                                  onLinkTap: _handleLinkTap,
+                                                ),
+                                              );
+                                              if (message.customProperties?[
+                                                      'retracted'] ??
+                                                  false) {
+                                                bubbleChildren.add(
+                                                  Text(
+                                                    '(retracted)',
+                                                    style: extraStyle,
+                                                  ),
+                                                );
+                                              } else if (message
+                                                          .customProperties?[
+                                                      'edited'] ??
+                                                  false) {
+                                                bubbleChildren.add(
+                                                  Text(
+                                                    '(edited)',
+                                                    style: extraStyle,
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                            final metadataId =
+                                                messageModel.fileMetadataID;
+                                            if (metadataId != null &&
+                                                metadataId.isNotEmpty) {
+                                              if (bubbleChildren.isNotEmpty) {
+                                                bubbleChildren.add(
+                                                  const SizedBox(height: 8),
+                                                );
+                                              }
+                                              final allowAttachment =
+                                                  _shouldAllowAttachment(
+                                                senderJid:
+                                                    messageModel.senderJid,
+                                                isSelf: self,
+                                                knownContacts: rosterContacts,
+                                              );
+                                              bubbleChildren.add(
+                                                ChatAttachmentPreview(
+                                                  metadataFuture:
+                                                      _metadataFutureFor(
+                                                    metadataId,
+                                                  ),
+                                                  allowed: allowAttachment,
+                                                  onAllowPressed:
+                                                      allowAttachment
+                                                          ? null
+                                                          : () =>
+                                                              _approveAttachment(
+                                                                messageModel
+                                                                    .senderJid,
                                                               ),
-                                                              cutouts: cutouts,
-                                                              shadows:
-                                                                  _selectedBubbleShadows(
-                                                                bubbleHighlightColor,
-                                                              ),
-                                                              shadowOpacity:
-                                                                  shadowValue,
-                                                              child: child!,
-                                                            );
-                                                          },
-                                                        );
-                                                      },
-                                                    );
-                                                    final baseAlignment = self
-                                                        ? Alignment.centerRight
-                                                        : Alignment.centerLeft;
-                                                    final targetAlignment =
-                                                        isSelected
-                                                            ? Alignment.center
-                                                            : baseAlignment;
-                                                    final shadowedBubble =
-                                                        ConstrainedBox(
-                                                      constraints:
-                                                          bubbleConstraints,
-                                                      child: bubble,
-                                                    );
-                                                    final alignedBubble =
-                                                        AnimatedAlign(
-                                                      duration:
-                                                          _bubbleFocusDuration,
-                                                      curve: _bubbleFocusCurve,
-                                                      alignment:
-                                                          targetAlignment,
-                                                      child: shadowedBubble,
-                                                    );
-                                                    final canResend = message
-                                                            .status ==
-                                                        MessageStatus.failed;
-                                                    List<GlobalKey>?
-                                                        actionButtonKeys;
-                                                    if (isSelected) {
-                                                      final actionCount =
-                                                          canResend ? 5 : 4;
-                                                      actionButtonKeys =
-                                                          List.generate(
-                                                              actionCount,
-                                                              (_) =>
-                                                                  GlobalKey());
-                                                      _selectionActionButtonKeys
-                                                        ..clear()
-                                                        ..addAll(
-                                                            actionButtonKeys);
-                                                    } else if (_selectedMessageId ==
-                                                        messageModel.stanzaID) {
-                                                      _selectionActionButtonKeys
-                                                          .clear();
-                                                    }
-                                                    final actionBar =
-                                                        _MessageActionBar(
-                                                      onReply: () {
-                                                        context
-                                                            .read<ChatBloc>()
-                                                            .add(
-                                                              ChatQuoteRequested(
+                                                ),
+                                              );
+                                            }
+                                            final bubblePadding =
+                                                showCompactReactions
+                                                    ? _bubblePadding.add(
+                                                        const EdgeInsets.only(
+                                                          bottom:
+                                                              _reactionBubbleInset,
+                                                        ),
+                                                      )
+                                                    : _bubblePadding;
+                                            final bubbleBorderRadius =
+                                                _bubbleBorderRadius(
+                                              isSelf: self,
+                                              chainedPrevious: chainedPrev,
+                                              chainedNext: chainedNext,
+                                              isSelected: isSelected,
+                                            );
+                                            final bubbleKey =
+                                                _messageBubbleKeys.putIfAbsent(
+                                              messageModel.stanzaID,
+                                              () => GlobalKey(),
+                                            );
+                                            final bubbleMaxWidth =
+                                                clampedBubbleWidth;
+                                            final bubbleConstraints =
+                                                BoxConstraints(
+                                              maxWidth: bubbleMaxWidth,
+                                            );
+                                            final bubbleHighlightColor =
+                                                context.colorScheme.primary;
+                                            final bubbleContent = Padding(
+                                              padding: bubblePadding,
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                spacing: 4,
+                                                children: bubbleChildren,
+                                              ),
+                                            );
+                                            final nextIsTailSpacer =
+                                                next?.customProperties?[
+                                                        'selectionSpacer'] ==
+                                                    true;
+                                            final isRenderableBubble =
+                                                !(isSelectionSpacer ||
+                                                    isEmptyState);
+                                            final isLatestBubble =
+                                                isRenderableBubble &&
+                                                    (next == null ||
+                                                        nextIsTailSpacer);
+                                            final outerPadding =
+                                                EdgeInsets.only(
+                                              top: 2,
+                                              bottom: isLatestBubble ? 12 : 2,
+                                              left: _chatHorizontalPadding,
+                                              right: _chatHorizontalPadding,
+                                            );
+                                            final bubble = LayoutBuilder(
+                                              builder:
+                                                  (context, innerConstraints) {
+                                                final width =
+                                                    innerConstraints.maxWidth;
+                                                final bubbleWidth =
+                                                    width.isFinite
+                                                        ? width
+                                                        : null;
+                                                final List<CutoutSpec> cutouts =
+                                                    showCompactReactions
+                                                        ? _buildReactionCutouts(
+                                                            reactions:
+                                                                reactions,
+                                                            message:
                                                                 messageModel,
-                                                              ),
-                                                            );
-                                                        _focusNode
-                                                            .requestFocus();
-                                                        _clearMessageSelection();
-                                                      },
-                                                      onForward: () =>
-                                                          _handleForward(
-                                                              messageModel),
-                                                      onCopy: () =>
-                                                          _copyMessage(
-                                                        dashMessage: message,
-                                                        model: messageModel,
+                                                            canReact: canReact,
+                                                            isSelf: self,
+                                                            bubbleWidth:
+                                                                bubbleWidth,
+                                                          )
+                                                        : const [];
+                                                return TweenAnimationBuilder<
+                                                    double>(
+                                                  tween: Tween<double>(
+                                                    begin: 0,
+                                                    end: isSelected ? 1.0 : 0.0,
+                                                  ),
+                                                  duration:
+                                                      _bubbleFocusDuration,
+                                                  curve: _bubbleFocusCurve,
+                                                  child: bubbleContent,
+                                                  builder: (
+                                                    context,
+                                                    shadowValue,
+                                                    child,
+                                                  ) {
+                                                    return CutoutSurface(
+                                                      key: bubbleKey,
+                                                      backgroundColor:
+                                                          bubbleColor,
+                                                      borderColor: borderColor,
+                                                      shape:
+                                                          ContinuousRectangleBorder(
+                                                        borderRadius:
+                                                            bubbleBorderRadius,
                                                       ),
-                                                      onDetails: () =>
-                                                          _showMessageDetails(
-                                                              message),
-                                                      onResend: canResend
-                                                          ? () => context
-                                                              .read<ChatBloc>()
-                                                              .add(
-                                                                ChatMessageResendRequested(
-                                                                  messageModel,
-                                                                ),
-                                                              )
-                                                          : null,
-                                                      hitRegionKeys:
-                                                          actionButtonKeys,
-                                                    );
-                                                    if (isSelected) {
-                                                      _activeSelectionExtrasKey ??=
-                                                          GlobalKey();
-                                                      _scheduleSelectionAutoscroll();
-                                                      _requestSelectionControlsMeasurement();
-                                                    } else if (_activeSelectionExtrasKey !=
-                                                            null &&
-                                                        _selectedMessageId ==
-                                                            messageModel
-                                                                .stanzaID) {
-                                                      _activeSelectionExtrasKey =
-                                                          null;
-                                                    }
-                                                    final attachmentsKey =
-                                                        isSelected
-                                                            ? _activeSelectionExtrasKey
-                                                            : null;
-                                                    final attachmentTopPadding =
-                                                        isSelected
-                                                            ? _selectionAttachmentSelectedGap
-                                                            : _selectionAttachmentBaseGap;
-                                                    final attachmentBottomPadding =
-                                                        _selectionExtrasViewportGap +
-                                                            (showReactionManager
-                                                                ? _reactionManagerShadowGap
-                                                                : 0);
-                                                    final attachmentPadding =
-                                                        EdgeInsets.only(
-                                                      top: attachmentTopPadding,
-                                                      bottom:
-                                                          attachmentBottomPadding,
-                                                      left:
-                                                          _chatHorizontalPadding,
-                                                      right:
-                                                          _chatHorizontalPadding,
-                                                    );
-                                                    final attachments =
-                                                        AnimatedSwitcher(
-                                                      duration:
-                                                          _bubbleFocusDuration,
-                                                      switchInCurve:
-                                                          _bubbleFocusCurve,
-                                                      switchOutCurve:
-                                                          Curves.easeInCubic,
-                                                      layoutBuilder: (
-                                                        currentChild,
-                                                        previousChildren,
-                                                      ) {
-                                                        return Stack(
-                                                          clipBehavior:
-                                                              Clip.none,
-                                                          alignment: Alignment
-                                                              .topCenter,
-                                                          children: [
-                                                            ...previousChildren,
-                                                            if (currentChild !=
-                                                                null)
-                                                              currentChild,
-                                                          ],
-                                                        );
-                                                      },
-                                                      transitionBuilder:
-                                                          (child, animation) {
-                                                        final slideAnimation =
-                                                            Tween<Offset>(
-                                                          begin: const Offset(
-                                                              0, -0.05),
-                                                          end: Offset.zero,
-                                                        ).animate(animation);
-                                                        return FadeTransition(
-                                                          opacity: animation,
-                                                          child: SizeTransition(
-                                                            sizeFactor:
-                                                                animation,
-                                                            axisAlignment: -1,
-                                                            child:
-                                                                SlideTransition(
-                                                              position:
-                                                                  slideAnimation,
-                                                              child: child,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                      child: isSelected
-                                                          ? KeyedSubtree(
-                                                              key:
-                                                                  attachmentsKey,
-                                                              child: Padding(
-                                                                padding:
-                                                                    attachmentPadding,
-                                                                child: Column(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .center,
-                                                                  children: [
-                                                                    actionBar,
-                                                                    if (showReactionManager)
-                                                                      const SizedBox(
-                                                                        height:
-                                                                            20,
-                                                                      ),
-                                                                    if (showReactionManager)
-                                                                      KeyedSubtree(
-                                                                        key: _reactionManagerKey ??=
-                                                                            GlobalKey(),
-                                                                        child:
-                                                                            _ReactionManager(
-                                                                          reactions:
-                                                                              reactions,
-                                                                          onToggle: (emoji) =>
-                                                                              _toggleQuickReaction(
-                                                                            messageModel,
-                                                                            emoji,
-                                                                          ),
-                                                                          onAddCustom: () =>
-                                                                              _handleReactionSelection(
-                                                                            messageModel,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                            )
-                                                          : const SizedBox
-                                                              .shrink(),
-                                                    );
-                                                    final messageKey =
-                                                        _messageKeys
-                                                            .putIfAbsent(
-                                                      messageModel.stanzaID,
-                                                      () => GlobalKey(),
-                                                    );
-                                                    final selectableBubble =
-                                                        GestureDetector(
-                                                      behavior: HitTestBehavior
-                                                          .translucent,
-                                                      onTap: () {
-                                                        if (isSelected) {
-                                                          _clearMessageSelection();
-                                                        }
-                                                      },
-                                                      onLongPress: () =>
-                                                          _toggleMessageSelection(
-                                                        messageModel.stanzaID,
+                                                      cutouts: cutouts,
+                                                      shadows:
+                                                          _selectedBubbleShadows(
+                                                        bubbleHighlightColor,
                                                       ),
-                                                      child: alignedBubble,
-                                                    );
-                                                    final animatedStack =
-                                                        AnimatedSize(
-                                                      duration:
-                                                          _bubbleFocusDuration,
-                                                      curve: _bubbleFocusCurve,
-                                                      clipBehavior: Clip.none,
-                                                      child: Column(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .center,
-                                                        children: [
-                                                          selectableBubble,
-                                                          attachments,
-                                                        ],
-                                                      ),
-                                                    );
-                                                    Widget bubbleWithSlack =
-                                                        animatedStack;
-                                                    bubbleWithSlack = Align(
-                                                      alignment:
-                                                          Alignment.center,
-                                                      child: SizedBox(
-                                                        width:
-                                                            messageRowMaxWidth,
-                                                        child: bubbleWithSlack,
-                                                      ),
-                                                    );
-                                                    return KeyedSubtree(
-                                                      key: messageKey,
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          vertical: 2,
-                                                          horizontal:
-                                                              _chatHorizontalPadding,
-                                                        ),
-                                                        child: bubbleWithSlack,
-                                                      ),
+                                                      shadowOpacity:
+                                                          shadowValue,
+                                                      child: child!,
                                                     );
                                                   },
-                                                ),
-                                                messageListOptions:
-                                                    dashMessageListOptions,
-                                                readOnly: true,
-                                                typingUsers: [
-                                                  if (state.typing == true)
-                                                    user,
-                                                  if (state.chat?.chatState
-                                                          ?.name ==
-                                                      'composing')
-                                                    ChatUser(
-                                                      id: state.chat!.jid,
-                                                      firstName:
-                                                          state.chat!.title,
-                                                    ),
-                                                ].take(1).toList(),
+                                                );
+                                              },
+                                            );
+                                            final baseAlignment = self
+                                                ? Alignment.centerRight
+                                                : Alignment.centerLeft;
+                                            final targetAlignment = isSelected
+                                                ? Alignment.center
+                                                : baseAlignment;
+                                            final shadowedBubble =
+                                                ConstrainedBox(
+                                              constraints: bubbleConstraints,
+                                              child: bubble,
+                                            );
+                                            final alignedBubble = AnimatedAlign(
+                                              duration: _bubbleFocusDuration,
+                                              curve: _bubbleFocusCurve,
+                                              alignment: targetAlignment,
+                                              child: shadowedBubble,
+                                            );
+                                            final canResend = message.status ==
+                                                MessageStatus.failed;
+                                            List<GlobalKey>? actionButtonKeys;
+                                            if (isSelected) {
+                                              final actionCount =
+                                                  canResend ? 5 : 4;
+                                              actionButtonKeys = List.generate(
+                                                  actionCount,
+                                                  (_) => GlobalKey());
+                                              _selectionActionButtonKeys
+                                                ..clear()
+                                                ..addAll(actionButtonKeys);
+                                            } else if (_selectedMessageId ==
+                                                messageModel.stanzaID) {
+                                              _selectionActionButtonKeys
+                                                  .clear();
+                                            }
+                                            final actionBar = _MessageActionBar(
+                                              onReply: () {
+                                                context.read<ChatBloc>().add(
+                                                      ChatQuoteRequested(
+                                                        messageModel,
+                                                      ),
+                                                    );
+                                                _focusNode.requestFocus();
+                                                _clearMessageSelection();
+                                              },
+                                              onForward: () =>
+                                                  _handleForward(messageModel),
+                                              onCopy: () => _copyMessage(
+                                                dashMessage: message,
+                                                model: messageModel,
                                               ),
-                                            ),
-                                          ),
+                                              onDetails: () =>
+                                                  _showMessageDetails(message),
+                                              onResend: canResend
+                                                  ? () => context
+                                                      .read<ChatBloc>()
+                                                      .add(
+                                                        ChatMessageResendRequested(
+                                                          messageModel,
+                                                        ),
+                                                      )
+                                                  : null,
+                                              hitRegionKeys: actionButtonKeys,
+                                            );
+                                            if (isSelected) {
+                                              _activeSelectionExtrasKey ??=
+                                                  GlobalKey();
+                                              _scheduleSelectionAutoscroll();
+                                              _requestSelectionControlsMeasurement();
+                                            } else if (_activeSelectionExtrasKey !=
+                                                    null &&
+                                                _selectedMessageId ==
+                                                    messageModel.stanzaID) {
+                                              _activeSelectionExtrasKey = null;
+                                            }
+                                            final attachmentsKey = isSelected
+                                                ? _activeSelectionExtrasKey
+                                                : null;
+                                            final attachmentTopPadding = isSelected
+                                                ? _selectionAttachmentSelectedGap
+                                                : _selectionAttachmentBaseGap;
+                                            final attachmentBottomPadding =
+                                                _selectionExtrasViewportGap +
+                                                    (showReactionManager
+                                                        ? _reactionManagerShadowGap
+                                                        : 0);
+                                            final attachmentPadding =
+                                                EdgeInsets.only(
+                                              top: attachmentTopPadding,
+                                              bottom: attachmentBottomPadding,
+                                              left: _chatHorizontalPadding,
+                                              right: _chatHorizontalPadding,
+                                            );
+                                            final attachments =
+                                                AnimatedSwitcher(
+                                              duration: _bubbleFocusDuration,
+                                              switchInCurve: _bubbleFocusCurve,
+                                              switchOutCurve:
+                                                  Curves.easeInCubic,
+                                              layoutBuilder: (
+                                                currentChild,
+                                                previousChildren,
+                                              ) {
+                                                return Stack(
+                                                  clipBehavior: Clip.none,
+                                                  alignment:
+                                                      Alignment.topCenter,
+                                                  children: [
+                                                    ...previousChildren,
+                                                    if (currentChild != null)
+                                                      currentChild,
+                                                  ],
+                                                );
+                                              },
+                                              transitionBuilder:
+                                                  (child, animation) {
+                                                final slideAnimation =
+                                                    Tween<Offset>(
+                                                  begin: const Offset(0, -0.05),
+                                                  end: Offset.zero,
+                                                ).animate(animation);
+                                                return FadeTransition(
+                                                  opacity: animation,
+                                                  child: SizeTransition(
+                                                    sizeFactor: animation,
+                                                    axisAlignment: -1,
+                                                    child: SlideTransition(
+                                                      position: slideAnimation,
+                                                      child: child,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: isSelected
+                                                  ? KeyedSubtree(
+                                                      key: attachmentsKey,
+                                                      child: Padding(
+                                                        padding:
+                                                            attachmentPadding,
+                                                        child: Column(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .center,
+                                                          children: [
+                                                            actionBar,
+                                                            if (showReactionManager)
+                                                              const SizedBox(
+                                                                height: 20,
+                                                              ),
+                                                            if (showReactionManager)
+                                                              KeyedSubtree(
+                                                                key: _reactionManagerKey ??=
+                                                                    GlobalKey(),
+                                                                child:
+                                                                    _ReactionManager(
+                                                                  reactions:
+                                                                      reactions,
+                                                                  onToggle:
+                                                                      (emoji) =>
+                                                                          _toggleQuickReaction(
+                                                                    messageModel,
+                                                                    emoji,
+                                                                  ),
+                                                                  onAddCustom: () =>
+                                                                      _handleReactionSelection(
+                                                                    messageModel,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : const SizedBox.shrink(),
+                                            );
+                                            final messageKey =
+                                                _messageKeys.putIfAbsent(
+                                              messageModel.stanzaID,
+                                              () => GlobalKey(),
+                                            );
+                                            final selectableBubble =
+                                                GestureDetector(
+                                              behavior:
+                                                  HitTestBehavior.translucent,
+                                              onTap: () {
+                                                if (isSelected) {
+                                                  _clearMessageSelection();
+                                                }
+                                              },
+                                              onLongPress: () =>
+                                                  _toggleMessageSelection(
+                                                messageModel.stanzaID,
+                                              ),
+                                              child: alignedBubble,
+                                            );
+                                            final animatedStack = AnimatedSize(
+                                              duration: _bubbleFocusDuration,
+                                              curve: _bubbleFocusCurve,
+                                              clipBehavior: Clip.none,
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: [
+                                                  selectableBubble,
+                                                  attachments,
+                                                ],
+                                              ),
+                                            );
+                                            Widget bubbleWithSlack =
+                                                animatedStack;
+                                            bubbleWithSlack = Align(
+                                              alignment: Alignment.center,
+                                              child: SizedBox(
+                                                width: messageRowMaxWidth,
+                                                child: bubbleWithSlack,
+                                              ),
+                                            );
+                                            return KeyedSubtree(
+                                              key: messageKey,
+                                              child: Padding(
+                                                padding: outerPadding,
+                                                child: bubbleWithSlack,
+                                              ),
+                                            );
+                                          },
                                         ),
-                                        Positioned(
-                                          left: 0,
-                                          right: 0,
-                                          bottom: _composerBottomInset(context),
-                                          child: _buildComposer(
-                                            isEmailTransport: isEmailTransport,
-                                            hintText: composerHintText,
-                                          ),
-                                        ),
-                                      ],
+                                        messageListOptions:
+                                            dashMessageListOptions,
+                                        readOnly: true,
+                                      ),
                                     ),
+                                  ),
+                                  quoteSection,
+                                  _buildComposer(
+                                    isEmailTransport: isEmailTransport,
+                                    hintText: composerHintText,
                                   ),
                                 ],
                               );
@@ -2886,6 +2752,7 @@ class _QuotedMessagePreview extends StatelessWidget {
 
 class _QuoteBanner extends StatelessWidget {
   const _QuoteBanner({
+    super.key,
     required this.message,
     required this.isSelf,
     required this.onClear,
