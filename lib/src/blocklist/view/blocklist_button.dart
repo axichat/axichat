@@ -92,7 +92,7 @@ class BlocklistUnblockAllButton extends StatelessWidget {
                 )
               : null,
           child: const Text('Unblock all'),
-        );
+        ).withTapBounce(enabled: !disabled);
       },
     );
   }

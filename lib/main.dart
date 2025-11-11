@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
 import 'package:logging/logging.dart';
@@ -28,6 +29,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   _configureLogging();
+  _registerThirdPartyLicenses();
 
   final storageDirectory = await getApplicationDocumentsDirectory();
   final baseStorage = await HydratedStorage.build(
@@ -136,6 +138,17 @@ void _configureLogging() {
   }
 
   Logger.root.level = Level.WARNING;
+}
+
+void _registerThirdPartyLicenses() {
+  LicenseRegistry.addLicense(() async* {
+    final text =
+        await rootBundle.loadString('assets/licenses/delta_chat_core_mpl.txt');
+    yield LicenseEntryWithLineBreaks(
+      ['Delta Chat Core (MPL-2.0)'],
+      text,
+    );
+  });
 }
 
 class BlocLogger extends BlocObserver {

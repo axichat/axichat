@@ -11,7 +11,8 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/app_theme.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
@@ -24,6 +25,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -140,6 +142,19 @@ class _AxichatState extends State<Axichat> {
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
         RepositoryProvider.value(value: _reminderController),
+        RepositoryProvider<CredentialStore>(
+          create: (context) => CredentialStore(
+            capability: context.read<Capability>(),
+            policy: context.read<Policy>(),
+          ),
+        ),
+        RepositoryProvider<EmailService>(
+          create: (context) => EmailService(
+            credentialStore: context.read<CredentialStore>(),
+            databaseBuilder: () => context.read<XmppService>().database,
+            notificationService: context.read<NotificationService>(),
+          ),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -148,11 +163,9 @@ class _AxichatState extends State<Axichat> {
           ),
           BlocProvider(
             create: (context) => AuthenticationCubit(
-              credentialStore: CredentialStore(
-                capability: context.read<Capability>(),
-                policy: context.read<Policy>(),
-              ),
+              credentialStore: context.read<CredentialStore>(),
               xmppService: context.read<XmppService>(),
+              emailService: context.read<EmailService>(),
               notificationService: context.read<NotificationService>(),
             ),
           ),
@@ -206,22 +219,16 @@ class MaterialAxichat extends StatelessWidget {
             responsive: state.readReceipts,
           );
         }
-        final lightTheme = ShadThemeData(
-          colorScheme: ShadColorScheme.fromName(state.shadColor.name),
+        const chatNeutrals = ChatNeutrals();
+        final lightTheme = AppTheme.build(
+          shadColor: state.shadColor,
           brightness: Brightness.light,
-          decoration: const ShadDecoration(
-            errorPadding: inputSubtextInsets,
-          ),
+          neutrals: chatNeutrals,
         );
-        final darkTheme = ShadThemeData(
-          colorScheme: ShadColorScheme.fromName(
-            state.shadColor.name,
-            brightness: Brightness.dark,
-          ),
+        final darkTheme = AppTheme.build(
+          shadColor: state.shadColor,
           brightness: Brightness.dark,
-          decoration: const ShadDecoration(
-            errorPadding: inputSubtextInsets,
-          ),
+          neutrals: chatNeutrals,
         );
         return ShadApp.router(
           localizationsDelegates: const [
@@ -240,6 +247,32 @@ class MaterialAxichat extends StatelessWidget {
           materialThemeBuilder: (context, theme) {
             final shadTheme =
                 theme.brightness == Brightness.light ? lightTheme : darkTheme;
+            final chatTokens = AppTheme.tokens(
+              brightness: theme.brightness,
+              neutrals: chatNeutrals,
+            );
+            final materialColors = shadTheme.colorScheme;
+            final globalRadius = shadTheme.radius;
+            final buttonShape =
+                ContinuousRectangleBorder(borderRadius: globalRadius);
+            final listTileShape = buttonShape;
+            final outlineInputBorder = OutlineInputBorder(
+              borderRadius: globalRadius,
+              borderSide: BorderSide(color: materialColors.border),
+            );
+            final focusedInputBorder = outlineInputBorder.copyWith(
+              borderSide: BorderSide(color: materialColors.primary, width: 1.5),
+            );
+            final errorBorder = outlineInputBorder.copyWith(
+              borderSide:
+                  BorderSide(color: materialColors.destructive, width: 1),
+            );
+            final selectionOverlay = materialColors.primary.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
+            );
+            final focusRingColor = materialColors.primary.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.25 : 0.15,
+            );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: 20),
               textTheme: TextTheme(
@@ -256,11 +289,100 @@ class MaterialAxichat extends StatelessWidget {
                 labelMedium: shadTheme.textTheme.muted,
                 labelSmall: shadTheme.textTheme.muted,
               ),
+              scaffoldBackgroundColor: materialColors.background,
+              dividerColor: materialColors.border,
+              cardColor: materialColors.card,
+              listTileTheme: ListTileThemeData(
+                shape: listTileShape,
+                tileColor: materialColors.card,
+                selectedTileColor: Color.alphaBlend(
+                  selectionOverlay,
+                  materialColors.card,
+                ),
+                textColor: materialColors.foreground,
+                iconColor: materialColors.foreground,
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: materialColors.card,
+                focusColor: focusRingColor,
+                hoverColor: materialColors.card,
+                border: outlineInputBorder,
+                enabledBorder: outlineInputBorder,
+                disabledBorder: outlineInputBorder.copyWith(
+                  borderSide: BorderSide(
+                    color: materialColors.border.withValues(alpha: 0.6),
+                  ),
+                ),
+                focusedBorder: focusedInputBorder,
+                errorBorder: errorBorder,
+                focusedErrorBorder: errorBorder,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              filledButtonTheme: FilledButtonThemeData(
+                style: FilledButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: materialColors.primary,
+                  foregroundColor: materialColors.primaryForeground,
+                  shape: buttonShape,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: materialColors.card,
+                  foregroundColor: materialColors.foreground,
+                  shape: buttonShape,
+                  side: BorderSide(color: materialColors.border),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: materialColors.foreground,
+                  shape: buttonShape,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+              ),
+              scrollbarTheme: ScrollbarThemeData(
+                thickness: const WidgetStatePropertyAll<double>(4),
+                radius: const Radius.circular(999),
+                thumbColor: WidgetStateProperty.resolveWith(
+                  (states) {
+                    final hovered = states.contains(WidgetState.hovered) ||
+                        states.contains(WidgetState.focused) ||
+                        states.contains(WidgetState.dragged);
+                    return hovered
+                        ? chatTokens.scrollbarHover
+                        : chatTokens.scrollbar;
+                  },
+                ),
+              ),
+              extensions: [
+                ...theme.extensions.values
+                    .where((extension) => extension is! ChatThemeTokens),
+                chatTokens,
+              ],
             );
           },
           routerConfig: _router,
           builder: (context, child) {
-            return BlocListener<AuthenticationCubit, AuthenticationState>(
+            final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
+            final routedContent =
+                BlocListener<AuthenticationCubit, AuthenticationState>(
               listener: (context, state) {
                 final location = routeLocations[_router.state.matchedLocation]!;
                 if (state is AuthenticationNone &&
@@ -278,6 +400,10 @@ class MaterialAxichat extends StatelessWidget {
                 ],
               ),
             );
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: overlayStyle,
+              child: routedContent,
+            );
           },
         );
       },
@@ -293,4 +419,25 @@ extension ThemeExtension on BuildContext {
   IconThemeData get iconTheme => IconTheme.of(this);
 
   BorderRadius get radius => ShadTheme.of(this).radius;
+
+  ChatThemeTokens get chatTheme =>
+      Theme.of(this).extension<ChatThemeTokens>() ??
+      AppTheme.tokens(
+        brightness: Theme.of(this).brightness,
+      );
+}
+
+SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  final baseStyle =
+      isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
+  final iconBrightness = isDark ? Brightness.light : Brightness.dark;
+  return baseStyle.copyWith(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: iconBrightness,
+    statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: iconBrightness,
+    systemNavigationBarDividerColor: Colors.transparent,
+  );
 }

@@ -40,56 +40,60 @@ class RosterInvitesList extends StatelessWidget {
           );
         }
 
-        return ListView.separated(
-          separatorBuilder: (_, __) => const AxiListDivider(),
-          itemCount: invites.length,
-          itemBuilder: (context, index) {
-            final invite = invites![index];
-            return BlocSelector<RosterCubit, RosterState, bool>(
-              selector: (state) =>
-                  state is RosterLoading && state.jid == invite.jid,
-              builder: (context, disabled) {
-                return AxiListTile(
-                  key: Key(invite.jid),
-                  menuItems: [
-                    AxiDeleteMenuItem(
-                      onPressed: () async {
-                        if (!disabled &&
-                            await confirm(context,
-                                    text:
-                                        'Reject invite from ${invite.jid}?') ==
-                                true &&
-                            context.mounted) {
-                          context
-                              .read<RosterCubit>()
-                              .rejectContact(jid: invite.jid);
-                        }
-                      },
+        return ColoredBox(
+          color: context.colorScheme.background,
+          child: ListView.builder(
+            itemCount: invites.length,
+            itemBuilder: (context, index) {
+              final invite = invites![index];
+              return BlocSelector<RosterCubit, RosterState, bool>(
+                selector: (state) =>
+                    state is RosterLoading && state.jid == invite.jid,
+                builder: (context, disabled) {
+                  return ListItemPadding(
+                    child: AxiListTile(
+                      key: Key(invite.jid),
+                      menuItems: [
+                        AxiDeleteMenuItem(
+                          onPressed: () async {
+                            if (!disabled &&
+                                await confirm(context,
+                                        text:
+                                            'Reject invite from ${invite.jid}?') ==
+                                    true &&
+                                context.mounted) {
+                              context
+                                  .read<RosterCubit>()
+                                  .rejectContact(jid: invite.jid);
+                            }
+                          },
+                        ),
+                        BlockMenuItem(jid: invite.jid),
+                      ],
+                      leading: AxiAvatar(jid: invite.jid),
+                      title: invite.title,
+                      subtitle: invite.jid,
+                      actions: [
+                        AxiIconButton(
+                          tooltip: 'Add contact',
+                          iconData: LucideIcons.userPlus,
+                          color: axiGreen,
+                          onPressed: disabled
+                              ? null
+                              : () {
+                                  context.read<RosterCubit?>()?.addContact(
+                                        jid: invite.jid,
+                                        title: invite.title,
+                                      );
+                                },
+                        ),
+                      ],
                     ),
-                    BlockMenuItem(jid: invite.jid),
-                  ],
-                  leading: AxiAvatar(jid: invite.jid),
-                  title: invite.title,
-                  subtitle: invite.jid,
-                  actions: [
-                    AxiIconButton(
-                      tooltip: 'Add contact',
-                      iconData: LucideIcons.userPlus,
-                      color: axiGreen,
-                      onPressed: disabled
-                          ? null
-                          : () {
-                              context.read<RosterCubit?>()?.addContact(
-                                    jid: invite.jid,
-                                    title: invite.title,
-                                  );
-                            },
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+                  );
+                },
+              );
+            },
+          ),
         );
       },
     );

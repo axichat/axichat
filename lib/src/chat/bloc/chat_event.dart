@@ -103,3 +103,63 @@ final class ChatAlertHidden extends ChatEvent {
   @override
   List<Object?> get props => [forever];
 }
+
+final class ChatTransportChanged extends ChatEvent {
+  const ChatTransportChanged(this.transport);
+
+  final MessageTransport transport;
+
+  @override
+  List<Object?> get props => [transport];
+}
+
+final class ChatQuoteRequested extends ChatEvent {
+  const ChatQuoteRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+final class ChatQuoteCleared extends ChatEvent {
+  const ChatQuoteCleared();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatMessageReactionToggled extends ChatEvent {
+  const ChatMessageReactionToggled({
+    required this.message,
+    required this.emoji,
+  });
+
+  final Message message;
+  final String emoji;
+
+  @override
+  List<Object?> get props => [message, emoji];
+}
+
+final class ChatMessageForwardRequested extends ChatEvent {
+  const ChatMessageForwardRequested({
+    required this.message,
+    required this.target,
+  });
+
+  final Message message;
+  final Chat target;
+
+  @override
+  List<Object?> get props => [message, target];
+}
+
+final class ChatMessageResendRequested extends ChatEvent {
+  const ChatMessageResendRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}

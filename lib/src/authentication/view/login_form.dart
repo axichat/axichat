@@ -133,7 +133,7 @@ class _LoginFormState extends State<LoginForm> {
                     ),
                     trailing: const SizedBox.shrink(),
                     child: const Text('Log in'),
-                  );
+                  ).withTapBounce(enabled: !loading);
                 },
               ),
             ],

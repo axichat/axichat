@@ -52,7 +52,7 @@ class _PasswordInputState extends State<PasswordInput> {
         onPressed: () {
           setState(() => obscure = !obscure);
         },
-      ),
+      ).withTapBounce(),
       validator: widget.confirmValidator ??
           (text) {
             if (text.isEmpty) {

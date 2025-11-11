@@ -53,9 +53,18 @@ mixin MessageService on XmppBase, BaseStreamService {
   }) =>
       createSingleItemStream<List<Message>, XmppDatabase>(
         watchFunction: (db) async {
-          final stream = db.watchChatMessages(jid, start: start, end: end);
-          final initial = await db.getChatMessages(jid, start: start, end: end);
-          return stream.startWith(initial);
+          final messagesStream =
+              db.watchChatMessages(jid, start: start, end: end);
+          final reactionsStream = db.watchReactionsForChat(jid);
+          final initialMessages =
+              await db.getChatMessages(jid, start: start, end: end);
+          final initialReactions = await db.getReactionsForChat(jid);
+          return _combineMessageAndReactionStreams(
+            messageStream: messagesStream,
+            reactionStream: reactionsStream,
+            initialMessages: initialMessages,
+            initialReactions: initialReactions,
+          );
         },
       );
 
@@ -83,7 +92,10 @@ mixin MessageService on XmppBase, BaseStreamService {
     ..registerHandler<mox.MessageEvent>((event) async {
       if (await _handleError(event)) return;
 
-      final message = Message.fromMox(event);
+      final reactionOnly = await _handleReactions(event);
+      if (reactionOnly) return;
+
+      var message = Message.fromMox(event);
 
       await _handleChatState(event, message.chatJid);
 
@@ -104,15 +116,16 @@ mixin MessageService on XmppBase, BaseStreamService {
 
       unawaited(_acknowledgeMessage(event));
 
-      await _handleFile(event, message.senderJid);
-
       final metadata = _extractFileMetadata(event);
 
       if (metadata != null) {
         await _dbOp<XmppDatabase>(
           (db) => db.saveFileMetadata(metadata),
         );
+        message = message.copyWith(fileMetadataID: metadata.id);
       }
+
+      await _handleFile(event, message.senderJid);
 
       if (event.get<mox.OmemoData>() case final data?) {
         final newRatchets = data.newRatchets.values.map((e) => e.length);
@@ -210,6 +223,7 @@ mixin MessageService on XmppBase, BaseStreamService {
     required String jid,
     required String text,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
+    Message? quotedMessage,
   }) async {
     final message = Message(
       stanzaID: _connection.generateId(),
@@ -218,6 +232,7 @@ mixin MessageService on XmppBase, BaseStreamService {
       chatJid: jid,
       body: text,
       encryptionProtocol: encryptionProtocol,
+      quoting: quotedMessage?.stanzaID,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${text.length} chars)',
@@ -227,7 +242,15 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
 
     try {
-      final sent = await _connection.sendMessage(message.toMox());
+      final quotedJid = quotedMessage == null
+          ? null
+          : mox.JID.fromString(quotedMessage.senderJid);
+      final sent = await _connection.sendMessage(
+        message.toMox(
+          quotedBody: quotedMessage?.body,
+          quotedJid: quotedJid,
+        ),
+      );
       if (!sent) {
         await _handleMessageSendFailure(message.stanzaID);
         throw XmppMessageException();
@@ -241,6 +264,82 @@ mixin MessageService on XmppBase, BaseStreamService {
       await _handleMessageSendFailure(message.stanzaID);
       throw XmppMessageException();
     }
+  }
+
+  Future<void> reactToMessage({
+    required String stanzaID,
+    required String emoji,
+  }) async {
+    if (emoji.isEmpty) return;
+    final sender = myJid;
+    final fromJid = _myJid;
+    if (sender == null || fromJid == null) return;
+    final message = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(stanzaID),
+    );
+    if (message == null) return;
+    final existing = await _dbOpReturning<XmppDatabase, List<Reaction>>(
+      (db) => db.getReactionsForMessageSender(
+        messageId: message.stanzaID,
+        senderJid: sender,
+      ),
+    );
+    final emojis = existing.map((reaction) => reaction.emoji).toList();
+    if (emojis.contains(emoji)) {
+      emojis.remove(emoji);
+    } else {
+      emojis.add(emoji);
+    }
+    final reactionEvent = mox.MessageEvent(
+      fromJid,
+      mox.JID.fromString(message.chatJid),
+      false,
+      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+        mox.MessageReactionsData(message.stanzaID, emojis),
+      ]),
+      id: _connection.generateId(),
+    );
+    try {
+      final sent = await _connection.sendMessage(reactionEvent);
+      if (!sent) {
+        throw XmppMessageException();
+      }
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send reaction for ${message.stanzaID}',
+        error,
+        stackTrace,
+      );
+      rethrow;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.replaceReactions(
+        messageId: message.stanzaID,
+        senderJid: sender,
+        emojis: emojis,
+      ),
+    );
+  }
+
+  Future<void> resendMessage(String stanzaID) async {
+    final message = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(stanzaID),
+    );
+    if (message == null || message.body?.isNotEmpty != true) {
+      return;
+    }
+    Message? quoted;
+    if (message.quoting != null) {
+      quoted = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByStanzaID(message.quoting!),
+      );
+    }
+    await sendMessage(
+      jid: message.chatJid,
+      text: message.body!,
+      encryptionProtocol: message.encryptionProtocol,
+      quotedMessage: quoted,
+    );
   }
 
   Future<bool> _canSendChatMarkers({required String to}) async {
@@ -559,15 +658,27 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
   }
 
-  // Future<bool> _handleReactions(mox.MessageEvent event, String jid) async {
-  //   final reactions = event.extensions.get<mox.MessageReactionsData>();
-  //   if (reactions == null || event.type == 'groupchat') return false;
-  //   await _dbOp<XmppDatabase>((db) async {
-  //     if (await db.messagesAccessor.selectOne(reactions.messageId)
-  //         case final message?) {}
-  //   });
-  //   return true;
-  // }
+  Future<bool> _handleReactions(mox.MessageEvent event) async {
+    final reactions = event.extensions.get<mox.MessageReactionsData>();
+    if (reactions == null) return false;
+    return await _dbOpReturning<XmppDatabase, bool>(
+      (db) async {
+        final message = await db.getMessageByStanzaID(reactions.messageId);
+        if (message == null) {
+          _log.fine(
+            'Dropping reactions for unknown message ${reactions.messageId}',
+          );
+          return !event.displayable;
+        }
+        await db.replaceReactions(
+          messageId: message.stanzaID,
+          senderJid: event.from.toBare().toString(),
+          emojis: reactions.emojis,
+        );
+        return !event.displayable;
+      },
+    );
+  }
 
   Future<bool> _handleCalendarSync(mox.MessageEvent event) async {
     // Check if this is a calendar sync message by looking at the message body
@@ -616,6 +727,117 @@ mixin MessageService on XmppBase, BaseStreamService {
   }
 
   Future<void> _handleFile(mox.MessageEvent event, String jid) async {}
+
+  Stream<List<Message>> _combineMessageAndReactionStreams({
+    required Stream<List<Message>> messageStream,
+    required Stream<List<Reaction>> reactionStream,
+    required List<Message> initialMessages,
+    required List<Reaction> initialReactions,
+  }) {
+    final controller = StreamController<List<Message>>.broadcast();
+    StreamSubscription<List<Message>>? messageSubscription;
+    StreamSubscription<List<Reaction>>? reactionSubscription;
+    var listeners = 0;
+    var closed = false;
+    var currentMessages = initialMessages;
+    var currentReactions = initialReactions;
+
+    void emit() {
+      if (!controller.hasListener) return;
+      controller.add(
+        _applyReactionPreviews(currentMessages, currentReactions),
+      );
+    }
+
+    void start() {
+      emit();
+      messageSubscription = messageStream.listen((messages) {
+        currentMessages = messages;
+        emit();
+      });
+      reactionSubscription = reactionStream.listen((reactions) {
+        currentReactions = reactions;
+        emit();
+      });
+    }
+
+    Future<void> stop() async {
+      if (closed) return;
+      closed = true;
+      await messageSubscription?.cancel();
+      await reactionSubscription?.cancel();
+      await controller.close();
+    }
+
+    controller.onListen = () {
+      listeners++;
+      if (listeners == 1) {
+        start();
+      } else {
+        emit();
+      }
+    };
+
+    controller.onCancel = () async {
+      listeners--;
+      if (listeners <= 0) {
+        await stop();
+      }
+    };
+
+    return controller.stream;
+  }
+
+  List<Message> _applyReactionPreviews(
+    List<Message> messages,
+    List<Reaction> reactions,
+  ) {
+    if (messages.isEmpty) return messages;
+    final allowedIds = <String>{};
+    for (final message in messages) {
+      allowedIds.add(message.stanzaID);
+    }
+    if (allowedIds.isEmpty || reactions.isEmpty) {
+      return messages
+          .map(
+            (message) => message.reactionsPreview.isEmpty
+                ? message
+                : message.copyWith(reactionsPreview: const []),
+          )
+          .toList();
+    }
+    final grouped = <String, Map<String, _ReactionBucket>>{};
+    final selfJid = myJid;
+    for (final reaction in reactions) {
+      if (!allowedIds.contains(reaction.messageID)) continue;
+      final buckets = grouped.putIfAbsent(
+        reaction.messageID,
+        () => <String, _ReactionBucket>{},
+      );
+      final bucket = buckets.putIfAbsent(
+        reaction.emoji,
+        () => _ReactionBucket(reaction.emoji),
+      );
+      bucket.add(reaction.senderJid, selfJid);
+    }
+    return messages.map((message) {
+      final id = message.stanzaID;
+      final buckets = grouped[id];
+      if (buckets == null || buckets.isEmpty) {
+        return message.reactionsPreview.isEmpty
+            ? message
+            : message.copyWith(reactionsPreview: const []);
+      }
+      final previews =
+          buckets.values.map((bucket) => bucket.toPreview()).toList()
+            ..sort((a, b) {
+              final countCompare = b.count.compareTo(a.count);
+              if (countCompare != 0) return countCompare;
+              return a.emoji.compareTo(b.emoji);
+            });
+      return message.copyWith(reactionsPreview: previews);
+    }).toList();
+  }
 
   FileMetadataData? _extractFileMetadata(mox.MessageEvent event) {
     final statelessData = event.extensions.get<mox.StatelessFileSharingData>();
@@ -671,4 +893,25 @@ mixin MessageService on XmppBase, BaseStreamService {
 //   });
 //   return allowed;
 // }
+}
+
+class _ReactionBucket {
+  _ReactionBucket(this.emoji);
+
+  final String emoji;
+  var count = 0;
+  var reactedBySelf = false;
+
+  void add(String senderJid, String? selfJid) {
+    count += 1;
+    if (!reactedBySelf && senderJid == selfJid) {
+      reactedBySelf = true;
+    }
+  }
+
+  ReactionPreview toPreview() => ReactionPreview(
+        emoji: emoji,
+        count: count,
+        reactedBySelf: reactedBySelf,
+      );
 }

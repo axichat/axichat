@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -9,8 +11,11 @@ import 'package:equatable/equatable.dart';
 part 'draft_state.dart';
 
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
-  DraftCubit({required MessageService messageService})
-      : _messageService = messageService,
+  DraftCubit({
+    required MessageService messageService,
+    EmailService? emailService,
+  })  : _messageService = messageService,
+        _emailService = emailService,
         super(const DraftsAvailable(items: null)) {
     _draftsSubscription = _messageService
         .draftsStream()
@@ -18,6 +23,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   final MessageService _messageService;
+  final EmailService? _emailService;
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
 
@@ -40,15 +46,34 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required int? id,
     required List<String> jids,
     required String body,
+    MessageTransport transport = MessageTransport.xmpp,
   }) async {
     emit(DraftSending());
     try {
-      for (final jid in jids) {
-        await _messageService.sendMessage(jid: jid, text: body);
+      if (transport == MessageTransport.email) {
+        final emailService = _emailService;
+        if (emailService == null) {
+          throw StateError('EmailService unavailable for email draft send.');
+        }
+        for (final address in jids) {
+          await emailService.sendToAddress(
+            address: address,
+            body: body,
+            displayName: address.split('@').first,
+          );
+        }
+      } else {
+        for (final jid in jids) {
+          await _messageService.sendMessage(jid: jid, text: body);
+        }
       }
     } on XmppMessageException catch (_) {
       emit(const DraftFailure(
           'Failed to send message. Ensure recipient address exists.'));
+      return;
+    } on Exception catch (_) {
+      emit(const DraftFailure(
+          'Failed to send email. Ensure recipient address exists.'));
       return;
     }
     if (id != null) {

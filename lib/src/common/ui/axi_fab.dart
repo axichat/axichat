@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -19,6 +20,6 @@ class AxiFab extends StatelessWidget {
       onPressed: onPressed,
       leading: Icon(iconData),
       child: Text(text),
-    );
+    ).withTapBounce(enabled: onPressed != null);
   }
 }

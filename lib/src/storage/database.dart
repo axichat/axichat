@@ -41,6 +41,21 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID);
 
+  Stream<List<Reaction>> watchReactionsForChat(String jid);
+
+  Future<List<Reaction>> getReactionsForChat(String jid);
+
+  Future<List<Reaction>> getReactionsForMessageSender({
+    required String messageId,
+    required String senderJid,
+  });
+
+  Future<void> replaceReactions({
+    required String messageId,
+    required String senderJid,
+    required List<String> emojis,
+  });
+
   Future<void> saveMessage(Message message);
 
   Future<void> saveMessageError({
@@ -132,6 +147,8 @@ abstract interface class XmppDatabase implements Database {
   Future<void> setLastPreKeyRotationTime(String jid, DateTime time);
 
   Future<void> saveFileMetadata(FileMetadataData metadata);
+
+  Future<FileMetadataData?> getFileMetadata(String id);
 
   Stream<List<Chat>> watchChats({required int start, required int end});
 
@@ -329,6 +346,56 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
       (delete(table)..where((item) => item.chatJid.equals(jid))).go();
 }
 
+@DriftAccessor(tables: [Reactions, Messages])
+class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
+    with _$ReactionsAccessorMixin {
+  ReactionsAccessor(super.attachedDatabase);
+
+  Stream<List<Reaction>> watchChat(String jid) {
+    final query = select(reactions).join([
+      innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
+    ])
+      ..where(messages.chatJid.equals(jid));
+    return query
+        .watch()
+        .map((rows) => rows.map((row) => row.readTable(reactions)).toList());
+  }
+
+  Future<List<Reaction>> selectByChat(String jid) {
+    final query = select(reactions).join([
+      innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
+    ])
+      ..where(messages.chatJid.equals(jid));
+    return query
+        .get()
+        .then((rows) => rows.map((row) => row.readTable(reactions)).toList());
+  }
+
+  Future<List<Reaction>> selectByMessageAndSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      (select(reactions)
+            ..where(
+              (table) =>
+                  table.messageID.equals(messageId) &
+                  table.senderJid.equals(senderJid),
+            ))
+          .get();
+
+  Future<void> deleteByMessageAndSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      (delete(reactions)
+            ..where(
+              (table) =>
+                  table.messageID.equals(messageId) &
+                  table.senderJid.equals(senderJid),
+            ))
+          .go();
+}
+
 @DriftAccessor(tables: [Drafts])
 class DraftsAccessor extends BaseAccessor<Draft, $DraftsTable>
     with _$DraftsAccessorMixin {
@@ -470,10 +537,9 @@ class FileMetadataAccessor
   $FileMetadataTable get table => fileMetadata;
 
   @override
-  Future<FileMetadataData?> selectOne(Object value) {
-    // TODO: implement selectOne
-    throw UnimplementedError();
-  }
+  Future<FileMetadataData?> selectOne(Object value) =>
+      (select(table)..where((table) => table.id.equals(value as String)))
+          .getSingleOrNull();
 
   Future<FileMetadataData?> selectOneByPlaintextHashes(
           Map<HashFunction, String> hashes) =>
@@ -607,6 +673,7 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   StickerPacks,
 ], daos: [
   MessagesAccessor,
+  ReactionsAccessor,
   DraftsAccessor,
   OmemoDevicesAccessor,
   OmemoTrustsAccessor,
@@ -636,7 +703,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -647,6 +714,22 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       onUpgrade: (m, from, to) async {
         if (from < 2) {
           await m.createTable(omemoBundleCaches);
+        }
+        if (from < 3) {
+          await m.addColumn(messages, messages.deltaChatId);
+          await m.addColumn(messages, messages.deltaMsgId);
+          await m.addColumn(chats, chats.deltaChatId);
+          await m.addColumn(chats, chats.emailAddress);
+        }
+        final rebuildReactions = from < 4;
+        if (rebuildReactions) {
+          await m.deleteTable(reactions.actualTableName);
+        }
+        if (from < 5) {
+          await _rebuildMessagesTable(m);
+        }
+        if (rebuildReactions) {
+          await m.createTable(reactions);
         }
       },
       beforeOpen: (_) async {
@@ -689,6 +772,48 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   @override
   Future<Message?> getMessageByOriginID(String originID) =>
       messagesAccessor.selectOneByOriginID(originID);
+
+  @override
+  Stream<List<Reaction>> watchReactionsForChat(String jid) =>
+      reactionsAccessor.watchChat(jid);
+
+  @override
+  Future<List<Reaction>> getReactionsForChat(String jid) =>
+      reactionsAccessor.selectByChat(jid);
+
+  @override
+  Future<List<Reaction>> getReactionsForMessageSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      reactionsAccessor.selectByMessageAndSender(
+        messageId: messageId,
+        senderJid: senderJid,
+      );
+
+  @override
+  Future<void> replaceReactions({
+    required String messageId,
+    required String senderJid,
+    required List<String> emojis,
+  }) async {
+    await transaction(() async {
+      await reactionsAccessor.deleteByMessageAndSender(
+        messageId: messageId,
+        senderJid: senderJid,
+      );
+      for (final emoji in emojis) {
+        await into(reactions).insert(
+          ReactionsCompanion.insert(
+            messageID: messageId,
+            senderJid: senderJid,
+            emoji: emoji,
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
+  }
 
   @override
   Future<void> saveMessage(Message message) async {
@@ -1006,6 +1131,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> saveFileMetadata(FileMetadataData metadata) async {
     await fileMetadataAccessor.insertOne(metadata);
   }
+
+  @override
+  Future<FileMetadataData?> getFileMetadata(String id) =>
+      fileMetadataAccessor.selectOne(id);
 
   @override
   Stream<List<Chat>> watchChats({required int start, required int end}) {
@@ -1369,6 +1498,67 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   Future<void> deleteBlocklist() async {
     _log.info('Deleting blocklist...');
     await blocklistAccessor.deleteAll();
+  }
+
+  Future<void> _rebuildMessagesTable(Migrator m) async {
+    final tableName = messages.actualTableName;
+    final tempTableName = '${tableName}_old';
+    const columnNames = <String>[
+      'id',
+      'stanza_i_d',
+      'origin_i_d',
+      'occupant_i_d',
+      'sender_jid',
+      'chat_jid',
+      'body',
+      'timestamp',
+      'error',
+      'warning',
+      'encryption_protocol',
+      'trust',
+      'trusted',
+      'device_i_d',
+      'no_store',
+      'acked',
+      'received',
+      'displayed',
+      'edited',
+      'retracted',
+      'is_file_upload_notification',
+      'file_downloading',
+      'file_uploading',
+      'file_metadata_i_d',
+      'quoting',
+      'sticker_pack_i_d',
+      'pseudo_message_type',
+      'pseudo_message_data',
+      'delta_chat_id',
+      'delta_msg_id',
+    ];
+    final columnList = columnNames.map((c) => '"$c"').join(', ');
+    final tableExists = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable<String>(tableName)],
+    ).get();
+    if (tableExists.isEmpty) {
+      await m.createTable(messages);
+      return;
+    }
+    await customStatement('PRAGMA foreign_keys = OFF');
+    try {
+      await customStatement('DROP TABLE IF EXISTS "$tempTableName"');
+      await customStatement(
+        'ALTER TABLE "$tableName" RENAME TO "$tempTableName"',
+      );
+      await m.createTable(messages);
+      await customStatement(
+        'INSERT INTO "$tableName" ($columnList) '
+        'SELECT $columnList FROM "$tempTableName"',
+      );
+      await customStatement('DROP TABLE "$tempTableName"');
+    } finally {
+      await customStatement('PRAGMA foreign_keys = ON');
+    }
   }
 
   @override

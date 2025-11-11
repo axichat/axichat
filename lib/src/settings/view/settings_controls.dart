@@ -52,37 +52,58 @@ class SettingsControls extends StatelessWidget {
               ),
               child: Text('Appearance', style: context.textTheme.muted),
             ),
-            ListTile(
-              title: const Text('Theme Mode'),
-              trailing: ShadSelect<ThemeMode>(
-                initialValue: state.themeMode,
-                onChanged: (themeMode) =>
-                    context.read<SettingsCubit>().updateThemeMode(themeMode),
-                options: ThemeMode.values
-                    .map((themeMode) => ShadOption<ThemeMode>(
-                          value: themeMode,
-                          child: Text(themeMode.name),
-                        ))
-                    .toList(),
-                selectedOptionBuilder:
-                    (BuildContext context, ThemeMode value) => Text(value.name),
+            ListItemPadding(
+              child: AxiListTile(
+                title: 'Theme Mode',
+                actions: [
+                  SizedBox(
+                    width: 180,
+                    child: ShadSelect<ThemeMode>(
+                      initialValue: state.themeMode,
+                      onChanged: (themeMode) => context
+                          .read<SettingsCubit>()
+                          .updateThemeMode(themeMode),
+                      options: ThemeMode.values
+                          .map(
+                            (themeMode) => ShadOption<ThemeMode>(
+                              value: themeMode,
+                              child: Text(themeMode.name),
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder:
+                          (BuildContext context, ThemeMode value) =>
+                              Text(value.name),
+                    ),
+                  ),
+                ],
               ),
             ),
-            ListTile(
-              title: const Text('Color Scheme'),
-              trailing: ShadSelect<ShadColor>(
-                initialValue: state.shadColor,
-                onChanged: (colorScheme) => context
-                    .read<SettingsCubit>()
-                    .updateColorScheme(colorScheme),
-                options: ShadColor.values
-                    .map((colorScheme) => ShadOption<ShadColor>(
-                          value: colorScheme,
-                          child: Text(colorScheme.name),
-                        ))
-                    .toList(),
-                selectedOptionBuilder:
-                    (BuildContext context, ShadColor value) => Text(value.name),
+            ListItemPadding(
+              child: AxiListTile(
+                title: 'Color Scheme',
+                actions: [
+                  SizedBox(
+                    width: 180,
+                    child: ShadSelect<ShadColor>(
+                      initialValue: state.shadColor,
+                      onChanged: (colorScheme) => context
+                          .read<SettingsCubit>()
+                          .updateColorScheme(colorScheme),
+                      options: ShadColor.values
+                          .map(
+                            (colorScheme) => ShadOption<ShadColor>(
+                              value: colorScheme,
+                              child: Text(colorScheme.name),
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder:
+                          (BuildContext context, ShadColor value) =>
+                              Text(value.name),
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(
