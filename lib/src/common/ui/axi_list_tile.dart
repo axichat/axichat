@@ -18,6 +18,7 @@ class AxiListTile extends StatelessWidget {
     this.surfaceShape,
     this.paintSurface = true,
     this.contentPadding,
+    this.tapBounce = true,
   });
 
   final Widget? leading;
@@ -33,6 +34,7 @@ class AxiListTile extends StatelessWidget {
   final ShapeBorder? surfaceShape;
   final bool paintSurface;
   final EdgeInsetsGeometry? contentPadding;
+  final bool tapBounce;
 
   @override
   Widget build(BuildContext context) {
@@ -122,8 +124,10 @@ class AxiListTile extends StatelessWidget {
       );
     }
 
-    final enableBounce = onTap != null || (menuItems?.isNotEmpty ?? false);
-    child = child.withTapBounce(enabled: enableBounce);
+    if (tapBounce) {
+      final enableBounce = onTap != null || (menuItems?.isNotEmpty ?? false);
+      child = child.withTapBounce(enabled: enableBounce);
+    }
 
     return child;
   }
