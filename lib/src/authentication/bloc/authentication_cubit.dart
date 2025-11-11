@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
@@ -39,11 +40,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
     required XmppService xmppService,
+    EmailService? emailService,
     NotificationService? notificationService,
     http.Client? httpClient,
     AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
+        _emailService = emailService,
         _httpClient = httpClient ?? http.Client(),
         super(initialState ?? const AuthenticationNone()) {
     _lifecycleListener = AppLifecycleListener(
@@ -71,6 +74,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _xmppService.setClientState(
             lifeCycleState == AppLifecycleState.resumed ||
                 lifeCycleState == AppLifecycleState.inactive);
+        await _emailService?.setClientState(
+          lifeCycleState == AppLifecycleState.resumed ||
+              lifeCycleState == AppLifecycleState.inactive,
+        );
       },
     );
   }
@@ -89,6 +96,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
+  final EmailService? _emailService;
   final http.Client _httpClient;
 
   late final AppLifecycleListener _lifecycleListener;
@@ -97,6 +105,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> close() async {
     _lifecycleListener.dispose();
     await _credentialStore.close();
+    await _emailService?.shutdown();
     return super.close();
   }
 
@@ -191,6 +200,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     }
 
+    try {
+      final displayName = jid.split('@').first;
+      await _emailService?.ensureProvisioned(
+        displayName: displayName,
+        databasePrefix: databasePrefix,
+        databasePassphrase: databasePassphrase,
+        jid: jid,
+      );
+    } on EmailProvisioningException catch (error) {
+      emit(AuthenticationFailure(error.message));
+      await _xmppService.disconnect();
+      return;
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Chatmail provisioning failed', error, stackTrace);
+    }
+
     emit(const AuthenticationComplete());
   }
 
@@ -269,6 +294,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     await _xmppService.disconnect();
+    if (severity == LogoutSeverity.burn) {
+      await _emailService?.burn();
+    } else {
+      await _emailService?.shutdown();
+    }
 
     emit(const AuthenticationNone());
   }

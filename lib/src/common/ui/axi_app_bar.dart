@@ -3,7 +3,9 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class AxiAppBar extends StatelessWidget {
-  const AxiAppBar({super.key});
+  const AxiAppBar({super.key, this.trailing});
+
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +25,7 @@ class AxiAppBar extends StatelessWidget {
             appDisplayName,
             style: context.textTheme.h3,
           ),
-          const AxiVersion(),
+          trailing ?? const AxiVersion(),
         ],
       ),
     );

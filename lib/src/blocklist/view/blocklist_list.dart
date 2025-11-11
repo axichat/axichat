@@ -40,25 +40,27 @@ class BlocklistList extends StatelessWidget {
           );
         }
 
-        return ListView.separated(
-          separatorBuilder: (_, __) => const AxiListDivider(),
-          itemCount: items.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: BlocklistUnblockAllButton(),
+        return ColoredBox(
+          color: context.colorScheme.background,
+          child: ListView.builder(
+            itemCount: (items.length) + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: BlocklistUnblockAllButton(),
+                  ),
+                );
+              }
+              final item = items![index - 1];
+              return ListItemPadding(
+                child: BlocklistTile(
+                  jid: item.jid,
                 ),
               );
-            }
-            final item = items![index - 1];
-            return ListItemPadding(
-              child: BlocklistTile(
-                jid: item.jid,
-              ),
-            );
-          },
+            },
+          ),
         );
       },
     );

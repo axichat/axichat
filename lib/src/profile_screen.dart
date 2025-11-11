@@ -98,7 +98,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   : setState(() {
                       _profileRoute = _ProfileRoute.main;
                     }),
-            ),
+            ).withTapBounce(),
           ),
           body: SafeArea(
             child: Center(
@@ -231,7 +231,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                             _profileRoute =
                                                 _ProfileRoute.changePassword;
                                           }),
-                                        ),
+                                        ).withTapBounce(),
                                         ShadButton.secondary(
                                           child: Text(
                                             'Delete account',
@@ -243,7 +243,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                             _profileRoute =
                                                 _ProfileRoute.delete;
                                           }),
-                                        ),
+                                        ).withTapBounce(),
                                       ],
                                     ),
                                   ],

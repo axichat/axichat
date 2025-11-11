@@ -1,4 +1,5 @@
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,7 +48,7 @@ class ChatAlert extends StatelessWidget {
                         onPressed: () => context
                             .read<ChatBloc>()
                             .add(const ChatAlertHidden()),
-                      ),
+                      ).withTapBounce(),
                       const SizedBox.square(dimension: 4.0),
                       ShadButton.ghost(
                         child: const Text(
@@ -57,7 +58,7 @@ class ChatAlert extends StatelessWidget {
                         onPressed: () => context
                             .read<ChatBloc>()
                             .add(const ChatAlertHidden(forever: true)),
-                      ),
+                      ).withTapBounce(),
                     ],
                   ),
                 ),

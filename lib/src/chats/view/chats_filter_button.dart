@@ -1,7 +1,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -58,7 +60,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('All'),
-                  ),
+                  ).withTapBounce(),
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: context.colorScheme.foreground,
@@ -70,7 +72,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('Contacts'),
-                  ),
+                  ).withTapBounce(),
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: context.colorScheme.foreground,
@@ -83,7 +85,29 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                       popoverController.toggle();
                     },
                     child: const Text('Non-contacts'),
-                  ),
+                  ).withTapBounce(),
+                  ShadButton.ghost(
+                    width: double.infinity,
+                    foregroundColor: context.colorScheme.foreground,
+                    onPressed: () {
+                      context
+                          .read<ChatsCubit?>()
+                          ?.filterChats((chat) => chat.transport.isXmpp);
+                      popoverController.toggle();
+                    },
+                    child: const Text('XMPP only'),
+                  ).withTapBounce(),
+                  ShadButton.ghost(
+                    width: double.infinity,
+                    foregroundColor: context.colorScheme.foreground,
+                    onPressed: () {
+                      context
+                          .read<ChatsCubit?>()
+                          ?.filterChats((chat) => chat.transport.isEmail);
+                      popoverController.toggle();
+                    },
+                    child: const Text('Email only'),
+                  ).withTapBounce(),
                 ],
               ),
             ),
@@ -95,7 +119,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         child: ShadIconButton.secondary(
           onPressed: popoverController.toggle,
           icon: const Icon(LucideIcons.listFilter),
-        ),
+        ).withTapBounce(),
       ),
     );
   }

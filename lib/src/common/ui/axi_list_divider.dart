@@ -10,8 +10,8 @@ class AxiListDivider extends StatelessWidget {
       color: context.colorScheme.border,
       thickness: 1.0,
       height: 1.0,
-      indent: 16.0,
-      endIndent: 16.0,
+      indent: 0,
+      endIndent: 0,
     );
   }
 }

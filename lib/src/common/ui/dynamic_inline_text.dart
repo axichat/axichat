@@ -3,15 +3,28 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+typedef LinkTapCallback = void Function(String url);
+
+class DynamicTextLink {
+  const DynamicTextLink({required this.range, required this.url});
+
+  final TextRange range;
+  final String url;
+}
+
 class DynamicInlineText extends LeafRenderObjectWidget {
   const DynamicInlineText({
     super.key,
     required this.text,
     required this.details,
+    this.links = const [],
+    this.onLinkTap,
   });
 
   final TextSpan text;
   final List<TextSpan> details;
+  final List<DynamicTextLink> links;
+  final LinkTapCallback? onLinkTap;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -21,6 +34,8 @@ class DynamicInlineText extends LeafRenderObjectWidget {
         textDirection: Directionality.of(context),
         textScaler:
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+        links: links,
+        onLinkTap: onLinkTap,
       );
 
   @override
@@ -33,7 +48,9 @@ class DynamicInlineText extends LeafRenderObjectWidget {
       ..details = details
       ..textDirection = Directionality.of(context)
       ..textScaler =
-          MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+          MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling
+      ..links = links
+      ..onLinkTap = onLinkTap;
   }
 }
 
@@ -43,10 +60,14 @@ class DynamicInlineTextRenderObject extends RenderBox {
     required List<TextSpan> details,
     required TextDirection textDirection,
     required TextScaler textScaler,
+    List<DynamicTextLink> links = const [],
+    LinkTapCallback? onLinkTap,
   })  : _text = text,
         _details = details,
         _textDirection = textDirection,
-        _textScaler = textScaler;
+        _textScaler = textScaler,
+        _links = List.unmodifiable(links),
+        _onLinkTap = onLinkTap;
 
   TextSpan get text => _text;
   TextSpan _text;
@@ -89,8 +110,41 @@ class DynamicInlineTextRenderObject extends RenderBox {
     markNeedsLayout();
   }
 
+  List<DynamicTextLink> _links;
+
+  set links(List<DynamicTextLink> value) {
+    _links = List.unmodifiable(value);
+  }
+
+  LinkTapCallback? _onLinkTap;
+
+  set onLinkTap(LinkTapCallback? value) {
+    _onLinkTap = value;
+  }
+
   @override
-  bool hitTest(BoxHitTestResult result, {required Offset position}) => true;
+  bool hitTestSelf(Offset position) => _links.isNotEmpty && _onLinkTap != null;
+
+  @override
+  void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
+    if (_links.isEmpty || _onLinkTap == null) return;
+    if (event is! PointerUpEvent) return;
+    if (_textPainter.text == null) return;
+    if (entry.localPosition.dy < 0 ||
+        entry.localPosition.dy > _textPainter.height) {
+      return;
+    }
+    final textPosition = _textPainter.getPositionForOffset(
+      entry.localPosition,
+    );
+    final offset = textPosition.offset;
+    for (final link in _links) {
+      if (offset >= link.range.start && offset < link.range.end) {
+        _onLinkTap?.call(link.url);
+        break;
+      }
+    }
+  }
 
   @override
   double computeMinIntrinsicWidth(double height) {
@@ -130,7 +184,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
   final int detailSpacing = 2;
 
   Size _layout(double maxWidth) {
-    if (text.text == null || text.text!.isEmpty) return Size.zero;
+    final plainText = text.toPlainText();
+    if (plainText.isEmpty) return Size.zero;
     assert(maxWidth > 0);
 
     _lineHeight = 0;

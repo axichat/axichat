@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -28,6 +29,7 @@ class _DraftFormState extends State<DraftForm> {
   late List<String> _jids;
 
   late var id = widget.id;
+  var _transport = MessageTransport.xmpp;
 
   @override
   void initState() {
@@ -67,6 +69,28 @@ class _DraftFormState extends State<DraftForm> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: MessageTransport.values.map((transport) {
+                    final selected = _transport == transport;
+                    final buttonChild = Text(transport.label);
+                    final handler = enabled
+                        ? () => setState(() => _transport = transport)
+                        : null;
+                    if (selected) {
+                      return ShadButton(
+                        onPressed: handler,
+                        child: buttonChild,
+                      ).withTapBounce(enabled: handler != null);
+                    }
+                    return ShadButton.outline(
+                      onPressed: handler,
+                      child: buttonChild,
+                    ).withTapBounce(enabled: handler != null);
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
                 for (var i = 0; i < _jids.length; i++)
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -88,14 +112,14 @@ class _DraftFormState extends State<DraftForm> {
                           onPressed: () => setState(() {
                             _jids.add('');
                           }),
-                        )
+                        ).withTapBounce()
                       else
                         ShadIconButton.ghost(
                           icon: const Icon(LucideIcons.minus),
                           onPressed: () => setState(() {
                             _jids.removeAt(i);
                           }),
-                        ),
+                        ).withTapBounce(),
                     ],
                   ),
                 const SizedBox(height: 12),
@@ -121,7 +145,8 @@ class _DraftFormState extends State<DraftForm> {
                     ShadButton.outline(
                       enabled: enabled &&
                           (_jids.any((e) => e.isNotEmpty) ||
-                              _bodyTextController.text.isNotEmpty),
+                              _bodyTextController.text.isNotEmpty) &&
+                          _transport != MessageTransport.email,
                       child: const Text('Save draft'),
                       onPressed: () => setState(() async => id = await context
                           .read<DraftCubit?>()
@@ -129,6 +154,11 @@ class _DraftFormState extends State<DraftForm> {
                               id: id,
                               jids: _jids,
                               body: _bodyTextController.text)),
+                    ).withTapBounce(
+                      enabled: enabled &&
+                          (_jids.any((e) => e.isNotEmpty) ||
+                              _bodyTextController.text.isNotEmpty) &&
+                          _transport != MessageTransport.email,
                     ),
                     ShadButton(
                       enabled: enabled &&
@@ -140,10 +170,15 @@ class _DraftFormState extends State<DraftForm> {
                         await context.read<DraftCubit?>()?.sendDraft(
                             id: id,
                             jids: _jids,
-                            body: _bodyTextController.text);
+                            body: _bodyTextController.text,
+                            transport: _transport);
                         if (!context.mounted) return;
                         context.pop();
                       },
+                    ).withTapBounce(
+                      enabled: enabled &&
+                          _jids.any((e) => e.isNotEmpty) &&
+                          _bodyTextController.text.isNotEmpty,
                     ),
                   ],
                 ),

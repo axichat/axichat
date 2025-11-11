@@ -9,11 +9,13 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -93,6 +95,7 @@ class HomeScreen extends StatelessWidget {
               BlocProvider(
                 create: (context) => DraftCubit(
                   messageService: context.read<XmppService>(),
+                  emailService: context.read<EmailService>(),
                 ),
               ),
             if (isRoster)
@@ -201,13 +204,22 @@ class HomeScreen extends StatelessWidget {
                                                     context.read<XmppService>(),
                                                 chatsService:
                                                     context.read<XmppService>(),
-                                                notificationService:
-                                                    context.read<
-                                                        NotificationService>(),
+                                                notificationService: context
+                                                    .read<NotificationService>(),
+                                                emailService:
+                                                    context.read<EmailService>(),
                                                 omemoService: isOmemo
                                                     ? context
                                                         .read<XmppService>()
                                                     : null,
+                                              ),
+                                            ),
+                                            BlocProvider(
+                                              create: (context) =>
+                                                  ChatTransportCubit(
+                                                chatsService:
+                                                    context.read<XmppService>(),
+                                                jid: openJid,
                                               ),
                                             ),
                                             if (isOmemo)

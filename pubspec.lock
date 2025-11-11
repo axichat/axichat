@@ -2,7 +2,7 @@
 # See https://dart.dev/tools/pub/glossary#lockfile
 packages:
   _fe_analyzer_shared:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: _fe_analyzer_shared
       sha256: "0b2f2bd91ba804e53a61d757b986f89f1f9eaed5b11e4b2f5a2468d86d6c9fc7"
@@ -18,7 +18,7 @@ packages:
     source: hosted
     version: "1.0.0"
   analyzer:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: analyzer
       sha256: "37577842a27e4338429a1cbc32679d508836510b056f1eedf0c8d20e39c1383d"
@@ -273,6 +273,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.2"
+  code_assets:
+    dependency: transitive
+    description:
+      name: code_assets
+      sha256: "450f46c55509b7215f2b2ead126bad1567a2edf3207ea0eb7a91d3d508cea0f8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.19.9"
   code_builder:
     dependency: transitive
     description:
@@ -369,6 +377,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
+  delta_ffi:
+    dependency: "direct main"
+    description:
+      path: "packages/delta_ffi"
+      relative: true
+    source: path
+    version: "0.1.0"
   diff_match_patch:
     dependency: transitive
     description:
@@ -758,6 +773,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
+  hooks:
+    dependency: transitive
+    description:
+      name: hooks
+      sha256: "6274d1fe704962cbb881d437aae11af3e6eecc810da7438cc100c85679b4feb6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.20.4"
   hsluv:
     dependency: "direct main"
     description:
@@ -980,7 +1003,7 @@ packages:
     source: hosted
     version: "1.0.4"
   moxlib:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: moxlib
       sha256: "2a76a632d23ea73906964cee4463352995e40199036162217ea323a6c3846e73"
@@ -1013,6 +1036,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.16.12"
+  native_assets_cli:
+    dependency: transitive
+    description:
+      name: native_assets_cli
+      sha256: "1ff032c0ca050391c4c5107485f1a26e0e95cee18d1fdb2b7bdbb990efd3c188"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.3"
+  native_toolchain_rust:
+    dependency: transitive
+    description:
+      name: native_toolchain_rust
+      sha256: ab84799acd3f353dd3c57aaf3e9e4da68c1391fb3049adf2981be50a0f58a090
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0-dev.7"
+  native_toolchain_rust_common:
+    dependency: transitive
+    description:
+      name: native_toolchain_rust_common
+      sha256: "0d23d87dcab2430d55f27ef122d30112d96dea72ef1ea69d0ecc32fcb3040028"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0-dev.3"
   nested:
     dependency: transitive
     description:
@@ -1038,7 +1085,7 @@ packages:
     source: hosted
     version: "2.1.0"
   omemo_dart:
-    dependency: transitive
+    dependency: "direct main"
     description:
       path: "."
       ref: "v0.7.1"
@@ -1194,10 +1241,10 @@ packages:
     dependency: transitive
     description:
       name: petitparser
-      sha256: "1a97266a94f7350d30ae522c0af07890c70b8e62c71e8e3920d1db4d23c057d1"
+      sha256: "07c8f0b1913bcde1ff0d26e57ace2f3012ccbf2b204e070290dad3bb22797646"
       url: "https://pub.dev"
     source: hosted
-    version: "7.0.1"
+    version: "6.1.0"
   pinenacl:
     dependency: "direct overridden"
     description:
@@ -1318,6 +1365,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.2"
+  rustup:
+    dependency: transitive
+    description:
+      name: rustup
+      sha256: b7e6d9036ac11d924b9ddd3a99d1a16a91b3c8fce9d4521a883e894165f4a26c
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0-dev.6"
   rxdart:
     dependency: transitive
     description:
@@ -1532,7 +1587,7 @@ packages:
     source: hosted
     version: "0.6.8"
   sqlite3:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: sqlite3
       sha256: fde692580bee3379374af1f624eb3e113ab2865ecb161dbe2d8ac2de9735dbdb
@@ -1643,6 +1698,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
+  toml:
+    dependency: transitive
+    description:
+      name: toml
+      sha256: "9968de24e45b632bf1a654fe1ac7b6fe5261c349243df83fd262397799c45a2d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.15.0"
   two_dimensional_scrollables:
     dependency: transitive
     description:
@@ -1911,10 +1974,10 @@ packages:
     dependency: "direct main"
     description:
       name: xml
-      sha256: "971043b3a0d3da28727e40ed3e0b5d18b742fa5a68665cca88e74b7876d5e025"
+      sha256: b015a8ad1c488f66851d762d3090a21c600e479dc75e68328c52774040cf9226
       url: "https://pub.dev"
     source: hosted
-    version: "6.6.1"
+    version: "6.5.0"
   yaml:
     dependency: transitive
     description:

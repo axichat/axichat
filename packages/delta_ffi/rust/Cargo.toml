@@ -1,0 +1,10 @@
+[package]
+name = "deltachat_wrap"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+deltachat = { git = "https://github.com/deltachat/deltachat-core-rust", package = "deltachat_ffi", default-features = false, features = ["vendored"] }

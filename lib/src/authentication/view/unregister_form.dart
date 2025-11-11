@@ -93,7 +93,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                     ),
                     trailing: const SizedBox.shrink(),
                     child: const Text('Continue'),
-                  );
+                  ).withTapBounce(enabled: !loading);
                 },
               ),
             ],
