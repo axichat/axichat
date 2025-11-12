@@ -1,3 +1,4 @@
+import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:delta_ffi/delta_safe.dart' show DeltaCoreEvent;
 
 /// Contract that allows the application to plug different transports
@@ -30,6 +31,16 @@ abstract class ChatTransport {
   Future<int> sendText({
     required int chatId,
     required String body,
+    String? shareId,
+    String? localBodyOverride,
+  });
+
+  /// Sends an attachment message to an existing chat id.
+  Future<int> sendAttachment({
+    required int chatId,
+    required EmailAttachment attachment,
+    String? shareId,
+    String? captionOverride,
   });
 
   /// Ensures there is a 1:1 chat for the provided address and returns

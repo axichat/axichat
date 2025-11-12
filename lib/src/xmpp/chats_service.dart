@@ -2,10 +2,17 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin ChatsService on XmppBase, BaseStreamService {
   static final _transportKeys = <String, RegisteredStateKey>{};
+  static final _viewFilterKeys = <String, RegisteredStateKey>{};
 
   RegisteredStateKey _transportKeyFor(String jid) => _transportKeys.putIfAbsent(
         jid,
         () => XmppStateStore.registerKey('chat_transport_$jid'),
+      );
+
+  RegisteredStateKey _viewFilterKeyFor(String jid) =>
+      _viewFilterKeys.putIfAbsent(
+        jid,
+        () => XmppStateStore.registerKey('chat_view_filter_$jid'),
       );
 
   MessageTransport _transportFrom(Object? raw) {
@@ -16,6 +23,16 @@ mixin ChatsService on XmppBase, BaseStreamService {
       );
     }
     return MessageTransport.xmpp;
+  }
+
+  MessageTimelineFilter _viewFilterFrom(Object? raw) {
+    if (raw is String) {
+      return MessageTimelineFilter.values.firstWhere(
+        (filter) => filter.name == raw,
+        orElse: () => MessageTimelineFilter.directOnly,
+      );
+    }
+    return MessageTimelineFilter.directOnly;
   }
 
   Future<MessageTransport> loadChatTransportPreference(String jid) async {
@@ -36,6 +53,29 @@ mixin ChatsService on XmppBase, BaseStreamService {
       (store) => store.write(
         key: _transportKeyFor(jid),
         value: transport.name,
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<MessageTimelineFilter> loadChatViewFilter(String jid) async {
+    try {
+      return await _dbOpReturning<XmppStateStore, MessageTimelineFilter>(
+        (store) => _viewFilterFrom(store.read(key: _viewFilterKeyFor(jid))),
+      );
+    } on XmppAbortedException {
+      return MessageTimelineFilter.directOnly;
+    }
+  }
+
+  Future<void> saveChatViewFilter({
+    required String jid,
+    required MessageTimelineFilter filter,
+  }) async {
+    await _dbOp<XmppStateStore>(
+      (store) => store.write(
+        key: _viewFilterKeyFor(jid),
+        value: filter.name,
       ),
       awaitDatabase: true,
     );

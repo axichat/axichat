@@ -47,7 +47,4 @@ app.*.map.json
 /android/app/release
 /.env
 /temporaryPath/.axichat.state_store.hive
-/packages/delta_ffi/rust/target/aarch64-apple-darwin/
-/packages/delta_ffi/rust/target/aarch64-linux-android/
-/packages/delta_ffi/rust/target/debug/
-/packages/delta_ffi/rust/target/release/
+/packages/delta_ffi/rust/target/

@@ -1,6 +1,11 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/verification/bloc/verification_cubit.dart';
+import 'package:axichat/src/verification/view/verification_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -14,6 +19,12 @@ class ChatMessageDetails extends StatelessWidget {
       builder: (context, state) {
         final message = state.focused;
         if (message == null) return const SizedBox.shrink();
+        final profileState = context.read<ProfileCubit>().state;
+        final shareParticipants = _shareParticipants(
+          state.shareContexts[message.stanzaID]?.participants ?? const <Chat>[],
+          state.chat?.jid,
+          profileState.jid,
+        );
         return SingleChildScrollView(
           child: Container(
             width: double.maxFinite,
@@ -26,6 +37,32 @@ class ChatMessageDetails extends StatelessWidget {
                   message.body ?? '',
                   style: context.textTheme.lead,
                 ),
+                if (shareParticipants.isNotEmpty)
+                  Column(
+                    spacing: 8,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Also sent to',
+                        style: context.textTheme.muted,
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          for (final participant in shareParticipants)
+                            ActionChip(
+                              avatar: const Icon(Icons.mail_outline, size: 16),
+                              label: Text(participant.title),
+                              onPressed: () => context
+                                  .read<ChatsCubit>()
+                                  .toggleChat(jid: participant.jid),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 Wrap(
                   spacing: 12.0,
                   children: [
@@ -73,11 +110,37 @@ class ChatMessageDetails extends StatelessWidget {
                     ),
                   ],
                 ),
-                Text(
-                  'Encryption is disabled. Messages are sent in plaintext.',
-                  style: context.textTheme.muted,
-                  textAlign: TextAlign.center,
-                ),
+                if (message.deviceID != null &&
+                    context.read<VerificationCubit?>() != null)
+                  Column(
+                    spacing: 8,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Encrypted by',
+                        style: context.textTheme.muted,
+                      ),
+                      BlocBuilder<VerificationCubit, VerificationState>(
+                        builder: (context, verificationState) {
+                          final myFingerprint = profileState.fingerprint;
+                          if (message.deviceID == myFingerprint?.deviceID) {
+                            return VerificationSelector(
+                              fingerprint: myFingerprint!,
+                            );
+                          }
+                          final list = message.senderJid == profileState.jid
+                              ? verificationState.myFingerprints
+                              : verificationState.fingerprints;
+                          final fingerprint = list.singleWhere(
+                              (e) => e.deviceID == message.deviceID);
+                          return VerificationSelector(fingerprint: fingerprint);
+                        },
+                      ),
+                    ],
+                  )
+                else
+                  const Text('Not encrypted'),
                 if (message.error.isNotNone)
                   Column(
                     spacing: 8,
@@ -97,5 +160,25 @@ class ChatMessageDetails extends StatelessWidget {
         );
       },
     );
+  }
+
+  List<Chat> _shareParticipants(
+    List<Chat> participants,
+    String? chatJid,
+    String? selfJid,
+  ) {
+    if (participants.isEmpty) {
+      return const <Chat>[];
+    }
+    return participants.where((participant) {
+      final jid = participant.jid;
+      if (chatJid != null && jid == chatJid) {
+        return false;
+      }
+      if (selfJid != null && jid == selfJid) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 }

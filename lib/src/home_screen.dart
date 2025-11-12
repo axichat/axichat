@@ -228,8 +228,7 @@ class HomeScreen extends StatelessWidget {
                             await xmppService.sendMessage(
                               jid: jid,
                               text: message,
-                              persistLocally: false,
-                              markNoStore: true,
+                              storeLocally: false,
                             );
                           }
                         },

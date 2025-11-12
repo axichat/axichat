@@ -1,5 +1,4 @@
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/axi_icon_button.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -24,37 +23,8 @@ class ComposeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.colorScheme.background,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(56),
-        child: Container(
-          decoration: BoxDecoration(
-            color: context.colorScheme.background,
-            border: Border(
-              bottom: BorderSide(color: context.colorScheme.border),
-            ),
-          ),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  AxiIconButton(
-                    iconData: Icons.arrow_back,
-                    tooltip: 'Back',
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Compose',
-                    style: context.textTheme.h3,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      appBar: AppBar(
+        title: const Text('Compose'),
       ),
       body: Center(
         child: Padding(

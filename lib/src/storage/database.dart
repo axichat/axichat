@@ -29,12 +29,14 @@ abstract interface class XmppDatabase implements Database {
     String jid, {
     required int start,
     required int end,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
   Future<List<Message>> getChatMessages(
     String jid, {
     required int start,
     required int end,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
   Future<Message?> getMessageByStanzaID(String stanzaID);
@@ -81,6 +83,30 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markMessageReceived(String stanzaID);
 
   Future<void> markMessageDisplayed(String stanzaID);
+
+  Future<void> createMessageShare({
+    required MessageShareData share,
+    required List<MessageParticipantData> participants,
+  });
+
+  Future<void> insertMessageCopy({
+    required String shareId,
+    required int dcMsgId,
+    required int dcChatId,
+  });
+
+  Future<void> assignShareOriginator({
+    required String shareId,
+    required int originatorDcMsgId,
+  });
+
+  Future<MessageShareData?> getMessageShareByToken(String token);
+
+  Future<MessageShareData?> getMessageShareById(String shareId);
+
+  Future<List<MessageParticipantData>> getParticipantsForShare(String shareId);
+
+  Future<String?> getShareIdForDeltaMessage(int deltaMsgId);
 
   Future<void> removeChatMessages(String jid);
 
@@ -344,6 +370,87 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
 
   Future<void> deleteChatMessages(String jid) =>
       (delete(table)..where((item) => item.chatJid.equals(jid))).go();
+}
+
+@DriftAccessor(tables: [MessageShares])
+class MessageSharesAccessor
+    extends BaseAccessor<MessageShareData, $MessageSharesTable>
+    with _$MessageSharesAccessorMixin {
+  MessageSharesAccessor(super.attachedDatabase);
+
+  @override
+  $MessageSharesTable get table => messageShares;
+
+  @override
+  Future<MessageShareData?> selectOne(String shareId) =>
+      (select(table)..where((tbl) => tbl.shareId.equals(shareId)))
+          .getSingleOrNull();
+
+  Future<MessageShareData?> selectByToken(String token) =>
+      (select(table)..where((tbl) => tbl.subjectToken.equals(token)))
+          .getSingleOrNull();
+
+  Future<void> updateOriginator(String shareId, int originatorDcMsgId) =>
+      (update(table)..where((tbl) => tbl.shareId.equals(shareId))).write(
+        MessageSharesCompanion(
+          originatorDcMsgId: Value(originatorDcMsgId),
+        ),
+      );
+
+  @override
+  Future<void> deleteOne(String shareId) =>
+      (delete(table)..where((tbl) => tbl.shareId.equals(shareId))).go();
+}
+
+@DriftAccessor(tables: [MessageParticipants])
+class MessageParticipantsAccessor
+    extends BaseAccessor<MessageParticipantData, $MessageParticipantsTable>
+    with _$MessageParticipantsAccessorMixin {
+  MessageParticipantsAccessor(super.attachedDatabase);
+
+  @override
+  $MessageParticipantsTable get table => messageParticipants;
+
+  @override
+  Future<MessageParticipantData?> selectOne((String, String) key) =>
+      (select(table)
+            ..where((tbl) =>
+                tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne((String, String) key) => (delete(table)
+        ..where((tbl) =>
+            tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2)))
+      .go();
+
+  Future<List<MessageParticipantData>> selectByShare(String shareId) =>
+      (select(table)..where((tbl) => tbl.shareId.equals(shareId))).get();
+}
+
+@DriftAccessor(tables: [MessageCopies])
+class MessageCopiesAccessor
+    extends BaseAccessor<MessageCopyData, $MessageCopiesTable>
+    with _$MessageCopiesAccessorMixin {
+  MessageCopiesAccessor(super.attachedDatabase);
+
+  @override
+  $MessageCopiesTable get table => messageCopies;
+
+  @override
+  Future<MessageCopyData?> selectOne(int id) =>
+      (select(table)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(int id) =>
+      (delete(table)..where((tbl) => tbl.id.equals(id))).go();
+
+  Future<MessageCopyData?> selectByDeltaMsgId(int deltaMsgId) =>
+      (select(table)..where((tbl) => tbl.dcMsgId.equals(deltaMsgId)))
+          .getSingleOrNull();
+
+  Future<String?> selectShareIdForDeltaMsg(int deltaMsgId) async =>
+      (await selectByDeltaMsgId(deltaMsgId))?.shareId;
 }
 
 @DriftAccessor(tables: [Reactions, Messages])
@@ -655,6 +762,9 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
 
 @DriftDatabase(tables: [
   Messages,
+  MessageShares,
+  MessageParticipants,
+  MessageCopies,
   Drafts,
   OmemoDevices,
   OmemoTrusts,
@@ -673,6 +783,9 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   StickerPacks,
 ], daos: [
   MessagesAccessor,
+  MessageSharesAccessor,
+  MessageParticipantsAccessor,
+  MessageCopiesAccessor,
   ReactionsAccessor,
   DraftsAccessor,
   OmemoDevicesAccessor,
@@ -703,7 +816,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -728,6 +841,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
         if (from < 5) {
           await _rebuildMessagesTable(m);
         }
+        if (from < 6) {
+          await m.createTable(messageShares);
+          await m.createTable(messageParticipants);
+          await m.createTable(messageCopies);
+        }
         if (rebuildReactions) {
           await m.createTable(reactions);
         }
@@ -743,8 +861,14 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     String jid, {
     required int start,
     required int end,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) {
-    return messagesAccessor.watchChat(jid, limit: end);
+    return _chatMessagesSelectable(
+      jid: jid,
+      filter: filter,
+      limit: end,
+      offset: start,
+    ).watch();
   }
 
   @override
@@ -752,8 +876,58 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     String jid, {
     required int start,
     required int end,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) {
-    return messagesAccessor.selectChatMessages(jid);
+    return _chatMessagesSelectable(
+      jid: jid,
+      filter: filter,
+      limit: end,
+      offset: start,
+    ).get();
+  }
+
+  Selectable<Message> _chatMessagesSelectable({
+    required String jid,
+    required MessageTimelineFilter filter,
+    required int limit,
+    required int offset,
+  }) {
+    final filterValue = filter.index;
+    final query = customSelect(
+      '''
+      SELECT m.*
+      FROM messages m
+      LEFT JOIN message_copies mc ON mc.dc_msg_id = m.delta_msg_id
+      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+      LEFT JOIN message_participants mp
+        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+      WHERE m.chat_jid = ?
+        AND (
+          CASE WHEN ? = 0 THEN
+            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+          ELSE
+            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+      ORDER BY m.timestamp DESC
+      LIMIT ?
+      OFFSET ?
+      ''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<int>(filterValue),
+        Variable<int>(limit),
+        Variable<int>(offset),
+      ],
+      readsFrom: {
+        messages,
+        messageCopies,
+        messageShares,
+        messageParticipants,
+      },
+    );
+    return query.map((row) => messages.map(row.data));
   }
 
   Future<Message?> getLastMessageForChat(String jid) async {
@@ -820,47 +994,36 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     final bodyPreview =
         message.body == null ? 'no body' : '${message.body!.length} chars';
     _log.fine('Persisting message ${message.stanzaID}; body=$bodyPreview');
-    final hasBody = message.body != null;
-    final isCalendarSync =
-        message.pseudoMessageType == PseudoMessageType.calendarSync;
-    final chatTitle = mox.JID.fromString(message.chatJid).local;
+    final trimmedBody = message.body?.trim();
+    final hasBody = trimmedBody?.isNotEmpty == true;
+    final hasAttachment = message.fileMetadataID?.isNotEmpty == true;
+    final lastMessagePreview = await _messagePreview(
+      trimmedBody: trimmedBody,
+      fileMetadataId: message.fileMetadataID,
+      hasAttachment: hasAttachment,
+    );
     await transaction(() async {
-      if (isCalendarSync) {
-        await into(chats).insert(
-          ChatsCompanion.insert(
-            jid: message.chatJid,
-            title: chatTitle,
-            type: ChatType.chat,
-            unreadCount: const Value(0),
-            lastMessage: const Value(null),
-            lastChangeTimestamp: DateTime.timestamp(),
-            encryptionProtocol: Value(message.encryptionProtocol),
-          ),
-          mode: InsertMode.insertOrIgnore,
-        );
-      } else {
-        await into(chats).insert(
-          ChatsCompanion.insert(
-            jid: message.chatJid,
-            title: chatTitle,
-            type: ChatType.chat,
-            unreadCount: Value(hasBody.toBinary),
-            lastMessage: Value.absentIfNull(message.body),
-            lastChangeTimestamp: DateTime.timestamp(),
-            encryptionProtocol: Value(message.encryptionProtocol),
-          ),
-          onConflict: DoUpdate.withExcluded(
-            (old, excluded) => ChatsCompanion.custom(
-              unreadCount: const Constant(0).iif(
-                old.open.isValue(true),
-                old.unreadCount + Constant(hasBody.toBinary),
-              ),
-              lastMessage: excluded.lastMessage,
-              lastChangeTimestamp: excluded.lastChangeTimestamp,
+      await into(chats).insert(
+        ChatsCompanion.insert(
+          jid: message.chatJid,
+          title: mox.JID.fromString(message.chatJid).local,
+          type: ChatType.chat,
+          unreadCount: Value((hasBody || hasAttachment).toBinary),
+          lastMessage: Value.absentIfNull(lastMessagePreview),
+          lastChangeTimestamp: DateTime.timestamp(),
+          encryptionProtocol: Value(message.encryptionProtocol),
+        ),
+        onConflict: DoUpdate.withExcluded(
+          (old, excluded) => ChatsCompanion.custom(
+            unreadCount: const Constant(0).iif(
+              old.open.isValue(true),
+              old.unreadCount + Constant((hasBody || hasAttachment).toBinary),
             ),
+            lastMessage: excluded.lastMessage,
+            lastChangeTimestamp: excluded.lastChangeTimestamp,
           ),
-        );
-      }
+        ),
+      );
       BTBVTrustState? trust;
       bool? trusted;
       if (message.deviceID case final int deviceID) {
@@ -874,6 +1037,31 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
         trusted: trusted,
       ));
     });
+  }
+
+  Future<String?> _messagePreview({
+    required String? trimmedBody,
+    required String? fileMetadataId,
+    required bool hasAttachment,
+  }) async {
+    if (trimmedBody?.isNotEmpty == true) {
+      return trimmedBody;
+    }
+    if (!hasAttachment) {
+      return null;
+    }
+    if (fileMetadataId == null) {
+      return 'Attachment';
+    }
+    final metadata = await fileMetadataAccessor.selectOne(fileMetadataId);
+    if (metadata == null) {
+      return 'Attachment';
+    }
+    final filename = metadata.filename.trim();
+    if (filename.isEmpty) {
+      return 'Attachment';
+    }
+    return 'Attachment: $filename';
   }
 
   @override
@@ -961,6 +1149,58 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       displayed: const Value(true),
     ));
   }
+
+  @override
+  Future<void> createMessageShare({
+    required MessageShareData share,
+    required List<MessageParticipantData> participants,
+  }) async {
+    await transaction(() async {
+      await messageSharesAccessor.insertOrUpdateOne(share);
+      for (final participant in participants) {
+        await messageParticipantsAccessor.insertOrUpdateOne(participant);
+      }
+    });
+  }
+
+  @override
+  Future<void> insertMessageCopy({
+    required String shareId,
+    required int dcMsgId,
+    required int dcChatId,
+  }) async {
+    await messageCopiesAccessor.insertOrUpdateOne(
+      MessageCopiesCompanion.insert(
+        shareId: shareId,
+        dcMsgId: dcMsgId,
+        dcChatId: dcChatId,
+      ),
+    );
+  }
+
+  @override
+  Future<void> assignShareOriginator({
+    required String shareId,
+    required int originatorDcMsgId,
+  }) =>
+      messageSharesAccessor.updateOriginator(shareId, originatorDcMsgId);
+
+  @override
+  Future<MessageShareData?> getMessageShareByToken(String token) =>
+      messageSharesAccessor.selectByToken(token);
+
+  @override
+  Future<MessageShareData?> getMessageShareById(String shareId) =>
+      messageSharesAccessor.selectOne(shareId);
+
+  @override
+  Future<List<MessageParticipantData>> getParticipantsForShare(
+          String shareId) =>
+      messageParticipantsAccessor.selectByShare(shareId);
+
+  @override
+  Future<String?> getShareIdForDeltaMessage(int deltaMsgId) =>
+      messageCopiesAccessor.selectShareIdForDeltaMsg(deltaMsgId);
 
   @override
   Future<void> removeChatMessages(String jid) =>
@@ -1147,7 +1387,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   @override
   Future<void> saveFileMetadata(FileMetadataData metadata) async {
-    await fileMetadataAccessor.insertOne(metadata);
+    await fileMetadataAccessor.insertOrUpdateOne(metadata);
   }
 
   @override

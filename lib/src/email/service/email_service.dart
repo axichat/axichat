@@ -4,6 +4,9 @@ import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
 
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -12,6 +15,8 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
 const _defaultPageSize = 50;
+const _maxFanOutRecipients = 20;
+const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
 
 class EmailAccount {
   const EmailAccount({required this.address, required this.password});
@@ -27,6 +32,15 @@ class EmailProvisioningException implements Exception {
 
   @override
   String toString() => 'EmailProvisioningException: $message';
+}
+
+class FanOutValidationException implements Exception {
+  const FanOutValidationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'FanOutValidationException: $message';
 }
 
 class EmailService {
@@ -219,6 +233,190 @@ class EmailService {
     return _transport.sendText(chatId: chatId, body: body);
   }
 
+  Future<int> sendAttachment({
+    required Chat chat,
+    required EmailAttachment attachment,
+  }) async {
+    final deltaChat = await ensureChatForEmailChat(chat);
+    final chatId = deltaChat.deltaChatId!;
+    await _ensureReady();
+    return _transport.sendAttachment(
+      chatId: chatId,
+      attachment: attachment,
+    );
+  }
+
+  Future<FanOutSendReport> fanOutSend({
+    required List<FanOutTarget> targets,
+    String? body,
+    EmailAttachment? attachment,
+    bool useSubjectToken = true,
+    String? shareId,
+  }) async {
+    await _ensureReady();
+    if (targets.isEmpty) {
+      throw const FanOutValidationException('Select at least one recipient.');
+    }
+    final resolvedTargets = await _resolveFanOutTargets(targets);
+    if (resolvedTargets.isEmpty) {
+      throw const FanOutValidationException('Unable to resolve recipients.');
+    }
+    if (resolvedTargets.length > _maxFanOutRecipients) {
+      throw const FanOutValidationException(
+        'Fan-out limited to $_maxFanOutRecipients recipients.',
+      );
+    }
+    final trimmedBody = body?.trim();
+    final hasBody = trimmedBody?.isNotEmpty == true;
+    final hasAttachment = attachment != null;
+    if (!hasBody && !hasAttachment) {
+      throw const FanOutValidationException('Message cannot be empty.');
+    }
+    final db = await _databaseBuilder();
+    final existingShare =
+        shareId == null ? null : await db.getMessageShareById(shareId);
+    final existingParticipants = <MessageParticipantData>[];
+    final existingShareId = existingShare?.shareId ?? shareId;
+    if (existingShareId != null) {
+      existingParticipants
+          .addAll(await db.getParticipantsForShare(existingShareId));
+    }
+    final resolvedShareId =
+        shareId ?? existingShare?.shareId ?? ShareTokenCodec.generateShareId();
+    final resolvedToken = existingShare?.subjectToken ??
+        (useSubjectToken
+            ? ShareTokenCodec.subjectToken(resolvedShareId)
+            : null);
+
+    final transmitBody = resolvedToken != null && hasBody
+        ? ShareTokenCodec.injectToken(token: resolvedToken, body: trimmedBody!)
+        : trimmedBody ?? '';
+
+    final sanitizedBody = resolvedToken != null && hasBody
+        ? ShareTokenCodec.stripToken(transmitBody)?.cleanedBody ?? trimmedBody!
+        : trimmedBody ?? '';
+
+    final captionText = attachment?.caption?.trim();
+    final transmitCaption =
+        resolvedToken != null && captionText?.isNotEmpty == true
+            ? ShareTokenCodec.injectToken(
+                token: resolvedToken,
+                body: captionText!,
+              )
+            : captionText;
+    final sanitizedCaption =
+        resolvedToken != null && captionText?.isNotEmpty == true
+            ? ShareTokenCodec.stripToken(transmitCaption)?.cleanedBody ??
+                captionText!
+            : captionText;
+
+    final participants = await _buildShareParticipants(
+      shareId: resolvedShareId,
+      chats: resolvedTargets.values,
+      existingParticipants: existingParticipants,
+    );
+    final shareRecord = MessageShareData(
+      shareId: resolvedShareId,
+      originatorDcMsgId: existingShare?.originatorDcMsgId,
+      subjectToken: resolvedToken,
+      createdAt: existingShare?.createdAt ?? DateTime.timestamp(),
+      participantCount: participants.length,
+    );
+    await db.createMessageShare(
+      share: shareRecord,
+      participants: participants,
+    );
+
+    final statuses = <FanOutRecipientStatus>[];
+    var originatorCaptured = existingShare?.originatorDcMsgId != null;
+    for (final entry in resolvedTargets.values) {
+      try {
+        final normalizedChat = entry.deltaChatId == null
+            ? await ensureChatForEmailChat(entry)
+            : entry;
+        final chatId = normalizedChat.deltaChatId!;
+        int msgId;
+        if (hasAttachment) {
+          final updatedAttachment = attachment.copyWith(
+            caption: transmitCaption,
+          );
+          msgId = await _transport.sendAttachment(
+            chatId: chatId,
+            attachment: updatedAttachment,
+            shareId: resolvedShareId,
+            captionOverride: sanitizedCaption,
+          );
+        } else {
+          msgId = await _transport.sendText(
+            chatId: chatId,
+            body: transmitBody,
+            shareId: resolvedShareId,
+            localBodyOverride: sanitizedBody,
+          );
+        }
+        if (!originatorCaptured) {
+          await db.assignShareOriginator(
+            shareId: resolvedShareId,
+            originatorDcMsgId: msgId,
+          );
+          originatorCaptured = true;
+        }
+        statuses.add(
+          FanOutRecipientStatus(
+            chat: normalizedChat,
+            state: FanOutRecipientState.sent,
+            deltaMsgId: msgId,
+          ),
+        );
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+          'Failed to send fan-out message to ${entry.jid}',
+          error,
+          stackTrace,
+        );
+        statuses.add(
+          FanOutRecipientStatus(
+            chat: entry,
+            state: FanOutRecipientState.failed,
+            error: error,
+          ),
+        );
+      }
+    }
+
+    final attachmentWarning = hasAttachment &&
+        resolvedTargets.length > 1 &&
+        attachment.sizeBytes > _attachmentFanOutWarningBytes;
+
+    return FanOutSendReport(
+      shareId: resolvedShareId,
+      subjectToken: resolvedToken,
+      statuses: statuses,
+      attachmentWarning: attachmentWarning,
+    );
+  }
+
+  Future<ShareContext?> shareContextForMessage(Message message) async {
+    final deltaMsgId = message.deltaMsgId;
+    if (deltaMsgId == null) return null;
+    await _ensureReady();
+    final db = await _databaseBuilder();
+    final shareId = await db.getShareIdForDeltaMessage(deltaMsgId);
+    if (shareId == null) return null;
+    final participants = await db.getParticipantsForShare(shareId);
+    final chats = <Chat>[];
+    for (final participant in participants) {
+      final chat = await db.getChat(participant.contactJid);
+      if (chat != null) {
+        chats.add(chat);
+      }
+    }
+    return ShareContext(
+      shareId: shareId,
+      participants: chats,
+    );
+  }
+
   Future<int> sendToAddress({
     required String address,
     String? displayName,
@@ -243,11 +441,22 @@ class EmailService {
     String jid, {
     int start = 0,
     int end = _defaultPageSize,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async* {
     await _ensureReady();
     final db = await _databaseBuilder();
-    yield await db.getChatMessages(jid, start: start, end: end);
-    yield* db.watchChatMessages(jid, start: start, end: end);
+    yield await db.getChatMessages(
+      jid,
+      start: start,
+      end: end,
+      filter: filter,
+    );
+    yield* db.watchChatMessages(
+      jid,
+      start: start,
+      end: end,
+      filter: filter,
+    );
   }
 
   Stream<List<Draft>> draftsStream({
@@ -309,7 +518,9 @@ class EmailService {
       if (selfJid != null && message.senderJid == selfJid) {
         return;
       }
-      if (message.body?.isNotEmpty != true) {
+      final notificationBody =
+          await _notificationBody(db: db, message: message);
+      if (notificationBody == null) {
         return;
       }
       final chat = await db.getChat(message.chatJid);
@@ -318,7 +529,7 @@ class EmailService {
       }
       await notificationService.sendNotification(
         title: chat?.title ?? message.senderJid,
-        body: message.body,
+        body: notificationBody,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -344,7 +555,82 @@ class EmailService {
     }
   }
 
+  Future<String?> _notificationBody({
+    required XmppDatabase db,
+    required Message message,
+  }) async {
+    final trimmed = message.body?.trim();
+    if (trimmed?.isNotEmpty == true) {
+      return trimmed;
+    }
+    final metadataId = message.fileMetadataID;
+    if (metadataId == null) {
+      return null;
+    }
+    final metadata = await db.getFileMetadata(metadataId);
+    if (metadata == null) {
+      return 'Attachment';
+    }
+    final filename = metadata.filename.trim();
+    return filename.isEmpty ? 'Attachment' : 'Attachment: $filename';
+  }
+
   String? get selfSenderJid => _transport.selfJid;
+
+  Future<Map<String, Chat>> _resolveFanOutTargets(
+    List<FanOutTarget> targets,
+  ) async {
+    final resolved = <String, Chat>{};
+    for (final target in targets) {
+      Chat chat;
+      if (target.chat != null) {
+        chat = await ensureChatForEmailChat(target.chat!);
+      } else {
+        final address = target.address;
+        if (address == null || address.isEmpty) {
+          continue;
+        }
+        chat = await ensureChatForAddress(
+          address: address,
+          displayName: target.displayName ?? address,
+        );
+      }
+      resolved.putIfAbsent(chat.jid, () => chat);
+    }
+    return resolved;
+  }
+
+  Future<List<MessageParticipantData>> _buildShareParticipants({
+    required String shareId,
+    required Iterable<Chat> chats,
+    Iterable<MessageParticipantData> existingParticipants = const [],
+  }) async {
+    final participants = <String, MessageParticipantData>{};
+    for (final participant in existingParticipants) {
+      participants[participant.contactJid] = participant;
+    }
+    final senderJid = _senderParticipantJid();
+    if (senderJid != null && senderJid.isNotEmpty) {
+      participants[senderJid] = MessageParticipantData(
+        shareId: shareId,
+        contactJid: senderJid,
+        role: MessageParticipantRole.sender,
+      );
+    }
+    for (final chat in chats) {
+      participants.putIfAbsent(
+        chat.jid,
+        () => MessageParticipantData(
+          shareId: shareId,
+          contactJid: chat.jid,
+          role: MessageParticipantRole.recipient,
+        ),
+      );
+    }
+    return participants.values.toList();
+  }
+
+  String? _senderParticipantJid() => selfSenderJid ?? _defaultDeltaSelfJid;
 
   Future<Chat> _waitForChat(int chatId) async {
     final jid = _chatJid(chatId);
@@ -397,6 +683,7 @@ class EmailService {
 }
 
 const _deltaDomain = 'delta.chat';
+const _defaultDeltaSelfJid = 'dc-self@$_deltaDomain';
 
 String _chatJid(int chatId) => 'dc-$chatId@$_deltaDomain';
 
