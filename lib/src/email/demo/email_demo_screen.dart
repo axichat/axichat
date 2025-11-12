@@ -143,16 +143,23 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
         shape: Border(
           bottom: BorderSide(color: context.colorScheme.border),
         ),
-        leadingWidth: AxiIconButton.kDefaultSize + 16,
+        leadingWidth: AxiIconButton.kDefaultSize + 24,
         leading: Navigator.canPop(context)
             ? Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: AxiIconButton(
-                  iconData: LucideIcons.arrowLeft,
-                  tooltip: 'Back',
-                  color: context.colorScheme.foreground,
-                  borderColor: context.colorScheme.border,
-                  onPressed: () => Navigator.maybePop(context),
+                padding: const EdgeInsets.only(left: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: AxiIconButton.kDefaultSize,
+                    height: AxiIconButton.kDefaultSize,
+                    child: AxiIconButton(
+                      iconData: LucideIcons.arrowLeft,
+                      tooltip: 'Back',
+                      color: context.colorScheme.foreground,
+                      borderColor: context.colorScheme.border,
+                      onPressed: () => Navigator.maybePop(context),
+                    ),
+                  ),
                 ),
               )
             : null,
