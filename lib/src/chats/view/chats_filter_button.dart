@@ -52,62 +52,21 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ShadButton.ghost(
-                    width: double.infinity,
-                    foregroundColor: context.colorScheme.foreground,
-                    onPressed: () {
-                      context.read<ChatsCubit?>()?.filterChats((chat) => true);
-                      popoverController.toggle();
-                    },
-                    child: const Text('All'),
-                  ).withTapBounce(),
-                  ShadButton.ghost(
-                    width: double.infinity,
-                    foregroundColor: context.colorScheme.foreground,
-                    onPressed: () {
-                      context.read<ChatsCubit?>()?.filterChats((chat) => context
-                          .read<RosterCubit>()
-                          .contacts
-                          .contains(chat.jid));
-                      popoverController.toggle();
-                    },
-                    child: const Text('Contacts'),
-                  ).withTapBounce(),
-                  ShadButton.ghost(
-                    width: double.infinity,
-                    foregroundColor: context.colorScheme.foreground,
-                    onPressed: () {
-                      context.read<ChatsCubit?>()?.filterChats((chat) =>
-                          !context
-                              .read<RosterCubit>()
-                              .contacts
-                              .contains(chat.jid));
-                      popoverController.toggle();
-                    },
-                    child: const Text('Non-contacts'),
-                  ).withTapBounce(),
-                  ShadButton.ghost(
-                    width: double.infinity,
-                    foregroundColor: context.colorScheme.foreground,
-                    onPressed: () {
-                      context
-                          .read<ChatsCubit?>()
-                          ?.filterChats((chat) => chat.transport.isXmpp);
-                      popoverController.toggle();
-                    },
-                    child: const Text('XMPP only'),
-                  ).withTapBounce(),
-                  ShadButton.ghost(
-                    width: double.infinity,
-                    foregroundColor: context.colorScheme.foreground,
-                    onPressed: () {
-                      context
-                          .read<ChatsCubit?>()
-                          ?.filterChats((chat) => chat.transport.isEmail);
-                      popoverController.toggle();
-                    },
-                    child: const Text('Email only'),
-                  ).withTapBounce(),
+                  for (final option in _filterOptions(
+                    context,
+                    context.read<RosterCubit?>(),
+                  ))
+                    ShadButton.ghost(
+                      width: double.infinity,
+                      foregroundColor: context.colorScheme.foreground,
+                      onPressed: () {
+                        context
+                            .read<ChatsCubit?>()
+                            ?.filterChats(option.predicate);
+                        popoverController.toggle();
+                      },
+                      child: Text(option.label),
+                    ).withTapBounce(),
                 ],
               ),
             ),
@@ -123,4 +82,42 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
       ),
     );
   }
+}
+
+class _FilterOption {
+  const _FilterOption(this.label, this.predicate);
+
+  final String label;
+  final bool Function(Chat) predicate;
+}
+
+List<_FilterOption> _filterOptions(
+  BuildContext context,
+  RosterCubit? rosterCubit,
+) {
+  final contacts = rosterCubit?.contacts ?? const <String>[];
+  final contactSet = contacts is Set<String> ? contacts : contacts.toSet();
+  return [
+    _FilterOption('All', (chat) => !chat.hidden),
+    _FilterOption(
+      'Contacts',
+      (chat) => !chat.hidden && contactSet.contains(chat.jid),
+    ),
+    _FilterOption(
+      'Non-contacts',
+      (chat) => !chat.hidden && !contactSet.contains(chat.jid),
+    ),
+    _FilterOption(
+      'XMPP only',
+      (chat) => !chat.hidden && chat.transport.isXmpp,
+    ),
+    _FilterOption(
+      'Email only',
+      (chat) => !chat.hidden && chat.transport.isEmail,
+    ),
+    _FilterOption(
+      'Hidden',
+      (chat) => chat.hidden,
+    ),
+  ];
 }

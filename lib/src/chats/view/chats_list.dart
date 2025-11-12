@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -6,11 +8,15 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart' as intl;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatsList extends StatelessWidget {
@@ -19,7 +25,14 @@ class ChatsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
-      selector: (state) => state.items?.where(state.filter).toList(),
+      selector: (state) {
+        final items = state.items;
+        if (items == null) return null;
+        return items
+            .where((chat) => !chat.archived)
+            .where(state.filter)
+            .toList();
+      },
       builder: (context, items) {
         if (items == null) {
           return Center(
@@ -64,7 +77,7 @@ class ChatsList extends StatelessWidget {
 
               final item = items[index - 1];
               return ListItemPadding(
-                child: _ChatListTile(item: item),
+                child: ChatListTile(item: item),
               );
             },
           ),
@@ -74,13 +87,27 @@ class ChatsList extends StatelessWidget {
   }
 }
 
-class _ChatListTile extends StatelessWidget {
-  const _ChatListTile({required this.item});
+class ChatListTile extends StatefulWidget {
+  const ChatListTile({
+    super.key,
+    required this.item,
+    this.archivedContext = false,
+  });
 
   final Chat item;
+  final bool archivedContext;
+
+  @override
+  State<ChatListTile> createState() => _ChatListTileState();
+}
+
+class _ChatListTileState extends State<ChatListTile> {
+  bool _showActions = false;
+  bool _exporting = false;
 
   @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final colors = context.colorScheme;
     final transport = item.transport;
     final int unreadCount = math.max(0, item.unreadCount);
@@ -126,66 +153,13 @@ class _ChatListTile extends StatelessWidget {
     final tileBackgroundColor = item.open
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
-    T locate<T>() => context.read<T>();
-    final menuItems = [
-      AxiDeleteMenuItem(
-        onPressed: () => showShadDialog<bool>(
-          context: context,
-          builder: (context) {
-            var deleteMessages = false;
-            return StatefulBuilder(builder: (context, setState) {
-              return ShadDialog(
-                title: const Text('Confirm'),
-                actions: [
-                  ShadButton.outline(
-                    onPressed: () => context.pop(),
-                    child: const Text('Cancel'),
-                  ).withTapBounce(),
-                  ShadButton.destructive(
-                    onPressed: () {
-                      if (deleteMessages) {
-                        locate<ChatsCubit?>()
-                            ?.deleteChatMessages(jid: item.jid);
-                      }
-                      locate<ChatsCubit?>()?.deleteChat(jid: item.jid);
-                      return context.pop();
-                    },
-                    child: const Text('Continue'),
-                  ).withTapBounce(),
-                ],
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Delete chat: ${item.title}',
-                      style: context.textTheme.small,
-                    ),
-                    const SizedBox.square(dimension: 10.0),
-                    ShadCheckbox(
-                      value: deleteMessages,
-                      onChanged: (value) =>
-                          setState(() => deleteMessages = value),
-                      label: Text(
-                        'Permanently delete messages',
-                        style: context.textTheme.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            });
-          },
-        ),
-      ),
-    ];
     final tile = AxiListTile(
       key: Key(item.jid),
-      onTap: () => context.read<ChatsCubit?>()?.toggleChat(jid: item.jid),
+      onTap: () => _handleTap(item),
       leadingConstraints: const BoxConstraints(
         maxWidth: 72,
         maxHeight: 80,
       ),
-      menuItems: menuItems,
       selected: item.open,
       paintSurface: false,
       contentPadding: const EdgeInsets.only(left: 16.0, right: 40.0),
@@ -221,13 +195,10 @@ class _ChatListTile extends StatelessWidget {
         depth: 32,
         thickness: 46,
         cornerRadius: 18,
-        child: _FavoriteToggle(
+        child: _ChatActionsToggle(
           backgroundColor: tileBackgroundColor,
-          favorited: item.favorited,
-          onPressed: () => context.read<ChatsCubit?>()?.toggleFavorited(
-                jid: item.jid,
-                favorited: !item.favorited,
-              ),
+          expanded: _showActions,
+          onPressed: _toggleActions,
         ),
       ),
       if (timestampLabel != null)
@@ -257,10 +228,250 @@ class _ChatListTile extends StatelessWidget {
         cornerRadius: 18,
         side: BorderSide(color: colors.border),
       ),
-      child: tile,
+      child: Column(
+        children: [
+          tile,
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 220),
+            sizeCurve: Curves.easeInOutCubic,
+            crossFadeState: _showActions
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: _buildActionButtons(context, item),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
 
     return tileSurface.withTapBounce();
+  }
+
+  void _toggleActions() {
+    setState(() {
+      _showActions = !_showActions;
+    });
+  }
+
+  Future<void> _handleTap(Chat chat) async {
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit == null) return;
+    if (widget.archivedContext && chat.archived) {
+      await chatsCubit.toggleArchived(jid: chat.jid, archived: false);
+      if (!mounted) return;
+      _showMessage('Archived chat restored');
+    }
+    unawaited(chatsCubit.toggleChat(jid: chat.jid));
+  }
+
+  List<Widget> _buildActionButtons(BuildContext context, Chat chat) {
+    final chatsCubit = context.read<ChatsCubit?>();
+    return [
+      ContextActionButton(
+        icon: Icon(
+          chat.favorited ? LucideIcons.starOff : LucideIcons.star,
+          size: 16,
+        ),
+        label: chat.favorited ? 'Unfavorite' : 'Favorite',
+        onPressed: chatsCubit == null
+            ? null
+            : () async {
+                await chatsCubit.toggleFavorited(
+                  jid: chat.jid,
+                  favorited: !chat.favorited,
+                );
+                if (!mounted) return;
+                setState(() => _showActions = false);
+              },
+      ),
+      ContextActionButton(
+        icon: _exporting
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(LucideIcons.share2, size: 16),
+        label: _exporting ? 'Exporting...' : 'Export',
+        onPressed: _exporting
+            ? null
+            : () async {
+                await _exportChat(chat);
+              },
+      ),
+      ContextActionButton(
+        icon: Icon(
+          chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
+          size: 16,
+        ),
+        label: chat.archived ? 'Unarchive' : 'Archive',
+        onPressed: chatsCubit == null
+            ? null
+            : () async {
+                await chatsCubit.toggleArchived(
+                  jid: chat.jid,
+                  archived: !chat.archived,
+                );
+                if (!mounted) return;
+                _showMessage(
+                  chat.archived
+                      ? 'Chat restored'
+                      : 'Chat archived (Profile → Archived chats)',
+                );
+                setState(() => _showActions = false);
+              },
+      ),
+      ContextActionButton(
+        icon: Icon(
+          chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
+          size: 16,
+        ),
+        label: chat.hidden ? 'Show' : 'Hide',
+        onPressed: chatsCubit == null
+            ? null
+            : () async {
+                await chatsCubit.toggleHidden(
+                  jid: chat.jid,
+                  hidden: !chat.hidden,
+                );
+                if (!mounted) return;
+                _showMessage(
+                  chat.hidden
+                      ? 'Chat is visible again'
+                      : 'Chat hidden (use filter to reveal)',
+                );
+                setState(() => _showActions = false);
+              },
+      ),
+      ContextActionButton(
+        icon: const Icon(LucideIcons.trash2, size: 16),
+        label: 'Delete',
+        onPressed: () => _confirmDelete(chat),
+      ),
+    ];
+  }
+
+  Future<void> _exportChat(Chat chat) async {
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit == null) return;
+    setState(() {
+      _exporting = true;
+    });
+    try {
+      final history = await chatsCubit.loadChatHistory(chat.jid);
+      if (!mounted) return;
+      if (history.isEmpty) {
+        _showMessage('No messages to export');
+        return;
+      }
+      final buffer = StringBuffer();
+      final formatter = intl.DateFormat('y-MM-dd HH:mm');
+      for (final message in history) {
+        final timestampValue =
+            message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timestamp = formatter.format(timestampValue);
+        final author = message.senderJid;
+        final content = message.body?.trim();
+        if (content == null || content.isEmpty) continue;
+        buffer.writeln('[$timestamp] $author: $content');
+      }
+      final exportText = buffer.toString().trim();
+      if (exportText.isEmpty) {
+        _showMessage('No text content to export');
+        return;
+      }
+      final tempDir = await getTemporaryDirectory();
+      final sanitizedTitle =
+          chat.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_').toLowerCase();
+      final fileName =
+          'chat-${sanitizedTitle.isEmpty ? 'thread' : sanitizedTitle}-${DateTime.now().millisecondsSinceEpoch}.txt';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsString(exportText);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Chat export from Axichat',
+        subject: 'Chat with ${chat.title}',
+      );
+      if (!mounted) return;
+      _showMessage('Chat exported');
+      setState(() => _showActions = false);
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('Unable to export chat');
+    } finally {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(Chat chat) async {
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit == null) return;
+    var deleteMessages = false;
+    final confirmed = await showShadDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return ShadDialog(
+              title: const Text('Confirm'),
+              actions: [
+                ShadButton.outline(
+                  onPressed: () => dialogContext.pop(false),
+                  child: const Text('Cancel'),
+                ).withTapBounce(),
+                ShadButton.destructive(
+                  onPressed: () => dialogContext.pop(true),
+                  child: const Text('Continue'),
+                ).withTapBounce(),
+              ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Delete chat: ${chat.title}',
+                    style: context.textTheme.small,
+                  ),
+                  const SizedBox.square(dimension: 10.0),
+                  ShadCheckbox(
+                    value: deleteMessages,
+                    onChanged: (value) =>
+                        setState(() => deleteMessages = value),
+                    label: Text(
+                      'Permanently delete messages',
+                      style: context.textTheme.muted,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (confirmed != true) return;
+    if (deleteMessages) {
+      await chatsCubit.deleteChatMessages(jid: chat.jid);
+    }
+    await chatsCubit.deleteChat(jid: chat.jid);
+    if (!mounted) return;
+    _showMessage('Chat deleted');
+    setState(() => _showActions = false);
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -412,16 +623,16 @@ class _UnreadBadge extends StatelessWidget {
   }
 }
 
-class _FavoriteToggle extends StatelessWidget {
-  const _FavoriteToggle({
+class _ChatActionsToggle extends StatelessWidget {
+  const _ChatActionsToggle({
     required this.backgroundColor,
-    required this.favorited,
+    required this.expanded,
     required this.onPressed,
   });
 
   final Color backgroundColor;
-  final bool favorited;
-  final VoidCallback? onPressed;
+  final bool expanded;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -444,11 +655,11 @@ class _FavoriteToggle extends StatelessWidget {
           minHeight: 40,
         ),
         icon: Icon(
-          favorited ? Icons.star_rounded : Icons.star_border_rounded,
-          color: favorited ? colors.primary : colors.mutedForeground,
+          expanded ? LucideIcons.x : LucideIcons.ellipsisVertical,
+          color: colors.mutedForeground,
         ),
         onPressed: onPressed,
-      ).withTapBounce(enabled: onPressed != null),
+      ).withTapBounce(),
     );
   }
 }

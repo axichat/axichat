@@ -181,6 +181,33 @@ mixin ChatsService on XmppBase, BaseStreamService {
     );
   }
 
+  Future<void> toggleChatArchived({
+    required String jid,
+    required bool archived,
+  }) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatArchived(jid: jid, archived: archived),
+    );
+  }
+
+  Future<void> toggleChatHidden({
+    required String jid,
+    required bool hidden,
+  }) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatHidden(jid: jid, hidden: hidden),
+    );
+  }
+
+  Future<List<Message>> loadCompleteChatHistory({
+    required String jid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getAllMessagesForChat(jid, filter: filter),
+    );
+  }
+
   Future<void> toggleChatMarkerResponsive({
     required String jid,
     required bool responsive,

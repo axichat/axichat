@@ -39,6 +39,11 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Future<List<Message>> getAllMessagesForChat(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
   Future<Message?> getMessageByStanzaID(String stanzaID);
 
   Future<Message?> getMessageByOriginID(String originID);
@@ -200,6 +205,16 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markChatFavorited({
     required String jid,
     required bool favorited,
+  });
+
+  Future<void> markChatArchived({
+    required String jid,
+    required bool archived,
+  });
+
+  Future<void> markChatHidden({
+    required String jid,
+    required bool hidden,
   });
 
   Future<void> markChatMarkerResponsive({
@@ -816,7 +831,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -845,6 +860,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
           await m.createTable(messageShares);
           await m.createTable(messageParticipants);
           await m.createTable(messageCopies);
+        }
+        if (from < 7) {
+          await m.addColumn(chats, chats.archived);
+          await m.addColumn(chats, chats.hidden);
         }
         if (rebuildReactions) {
           await m.createTable(reactions);
@@ -928,6 +947,22 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       },
     );
     return query.map((row) => messages.map(row.data));
+  }
+
+  @override
+  Future<List<Message>> getAllMessagesForChat(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    final query = select(messages)
+      ..where((tbl) => tbl.chatJid.equals(jid))
+      ..orderBy([
+        (tbl) => OrderingTerm(
+              expression: tbl.timestamp,
+              mode: OrderingMode.asc,
+            ),
+      ]);
+    return query.get();
   }
 
   Future<Message?> getLastMessageForChat(String jid) async {
@@ -1476,6 +1511,26 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     _log.info('Marking chat: $jid as favorited: $favorited');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(favorited: Value(favorited)));
+  }
+
+  @override
+  Future<void> markChatArchived({
+    required String jid,
+    required bool archived,
+  }) async {
+    _log.info('Marking chat: $jid as archived: $archived');
+    await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(archived: Value(archived)));
+  }
+
+  @override
+  Future<void> markChatHidden({
+    required String jid,
+    required bool hidden,
+  }) async {
+    _log.info('Marking chat: $jid as hidden: $hidden');
+    await (update(chats)..where((chats) => chats.jid.equals(jid)))
+        .write(ChatsCompanion(hidden: Value(hidden)));
   }
 
   @override

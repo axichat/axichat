@@ -10,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const double _chipHeight = 36.0;
+const Duration _chipMotionDuration = Duration(milliseconds: 320);
+const Curve _chipMotionCurve = Curves.easeInOutCubic;
+const Duration _barAnimationDuration = Duration(milliseconds: 360);
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -33,23 +36,47 @@ class RecipientChipsBar extends StatefulWidget {
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
 }
 
-class _RecipientChipsBarState extends State<RecipientChipsBar> {
+class _RecipientChipsBarState extends State<RecipientChipsBar>
+    with SingleTickerProviderStateMixin {
   static const _collapsedVisibleCount = 4;
 
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _expanded = false;
+  bool _barCollapsed = false;
+  late List<ComposerRecipient> _renderedRecipients;
+  final Set<String> _enteringKeys = <String>{};
+  final Set<String> _removingKeys = <String>{};
+  late final AnimationController _collapseController;
+  late final Animation<double> _collapseAnimation;
 
   @override
   void initState() {
     super.initState();
     _focusNode.onKeyEvent = _handleKeyEvent;
+    _renderedRecipients = _visibleRecipientsForState();
+    _collapseController = AnimationController(
+      vsync: this,
+      duration: _barAnimationDuration,
+      value: _barCollapsed ? 0 : 1,
+    );
+    _collapseAnimation = CurvedAnimation(
+      parent: _collapseController,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncRenderedRecipients();
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
+    _collapseController.dispose();
     super.dispose();
   }
 
@@ -58,15 +85,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar> {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final recipients = widget.recipients;
-    final visibleRecipients =
-        _expanded || recipients.length <= _collapsedVisibleCount
-            ? recipients
-            : recipients.take(_collapsedVisibleCount).toList();
+    final visibleRecipients = _visibleRecipientsForState();
     final overflow = recipients.length - visibleRecipients.length;
     final chips = <Widget>[
-      for (final recipient in visibleRecipients)
+      for (final recipient in _renderedRecipients)
         _AnimatedChipWrapper(
           key: ValueKey('recipient-${recipient.key}'),
+          isEntering: _enteringKeys.contains(recipient.key),
+          isRemoving: _removingKeys.contains(recipient.key),
           child: _RecipientChip(
             recipient: recipient,
             status: widget.latestStatuses[recipient.target.chat?.jid ?? ''],
@@ -76,66 +102,114 @@ class _RecipientChipsBarState extends State<RecipientChipsBar> {
                 : () => widget.onRecipientRemoved(recipient.key),
           ),
         ),
-      if (!_expanded && overflow > 0)
+      if (!_barCollapsed && !_expanded && overflow > 0)
         _AnimatedChipWrapper(
           key: ValueKey('show-more-$overflow'),
           child: _ActionChip(
             label: '+$overflow more',
             icon: Icons.add,
-            onPressed: () => setState(() => _expanded = true),
+            onPressed: () => _toggleListExpansion(true),
           ),
         ),
-      if (_expanded && overflow > 0)
+      if (!_barCollapsed && _expanded && overflow > 0)
         _AnimatedChipWrapper(
           key: const ValueKey('collapse'),
           child: _ActionChip(
             label: 'Collapse',
             icon: Icons.expand_less,
-            onPressed: () => setState(() => _expanded = false),
+            onPressed: () => _toggleListExpansion(false),
           ),
         ),
     ];
 
     final barBackground = _containerBackground(colors);
-    return SizedBox(
+    final bodyPadding = EdgeInsets.fromLTRB(16, 8, 16, _barCollapsed ? 8 : 12);
+    final headerStyle = theme.textTheme.labelSmall?.copyWith(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: colors.onSurfaceVariant.withValues(alpha: 0.9),
+      letterSpacing: 0.4,
+    );
+    final arrowIcon =
+        _barCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up;
+    return AnimatedContainer(
+      duration: _barAnimationDuration,
+      curve: Curves.easeInOutCubic,
       width: double.infinity,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: barBackground,
-          border: Border(
-            top: BorderSide(color: context.colorScheme.border, width: 1),
-          ),
+      decoration: BoxDecoration(
+        color: barBackground,
+        border: Border(
+          top: BorderSide(color: context.colorScheme.border, width: 1),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Sending to...',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+      ),
+      padding: bodyPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggleBarCollapsed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
                 children: [
-                  ...chips,
-                  _AnimatedChipWrapper(
-                    key: const ValueKey('autocomplete-field'),
-                    child: _buildAutocompleteField(
-                      context,
-                      backgroundColor: barBackground,
+                  Expanded(
+                    child: Text(
+                      'Send to...',
+                      style: headerStyle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _RecipientsCountBadge(
+                    count: recipients.length,
+                    expanded: !_barCollapsed,
+                    colors: colors,
+                  ),
+                  const SizedBox(width: 4),
+                  AnimatedSwitcher(
+                    duration: _barAnimationDuration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: Icon(
+                      arrowIcon,
+                      key: ValueKey<bool>(_barCollapsed),
+                      size: 18,
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+          ClipRect(
+            child: SizeTransition(
+              sizeFactor: _collapseAnimation,
+              axisAlignment: -1,
+              child: AnimatedSize(
+                duration: _barAnimationDuration,
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...chips,
+                      _AnimatedChipWrapper(
+                        key: const ValueKey('autocomplete-field'),
+                        child: _buildAutocompleteField(
+                          context,
+                          backgroundColor: barBackground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -231,15 +305,20 @@ class _RecipientChipsBarState extends State<RecipientChipsBar> {
                             ? null
                             : StrutStyle.fromTextStyle(textStyle),
                         textInputAction: TextInputAction.done,
+                        onEditingComplete: () => focusNode.requestFocus(),
                         textAlignVertical: TextAlignVertical.center,
                         onSubmitted: (value) {
                           final trimmed = value.trim();
-                          if (trimmed.isEmpty) return;
+                          if (trimmed.isEmpty) {
+                            focusNode.requestFocus();
+                            return;
+                          }
                           if (_handleManualEntry(trimmed)) {
                             controller.clear();
                           } else {
                             onFieldSubmitted();
                           }
+                          focusNode.requestFocus();
                         },
                       ),
                     ),
@@ -303,6 +382,87 @@ class _RecipientChipsBarState extends State<RecipientChipsBar> {
   bool _looksLikeEmail(String value) {
     final pattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
     return pattern.hasMatch(value);
+  }
+
+  List<ComposerRecipient> _visibleRecipientsForState() {
+    if (_expanded || widget.recipients.length <= _collapsedVisibleCount) {
+      return List<ComposerRecipient>.from(widget.recipients);
+    }
+    return widget.recipients.take(_collapsedVisibleCount).toList();
+  }
+
+  void _toggleListExpansion(bool expand) {
+    if (_expanded == expand) return;
+    setState(() {
+      _expanded = expand;
+    });
+    _syncRenderedRecipients();
+  }
+
+  void _toggleBarCollapsed() {
+    final next = !_barCollapsed;
+    setState(() {
+      _barCollapsed = next;
+    });
+    if (next) {
+      _collapseController.animateTo(0);
+    } else {
+      _collapseController.animateTo(1);
+    }
+  }
+
+  void _syncRenderedRecipients() {
+    final desired = _visibleRecipientsForState();
+    final current = List<ComposerRecipient>.from(_renderedRecipients);
+
+    for (var i = 0; i < desired.length; i++) {
+      final recipient = desired[i];
+      final index = current.indexWhere((item) => item.key == recipient.key);
+      _removingKeys.remove(recipient.key);
+      if (index == -1) {
+        current.insert(i, recipient);
+        _flagEntering(recipient.key);
+      } else {
+        current[index] = recipient;
+        if (index != i) {
+          final item = current.removeAt(index);
+          current.insert(i, item);
+        }
+      }
+    }
+
+    final desiredKeys = desired.map((recipient) => recipient.key).toSet();
+    for (final recipient in current) {
+      if (!desiredKeys.contains(recipient.key)) {
+        _flagRemoving(recipient.key);
+      }
+    }
+
+    setState(() {
+      _renderedRecipients = current;
+    });
+  }
+
+  void _flagEntering(String key) {
+    if (_enteringKeys.contains(key)) return;
+    _enteringKeys.add(key);
+    Future.delayed(_chipMotionDuration, () {
+      if (!mounted || !_enteringKeys.contains(key)) return;
+      setState(() {
+        _enteringKeys.remove(key);
+      });
+    });
+  }
+
+  void _flagRemoving(String key) {
+    if (_removingKeys.contains(key)) return;
+    _removingKeys.add(key);
+    Future.delayed(_chipMotionDuration, () {
+      if (!mounted || !_removingKeys.remove(key)) return;
+      setState(() {
+        _renderedRecipients.removeWhere((recipient) => recipient.key == key);
+      });
+    });
   }
 }
 
@@ -448,6 +608,42 @@ class _RecipientChip extends StatelessWidget {
   }
 }
 
+class _RecipientsCountBadge extends StatelessWidget {
+  const _RecipientsCountBadge({
+    required this.count,
+    required this.expanded,
+    required this.colors,
+  });
+
+  final int count;
+  final bool expanded;
+  final ColorScheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final background =
+        expanded ? colors.primary : colors.primary.withValues(alpha: 0.09);
+    final foreground = expanded ? colors.onPrimary : colors.primary;
+    return AnimatedContainer(
+      duration: _barAnimationDuration,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: foreground,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
 class _ActionChip extends StatelessWidget {
   const _ActionChip({
     required this.label,
@@ -490,40 +686,38 @@ class _AnimatedChipWrapper extends StatelessWidget {
   const _AnimatedChipWrapper({
     super.key,
     required this.child,
+    this.isEntering = false,
+    this.isRemoving = false,
   });
 
-  static const _duration = Duration(milliseconds: 240);
   final Widget child;
+  final bool isEntering;
+  final bool isRemoving;
 
   @override
   Widget build(BuildContext context) {
     final keyedChild = KeyedSubtree(key: key, child: child);
-    return AnimatedSize(
-      duration: _duration,
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.centerLeft,
-      child: AnimatedSwitcher(
-        duration: _duration,
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          final slide =
-              animation.drive(CurveTween(curve: Curves.easeOutCubic)).drive(
-                    Tween<Offset>(
-                      begin: const Offset(0.08, 0),
-                      end: Offset.zero,
-                    ),
-                  );
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: slide,
-              child: child,
+    final begin = isEntering ? 0.0 : 1.0;
+    final end = isRemoving ? 0.0 : 1.0;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: begin, end: end),
+      duration: _chipMotionDuration,
+      curve: _chipMotionCurve,
+      builder: (context, value, _) {
+        final clamped = value.clamp(0.0, 1.0);
+        return Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: clamped,
+          heightFactor: clamped,
+          child: Opacity(
+            opacity: clamped,
+            child: Transform.translate(
+              offset: Offset((1 - clamped) * (isRemoving ? 12 : -12), 0),
+              child: keyedChild,
             ),
-          );
-        },
-        child: keyedChild,
-      ),
+          ),
+        );
+      },
     );
   }
 }

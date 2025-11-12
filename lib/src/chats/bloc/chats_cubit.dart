@@ -13,11 +13,11 @@ class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({required ChatsService chatsService})
       : _chatsService = chatsService,
         super(
-          ChatsState(
+          const ChatsState(
             openJid: null,
             openCalendar: false,
             items: null,
-            filter: (chat) => true,
+            filter: _defaultFilter,
             creationStatus: RequestStatus.none,
           ),
         ) {
@@ -42,8 +42,14 @@ class ChatsCubit extends Cubit<ChatsState> {
     ));
   }
 
+  static bool _defaultFilter(Chat chat) => !chat.hidden;
+
   void filterChats(bool Function(Chat) filter) {
     emit(state.copyWith(filter: filter));
+  }
+
+  void resetFilter() {
+    emit(state.copyWith(filter: _defaultFilter));
   }
 
   Future<void> toggleChat({required String jid}) async {
@@ -76,6 +82,24 @@ class ChatsCubit extends Cubit<ChatsState> {
     required bool favorited,
   }) async {
     await _chatsService.toggleChatFavorited(jid: jid, favorited: favorited);
+  }
+
+  Future<void> toggleArchived({
+    required String jid,
+    required bool archived,
+  }) async {
+    await _chatsService.toggleChatArchived(jid: jid, archived: archived);
+  }
+
+  Future<void> toggleHidden({
+    required String jid,
+    required bool hidden,
+  }) async {
+    await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
+  }
+
+  Future<List<Message>> loadChatHistory(String jid) {
+    return _chatsService.loadCompleteChatHistory(jid: jid);
   }
 
   Future<void> createChatRoom({

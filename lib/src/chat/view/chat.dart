@@ -22,6 +22,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -38,6 +39,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -2198,7 +2200,7 @@ class _ChatState extends State<Chat> {
                                                 MessageStatus.failed;
                                             List<GlobalKey>? actionButtonKeys;
                                             if (isSelected) {
-                                              const baseActionCount = 5;
+                                              const baseActionCount = 6;
                                               final actionCount =
                                                   baseActionCount +
                                                       (canResend ? 1 : 0);
@@ -2226,6 +2228,10 @@ class _ChatState extends State<Chat> {
                                               onForward: () =>
                                                   _handleForward(messageModel),
                                               onCopy: () => _copyMessage(
+                                                dashMessage: message,
+                                                model: messageModel,
+                                              ),
+                                              onShare: () => _shareMessage(
                                                 dashMessage: message,
                                                 model: messageModel,
                                               ),
@@ -2485,6 +2491,24 @@ class _ChatState extends State<Chat> {
             target: target,
           ),
         );
+  }
+
+  Future<void> _shareMessage({
+    required ChatMessage dashMessage,
+    required Message model,
+  }) async {
+    final content = (model.body ?? dashMessage.text).trim();
+    if (content.isEmpty) {
+      _showSnackbar('Message has no text to share');
+      return;
+    }
+    final chatTitle =
+        context.read<ChatBloc>().state.chat?.title ?? 'Axichat message';
+    await Share.share(
+      content,
+      subject: 'Shared from $chatTitle',
+    );
+    _clearMessageSelection();
   }
 
   Future<void> _copyMessage({
@@ -3453,6 +3477,7 @@ class _MessageActionBar extends StatelessWidget {
     required this.onReply,
     required this.onForward,
     required this.onCopy,
+    required this.onShare,
     required this.onAddToCalendar,
     required this.onDetails,
     this.onResend,
@@ -3462,6 +3487,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback onReply;
   final VoidCallback onForward;
   final VoidCallback onCopy;
+  final VoidCallback onShare;
   final VoidCallback onAddToCalendar;
   final VoidCallback onDetails;
   final VoidCallback? onResend;
@@ -3477,13 +3503,13 @@ class _MessageActionBar extends StatelessWidget {
     }
 
     final actions = <Widget>[
-      _MessageActionButton(
+      ContextActionButton(
         key: nextKey(),
         icon: const Icon(LucideIcons.reply, size: 16),
         label: 'Reply',
         onPressed: onReply,
       ),
-      _MessageActionButton(
+      ContextActionButton(
         key: nextKey(),
         icon: Transform.scale(
           scaleX: -1,
@@ -3493,25 +3519,31 @@ class _MessageActionBar extends StatelessWidget {
         onPressed: onForward,
       ),
       if (onResend != null)
-        _MessageActionButton(
+        ContextActionButton(
           key: nextKey(),
           icon: const Icon(LucideIcons.repeat, size: 16),
           label: 'Resend',
           onPressed: onResend!,
         ),
-      _MessageActionButton(
+      ContextActionButton(
         key: nextKey(),
         icon: const Icon(LucideIcons.copy, size: 16),
         label: 'Copy',
         onPressed: onCopy,
       ),
-      _MessageActionButton(
+      ContextActionButton(
+        key: nextKey(),
+        icon: const Icon(LucideIcons.share2, size: 16),
+        label: 'Share',
+        onPressed: onShare,
+      ),
+      ContextActionButton(
         key: nextKey(),
         icon: const Icon(LucideIcons.calendarPlus, size: 16),
         label: 'Add to calendar',
         onPressed: onAddToCalendar,
       ),
-      _MessageActionButton(
+      ContextActionButton(
         key: nextKey(),
         icon: const Icon(LucideIcons.info, size: 16),
         label: 'Details',
@@ -3524,34 +3556,6 @@ class _MessageActionBar extends StatelessWidget {
       alignment: WrapAlignment.center,
       children: actions,
     );
-  }
-}
-
-class _MessageActionButton extends StatelessWidget {
-  const _MessageActionButton({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final Widget icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return ShadButton.outline(
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          const SizedBox(width: 6),
-          Text(label),
-        ],
-      ),
-    ).withTapBounce();
   }
 }
 

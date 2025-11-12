@@ -9,6 +9,7 @@ import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
+import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -50,14 +51,16 @@ class ProfileScreen extends StatelessWidget {
             value: locate<AuthenticationCubit>(),
           ),
         ],
-        child: const _ProfileBody(),
+        child: _ProfileBody(locate: locate),
       ),
     );
   }
 }
 
 class _ProfileBody extends StatefulWidget {
-  const _ProfileBody();
+  const _ProfileBody({required this.locate});
+
+  final T Function<T>() locate;
 
   @override
   State<_ProfileBody> createState() => _ProfileBodyState();
@@ -266,6 +269,13 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                         spacing: 8.0,
                                         overflowSpacing: 8.0,
                                         children: [
+                                          ShadButton.secondary(
+                                            child: const Text('View archives'),
+                                            onPressed: () => context.push(
+                                              const ArchivesRoute().location,
+                                              extra: widget.locate,
+                                            ),
+                                          ).withTapBounce(),
                                           ShadButton.secondary(
                                             child:
                                                 const Text('Change password'),

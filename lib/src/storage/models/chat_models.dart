@@ -260,6 +260,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool open,
     @Default(false) bool muted,
     @Default(false) bool favorited,
+    @Default(false) bool archived,
+    @Default(false) bool hidden,
     @Default(true) bool markerResponsive,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
@@ -285,6 +287,8 @@ class Chat with _$Chat implements Insertable<Chat> {
     required bool open,
     required bool muted,
     required bool favorited,
+    required bool archived,
+    required bool hidden,
     required bool markerResponsive,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
@@ -321,6 +325,8 @@ class Chat with _$Chat implements Insertable<Chat> {
         open: Value(open),
         muted: Value(muted),
         favorited: Value(favorited),
+        archived: Value(archived),
+        hidden: Value(hidden),
         markerResponsive: Value(markerResponsive),
         encryptionProtocol: Value(encryptionProtocol),
         contactID: Value.absentIfNull(contactID),
@@ -360,6 +366,10 @@ class Chats extends Table {
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
 
   BoolColumn get favorited => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get archived => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get hidden => boolean().withDefault(const Constant(false))();
 
   BoolColumn get markerResponsive =>
       boolean().withDefault(const Constant(true))();
