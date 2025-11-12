@@ -191,65 +191,56 @@ class _RecipientChipsBarState extends State<RecipientChipsBar> {
           final colors = Theme.of(context).colorScheme;
           final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
           final textStyle = Theme.of(context).textTheme.bodyMedium;
-          return CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.backspace): () {
-                if (controller.text.isEmpty) {
-                  _removeLastRecipient();
-                }
-              },
-            },
-            child: SizedBox(
-              height: _chipHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(_chipHeight / 2),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          inputDecorationTheme: const InputDecorationTheme(
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            focusedErrorBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
+          return SizedBox(
+            height: _chipHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: backgroundColor,
+                    borderRadius: BorderRadius.circular(_chipHeight / 2),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        inputDecorationTheme: const InputDecorationTheme(
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
                         ),
-                        child: TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          cursorColor: colors.primary,
-                          maxLines: 1,
-                          decoration: InputDecoration(
-                            hintText: 'Add...',
-                            hintStyle: textStyle?.copyWith(color: hintColor),
-                          ),
-                          style: textStyle,
-                          strutStyle: textStyle == null
-                              ? null
-                              : StrutStyle.fromTextStyle(textStyle),
-                          textInputAction: TextInputAction.done,
-                          textAlignVertical: TextAlignVertical.center,
-                          onSubmitted: (value) {
-                            final trimmed = value.trim();
-                            if (trimmed.isEmpty) return;
-                            if (_handleManualEntry(trimmed)) {
-                              controller.clear();
-                            } else {
-                              onFieldSubmitted();
-                            }
-                          },
+                      ),
+                      child: TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        cursorColor: colors.primary,
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          hintText: 'Add...',
+                          hintStyle: textStyle?.copyWith(color: hintColor),
                         ),
+                        style: textStyle,
+                        strutStyle: textStyle == null
+                            ? null
+                            : StrutStyle.fromTextStyle(textStyle),
+                        textInputAction: TextInputAction.done,
+                        textAlignVertical: TextAlignVertical.center,
+                        onSubmitted: (value) {
+                          final trimmed = value.trim();
+                          if (trimmed.isEmpty) return;
+                          if (_handleManualEntry(trimmed)) {
+                            controller.clear();
+                          } else {
+                            onFieldSubmitted();
+                          }
+                        },
                       ),
                     ),
                   ),

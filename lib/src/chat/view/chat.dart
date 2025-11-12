@@ -436,7 +436,7 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
     required List<chat_models.Chat> availableEmailChats,
     required Map<String, FanOutRecipientState> latestStatuses,
-    required List<EmailAttachment> pendingAttachments,
+    required List<PendingAttachment> pendingAttachments,
     String? composerError,
     bool showAttachmentWarning = false,
     FanOutSendReport? retryReport,
@@ -524,7 +524,15 @@ class _ChatState extends State<Chat> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (pendingAttachments.isNotEmpty) ...[
-            _PendingAttachmentList(attachments: pendingAttachments),
+            _PendingAttachmentList(
+              attachments: pendingAttachments,
+              onRetry: (id) => context
+                  .read<ChatBloc>()
+                  .add(ChatAttachmentRetryRequested(id)),
+              onRemove: (id) => context
+                  .read<ChatBloc>()
+                  .add(ChatPendingAttachmentRemoved(id)),
+            ),
             const SizedBox(height: 12),
           ],
           if (notices.isNotEmpty) ...[
@@ -2631,9 +2639,15 @@ class _ReactionStrip extends StatelessWidget {
 }
 
 class _PendingAttachmentList extends StatelessWidget {
-  const _PendingAttachmentList({required this.attachments});
+  const _PendingAttachmentList({
+    required this.attachments,
+    required this.onRetry,
+    required this.onRemove,
+  });
 
-  final List<EmailAttachment> attachments;
+  final List<PendingAttachment> attachments;
+  final ValueChanged<String> onRetry;
+  final ValueChanged<String> onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -2644,8 +2658,10 @@ class _PendingAttachmentList extends StatelessWidget {
         runSpacing: 12,
         children: attachments
             .map(
-              (attachment) => _PendingAttachmentPreview(
-                attachment: attachment,
+              (pending) => _PendingAttachmentPreview(
+                pending: pending,
+                onRetry: () => onRetry(pending.id),
+                onRemove: () => onRemove(pending.id),
               ),
             )
             .toList(),
@@ -2655,27 +2671,48 @@ class _PendingAttachmentList extends StatelessWidget {
 }
 
 class _PendingAttachmentPreview extends StatelessWidget {
-  const _PendingAttachmentPreview({required this.attachment});
+  const _PendingAttachmentPreview({
+    required this.pending,
+    required this.onRetry,
+    required this.onRemove,
+  });
 
-  final EmailAttachment attachment;
+  final PendingAttachment pending;
+  final VoidCallback onRetry;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    if (attachment.isImage) {
-      return _PendingImageAttachment(attachment: attachment);
+    if (pending.attachment.isImage) {
+      return _PendingImageAttachment(
+        pending: pending,
+        onRetry: onRetry,
+        onRemove: onRemove,
+      );
     }
-    return _PendingFileAttachment(attachment: attachment);
+    return _PendingFileAttachment(
+      pending: pending,
+      onRetry: onRetry,
+      onRemove: onRemove,
+    );
   }
 }
 
 class _PendingImageAttachment extends StatelessWidget {
-  const _PendingImageAttachment({required this.attachment});
+  const _PendingImageAttachment({
+    required this.pending,
+    required this.onRetry,
+    required this.onRemove,
+  });
 
-  final EmailAttachment attachment;
+  final PendingAttachment pending;
+  final VoidCallback onRetry;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final borderRadius = BorderRadius.circular(16);
     return SizedBox(
       width: 72,
       height: 72,
@@ -2683,37 +2720,46 @@ class _PendingImageAttachment extends StatelessWidget {
         children: [
           Positioned.fill(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: borderRadius,
               child: Image.file(
-                File(attachment.path),
+                File(pending.attachment.path),
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => ColoredBox(
                   color: colors.card,
                   child: Icon(
-                    _attachmentIcon(attachment),
+                    _attachmentIcon(pending.attachment),
                     color: colors.mutedForeground,
                   ),
                 ),
               ),
             ),
           ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: colors.background.withValues(alpha: 0.85),
-                shape: BoxShape.circle,
+          if (pending.status == PendingAttachmentStatus.uploading)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: colors.background.withValues(alpha: 0.85),
+                  shape: BoxShape.circle,
+                ),
+                padding: const EdgeInsets.all(4),
+                child: _PendingAttachmentSpinner(
+                  color: colors.primary,
+                  strokeWidth: 2,
+                ),
               ),
-              padding: const EdgeInsets.all(4),
-              child: _PendingAttachmentSpinner(
-                color: colors.primary,
-                strokeWidth: 2,
-              ),
+            )
+          else
+            _PendingAttachmentErrorOverlay(
+              borderRadius: borderRadius,
+              fileName: pending.attachment.fileName,
+              message: pending.errorMessage,
+              onRetry: onRetry,
+              onRemove: onRemove,
             ),
-          ),
         ],
       ),
     );
@@ -2721,71 +2767,202 @@ class _PendingImageAttachment extends StatelessWidget {
 }
 
 class _PendingFileAttachment extends StatelessWidget {
-  const _PendingFileAttachment({required this.attachment});
+  const _PendingFileAttachment({
+    required this.pending,
+    required this.onRetry,
+    required this.onRemove,
+  });
 
-  final EmailAttachment attachment;
+  final PendingAttachment pending;
+  final VoidCallback onRetry;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final sizeLabel = _formatBytes(attachment.sizeBytes);
+    final sizeLabel = _formatBytes(pending.attachment.sizeBytes);
+    final borderRadius = BorderRadius.circular(16);
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: math.min(MediaQuery.sizeOf(context).width * 0.65, 260),
       ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _attachmentIcon(attachment),
-              size: 20,
-              color: colors.primary,
+      child: Stack(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colors.card,
+              borderRadius: borderRadius,
+              border: Border.all(color: colors.border),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    attachment.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.small.copyWith(
-                      fontWeight: FontWeight.w600,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _attachmentIcon(pending.attachment),
+                  size: 20,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        pending.attachment.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        sizeLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.textTheme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (pending.status == PendingAttachmentStatus.uploading)
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: _PendingAttachmentSpinner(
+                      color: colors.primary,
+                      strokeWidth: 2,
                     ),
                   ),
-                  Text(
-                    sizeLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.mutedForeground,
-                    ),
+              ],
+            ),
+          ),
+          if (pending.status == PendingAttachmentStatus.failed)
+            _PendingAttachmentErrorOverlay(
+              borderRadius: borderRadius,
+              fileName: pending.attachment.fileName,
+              message: pending.errorMessage,
+              onRetry: onRetry,
+              onRemove: onRemove,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentErrorOverlay extends StatelessWidget {
+  const _PendingAttachmentErrorOverlay({
+    required this.fileName,
+    required this.message,
+    required this.onRetry,
+    required this.onRemove,
+    this.borderRadius = BorderRadius.zero,
+  });
+
+  final String fileName;
+  final String? message;
+  final VoidCallback onRetry;
+  final VoidCallback onRemove;
+  final BorderRadius borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final effectiveMessage = message?.trim().isNotEmpty == true
+        ? message!.trim()
+        : 'Unable to send attachment.';
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.background.withValues(alpha: 0.9),
+          borderRadius: borderRadius,
+          border: Border.all(color: colors.destructive),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                LucideIcons.triangleAlert,
+                color: colors.destructive,
+                size: 20,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                effectiveMessage,
+                style: context.textTheme.small.copyWith(
+                  color: colors.destructive,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                fileName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  _PendingAttachmentActionButton(
+                    label: 'Retry',
+                    icon: LucideIcons.refreshCw,
+                    onPressed: onRetry,
+                  ),
+                  _PendingAttachmentActionButton(
+                    label: 'Remove',
+                    icon: LucideIcons.x,
+                    onPressed: onRemove,
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: _PendingAttachmentSpinner(
-                color: colors.primary,
-                strokeWidth: 2,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+}
+
+class _PendingAttachmentActionButton extends StatelessWidget {
+  const _PendingAttachmentActionButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadButton.secondary(
+      size: ShadButtonSize.sm,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      onPressed: onPressed,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    ).withTapBounce();
   }
 }
 

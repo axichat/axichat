@@ -64,6 +64,40 @@ class FanOutDraft extends Equatable {
   List<Object?> get props => [body, attachment, shareId];
 }
 
+enum PendingAttachmentStatus { uploading, failed }
+
+class PendingAttachment extends Equatable {
+  const PendingAttachment({
+    required this.id,
+    required this.attachment,
+    this.status = PendingAttachmentStatus.uploading,
+    this.errorMessage,
+  });
+
+  final String id;
+  final EmailAttachment attachment;
+  final PendingAttachmentStatus status;
+  final String? errorMessage;
+
+  PendingAttachment copyWith({
+    EmailAttachment? attachment,
+    PendingAttachmentStatus? status,
+    String? errorMessage,
+    bool clearErrorMessage = false,
+  }) {
+    return PendingAttachment(
+      id: id,
+      attachment: attachment ?? this.attachment,
+      status: status ?? this.status,
+      errorMessage:
+          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, attachment, status, errorMessage];
+}
+
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required this.jid,
@@ -100,6 +134,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
+    on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
+    on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
     on<ChatViewFilterChanged>(_onChatViewFilterChanged);
     on<ChatComposerRecipientAdded>(_onComposerRecipientAdded);
     on<ChatComposerRecipientRemoved>(_onComposerRecipientRemoved);
@@ -125,6 +161,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final EmailService? _emailService;
   final OmemoService? _omemoService;
   final Logger _log = Logger('ChatBloc');
+  var _pendingAttachmentSeed = 0;
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
@@ -140,6 +177,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_transport.isEmail) return true;
     return chat.transport.isEmail;
   }
+
+  String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
   Future<void> _initializeTransport() async {
     if (jid == null) return;
@@ -505,39 +544,57 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     final service = _emailService;
     if (chat == null || service == null) return;
-    _addPendingAttachment(event.attachment, emit);
     final quotedDraft = state.quoting;
     final rawCaption = event.attachment.caption?.trim();
     final caption = rawCaption?.isNotEmpty == true
         ? _composeEmailBody(rawCaption!, quotedDraft)
         : null;
-    final recipients = _includedRecipients();
-    final shouldFanOut = _shouldFanOut(recipients, chat);
-    try {
-      if (shouldFanOut) {
-        await _sendFanOut(
-          recipients: recipients,
-          attachment: event.attachment.copyWith(caption: caption),
-          emit: emit,
-        );
-      } else {
-        await service.sendAttachment(
-          chat: chat,
-          attachment: event.attachment.copyWith(caption: caption),
-        );
-      }
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to send attachment for chat ${chat.jid}',
-        error,
-        stackTrace,
-      );
-    } finally {
-      _removePendingAttachment(event.attachment, emit);
-      if (state.quoting != null) {
-        emit(state.copyWith(quoting: null));
-      }
+    final pending = _addPendingAttachment(
+        event.attachment.copyWith(caption: caption), emit);
+    await _sendPendingAttachment(
+      pending: pending,
+      chat: chat,
+      service: service,
+      recipients: _includedRecipients(),
+      emit: emit,
+    );
+    if (state.quoting != null) {
+      emit(state.copyWith(quoting: null));
     }
+  }
+
+  Future<void> _onChatAttachmentRetryRequested(
+    ChatAttachmentRetryRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final pending = _pendingAttachmentById(event.attachmentId);
+    final chat = state.chat;
+    final service = _emailService;
+    if (pending == null ||
+        pending.status != PendingAttachmentStatus.failed ||
+        chat == null ||
+        service == null) {
+      return;
+    }
+    final updated = pending.copyWith(
+      status: PendingAttachmentStatus.uploading,
+      clearErrorMessage: true,
+    );
+    _replacePendingAttachment(updated, emit);
+    await _sendPendingAttachment(
+      pending: updated,
+      chat: chat,
+      service: service,
+      recipients: _includedRecipients(),
+      emit: emit,
+    );
+  }
+
+  Future<void> _onChatPendingAttachmentRemoved(
+    ChatPendingAttachmentRemoved event,
+    Emitter<ChatState> emit,
+  ) async {
+    _removePendingAttachment(event.attachmentId, emit);
   }
 
   Future<void> _onChatViewFilterChanged(
@@ -645,6 +702,52 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _sendPendingAttachment({
+    required PendingAttachment pending,
+    required Chat chat,
+    required EmailService service,
+    required List<ComposerRecipient> recipients,
+    required Emitter<ChatState> emit,
+  }) async {
+    if (_shouldFanOut(recipients, chat)) {
+      final succeeded = await _sendFanOut(
+        recipients: recipients,
+        attachment: pending.attachment,
+        emit: emit,
+      );
+      if (succeeded) {
+        _removePendingAttachment(pending.id, emit);
+      } else {
+        _markPendingAttachmentFailed(
+          pending.id,
+          emit,
+          message: state.composerError ??
+              'Unable to send attachment. Please try again.',
+        );
+      }
+      return;
+    }
+    try {
+      await service.sendAttachment(
+        chat: chat,
+        attachment: pending.attachment,
+      );
+      _removePendingAttachment(pending.id, emit);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send attachment for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+      _markPendingAttachmentFailed(pending.id, emit);
+      emit(
+        state.copyWith(
+          composerError: 'Unable to send attachment. Please try again.',
+        ),
+      );
+    }
+  }
+
   String _composeEmailBody(String body, Message? quoted) {
     if (quoted?.body?.isNotEmpty != true) {
       return body;
@@ -670,7 +773,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return true;
   }
 
-  Future<void> _sendFanOut({
+  Future<bool> _sendFanOut({
     required List<ComposerRecipient> recipients,
     String? text,
     EmailAttachment? attachment,
@@ -678,7 +781,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Emitter<ChatState> emit,
   }) async {
     final service = _emailService;
-    if (service == null || recipients.isEmpty) return;
+    if (service == null || recipients.isEmpty) return false;
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
     try {
       final report = await service.fanOutSend(
@@ -705,8 +808,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         fanOutDrafts: drafts,
         composerError: null,
       ));
+      return true;
     } on FanOutValidationException catch (error) {
       emit(state.copyWith(composerError: error.message));
+      return false;
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to send fan-out message', error, stackTrace);
       emit(
@@ -714,7 +819,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           composerError: 'Unable to send message. Please try again.',
         ),
       );
+      return false;
     }
+    // Should be unreachable.
+    // ignore: dead_code
+    return false;
   }
 
   List<ComposerRecipient> _mergeRecipientsWithReport(
@@ -754,32 +863,67 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return null;
   }
 
-  void _addPendingAttachment(
+  PendingAttachment _addPendingAttachment(
     EmailAttachment attachment,
     Emitter<ChatState> emit,
   ) {
-    final updated = List<EmailAttachment>.from(state.pendingAttachments)
-      ..add(attachment);
+    final pending = PendingAttachment(
+      id: _nextPendingAttachmentId(),
+      attachment: attachment,
+    );
+    emit(
+      state.copyWith(
+        pendingAttachments: [...state.pendingAttachments, pending],
+      ),
+    );
+    return pending;
+  }
+
+  void _replacePendingAttachment(
+    PendingAttachment replacement,
+    Emitter<ChatState> emit,
+  ) {
+    final updated = state.pendingAttachments
+        .map(
+          (pending) => pending.id == replacement.id ? replacement : pending,
+        )
+        .toList();
     emit(state.copyWith(pendingAttachments: updated));
   }
 
   void _removePendingAttachment(
-    EmailAttachment attachment,
+    String attachmentId,
     Emitter<ChatState> emit,
   ) {
-    final updated = List<EmailAttachment>.from(state.pendingAttachments);
-    final matchIndex =
-        updated.indexWhere((candidate) => identical(candidate, attachment));
-    if (matchIndex >= 0) {
-      updated.removeAt(matchIndex);
-    } else {
-      updated.removeWhere(
-        (candidate) =>
-            candidate.path == attachment.path &&
-            candidate.sizeBytes == attachment.sizeBytes,
-      );
-    }
+    final updated = state.pendingAttachments
+        .where((pending) => pending.id != attachmentId)
+        .toList();
+    if (updated.length == state.pendingAttachments.length) return;
     emit(state.copyWith(pendingAttachments: updated));
+  }
+
+  void _markPendingAttachmentFailed(
+    String attachmentId,
+    Emitter<ChatState> emit, {
+    String? message,
+  }) {
+    final updated = state.pendingAttachments.map((pending) {
+      if (pending.id != attachmentId) return pending;
+      return pending.copyWith(
+        status: PendingAttachmentStatus.failed,
+        errorMessage: message ?? 'Unable to send attachment. Please try again.',
+      );
+    }).toList();
+    emit(state.copyWith(pendingAttachments: updated));
+  }
+
+  PendingAttachment? _pendingAttachmentById(String attachmentId) {
+    for (final pending in state.pendingAttachments) {
+      if (pending.id == attachmentId) {
+        return pending;
+      }
+    }
+    return null;
   }
 
   List<ComposerRecipient> _syncRecipientsForChat(Chat chat) {

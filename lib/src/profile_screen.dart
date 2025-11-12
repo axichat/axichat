@@ -88,17 +88,20 @@ class _ProfileBodyState extends State<_ProfileBody> {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Profile'),
-            leading: ShadIconButton.ghost(
-              icon: const Icon(
-                LucideIcons.arrowLeft,
-                size: 20.0,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: AxiIconButton(
+                iconData: LucideIcons.arrowLeft,
+                tooltip: 'Back',
+                color: context.colorScheme.foreground,
+                borderColor: context.colorScheme.border,
+                onPressed: () => _profileRoute == _ProfileRoute.main
+                    ? context.pop()
+                    : setState(() {
+                        _profileRoute = _ProfileRoute.main;
+                      }),
               ),
-              onPressed: () => _profileRoute == _ProfileRoute.main
-                  ? context.pop()
-                  : setState(() {
-                      _profileRoute = _ProfileRoute.main;
-                    }),
-            ).withTapBounce(),
+            ),
           ),
           body: SafeArea(
             child: Center(
