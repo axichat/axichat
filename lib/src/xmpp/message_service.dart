@@ -222,7 +222,7 @@ mixin MessageService on XmppBase, BaseStreamService {
   Future<void> sendMessage({
     required String jid,
     required String text,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     Message? quotedMessage,
     bool persistLocally = true,
     bool markNoStore = false,

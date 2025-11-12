@@ -13,154 +13,28 @@ const String _weekdayWordPattern =
     r'thu(?:r|rs|rsday|rsdays)?|fri(?:day|days)?|sat(?:urday|urdays)?|'
     r'sun(?:day|days)?';
 
-const Set<String> _nonLocationVocabulary = {
-  'api',
-  'apis',
-  'app',
-  'apps',
-  'bug',
-  'bugs',
-  'button',
-  'buttons',
-  'calendar',
-  'calendars',
-  'card',
-  'cards',
-  'chat',
-  'chats',
-  'client',
-  'clients',
-  'component',
-  'components',
-  'contact',
-  'contacts',
-  'content',
-  'copy',
-  'dashboard',
-  'dashboards',
-  'dialog',
-  'dialogs',
-  'doc',
-  'docs',
-  'document',
-  'documents',
-  'draft',
-  'drafts',
-  'field',
-  'fields',
-  'form',
-  'forms',
-  'inbox',
-  'issue',
-  'issues',
-  'list',
-  'lists',
-  'message',
-  'messages',
-  'modal',
-  'modals',
-  'module',
-  'modules',
-  'notification',
-  'notifications',
-  'panel',
-  'panels',
-  'screen',
-  'screens',
-  'server',
-  'servers',
-  'schedule',
-  'scheduler',
-  'schedules',
-  'stack',
-  'task',
-  'tasks',
-  'tile',
-  'tiles',
-  'toolbar',
-  'ui',
-  'ux',
-  'view',
-  'views',
-  'widget',
-  'widgets',
-};
-
-const Set<String> _generalLocationHints = {
-  'arena',
-  'auditorium',
-  'bank',
-  'bar',
-  'beach',
-  'bistro',
-  'boardroom',
-  'building',
-  'bldg',
-  'cabin',
-  'cafe',
-  'campus',
-  'center',
-  'centre',
-  'church',
-  'clinic',
-  'club',
-  'coffee',
-  'condo',
-  'court',
-  'courtroom',
-  'deck',
-  'diner',
-  'dock',
-  'garage',
-  'garden',
-  'gym',
-  'hall',
-  'harbor',
-  'harbour',
-  'headquarters',
-  'home',
-  'hotel',
-  'hq',
-  'lab',
-  'labs',
-  'library',
-  'lobby',
-  'lodge',
-  'loft',
-  'lounge',
-  'mall',
-  'office',
-  'park',
-  'patio',
-  'pier',
-  'plant',
-  'plaza',
-  'pool',
-  'pub',
-  'resort',
-  'restaurant',
-  'road',
-  'room',
-  'rooms',
-  'salon',
-  'spa',
-  'station',
-  'store',
-  'studio',
-  'suite',
-  'terminal',
-  'warehouse',
-};
+const String _streetSuffixGroup =
+    '(?:st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|way|'
+    'pkwy|parkway|hwy|highway|trl|trail|ct|court|sq|square|pl|place|plz|plaza|'
+    'terrace|ter)';
+const String _locationConnectorWordsPattern =
+    '(?:with|on|for|by|at|in|to|via|and)';
 
 final RegExp _streetSuffixPattern = RegExp(
-  r'\b(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|way|'
-  r'pkwy|parkway|hwy|highway|trl|trail|ct|court|sq|square|pl|place|plz|plaza|'
-  r'terrace|ter)\b',
+  '\\b$_streetSuffixGroup\\b',
   caseSensitive: false,
 );
 
-final RegExp _unitPattern = RegExp(
-  r'\b(apt|apartment|unit|suite|ste|room|rm|floor|fl|building|bldg|wing)\b',
+final RegExp _addressLeadingNumberPattern =
+    RegExp(r'^\d{1,6}(?:[-/]\d{1,4})?\b');
+
+final RegExp _addressTailPattern = RegExp(
+  '\\s*,\\s*(?!$_locationConnectorWordsPattern\\b)([A-Za-z0-9.\\- ]{2,})',
+  caseSensitive: false,
+);
+
+final RegExp _locationConnectorMatcher = RegExp(
+  '\\b$_locationConnectorWordsPattern\\b',
   caseSensitive: false,
 );
 
@@ -175,76 +49,75 @@ const Set<String> _metadataConnectorWords = {
   'about',
 };
 
-bool _looksLikeLocationCandidate(String candidate, FuzzyPolicy policy) {
-  final trimmed = candidate.trim();
-  if (trimmed.isEmpty) return false;
+class _AddressTailCapture {
+  const _AddressTailCapture({required this.appendedText, required this.newEnd});
 
-  final lower = trimmed.toLowerCase();
-  final rawTokens =
-      trimmed.split(RegExp(r'\s+')).where((token) => token.isNotEmpty).toList();
-  if (rawTokens.isEmpty) return false;
-  final lowerTokens = rawTokens.map((token) => token.toLowerCase()).toList();
+  final String appendedText;
+  final int newEnd;
+}
 
-  if (lowerTokens.every(_nonLocationVocabulary.contains)) {
+_AddressTailCapture? _captureAddressTail(String source, int startIndex) {
+  var index = startIndex;
+  final buffer = StringBuffer();
+  while (index < source.length) {
+    final match = _addressTailPattern.matchAsPrefix(source, index);
+    if (match == null) {
+      break;
+    }
+    final fullMatch = match.group(0);
+    if (fullMatch == null || fullMatch.trim().isEmpty) {
+      break;
+    }
+    buffer.write(fullMatch);
+    index = match.end;
+  }
+  if (buffer.isEmpty) {
+    return null;
+  }
+  return _AddressTailCapture(
+    appendedText: buffer.toString(),
+    newEnd: index,
+  );
+}
+
+bool _looksLikeExactPostalAddress(String candidate) {
+  final normalized = candidate.trim();
+  if (normalized.isEmpty) return false;
+
+  final numberMatch = _addressLeadingNumberPattern.matchAsPrefix(normalized);
+  if (numberMatch == null) return false;
+
+  final remainder = normalized.substring(numberMatch.end).trimLeft();
+  if (remainder.isEmpty) return false;
+
+  final firstComma = remainder.indexOf(',');
+  final streetSegment =
+      firstComma == -1 ? remainder : remainder.substring(0, firstComma);
+
+  RegExpMatch? suffixMatch;
+  for (final match in _streetSuffixPattern.allMatches(streetSegment)) {
+    suffixMatch = match;
+  }
+  if (suffixMatch == null) {
     return false;
   }
 
-  if (_hasAddressMarkers(trimmed, lower)) return true;
-  if (_containsHint(lower, policy.trailingLocationHints)) return true;
-  if (_containsHint(lower, _generalLocationHints)) return true;
-  if (_looksLikeAllCapsLocation(rawTokens)) return true;
-  if (_looksLikeProperPlaceName(rawTokens, lowerTokens)) return true;
-
-  return false;
-}
-
-bool _hasAddressMarkers(String text, String lower) {
-  final hasDigits = RegExp(r'\d').hasMatch(text);
-  if (text.contains('#')) return true;
-  if (_unitPattern.hasMatch(lower) && hasDigits) return true;
-  if (_streetSuffixPattern.hasMatch(lower) && hasDigits) return true;
-  return false;
-}
-
-bool _containsHint(String lower, Iterable<String> hints) {
-  for (final hint in hints) {
-    final normalized = hint.trim().toLowerCase();
-    if (normalized.isEmpty) continue;
-    final pattern =
-        RegExp('\\b${RegExp.escape(normalized)}\\b', caseSensitive: false);
-    if (pattern.hasMatch(lower)) return true;
+  final beforeSuffix = streetSegment.substring(0, suffixMatch.start);
+  if (!RegExp(r'[A-Za-z]').hasMatch(beforeSuffix)) {
+    return false;
   }
-  return false;
-}
 
-bool _looksLikeAllCapsLocation(List<String> rawTokens) {
-  if (rawTokens.length != 1) return false;
-  final lettersOnly = rawTokens.first.replaceAll(RegExp(r'[^A-Za-z]'), '');
-  if (lettersOnly.length < 2) return false;
-  return lettersOnly == lettersOnly.toUpperCase();
-}
-
-bool _looksLikeProperPlaceName(
-  List<String> rawTokens,
-  List<String> lowerTokens,
-) {
-  int capitalizedWords = 0;
-  for (int i = 0; i < rawTokens.length; i++) {
-    final token = rawTokens[i];
-    final lower = lowerTokens[i];
-    if (_nonLocationVocabulary.contains(lower)) continue;
-    if (token.length < 2) continue;
-    final first = token[0];
-    final rest = token.substring(1);
-    final isAlpha = RegExp(r'[A-Za-z]').hasMatch(rest);
-    if (!isAlpha) continue;
-    if (first == first.toUpperCase() && rest != rest.toUpperCase()) {
-      capitalizedWords += 1;
-    }
+  final afterSuffix = remainder.substring(suffixMatch.end);
+  if (afterSuffix.isNotEmpty &&
+      !RegExp(r'^[,A-Za-z0-9.\- ]+$').hasMatch(afterSuffix)) {
+    return false;
   }
-  if (capitalizedWords >= 2) return true;
-  if (capitalizedWords == 1 && rawTokens.length == 1) return true;
-  return false;
+
+  if (_locationConnectorMatcher.hasMatch(afterSuffix)) {
+    return false;
+  }
+
+  return true;
 }
 
 /// ---------------------------------------------------------------------------
@@ -368,7 +241,6 @@ class FuzzyPolicy {
   final int weekendDefaultDay; // DateTime.saturday or DateTime.sunday
   final int lunchHour;
   final int afterWorkHour;
-  final List<String> trailingLocationHints;
 
   // Priority heuristics
   final int urgentHorizonHours;
@@ -391,28 +263,6 @@ class FuzzyPolicy {
     this.weekendDefaultDay = DateTime.saturday,
     this.lunchHour = 12,
     this.afterWorkHour = 18,
-    this.trailingLocationHints = const [
-      'office',
-      'home',
-      'cafe',
-      'coffee',
-      'restaurant',
-      'diner',
-      'gym',
-      'airport',
-      'station',
-      'park',
-      'campus',
-      'library',
-      'clinic',
-      'bank',
-      'mall',
-      'court',
-      'hotel',
-      'zoom',
-      'teams',
-      'meet'
-    ],
     this.urgentHorizonHours = 24,
     this.importantWords = const [
       'important',
@@ -447,6 +297,44 @@ class FuzzyPolicy {
       'later'
     ],
   });
+}
+
+const int _maxWordsBetweenToLeadInAndLocation = 2;
+
+final RegExp _toLocationLeadInPattern = RegExp(
+  r'\b(?:go|going|head|heading|drive|driving|travel|traveling|walk|walking|'
+  r'commute|commuting|fly|flying|ride|riding|return|returning|arrive|arriving|'
+  r'trip|flight|visit|visiting|tour|touring|meet|meeting|journey|vacation|'
+  r'holiday|retreat|move|moving)\b',
+  caseSensitive: false,
+);
+
+bool _looksLikeToLocationPhrase(String source, int prepositionStart) {
+  if (prepositionStart <= 0 || prepositionStart > source.length) {
+    return false;
+  }
+  final prefix = source.substring(0, prepositionStart).trimRight();
+  if (prefix.isEmpty) return false;
+
+  Match? lastMatch;
+  for (final match in _toLocationLeadInPattern.allMatches(prefix)) {
+    lastMatch = match;
+  }
+  if (lastMatch == null) {
+    return false;
+  }
+
+  final trailingSegment = prefix.substring(lastMatch.end).trim();
+  if (trailingSegment.isEmpty) {
+    return true;
+  }
+
+  final words = trailingSegment
+      .split(RegExp(r'\s+'))
+      .where((word) => word.trim().isNotEmpty)
+      .toList();
+
+  return words.length <= _maxWordsBetweenToLeadInAndLocation;
 }
 
 class ScheduleParseOptions {
@@ -666,23 +554,35 @@ class ScheduleParser {
     // Location: at/in/to …, @ …, or trailing hint
     String? location;
     final atInToRegex = RegExp(
-      r'\b(?:at|in|to)\s+(?:the\s+)?(?<loc>[^,.;]+?)'
+      r'\b(?<prep>at|in|to)\s+(?:the\s+)?(?<loc>[^,.;]+?)'
       r'(?=(?:\s+(?:with|on|for|by|at|in|to)\b|[,.;]|$))',
       caseSensitive: false,
     );
     final atInToMatches = atInToRegex.allMatches(s).toList();
     for (final match in atInToMatches) {
+      final preposition = match.namedGroup('prep')?.toLowerCase();
+      final locGroup = match.namedGroup('loc');
+      if (locGroup == null) continue;
+
+      final tail = _captureAddressTail(s, match.end);
+      final rawCandidate =
+          tail == null ? locGroup : '$locGroup${tail.appendedText}';
       final candidate = _pruneTemporalSuffix(
-          _normalizeLocation(_clean(match.namedGroup('loc')!)));
+        _normalizeLocation(_clean(rawCandidate)),
+      );
       if (candidate == null ||
           _looksTemporalPhrase(candidate) ||
           consumed.overlaps(candidate) ||
-          !_looksLikeLocationCandidate(candidate, opts.policy)) {
+          !_looksLikeExactPostalAddress(candidate)) {
         continue;
       }
+      if (preposition == 'to' && !_looksLikeToLocationPhrase(s, match.start)) {
+        continue;
+      }
+      final removalEnd = tail?.newEnd ?? match.end;
       location = candidate;
       consumed.add(candidate);
-      s = s.replaceRange(match.start, match.end, ' ');
+      s = s.replaceRange(match.start, removalEnd, ' ');
       break;
     }
     if (location == null && opts.policy.allowAtSignLocation) {
@@ -693,29 +593,12 @@ class ScheduleParser {
         if (candidate != null &&
             !_looksLikeHandle(candidate) &&
             !consumed.overlaps(candidate) &&
-            _looksLikeLocationCandidate(candidate, opts.policy)) {
+            _looksLikeExactPostalAddress(candidate)) {
           location = candidate;
           flags.add(AmbiguityFlag.locationGuessed);
           assumptions.add('Used "@ …" as location.');
           consumed.add(candidate);
           s = s.replaceRange(atSig.start, atSig.end, ' ');
-        }
-      }
-    }
-    if (location == null) {
-      final trailing = RegExp(r"([A-Za-z][A-Za-z0-9'&+\- ]{2,})\s*$")
-          .firstMatch(s.trimRight());
-      if (trailing != null) {
-        final word = trailing.group(1)!.trim().toLowerCase();
-        if (opts.policy.trailingLocationHints.contains(word)) {
-          final normalized = _normalizeLocation(_clean(word));
-          if (normalized != null && !consumed.overlaps(normalized)) {
-            location = normalized;
-            flags.add(AmbiguityFlag.locationGuessed);
-            assumptions.add('Guessed trailing word as location.');
-            consumed.add(normalized);
-            s = s.replaceRange(trailing.start, trailing.end, ' ');
-          }
         }
       }
     }
