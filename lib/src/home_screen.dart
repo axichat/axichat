@@ -30,7 +30,6 @@ import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:axichat/src/roster/view/roster_invites_list.dart';
 import 'package:axichat/src/roster/view/roster_list.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -139,6 +138,7 @@ class HomeScreen extends StatelessWidget {
                                           jid: openJid,
                                         ),
                                       ),
+                                      /* Verification flow temporarily disabled
                                       if (isOmemo)
                                         BlocProvider(
                                           create: (context) =>
@@ -149,6 +149,7 @@ class HomeScreen extends StatelessWidget {
                                                     as OmemoService,
                                           ),
                                         ),
+                                      */
                                     ],
                                     child: const Chat(),
                                   ),

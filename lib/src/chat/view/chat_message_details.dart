@@ -4,8 +4,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/verification/bloc/verification_cubit.dart';
-import 'package:axichat/src/verification/view/verification_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -110,33 +108,17 @@ class ChatMessageDetails extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (message.deviceID != null &&
-                    context.read<VerificationCubit?>() != null)
+                if (message.deviceID != null)
                   Column(
                     spacing: 8,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Encrypted by',
+                        'Encrypted device',
                         style: context.textTheme.muted,
                       ),
-                      BlocBuilder<VerificationCubit, VerificationState>(
-                        builder: (context, verificationState) {
-                          final myFingerprint = profileState.fingerprint;
-                          if (message.deviceID == myFingerprint?.deviceID) {
-                            return VerificationSelector(
-                              fingerprint: myFingerprint!,
-                            );
-                          }
-                          final list = message.senderJid == profileState.jid
-                              ? verificationState.myFingerprints
-                              : verificationState.fingerprints;
-                          final fingerprint = list.singleWhere(
-                              (e) => e.deviceID == message.deviceID);
-                          return VerificationSelector(fingerprint: fingerprint);
-                        },
-                      ),
+                      Text('#${message.deviceID}'),
                     ],
                   )
                 else

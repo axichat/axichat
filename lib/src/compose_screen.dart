@@ -1,9 +1,11 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ComposeScreen extends StatelessWidget {
   const ComposeScreen({
@@ -24,6 +26,25 @@ class ComposeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: context.colorScheme.background,
       appBar: AppBar(
+        backgroundColor: context.colorScheme.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        forceMaterialTransparency: true,
+        shape: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
+        ),
+        leading: Navigator.canPop(context)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: 'Back',
+                  color: context.colorScheme.foreground,
+                  borderColor: context.colorScheme.border,
+                  onPressed: () => Navigator.pop(context),
+                ),
+              )
+            : null,
         title: const Text('Compose'),
       ),
       body: Center(

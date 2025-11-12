@@ -9,7 +9,8 @@ class ChatState with _$ChatState {
     Message? quoting,
     @Default(false) bool typing,
     @Default(true) bool showAlert,
-    @Default(MessageTimelineFilter.directOnly) MessageTimelineFilter viewFilter,
+    @Default(MessageTimelineFilter.allWithContact)
+    MessageTimelineFilter viewFilter,
     @Default(<ComposerRecipient>[]) List<ComposerRecipient> recipients,
     @Default(<String, FanOutSendReport>{})
     Map<String, FanOutSendReport> fanOutReports,

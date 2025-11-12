@@ -1,7 +1,7 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/display_fingerprint.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/verification/view/verification_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -54,8 +54,19 @@ class _ProfileFingerprintState extends State<ProfileFingerprint> {
             child: _showFingerprint
                 ? Padding(
                     padding: const EdgeInsets.only(bottom: 8.0),
-                    child:
-                        VerificationSelector(fingerprint: state.fingerprint!),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 12.0,
+                      children: [
+                        Text(
+                          'Device #${state.fingerprint!.deviceID}',
+                          style: context.textTheme.small,
+                        ),
+                        DisplayFingerprint(
+                          fingerprint: state.fingerprint!.fingerprint,
+                        ),
+                      ],
+                    ),
                   )
                 : const SizedBox.shrink(),
           ),

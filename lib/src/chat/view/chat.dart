@@ -15,8 +15,6 @@ import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chat/view/chat_cutout_composer.dart';
 import 'package:axichat/src/chat/view/chat_drawer.dart';
 import 'package:axichat/src/chat/view/chat_message_details.dart';
-import 'package:axichat/src/chat/view/chat_verification_list.dart';
-import 'package:axichat/src/chat/view/filter_toggle.dart';
 import 'package:axichat/src/chat/view/incoming_banner.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
@@ -56,7 +54,6 @@ extension on MessageStatus {
 
 enum _ChatRoute {
   main,
-  verification,
   details,
 }
 
@@ -544,7 +541,6 @@ class _ChatState extends State<Chat> {
             onRecipientToggled: (key) =>
                 context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
           ),
-          const SizedBox(height: 12),
           composer,
         ],
       ),
@@ -1201,9 +1197,6 @@ class _ChatState extends State<Chat> {
                   ? null
                   : ChatDrawer(
                       state: state,
-                      showVerification: () => setState(() {
-                        _chatRoute = _ChatRoute.verification;
-                      }),
                     ),
               appBar: AppBar(
                 scrolledUnderElevation: 0,
@@ -1211,32 +1204,37 @@ class _ChatState extends State<Chat> {
                 shape: Border(
                     bottom: BorderSide(color: context.colorScheme.border)),
                 actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-                leading: ShadIconButton.ghost(
-                  icon: const Icon(
-                    LucideIcons.arrowLeft,
-                    size: 20.0,
-                  ),
-                  onPressed: () {
-                    if (_chatRoute != _ChatRoute.main) {
-                      context
-                          .read<ChatBloc>()
-                          .add(const ChatMessageFocused(null));
-                      return setState(() {
-                        _chatRoute = _ChatRoute.main;
-                      });
-                    }
-                    if (_textController.text.isNotEmpty) {
-                      if (!isEmailTransport) {
-                        context.read<DraftCubit?>()?.saveDraft(
-                              id: null,
-                              jids: [state.chat!.jid],
-                              body: _textController.text,
-                            );
+                leading: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: AxiIconButton(
+                    iconData: LucideIcons.arrowLeft,
+                    tooltip: 'Back',
+                    color: context.colorScheme.foreground,
+                    borderColor: context.colorScheme.border,
+                    onPressed: () {
+                      if (_chatRoute != _ChatRoute.main) {
+                        context
+                            .read<ChatBloc>()
+                            .add(const ChatMessageFocused(null));
+                        return setState(() {
+                          _chatRoute = _ChatRoute.main;
+                        });
                       }
-                    }
-                    context.read<ChatsCubit>().toggleChat(jid: state.chat!.jid);
-                  },
-                ).withTapBounce(),
+                      if (_textController.text.isNotEmpty) {
+                        if (!isEmailTransport) {
+                          context.read<DraftCubit?>()?.saveDraft(
+                                id: null,
+                                jids: [state.chat!.jid],
+                                body: _textController.text,
+                              );
+                        }
+                      }
+                      context
+                          .read<ChatsCubit>()
+                          .toggleChat(jid: state.chat!.jid);
+                    },
+                  ),
+                ),
                 title: jid == null
                     ? const SizedBox.shrink()
                     : BlocBuilder<RosterCubit, RosterState>(
@@ -1315,14 +1313,6 @@ class _ChatState extends State<Chat> {
               body: Column(
                 children: [
                   const ChatAlert(),
-                  if (isEmailTransport && state.chat != null)
-                    FilterToggle(
-                      selected: state.viewFilter,
-                      contactName: state.chat!.title,
-                      onChanged: (filter) => context
-                          .read<ChatBloc>()
-                          .add(ChatViewFilterChanged(filter: filter)),
-                    ),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration:
@@ -2284,7 +2274,6 @@ class _ChatState extends State<Chat> {
                               );
                             },
                           ),
-                          VerificationList(jid: jid),
                           const ChatMessageDetails(),
                         ],
                       ),
