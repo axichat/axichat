@@ -1,9 +1,11 @@
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
-
-import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/storage/credential_store.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class EmailDemoScreen extends StatefulWidget {
   const EmailDemoScreen({super.key});
@@ -133,7 +135,29 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
   Widget build(BuildContext context) {
     final account = _account;
     return Scaffold(
-      appBar: AppBar(title: const Text('Email Transport Demo')),
+      backgroundColor: context.colorScheme.background,
+      appBar: AppBar(
+        backgroundColor: context.colorScheme.background,
+        scrolledUnderElevation: 0,
+        forceMaterialTransparency: true,
+        shape: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
+        ),
+        leadingWidth: AxiIconButton.kDefaultSize + 16,
+        leading: Navigator.canPop(context)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: 'Back',
+                  color: context.colorScheme.foreground,
+                  borderColor: context.colorScheme.border,
+                  onPressed: () => Navigator.maybePop(context),
+                ),
+              )
+            : null,
+        title: const Text('Email Transport Demo'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -424,9 +424,19 @@ class _ChatState extends State<Chat> {
 
   void _handleSendMessage() {
     final text = _textController.text.trim();
-    if (text.isEmpty) return;
-    context.read<ChatBloc>().add(ChatMessageSent(text: text));
-    _textController.clear();
+    final bloc = context.read<ChatBloc>();
+    final pendingAttachments = bloc.state.pendingAttachments;
+    final hasQueuedAttachments = pendingAttachments.any(
+      (attachment) => attachment.status == PendingAttachmentStatus.queued,
+    );
+    final isEmailTransport = context.read<ChatTransportCubit>().state.isEmail;
+    final canSend =
+        text.isNotEmpty || (isEmailTransport && hasQueuedAttachments);
+    if (!canSend) return;
+    bloc.add(ChatMessageSent(text: text));
+    if (text.isNotEmpty) {
+      _textController.clear();
+    }
     _focusNode.requestFocus();
   }
 
@@ -444,6 +454,11 @@ class _ChatState extends State<Chat> {
   }) {
     final colors = context.colorScheme;
     const horizontalPadding = _composerHorizontalInset;
+    final hasQueuedAttachments = pendingAttachments.any(
+      (attachment) => attachment.status == PendingAttachmentStatus.queued,
+    );
+    final sendEnabled =
+        _composerHasText || (isEmailTransport && hasQueuedAttachments);
     Widget composer = SafeArea(
       top: false,
       left: false,
@@ -471,8 +486,10 @@ class _ChatState extends State<Chat> {
                 hintText: hintText,
                 onSend: _handleSendMessage,
                 actions: _buildComposerAccessories(
-                    isEmailTransport: isEmailTransport),
-                sendEnabled: _composerHasText,
+                  isEmailTransport: isEmailTransport,
+                  canSend: sendEnabled,
+                ),
+                sendEnabled: sendEnabled,
               ),
             ),
           ),
@@ -562,6 +579,7 @@ class _ChatState extends State<Chat> {
 
   List<ChatComposerAccessory> _buildComposerAccessories({
     required bool isEmailTransport,
+    required bool canSend,
   }) {
     final accessories = <ChatComposerAccessory>[];
     if (!isEmailTransport) {
@@ -575,7 +593,9 @@ class _ChatState extends State<Chat> {
       ),
     );
     accessories.add(
-      ChatComposerAccessory.trailing(child: _buildSendButton()),
+      ChatComposerAccessory.trailing(
+        child: _buildSendButton(enabled: canSend),
+      ),
     );
     return accessories;
   }
@@ -611,9 +631,8 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Widget _buildSendButton() {
+  Widget _buildSendButton({required bool enabled}) {
     final colors = context.colorScheme;
-    final enabled = _composerHasText;
     return _cutoutIconButton(
       icon: LucideIcons.send,
       tooltip: 'Send message',
@@ -2877,61 +2896,105 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
         ? message!.trim()
         : 'Unable to send attachment.';
     return Positioned.fill(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.background.withValues(alpha: 0.9),
-          borderRadius: borderRadius,
-          border: Border.all(color: colors.destructive),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                LucideIcons.triangleAlert,
-                color: colors.destructive,
-                size: 20,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                effectiveMessage,
-                style: context.textTheme.small.copyWith(
-                  color: colors.destructive,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                fileName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 4,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact =
+              constraints.maxWidth < 140 || constraints.maxHeight < 110;
+          final padding = isCompact
+              ? const EdgeInsets.all(4)
+              : const EdgeInsets.symmetric(horizontal: 8, vertical: 10);
+          final actionButtons = [
+            _PendingAttachmentActionButton(
+              label: 'Retry',
+              icon: LucideIcons.refreshCw,
+              onPressed: onRetry,
+              compact: isCompact,
+            ),
+            _PendingAttachmentActionButton(
+              label: 'Remove',
+              icon: LucideIcons.x,
+              onPressed: onRemove,
+              compact: isCompact,
+            ),
+          ];
+          final actions = Wrap(
+            alignment: WrapAlignment.center,
+            spacing: isCompact ? 4 : 8,
+            runSpacing: 4,
+            children: actionButtons,
+          );
+          final fileNameWidget = isCompact
+              ? const SizedBox.shrink()
+              : Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                );
+          final regularMessage = Text(
+            effectiveMessage,
+            style: context.textTheme.small.copyWith(
+              color: colors.destructive,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          );
+          final compactMessage = Text(
+            effectiveMessage,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.small.copyWith(
+              color: colors.destructive,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          );
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.background.withValues(alpha: 0.9),
+              borderRadius: borderRadius,
+              border: Border.all(color: colors.destructive),
+            ),
+            child: Padding(
+              padding: padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _PendingAttachmentActionButton(
-                    label: 'Retry',
-                    icon: LucideIcons.refreshCw,
-                    onPressed: onRetry,
+                  Icon(
+                    LucideIcons.triangleAlert,
+                    color: colors.destructive,
+                    size: isCompact ? 16 : 20,
                   ),
-                  _PendingAttachmentActionButton(
-                    label: 'Remove',
-                    icon: LucideIcons.x,
-                    onPressed: onRemove,
-                  ),
+                  SizedBox(height: isCompact ? 2 : 6),
+                  if (isCompact) ...[
+                    Expanded(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: compactMessage,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      height: 28,
+                      child: Center(child: actions),
+                    ),
+                  ] else ...[
+                    regularMessage,
+                    const SizedBox(height: 4),
+                    fileNameWidget,
+                    const SizedBox(height: 8),
+                    actions,
+                  ],
                 ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -2942,14 +3005,32 @@ class _PendingAttachmentActionButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onPressed,
+    this.compact = false,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onPressed;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      return SizedBox(
+        width: 28,
+        height: 28,
+        child: IconButton(
+          onPressed: onPressed,
+          tooltip: label,
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+          iconSize: 16,
+          color: context.colorScheme.destructive,
+          icon: Icon(icon),
+        ),
+      );
+    }
     return ShadButton.secondary(
       size: ShadButtonSize.sm,
       padding: const EdgeInsets.symmetric(horizontal: 10),

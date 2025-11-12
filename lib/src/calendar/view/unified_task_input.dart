@@ -1,8 +1,8 @@
+import 'package:axichat/src/app.dart';
+import '../../common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-import '../../common/ui/ui.dart';
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
@@ -99,6 +99,25 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
   Widget _buildMobileLayout() {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: context.colorScheme.background,
+        scrolledUnderElevation: 0,
+        forceMaterialTransparency: true,
+        shape: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
+        ),
+        leadingWidth: AxiIconButton.kDefaultSize + 16,
+        leading: Navigator.canPop(context)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: 'Back',
+                  color: context.colorScheme.foreground,
+                  borderColor: context.colorScheme.border,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              )
+            : null,
         title: Text(widget.editingTask != null ? 'Edit Task' : 'New Task'),
         actions: [_buildSaveButton()],
       ),

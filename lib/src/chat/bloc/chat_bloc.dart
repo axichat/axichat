@@ -12,6 +12,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
+import 'package:delta_ffi/delta_safe.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -64,13 +65,13 @@ class FanOutDraft extends Equatable {
   List<Object?> get props => [body, attachment, shareId];
 }
 
-enum PendingAttachmentStatus { uploading, failed }
+enum PendingAttachmentStatus { queued, uploading, failed }
 
 class PendingAttachment extends Equatable {
   const PendingAttachment({
     required this.id,
     required this.attachment,
-    this.status = PendingAttachmentStatus.uploading,
+    this.status = PendingAttachmentStatus.queued,
     this.errorMessage,
   });
 
@@ -316,6 +317,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return;
     final isEmailChat = _isEmailChat;
+    final trimmedText = event.text.trim();
+    final attachments = List<PendingAttachment>.from(state.pendingAttachments);
+    final queuedAttachments = attachments
+        .where(
+            (attachment) => attachment.status == PendingAttachmentStatus.queued)
+        .toList();
+    final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final quotedDraft = state.quoting;
     try {
       if (isEmailChat) {
@@ -328,31 +336,67 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
           return;
         }
+        final hasBody = trimmedText.isNotEmpty;
+        if (!hasBody && !hasQueuedAttachments) {
+          emit(
+            state.copyWith(
+              composerError: 'Message cannot be empty.',
+            ),
+          );
+          return;
+        }
         if (state.composerError != null) {
           emit(state.copyWith(composerError: null));
         }
-        final body = _composeEmailBody(event.text, quotedDraft);
+        final service = _emailService;
+        if (service == null) {
+          throw StateError('EmailService not available for email chat.');
+        }
+        final body =
+            hasBody ? _composeEmailBody(trimmedText, quotedDraft) : null;
         if (_shouldFanOut(recipients, chat)) {
-          await _sendFanOut(
-            recipients: recipients,
-            text: body,
-            emit: emit,
-          );
-        } else {
-          final service = _emailService;
-          if (service == null) {
-            throw StateError('EmailService not available for email chat.');
+          if (body != null) {
+            final sent = await _sendFanOut(
+              recipients: recipients,
+              text: body,
+              emit: emit,
+            );
+            if (!sent) {
+              return;
+            }
           }
-          await service.sendMessage(chat: chat, body: body);
+          if (hasQueuedAttachments) {
+            await _sendQueuedAttachments(
+              attachments: queuedAttachments,
+              chat: chat,
+              service: service,
+              recipients: recipients,
+              emit: emit,
+            );
+          }
+        } else {
+          if (body != null) {
+            await service.sendMessage(chat: chat, body: body);
+          }
+          if (hasQueuedAttachments) {
+            await _sendQueuedAttachments(
+              attachments: queuedAttachments,
+              chat: chat,
+              service: service,
+              recipients: recipients,
+              emit: emit,
+            );
+          }
         }
       } else {
+        if (trimmedText.isEmpty) return;
         final sameChatQuote =
             quotedDraft != null && quotedDraft.chatJid == chat.jid
                 ? quotedDraft
                 : null;
         await _messageService.sendMessage(
           jid: jid!,
-          text: event.text,
+          text: trimmedText,
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
         );
@@ -549,14 +593,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final caption = rawCaption?.isNotEmpty == true
         ? _composeEmailBody(rawCaption!, quotedDraft)
         : null;
-    final pending = _addPendingAttachment(
-        event.attachment.copyWith(caption: caption), emit);
-    await _sendPendingAttachment(
-      pending: pending,
-      chat: chat,
-      service: service,
-      recipients: _includedRecipients(),
-      emit: emit,
+    _addPendingAttachment(
+      event.attachment.copyWith(caption: caption),
+      emit,
     );
     if (state.quoting != null) {
       emit(state.copyWith(quoting: null));
@@ -577,7 +616,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final updated = pending.copyWith(
-      status: PendingAttachmentStatus.uploading,
+      status: PendingAttachmentStatus.queued,
       clearErrorMessage: true,
     );
     _replacePendingAttachment(updated, emit);
@@ -709,17 +748,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
   }) async {
+    var current = pending;
+    if (current.status != PendingAttachmentStatus.uploading) {
+      current = current.copyWith(
+        status: PendingAttachmentStatus.uploading,
+        clearErrorMessage: true,
+      );
+      _replacePendingAttachment(current, emit);
+    }
     if (_shouldFanOut(recipients, chat)) {
       final succeeded = await _sendFanOut(
         recipients: recipients,
-        attachment: pending.attachment,
+        attachment: current.attachment,
         emit: emit,
       );
       if (succeeded) {
-        _removePendingAttachment(pending.id, emit);
+        _removePendingAttachment(current.id, emit);
       } else {
         _markPendingAttachmentFailed(
-          pending.id,
+          current.id,
           emit,
           message: state.composerError ??
               'Unable to send attachment. Please try again.',
@@ -730,20 +777,54 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       await service.sendAttachment(
         chat: chat,
-        attachment: pending.attachment,
+        attachment: current.attachment,
       );
-      _removePendingAttachment(pending.id, emit);
+      _removePendingAttachment(current.id, emit);
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send attachment for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+      _markPendingAttachmentFailed(
+        current.id,
+        emit,
+        message: error.message,
+      );
+      emit(state.copyWith(composerError: error.message));
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment for chat ${chat.jid}',
         error,
         stackTrace,
       );
-      _markPendingAttachmentFailed(pending.id, emit);
+      _markPendingAttachmentFailed(current.id, emit);
       emit(
         state.copyWith(
           composerError: 'Unable to send attachment. Please try again.',
         ),
+      );
+    }
+  }
+
+  Future<void> _sendQueuedAttachments({
+    required Iterable<PendingAttachment> attachments,
+    required Chat chat,
+    required EmailService service,
+    required List<ComposerRecipient> recipients,
+    required Emitter<ChatState> emit,
+  }) async {
+    for (final attachment in attachments) {
+      final latest = _pendingAttachmentById(attachment.id);
+      if (latest == null) {
+        continue;
+      }
+      await _sendPendingAttachment(
+        pending: latest,
+        chat: chat,
+        service: service,
+        recipients: recipients,
+        emit: emit,
       );
     }
   }
