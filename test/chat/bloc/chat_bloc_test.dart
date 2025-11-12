@@ -372,7 +372,7 @@ void main() {
     await bloc.close();
   });
 
-  test('pending attachment indicator clears after upload completes', () async {
+  test('queued attachment sends when composer dispatches send', () async {
     final emailService = MockEmailService();
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
@@ -409,8 +409,19 @@ void main() {
     bloc.add(const ChatAttachmentPicked(attachment));
     await _pumpBloc();
     expect(bloc.state.pendingAttachments, hasLength(1));
-    final pending = bloc.state.pendingAttachments.single;
+    var pending = bloc.state.pendingAttachments.single;
     expect(pending.attachment, attachment);
+    expect(pending.status, PendingAttachmentStatus.queued);
+    verifyNever(
+      () => emailService.sendAttachment(
+        chat: any(named: 'chat'),
+        attachment: any(named: 'attachment'),
+      ),
+    );
+
+    bloc.add(const ChatMessageSent(text: 'Hello'));
+    await _pumpBloc();
+    pending = bloc.state.pendingAttachments.single;
     expect(pending.status, PendingAttachmentStatus.uploading);
 
     sendCompleter.complete();
@@ -459,6 +470,13 @@ void main() {
     await _pumpBloc();
 
     bloc.add(const ChatAttachmentPicked(attachment));
+    await _pumpBloc();
+    expect(
+      bloc.state.pendingAttachments.single.status,
+      PendingAttachmentStatus.queued,
+    );
+
+    bloc.add(const ChatMessageSent(text: ''));
     await _pumpBloc();
     final failed = bloc.state.pendingAttachments.single;
     expect(failed.status, PendingAttachmentStatus.failed);

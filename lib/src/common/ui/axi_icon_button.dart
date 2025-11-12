@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiIconButton extends StatelessWidget {
+  static const double kDefaultSize = 36.0;
+
   const AxiIconButton({
     super.key,
     required this.iconData,
@@ -27,8 +29,8 @@ class AxiIconButton extends StatelessWidget {
 
     Widget child = ShadIconButton.outline(
       decoration: ShadDecoration(border: ShadBorder.all(color: resolvedBorder)),
-      height: 36.0,
-      width: 36.0,
+      height: kDefaultSize,
+      width: kDefaultSize,
       foregroundColor: resolvedForeground,
       onPressed: onPressed,
       iconSize: context.iconTheme.size,
