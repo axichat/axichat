@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +27,7 @@ void main() {
   setUpAll(() {
     registerFallbackValue(MessageTransport.xmpp);
     registerFallbackValue(<FutureOr<bool>>[]);
+    registerFallbackValue(MessageTimelineFilter.directOnly);
   });
 
   setUp(() {
@@ -42,6 +46,44 @@ void main() {
     when(() => transport.selfJid).thenReturn('dc-self@user.delta.chat');
     when(() => transport.start()).thenAnswer((_) async {});
     when(() => transport.stop()).thenAnswer((_) async {});
+    when(
+      () => transport.sendText(
+        chatId: any(named: 'chatId'),
+        body: any(named: 'body'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+      ),
+    ).thenAnswer((_) async => 1);
+    when(
+      () => transport.sendAttachment(
+        chatId: any(named: 'chatId'),
+        attachment: any(named: 'attachment'),
+        shareId: any(named: 'shareId'),
+        captionOverride: any(named: 'captionOverride'),
+      ),
+    ).thenAnswer((_) async => 1);
+    when(
+      () => transport.ensureInitialized(
+        databasePrefix: any(named: 'databasePrefix'),
+        databasePassphrase: any(named: 'databasePassphrase'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => transport.configureAccount(
+        address: any(named: 'address'),
+        password: any(named: 'password'),
+        displayName: any(named: 'displayName'),
+        additional: any(named: 'additional'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => credentialStore.read(key: any(named: 'key')))
+        .thenAnswer((_) async => null);
+    when(
+      () => credentialStore.write(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+      ),
+    ).thenAnswer((_) async => true);
     when(() => notificationService.sendNotification(
           title: any(named: 'title'),
           body: any(named: 'body'),
@@ -124,6 +166,392 @@ void main() {
 
     await service.setClientState(true);
     verify(() => transport.start()).called(2);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('sendAttachment delegates to transport after provisioning', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    final chat = Chat(
+      jid: 'dc-5@delta.chat',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 5,
+    );
+    const attachment = EmailAttachment(
+      path: '/tmp/file.txt',
+      fileName: 'file.txt',
+      sizeBytes: 12,
+      mimeType: 'text/plain',
+    );
+
+    when(
+      () => transport.sendAttachment(
+        chatId: chat.deltaChatId!,
+        attachment: attachment,
+        shareId: any(named: 'shareId'),
+        captionOverride: any(named: 'captionOverride'),
+      ),
+    ).thenAnswer((_) async => 77);
+
+    final msgId = await service.sendAttachment(
+      chat: chat,
+      attachment: attachment,
+    );
+
+    expect(msgId, 77);
+    verify(
+      () => transport.sendAttachment(
+        chatId: chat.deltaChatId!,
+        attachment: attachment,
+      ),
+    ).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('fanOutSend delivers to multiple recipients and records share metadata',
+      () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    final chatA = Chat(
+      jid: 'dc-1@delta.chat',
+      title: 'Bob',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 1,
+      emailAddress: 'bob@example.com',
+    );
+    final chatB = Chat(
+      jid: 'dc-2@delta.chat',
+      title: 'Carol',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 2,
+      emailAddress: 'carol@example.com',
+    );
+
+    when(
+      () => database.createMessageShare(
+        share: any(named: 'share'),
+        participants: any(named: 'participants'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.insertMessageCopy(
+        shareId: any(named: 'shareId'),
+        dcMsgId: any(named: 'dcMsgId'),
+        dcChatId: any(named: 'dcChatId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.assignShareOriginator(
+        shareId: any(named: 'shareId'),
+        originatorDcMsgId: any(named: 'originatorDcMsgId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => database.getParticipantsForShare(any()))
+        .thenAnswer((_) async => const <MessageParticipantData>[]);
+    when(
+      () => transport.sendText(
+        chatId: any(named: 'chatId'),
+        body: any(named: 'body'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+      ),
+    ).thenAnswer(
+      (invocation) async => (invocation.namedArguments[#chatId] as int) + 100,
+    );
+
+    final report = await service.fanOutSend(
+      targets: [FanOutTarget.chat(chatA), FanOutTarget.chat(chatB)],
+      body: 'Hello everyone',
+    );
+
+    expect(report.statuses, hasLength(2));
+    expect(
+        report.statuses
+            .every((status) => status.state == FanOutRecipientState.sent),
+        isTrue);
+    final participantsCapture = verify(
+      () => database.createMessageShare(
+        share: any(named: 'share'),
+        participants: captureAny(named: 'participants'),
+      ),
+    ).captured.single as List<MessageParticipantData>;
+    expect(participantsCapture, hasLength(3));
+    verify(
+      () => transport.sendText(
+        chatId: chatA.deltaChatId!,
+        body: any(named: 'body'),
+        shareId: report.shareId,
+        localBodyOverride: any(named: 'localBodyOverride'),
+      ),
+    ).called(1);
+    verify(
+      () => transport.sendText(
+        chatId: chatB.deltaChatId!,
+        body: any(named: 'body'),
+        shareId: report.shareId,
+        localBodyOverride: any(named: 'localBodyOverride'),
+      ),
+    ).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('fanOutSend preserves participant count when retrying a subset',
+      () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    const shareId = '01HX5R8W7YAYR5K1R7Q7MB5G4W';
+    final createdAt = DateTime.utc(2024, 5, 4);
+    final existingShare = MessageShareData(
+      shareId: shareId,
+      originatorDcMsgId: 41,
+      subjectToken: '[s:1234]',
+      createdAt: createdAt,
+      participantCount: 3,
+    );
+    when(() => database.getMessageShareById(shareId))
+        .thenAnswer((_) async => existingShare);
+
+    final chatAlice = Chat(
+      jid: 'dc-1@delta.chat',
+      title: 'Bob',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 1,
+      emailAddress: 'bob@example.com',
+    );
+    final chatBob = Chat(
+      jid: 'dc-2@delta.chat',
+      title: 'Carol',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 2,
+      emailAddress: 'carol@example.com',
+    );
+
+    final existingParticipants = [
+      const MessageParticipantData(
+        shareId: shareId,
+        contactJid: 'dc-self@delta.chat',
+        role: MessageParticipantRole.sender,
+      ),
+      MessageParticipantData(
+        shareId: shareId,
+        contactJid: chatAlice.jid,
+        role: MessageParticipantRole.recipient,
+      ),
+      MessageParticipantData(
+        shareId: shareId,
+        contactJid: chatBob.jid,
+        role: MessageParticipantRole.recipient,
+      ),
+    ];
+
+    when(() => database.getParticipantsForShare(shareId))
+        .thenAnswer((_) async => existingParticipants);
+    final capturedShares = <MessageShareData>[];
+    final capturedParticipants = <List<MessageParticipantData>>[];
+    when(
+      () => database.createMessageShare(
+        share: captureAny(named: 'share'),
+        participants: captureAny(named: 'participants'),
+      ),
+    ).thenAnswer((invocation) async {
+      capturedShares.add(invocation.namedArguments[#share] as MessageShareData);
+      capturedParticipants.add(
+        List<MessageParticipantData>.from(
+          invocation.namedArguments[#participants] as List,
+        ),
+      );
+    });
+
+    when(
+      () => transport.sendText(
+        chatId: chatBob.deltaChatId!,
+        body: any(named: 'body'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+      ),
+    ).thenAnswer((_) async => 202);
+
+    await service.fanOutSend(
+      targets: [FanOutTarget.chat(chatBob)],
+      body: 'Retrying Carol only',
+      shareId: shareId,
+    );
+
+    expect(capturedShares.single.shareId, shareId);
+    expect(capturedShares.single.participantCount, 3);
+    expect(capturedParticipants.single.map((p) => p.contactJid).toSet(), {
+      'dc-self@delta.chat',
+      chatAlice.jid,
+      chatBob.jid,
+    });
+
+    addTearDown(service.shutdown);
+  });
+
+  test('shareContextForMessage returns null when message lacks delta id',
+      () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    final message = Message(
+      stanzaID: 'dc-msg-15',
+      senderJid: 'dc-self@delta.chat',
+      chatJid: 'dc-1@delta.chat',
+      timestamp: DateTime.now(),
+      body: 'Fan-out body',
+      encryptionProtocol: EncryptionProtocol.none,
+    );
+
+    final result = await service.shareContextForMessage(message);
+
+    expect(result, isNull);
+    verifyNever(() => database.getShareIdForDeltaMessage(any()));
+
+    addTearDown(service.shutdown);
+  });
+
+  test('shareContextForMessage returns null when share row is missing',
+      () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    final message = Message(
+      stanzaID: 'dc-msg-15',
+      senderJid: 'dc-self@delta.chat',
+      chatJid: 'dc-1@delta.chat',
+      timestamp: DateTime.now(),
+      body: 'Fan-out body',
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaMsgId: 15,
+    );
+
+    when(() => database.getShareIdForDeltaMessage(15))
+        .thenAnswer((_) async => null);
+
+    final result = await service.shareContextForMessage(message);
+
+    expect(result, isNull);
+    verify(() => database.getShareIdForDeltaMessage(15)).called(1);
+    verifyNever(() => database.getParticipantsForShare(any()));
+
+    addTearDown(service.shutdown);
+  });
+
+  test('shareContextForMessage resolves participants from database', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    final message = Message(
+      stanzaID: 'dc-msg-15',
+      senderJid: 'dc-self@delta.chat',
+      chatJid: 'dc-1@delta.chat',
+      timestamp: DateTime.now(),
+      body: 'Fan-out body',
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaMsgId: 15,
+    );
+    const participant = MessageParticipantData(
+      shareId: 'share-1',
+      contactJid: 'dc-1@delta.chat',
+      role: MessageParticipantRole.recipient,
+    );
+
+    when(() => database.getShareIdForDeltaMessage(15))
+        .thenAnswer((_) async => 'share-1');
+    when(() => database.getParticipantsForShare('share-1'))
+        .thenAnswer((_) async => [participant]);
+    when(() => database.getChat('dc-1@delta.chat')).thenAnswer(
+      (_) async => Chat(
+        jid: 'dc-1@delta.chat',
+        title: 'Bob',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+      ),
+    );
+
+    final contextResult = await service.shareContextForMessage(message);
+
+    expect(contextResult, isNotNull);
+    expect(contextResult!.participants, hasLength(1));
+    expect(contextResult.participants.first.title, 'Bob');
 
     addTearDown(service.shutdown);
   });

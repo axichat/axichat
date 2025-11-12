@@ -409,6 +409,25 @@ class DeltaChatBindings {
   late final _dc_send_text_msg = _dc_send_text_msgPtr.asFunction<
       int Function(ffi.Pointer<dc_context_t>, int, ffi.Pointer<ffi.Char>)>();
 
+  int dc_send_msg(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_send_msg(
+      ctx,
+      chat_id,
+      msg,
+    );
+  }
+
+  late final _dc_send_msgPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Uint32 Function(ffi.Pointer<dc_context_t>, ffi.Uint32,
+              ffi.Pointer<dc_msg_t>)>>('dc_send_msg');
+  late final _dc_send_msg = _dc_send_msgPtr.asFunction<
+      int Function(ffi.Pointer<dc_context_t>, int, ffi.Pointer<dc_msg_t>)>();
+
   ffi.Pointer<dc_chat_t> dc_get_chat(
     ffi.Pointer<dc_context_t> ctx,
     int chat_id,
@@ -543,6 +562,167 @@ class DeltaChatBindings {
           'dc_msg_get_id');
   late final _dc_msg_get_id =
       _dc_msg_get_idPtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_get_viewtype(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_viewtype(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_viewtypePtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_viewtype');
+  late final _dc_msg_get_viewtype =
+      _dc_msg_get_viewtypePtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<dc_msg_t> dc_msg_new(
+    ffi.Pointer<dc_context_t> ctx,
+    int viewtype,
+  ) {
+    return _dc_msg_new(
+      ctx,
+      viewtype,
+    );
+  }
+
+  late final _dc_msg_newPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_msg_t> Function(
+              ffi.Pointer<dc_context_t>, ffi.Int32)>>('dc_msg_new');
+  late final _dc_msg_new = _dc_msg_newPtr.asFunction<
+      ffi.Pointer<dc_msg_t> Function(ffi.Pointer<dc_context_t>, int)>();
+
+  void dc_msg_set_text(
+    ffi.Pointer<dc_msg_t> msg,
+    ffi.Pointer<ffi.Char> text,
+  ) {
+    return _dc_msg_set_text(
+      msg,
+      text,
+    );
+  }
+
+  late final _dc_msg_set_textPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_msg_t>,
+              ffi.Pointer<ffi.Char>)>>('dc_msg_set_text');
+  late final _dc_msg_set_text = _dc_msg_set_textPtr.asFunction<
+      void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
+
+  void dc_msg_set_file_and_deduplicate(
+    ffi.Pointer<dc_msg_t> msg,
+    ffi.Pointer<ffi.Char> file,
+    ffi.Pointer<ffi.Char> name,
+    ffi.Pointer<ffi.Char> filemime,
+  ) {
+    return _dc_msg_set_file_and_deduplicate(
+      msg,
+      file,
+      name,
+      filemime,
+    );
+  }
+
+  late final _dc_msg_set_file_and_deduplicatePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(
+              ffi.Pointer<dc_msg_t>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>)>>('dc_msg_set_file_and_deduplicate');
+  late final _dc_msg_set_file_and_deduplicate =
+      _dc_msg_set_file_and_deduplicatePtr.asFunction<
+          void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
+
+  ffi.Pointer<ffi.Char> dc_msg_get_file(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_file(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_filePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_file');
+  late final _dc_msg_get_file = _dc_msg_get_filePtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<ffi.Char> dc_msg_get_filename(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_filename(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_filenamePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_filename');
+  late final _dc_msg_get_filename = _dc_msg_get_filenamePtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
+
+  ffi.Pointer<ffi.Char> dc_msg_get_filemime(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_filemime(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_filemimePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_msg_t>)>>('dc_msg_get_filemime');
+  late final _dc_msg_get_filemime = _dc_msg_get_filemimePtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_get_filebytes(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_filebytes(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_filebytesPtr =
+      _lookup<ffi.NativeFunction<ffi.Uint64 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_filebytes');
+  late final _dc_msg_get_filebytes = _dc_msg_get_filebytesPtr
+      .asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_get_width(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_width(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_widthPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_width');
+  late final _dc_msg_get_width =
+      _dc_msg_get_widthPtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_get_height(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_height(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_heightPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_height');
+  late final _dc_msg_get_height =
+      _dc_msg_get_heightPtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
 }
 
 final class __mbstate_t extends ffi.Union {
@@ -650,8 +830,8 @@ final class dc_msg extends ffi.Opaque {}
 typedef dc_context_t = dc_context;
 typedef dc_event_emitter_t = dc_event_emitter;
 typedef dc_event_t = dc_event;
-typedef dc_chat_t = dc_chat;
 typedef dc_msg_t = dc_msg;
+typedef dc_chat_t = dc_chat;
 
 const int __WORDSIZE = 64;
 
@@ -818,3 +998,17 @@ const int WINT_MAX = 2147483647;
 const int SIG_ATOMIC_MIN = -2147483648;
 
 const int SIG_ATOMIC_MAX = 2147483647;
+
+const int DC_MSG_TEXT = 10;
+
+const int DC_MSG_IMAGE = 20;
+
+const int DC_MSG_GIF = 21;
+
+const int DC_MSG_AUDIO = 40;
+
+const int DC_MSG_VOICE = 41;
+
+const int DC_MSG_VIDEO = 50;
+
+const int DC_MSG_FILE = 60;

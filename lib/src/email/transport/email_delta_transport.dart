@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:delta_ffi/delta_safe.dart';
-import 'package:logging/logging.dart';
-
+import 'package:axichat/src/email/email_metadata.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:delta_ffi/delta_safe.dart';
+import 'package:logging/logging.dart';
 
 import '../sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
@@ -198,12 +199,60 @@ class EmailDeltaTransport implements ChatTransport {
   Future<int> sendText({
     required int chatId,
     required String body,
+    String? shareId,
+    String? localBodyOverride,
   }) async {
     if (_context == null) {
       throw StateError('Transport not initialized');
     }
     final msgId = await _context!.sendText(chatId: chatId, message: body);
-    await _recordOutgoing(chatId: chatId, msgId: msgId, body: body);
+    await _recordOutgoing(
+      chatId: chatId,
+      msgId: msgId,
+      body: body,
+      shareId: shareId,
+      localBodyOverride: localBodyOverride,
+    );
+    return msgId;
+  }
+
+  @override
+  Future<int> sendAttachment({
+    required int chatId,
+    required EmailAttachment attachment,
+    String? shareId,
+    String? captionOverride,
+  }) async {
+    if (_context == null) {
+      throw StateError('Transport not initialized');
+    }
+    final msgId = await _context!.sendFileMessage(
+      chatId: chatId,
+      viewType: _viewTypeFor(attachment),
+      filePath: attachment.path,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      text: attachment.caption,
+    );
+    final deltaMessage = await _context!.getMessage(msgId);
+    var metadata = _metadataForAttachment(attachment, msgId);
+    if (deltaMessage != null) {
+      metadata = metadata.copyWith(
+        path: deltaMessage.filePath ?? metadata.path,
+        mimeType: deltaMessage.fileMime ?? metadata.mimeType,
+        sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
+        width: deltaMessage.width ?? metadata.width,
+        height: deltaMessage.height ?? metadata.height,
+      );
+    }
+    await _recordOutgoing(
+      chatId: chatId,
+      msgId: msgId,
+      body: attachment.caption,
+      metadata: metadata,
+      shareId: shareId,
+      localBodyOverride: captionOverride,
+    );
     return msgId;
   }
 
@@ -227,23 +276,38 @@ class EmailDeltaTransport implements ChatTransport {
   Future<void> _recordOutgoing({
     required int chatId,
     required int msgId,
-    required String body,
+    String? body,
+    FileMetadataData? metadata,
+    String? shareId,
+    String? localBodyOverride,
   }) async {
     final db = await _databaseBuilder();
     final chat = await _ensureChat(chatId);
+    if (metadata != null) {
+      await db.saveFileMetadata(metadata);
+    }
+    final displayBody = localBodyOverride ?? body;
     final message = Message(
       stanzaID: _stanzaId(msgId),
       senderJid: _selfJid,
       chatJid: chat.jid,
       timestamp: DateTime.timestamp(),
-      body: body,
+      body: displayBody,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
       deltaChatId: chatId,
       deltaMsgId: msgId,
+      fileMetadataID: metadata?.id,
     );
     await db.saveMessage(message);
+    if (shareId != null) {
+      await db.insertMessageCopy(
+        shareId: shareId,
+        dcMsgId: msgId,
+        dcChatId: chat.deltaChatId ?? chatId,
+      );
+    }
   }
 
   Future<Chat> _ensureChat(int chatId) async {
@@ -313,6 +377,29 @@ class EmailDeltaTransport implements ChatTransport {
 
   void removeEventListener(void Function(DeltaCoreEvent event) listener) {
     _eventListeners.remove(listener);
+  }
+
+  FileMetadataData _metadataForAttachment(
+    EmailAttachment attachment,
+    int msgId,
+  ) {
+    return FileMetadataData(
+      id: deltaFileMetadataId(msgId),
+      filename: attachment.fileName,
+      path: attachment.path,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+    );
+  }
+
+  int _viewTypeFor(EmailAttachment attachment) {
+    if (attachment.isGif) return DeltaMessageType.gif;
+    if (attachment.isImage) return DeltaMessageType.image;
+    if (attachment.isVideo) return DeltaMessageType.video;
+    if (attachment.isAudio) return DeltaMessageType.audio;
+    return DeltaMessageType.file;
   }
 }
 

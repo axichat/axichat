@@ -45,6 +45,16 @@ class DeltaSafe {
   }
 }
 
+class DeltaMessageType {
+  static const int text = 10;
+  static const int image = 20;
+  static const int gif = 21;
+  static const int audio = 40;
+  static const int voice = 41;
+  static const int video = 50;
+  static const int file = 60;
+}
+
 class DeltaContextHandle {
   DeltaContextHandle._(this._bindings, this._context);
 
@@ -151,6 +161,39 @@ class DeltaContextHandle {
     return msgId;
   }
 
+  Future<int> sendFileMessage({
+    required int chatId,
+    required int viewType,
+    required String filePath,
+    String? fileName,
+    String? mimeType,
+    String? text,
+  }) async {
+    _ensureState(_opened, 'send attachment');
+    final message = _bindings.dc_msg_new(_context, viewType);
+    if (message == ffi.nullptr) {
+      throw const DeltaSafeException('Failed to allocate Delta message');
+    }
+    try {
+      if (text != null && text.isNotEmpty) {
+        _withCString(text, (textPtr) {
+          _bindings.dc_msg_set_text(message, textPtr);
+        });
+      }
+      _setFileForMessage(
+        message,
+        filePath: filePath,
+        fileName: fileName,
+        mimeType: mimeType,
+      );
+      final msgId = _bindings.dc_send_msg(_context, chatId, message);
+      _ensurePositive(msgId, 'send file message');
+      return msgId;
+    } finally {
+      _bindings.dc_msg_unref(message);
+    }
+  }
+
   Future<DeltaChat?> getChat(int chatId) async {
     final chatPtr = _bindings.dc_get_chat(_context, chatId);
     if (chatPtr == ffi.nullptr) {
@@ -175,11 +218,35 @@ class DeltaContextHandle {
       return null;
     }
     try {
+      final viewType = _bindings.dc_msg_get_viewtype(msgPtr);
       final text =
           _takeString(_bindings.dc_msg_get_text(msgPtr), bindings: _bindings);
       final chatId = _bindings.dc_msg_get_chat_id(msgPtr);
       final id = _bindings.dc_msg_get_id(msgPtr);
-      return DeltaMessage(id: id, chatId: chatId, text: text);
+      final filePath = _cleanString(
+        _takeString(_bindings.dc_msg_get_file(msgPtr), bindings: _bindings),
+      );
+      final fileName = _cleanString(
+        _takeString(_bindings.dc_msg_get_filename(msgPtr), bindings: _bindings),
+      );
+      final fileMime = _cleanString(
+        _takeString(_bindings.dc_msg_get_filemime(msgPtr), bindings: _bindings),
+      );
+      final fileBytes = _bindings.dc_msg_get_filebytes(msgPtr);
+      final width = _bindings.dc_msg_get_width(msgPtr);
+      final height = _bindings.dc_msg_get_height(msgPtr);
+      return DeltaMessage(
+        id: id,
+        chatId: chatId,
+        text: text,
+        viewType: viewType,
+        filePath: filePath,
+        fileName: fileName,
+        fileMime: fileMime,
+        fileSize: fileBytes == 0 ? null : fileBytes,
+        width: width == 0 ? null : width,
+        height: height == 0 ? null : height,
+      );
     } finally {
       _bindings.dc_msg_unref(msgPtr);
     }
@@ -253,6 +320,37 @@ class DeltaContextHandle {
       return null;
     }
   }
+
+  void _setFileForMessage(
+    ffi.Pointer<dc_msg_t> message, {
+    required String filePath,
+    String? fileName,
+    String? mimeType,
+  }) {
+    final namePointer = fileName == null || fileName.isEmpty
+        ? ffi.nullptr
+        : _toCString(fileName);
+    final mimePointer = mimeType == null || mimeType.isEmpty
+        ? ffi.nullptr
+        : _toCString(mimeType);
+    try {
+      _withCString(filePath, (filePtr) {
+        _bindings.dc_msg_set_file_and_deduplicate(
+          message,
+          filePtr,
+          namePointer,
+          mimePointer,
+        );
+      });
+    } finally {
+      if (namePointer != ffi.nullptr) {
+        malloc.free(namePointer);
+      }
+      if (mimePointer != ffi.nullptr) {
+        malloc.free(mimePointer);
+      }
+    }
+  }
 }
 
 class DeltaCoreEvent {
@@ -280,11 +378,31 @@ class DeltaChat {
 }
 
 class DeltaMessage {
-  const DeltaMessage({required this.id, required this.chatId, this.text});
+  const DeltaMessage({
+    required this.id,
+    required this.chatId,
+    this.text,
+    this.viewType,
+    this.filePath,
+    this.fileName,
+    this.fileMime,
+    this.fileSize,
+    this.width,
+    this.height,
+  });
 
   final int id;
   final int chatId;
   final String? text;
+  final int? viewType;
+  final String? filePath;
+  final String? fileName;
+  final String? fileMime;
+  final int? fileSize;
+  final int? width;
+  final int? height;
+
+  bool get hasFile => filePath != null && filePath!.isNotEmpty;
 }
 
 class DeltaSafeException implements Exception {
@@ -355,6 +473,9 @@ void _eventLoop(_EventLoopConfig config) {
   }
 }
 
+ffi.Pointer<ffi.Char> _toCString(String value) =>
+    value.toNativeUtf8().cast<ffi.Char>();
+
 T _withCString<T>(String value, T Function(ffi.Pointer<ffi.Char>) fn) {
   final pointer = value.toNativeUtf8().cast<ffi.Char>();
   try {
@@ -375,6 +496,9 @@ String? _takeString(
   (bindings ?? deltaBindings).dc_str_unref(ptr);
   return result;
 }
+
+String? _cleanString(String? value) =>
+    value == null || value.isEmpty ? null : value;
 
 void _ensureSuccess(int code, String operation) {
   if (code == 0) {

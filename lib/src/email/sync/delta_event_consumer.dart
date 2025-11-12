@@ -1,10 +1,12 @@
 import 'dart:async';
 
-import 'package:delta_ffi/delta_safe.dart';
-import 'package:logging/logging.dart';
-
+import 'package:axichat/src/email/email_metadata.dart';
+import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:delta_ffi/delta_safe.dart';
+import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 
 const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
@@ -70,7 +72,7 @@ class DeltaEventConsumer {
     if (existing != null) {
       return;
     }
-    final message = Message(
+    var message = Message(
       stanzaID: stanzaId,
       senderJid: chat.jid,
       chatJid: chat.jid,
@@ -82,6 +84,14 @@ class DeltaEventConsumer {
       deltaChatId: chat.deltaChatId,
       deltaMsgId: msg.id,
     );
+    message = await _applyShareMetadata(
+      db: db,
+      message: message,
+      rawBody: msg.text,
+      chatId: chatId,
+      msgId: msg.id,
+    );
+    message = await _attachFileMetadata(db: db, message: message, delta: msg);
     await db.saveMessage(message);
   }
 
@@ -95,7 +105,7 @@ class DeltaEventConsumer {
     if (existing != null) {
       return;
     }
-    final message = Message(
+    var message = Message(
       stanzaID: stanzaId,
       senderJid: _deltaSelfJid,
       chatJid: chat.jid,
@@ -106,6 +116,14 @@ class DeltaEventConsumer {
       deltaChatId: chat.deltaChatId,
       deltaMsgId: msg.id,
     );
+    message = await _applyShareMetadata(
+      db: db,
+      message: message,
+      rawBody: msg.text,
+      chatId: chatId,
+      msgId: msg.id,
+    );
+    message = await _attachFileMetadata(db: db, message: message, delta: msg);
     await db.saveMessage(message);
   }
 
@@ -152,6 +170,72 @@ class DeltaEventConsumer {
 
   Future<XmppDatabase> _db() async {
     return _database ??= await _databaseBuilder();
+  }
+
+  Future<Message> _attachFileMetadata({
+    required XmppDatabase db,
+    required Message message,
+    required DeltaMessage delta,
+  }) async {
+    if (!delta.hasFile || delta.filePath == null) {
+      return message;
+    }
+    final metadataId = deltaFileMetadataId(delta.id);
+    final existing = await db.getFileMetadata(metadataId);
+    final metadata = _metadataFromDelta(delta: delta, metadataId: metadataId);
+    if (existing != null) {
+      final merged = existing.copyWith(
+        path: metadata.path ?? existing.path,
+        mimeType: metadata.mimeType ?? existing.mimeType,
+        sizeBytes: metadata.sizeBytes ?? existing.sizeBytes,
+        width: metadata.width ?? existing.width,
+        height: metadata.height ?? existing.height,
+      );
+      if (merged != existing) {
+        await db.saveFileMetadata(merged);
+      }
+      return message.copyWith(fileMetadataID: existing.id);
+    }
+    await db.saveFileMetadata(metadata);
+    return message.copyWith(fileMetadataID: metadata.id);
+  }
+
+  FileMetadataData _metadataFromDelta({
+    required DeltaMessage delta,
+    required String metadataId,
+  }) {
+    return FileMetadataData(
+      id: metadataId,
+      filename: delta.fileName ?? p.basename(delta.filePath!),
+      path: delta.filePath,
+      mimeType: delta.fileMime,
+      sizeBytes: delta.fileSize,
+      width: delta.width,
+      height: delta.height,
+    );
+  }
+
+  Future<Message> _applyShareMetadata({
+    required XmppDatabase db,
+    required Message message,
+    required String? rawBody,
+    required int chatId,
+    required int msgId,
+  }) async {
+    final match = ShareTokenCodec.stripToken(rawBody);
+    if (match == null) {
+      return message;
+    }
+    final sanitized = message.copyWith(body: match.cleanedBody);
+    final share = await db.getMessageShareByToken(match.token);
+    if (share != null) {
+      await db.insertMessageCopy(
+        shareId: share.shareId,
+        dcMsgId: msgId,
+        dcChatId: chatId,
+      );
+    }
+    return sanitized;
   }
 }
 

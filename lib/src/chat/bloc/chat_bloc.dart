@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -16,6 +20,49 @@ import 'package:logging/logging.dart';
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
 part 'chat_state.dart';
+
+class ComposerRecipient extends Equatable {
+  const ComposerRecipient({
+    required this.target,
+    this.included = true,
+    this.pinned = false,
+  });
+
+  final FanOutTarget target;
+  final bool included;
+  final bool pinned;
+
+  String get key => target.key;
+
+  ComposerRecipient copyWith({
+    FanOutTarget? target,
+    bool? included,
+    bool? pinned,
+  }) =>
+      ComposerRecipient(
+        target: target ?? this.target,
+        included: included ?? this.included,
+        pinned: pinned ?? this.pinned,
+      );
+
+  @override
+  List<Object?> get props => [target, included, pinned];
+}
+
+class FanOutDraft extends Equatable {
+  const FanOutDraft({
+    this.body,
+    this.attachment,
+    required this.shareId,
+  });
+
+  final String? body;
+  final EmailAttachment? attachment;
+  final String shareId;
+
+  @override
+  List<Object?> get props => [body, attachment, shareId];
+}
 
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
@@ -52,15 +99,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
+    on<ChatAttachmentPicked>(_onChatAttachmentPicked);
+    on<ChatViewFilterChanged>(_onChatViewFilterChanged);
+    on<ChatComposerRecipientAdded>(_onComposerRecipientAdded);
+    on<ChatComposerRecipientRemoved>(_onComposerRecipientRemoved);
+    on<ChatComposerRecipientToggled>(_onComposerRecipientToggled);
+    on<ChatFanOutRetryRequested>(_onFanOutRetryRequested);
     if (jid != null) {
       _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
-      _messageSubscription = _messageService
-          .messageStreamForChat(jid!, end: messageBatchSize)
-          .listen((items) => add(_ChatMessagesUpdated(items)));
+      _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
       unawaited(_initializeTransport());
+      unawaited(_initializeViewFilter());
     }
   }
 
@@ -75,7 +127,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Logger _log = Logger('ChatBloc');
 
   late final StreamSubscription<Chat?> _chatSubscription;
-  late StreamSubscription<List<Message>> _messageSubscription;
+  StreamSubscription<List<Message>>? _messageSubscription;
+  var _currentMessageLimit = messageBatchSize;
 
   RestartableTimer? _typingTimer;
   MessageTransport _transport = MessageTransport.xmpp;
@@ -101,19 +154,51 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _initializeViewFilter() async {
+    if (jid == null) return;
+    try {
+      final filter = await _chatsService.loadChatViewFilter(jid!);
+      add(ChatViewFilterChanged(filter: filter, persist: false));
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to load view filter for $jid', error, stackTrace);
+    }
+  }
+
+  void _subscribeToMessages({
+    required int limit,
+    required MessageTimelineFilter filter,
+  }) {
+    if (jid == null) return;
+    unawaited(_messageSubscription?.cancel());
+    _currentMessageLimit = limit;
+    _messageSubscription = _messageService
+        .messageStreamForChat(
+          jid!,
+          end: limit,
+          filter: filter,
+        )
+        .listen((items) => add(_ChatMessagesUpdated(items)));
+  }
+
   @override
   Future<void> close() async {
     await _chatSubscription.cancel();
-    await _messageSubscription.cancel();
+    await _messageSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     return super.close();
   }
 
   void _onChatUpdated(_ChatUpdated event, Emitter<ChatState> emit) {
+    final resetContext = state.chat?.jid != event.chat.jid;
     emit(state.copyWith(
       chat: event.chat,
       showAlert: event.chat.alert != null && state.chat?.alert == null,
+      recipients: _syncRecipientsForChat(event.chat),
+      fanOutReports: resetContext ? const {} : state.fanOutReports,
+      fanOutDrafts: resetContext ? const {} : state.fanOutDrafts,
+      shareContexts: resetContext ? const {} : state.shareContexts,
+      composerError: resetContext ? null : state.composerError,
     ));
     if (event.chat.deltaChatId != null && _transport.isXmpp) {
       _transport = MessageTransport.email;
@@ -126,11 +211,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _onChatMessagesUpdated(
+  Future<void> _onChatMessagesUpdated(
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
     emit(state.copyWith(items: event.items));
+    if (_isEmailChat) {
+      await _hydrateShareContexts(event.items, emit);
+    }
 
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
     if (!_isEmailChat && lifecycleState == AppLifecycleState.resumed) {
@@ -192,12 +280,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final quotedDraft = state.quoting;
     try {
       if (isEmailChat) {
-        final service = _emailService;
-        if (service == null) {
-          throw StateError('EmailService not available for email chat.');
+        final recipients = _includedRecipients();
+        if (recipients.isEmpty) {
+          emit(
+            state.copyWith(
+              composerError: 'Select at least one recipient.',
+            ),
+          );
+          return;
+        }
+        if (state.composerError != null) {
+          emit(state.copyWith(composerError: null));
         }
         final body = _composeEmailBody(event.text, quotedDraft);
-        await service.sendMessage(chat: chat, body: body);
+        if (_shouldFanOut(recipients, chat)) {
+          await _sendFanOut(
+            recipients: recipients,
+            text: body,
+            emit: emit,
+          );
+        } else {
+          final service = _emailService;
+          if (service == null) {
+            throw StateError('EmailService not available for email chat.');
+          }
+          await service.sendMessage(chat: chat, body: body);
+        }
       } else {
         final sameChatQuote =
             quotedDraft != null && quotedDraft.chatJid == chat.jid
@@ -284,10 +392,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatLoadEarlier event,
     Emitter<ChatState> emit,
   ) async {
-    await _messageSubscription.cancel();
-    _messageSubscription = _messageService
-        .messageStreamForChat(jid!, end: state.items.length + messageBatchSize)
-        .listen((items) => add(_ChatMessagesUpdated(items)));
+    final nextLimit = state.items.length + messageBatchSize;
+    _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
   }
 
   Future<void> _onChatAlertHidden(
@@ -391,6 +497,144 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _onChatAttachmentPicked(
+    ChatAttachmentPicked event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (!_isEmailChat) return;
+    final chat = state.chat;
+    final service = _emailService;
+    if (chat == null || service == null) return;
+    final quotedDraft = state.quoting;
+    final rawCaption = event.attachment.caption?.trim();
+    final caption = rawCaption?.isNotEmpty == true
+        ? _composeEmailBody(rawCaption!, quotedDraft)
+        : null;
+    final recipients = _includedRecipients();
+    final shouldFanOut = _shouldFanOut(recipients, chat);
+    try {
+      if (shouldFanOut) {
+        await _sendFanOut(
+          recipients: recipients,
+          attachment: event.attachment.copyWith(caption: caption),
+          emit: emit,
+        );
+      } else {
+        await service.sendAttachment(
+          chat: chat,
+          attachment: event.attachment.copyWith(caption: caption),
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send attachment for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    } finally {
+      if (state.quoting != null) {
+        emit(state.copyWith(quoting: null));
+      }
+    }
+  }
+
+  Future<void> _onChatViewFilterChanged(
+    ChatViewFilterChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (jid == null) return;
+    emit(state.copyWith(viewFilter: event.filter));
+    _subscribeToMessages(limit: _currentMessageLimit, filter: event.filter);
+    if (event.persist) {
+      await _chatsService.saveChatViewFilter(jid: jid!, filter: event.filter);
+    }
+  }
+
+  void _onComposerRecipientAdded(
+    ChatComposerRecipientAdded event,
+    Emitter<ChatState> emit,
+  ) {
+    if (!_isEmailChat) return;
+    final recipients = List<ComposerRecipient>.from(state.recipients);
+    final index =
+        recipients.indexWhere((recipient) => recipient.key == event.target.key);
+    if (index >= 0) {
+      recipients[index] = recipients[index].copyWith(
+        target: event.target,
+        included: true,
+      );
+    } else {
+      recipients.add(ComposerRecipient(target: event.target));
+    }
+    emit(state.copyWith(recipients: recipients, composerError: null));
+  }
+
+  void _onComposerRecipientRemoved(
+    ChatComposerRecipientRemoved event,
+    Emitter<ChatState> emit,
+  ) {
+    if (!_isEmailChat) return;
+    final recipients = List<ComposerRecipient>.from(state.recipients);
+    final index = recipients
+        .indexWhere((recipient) => recipient.key == event.recipientKey);
+    if (index == -1 || recipients[index].pinned) {
+      return;
+    }
+    recipients.removeAt(index);
+    emit(state.copyWith(recipients: recipients, composerError: null));
+  }
+
+  void _onComposerRecipientToggled(
+    ChatComposerRecipientToggled event,
+    Emitter<ChatState> emit,
+  ) {
+    if (!_isEmailChat) return;
+    final recipients = List<ComposerRecipient>.from(state.recipients);
+    final index = recipients
+        .indexWhere((recipient) => recipient.key == event.recipientKey);
+    if (index == -1) {
+      return;
+    }
+    final recipient = recipients[index];
+    recipients[index] = recipient.copyWith(
+      included: event.included ?? !recipient.included,
+    );
+    emit(state.copyWith(recipients: recipients, composerError: null));
+  }
+
+  Future<void> _onFanOutRetryRequested(
+    ChatFanOutRetryRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final draft = state.fanOutDrafts[event.shareId];
+    final report = state.fanOutReports[event.shareId];
+    if (draft == null || report == null) return;
+    final failedStatuses = report.statuses
+        .where((status) => status.state == FanOutRecipientState.failed)
+        .toList();
+    if (failedStatuses.isEmpty) return;
+    final recipients = <ComposerRecipient>[];
+    for (final status in failedStatuses) {
+      final jid = status.chat.jid;
+      final existing = _recipientForChat(jid);
+      if (existing != null) {
+        recipients.add(existing.copyWith(included: true));
+      } else {
+        recipients.add(
+          ComposerRecipient(target: FanOutTarget.chat(status.chat)),
+        );
+      }
+    }
+    if (recipients.isEmpty) return;
+    await _sendFanOut(
+      recipients: recipients,
+      text: draft.body,
+      attachment: draft.attachment,
+      shareId: draft.shareId,
+      emit: emit,
+    );
+  }
+
   Future<void> _stopTyping() async {
     _typingTimer?.cancel();
     _typingTimer = null;
@@ -408,5 +652,153 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .map((line) => line.isEmpty ? '>' : '> $line')
         .join('\n');
     return '$quotedBody\n\n$body';
+  }
+
+  List<ComposerRecipient> _includedRecipients() =>
+      state.recipients.where((recipient) => recipient.included).toList();
+
+  bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
+    if (recipients.isEmpty) return false;
+    if (recipients.length == 1) {
+      final targetChat = recipients.single.target.chat;
+      if (targetChat != null && targetChat.jid == chat.jid) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _sendFanOut({
+    required List<ComposerRecipient> recipients,
+    String? text,
+    EmailAttachment? attachment,
+    String? shareId,
+    required Emitter<ChatState> emit,
+  }) async {
+    final service = _emailService;
+    if (service == null || recipients.isEmpty) return;
+    final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
+    try {
+      final report = await service.fanOutSend(
+        targets: recipients.map((recipient) => recipient.target).toList(),
+        body: text,
+        attachment: attachment,
+        shareId: effectiveShareId,
+      );
+      final mergedRecipients = _mergeRecipientsWithReport(report);
+      final reports =
+          LinkedHashMap<String, FanOutSendReport>.from(state.fanOutReports)
+            ..remove(report.shareId)
+            ..[report.shareId] = report;
+      final drafts = LinkedHashMap<String, FanOutDraft>.from(state.fanOutDrafts)
+        ..remove(report.shareId)
+        ..[report.shareId] = FanOutDraft(
+          body: text,
+          attachment: attachment,
+          shareId: report.shareId,
+        );
+      emit(state.copyWith(
+        recipients: mergedRecipients,
+        fanOutReports: reports,
+        fanOutDrafts: drafts,
+        composerError: null,
+      ));
+    } on FanOutValidationException catch (error) {
+      emit(state.copyWith(composerError: error.message));
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to send fan-out message', error, stackTrace);
+      emit(
+        state.copyWith(
+          composerError: 'Unable to send message. Please try again.',
+        ),
+      );
+    }
+  }
+
+  List<ComposerRecipient> _mergeRecipientsWithReport(
+    FanOutSendReport report,
+  ) {
+    if (report.statuses.isEmpty) {
+      return state.recipients;
+    }
+    final recipients = List<ComposerRecipient>.from(state.recipients);
+    var changed = false;
+    for (final status in report.statuses) {
+      final jid = status.chat.jid;
+      final matchesIndex = recipients.indexWhere(
+        (recipient) =>
+            recipient.target.chat?.jid == jid ||
+            (recipient.target.address != null &&
+                recipient.target.address == status.chat.emailAddress),
+      );
+      if (matchesIndex >= 0 &&
+          recipients[matchesIndex].target.chat?.jid != jid) {
+        recipients[matchesIndex] = recipients[matchesIndex].copyWith(
+          target: FanOutTarget.chat(status.chat),
+        );
+        changed = true;
+      }
+    }
+    return changed ? recipients : state.recipients;
+  }
+
+  ComposerRecipient? _recipientForChat(String jid) {
+    for (final recipient in state.recipients) {
+      final chat = recipient.target.chat;
+      if (chat != null && chat.jid == jid) {
+        return recipient;
+      }
+    }
+    return null;
+  }
+
+  List<ComposerRecipient> _syncRecipientsForChat(Chat chat) {
+    if (!chat.transport.isEmail) {
+      return const [];
+    }
+    final recipients = List<ComposerRecipient>.from(state.recipients);
+    final key = chat.jid;
+    final index = recipients.indexWhere(
+      (recipient) => recipient.pinned && recipient.target.chat?.jid == key,
+    );
+    if (index >= 0) {
+      recipients[index] = recipients[index].copyWith(
+        target: FanOutTarget.chat(chat),
+        included: true,
+      );
+      return recipients;
+    }
+    recipients.insert(
+      0,
+      ComposerRecipient(
+        target: FanOutTarget.chat(chat),
+        included: true,
+        pinned: true,
+      ),
+    );
+    return recipients;
+  }
+
+  Future<void> _hydrateShareContexts(
+    List<Message> messages,
+    Emitter<ChatState> emit,
+  ) async {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    final pending = <String, ShareContext>{};
+    for (final message in messages) {
+      if (message.deltaMsgId == null) continue;
+      if (state.shareContexts.containsKey(message.stanzaID)) {
+        continue;
+      }
+      final context = await emailService.shareContextForMessage(message);
+      if (context != null) {
+        pending[message.stanzaID] = context;
+      }
+    }
+    if (pending.isEmpty) return;
+    final contexts = Map<String, ShareContext>.from(state.shareContexts)
+      ..addAll(pending);
+    emit(state.copyWith(shareContexts: contexts));
   }
 }

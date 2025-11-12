@@ -163,3 +163,62 @@ final class ChatMessageResendRequested extends ChatEvent {
   @override
   List<Object?> get props => [message];
 }
+
+final class ChatAttachmentPicked extends ChatEvent {
+  const ChatAttachmentPicked(this.attachment);
+
+  final EmailAttachment attachment;
+
+  @override
+  List<Object?> get props => [attachment];
+}
+
+final class ChatViewFilterChanged extends ChatEvent {
+  const ChatViewFilterChanged({
+    required this.filter,
+    this.persist = true,
+  });
+
+  final MessageTimelineFilter filter;
+  final bool persist;
+
+  @override
+  List<Object?> get props => [filter, persist];
+}
+
+final class ChatComposerRecipientAdded extends ChatEvent {
+  const ChatComposerRecipientAdded(this.target);
+
+  final FanOutTarget target;
+
+  @override
+  List<Object?> get props => [target];
+}
+
+final class ChatComposerRecipientRemoved extends ChatEvent {
+  const ChatComposerRecipientRemoved(this.recipientKey);
+
+  final String recipientKey;
+
+  @override
+  List<Object?> get props => [recipientKey];
+}
+
+final class ChatComposerRecipientToggled extends ChatEvent {
+  const ChatComposerRecipientToggled(this.recipientKey, {this.included});
+
+  final String recipientKey;
+  final bool? included;
+
+  @override
+  List<Object?> get props => [recipientKey, included];
+}
+
+final class ChatFanOutRetryRequested extends ChatEvent {
+  const ChatFanOutRetryRequested(this.shareId);
+
+  final String shareId;
+
+  @override
+  List<Object?> get props => [shareId];
+}

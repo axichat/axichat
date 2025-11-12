@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -119,35 +121,46 @@ class _ImageAttachment extends StatelessWidget {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    if (url == null) {
-      return const _AttachmentError(message: 'Missing attachment URL');
+    final path = metadata.path;
+    final localFile = path == null ? null : File(path);
+    final hasLocalFile = localFile?.existsSync() ?? false;
+    if (!hasLocalFile && url == null) {
+      return const _AttachmentError(message: 'Attachment unavailable');
     }
     final radius = BorderRadius.circular(18);
+    final image = hasLocalFile
+        ? Image.file(
+            localFile!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Center(child: Icon(Icons.broken_image_outlined)),
+          )
+        : Image.network(
+            url!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Center(child: Icon(Icons.broken_image_outlined)),
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: progress.expectedTotalBytes == null
+                      ? null
+                      : progress.cumulativeBytesLoaded /
+                          progress.expectedTotalBytes!,
+                ),
+              );
+            },
+          );
     return _AttachmentSurface(
       padding: EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: radius,
         child: GestureDetector(
-          onTap: () => _openUrl(context, url),
+          onTap: () => _openAttachment(context, url: url, path: path),
           child: AspectRatio(
             aspectRatio: _aspectRatio(metadata),
-            child: Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  const Center(child: Icon(Icons.broken_image_outlined)),
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    value: progress.expectedTotalBytes == null
-                        ? null
-                        : progress.cumulativeBytesLoaded /
-                            progress.expectedTotalBytes!,
-                  ),
-                );
-              },
-            ),
+            child: image,
           ),
         ),
       ),
@@ -220,7 +233,13 @@ class _FileAttachment extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           ShadIconButton(
-            onPressed: url == null ? null : () => _openUrl(context, url),
+            onPressed: url == null && metadata.path == null
+                ? null
+                : () => _openAttachment(
+                      context,
+                      url: url,
+                      path: metadata.path,
+                    ),
             icon: const Icon(LucideIcons.download),
           ),
         ],
@@ -284,9 +303,37 @@ class _AttachmentError extends StatelessWidget {
   }
 }
 
-Future<void> _openUrl(BuildContext context, String url) async {
-  final uri = Uri.tryParse(url);
+Future<void> _openAttachment(
+  BuildContext context, {
+  String? url,
+  String? path,
+}) async {
   final toaster = ShadToaster.maybeOf(context);
+  if (path != null) {
+    final file = File(path);
+    if (!await file.exists()) {
+      _showToast(
+        toaster,
+        'Attachment is no longer available on this device',
+        destructive: true,
+      );
+      return;
+    }
+    final launched = await launchUrl(
+      Uri.file(file.path),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched) {
+      _showToast(
+        toaster,
+        'Could not open ${file.path.split('/').last}',
+        destructive: true,
+      );
+    }
+    return;
+  }
+  final trimmed = url?.trim();
+  final uri = trimmed == null ? null : Uri.tryParse(trimmed);
   if (uri == null) {
     _showToast(
       toaster,

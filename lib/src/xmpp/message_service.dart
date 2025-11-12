@@ -50,14 +50,23 @@ mixin MessageService on XmppBase, BaseStreamService {
     String jid, {
     int start = 0,
     int end = 50,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) =>
       createSingleItemStream<List<Message>, XmppDatabase>(
         watchFunction: (db) async {
-          final messagesStream =
-              db.watchChatMessages(jid, start: start, end: end);
+          final messagesStream = db.watchChatMessages(
+            jid,
+            start: start,
+            end: end,
+            filter: filter,
+          );
           final reactionsStream = db.watchReactionsForChat(jid);
-          final initialMessages =
-              await db.getChatMessages(jid, start: start, end: end);
+          final initialMessages = await db.getChatMessages(
+            jid,
+            start: start,
+            end: end,
+            filter: filter,
+          );
           final initialReactions = await db.getReactionsForChat(jid);
           return _combineMessageAndReactionStreams(
             messageStream: messagesStream,
@@ -103,7 +112,7 @@ mixin MessageService on XmppBase, BaseStreamService {
       if (await _handleRetraction(event, message.senderJid)) return;
 
       // Handle calendar sync messages
-      if (await _handleCalendarSync(event, message)) return;
+      if (await _handleCalendarSync(event)) return;
 
       if (!event.displayable && event.encryptionError == null) return;
       if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
@@ -222,10 +231,9 @@ mixin MessageService on XmppBase, BaseStreamService {
   Future<void> sendMessage({
     required String jid,
     required String text,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     Message? quotedMessage,
-    bool persistLocally = true,
-    bool markNoStore = false,
+    bool storeLocally = true,
   }) async {
     final message = Message(
       stanzaID: _connection.generateId(),
@@ -235,12 +243,11 @@ mixin MessageService on XmppBase, BaseStreamService {
       body: text,
       encryptionProtocol: encryptionProtocol,
       quoting: quotedMessage?.stanzaID,
-      noStore: markNoStore,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${text.length} chars)',
     );
-    if (persistLocally) {
+    if (storeLocally) {
       await _dbOp<XmppDatabase>(
         (db) => db.saveMessage(message),
       );
@@ -257,7 +264,7 @@ mixin MessageService on XmppBase, BaseStreamService {
         ),
       );
       if (!sent) {
-        if (persistLocally) {
+        if (storeLocally) {
           await _handleMessageSendFailure(message.stanzaID);
         }
         throw XmppMessageException();
@@ -268,7 +275,7 @@ mixin MessageService on XmppBase, BaseStreamService {
         error,
         stackTrace,
       );
-      if (persistLocally) {
+      if (storeLocally) {
         await _handleMessageSendFailure(message.stanzaID);
       }
       throw XmppMessageException();
@@ -689,67 +696,50 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
   }
 
-  Future<bool> _handleCalendarSync(
-    mox.MessageEvent event,
-    Message message,
-  ) async {
+  Future<bool> _handleCalendarSync(mox.MessageEvent event) async {
+    // Check if this is a calendar sync message by looking at the message body
     final messageText = event.text;
     if (messageText.isEmpty) return false;
 
-    final syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
-    if (syncMessage == null) {
+    try {
+      final messageData = jsonDecode(messageText);
+      if (messageData is! Map<String, dynamic> ||
+          !messageData.containsKey('calendar_sync')) {
+        return false;
+      }
+
+      // SECURITY: Only accept calendar sync messages from our own JID
+      final senderJid = event.from.toBare().toString();
+      if (senderJid != myJid) {
+        _log.warning(
+            'Rejected calendar sync message from unauthorized JID: $senderJid');
+        return true; // Handled - don't process as regular chat message
+      }
+
+      // This is a calendar sync message - parse and process it
+      final syncData = messageData['calendar_sync'] as Map<String, dynamic>;
+      final syncMessage = CalendarSyncMessage.fromJson(syncData);
+
+      _log.info(
+          'Received calendar sync message type: ${syncMessage.type} from ${event.from}');
+
+      // Route to CalendarSyncManager for processing
+      if (owner is XmppService &&
+          (owner as XmppService)._calendarSyncCallback != null) {
+        try {
+          await (owner as XmppService)._calendarSyncCallback!(syncMessage);
+        } catch (e) {
+          _log.warning('Calendar sync callback failed: $e');
+        }
+      } else {
+        _log.info('No calendar sync callback registered - message ignored');
+      }
+
+      return true; // Handled - don't process as regular chat message
+    } catch (e) {
+      // Not a valid calendar sync message, let it be processed normally
       return false;
     }
-
-    // SECURITY: Only accept calendar sync messages from our own JID
-    final senderJid = event.from.toBare().toString();
-    if (senderJid != myJid) {
-      _log.warning(
-        'Rejected calendar sync message from unauthorized JID: $senderJid',
-      );
-      return true;
-    }
-
-    _log.info(
-      'Received calendar sync message type: ${syncMessage.type} from ${event.from}',
-    );
-
-    if (owner is XmppService &&
-        (owner as XmppService)._calendarSyncCallback != null) {
-      try {
-        await (owner as XmppService)._calendarSyncCallback!(syncMessage);
-      } catch (e) {
-        _log.warning('Calendar sync callback failed: $e');
-      }
-    } else {
-      _log.info('No calendar sync callback registered - message ignored');
-    }
-
-    await _persistCalendarSyncSnapshot(
-      message: message,
-      payload: syncMessage,
-      rawText: messageText,
-    );
-
-    return true;
-  }
-
-  Future<void> _persistCalendarSyncSnapshot({
-    required Message message,
-    required CalendarSyncMessage payload,
-    required String rawText,
-  }) async {
-    final snapshot = message.copyWith(
-      body: null,
-      pseudoMessageType: PseudoMessageType.calendarSync,
-      pseudoMessageData: {
-        'calendar_sync': payload.toJson(),
-        'raw': rawText,
-      },
-    );
-    await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(snapshot),
-    );
   }
 
   Future<void> _handleFile(mox.MessageEvent event, String jid) async {}
@@ -765,7 +755,7 @@ mixin MessageService on XmppBase, BaseStreamService {
     StreamSubscription<List<Reaction>>? reactionSubscription;
     var listeners = 0;
     var closed = false;
-    var currentMessages = _filterVisibleMessages(initialMessages);
+    var currentMessages = initialMessages;
     var currentReactions = initialReactions;
 
     void emit() {
@@ -778,7 +768,7 @@ mixin MessageService on XmppBase, BaseStreamService {
     void start() {
       emit();
       messageSubscription = messageStream.listen((messages) {
-        currentMessages = _filterVisibleMessages(messages);
+        currentMessages = messages;
         emit();
       });
       reactionSubscription = reactionStream.listen((reactions) {
@@ -813,13 +803,6 @@ mixin MessageService on XmppBase, BaseStreamService {
 
     return controller.stream;
   }
-
-  List<Message> _filterVisibleMessages(List<Message> messages) => messages
-      .where(
-        (message) =>
-            message.pseudoMessageType != PseudoMessageType.calendarSync,
-      )
-      .toList(growable: false);
 
   List<Message> _applyReactionPreviews(
     List<Message> messages,

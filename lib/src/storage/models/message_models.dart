@@ -118,7 +118,16 @@ enum EncryptionProtocol {
   bool get isMls => this == mls;
 }
 
-enum PseudoMessageType { newDevice, changedDevice, calendarSync }
+enum MessageTimelineFilter {
+  directOnly,
+  allWithContact;
+
+  bool get isDirect => this == MessageTimelineFilter.directOnly;
+}
+
+enum MessageParticipantRole { sender, recipient }
+
+enum PseudoMessageType { newDevice, changedDevice }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
 
@@ -316,6 +325,13 @@ class Message with _$Message implements Insertable<Message> {
       );
     }
 
+    // Add OMEMO flag if encryption is requested
+    if (encryptionProtocol == EncryptionProtocol.omemo) {
+      // The OmemoManager will intercept based on _shouldEncryptStanza callback
+      // But we should ensure the message is properly flagged
+      extensions.add(mox.StableIdData(originID ?? stanzaID, null));
+    }
+
     return mox.MessageEvent(
       mox.JID.fromString(senderJid),
       mox.JID.fromString(chatJid),
@@ -433,6 +449,61 @@ class Messages extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
+}
+
+@DataClassName('MessageShareData')
+class MessageShares extends Table {
+  TextColumn get shareId => text()();
+
+  IntColumn get originatorDcMsgId => integer().nullable()();
+
+  TextColumn get subjectToken => text().nullable()();
+
+  DateTimeColumn get createdAt =>
+      dateTime().clientDefault(() => DateTime.timestamp())();
+
+  IntColumn get participantCount => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {shareId};
+}
+
+@DataClassName('MessageParticipantData')
+class MessageParticipants extends Table {
+  TextColumn get shareId => text().references(MessageShares, #shareId)();
+
+  TextColumn get contactJid => text()();
+
+  TextColumn get role => textEnum<MessageParticipantRole>()();
+
+  @override
+  Set<Column> get primaryKey => {shareId, contactJid};
+
+  List<Index> get indexes => [
+        Index(
+          'idx_message_participants_contact',
+          'contact_jid, share_id',
+        ),
+      ];
+}
+
+@DataClassName('MessageCopyData')
+class MessageCopies extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get shareId => text().references(MessageShares, #shareId)();
+
+  IntColumn get dcMsgId => integer()();
+
+  IntColumn get dcChatId => integer()();
+
+  @override
+  List<String> get customConstraints => const ['UNIQUE(dc_msg_id)'];
+
+  List<Index> get indexes => [
+        Index('idx_message_copies_share', 'share_id, dc_chat_id'),
+        Index('idx_message_copies_dc_msg', 'dc_msg_id'),
+      ];
 }
 
 @Freezed(toJson: false, fromJson: false)
