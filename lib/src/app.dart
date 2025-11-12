@@ -17,6 +17,7 @@ import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/share/share_intent_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -173,6 +174,9 @@ class _AxichatState extends State<Axichat> {
             create: (context) => OmemoActivityCubit(
               xmppBase: context.read<XmppService>(),
             ),
+          ),
+          BlocProvider(
+            create: (context) => ShareIntentCubit()..initialize(),
           ),
           if (widget._storageManager.guestStorage != null)
             BlocProvider(
@@ -381,18 +385,26 @@ class MaterialAxichat extends StatelessWidget {
           routerConfig: _router,
           builder: (context, child) {
             final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
-            final routedContent =
+            final routedContent = MultiBlocListener(
+              listeners: [
                 BlocListener<AuthenticationCubit, AuthenticationState>(
-              listener: (context, state) {
-                final location = routeLocations[_router.state.matchedLocation]!;
-                if (state is AuthenticationNone &&
-                    location.authenticationRequired) {
-                  _router.go(const LoginRoute().location);
-                } else if (state is AuthenticationComplete &&
-                    !location.authenticationRequired) {
-                  _router.go(const HomeRoute().location);
-                }
-              },
+                  listener: (context, state) {
+                    final location =
+                        routeLocations[_router.state.matchedLocation]!;
+                    if (state is AuthenticationNone &&
+                        location.authenticationRequired) {
+                      _router.go(const LoginRoute().location);
+                    } else if (state is AuthenticationComplete &&
+                        !location.authenticationRequired) {
+                      _router.go(const HomeRoute().location);
+                    }
+                    _handleShareIntent(context);
+                  },
+                ),
+                BlocListener<ShareIntentCubit, ShareIntentState>(
+                  listener: (context, _) => _handleShareIntent(context),
+                ),
+              ],
               child: Stack(
                 children: [
                   if (child != null) child else const SizedBox.shrink(),
@@ -408,6 +420,23 @@ class MaterialAxichat extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _handleShareIntent(BuildContext context) {
+    final shareState = context.read<ShareIntentCubit>().state;
+    if (!shareState.hasPayload) return;
+    final authState = context.read<AuthenticationCubit>().state;
+    if (authState is! AuthenticationComplete) return;
+    final payload = shareState.payload!;
+    _router.push(
+      const ComposeRoute().location,
+      extra: {
+        'locate': context.read,
+        'body': payload.text,
+        'jids': [''],
+      },
+    );
+    context.read<ShareIntentCubit>().consume();
   }
 }
 

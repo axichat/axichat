@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
+import 'package:axichat/src/chats/view/archives_screen.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';
 import 'package:axichat/src/home_screen.dart';
@@ -20,6 +21,7 @@ mixin AuthenticationRouteData on GoRouteData {
 final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const HomeRoute().location: const HomeRoute(),
   const ProfileRoute().location: const ProfileRoute(),
+  const ArchivesRoute().location: const ArchivesRoute(),
   const ComposeRoute().location: const ComposeRoute(),
   const GuestCalendarRoute().location: const GuestCalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
@@ -41,7 +43,12 @@ class TransitionGoRouteData extends GoRouteData {
 @TypedGoRoute<HomeRoute>(
   path: '/',
   routes: [
-    TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
+    TypedGoRoute<ProfileRoute>(
+      path: ProfileRoute.path,
+      routes: [
+        TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path),
+      ],
+    ),
     TypedGoRoute<ComposeRoute>(path: ComposeRoute.path),
   ],
 )
@@ -68,6 +75,20 @@ class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       ProfileScreen(locate: state.extra! as T Function<T>());
+}
+
+class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
+  const ArchivesRoute();
+
+  static const path = 'archives';
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) => ArchivesScreen(
+        locate: state.extra! as T Function<T>(),
+      );
 }
 
 class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
