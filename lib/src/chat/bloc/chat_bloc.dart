@@ -505,6 +505,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     final service = _emailService;
     if (chat == null || service == null) return;
+    _addPendingAttachment(event.attachment, emit);
     final quotedDraft = state.quoting;
     final rawCaption = event.attachment.caption?.trim();
     final caption = rawCaption?.isNotEmpty == true
@@ -532,6 +533,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
     } finally {
+      _removePendingAttachment(event.attachment, emit);
       if (state.quoting != null) {
         emit(state.copyWith(quoting: null));
       }
@@ -750,6 +752,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return null;
+  }
+
+  void _addPendingAttachment(
+    EmailAttachment attachment,
+    Emitter<ChatState> emit,
+  ) {
+    final updated = List<EmailAttachment>.from(state.pendingAttachments)
+      ..add(attachment);
+    emit(state.copyWith(pendingAttachments: updated));
+  }
+
+  void _removePendingAttachment(
+    EmailAttachment attachment,
+    Emitter<ChatState> emit,
+  ) {
+    final updated = List<EmailAttachment>.from(state.pendingAttachments);
+    final matchIndex =
+        updated.indexWhere((candidate) => identical(candidate, attachment));
+    if (matchIndex >= 0) {
+      updated.removeAt(matchIndex);
+    } else {
+      updated.removeWhere(
+        (candidate) =>
+            candidate.path == attachment.path &&
+            candidate.sizeBytes == attachment.sizeBytes,
+      );
+    }
+    emit(state.copyWith(pendingAttachments: updated));
   }
 
   List<ComposerRecipient> _syncRecipientsForChat(Chat chat) {

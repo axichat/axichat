@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -366,6 +367,51 @@ void main() {
       [extraChat.jid],
     );
     expect(capturedShareIds.every((id) => id == failureReport.shareId), isTrue);
+
+    await bloc.close();
+  });
+
+  test('pending attachment indicator clears after upload completes', () async {
+    final emailService = MockEmailService();
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 1,
+      emailAddress: 'peer@example.com',
+    );
+    final attachment = EmailAttachment(
+      path: '/tmp/file.txt',
+      fileName: 'file.txt',
+      sizeBytes: 2048,
+      mimeType: 'text/plain',
+    );
+    final sendCompleter = Completer<void>();
+    when(
+      () => emailService.sendAttachment(
+        chat: any(named: 'chat'),
+        attachment: any(named: 'attachment'),
+      ),
+    ).thenAnswer(
+      (_) => sendCompleter.future.then((_) => 1),
+    );
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      notificationService: notificationService,
+      emailService: emailService,
+    );
+
+    messageStreamController.add(const <Message>[]);
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+
+    bloc.add(ChatAttachmentPicked(attachment));
+    await _pumpBloc();
+    expect(bloc.state.pendingAttachments, [attachment]);
+
+    sendCompleter.complete();
+    await _pumpBloc();
+    expect(bloc.state.pendingAttachments, isEmpty);
 
     await bloc.close();
   });

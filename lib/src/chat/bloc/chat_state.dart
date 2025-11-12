@@ -16,6 +16,7 @@ class ChatState with _$ChatState {
     Map<String, FanOutSendReport> fanOutReports,
     @Default(<String, FanOutDraft>{}) Map<String, FanOutDraft> fanOutDrafts,
     @Default(<String, ShareContext>{}) Map<String, ShareContext> shareContexts,
+    @Default(<EmailAttachment>[]) List<EmailAttachment> pendingAttachments,
     String? composerError,
   }) = _ChatState;
 }

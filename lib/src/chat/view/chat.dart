@@ -436,6 +436,7 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
     required List<chat_models.Chat> availableEmailChats,
     required Map<String, FanOutRecipientState> latestStatuses,
+    required List<EmailAttachment> pendingAttachments,
     String? composerError,
     bool showAttachmentWarning = false,
     FanOutSendReport? retryReport,
@@ -522,6 +523,10 @@ class _ChatState extends State<Chat> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (pendingAttachments.isNotEmpty) ...[
+            _PendingAttachmentList(attachments: pendingAttachments),
+            const SizedBox(height: 12),
+          ],
           if (notices.isNotEmpty) ...[
             for (var i = 0; i < notices.length; i++) ...[
               notices[i],
@@ -1159,6 +1164,7 @@ class _ChatState extends State<Chat> {
               : (profile?.jid ?? '');
           final shareContexts = state.shareContexts;
           final recipients = state.recipients;
+          final pendingAttachments = state.pendingAttachments;
           final latestStatuses = _latestRecipientStatuses(state);
           final fanOutReports = state.fanOutReports;
           final warningEntry =
@@ -2264,6 +2270,7 @@ class _ChatState extends State<Chat> {
                                     recipients: recipients,
                                     availableEmailChats: emailSuggestions,
                                     latestStatuses: latestStatuses,
+                                    pendingAttachments: pendingAttachments,
                                     composerError: state.composerError,
                                     showAttachmentWarning:
                                         showAttachmentWarning,
@@ -2621,6 +2628,204 @@ class _ReactionStrip extends StatelessWidget {
       ],
     );
   }
+}
+
+class _PendingAttachmentList extends StatelessWidget {
+  const _PendingAttachmentList({required this.attachments});
+
+  final List<EmailAttachment> attachments;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: attachments
+            .map(
+              (attachment) => _PendingAttachmentPreview(
+                attachment: attachment,
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentPreview extends StatelessWidget {
+  const _PendingAttachmentPreview({required this.attachment});
+
+  final EmailAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (attachment.isImage) {
+      return _PendingImageAttachment(attachment: attachment);
+    }
+    return _PendingFileAttachment(attachment: attachment);
+  }
+}
+
+class _PendingImageAttachment extends StatelessWidget {
+  const _PendingImageAttachment({required this.attachment});
+
+  final EmailAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.file(
+                File(attachment.path),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => ColoredBox(
+                  color: colors.card,
+                  child: Icon(
+                    _attachmentIcon(attachment),
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: colors.background.withValues(alpha: 0.85),
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(4),
+              child: _PendingAttachmentSpinner(
+                color: colors.primary,
+                strokeWidth: 2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingFileAttachment extends StatelessWidget {
+  const _PendingFileAttachment({required this.attachment});
+
+  final EmailAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final sizeLabel = _formatBytes(attachment.sizeBytes);
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: math.min(MediaQuery.sizeOf(context).width * 0.65, 260),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _attachmentIcon(attachment),
+              size: 20,
+              color: colors.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    attachment.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.small.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    sizeLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.small.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: _PendingAttachmentSpinner(
+                color: colors.primary,
+                strokeWidth: 2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentSpinner extends StatelessWidget {
+  const _PendingAttachmentSpinner({
+    required this.color,
+    this.strokeWidth = 2.5,
+  });
+
+  final Color color;
+  final double strokeWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return CircularProgressIndicator(
+      strokeWidth: strokeWidth,
+      color: color,
+    );
+  }
+}
+
+IconData _attachmentIcon(EmailAttachment attachment) {
+  if (attachment.isImage) return Icons.image_outlined;
+  if (attachment.isVideo) return Icons.videocam_outlined;
+  if (attachment.isAudio) return Icons.audiotrack;
+  return Icons.insert_drive_file_outlined;
+}
+
+String _formatBytes(int bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var size = bytes.toDouble();
+  var unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit++;
+  }
+  final formatted = unit == 0
+      ? size.toStringAsFixed(0)
+      : size.toStringAsFixed(size >= 10 ? 0 : 1);
+  return '$formatted ${units[unit]}';
 }
 
 enum _ComposerNoticeType { error, warning, info }
