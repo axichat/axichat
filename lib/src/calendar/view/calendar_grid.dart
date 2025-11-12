@@ -1488,45 +1488,64 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   Widget _buildZoomControls() {
+    final theme = ShadTheme.of(context);
+    final colors = theme.colorScheme;
+    final labelStyle = calendarZoomLabelTextStyle.copyWith(
+      color: colors.foreground,
+      fontFamily: theme.textTheme.small.fontFamily,
+      letterSpacing: 0.2,
+    );
+    final bool canZoomOut = _isZoomEnabled && _canZoomOut;
+    final bool canZoomIn = _isZoomEnabled && _canZoomIn;
+
+    Widget buildButton({
+      required String tooltip,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      final button = ShadIconButton.ghost(
+        icon: Icon(icon, size: _zoomControlsIconSize),
+        padding: const EdgeInsets.all(8),
+        onPressed: onPressed,
+        enabled: onPressed != null,
+      );
+      return Tooltip(message: tooltip, child: button);
+    }
+
     return Material(
-      elevation: _zoomControlsElevation,
-      color: calendarBackgroundColor.withValues(
-          alpha: calendarZoomControlsBackgroundOpacity),
-      borderRadius: BorderRadius.circular(_zoomControlsBorderRadius),
+      elevation: _zoomControlsElevation + 1,
+      color: colors.card,
+      shadowColor: Colors.black.withOpacity(0.12),
+      shape: SquircleBorder(
+        cornerRadius: 26,
+        side: BorderSide(color: colors.border),
+      ),
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: _zoomControlsPaddingHorizontal,
-          vertical: _zoomControlsPaddingVertical,
+          horizontal: _zoomControlsPaddingHorizontal + 4,
+          vertical: _zoomControlsPaddingVertical + 2,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Tooltip(
-              message: 'Zoom out (Ctrl/Cmd + -)',
-              child: IconButton(
-                iconSize: _zoomControlsIconSize,
-                visualDensity: VisualDensity.compact,
-                onPressed: _isZoomEnabled && _canZoomOut ? zoomOut : null,
-                icon: const Icon(Icons.remove),
-              ),
+            buildButton(
+              tooltip: 'Zoom out (Ctrl/Cmd + -)',
+              icon: Icons.remove,
+              onPressed: canZoomOut ? zoomOut : null,
             ),
             Padding(
               padding: EdgeInsets.symmetric(
-                horizontal: _zoomControlsLabelPaddingHorizontal,
+                horizontal: _zoomControlsLabelPaddingHorizontal + 2,
               ),
               child: Text(
                 _zoomLabel,
-                style: calendarZoomLabelTextStyle,
+                style: labelStyle,
               ),
             ),
-            Tooltip(
-              message: 'Zoom in (Ctrl/Cmd + +)',
-              child: IconButton(
-                iconSize: _zoomControlsIconSize,
-                visualDensity: VisualDensity.compact,
-                onPressed: _isZoomEnabled && _canZoomIn ? zoomIn : null,
-                icon: const Icon(Icons.add),
-              ),
+            buildButton(
+              tooltip: 'Zoom in (Ctrl/Cmd + +)',
+              icon: Icons.add,
+              onPressed: canZoomIn ? zoomIn : null,
             ),
           ],
         ),

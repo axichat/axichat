@@ -21,6 +21,7 @@ import '../view/task_sidebar.dart';
 import 'guest_calendar_bloc.dart';
 import '../view/widgets/calendar_drag_tab_mixin.dart';
 import '../view/widgets/calendar_keyboard_scope.dart';
+import '../view/widgets/calendar_task_feedback_observer.dart';
 import '../view/widgets/task_form_section.dart';
 import '../view/models/calendar_drag_payload.dart';
 
@@ -116,27 +117,29 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
                 .read<GuestCalendarBloc>()
                 .add(const CalendarEvent.redoRequested());
           },
-          child: Scaffold(
-            backgroundColor: calendarBackgroundColor,
-            body: Stack(
-              children: [
-                SafeArea(
-                  top: true,
-                  bottom: false,
-                  child: Column(
-                    children: [
-                      // Guest banner at very top
-                      _buildGuestBanner(),
+          child: CalendarTaskFeedbackObserver<GuestCalendarBloc>(
+            child: Scaffold(
+              backgroundColor: calendarBackgroundColor,
+              body: Stack(
+                children: [
+                  SafeArea(
+                    top: true,
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        // Guest banner at very top
+                        _buildGuestBanner(),
 
-                      // New structure: Row with sidebar OUTSIDE of navigation column
-                      Expanded(child: activeLayout),
-                    ],
+                        // New structure: Row with sidebar OUTSIDE of navigation column
+                        Expanded(child: activeLayout),
+                      ],
+                    ),
                   ),
-                ),
 
-                // Loading overlay
-                if (state.isLoading) _buildLoadingOverlay(),
-              ],
+                  // Loading overlay
+                  if (state.isLoading) _buildLoadingOverlay(),
+                ],
+              ),
             ),
           ),
         );

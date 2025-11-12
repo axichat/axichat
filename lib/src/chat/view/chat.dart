@@ -1014,6 +1014,8 @@ class _ChatState extends State<Chat> {
           final emailSelfJid = emailService.selfSenderJid;
           final jid = state.chat?.jid;
           final transport = context.watch<ChatTransportCubit>().state;
+          final supportsVerification =
+              context.read<XmppService>() is OmemoService;
           final canUseEmail = (state.chat?.deltaChatId != null) ||
               (state.chat?.emailAddress?.isNotEmpty ?? false);
           final rosterContacts = context.watch<RosterCubit>().contacts;
@@ -1327,7 +1329,7 @@ class _ChatState extends State<Chat> {
                               );
                               final composerHintText = isEmailTransport
                                   ? 'Send email message'
-                                  : 'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message';
+                                  : 'Send message';
                               Widget quoteSection;
                               final quoting = state.quoting;
                               if (quoting == null) {
@@ -1469,10 +1471,6 @@ class _ChatState extends State<Chat> {
                                                     : colors.foreground;
                                             final timestampColor =
                                                 chatTokens.timestamp;
-                                            final encrypted =
-                                                message.customProperties![
-                                                        'encrypted'] ==
-                                                    true;
                                             const iconSize = 13.0;
                                             final iconFamily =
                                                 message.status!.icon.fontFamily;
@@ -1536,49 +1534,6 @@ class _ChatState extends State<Chat> {
                                                 package: iconPackage,
                                               ),
                                             );
-                                            final encryption = TextSpan(
-                                              text: String.fromCharCode(
-                                                (encrypted
-                                                        ? LucideIcons
-                                                            .lockKeyhole
-                                                        : LucideIcons
-                                                            .lockKeyholeOpen)
-                                                    .codePoint,
-                                              ),
-                                              style: context.textTheme.muted
-                                                  .copyWith(
-                                                color: encrypted
-                                                    ? (self
-                                                        ? colors
-                                                            .primaryForeground
-                                                        : colors.foreground)
-                                                    : colors.destructive,
-                                                fontSize: iconSize,
-                                                fontFamily: iconFamily,
-                                                package: iconPackage,
-                                              ),
-                                            );
-                                            final trusted =
-                                                message.customProperties![
-                                                    'trusted'] as bool?;
-                                            final verification = trusted == null
-                                                ? null
-                                                : TextSpan(
-                                                    text: String.fromCharCode(
-                                                      trusted.toShieldIcon
-                                                          .codePoint,
-                                                    ),
-                                                    style: context
-                                                        .textTheme.muted
-                                                        .copyWith(
-                                                      color: trusted
-                                                          ? axiGreen
-                                                          : colors.destructive,
-                                                      fontSize: iconSize,
-                                                      fontFamily: iconFamily,
-                                                      package: iconPackage,
-                                                    ),
-                                                  );
                                             final messageModel = message
                                                     .customProperties?['model']
                                                 as Message;
@@ -1643,9 +1598,6 @@ class _ChatState extends State<Chat> {
                                                   details: [
                                                     time,
                                                     if (self) status,
-                                                    encryption,
-                                                    if (verification != null)
-                                                      verification,
                                                   ],
                                                   links: parsedText.links,
                                                   onLinkTap: _handleLinkTap,
@@ -2072,7 +2024,7 @@ class _ChatState extends State<Chat> {
                               );
                             },
                           ),
-                          VerificationList(jid: jid),
+                          if (supportsVerification) VerificationList(jid: jid),
                           const ChatMessageDetails(),
                         ],
                       ),

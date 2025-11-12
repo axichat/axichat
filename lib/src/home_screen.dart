@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
@@ -78,6 +79,89 @@ class HomeScreen extends StatelessWidget {
       if (isMessage)
         ('Drafts', const DraftsList(key: PageStorageKey('Drafts')), null),
     ];
+    final hasCalendarBloc = context.read<Storage?>() != null;
+    final Widget mainContent = Builder(
+      builder: (context) {
+        final openJid = context.watch<ChatsCubit?>()?.state.openJid;
+        final openCalendar =
+            context.watch<ChatsCubit?>()?.state.openCalendar ?? false;
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (_, __) {
+            final chatsCubit = context.read<ChatsCubit?>();
+            if (chatsCubit?.state.openCalendar ?? false) {
+              chatsCubit?.toggleCalendar();
+            } else if (openJid case final jid?) {
+              chatsCubit?.toggleChat(jid: jid);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ConnectivityIndicator(),
+              Expanded(
+                child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+                  builder: (context, state) {
+                    return SafeArea(
+                      top: state is ConnectivityConnected,
+                      child: AxiAdaptiveLayout(
+                        invertPriority: openJid != null || openCalendar,
+                        primaryChild: Nexus(tabs: tabs),
+                        secondaryChild: openCalendar
+                            ? const CalendarWidget()
+                            : openJid == null ||
+                                    context.read<XmppService?>() == null
+                                ? const GuestChat()
+                                : MultiBlocProvider(
+                                    providers: [
+                                      BlocProvider(
+                                        key: Key(openJid),
+                                        create: (context) => ChatBloc(
+                                          jid: openJid,
+                                          messageService:
+                                              context.read<XmppService>(),
+                                          chatsService:
+                                              context.read<XmppService>(),
+                                          notificationService: context
+                                              .read<NotificationService>(),
+                                          emailService:
+                                              context.read<EmailService>(),
+                                          omemoService: isOmemo
+                                              ? context.read<XmppService>()
+                                                  as OmemoService
+                                              : null,
+                                        ),
+                                      ),
+                                      BlocProvider(
+                                        create: (context) => ChatTransportCubit(
+                                          chatsService:
+                                              context.read<XmppService>(),
+                                          jid: openJid,
+                                        ),
+                                      ),
+                                      if (isOmemo)
+                                        BlocProvider(
+                                          create: (context) =>
+                                              VerificationCubit(
+                                            jid: openJid,
+                                            omemoService:
+                                                context.read<XmppService>()
+                                                    as OmemoService,
+                                          ),
+                                        ),
+                                    ],
+                                    child: const Chat(),
+                                  ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
 
     return Scaffold(
       body: DefaultTabController(
@@ -166,91 +250,11 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ],
-          child: Builder(
-            builder: (context) {
-              final openJid = context.watch<ChatsCubit?>()?.state.openJid;
-              final openCalendar =
-                  context.watch<ChatsCubit?>()?.state.openCalendar ?? false;
-              return PopScope(
-                canPop: false,
-                onPopInvokedWithResult: (_, __) {
-                  final chatsCubit = context.read<ChatsCubit?>();
-                  if (chatsCubit?.state.openCalendar ?? false) {
-                    chatsCubit?.toggleCalendar();
-                  } else if (openJid case final jid?) {
-                    chatsCubit?.toggleChat(jid: jid);
-                  }
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const ConnectivityIndicator(),
-                    Expanded(
-                      child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
-                        builder: (context, state) {
-                          return SafeArea(
-                            top: state is ConnectivityConnected,
-                            child: AxiAdaptiveLayout(
-                              invertPriority: openJid != null || openCalendar,
-                              primaryChild: Nexus(tabs: tabs),
-                              secondaryChild: openCalendar
-                                  ? const CalendarWidget()
-                                  : openJid == null ||
-                                          context.read<XmppService?>() == null
-                                      ? const GuestChat()
-                                      : MultiBlocProvider(
-                                          providers: [
-                                            BlocProvider(
-                                              key: Key(openJid),
-                                              create: (context) => ChatBloc(
-                                                jid: openJid,
-                                                messageService:
-                                                    context.read<XmppService>(),
-                                                chatsService:
-                                                    context.read<XmppService>(),
-                                                notificationService:
-                                                    context.read<
-                                                        NotificationService>(),
-                                                emailService: context
-                                                    .read<EmailService>(),
-                                                omemoService: isOmemo
-                                                    ? context
-                                                            .read<XmppService>()
-                                                        as OmemoService
-                                                    : null,
-                                              ),
-                                            ),
-                                            BlocProvider(
-                                              create: (context) =>
-                                                  ChatTransportCubit(
-                                                chatsService:
-                                                    context.read<XmppService>(),
-                                                jid: openJid,
-                                              ),
-                                            ),
-                                            if (isOmemo)
-                                              BlocProvider(
-                                                create: (context) =>
-                                                    VerificationCubit(
-                                                  jid: openJid,
-                                                  omemoService: context
-                                                          .read<XmppService>()
-                                                      as OmemoService,
-                                                ),
-                                              ),
-                                          ],
-                                          child: const Chat(),
-                                        ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+          child: hasCalendarBloc
+              ? CalendarTaskFeedbackObserver<CalendarBloc>(
+                  child: mainContent,
+                )
+              : mainContent,
         ),
       ),
     );

@@ -261,7 +261,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool muted,
     @Default(false) bool favorited,
     @Default(true) bool markerResponsive,
-    @Default(EncryptionProtocol.omemo) EncryptionProtocol encryptionProtocol,
+    @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
     String? contactAvatarPath,
