@@ -1696,6 +1696,7 @@ class _ChatState extends State<Chat> {
           child: BlocBuilder<ChatBloc, ChatState>(
             builder: (context, state) {
               final profile = context.watch<ProfileCubit?>()?.state;
+              final readOnly = widget.readOnly;
               final emailService =
                   RepositoryProvider.of<EmailService>(context, listen: false);
               final emailSelfJid = emailService.selfSenderJid;
@@ -1748,7 +1749,7 @@ class _ChatState extends State<Chat> {
                 child: Scaffold(
                   backgroundColor: context.colorScheme.background,
                   endDrawerEnableOpenDragGesture: false,
-                  endDrawer: jid == null
+                  endDrawer: readOnly || jid == null
                       ? null
                       : ChatDrawer(
                           state: state,
@@ -1759,45 +1760,48 @@ class _ChatState extends State<Chat> {
                     shape: Border(
                         bottom: BorderSide(color: context.colorScheme.border)),
                     actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    leadingWidth: AxiIconButton.kDefaultSize + 24,
-                    leading: Padding(
-                      padding: const EdgeInsets.only(left: 12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: AxiIconButton.kDefaultSize,
-                          height: AxiIconButton.kDefaultSize,
-                          child: AxiIconButton(
-                            iconData: LucideIcons.arrowLeft,
-                            tooltip: 'Back',
-                            color: context.colorScheme.foreground,
-                            borderColor: context.colorScheme.border,
-                            onPressed: () {
-                              if (_chatRoute != _ChatRoute.main) {
-                                context
-                                    .read<ChatBloc>()
-                                    .add(const ChatMessageFocused(null));
-                                return setState(() {
-                                  _chatRoute = _ChatRoute.main;
-                                });
-                              }
-                              if (_textController.text.isNotEmpty) {
-                                if (!isEmailTransport) {
-                                  context.read<DraftCubit?>()?.saveDraft(
-                                        id: null,
-                                        jids: [state.chat!.jid],
-                                        body: _textController.text,
-                                      );
-                                }
-                              }
-                              context
-                                  .read<ChatsCubit>()
-                                  .toggleChat(jid: state.chat!.jid);
-                            },
+                    leadingWidth:
+                        readOnly ? 0 : (AxiIconButton.kDefaultSize + 24),
+                    leading: readOnly
+                        ? null
+                        : Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: SizedBox(
+                                width: AxiIconButton.kDefaultSize,
+                                height: AxiIconButton.kDefaultSize,
+                                child: AxiIconButton(
+                                  iconData: LucideIcons.arrowLeft,
+                                  tooltip: 'Back',
+                                  color: context.colorScheme.foreground,
+                                  borderColor: context.colorScheme.border,
+                                  onPressed: () {
+                                    if (_chatRoute != _ChatRoute.main) {
+                                      context
+                                          .read<ChatBloc>()
+                                          .add(const ChatMessageFocused(null));
+                                      return setState(() {
+                                        _chatRoute = _ChatRoute.main;
+                                      });
+                                    }
+                                    if (_textController.text.isNotEmpty) {
+                                      if (!isEmailTransport) {
+                                        context.read<DraftCubit?>()?.saveDraft(
+                                              id: null,
+                                              jids: [state.chat!.jid],
+                                              body: _textController.text,
+                                            );
+                                      }
+                                    }
+                                    context
+                                        .read<ChatsCubit>()
+                                        .toggleChat(jid: state.chat!.jid);
+                                  },
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
                     title: jid == null
                         ? const SizedBox.shrink()
                         : BlocBuilder<RosterCubit, RosterState>(
@@ -1866,13 +1870,15 @@ class _ChatState extends State<Chat> {
                     actions: [
                       if (jid != null && _chatRoute == _ChatRoute.main) ...[
                         const _ChatSearchToggleButton(),
-                        const SizedBox(width: 4),
-                        Builder(
-                          builder: (context) => AxiIconButton(
-                            iconData: LucideIcons.settings,
-                            onPressed: Scaffold.of(context).openEndDrawer,
+                        if (!readOnly) ...[
+                          const SizedBox(width: 4),
+                          Builder(
+                            builder: (context) => AxiIconButton(
+                              iconData: LucideIcons.settings,
+                              onPressed: Scaffold.of(context).openEndDrawer,
+                            ),
                           ),
-                        ),
+                        ],
                       ] else
                         const SizedBox.shrink(),
                     ],
@@ -2246,10 +2252,6 @@ class _ChatState extends State<Chat> {
                                                         : colors.foreground;
                                                 final timestampColor =
                                                     chatTokens.timestamp;
-                                                final encrypted =
-                                                    message.customProperties![
-                                                            'encrypted'] ==
-                                                        true;
                                                 const iconSize = 13.0;
                                                 final iconFamily = message
                                                     .status!.icon.fontFamily;
@@ -2312,28 +2314,6 @@ class _ChatState extends State<Chat> {
                                                         ? colors
                                                             .primaryForeground
                                                         : timestampColor,
-                                                    fontSize: iconSize,
-                                                    fontFamily: iconFamily,
-                                                    package: iconPackage,
-                                                  ),
-                                                );
-                                                final encryption = TextSpan(
-                                                  text: String.fromCharCode(
-                                                    (encrypted
-                                                            ? LucideIcons
-                                                                .lockKeyhole
-                                                            : LucideIcons
-                                                                .lockKeyholeOpen)
-                                                        .codePoint,
-                                                  ),
-                                                  style: context.textTheme.muted
-                                                      .copyWith(
-                                                    color: encrypted
-                                                        ? (self
-                                                            ? colors
-                                                                .primaryForeground
-                                                            : colors.foreground)
-                                                        : colors.destructive,
                                                     fontSize: iconSize,
                                                     fontFamily: iconFamily,
                                                     package: iconPackage,
@@ -2453,7 +2433,6 @@ class _ChatState extends State<Chat> {
                                                       details: [
                                                         time,
                                                         if (self) status,
-                                                        encryption,
                                                         if (verification !=
                                                             null)
                                                           verification,
@@ -4507,19 +4486,6 @@ class _GuestChatState extends State<GuestChat> {
                               package: iconPackage,
                             ),
                           ),
-                        TextSpan(
-                          text: String.fromCharCode(
-                            LucideIcons.lockKeyhole.codePoint,
-                          ),
-                          style: context.textTheme.muted.copyWith(
-                            color: self
-                                ? colors.primaryForeground
-                                : timestampColor,
-                            fontSize: iconSize,
-                            fontFamily: iconFamily,
-                            package: iconPackage,
-                          ),
-                        ),
                       ],
                     ),
                   ),

@@ -33,12 +33,16 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
-    final selectedFilter = context
+    final selectedFilterId = context
             .watch<HomeSearchCubit?>()
             ?.state
             .stateFor(HomeTab.chats)
             .filterId ??
         chatsSearchFilters.first.id;
+    final selectedFilter = chatsSearchFilters.firstWhere(
+      (filter) => filter.id == selectedFilterId,
+      orElse: () => chatsSearchFilters.first,
+    );
     return ShadPopover(
       controller: popoverController,
       popover: (context) {
@@ -47,10 +51,29 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.listFilter, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        selectedFilter.label,
+                        style: context.textTheme.small,
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: context.colorScheme.border,
+                ),
                 for (final option in chatsSearchFilters)
                   ShadButton.ghost(
                     width: double.infinity,
-                    foregroundColor: option.id == selectedFilter
+                    foregroundColor: option.id == selectedFilter.id
                         ? context.colorScheme.primary
                         : context.colorScheme.foreground,
                     onPressed: () {
@@ -69,10 +92,18 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         );
       },
       child: AxiTooltip(
-        builder: (_) => const Text('Filter'),
-        child: ShadIconButton.secondary(
+        builder: (_) => Text('Filter • ${selectedFilter.label}'),
+        child: ShadButton.secondary(
+          size: ShadButtonSize.sm,
           onPressed: popoverController.toggle,
-          icon: const Icon(LucideIcons.listFilter),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.listFilter, size: 16),
+              const SizedBox(width: 8),
+              Text(selectedFilter.label),
+            ],
+          ),
         ).withTapBounce(),
       ),
     );

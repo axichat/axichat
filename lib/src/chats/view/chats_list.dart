@@ -305,11 +305,14 @@ class _ChatListTileState extends State<ChatListTile> {
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: _buildActionButtons(context, item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: _buildActionButtons(context, item),
+                ),
               ),
             ),
           ),
@@ -422,6 +425,7 @@ class _ChatListTileState extends State<ChatListTile> {
       ContextActionButton(
         icon: const Icon(LucideIcons.trash2, size: 16),
         label: 'Delete',
+        destructive: true,
         onPressed: () => _confirmDelete(chat),
       ),
     ];
