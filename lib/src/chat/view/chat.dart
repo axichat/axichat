@@ -173,9 +173,7 @@ class _ChatSearchToggleButton extends StatelessWidget {
 }
 
 class _ChatSearchPanel extends StatefulWidget {
-  const _ChatSearchPanel({required this.onResultTap});
-
-  final ValueChanged<Message> onResultTap;
+  const _ChatSearchPanel();
 
   @override
   State<_ChatSearchPanel> createState() => _ChatSearchPanelState();
@@ -332,123 +330,65 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                if (state.status == RequestStatus.loading)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: context.colorScheme.primary,
+                Builder(
+                  builder: (context) {
+                    final trimmedQuery = state.query.trim();
+                    final queryEmpty = trimmedQuery.isEmpty;
+                    Widget? statusChild;
+                    if (state.error != null) {
+                      statusChild = Text(
+                        state.error ?? 'Search failed',
+                        style: TextStyle(
+                          color: context.colorScheme.destructive,
+                        ),
+                      );
+                    } else if (state.status == RequestStatus.loading) {
+                      statusChild = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: context.colorScheme.primary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Searching…',
-                          style: context.textTheme.muted,
-                        ),
-                      ],
-                    ),
-                  )
-                else if (state.error != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      state.error ?? 'Search failed',
-                      style: TextStyle(color: context.colorScheme.destructive),
-                    ),
-                  ),
-                if (state.results.isNotEmpty)
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 320),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: state.results.length,
-                      itemBuilder: (context, index) {
-                        final message = state.results[index];
-                        return _ChatSearchResultTile(
-                          message: message,
-                          onTap: widget.onResultTap,
-                        );
-                      },
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    ),
-                  )
-                else if (state.status == RequestStatus.success)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'No matches',
-                      style: context.textTheme.muted,
-                    ),
-                  ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Searching…',
+                            style: context.textTheme.muted,
+                          ),
+                        ],
+                      );
+                    } else if (queryEmpty) {
+                      statusChild = Text(
+                        'Matches will appear in the conversation below.',
+                        style: context.textTheme.muted,
+                      );
+                    } else if (state.status == RequestStatus.success) {
+                      final matchCount = state.results.length;
+                      statusChild = Text(
+                        matchCount == 0
+                            ? 'No matches. Adjust filters or try another query.'
+                            : '$matchCount match${matchCount == 1 ? '' : 'es'} shown below.',
+                        style: context.textTheme.muted,
+                      );
+                    }
+                    if (statusChild == null) {
+                      return const SizedBox.shrink();
+                    }
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: statusChild,
+                    );
+                  },
+                ),
               ],
             ),
           ),
         );
       },
-    );
-  }
-}
-
-class _ChatSearchResultTile extends StatelessWidget {
-  const _ChatSearchResultTile({
-    required this.message,
-    required this.onTap,
-  });
-
-  final Message message;
-  final ValueChanged<Message> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final body = message.body?.trim();
-    final timestamp = message.timestamp;
-    final label = timestamp == null
-        ? ''
-        : formatTimeSinceLabel(DateTime.now(), timestamp);
-    return Material(
-      color: context.colorScheme.card,
-      borderRadius: const BorderRadius.all(Radius.circular(12)),
-      child: InkWell(
-        borderRadius: const BorderRadius.all(Radius.circular(12)),
-        onTap: () => onTap(message),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                body?.isNotEmpty == true ? body! : '[No text]',
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    label,
-                    style: context.textTheme.muted,
-                  ),
-                  if (body?.isNotEmpty == true)
-                    AxiIconButton(
-                      iconData: LucideIcons.copy,
-                      tooltip: 'Copy',
-                      onPressed: () => Clipboard.setData(
-                        ClipboardData(text: body!),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -804,16 +744,6 @@ class _ChatState extends State<Chat> {
       ..showSnackBar(
         SnackBar(content: Text(message)),
       );
-  }
-
-  void _handleSearchResultTap(Message message) {
-    context.read<ChatBloc>().add(ChatMessageFocused(message.stanzaID));
-    setState(() {
-      _chatRoute = _ChatRoute.details;
-      if (_focusNode.hasFocus) {
-        _focusNode.unfocus();
-      }
-    });
   }
 
   void _handleSendMessage() {
@@ -1752,1179 +1682,1279 @@ class _ChatState extends State<Chat> {
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: _handlePointerDown,
-      onPointerMove: _handlePointerMove,
-      onPointerUp: _handlePointerUp,
-      onPointerCancel: _handlePointerCancel,
-      child: BlocBuilder<ChatBloc, ChatState>(
-        builder: (context, state) {
-          final profile = context.watch<ProfileCubit?>()?.state;
-          final emailService =
-              RepositoryProvider.of<EmailService>(context, listen: false);
-          final emailSelfJid = emailService.selfSenderJid;
-          final jid = state.chat?.jid;
-          final transport = context.watch<ChatTransportCubit>().state;
-          final canUseEmail = (state.chat?.deltaChatId != null) ||
-              (state.chat?.emailAddress?.isNotEmpty ?? false);
-          final isEmailChat = state.chat?.deltaChatId != null;
-          final rosterContacts = context.watch<RosterCubit>().contacts;
-          final isEmailTransport = canUseEmail && transport.isEmail;
-          final currentUserId = isEmailTransport
-              ? (emailSelfJid ?? profile?.jid ?? '')
-              : (profile?.jid ?? '');
-          final shareContexts = state.shareContexts;
-          final recipients = state.recipients;
-          final pendingAttachments = state.pendingAttachments;
-          final latestStatuses = _latestRecipientStatuses(state);
-          final fanOutReports = state.fanOutReports;
-          final warningEntry =
-              fanOutReports.entries.isEmpty ? null : fanOutReports.entries.last;
-          final showAttachmentWarning =
-              warningEntry?.value.attachmentWarning ?? false;
-          final retryEntry = _lastReportEntryWhere(
-            fanOutReports.entries,
-            (entry) => entry.value.hasFailures,
-          );
-          final retryReport = retryEntry?.value;
-          final retryShareId = retryEntry?.key;
-          final emailSuggestions = (context.watch<ChatsCubit?>()?.state.items ??
-                  const <chat_models.Chat>[])
-              .where((chat) => chat.transport.isEmail)
-              .toList();
-          final user = ChatUser(
-            id: currentUserId,
-            firstName: profile?.username ?? '',
-          );
-          final spacerUser = ChatUser(
-            id: _selectionSpacerMessageId,
-            firstName: '',
-          );
-          return Container(
-            decoration: BoxDecoration(
-              color: context.colorScheme.background,
-              border: Border(
-                left: BorderSide(color: context.colorScheme.border),
-              ),
-            ),
-            child: Scaffold(
-              backgroundColor: context.colorScheme.background,
-              endDrawerEnableOpenDragGesture: false,
-              endDrawer: jid == null
+    return BlocBuilder<ChatSearchCubit, ChatSearchState>(
+      builder: (context, searchState) {
+        final trimmedQuery = searchState.query.trim();
+        final searchFiltering = searchState.active && trimmedQuery.isNotEmpty;
+        final searchResults = searchState.results;
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: _handlePointerDown,
+          onPointerMove: _handlePointerMove,
+          onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerCancel,
+          child: BlocBuilder<ChatBloc, ChatState>(
+            builder: (context, state) {
+              final profile = context.watch<ProfileCubit?>()?.state;
+              final emailService =
+                  RepositoryProvider.of<EmailService>(context, listen: false);
+              final emailSelfJid = emailService.selfSenderJid;
+              final jid = state.chat?.jid;
+              final transport = context.watch<ChatTransportCubit>().state;
+              final canUseEmail = (state.chat?.deltaChatId != null) ||
+                  (state.chat?.emailAddress?.isNotEmpty ?? false);
+              final isEmailChat = state.chat?.deltaChatId != null;
+              final rosterContacts = context.watch<RosterCubit>().contacts;
+              final isEmailTransport = canUseEmail && transport.isEmail;
+              final currentUserId = isEmailTransport
+                  ? (emailSelfJid ?? profile?.jid ?? '')
+                  : (profile?.jid ?? '');
+              final shareContexts = state.shareContexts;
+              final recipients = state.recipients;
+              final pendingAttachments = state.pendingAttachments;
+              final latestStatuses = _latestRecipientStatuses(state);
+              final fanOutReports = state.fanOutReports;
+              final warningEntry = fanOutReports.entries.isEmpty
                   ? null
-                  : ChatDrawer(
-                      state: state,
-                    ),
-              appBar: AppBar(
-                scrolledUnderElevation: 0,
-                forceMaterialTransparency: true,
-                shape: Border(
-                    bottom: BorderSide(color: context.colorScheme.border)),
-                actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-                leadingWidth: AxiIconButton.kDefaultSize + 24,
-                leading: Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: AxiIconButton.kDefaultSize,
-                      height: AxiIconButton.kDefaultSize,
-                      child: AxiIconButton(
-                        iconData: LucideIcons.arrowLeft,
-                        tooltip: 'Back',
-                        color: context.colorScheme.foreground,
-                        borderColor: context.colorScheme.border,
-                        onPressed: () {
-                          if (_chatRoute != _ChatRoute.main) {
-                            context
-                                .read<ChatBloc>()
-                                .add(const ChatMessageFocused(null));
-                            return setState(() {
-                              _chatRoute = _ChatRoute.main;
-                            });
-                          }
-                          if (_textController.text.isNotEmpty) {
-                            if (!isEmailTransport) {
-                              context.read<DraftCubit?>()?.saveDraft(
-                                    id: null,
-                                    jids: [state.chat!.jid],
-                                    body: _textController.text,
-                                  );
-                            }
-                          }
-                          context
-                              .read<ChatsCubit>()
-                              .toggleChat(jid: state.chat!.jid);
-                        },
-                      ),
-                    ),
+                  : fanOutReports.entries.last;
+              final showAttachmentWarning =
+                  warningEntry?.value.attachmentWarning ?? false;
+              final retryEntry = _lastReportEntryWhere(
+                fanOutReports.entries,
+                (entry) => entry.value.hasFailures,
+              );
+              final retryReport = retryEntry?.value;
+              final retryShareId = retryEntry?.key;
+              final emailSuggestions =
+                  (context.watch<ChatsCubit?>()?.state.items ??
+                          const <chat_models.Chat>[])
+                      .where((chat) => chat.transport.isEmail)
+                      .toList();
+              final user = ChatUser(
+                id: currentUserId,
+                firstName: profile?.username ?? '',
+              );
+              final spacerUser = ChatUser(
+                id: _selectionSpacerMessageId,
+                firstName: '',
+              );
+              return Container(
+                decoration: BoxDecoration(
+                  color: context.colorScheme.background,
+                  border: Border(
+                    left: BorderSide(color: context.colorScheme.border),
                   ),
                 ),
-                title: jid == null
-                    ? const SizedBox.shrink()
-                    : BlocBuilder<RosterCubit, RosterState>(
-                        buildWhen: (_, current) => current is RosterAvailable,
-                        builder: (context, rosterState) {
-                          final item = (rosterState is! RosterAvailable
-                                  ? context.read<RosterCubit>()['items']
-                                      as List<RosterItem>
-                                  : rosterState.items)
-                              ?.where((e) => e.jid == jid)
-                              .singleOrNull;
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 40.0,
-                                  maxHeight: 40.0,
-                                ),
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Positioned.fill(
-                                      child: (item == null)
-                                          ? AxiAvatar(jid: jid)
-                                          : AxiAvatar(
-                                              jid: item.jid,
-                                              subscription: item.subscription,
-                                              presence: item.presence,
-                                              status: item.status,
-                                            ),
-                                    ),
-                                    Positioned(
-                                      right: -6,
-                                      bottom: -4,
-                                      child: AxiTransportChip(
-                                        transport: transport,
-                                        compact: true,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8.0,
-                                ),
-                                child: Text(
-                                  state.chat?.title ?? '',
-                                  style: context.textTheme.h4,
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  item?.status ?? '',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: context.textTheme.muted,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                actions: [
-                  if (jid != null && _chatRoute == _ChatRoute.main) ...[
-                    const _ChatSearchToggleButton(),
-                    const SizedBox(width: 4),
-                    Builder(
-                      builder: (context) => AxiIconButton(
-                        iconData: LucideIcons.settings,
-                        onPressed: Scaffold.of(context).openEndDrawer,
+                child: Scaffold(
+                  backgroundColor: context.colorScheme.background,
+                  endDrawerEnableOpenDragGesture: false,
+                  endDrawer: jid == null
+                      ? null
+                      : ChatDrawer(
+                          state: state,
+                        ),
+                  appBar: AppBar(
+                    scrolledUnderElevation: 0,
+                    forceMaterialTransparency: true,
+                    shape: Border(
+                        bottom: BorderSide(color: context.colorScheme.border)),
+                    actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    leadingWidth: AxiIconButton.kDefaultSize + 24,
+                    leading: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: AxiIconButton.kDefaultSize,
+                          height: AxiIconButton.kDefaultSize,
+                          child: AxiIconButton(
+                            iconData: LucideIcons.arrowLeft,
+                            tooltip: 'Back',
+                            color: context.colorScheme.foreground,
+                            borderColor: context.colorScheme.border,
+                            onPressed: () {
+                              if (_chatRoute != _ChatRoute.main) {
+                                context
+                                    .read<ChatBloc>()
+                                    .add(const ChatMessageFocused(null));
+                                return setState(() {
+                                  _chatRoute = _ChatRoute.main;
+                                });
+                              }
+                              if (_textController.text.isNotEmpty) {
+                                if (!isEmailTransport) {
+                                  context.read<DraftCubit?>()?.saveDraft(
+                                        id: null,
+                                        jids: [state.chat!.jid],
+                                        body: _textController.text,
+                                      );
+                                }
+                              }
+                              context
+                                  .read<ChatsCubit>()
+                                  .toggleChat(jid: state.chat!.jid);
+                            },
+                          ),
+                        ),
                       ),
                     ),
-                  ] else
-                    const SizedBox.shrink(),
-                ],
-              ),
-              body: Column(
-                children: [
-                  const ChatAlert(),
-                  _ChatSearchPanel(
-                    onResultTap: _handleSearchResultTap,
-                  ),
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration:
-                          context.watch<SettingsCubit>().animationDuration,
-                      reverseDuration:
-                          context.watch<SettingsCubit>().animationDuration,
-                      switchInCurve: Curves.easeIn,
-                      switchOutCurve: Curves.easeOut,
-                      child: IndexedStack(
-                        key: ValueKey(_chatRoute.index),
-                        index: _chatRoute.index,
-                        children: [
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final contentWidth = math.max(
-                                0.0,
-                                constraints.maxWidth -
-                                    (_chatHorizontalPadding * 2),
-                              );
-                              final isCompact = contentWidth < smallScreen;
-                              final messageById = {
-                                for (final item in state.items)
-                                  item.stanzaID: item,
-                              };
-                              final filteredItems = state.items
-                                  .where((e) =>
-                                      e.body != null || e.error.isNotNone)
-                                  .toList();
-                              final selectionActive =
-                                  _selectedMessageId != null;
-                              final selectionSpacerVisibleHeight =
-                                  selectionActive
-                                      ? math.max(
-                                          _messageListTailSpacer,
-                                          _selectionSpacerHeight,
-                                        )
-                                      : _messageListTailSpacer;
-                              final baseBubbleMaxWidth =
-                                  contentWidth * (isCompact ? 0.8 : 0.7);
-                              final messageRowMaxWidth = contentWidth;
-                              final clampedBubbleWidth =
-                                  baseBubbleMaxWidth.clamp(
-                                0.0,
-                                contentWidth,
-                              );
-                              final dashMessages = <ChatMessage>[];
-                              for (var index = 0;
-                                  index < filteredItems.length;
-                                  index++) {
-                                final e = filteredItems[index];
-                                final isSelfXmpp = e.senderJid == profile?.jid;
-                                final isSelfEmail = emailSelfJid != null &&
-                                    e.senderJid == emailSelfJid;
-                                final isSelf = isSelfXmpp || isSelfEmail;
-                                final author = isSelf
-                                    ? user
-                                    : ChatUser(
-                                        id: e.senderJid,
-                                        firstName: state.chat?.title,
-                                      );
-                                final quotedMessage = e.quoting == null
-                                    ? null
-                                    : messageById[e.quoting!];
-                                final bannerParticipants =
-                                    List<chat_models.Chat>.of(
-                                  _participantsForBanner(
-                                    shareContexts[e.stanzaID],
-                                    state.chat?.jid,
-                                    currentUserId,
-                                  ),
-                                );
-                                dashMessages.add(
-                                  ChatMessage(
-                                    user: author,
-                                    createdAt: e.timestamp!,
-                                    text:
-                                        '${e.error.isNotNone ? e.error.asString : ''}'
-                                        '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': "${e.body}"' : e.body}',
-                                    status: e.error.isNotNone
-                                        ? MessageStatus.failed
-                                        : e.displayed
-                                            ? MessageStatus.read
-                                            : e.received
-                                                ? MessageStatus.received
-                                                : e.acked
-                                                    ? MessageStatus.sent
-                                                    : MessageStatus.pending,
-                                    customProperties: {
-                                      'id': e.stanzaID,
-                                      'body': e.body,
-                                      'edited': e.edited,
-                                      'retracted': e.retracted,
-                                      'error': e.error,
-                                      'encrypted':
-                                          e.encryptionProtocol.isNotNone,
-                                      'trust': e.trust,
-                                      'trusted': e.trusted,
-                                      'isSelf': isSelf,
-                                      'model': e,
-                                      'quoted': quotedMessage,
-                                      'reactions': e.reactionsPreview,
-                                      'shareParticipants': bannerParticipants,
-                                    },
-                                  ),
-                                );
-                              }
-                              if (filteredItems.isEmpty) {
-                                dashMessages.add(
-                                  ChatMessage(
-                                    user: spacerUser,
-                                    createdAt: _selectionSpacerTimestamp,
-                                    text: ' ',
-                                    customProperties: const {
-                                      'id': _emptyStateMessageId,
-                                      'emptyState': true,
-                                    },
-                                  ),
-                                );
-                              }
-                              dashMessages.add(
-                                ChatMessage(
-                                  user: spacerUser,
-                                  createdAt: _selectionSpacerTimestamp,
-                                  text: ' ',
-                                  customProperties: const {
-                                    'id': _selectionSpacerMessageId,
-                                    'selectionSpacer': true,
-                                  },
-                                ),
-                              );
-                              late final MessageListOptions
-                                  dashMessageListOptions;
-                              dashMessageListOptions = MessageListOptions(
-                                scrollController: _scrollController,
-                                scrollPhysics: _selectionAutoscrollActive
-                                    ? const AlwaysScrollableScrollPhysics(
-                                        parent: ClampingScrollPhysics(),
-                                      )
-                                    : const AlwaysScrollableScrollPhysics(
-                                        parent: BouncingScrollPhysics(),
-                                      ),
-                                separatorFrequency: SeparatorFrequency.days,
-                                dateSeparatorBuilder: (date) {
-                                  if (date.isAtSameMomentAs(
-                                    _selectionSpacerTimestamp,
-                                  )) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return DefaultDateSeparator(
-                                    date: date,
-                                    messageListOptions: dashMessageListOptions,
-                                  );
-                                },
-                                typingBuilder: (_) => const Padding(
-                                  padding: EdgeInsets.fromLTRB(
-                                    _chatHorizontalPadding,
-                                    12,
-                                    _chatHorizontalPadding,
-                                    8,
-                                  ),
-                                  child: TypingIndicator(),
-                                ),
-                                onLoadEarlier: state.items.length %
-                                            ChatBloc.messageBatchSize !=
-                                        0
-                                    ? null
-                                    : () async => context
-                                        .read<ChatBloc>()
-                                        .add(const ChatLoadEarlier()),
-                                loadEarlierBuilder: Container(
-                                  padding: const EdgeInsets.all(12.0),
-                                  alignment: Alignment.center,
-                                  child: CircularProgressIndicator(
-                                    color: context.colorScheme.primary,
-                                  ),
-                                ),
-                              );
-                              final composerHintText = isEmailTransport
-                                  ? 'Send email message'
-                                  : 'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message';
-                              Widget quoteSection;
-                              final quoting = state.quoting;
-                              if (quoting == null) {
-                                quoteSection = const SizedBox.shrink();
-                              } else {
-                                quoteSection = Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8,
-                                  ),
-                                  child: _QuoteBanner(
-                                    key: ValueKey<String?>(quoting.stanzaID),
-                                    message: quoting,
-                                    isSelf: quoting.senderJid == currentUserId,
-                                    onClear: () => context
-                                        .read<ChatBloc>()
-                                        .add(const ChatQuoteCleared()),
-                                  ),
-                                );
-                              }
-                              quoteSection = AnimatedSize(
-                                duration: _bubbleFocusDuration,
-                                curve: _bubbleFocusCurve,
-                                alignment: Alignment.topCenter,
-                                child: quoteSection,
-                              );
-                              final remoteTyping =
-                                  state.chat?.chatState?.name == 'composing'
-                                      ? ChatUser(
-                                          id: state.chat!.jid,
-                                          firstName: state.chat!.title,
-                                        )
-                                      : null;
-                              final typingUsers = <ChatUser>[
-                                if (state.typing == true) user,
-                                if (remoteTyping != null) remoteTyping,
-                              ];
-                              return Column(
+                    title: jid == null
+                        ? const SizedBox.shrink()
+                        : BlocBuilder<RosterCubit, RosterState>(
+                            buildWhen: (_, current) =>
+                                current is RosterAvailable,
+                            builder: (context, rosterState) {
+                              final item = (rosterState is! RosterAvailable
+                                      ? context.read<RosterCubit>()['items']
+                                          as List<RosterItem>
+                                      : rosterState.items)
+                                  ?.where((e) => e.jid == jid)
+                                  .singleOrNull;
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Expanded(
-                                    child: KeyedSubtree(
-                                      key: _messageListKey,
-                                      child: DashChat(
-                                        currentUser: user,
-                                        onSend: widget.readOnly
-                                            ? (_) {}
-                                            : (_) => _handleSendMessage(),
-                                        messages: dashMessages,
-                                        typingUsers:
-                                            typingUsers.take(1).toList(),
-                                        messageOptions: MessageOptions(
-                                          showOtherUsersAvatar: false,
-                                          borderRadius: 0,
-                                          maxWidth: messageRowMaxWidth,
-                                          messagePadding: EdgeInsets.zero,
-                                          spaceWhenAvatarIsHidden: 0,
-                                          currentUserContainerColor:
-                                              Colors.transparent,
-                                          containerColor: Colors.transparent,
-                                          userNameBuilder: (user) {
-                                            if (user.id ==
-                                                _selectionSpacerMessageId) {
-                                              return const SizedBox.shrink();
-                                            }
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                left: _chatHorizontalPadding,
-                                                right: _chatHorizontalPadding,
-                                                bottom: 4,
-                                              ),
-                                              child: Text(
-                                                user.getFullName(),
-                                                style: context.textTheme.muted
-                                                    .copyWith(fontSize: 12.0),
-                                              ),
-                                            );
-                                          },
-                                          messageTextBuilder:
-                                              (message, previous, next) {
-                                            final colors = context.colorScheme;
-                                            final chatTokens =
-                                                context.chatTheme;
-                                            final isSelectionSpacer =
-                                                message.customProperties?[
-                                                        'selectionSpacer'] ==
-                                                    true;
-                                            if (isSelectionSpacer) {
-                                              final spacerHeight =
-                                                  selectionSpacerVisibleHeight;
-                                              return _SelectionHeadroomSpacer(
-                                                height: spacerHeight,
-                                              );
-                                            }
-                                            final bannerParticipants = (message
-                                                            .customProperties?[
-                                                        'shareParticipants']
-                                                    as List<
-                                                        chat_models.Chat>?) ??
-                                                const <chat_models.Chat>[];
-                                            final extraStyle = context
-                                                .textTheme.muted
-                                                .copyWith(
-                                              fontStyle: FontStyle.italic,
-                                            );
-                                            final isEmptyState =
-                                                message.customProperties?[
-                                                        'emptyState'] ==
-                                                    true;
-                                            if (isEmptyState) {
-                                              return Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  vertical: 24,
-                                                  horizontal:
-                                                      _chatHorizontalPadding,
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 40.0,
+                                      maxHeight: 40.0,
+                                    ),
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Positioned.fill(
+                                          child: (item == null)
+                                              ? AxiAvatar(jid: jid)
+                                              : AxiAvatar(
+                                                  jid: item.jid,
+                                                  subscription:
+                                                      item.subscription,
+                                                  presence: item.presence,
+                                                  status: item.status,
                                                 ),
-                                                child: Center(
-                                                  child: Text(
-                                                    'No messages',
-                                                    style:
-                                                        context.textTheme.muted,
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                            final self =
-                                                message.customProperties?[
-                                                        'isSelf'] as bool? ??
-                                                    (message.user.id ==
-                                                        profile?.jid);
-                                            final error = message
-                                                    .customProperties!['error']
-                                                as MessageError;
-                                            final isError = error.isNotNone;
-                                            final bubbleColor = isError
-                                                ? colors.destructive
-                                                : self
-                                                    ? colors.primary
-                                                    : colors.card;
-                                            final borderColor = self || isError
-                                                ? Colors.transparent
-                                                : chatTokens.recvEdge;
-                                            final textColor = isError
-                                                ? colors.destructiveForeground
-                                                : self
-                                                    ? colors.primaryForeground
-                                                    : colors.foreground;
-                                            final timestampColor =
-                                                chatTokens.timestamp;
-                                            final encrypted =
-                                                message.customProperties![
-                                                        'encrypted'] ==
-                                                    true;
-                                            const iconSize = 13.0;
-                                            final iconFamily =
-                                                message.status!.icon.fontFamily;
-                                            final iconPackage = message
-                                                .status!.icon.fontPackage;
-                                            final chainedPrev =
-                                                _chatMessagesShouldChain(
-                                              message,
-                                              previous,
-                                            );
-                                            final chainedNext =
-                                                _chatMessagesShouldChain(
-                                              message,
-                                              next,
-                                            );
-                                            final baseTextStyle = context
-                                                .textTheme.small
-                                                .copyWith(
-                                              color: textColor,
-                                              height: 1.3,
-                                            );
-                                            final linkStyle =
-                                                baseTextStyle.copyWith(
-                                              color: self
-                                                  ? colors.primaryForeground
-                                                  : colors.primary,
-                                              decoration:
-                                                  TextDecoration.underline,
-                                              fontWeight: FontWeight.w600,
-                                            );
-                                            final parsedText = parseMessageText(
-                                              text: message.text,
-                                              baseStyle: baseTextStyle,
-                                              linkStyle: linkStyle,
-                                            );
-                                            final timeColor = isError
-                                                ? textColor
-                                                : self
-                                                    ? colors.primaryForeground
-                                                    : timestampColor;
-                                            final time = TextSpan(
-                                              text:
-                                                  '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                                                  '${message.createdAt.minute.toString().padLeft(2, '0')}',
-                                              style: context.textTheme.muted
-                                                  .copyWith(
-                                                color: timeColor,
-                                                fontSize: 11.0,
-                                              ),
-                                            );
-                                            final status = TextSpan(
-                                              text: String.fromCharCode(
-                                                message.status!.icon.codePoint,
-                                              ),
-                                              style: TextStyle(
-                                                color: self
-                                                    ? colors.primaryForeground
-                                                    : timestampColor,
-                                                fontSize: iconSize,
-                                                fontFamily: iconFamily,
-                                                package: iconPackage,
-                                              ),
-                                            );
-                                            final encryption = TextSpan(
-                                              text: String.fromCharCode(
-                                                (encrypted
-                                                        ? LucideIcons
-                                                            .lockKeyhole
-                                                        : LucideIcons
-                                                            .lockKeyholeOpen)
-                                                    .codePoint,
-                                              ),
-                                              style: context.textTheme.muted
-                                                  .copyWith(
-                                                color: encrypted
-                                                    ? (self
-                                                        ? colors
-                                                            .primaryForeground
-                                                        : colors.foreground)
-                                                    : colors.destructive,
-                                                fontSize: iconSize,
-                                                fontFamily: iconFamily,
-                                                package: iconPackage,
-                                              ),
-                                            );
-                                            final trusted =
-                                                message.customProperties![
-                                                    'trusted'] as bool?;
-                                            final verification = trusted == null
-                                                ? null
-                                                : TextSpan(
-                                                    text: String.fromCharCode(
-                                                      trusted.toShieldIcon
-                                                          .codePoint,
-                                                    ),
-                                                    style: context
-                                                        .textTheme.muted
-                                                        .copyWith(
-                                                      color: trusted
-                                                          ? axiGreen
-                                                          : colors.destructive,
-                                                      fontSize: iconSize,
-                                                      fontFamily: iconFamily,
-                                                      package: iconPackage,
-                                                    ),
-                                                  );
-                                            final messageModel = message
-                                                    .customProperties?['model']
-                                                as Message;
-                                            final quotedModel = message
-                                                    .customProperties?['quoted']
-                                                as Message?;
-                                            final reactions = (message
-                                                            .customProperties?[
-                                                        'reactions']
-                                                    as List<
-                                                        ReactionPreview>?) ??
-                                                const <ReactionPreview>[];
-                                            final canReact = !isEmailTransport;
-                                            final isSelected =
-                                                _selectedMessageId ==
-                                                    messageModel.stanzaID;
-                                            final showReactionManager =
-                                                canReact && isSelected;
-                                            final showCompactReactions =
-                                                reactions.isNotEmpty &&
-                                                    !showReactionManager;
-                                            final bubbleContentKey = message
-                                                    .customProperties?['id'] ??
-                                                '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
-                                            final bubbleChildren = <Widget>[];
-                                            if (quotedModel != null) {
-                                              bubbleChildren.add(
-                                                _QuotedMessagePreview(
-                                                  message: quotedModel,
-                                                  isSelf:
-                                                      quotedModel.senderJid ==
-                                                          user.id,
-                                                ),
-                                              );
-                                            }
-                                            if (bannerParticipants.isNotEmpty) {
-                                              bubbleChildren.add(
-                                                IncomingBanner(
-                                                  participants:
-                                                      bannerParticipants,
-                                                  onParticipantTap:
-                                                      (participant) => context
-                                                          .read<ChatsCubit?>()
-                                                          ?.toggleChat(
-                                                            jid:
-                                                                participant.jid,
-                                                          ),
-                                                ),
-                                              );
-                                              bubbleChildren.add(
-                                                const SizedBox(height: 4),
-                                              );
-                                            }
-                                            if (isError) {
-                                              bubbleChildren.addAll([
-                                                Text(
-                                                  'Error!',
-                                                  style: context.textTheme.small
-                                                      .copyWith(
-                                                    color: textColor,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                                DynamicInlineText(
-                                                  key: ValueKey(
-                                                    bubbleContentKey,
-                                                  ),
-                                                  text: parsedText.body,
-                                                  details: [time],
-                                                  links: parsedText.links,
-                                                  onLinkTap: _handleLinkTap,
-                                                ),
-                                              ]);
-                                            } else {
-                                              bubbleChildren.add(
-                                                DynamicInlineText(
-                                                  key: ValueKey(
-                                                      bubbleContentKey),
-                                                  text: parsedText.body,
-                                                  details: [
-                                                    time,
-                                                    if (self) status,
-                                                    encryption,
-                                                    if (verification != null)
-                                                      verification,
-                                                  ],
-                                                  links: parsedText.links,
-                                                  onLinkTap: _handleLinkTap,
-                                                ),
-                                              );
-                                              if (message.customProperties?[
-                                                      'retracted'] ??
-                                                  false) {
-                                                bubbleChildren.add(
-                                                  Text(
-                                                    '(retracted)',
-                                                    style: extraStyle,
-                                                  ),
-                                                );
-                                              } else if (message
-                                                          .customProperties?[
-                                                      'edited'] ??
-                                                  false) {
-                                                bubbleChildren.add(
-                                                  Text(
-                                                    '(edited)',
-                                                    style: extraStyle,
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                            final metadataId =
-                                                messageModel.fileMetadataID;
-                                            if (metadataId != null &&
-                                                metadataId.isNotEmpty) {
-                                              if (bubbleChildren.isNotEmpty) {
-                                                bubbleChildren.add(
-                                                  const SizedBox(height: 8),
-                                                );
-                                              }
-                                              final allowAttachment =
-                                                  _shouldAllowAttachment(
-                                                senderJid:
-                                                    messageModel.senderJid,
-                                                isSelf: self,
-                                                knownContacts: rosterContacts,
-                                                isEmailChat: isEmailChat,
-                                              );
-                                              bubbleChildren.add(
-                                                ChatAttachmentPreview(
-                                                  metadataFuture:
-                                                      _metadataFutureFor(
-                                                    metadataId,
-                                                  ),
-                                                  allowed: allowAttachment,
-                                                  onAllowPressed:
-                                                      allowAttachment
-                                                          ? null
-                                                          : () =>
-                                                              _approveAttachment(
-                                                                senderJid:
-                                                                    messageModel
-                                                                        .senderJid,
-                                                                senderEmail: state
-                                                                    .chat
-                                                                    ?.emailAddress,
-                                                              ),
-                                                ),
-                                              );
-                                            }
-                                            final bubblePadding =
-                                                showCompactReactions
-                                                    ? _bubblePadding.add(
-                                                        const EdgeInsets.only(
-                                                          bottom:
-                                                              _reactionBubbleInset,
-                                                        ),
-                                                      )
-                                                    : _bubblePadding;
-                                            final bubbleBorderRadius =
-                                                _bubbleBorderRadius(
-                                              isSelf: self,
-                                              chainedPrevious: chainedPrev,
-                                              chainedNext: chainedNext,
-                                              isSelected: isSelected,
-                                            );
-                                            final bubbleKey =
-                                                _messageBubbleKeys.putIfAbsent(
-                                              messageModel.stanzaID,
-                                              () => GlobalKey(),
-                                            );
-                                            final bubbleMaxWidth =
-                                                clampedBubbleWidth;
-                                            final bubbleConstraints =
-                                                BoxConstraints(
-                                              maxWidth: bubbleMaxWidth,
-                                            );
-                                            final bubbleHighlightColor =
-                                                context.colorScheme.primary;
-                                            final bubbleContent = Padding(
-                                              padding: bubblePadding,
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                spacing: 4,
-                                                children: bubbleChildren,
-                                              ),
-                                            );
-                                            final nextIsTailSpacer =
-                                                next?.customProperties?[
-                                                        'selectionSpacer'] ==
-                                                    true;
-                                            final isRenderableBubble =
-                                                !(isSelectionSpacer ||
-                                                    isEmptyState);
-                                            final isLatestBubble =
-                                                isRenderableBubble &&
-                                                    (next == null ||
-                                                        nextIsTailSpacer);
-                                            final outerPadding =
-                                                EdgeInsets.only(
-                                              top: 2,
-                                              bottom: isLatestBubble ? 12 : 2,
-                                              left: _chatHorizontalPadding,
-                                              right: _chatHorizontalPadding,
-                                            );
-                                            final bubble = LayoutBuilder(
-                                              builder:
-                                                  (context, innerConstraints) {
-                                                final width =
-                                                    innerConstraints.maxWidth;
-                                                final bubbleWidth =
-                                                    width.isFinite
-                                                        ? width
-                                                        : null;
-                                                final List<CutoutSpec> cutouts =
-                                                    showCompactReactions
-                                                        ? _buildReactionCutouts(
-                                                            reactions:
-                                                                reactions,
-                                                            message:
-                                                                messageModel,
-                                                            canReact: canReact,
-                                                            isSelf: self,
-                                                            bubbleWidth:
-                                                                bubbleWidth,
-                                                          )
-                                                        : const [];
-                                                return TweenAnimationBuilder<
-                                                    double>(
-                                                  tween: Tween<double>(
-                                                    begin: 0,
-                                                    end: isSelected ? 1.0 : 0.0,
-                                                  ),
-                                                  duration:
-                                                      _bubbleFocusDuration,
-                                                  curve: _bubbleFocusCurve,
-                                                  child: bubbleContent,
-                                                  builder: (
-                                                    context,
-                                                    shadowValue,
-                                                    child,
-                                                  ) {
-                                                    return CutoutSurface(
-                                                      key: bubbleKey,
-                                                      backgroundColor:
-                                                          bubbleColor,
-                                                      borderColor: borderColor,
-                                                      shape:
-                                                          ContinuousRectangleBorder(
-                                                        borderRadius:
-                                                            bubbleBorderRadius,
-                                                      ),
-                                                      cutouts: cutouts,
-                                                      shadows:
-                                                          _selectedBubbleShadows(
-                                                        bubbleHighlightColor,
-                                                      ),
-                                                      shadowOpacity:
-                                                          shadowValue,
-                                                      child: child!,
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                            );
-                                            final baseAlignment = self
-                                                ? Alignment.centerRight
-                                                : Alignment.centerLeft;
-                                            final targetAlignment = isSelected
-                                                ? Alignment.center
-                                                : baseAlignment;
-                                            final shadowedBubble =
-                                                ConstrainedBox(
-                                              constraints: bubbleConstraints,
-                                              child: bubble,
-                                            );
-                                            final alignedBubble = AnimatedAlign(
-                                              duration: _bubbleFocusDuration,
-                                              curve: _bubbleFocusCurve,
-                                              alignment: targetAlignment,
-                                              child: shadowedBubble,
-                                            );
-                                            final canResend = message.status ==
-                                                MessageStatus.failed;
-                                            List<GlobalKey>? actionButtonKeys;
-                                            if (isSelected) {
-                                              const baseActionCount = 6;
-                                              final actionCount =
-                                                  baseActionCount +
-                                                      (canResend ? 1 : 0);
-                                              actionButtonKeys = List.generate(
-                                                  actionCount,
-                                                  (_) => GlobalKey());
-                                              _selectionActionButtonKeys
-                                                ..clear()
-                                                ..addAll(actionButtonKeys);
-                                            } else if (_selectedMessageId ==
-                                                messageModel.stanzaID) {
-                                              _selectionActionButtonKeys
-                                                  .clear();
-                                            }
-                                            final actionBar = _MessageActionBar(
-                                              onReply: () {
-                                                context.read<ChatBloc>().add(
-                                                      ChatQuoteRequested(
-                                                        messageModel,
-                                                      ),
-                                                    );
-                                                _focusNode.requestFocus();
-                                                _clearMessageSelection();
-                                              },
-                                              onForward: () =>
-                                                  _handleForward(messageModel),
-                                              onCopy: () => _copyMessage(
-                                                dashMessage: message,
-                                                model: messageModel,
-                                              ),
-                                              onShare: () => _shareMessage(
-                                                dashMessage: message,
-                                                model: messageModel,
-                                              ),
-                                              onAddToCalendar: () =>
-                                                  _handleAddToCalendar(
-                                                dashMessage: message,
-                                                model: messageModel,
-                                              ),
-                                              onDetails: () =>
-                                                  _showMessageDetails(message),
-                                              onResend: canResend
-                                                  ? () => context
-                                                      .read<ChatBloc>()
-                                                      .add(
-                                                        ChatMessageResendRequested(
-                                                          messageModel,
-                                                        ),
-                                                      )
-                                                  : null,
-                                              hitRegionKeys: actionButtonKeys,
-                                            );
-                                            if (isSelected) {
-                                              _activeSelectionExtrasKey ??=
-                                                  GlobalKey();
-                                              _scheduleSelectionAutoscroll();
-                                              _requestSelectionControlsMeasurement();
-                                            } else if (_activeSelectionExtrasKey !=
-                                                    null &&
-                                                _selectedMessageId ==
-                                                    messageModel.stanzaID) {
-                                              _activeSelectionExtrasKey = null;
-                                            }
-                                            final attachmentsKey = isSelected
-                                                ? _activeSelectionExtrasKey
-                                                : null;
-                                            final attachmentTopPadding = isSelected
-                                                ? _selectionAttachmentSelectedGap
-                                                : _selectionAttachmentBaseGap;
-                                            final attachmentBottomPadding =
-                                                _selectionExtrasViewportGap +
-                                                    (showReactionManager
-                                                        ? _reactionManagerShadowGap
-                                                        : 0);
-                                            final attachmentPadding =
-                                                EdgeInsets.only(
-                                              top: attachmentTopPadding,
-                                              bottom: attachmentBottomPadding,
-                                              left: _chatHorizontalPadding,
-                                              right: _chatHorizontalPadding,
-                                            );
-                                            final attachments =
-                                                AnimatedSwitcher(
-                                              duration: _bubbleFocusDuration,
-                                              switchInCurve: _bubbleFocusCurve,
-                                              switchOutCurve:
-                                                  Curves.easeInCubic,
-                                              layoutBuilder: (
-                                                currentChild,
-                                                previousChildren,
-                                              ) {
-                                                return Stack(
-                                                  clipBehavior: Clip.none,
-                                                  alignment:
-                                                      Alignment.topCenter,
-                                                  children: [
-                                                    ...previousChildren,
-                                                    if (currentChild != null)
-                                                      currentChild,
-                                                  ],
-                                                );
-                                              },
-                                              transitionBuilder:
-                                                  (child, animation) {
-                                                final slideAnimation =
-                                                    Tween<Offset>(
-                                                  begin: const Offset(0, -0.05),
-                                                  end: Offset.zero,
-                                                ).animate(animation);
-                                                return FadeTransition(
-                                                  opacity: animation,
-                                                  child: SizeTransition(
-                                                    sizeFactor: animation,
-                                                    axisAlignment: -1,
-                                                    child: SlideTransition(
-                                                      position: slideAnimation,
-                                                      child: child,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              child: isSelected
-                                                  ? KeyedSubtree(
-                                                      key: attachmentsKey,
-                                                      child: Padding(
-                                                        padding:
-                                                            attachmentPadding,
-                                                        child: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            actionBar,
-                                                            if (showReactionManager)
-                                                              const SizedBox(
-                                                                height: 20,
-                                                              ),
-                                                            if (showReactionManager)
-                                                              KeyedSubtree(
-                                                                key: _reactionManagerKey ??=
-                                                                    GlobalKey(),
-                                                                child:
-                                                                    _ReactionManager(
-                                                                  reactions:
-                                                                      reactions,
-                                                                  onToggle:
-                                                                      (emoji) =>
-                                                                          _toggleQuickReaction(
-                                                                    messageModel,
-                                                                    emoji,
-                                                                  ),
-                                                                  onAddCustom: () =>
-                                                                      _handleReactionSelection(
-                                                                    messageModel,
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    )
-                                                  : const SizedBox.shrink(),
-                                            );
-                                            final messageKey =
-                                                _messageKeys.putIfAbsent(
-                                              messageModel.stanzaID,
-                                              () => GlobalKey(),
-                                            );
-                                            final selectableBubble =
-                                                GestureDetector(
-                                              behavior:
-                                                  HitTestBehavior.translucent,
-                                              onTap: () {
-                                                if (isSelected) {
-                                                  _clearMessageSelection();
-                                                }
-                                              },
-                                              onLongPress: widget.readOnly
-                                                  ? null
-                                                  : () =>
-                                                      _toggleMessageSelection(
-                                                        messageModel.stanzaID,
-                                                      ),
-                                              child: alignedBubble,
-                                            );
-                                            final animatedStack = AnimatedSize(
-                                              duration: _bubbleFocusDuration,
-                                              curve: _bubbleFocusCurve,
-                                              clipBehavior: Clip.none,
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.center,
-                                                children: [
-                                                  selectableBubble,
-                                                  attachments,
-                                                ],
-                                              ),
-                                            );
-                                            Widget bubbleWithSlack =
-                                                animatedStack;
-                                            bubbleWithSlack = Align(
-                                              alignment: Alignment.center,
-                                              child: SizedBox(
-                                                width: messageRowMaxWidth,
-                                                child: bubbleWithSlack,
-                                              ),
-                                            );
-                                            return KeyedSubtree(
-                                              key: messageKey,
-                                              child: Padding(
-                                                padding: outerPadding,
-                                                child: bubbleWithSlack,
-                                              ),
-                                            );
-                                          },
                                         ),
-                                        messageListOptions:
-                                            dashMessageListOptions,
-                                        readOnly: true,
-                                      ),
+                                        Positioned(
+                                          right: -6,
+                                          bottom: -4,
+                                          child: AxiTransportChip(
+                                            transport: transport,
+                                            compact: true,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  quoteSection,
-                                  _buildComposer(
-                                    isEmailTransport: isEmailTransport,
-                                    hintText: composerHintText,
-                                    recipients: recipients,
-                                    availableEmailChats: emailSuggestions,
-                                    latestStatuses: latestStatuses,
-                                    pendingAttachments: pendingAttachments,
-                                    composerError: state.composerError,
-                                    showAttachmentWarning:
-                                        showAttachmentWarning,
-                                    retryReport: retryReport,
-                                    retryShareId: retryShareId,
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8.0,
+                                    ),
+                                    child: Text(
+                                      state.chat?.title ?? '',
+                                      style: context.textTheme.h4,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      item?.status ?? '',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: context.textTheme.muted,
+                                    ),
                                   ),
                                 ],
                               );
                             },
                           ),
-                          const ChatMessageDetails(),
-                        ],
-                      ),
-                    ),
+                    actions: [
+                      if (jid != null && _chatRoute == _ChatRoute.main) ...[
+                        const _ChatSearchToggleButton(),
+                        const SizedBox(width: 4),
+                        Builder(
+                          builder: (context) => AxiIconButton(
+                            iconData: LucideIcons.settings,
+                            onPressed: Scaffold.of(context).openEndDrawer,
+                          ),
+                        ),
+                      ] else
+                        const SizedBox.shrink(),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                  body: Column(
+                    children: [
+                      const ChatAlert(),
+                      const _ChatSearchPanel(),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration:
+                              context.watch<SettingsCubit>().animationDuration,
+                          reverseDuration:
+                              context.watch<SettingsCubit>().animationDuration,
+                          switchInCurve: Curves.easeIn,
+                          switchOutCurve: Curves.easeOut,
+                          child: IndexedStack(
+                            key: ValueKey(_chatRoute.index),
+                            index: _chatRoute.index,
+                            children: [
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final contentWidth = math.max(
+                                    0.0,
+                                    constraints.maxWidth -
+                                        (_chatHorizontalPadding * 2),
+                                  );
+                                  final isCompact = contentWidth < smallScreen;
+                                  final messageById = {
+                                    for (final item in state.items)
+                                      item.stanzaID: item,
+                                  };
+                                  if (searchFiltering) {
+                                    for (final item in searchResults) {
+                                      messageById[item.stanzaID] = item;
+                                    }
+                                  }
+                                  final activeItems = searchFiltering
+                                      ? searchResults
+                                      : state.items;
+                                  final filteredItems = activeItems
+                                      .where((e) =>
+                                          e.body != null || e.error.isNotNone)
+                                      .toList();
+                                  final selectionActive =
+                                      _selectedMessageId != null;
+                                  final selectionSpacerVisibleHeight =
+                                      selectionActive
+                                          ? math.max(
+                                              _messageListTailSpacer,
+                                              _selectionSpacerHeight,
+                                            )
+                                          : _messageListTailSpacer;
+                                  final baseBubbleMaxWidth =
+                                      contentWidth * (isCompact ? 0.8 : 0.7);
+                                  final messageRowMaxWidth = contentWidth;
+                                  final clampedBubbleWidth =
+                                      baseBubbleMaxWidth.clamp(
+                                    0.0,
+                                    contentWidth,
+                                  );
+                                  final dashMessages = <ChatMessage>[];
+                                  for (var index = 0;
+                                      index < filteredItems.length;
+                                      index++) {
+                                    final e = filteredItems[index];
+                                    final isSelfXmpp =
+                                        e.senderJid == profile?.jid;
+                                    final isSelfEmail = emailSelfJid != null &&
+                                        e.senderJid == emailSelfJid;
+                                    final isSelf = isSelfXmpp || isSelfEmail;
+                                    final author = isSelf
+                                        ? user
+                                        : ChatUser(
+                                            id: e.senderJid,
+                                            firstName: state.chat?.title,
+                                          );
+                                    final quotedMessage = e.quoting == null
+                                        ? null
+                                        : messageById[e.quoting!];
+                                    final bannerParticipants =
+                                        List<chat_models.Chat>.of(
+                                      _participantsForBanner(
+                                        shareContexts[e.stanzaID],
+                                        state.chat?.jid,
+                                        currentUserId,
+                                      ),
+                                    );
+                                    dashMessages.add(
+                                      ChatMessage(
+                                        user: author,
+                                        createdAt: e.timestamp!,
+                                        text:
+                                            '${e.error.isNotNone ? e.error.asString : ''}'
+                                            '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': "${e.body}"' : e.body}',
+                                        status: e.error.isNotNone
+                                            ? MessageStatus.failed
+                                            : e.displayed
+                                                ? MessageStatus.read
+                                                : e.received
+                                                    ? MessageStatus.received
+                                                    : e.acked
+                                                        ? MessageStatus.sent
+                                                        : MessageStatus.pending,
+                                        customProperties: {
+                                          'id': e.stanzaID,
+                                          'body': e.body,
+                                          'edited': e.edited,
+                                          'retracted': e.retracted,
+                                          'error': e.error,
+                                          'encrypted':
+                                              e.encryptionProtocol.isNotNone,
+                                          'trust': e.trust,
+                                          'trusted': e.trusted,
+                                          'isSelf': isSelf,
+                                          'model': e,
+                                          'quoted': quotedMessage,
+                                          'reactions': e.reactionsPreview,
+                                          'shareParticipants':
+                                              bannerParticipants,
+                                        },
+                                      ),
+                                    );
+                                  }
+                                  final emptyStateLabel = searchFiltering
+                                      ? 'No matches'
+                                      : 'No messages';
+                                  if (filteredItems.isEmpty) {
+                                    dashMessages.add(
+                                      ChatMessage(
+                                        user: spacerUser,
+                                        createdAt: _selectionSpacerTimestamp,
+                                        text: ' ',
+                                        customProperties: {
+                                          'id': _emptyStateMessageId,
+                                          'emptyState': true,
+                                          'emptyLabel': emptyStateLabel,
+                                        },
+                                      ),
+                                    );
+                                  }
+                                  dashMessages.add(
+                                    ChatMessage(
+                                      user: spacerUser,
+                                      createdAt: _selectionSpacerTimestamp,
+                                      text: ' ',
+                                      customProperties: const {
+                                        'id': _selectionSpacerMessageId,
+                                        'selectionSpacer': true,
+                                      },
+                                    ),
+                                  );
+                                  late final MessageListOptions
+                                      dashMessageListOptions;
+                                  dashMessageListOptions = MessageListOptions(
+                                    scrollController: _scrollController,
+                                    scrollPhysics: _selectionAutoscrollActive
+                                        ? const AlwaysScrollableScrollPhysics(
+                                            parent: ClampingScrollPhysics(),
+                                          )
+                                        : const AlwaysScrollableScrollPhysics(
+                                            parent: BouncingScrollPhysics(),
+                                          ),
+                                    separatorFrequency: SeparatorFrequency.days,
+                                    dateSeparatorBuilder: (date) {
+                                      if (date.isAtSameMomentAs(
+                                        _selectionSpacerTimestamp,
+                                      )) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return DefaultDateSeparator(
+                                        date: date,
+                                        messageListOptions:
+                                            dashMessageListOptions,
+                                      );
+                                    },
+                                    typingBuilder: (_) => const Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        _chatHorizontalPadding,
+                                        12,
+                                        _chatHorizontalPadding,
+                                        8,
+                                      ),
+                                      child: TypingIndicator(),
+                                    ),
+                                    onLoadEarlier: searchFiltering ||
+                                            state.items.length %
+                                                    ChatBloc.messageBatchSize !=
+                                                0
+                                        ? null
+                                        : () async => context
+                                            .read<ChatBloc>()
+                                            .add(const ChatLoadEarlier()),
+                                    loadEarlierBuilder: Container(
+                                      padding: const EdgeInsets.all(12.0),
+                                      alignment: Alignment.center,
+                                      child: CircularProgressIndicator(
+                                        color: context.colorScheme.primary,
+                                      ),
+                                    ),
+                                  );
+                                  final composerHintText = isEmailTransport
+                                      ? 'Send email message'
+                                      : 'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message';
+                                  Widget quoteSection;
+                                  final quoting = state.quoting;
+                                  if (quoting == null) {
+                                    quoteSection = const SizedBox.shrink();
+                                  } else {
+                                    quoteSection = Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      child: _QuoteBanner(
+                                        key:
+                                            ValueKey<String?>(quoting.stanzaID),
+                                        message: quoting,
+                                        isSelf:
+                                            quoting.senderJid == currentUserId,
+                                        onClear: () => context
+                                            .read<ChatBloc>()
+                                            .add(const ChatQuoteCleared()),
+                                      ),
+                                    );
+                                  }
+                                  quoteSection = AnimatedSize(
+                                    duration: _bubbleFocusDuration,
+                                    curve: _bubbleFocusCurve,
+                                    alignment: Alignment.topCenter,
+                                    child: quoteSection,
+                                  );
+                                  final remoteTyping =
+                                      state.chat?.chatState?.name == 'composing'
+                                          ? ChatUser(
+                                              id: state.chat!.jid,
+                                              firstName: state.chat!.title,
+                                            )
+                                          : null;
+                                  final typingUsers = <ChatUser>[
+                                    if (state.typing == true) user,
+                                    if (remoteTyping != null) remoteTyping,
+                                  ];
+                                  return Column(
+                                    children: [
+                                      Expanded(
+                                        child: KeyedSubtree(
+                                          key: _messageListKey,
+                                          child: DashChat(
+                                            currentUser: user,
+                                            onSend: widget.readOnly
+                                                ? (_) {}
+                                                : (_) => _handleSendMessage(),
+                                            messages: dashMessages,
+                                            typingUsers:
+                                                typingUsers.take(1).toList(),
+                                            messageOptions: MessageOptions(
+                                              showOtherUsersAvatar: false,
+                                              borderRadius: 0,
+                                              maxWidth: messageRowMaxWidth,
+                                              messagePadding: EdgeInsets.zero,
+                                              spaceWhenAvatarIsHidden: 0,
+                                              currentUserContainerColor:
+                                                  Colors.transparent,
+                                              containerColor:
+                                                  Colors.transparent,
+                                              userNameBuilder: (user) {
+                                                if (user.id ==
+                                                    _selectionSpacerMessageId) {
+                                                  return const SizedBox
+                                                      .shrink();
+                                                }
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                    left:
+                                                        _chatHorizontalPadding,
+                                                    right:
+                                                        _chatHorizontalPadding,
+                                                    bottom: 4,
+                                                  ),
+                                                  child: Text(
+                                                    user.getFullName(),
+                                                    style: context
+                                                        .textTheme.muted
+                                                        .copyWith(
+                                                            fontSize: 12.0),
+                                                  ),
+                                                );
+                                              },
+                                              messageTextBuilder:
+                                                  (message, previous, next) {
+                                                final colors =
+                                                    context.colorScheme;
+                                                final chatTokens =
+                                                    context.chatTheme;
+                                                final isSelectionSpacer =
+                                                    message.customProperties?[
+                                                            'selectionSpacer'] ==
+                                                        true;
+                                                if (isSelectionSpacer) {
+                                                  final spacerHeight =
+                                                      selectionSpacerVisibleHeight;
+                                                  return _SelectionHeadroomSpacer(
+                                                    height: spacerHeight,
+                                                  );
+                                                }
+                                                final bannerParticipants =
+                                                    (message.customProperties?[
+                                                                'shareParticipants']
+                                                            as List<
+                                                                chat_models
+                                                                .Chat>?) ??
+                                                        const <chat_models
+                                                            .Chat>[];
+                                                final extraStyle = context
+                                                    .textTheme.muted
+                                                    .copyWith(
+                                                  fontStyle: FontStyle.italic,
+                                                );
+                                                final isEmptyState =
+                                                    message.customProperties?[
+                                                            'emptyState'] ==
+                                                        true;
+                                                if (isEmptyState) {
+                                                  final emptyLabel =
+                                                      message.customProperties?[
+                                                                  'emptyLabel']
+                                                              as String? ??
+                                                          'No messages';
+                                                  return Padding(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      vertical: 24,
+                                                      horizontal:
+                                                          _chatHorizontalPadding,
+                                                    ),
+                                                    child: Center(
+                                                      child: Text(
+                                                        emptyLabel,
+                                                        style: context
+                                                            .textTheme.muted,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                final self = message
+                                                            .customProperties?[
+                                                        'isSelf'] as bool? ??
+                                                    (message.user.id ==
+                                                        profile?.jid);
+                                                final error = message
+                                                        .customProperties![
+                                                    'error'] as MessageError;
+                                                final isError = error.isNotNone;
+                                                final bubbleColor = isError
+                                                    ? colors.destructive
+                                                    : self
+                                                        ? colors.primary
+                                                        : colors.card;
+                                                final borderColor =
+                                                    self || isError
+                                                        ? Colors.transparent
+                                                        : chatTokens.recvEdge;
+                                                final textColor = isError
+                                                    ? colors
+                                                        .destructiveForeground
+                                                    : self
+                                                        ? colors
+                                                            .primaryForeground
+                                                        : colors.foreground;
+                                                final timestampColor =
+                                                    chatTokens.timestamp;
+                                                final encrypted =
+                                                    message.customProperties![
+                                                            'encrypted'] ==
+                                                        true;
+                                                const iconSize = 13.0;
+                                                final iconFamily = message
+                                                    .status!.icon.fontFamily;
+                                                final iconPackage = message
+                                                    .status!.icon.fontPackage;
+                                                final chainedPrev =
+                                                    _chatMessagesShouldChain(
+                                                  message,
+                                                  previous,
+                                                );
+                                                final chainedNext =
+                                                    _chatMessagesShouldChain(
+                                                  message,
+                                                  next,
+                                                );
+                                                final baseTextStyle = context
+                                                    .textTheme.small
+                                                    .copyWith(
+                                                  color: textColor,
+                                                  height: 1.3,
+                                                );
+                                                final linkStyle =
+                                                    baseTextStyle.copyWith(
+                                                  color: self
+                                                      ? colors.primaryForeground
+                                                      : colors.primary,
+                                                  decoration:
+                                                      TextDecoration.underline,
+                                                  fontWeight: FontWeight.w600,
+                                                );
+                                                final parsedText =
+                                                    parseMessageText(
+                                                  text: message.text,
+                                                  baseStyle: baseTextStyle,
+                                                  linkStyle: linkStyle,
+                                                );
+                                                final timeColor = isError
+                                                    ? textColor
+                                                    : self
+                                                        ? colors
+                                                            .primaryForeground
+                                                        : timestampColor;
+                                                final time = TextSpan(
+                                                  text:
+                                                      '${message.createdAt.hour.toString().padLeft(2, '0')}:'
+                                                      '${message.createdAt.minute.toString().padLeft(2, '0')}',
+                                                  style: context.textTheme.muted
+                                                      .copyWith(
+                                                    color: timeColor,
+                                                    fontSize: 11.0,
+                                                  ),
+                                                );
+                                                final status = TextSpan(
+                                                  text: String.fromCharCode(
+                                                    message
+                                                        .status!.icon.codePoint,
+                                                  ),
+                                                  style: TextStyle(
+                                                    color: self
+                                                        ? colors
+                                                            .primaryForeground
+                                                        : timestampColor,
+                                                    fontSize: iconSize,
+                                                    fontFamily: iconFamily,
+                                                    package: iconPackage,
+                                                  ),
+                                                );
+                                                final encryption = TextSpan(
+                                                  text: String.fromCharCode(
+                                                    (encrypted
+                                                            ? LucideIcons
+                                                                .lockKeyhole
+                                                            : LucideIcons
+                                                                .lockKeyholeOpen)
+                                                        .codePoint,
+                                                  ),
+                                                  style: context.textTheme.muted
+                                                      .copyWith(
+                                                    color: encrypted
+                                                        ? (self
+                                                            ? colors
+                                                                .primaryForeground
+                                                            : colors.foreground)
+                                                        : colors.destructive,
+                                                    fontSize: iconSize,
+                                                    fontFamily: iconFamily,
+                                                    package: iconPackage,
+                                                  ),
+                                                );
+                                                final trusted =
+                                                    message.customProperties![
+                                                        'trusted'] as bool?;
+                                                final verification = trusted ==
+                                                        null
+                                                    ? null
+                                                    : TextSpan(
+                                                        text:
+                                                            String.fromCharCode(
+                                                          trusted.toShieldIcon
+                                                              .codePoint,
+                                                        ),
+                                                        style: context
+                                                            .textTheme.muted
+                                                            .copyWith(
+                                                          color: trusted
+                                                              ? axiGreen
+                                                              : colors
+                                                                  .destructive,
+                                                          fontSize: iconSize,
+                                                          fontFamily:
+                                                              iconFamily,
+                                                          package: iconPackage,
+                                                        ),
+                                                      );
+                                                final messageModel =
+                                                    message.customProperties?[
+                                                        'model'] as Message;
+                                                final quotedModel =
+                                                    message.customProperties?[
+                                                        'quoted'] as Message?;
+                                                final reactions = (message
+                                                                .customProperties?[
+                                                            'reactions']
+                                                        as List<
+                                                            ReactionPreview>?) ??
+                                                    const <ReactionPreview>[];
+                                                final canReact =
+                                                    !isEmailTransport;
+                                                final isSelected =
+                                                    _selectedMessageId ==
+                                                        messageModel.stanzaID;
+                                                final showReactionManager =
+                                                    canReact && isSelected;
+                                                final showCompactReactions =
+                                                    reactions.isNotEmpty &&
+                                                        !showReactionManager;
+                                                final bubbleContentKey = message
+                                                            .customProperties?[
+                                                        'id'] ??
+                                                    '${message.user.id}-${message.createdAt.microsecondsSinceEpoch}';
+                                                final bubbleChildren =
+                                                    <Widget>[];
+                                                if (quotedModel != null) {
+                                                  bubbleChildren.add(
+                                                    _QuotedMessagePreview(
+                                                      message: quotedModel,
+                                                      isSelf: quotedModel
+                                                              .senderJid ==
+                                                          user.id,
+                                                    ),
+                                                  );
+                                                }
+                                                if (bannerParticipants
+                                                    .isNotEmpty) {
+                                                  bubbleChildren.add(
+                                                    IncomingBanner(
+                                                      participants:
+                                                          bannerParticipants,
+                                                      onParticipantTap:
+                                                          (participant) => context
+                                                              .read<
+                                                                  ChatsCubit?>()
+                                                              ?.toggleChat(
+                                                                jid: participant
+                                                                    .jid,
+                                                              ),
+                                                    ),
+                                                  );
+                                                  bubbleChildren.add(
+                                                    const SizedBox(height: 4),
+                                                  );
+                                                }
+                                                if (isError) {
+                                                  bubbleChildren.addAll([
+                                                    Text(
+                                                      'Error!',
+                                                      style: context
+                                                          .textTheme.small
+                                                          .copyWith(
+                                                        color: textColor,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    DynamicInlineText(
+                                                      key: ValueKey(
+                                                        bubbleContentKey,
+                                                      ),
+                                                      text: parsedText.body,
+                                                      details: [time],
+                                                      links: parsedText.links,
+                                                      onLinkTap: _handleLinkTap,
+                                                    ),
+                                                  ]);
+                                                } else {
+                                                  bubbleChildren.add(
+                                                    DynamicInlineText(
+                                                      key: ValueKey(
+                                                          bubbleContentKey),
+                                                      text: parsedText.body,
+                                                      details: [
+                                                        time,
+                                                        if (self) status,
+                                                        encryption,
+                                                        if (verification !=
+                                                            null)
+                                                          verification,
+                                                      ],
+                                                      links: parsedText.links,
+                                                      onLinkTap: _handleLinkTap,
+                                                    ),
+                                                  );
+                                                  if (message.customProperties?[
+                                                          'retracted'] ??
+                                                      false) {
+                                                    bubbleChildren.add(
+                                                      Text(
+                                                        '(retracted)',
+                                                        style: extraStyle,
+                                                      ),
+                                                    );
+                                                  } else if (message
+                                                              .customProperties?[
+                                                          'edited'] ??
+                                                      false) {
+                                                    bubbleChildren.add(
+                                                      Text(
+                                                        '(edited)',
+                                                        style: extraStyle,
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                                final metadataId =
+                                                    messageModel.fileMetadataID;
+                                                if (metadataId != null &&
+                                                    metadataId.isNotEmpty) {
+                                                  if (bubbleChildren
+                                                      .isNotEmpty) {
+                                                    bubbleChildren.add(
+                                                      const SizedBox(height: 8),
+                                                    );
+                                                  }
+                                                  final allowAttachment =
+                                                      _shouldAllowAttachment(
+                                                    senderJid:
+                                                        messageModel.senderJid,
+                                                    isSelf: self,
+                                                    knownContacts:
+                                                        rosterContacts,
+                                                    isEmailChat: isEmailChat,
+                                                  );
+                                                  bubbleChildren.add(
+                                                    ChatAttachmentPreview(
+                                                      metadataFuture:
+                                                          _metadataFutureFor(
+                                                        metadataId,
+                                                      ),
+                                                      allowed: allowAttachment,
+                                                      onAllowPressed:
+                                                          allowAttachment
+                                                              ? null
+                                                              : () =>
+                                                                  _approveAttachment(
+                                                                    senderJid:
+                                                                        messageModel
+                                                                            .senderJid,
+                                                                    senderEmail:
+                                                                        state
+                                                                            .chat
+                                                                            ?.emailAddress,
+                                                                  ),
+                                                    ),
+                                                  );
+                                                }
+                                                final bubblePadding =
+                                                    showCompactReactions
+                                                        ? _bubblePadding.add(
+                                                            const EdgeInsets
+                                                                .only(
+                                                              bottom:
+                                                                  _reactionBubbleInset,
+                                                            ),
+                                                          )
+                                                        : _bubblePadding;
+                                                final bubbleBorderRadius =
+                                                    _bubbleBorderRadius(
+                                                  isSelf: self,
+                                                  chainedPrevious: chainedPrev,
+                                                  chainedNext: chainedNext,
+                                                  isSelected: isSelected,
+                                                );
+                                                final bubbleKey =
+                                                    _messageBubbleKeys
+                                                        .putIfAbsent(
+                                                  messageModel.stanzaID,
+                                                  () => GlobalKey(),
+                                                );
+                                                final bubbleMaxWidth =
+                                                    clampedBubbleWidth;
+                                                final bubbleConstraints =
+                                                    BoxConstraints(
+                                                  maxWidth: bubbleMaxWidth,
+                                                );
+                                                final bubbleHighlightColor =
+                                                    context.colorScheme.primary;
+                                                final bubbleContent = Padding(
+                                                  padding: bubblePadding,
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    spacing: 4,
+                                                    children: bubbleChildren,
+                                                  ),
+                                                );
+                                                final nextIsTailSpacer = next
+                                                            ?.customProperties?[
+                                                        'selectionSpacer'] ==
+                                                    true;
+                                                final isRenderableBubble =
+                                                    !(isSelectionSpacer ||
+                                                        isEmptyState);
+                                                final isLatestBubble =
+                                                    isRenderableBubble &&
+                                                        (next == null ||
+                                                            nextIsTailSpacer);
+                                                final outerPadding =
+                                                    EdgeInsets.only(
+                                                  top: 2,
+                                                  bottom:
+                                                      isLatestBubble ? 12 : 2,
+                                                  left: _chatHorizontalPadding,
+                                                  right: _chatHorizontalPadding,
+                                                );
+                                                final bubble = LayoutBuilder(
+                                                  builder: (context,
+                                                      innerConstraints) {
+                                                    final width =
+                                                        innerConstraints
+                                                            .maxWidth;
+                                                    final bubbleWidth =
+                                                        width.isFinite
+                                                            ? width
+                                                            : null;
+                                                    final List<CutoutSpec>
+                                                        cutouts =
+                                                        showCompactReactions
+                                                            ? _buildReactionCutouts(
+                                                                reactions:
+                                                                    reactions,
+                                                                message:
+                                                                    messageModel,
+                                                                canReact:
+                                                                    canReact,
+                                                                isSelf: self,
+                                                                bubbleWidth:
+                                                                    bubbleWidth,
+                                                              )
+                                                            : const [];
+                                                    return TweenAnimationBuilder<
+                                                        double>(
+                                                      tween: Tween<double>(
+                                                        begin: 0,
+                                                        end: isSelected
+                                                            ? 1.0
+                                                            : 0.0,
+                                                      ),
+                                                      duration:
+                                                          _bubbleFocusDuration,
+                                                      curve: _bubbleFocusCurve,
+                                                      child: bubbleContent,
+                                                      builder: (
+                                                        context,
+                                                        shadowValue,
+                                                        child,
+                                                      ) {
+                                                        return CutoutSurface(
+                                                          key: bubbleKey,
+                                                          backgroundColor:
+                                                              bubbleColor,
+                                                          borderColor:
+                                                              borderColor,
+                                                          shape:
+                                                              ContinuousRectangleBorder(
+                                                            borderRadius:
+                                                                bubbleBorderRadius,
+                                                          ),
+                                                          cutouts: cutouts,
+                                                          shadows:
+                                                              _selectedBubbleShadows(
+                                                            bubbleHighlightColor,
+                                                          ),
+                                                          shadowOpacity:
+                                                              shadowValue,
+                                                          child: child!,
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                );
+                                                final baseAlignment = self
+                                                    ? Alignment.centerRight
+                                                    : Alignment.centerLeft;
+                                                final targetAlignment =
+                                                    isSelected
+                                                        ? Alignment.center
+                                                        : baseAlignment;
+                                                final shadowedBubble =
+                                                    ConstrainedBox(
+                                                  constraints:
+                                                      bubbleConstraints,
+                                                  child: bubble,
+                                                );
+                                                final alignedBubble =
+                                                    AnimatedAlign(
+                                                  duration:
+                                                      _bubbleFocusDuration,
+                                                  curve: _bubbleFocusCurve,
+                                                  alignment: targetAlignment,
+                                                  child: shadowedBubble,
+                                                );
+                                                final canResend =
+                                                    message.status ==
+                                                        MessageStatus.failed;
+                                                List<GlobalKey>?
+                                                    actionButtonKeys;
+                                                if (isSelected) {
+                                                  const baseActionCount = 6;
+                                                  final actionCount =
+                                                      baseActionCount +
+                                                          (canResend ? 1 : 0);
+                                                  actionButtonKeys =
+                                                      List.generate(actionCount,
+                                                          (_) => GlobalKey());
+                                                  _selectionActionButtonKeys
+                                                    ..clear()
+                                                    ..addAll(actionButtonKeys);
+                                                } else if (_selectedMessageId ==
+                                                    messageModel.stanzaID) {
+                                                  _selectionActionButtonKeys
+                                                      .clear();
+                                                }
+                                                final actionBar =
+                                                    _MessageActionBar(
+                                                  onReply: () {
+                                                    context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          ChatQuoteRequested(
+                                                            messageModel,
+                                                          ),
+                                                        );
+                                                    _focusNode.requestFocus();
+                                                    _clearMessageSelection();
+                                                  },
+                                                  onForward: () =>
+                                                      _handleForward(
+                                                          messageModel),
+                                                  onCopy: () => _copyMessage(
+                                                    dashMessage: message,
+                                                    model: messageModel,
+                                                  ),
+                                                  onShare: () => _shareMessage(
+                                                    dashMessage: message,
+                                                    model: messageModel,
+                                                  ),
+                                                  onAddToCalendar: () =>
+                                                      _handleAddToCalendar(
+                                                    dashMessage: message,
+                                                    model: messageModel,
+                                                  ),
+                                                  onDetails: () =>
+                                                      _showMessageDetails(
+                                                          message),
+                                                  onResend: canResend
+                                                      ? () => context
+                                                          .read<ChatBloc>()
+                                                          .add(
+                                                            ChatMessageResendRequested(
+                                                              messageModel,
+                                                            ),
+                                                          )
+                                                      : null,
+                                                  hitRegionKeys:
+                                                      actionButtonKeys,
+                                                );
+                                                if (isSelected) {
+                                                  _activeSelectionExtrasKey ??=
+                                                      GlobalKey();
+                                                  _scheduleSelectionAutoscroll();
+                                                  _requestSelectionControlsMeasurement();
+                                                } else if (_activeSelectionExtrasKey !=
+                                                        null &&
+                                                    _selectedMessageId ==
+                                                        messageModel.stanzaID) {
+                                                  _activeSelectionExtrasKey =
+                                                      null;
+                                                }
+                                                final attachmentsKey = isSelected
+                                                    ? _activeSelectionExtrasKey
+                                                    : null;
+                                                final attachmentTopPadding = isSelected
+                                                    ? _selectionAttachmentSelectedGap
+                                                    : _selectionAttachmentBaseGap;
+                                                final attachmentBottomPadding =
+                                                    _selectionExtrasViewportGap +
+                                                        (showReactionManager
+                                                            ? _reactionManagerShadowGap
+                                                            : 0);
+                                                final attachmentPadding =
+                                                    EdgeInsets.only(
+                                                  top: attachmentTopPadding,
+                                                  bottom:
+                                                      attachmentBottomPadding,
+                                                  left: _chatHorizontalPadding,
+                                                  right: _chatHorizontalPadding,
+                                                );
+                                                final attachments =
+                                                    AnimatedSwitcher(
+                                                  duration:
+                                                      _bubbleFocusDuration,
+                                                  switchInCurve:
+                                                      _bubbleFocusCurve,
+                                                  switchOutCurve:
+                                                      Curves.easeInCubic,
+                                                  layoutBuilder: (
+                                                    currentChild,
+                                                    previousChildren,
+                                                  ) {
+                                                    return Stack(
+                                                      clipBehavior: Clip.none,
+                                                      alignment:
+                                                          Alignment.topCenter,
+                                                      children: [
+                                                        ...previousChildren,
+                                                        if (currentChild !=
+                                                            null)
+                                                          currentChild,
+                                                      ],
+                                                    );
+                                                  },
+                                                  transitionBuilder:
+                                                      (child, animation) {
+                                                    final slideAnimation =
+                                                        Tween<Offset>(
+                                                      begin: const Offset(
+                                                          0, -0.05),
+                                                      end: Offset.zero,
+                                                    ).animate(animation);
+                                                    return FadeTransition(
+                                                      opacity: animation,
+                                                      child: SizeTransition(
+                                                        sizeFactor: animation,
+                                                        axisAlignment: -1,
+                                                        child: SlideTransition(
+                                                          position:
+                                                              slideAnimation,
+                                                          child: child,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                  child: isSelected
+                                                      ? KeyedSubtree(
+                                                          key: attachmentsKey,
+                                                          child: Padding(
+                                                            padding:
+                                                                attachmentPadding,
+                                                            child: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .center,
+                                                              children: [
+                                                                actionBar,
+                                                                if (showReactionManager)
+                                                                  const SizedBox(
+                                                                    height: 20,
+                                                                  ),
+                                                                if (showReactionManager)
+                                                                  KeyedSubtree(
+                                                                    key: _reactionManagerKey ??=
+                                                                        GlobalKey(),
+                                                                    child:
+                                                                        _ReactionManager(
+                                                                      reactions:
+                                                                          reactions,
+                                                                      onToggle:
+                                                                          (emoji) =>
+                                                                              _toggleQuickReaction(
+                                                                        messageModel,
+                                                                        emoji,
+                                                                      ),
+                                                                      onAddCustom:
+                                                                          () =>
+                                                                              _handleReactionSelection(
+                                                                        messageModel,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        )
+                                                      : const SizedBox.shrink(),
+                                                );
+                                                final messageKey =
+                                                    _messageKeys.putIfAbsent(
+                                                  messageModel.stanzaID,
+                                                  () => GlobalKey(),
+                                                );
+                                                final selectableBubble =
+                                                    GestureDetector(
+                                                  behavior: HitTestBehavior
+                                                      .translucent,
+                                                  onTap: () {
+                                                    if (isSelected) {
+                                                      _clearMessageSelection();
+                                                    }
+                                                  },
+                                                  onLongPress: widget.readOnly
+                                                      ? null
+                                                      : () =>
+                                                          _toggleMessageSelection(
+                                                            messageModel
+                                                                .stanzaID,
+                                                          ),
+                                                  child: alignedBubble,
+                                                );
+                                                final animatedStack =
+                                                    AnimatedSize(
+                                                  duration:
+                                                      _bubbleFocusDuration,
+                                                  curve: _bubbleFocusCurve,
+                                                  clipBehavior: Clip.none,
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      selectableBubble,
+                                                      attachments,
+                                                    ],
+                                                  ),
+                                                );
+                                                Widget bubbleWithSlack =
+                                                    animatedStack;
+                                                bubbleWithSlack = Align(
+                                                  alignment: Alignment.center,
+                                                  child: SizedBox(
+                                                    width: messageRowMaxWidth,
+                                                    child: bubbleWithSlack,
+                                                  ),
+                                                );
+                                                return KeyedSubtree(
+                                                  key: messageKey,
+                                                  child: Padding(
+                                                    padding: outerPadding,
+                                                    child: bubbleWithSlack,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                            messageListOptions:
+                                                dashMessageListOptions,
+                                            readOnly: true,
+                                          ),
+                                        ),
+                                      ),
+                                      quoteSection,
+                                      _buildComposer(
+                                        isEmailTransport: isEmailTransport,
+                                        hintText: composerHintText,
+                                        recipients: recipients,
+                                        availableEmailChats: emailSuggestions,
+                                        latestStatuses: latestStatuses,
+                                        pendingAttachments: pendingAttachments,
+                                        composerError: state.composerError,
+                                        showAttachmentWarning:
+                                            showAttachmentWarning,
+                                        retryReport: retryReport,
+                                        retryShareId: retryShareId,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              const ChatMessageDetails(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
