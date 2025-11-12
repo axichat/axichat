@@ -2,11 +2,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_button_inline.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
+import 'package:axichat/src/chat/view/filter_toggle.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/verification/bloc/verification_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -16,11 +16,9 @@ class ChatDrawer extends StatelessWidget {
   const ChatDrawer({
     super.key,
     required this.state,
-    this.showVerification,
   });
 
   final ChatState state;
-  final void Function()? showVerification;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +72,18 @@ class ChatDrawer extends StatelessWidget {
                           .read<ChatBloc>()
                           .add(ChatTransportChanged(candidate)),
                     ),
+                    if (isEmailTransport)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: FilterToggle(
+                          padding: EdgeInsets.zero,
+                          selected: state.viewFilter,
+                          contactName: chat.title,
+                          onChanged: (filter) => context
+                              .read<ChatBloc>()
+                              .add(ChatViewFilterChanged(filter: filter)),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -110,22 +120,6 @@ class ChatDrawer extends StatelessWidget {
             ),
             const _DrawerDivider(),
             const Spacer(),
-            encryptionAvailable
-                ? ShadButton.ghost(
-                    width: double.infinity,
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    leading: Icon(
-                      LucideIcons.shieldUser,
-                      size: context.iconTheme.size,
-                    ),
-                    child: const Text('Verification'),
-                    onPressed: () {
-                      context.read<VerificationCubit>().loadFingerprints();
-                      showVerification?.call();
-                      Scaffold.of(context).closeEndDrawer();
-                    },
-                  ).withTapBounce()
-                : const SizedBox.shrink(),
             encryptionAvailable
                 ? ShadButton.ghost(
                     width: double.infinity,

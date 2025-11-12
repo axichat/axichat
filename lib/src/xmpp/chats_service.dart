@@ -29,10 +29,10 @@ mixin ChatsService on XmppBase, BaseStreamService {
     if (raw is String) {
       return MessageTimelineFilter.values.firstWhere(
         (filter) => filter.name == raw,
-        orElse: () => MessageTimelineFilter.directOnly,
+        orElse: () => MessageTimelineFilter.allWithContact,
       );
     }
-    return MessageTimelineFilter.directOnly;
+    return MessageTimelineFilter.allWithContact;
   }
 
   Future<MessageTransport> loadChatTransportPreference(String jid) async {
@@ -64,7 +64,7 @@ mixin ChatsService on XmppBase, BaseStreamService {
         (store) => _viewFilterFrom(store.read(key: _viewFilterKeyFor(jid))),
       );
     } on XmppAbortedException {
-      return MessageTimelineFilter.directOnly;
+      return MessageTimelineFilter.allWithContact;
     }
   }
 
