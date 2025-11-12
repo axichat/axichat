@@ -6,6 +6,8 @@ import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -30,10 +32,29 @@ class ArchivedChatScreen extends StatelessWidget {
     final chatsCubit = locate<ChatsCubit>();
     final OmemoService? omemoService =
         xmppService is OmemoService ? xmppService as OmemoService : null;
+    ProfileCubit? profileCubit;
+    RosterCubit? rosterCubit;
+    try {
+      profileCubit = locate<ProfileCubit>();
+    } catch (_) {
+      profileCubit = null;
+    }
+    try {
+      rosterCubit = locate<RosterCubit>();
+    } catch (_) {
+      rosterCubit = null;
+    }
 
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: chatsCubit),
+        if (profileCubit != null) BlocProvider.value(value: profileCubit),
+        if (rosterCubit != null)
+          BlocProvider.value(value: rosterCubit)
+        else
+          BlocProvider(
+            create: (_) => RosterCubit(rosterService: xmppService),
+          ),
         BlocProvider(
           create: (_) => ChatBloc(
             jid: jid,

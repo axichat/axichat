@@ -127,7 +127,11 @@ enum MessageTimelineFilter {
 
 enum MessageParticipantRole { sender, recipient }
 
-enum PseudoMessageType { newDevice, changedDevice }
+enum PseudoMessageType {
+  newDevice,
+  changedDevice,
+  unknown,
+}
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
 
