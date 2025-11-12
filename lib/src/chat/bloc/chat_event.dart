@@ -173,6 +173,24 @@ final class ChatAttachmentPicked extends ChatEvent {
   List<Object?> get props => [attachment];
 }
 
+final class ChatAttachmentRetryRequested extends ChatEvent {
+  const ChatAttachmentRetryRequested(this.attachmentId);
+
+  final String attachmentId;
+
+  @override
+  List<Object?> get props => [attachmentId];
+}
+
+final class ChatPendingAttachmentRemoved extends ChatEvent {
+  const ChatPendingAttachmentRemoved(this.attachmentId);
+
+  final String attachmentId;
+
+  @override
+  List<Object?> get props => [attachmentId];
+}
+
 final class ChatViewFilterChanged extends ChatEvent {
   const ChatViewFilterChanged({
     required this.filter,

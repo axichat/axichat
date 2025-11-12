@@ -7,6 +7,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:bloc_test/bloc_test.dart';
+import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -377,7 +378,7 @@ void main() {
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
     );
-    final attachment = EmailAttachment(
+    const attachment = EmailAttachment(
       path: '/tmp/file.txt',
       fileName: 'file.txt',
       sizeBytes: 2048,
@@ -405,13 +406,69 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(ChatAttachmentPicked(attachment));
+    bloc.add(const ChatAttachmentPicked(attachment));
     await _pumpBloc();
-    expect(bloc.state.pendingAttachments, [attachment]);
+    expect(bloc.state.pendingAttachments, hasLength(1));
+    final pending = bloc.state.pendingAttachments.single;
+    expect(pending.attachment, attachment);
+    expect(pending.status, PendingAttachmentStatus.uploading);
 
     sendCompleter.complete();
     await _pumpBloc();
     expect(bloc.state.pendingAttachments, isEmpty);
+
+    await bloc.close();
+  });
+
+  test('failed attachment can be retried', () async {
+    final emailService = MockEmailService();
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 1,
+      emailAddress: 'peer@example.com',
+    );
+    const attachment = EmailAttachment(
+      path: '/tmp/error.txt',
+      fileName: 'error.txt',
+      sizeBytes: 512,
+      mimeType: 'text/plain',
+    );
+    var attempts = 0;
+    when(
+      () => emailService.sendAttachment(
+        chat: any(named: 'chat'),
+        attachment: any(named: 'attachment'),
+      ),
+    ).thenAnswer((_) async {
+      attempts++;
+      if (attempts == 1) {
+        throw const DeltaSafeException('failed to send');
+      }
+      return 1;
+    });
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      notificationService: notificationService,
+      emailService: emailService,
+    );
+
+    messageStreamController.add(const <Message>[]);
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+
+    bloc.add(const ChatAttachmentPicked(attachment));
+    await _pumpBloc();
+    final failed = bloc.state.pendingAttachments.single;
+    expect(failed.status, PendingAttachmentStatus.failed);
+    expect(failed.errorMessage, isNotEmpty);
+    expect(attempts, 1);
+
+    bloc.add(ChatAttachmentRetryRequested(failed.id));
+    await _pumpBloc();
+    expect(bloc.state.pendingAttachments, isEmpty);
+    expect(attempts, 2);
 
     await bloc.close();
   });
