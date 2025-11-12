@@ -460,7 +460,9 @@ class _ChatState extends State<Chat> {
     final sendEnabled =
         _composerHasText || (isEmailTransport && hasQueuedAttachments);
     Widget? attachmentTray;
-    if (isEmailTransport && pendingAttachments.isNotEmpty) {
+    final showAttachmentTray =
+        isEmailTransport && pendingAttachments.isNotEmpty;
+    if (showAttachmentTray) {
       attachmentTray = _PendingAttachmentList(
         attachments: pendingAttachments,
         onRetry: (id) =>
@@ -492,17 +494,26 @@ class _ChatState extends State<Chat> {
                 horizontalPadding,
                 10,
               ),
-              child: ChatCutoutComposer(
-                controller: _textController,
-                focusNode: _focusNode,
-                hintText: hintText,
-                onSend: _handleSendMessage,
-                actions: _buildComposerAccessories(
-                  isEmailTransport: isEmailTransport,
-                  canSend: sendEnabled,
-                ),
-                sendEnabled: sendEnabled,
-                topContent: attachmentTray,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (attachmentTray != null) ...[
+                    attachmentTray,
+                    const SizedBox(height: 12),
+                  ],
+                  ChatCutoutComposer(
+                    controller: _textController,
+                    focusNode: _focusNode,
+                    hintText: hintText,
+                    onSend: _handleSendMessage,
+                    actions: _buildComposerAccessories(
+                      isEmailTransport: isEmailTransport,
+                      canSend: sendEnabled,
+                    ),
+                    sendEnabled: sendEnabled,
+                  ),
+                ],
               ),
             ),
           ),
@@ -571,7 +582,6 @@ class _ChatState extends State<Chat> {
             context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
       ),
     );
-    children.add(const SizedBox(height: 12));
     children.add(composer);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),

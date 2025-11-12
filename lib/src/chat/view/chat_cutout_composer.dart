@@ -71,8 +71,6 @@ class ChatCutoutComposer extends StatelessWidget {
     required this.sendEnabled,
     this.minLines = 1,
     this.maxLines = 6,
-    this.topContent,
-    this.topContentSpacing = 12,
   });
 
   final TextEditingController controller;
@@ -83,8 +81,6 @@ class ChatCutoutComposer extends StatelessWidget {
   final bool sendEnabled;
   final int minLines;
   final int maxLines;
-  final Widget? topContent;
-  final double topContentSpacing;
 
   @override
   Widget build(BuildContext context) {
@@ -138,49 +134,39 @@ class ChatCutoutComposer extends StatelessWidget {
           .toList(),
       child: Padding(
         padding: padding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (topContent != null) ...[
-              topContent!,
-              if (topContentSpacing > 0) SizedBox(height: topContentSpacing),
-            ],
-            Shortcuts(
-              shortcuts: shortcuts,
-              child: Actions(
-                actions: actionsMap,
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  minLines: minLines,
-                  maxLines: maxLines,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  style: textStyle,
-                  cursorColor: colors.primary,
-                  cursorHeight: cursorHeight,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    isCollapsed: true,
-                    contentPadding: EdgeInsets.zero,
-                    hintText: hintText,
-                    hintStyle: context.textTheme.muted.copyWith(
-                      color: colors.mutedForeground,
-                    ),
-                  ),
-                  onSubmitted: (_) {
-                    if (sendEnabled) onSend();
-                  },
+        child: Shortcuts(
+          shortcuts: shortcuts,
+          child: Actions(
+            actions: actionsMap,
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              minLines: minLines,
+              maxLines: maxLines,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              style: textStyle,
+              cursorColor: colors.primary,
+              cursorHeight: cursorHeight,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                isCollapsed: true,
+                contentPadding: EdgeInsets.zero,
+                hintText: hintText,
+                hintStyle: context.textTheme.muted.copyWith(
+                  color: colors.mutedForeground,
                 ),
               ),
+              onSubmitted: (_) {
+                if (sendEnabled) onSend();
+              },
             ),
-          ],
+          ),
         ),
       ),
     );
