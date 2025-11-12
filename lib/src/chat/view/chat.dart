@@ -459,6 +459,18 @@ class _ChatState extends State<Chat> {
     );
     final sendEnabled =
         _composerHasText || (isEmailTransport && hasQueuedAttachments);
+    Widget? attachmentTray;
+    if (isEmailTransport && pendingAttachments.isNotEmpty) {
+      attachmentTray = _PendingAttachmentList(
+        attachments: pendingAttachments,
+        onRetry: (id) =>
+            context.read<ChatBloc>().add(ChatAttachmentRetryRequested(id)),
+        onRemove: (id) =>
+            context.read<ChatBloc>().add(ChatPendingAttachmentRemoved(id)),
+        onPressed: _handlePendingAttachmentPressed,
+        onLongPress: _handlePendingAttachmentLongPressed,
+      );
+    }
     Widget composer = SafeArea(
       top: false,
       left: false,
@@ -490,6 +502,7 @@ class _ChatState extends State<Chat> {
                   canSend: sendEnabled,
                 ),
                 sendEnabled: sendEnabled,
+                topContent: attachmentTray,
               ),
             ),
           ),
@@ -535,44 +548,36 @@ class _ChatState extends State<Chat> {
         );
       }
     }
+    final children = <Widget>[];
+    if (notices.isNotEmpty) {
+      for (var i = 0; i < notices.length; i++) {
+        children.add(notices[i]);
+        if (i != notices.length - 1) {
+          children.add(const SizedBox(height: 8));
+        }
+      }
+      children.add(const SizedBox(height: 12));
+    }
+    children.add(
+      RecipientChipsBar(
+        recipients: recipients,
+        availableChats: availableEmailChats,
+        latestStatuses: latestStatuses,
+        onRecipientAdded: (target) =>
+            context.read<ChatBloc>().add(ChatComposerRecipientAdded(target)),
+        onRecipientRemoved: (key) =>
+            context.read<ChatBloc>().add(ChatComposerRecipientRemoved(key)),
+        onRecipientToggled: (key) =>
+            context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
+      ),
+    );
+    children.add(const SizedBox(height: 12));
+    children.add(composer);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (pendingAttachments.isNotEmpty) ...[
-            _PendingAttachmentList(
-              attachments: pendingAttachments,
-              onRetry: (id) => context
-                  .read<ChatBloc>()
-                  .add(ChatAttachmentRetryRequested(id)),
-              onRemove: (id) => context
-                  .read<ChatBloc>()
-                  .add(ChatPendingAttachmentRemoved(id)),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (notices.isNotEmpty) ...[
-            for (var i = 0; i < notices.length; i++) ...[
-              notices[i],
-              if (i != notices.length - 1) const SizedBox(height: 8),
-            ],
-            const SizedBox(height: 12),
-          ],
-          RecipientChipsBar(
-            recipients: recipients,
-            availableChats: availableEmailChats,
-            latestStatuses: latestStatuses,
-            onRecipientAdded: (target) => context
-                .read<ChatBloc>()
-                .add(ChatComposerRecipientAdded(target)),
-            onRecipientRemoved: (key) =>
-                context.read<ChatBloc>().add(ChatComposerRecipientRemoved(key)),
-            onRecipientToggled: (key) =>
-                context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
-          ),
-          composer,
-        ],
+        children: children,
       ),
     );
   }
@@ -747,6 +752,111 @@ class _ChatState extends State<Chat> {
           style: dialogContext.textTheme.small,
         ),
       ),
+    );
+  }
+
+  void _handlePendingAttachmentPressed(PendingAttachment pending) {
+    if (!mounted) return;
+    if (pending.attachment.isImage) {
+      _showAttachmentPreview(pending);
+    } else {
+      _showPendingAttachmentActions(pending);
+    }
+  }
+
+  void _handlePendingAttachmentLongPressed(PendingAttachment pending) {
+    if (!mounted) return;
+    _showPendingAttachmentActions(pending);
+  }
+
+  Future<void> _showAttachmentPreview(PendingAttachment pending) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            SizedBox(
+              width: MediaQuery.sizeOf(context).width * 0.9,
+              height: MediaQuery.sizeOf(context).height * 0.7,
+              child: InteractiveViewer(
+                child: Image.file(
+                  File(pending.attachment.path),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(LucideIcons.x),
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final attachment = pending.attachment;
+        final sizeLabel = _formatBytes(attachment.sizeBytes);
+        final bloc = context.read<ChatBloc>();
+        final colors = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    _attachmentIcon(attachment),
+                    color: colors.primary,
+                  ),
+                  title: Text(attachment.fileName),
+                  subtitle: Text(sizeLabel),
+                ),
+                if (attachment.isImage)
+                  ListTile(
+                    leading: const Icon(LucideIcons.eye),
+                    title: const Text('View'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _showAttachmentPreview(pending);
+                    },
+                  ),
+                if (pending.status == PendingAttachmentStatus.failed)
+                  ListTile(
+                    leading: const Icon(LucideIcons.refreshCw),
+                    title: const Text('Retry upload'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      bloc.add(ChatAttachmentRetryRequested(pending.id));
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(LucideIcons.trash),
+                  title: const Text('Remove attachment'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    bloc.add(ChatPendingAttachmentRemoved(pending.id));
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1237,35 +1347,43 @@ class _ChatState extends State<Chat> {
                 shape: Border(
                     bottom: BorderSide(color: context.colorScheme.border)),
                 actionsPadding: const EdgeInsets.symmetric(horizontal: 8.0),
+                leadingWidth: AxiIconButton.kDefaultSize + 24,
                 leading: Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: AxiIconButton(
-                    iconData: LucideIcons.arrowLeft,
-                    tooltip: 'Back',
-                    color: context.colorScheme.foreground,
-                    borderColor: context.colorScheme.border,
-                    onPressed: () {
-                      if (_chatRoute != _ChatRoute.main) {
-                        context
-                            .read<ChatBloc>()
-                            .add(const ChatMessageFocused(null));
-                        return setState(() {
-                          _chatRoute = _ChatRoute.main;
-                        });
-                      }
-                      if (_textController.text.isNotEmpty) {
-                        if (!isEmailTransport) {
-                          context.read<DraftCubit?>()?.saveDraft(
-                                id: null,
-                                jids: [state.chat!.jid],
-                                body: _textController.text,
-                              );
-                        }
-                      }
-                      context
-                          .read<ChatsCubit>()
-                          .toggleChat(jid: state.chat!.jid);
-                    },
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox(
+                      width: AxiIconButton.kDefaultSize,
+                      height: AxiIconButton.kDefaultSize,
+                      child: AxiIconButton(
+                        iconData: LucideIcons.arrowLeft,
+                        tooltip: 'Back',
+                        color: context.colorScheme.foreground,
+                        borderColor: context.colorScheme.border,
+                        onPressed: () {
+                          if (_chatRoute != _ChatRoute.main) {
+                            context
+                                .read<ChatBloc>()
+                                .add(const ChatMessageFocused(null));
+                            return setState(() {
+                              _chatRoute = _ChatRoute.main;
+                            });
+                          }
+                          if (_textController.text.isNotEmpty) {
+                            if (!isEmailTransport) {
+                              context.read<DraftCubit?>()?.saveDraft(
+                                    id: null,
+                                    jids: [state.chat!.jid],
+                                    body: _textController.text,
+                                  );
+                            }
+                          }
+                          context
+                              .read<ChatsCubit>()
+                              .toggleChat(jid: state.chat!.jid);
+                        },
+                      ),
+                    ),
                   ),
                 ),
                 title: jid == null
@@ -2662,11 +2780,15 @@ class _PendingAttachmentList extends StatelessWidget {
     required this.attachments,
     required this.onRetry,
     required this.onRemove,
+    this.onPressed,
+    this.onLongPress,
   });
 
   final List<PendingAttachment> attachments;
   final ValueChanged<String> onRetry;
   final ValueChanged<String> onRemove;
+  final ValueChanged<PendingAttachment>? onPressed;
+  final ValueChanged<PendingAttachment>? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -2681,6 +2803,9 @@ class _PendingAttachmentList extends StatelessWidget {
                 pending: pending,
                 onRetry: () => onRetry(pending.id),
                 onRemove: () => onRemove(pending.id),
+                onPressed: onPressed == null ? null : () => onPressed!(pending),
+                onLongPress:
+                    onLongPress == null ? null : () => onLongPress!(pending),
               ),
             )
             .toList(),
@@ -2694,25 +2819,44 @@ class _PendingAttachmentPreview extends StatelessWidget {
     required this.pending,
     required this.onRetry,
     required this.onRemove,
+    this.onPressed,
+    this.onLongPress,
   });
 
   final PendingAttachment pending;
   final VoidCallback onRetry;
   final VoidCallback onRemove;
+  final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
+    Widget preview;
     if (pending.attachment.isImage) {
-      return _PendingImageAttachment(
+      preview = _PendingImageAttachment(
+        pending: pending,
+        onRetry: onRetry,
+        onRemove: onRemove,
+      );
+    } else {
+      preview = _PendingFileAttachment(
         pending: pending,
         onRetry: onRetry,
         onRemove: onRemove,
       );
     }
-    return _PendingFileAttachment(
-      pending: pending,
-      onRetry: onRetry,
-      onRemove: onRemove,
+    if (onPressed == null && onLongPress == null) {
+      return preview;
+    }
+    final borderRadius = BorderRadius.circular(16);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: borderRadius,
+        onTap: onPressed,
+        onLongPress: onLongPress ?? onPressed,
+        child: preview,
+      ),
     );
   }
 }
@@ -2732,6 +2876,7 @@ class _PendingImageAttachment extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final borderRadius = BorderRadius.circular(16);
+    final isFailed = pending.status == PendingAttachmentStatus.failed;
     return SizedBox(
       width: 72,
       height: 72,
@@ -2753,31 +2898,19 @@ class _PendingImageAttachment extends StatelessWidget {
               ),
             ),
           ),
-          if (pending.status == PendingAttachmentStatus.uploading)
-            Positioned(
-              top: 6,
-              right: 6,
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: colors.background.withValues(alpha: 0.85),
-                  shape: BoxShape.circle,
-                ),
-                padding: const EdgeInsets.all(4),
-                child: _PendingAttachmentSpinner(
-                  color: colors.primary,
-                  strokeWidth: 2,
-                ),
-              ),
-            )
-          else
+          if (isFailed)
             _PendingAttachmentErrorOverlay(
               borderRadius: borderRadius,
               fileName: pending.attachment.fileName,
               message: pending.errorMessage,
               onRetry: onRetry,
               onRemove: onRemove,
+            )
+          else
+            Positioned(
+              top: 6,
+              right: 6,
+              child: _PendingAttachmentStatusBadge(status: pending.status),
             ),
         ],
       ),
@@ -2801,6 +2934,7 @@ class _PendingFileAttachment extends StatelessWidget {
     final colors = context.colorScheme;
     final sizeLabel = _formatBytes(pending.attachment.sizeBytes);
     final borderRadius = BorderRadius.circular(16);
+    final isFailed = pending.status == PendingAttachmentStatus.failed;
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: math.min(MediaQuery.sizeOf(context).width * 0.65, 260),
@@ -2848,19 +2982,12 @@ class _PendingFileAttachment extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                if (pending.status == PendingAttachmentStatus.uploading)
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: _PendingAttachmentSpinner(
-                      color: colors.primary,
-                      strokeWidth: 2,
-                    ),
-                  ),
+                if (!isFailed)
+                  _PendingAttachmentStatusInlineBadge(status: pending.status),
               ],
             ),
           ),
-          if (pending.status == PendingAttachmentStatus.failed)
+          if (isFailed)
             _PendingAttachmentErrorOverlay(
               borderRadius: borderRadius,
               fileName: pending.attachment.fileName,
@@ -3063,6 +3190,88 @@ class _PendingAttachmentSpinner extends StatelessWidget {
       color: color,
     );
   }
+}
+
+class _PendingAttachmentStatusBadge extends StatelessWidget {
+  const _PendingAttachmentStatusBadge({required this.status});
+
+  final PendingAttachmentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final background = colors.background.withValues(alpha: 0.85);
+    return Tooltip(
+      message: _statusLabel(status),
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: background,
+          shape: BoxShape.circle,
+          border: Border.all(color: colors.border),
+        ),
+        padding: const EdgeInsets.all(4),
+        child: _StatusIndicator(status: status),
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentStatusInlineBadge extends StatelessWidget {
+  const _PendingAttachmentStatusInlineBadge({required this.status});
+
+  final PendingAttachmentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: _statusLabel(status),
+      child: SizedBox(
+        width: 20,
+        height: 20,
+        child: _StatusIndicator(status: status),
+      ),
+    );
+  }
+}
+
+class _StatusIndicator extends StatelessWidget {
+  const _StatusIndicator({required this.status});
+
+  final PendingAttachmentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    switch (status) {
+      case PendingAttachmentStatus.uploading:
+        return _PendingAttachmentSpinner(
+          color: colors.primary,
+          strokeWidth: 2,
+        );
+      case PendingAttachmentStatus.queued:
+        return Icon(
+          LucideIcons.clock,
+          size: 14,
+          color: colors.mutedForeground,
+        );
+      case PendingAttachmentStatus.failed:
+        return Icon(
+          LucideIcons.triangleAlert,
+          size: 14,
+          color: colors.destructive,
+        );
+    }
+  }
+}
+
+String _statusLabel(PendingAttachmentStatus status) {
+  return switch (status) {
+    PendingAttachmentStatus.uploading => 'Uploading attachment…',
+    PendingAttachmentStatus.queued => 'Waiting to send',
+    PendingAttachmentStatus.failed => 'Upload failed',
+  };
 }
 
 IconData _attachmentIcon(EmailAttachment attachment) {
