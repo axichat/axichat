@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
@@ -21,6 +22,8 @@ import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/policy.dart';
+import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -52,6 +55,36 @@ extension on MessageStatus {
         MessageStatus.failed => LucideIcons.x,
         _ => LucideIcons.dot,
       };
+}
+
+class _SizeReportingWidget extends StatefulWidget {
+  const _SizeReportingWidget({
+    required this.onSizeChanged,
+    required this.child,
+  });
+
+  final ValueChanged<Size> onSizeChanged;
+  final Widget child;
+
+  @override
+  State<_SizeReportingWidget> createState() => _SizeReportingWidgetState();
+}
+
+class _SizeReportingWidgetState extends State<_SizeReportingWidget> {
+  Size? _lastReportedSize;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final renderSize = context.size;
+      if (renderSize == null) return;
+      if (_lastReportedSize == renderSize) return;
+      _lastReportedSize = renderSize;
+      widget.onSizeChanged(renderSize);
+    });
+    return widget.child;
+  }
 }
 
 enum _ChatRoute {
@@ -103,6 +136,322 @@ const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _messageListTailSpacer = 36.0;
+
+class _MessageFilterOption {
+  const _MessageFilterOption(this.filter, this.label);
+
+  final MessageTimelineFilter filter;
+  final String label;
+}
+
+const _messageFilterOptions = [
+  _MessageFilterOption(
+    MessageTimelineFilter.directOnly,
+    'Direct only',
+  ),
+  _MessageFilterOption(
+    MessageTimelineFilter.allWithContact,
+    'All with contact',
+  ),
+];
+
+class _ChatSearchToggleButton extends StatelessWidget {
+  const _ChatSearchToggleButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.watch<ChatSearchCubit?>();
+    final active = cubit?.state.active ?? false;
+    return AxiIconButton(
+      iconData: active ? LucideIcons.x : LucideIcons.search,
+      tooltip: active ? 'Close search' : 'Search messages',
+      onPressed: cubit == null
+          ? null
+          : () => context.read<ChatSearchCubit>().toggleActive(),
+    );
+  }
+}
+
+class _ChatSearchPanel extends StatefulWidget {
+  const _ChatSearchPanel({required this.onResultTap});
+
+  final ValueChanged<Message> onResultTap;
+
+  @override
+  State<_ChatSearchPanel> createState() => _ChatSearchPanelState();
+}
+
+class _ChatSearchPanelState extends State<_ChatSearchPanel> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  var _programmatic = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _focusNode = FocusNode();
+    _controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleTextChanged);
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleTextChanged() {
+    if (_programmatic) return;
+    context.read<ChatSearchCubit?>()?.updateQuery(_controller.text);
+  }
+
+  void _syncController(String text) {
+    if (_controller.text == text) return;
+    _programmatic = true;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _programmatic = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final searchCubit = context.watch<ChatSearchCubit?>();
+    if (searchCubit == null) return const SizedBox.shrink();
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    return BlocConsumer<ChatSearchCubit, ChatSearchState>(
+      listener: (context, state) {
+        _syncController(state.query);
+        if (state.active) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _focusNode.hasFocus) return;
+            _focusNode.requestFocus();
+          });
+        } else if (_focusNode.hasFocus) {
+          _focusNode.unfocus();
+        }
+      },
+      builder: (context, state) {
+        return AnimatedCrossFade(
+          duration: animationDuration,
+          reverseDuration: animationDuration,
+          sizeCurve: Curves.easeInOutCubic,
+          crossFadeState: state.active
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          firstChild: const SizedBox.shrink(),
+          secondChild: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: context.colorScheme.card,
+              border: Border(
+                bottom: BorderSide(color: context.colorScheme.border),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ShadInput(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        placeholder: const Text('Search messages'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AxiIconButton(
+                      iconData: LucideIcons.x,
+                      tooltip: 'Clear',
+                      onPressed: _controller.text.isEmpty
+                          ? null
+                          : () {
+                              _controller.clear();
+                            },
+                    ),
+                    const SizedBox(width: 8),
+                    ShadButton.ghost(
+                      size: ShadButtonSize.sm,
+                      onPressed: () =>
+                          context.read<ChatSearchCubit?>()?.setActive(false),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ShadSelect<SearchSortOrder>(
+                        initialValue: state.sort,
+                        onChanged: (value) {
+                          if (value == null) return;
+                          context.read<ChatSearchCubit?>()?.updateSort(value);
+                        },
+                        options: SearchSortOrder.values
+                            .map(
+                              (order) => ShadOption<SearchSortOrder>(
+                                value: order,
+                                child: Text(order.label),
+                              ),
+                            )
+                            .toList(),
+                        selectedOptionBuilder: (_, value) => Text(value.label),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ShadSelect<MessageTimelineFilter>(
+                        initialValue: state.filter,
+                        onChanged: (value) {
+                          if (value == null) return;
+                          context.read<ChatSearchCubit?>()?.updateFilter(value);
+                        },
+                        options: _messageFilterOptions
+                            .map(
+                              (option) => ShadOption<MessageTimelineFilter>(
+                                value: option.filter,
+                                child: Text(option.label),
+                              ),
+                            )
+                            .toList(),
+                        selectedOptionBuilder: (_, value) => Text(
+                          _messageFilterOptions
+                              .firstWhere(
+                                (option) => option.filter == value,
+                              )
+                              .label,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (state.status == RequestStatus.loading)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: context.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Searching…',
+                          style: context.textTheme.muted,
+                        ),
+                      ],
+                    ),
+                  )
+                else if (state.error != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      state.error ?? 'Search failed',
+                      style: TextStyle(color: context.colorScheme.destructive),
+                    ),
+                  ),
+                if (state.results.isNotEmpty)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: state.results.length,
+                      itemBuilder: (context, index) {
+                        final message = state.results[index];
+                        return _ChatSearchResultTile(
+                          message: message,
+                          onTap: widget.onResultTap,
+                        );
+                      },
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    ),
+                  )
+                else if (state.status == RequestStatus.success)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'No matches',
+                      style: context.textTheme.muted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ChatSearchResultTile extends StatelessWidget {
+  const _ChatSearchResultTile({
+    required this.message,
+    required this.onTap,
+  });
+
+  final Message message;
+  final ValueChanged<Message> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = message.body?.trim();
+    final timestamp = message.timestamp;
+    final label = timestamp == null
+        ? ''
+        : formatTimeSinceLabel(DateTime.now(), timestamp);
+    return Material(
+      color: context.colorScheme.card,
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      child: InkWell(
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        onTap: () => onTap(message),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                body?.isNotEmpty == true ? body! : '[No text]',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    label,
+                    style: context.textTheme.muted,
+                  ),
+                  if (body?.isNotEmpty == true)
+                    AxiIconButton(
+                      iconData: LucideIcons.copy,
+                      tooltip: 'Copy',
+                      onPressed: () => Clipboard.setData(
+                        ClipboardData(text: body!),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 List<BoxShadow> _selectedBubbleShadows(Color color) => [
       BoxShadow(
@@ -225,7 +574,9 @@ InputDecoration _chatInputDecoration(
 }
 
 class Chat extends StatefulWidget {
-  const Chat({super.key});
+  const Chat({super.key, this.readOnly = false});
+
+  final bool readOnly;
 
   @override
   State<Chat> createState() => _ChatState();
@@ -259,6 +610,7 @@ class _ChatState extends State<Chat> {
   Offset? _dismissPointerDownPosition;
   bool _dismissPointerMoved = false;
   var _sendingAttachment = false;
+  double _recipientBarHeight = 0;
 
   void _typingListener() {
     final text = _textController.text;
@@ -313,6 +665,36 @@ class _ChatState extends State<Chat> {
     _dismissPointer = null;
     _dismissPointerDownPosition = null;
     _dismissPointerMoved = false;
+  }
+
+  void _handleRecipientBarSizeChanged(Size size) {
+    if (!mounted) return;
+    _setRecipientBarHeight(size.height);
+  }
+
+  void _setRecipientBarHeight(double height) {
+    final targetHeight =
+        height.isFinite ? math.max(0.0, height) : 0.0; // ignore invalid sizes
+    if ((_recipientBarHeight - targetHeight).abs() <=
+        _selectionHeadroomTolerance) {
+      return;
+    }
+    setState(() {
+      _recipientBarHeight = targetHeight;
+    });
+    if (_selectionAutoscrollActive) {
+      _scheduleSelectionAutoscroll();
+    }
+  }
+
+  void _ensureRecipientBarHeightCleared() {
+    if (_recipientBarHeight <= _selectionHeadroomTolerance) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _setRecipientBarHeight(0);
+    });
   }
 
   Future<FileMetadataData?> _metadataFutureFor(String id) {
@@ -424,6 +806,16 @@ class _ChatState extends State<Chat> {
       );
   }
 
+  void _handleSearchResultTap(Message message) {
+    context.read<ChatBloc>().add(ChatMessageFocused(message.stanzaID));
+    setState(() {
+      _chatRoute = _ChatRoute.details;
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    });
+  }
+
   void _handleSendMessage() {
     final text = _textController.text.trim();
     final bloc = context.read<ChatBloc>();
@@ -454,6 +846,10 @@ class _ChatState extends State<Chat> {
     FanOutSendReport? retryReport,
     String? retryShareId,
   }) {
+    if (widget.readOnly) {
+      _ensureRecipientBarHeightCleared();
+      return _buildReadOnlyBanner();
+    }
     final colors = context.colorScheme;
     const horizontalPadding = _composerHorizontalInset;
     final hasQueuedAttachments = pendingAttachments.any(
@@ -523,6 +919,7 @@ class _ChatState extends State<Chat> {
       ),
     );
     if (!isEmailTransport) {
+      _ensureRecipientBarHeightCleared();
       return composer;
     }
     final notices = <Widget>[];
@@ -572,16 +969,19 @@ class _ChatState extends State<Chat> {
       children.add(const SizedBox(height: 12));
     }
     children.add(
-      RecipientChipsBar(
-        recipients: recipients,
-        availableChats: availableEmailChats,
-        latestStatuses: latestStatuses,
-        onRecipientAdded: (target) =>
-            context.read<ChatBloc>().add(ChatComposerRecipientAdded(target)),
-        onRecipientRemoved: (key) =>
-            context.read<ChatBloc>().add(ChatComposerRecipientRemoved(key)),
-        onRecipientToggled: (key) =>
-            context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
+      _SizeReportingWidget(
+        onSizeChanged: _handleRecipientBarSizeChanged,
+        child: RecipientChipsBar(
+          recipients: recipients,
+          availableChats: availableEmailChats,
+          latestStatuses: latestStatuses,
+          onRecipientAdded: (target) =>
+              context.read<ChatBloc>().add(ChatComposerRecipientAdded(target)),
+          onRecipientRemoved: (key) =>
+              context.read<ChatBloc>().add(ChatComposerRecipientRemoved(key)),
+          onRecipientToggled: (key) =>
+              context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
+        ),
       ),
     );
     children.add(composer);
@@ -590,6 +990,65 @@ class _ChatState extends State<Chat> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: children,
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyBanner() {
+    final colors = context.colorScheme;
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: ColoredBox(
+        color: colors.background,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: colors.border, width: 1),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              _composerHorizontalInset,
+              18,
+              _composerHorizontalInset,
+              18,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  LucideIcons.archive,
+                  size: 18,
+                  color: colors.mutedForeground,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Read only',
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Unarchive to send new messages.',
+                        style: context.textTheme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -909,6 +1368,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _toggleMessageSelection(String messageId) {
+    if (widget.readOnly) return;
     if (_selectedMessageId == messageId) {
       _clearMessageSelection();
     } else {
@@ -1091,7 +1551,10 @@ class _ChatState extends State<Chat> {
     final reactionBottom = reactionOrigin.dy + reactionBox.size.height;
     final inputOrigin = inputBox.localToGlobal(Offset.zero);
     final inputTop = inputOrigin.dy;
-    final currentGap = inputTop - reactionBottom;
+    final recipientInset = _recipientBarHeight > _selectionHeadroomTolerance
+        ? _recipientBarHeight
+        : 0.0;
+    final currentGap = inputTop - reactionBottom - recipientInset;
     final gapDelta = currentGap - _selectionExtrasViewportGap;
     if (gapDelta.abs() <= _selectionHeadroomTolerance) {
       return 0;
@@ -1462,20 +1925,25 @@ class _ChatState extends State<Chat> {
                         },
                       ),
                 actions: [
-                  if (jid == null || _chatRoute != _ChatRoute.main)
-                    const SizedBox.shrink()
-                  else
+                  if (jid != null && _chatRoute == _ChatRoute.main) ...[
+                    const _ChatSearchToggleButton(),
+                    const SizedBox(width: 4),
                     Builder(
                       builder: (context) => AxiIconButton(
                         iconData: LucideIcons.settings,
                         onPressed: Scaffold.of(context).openEndDrawer,
                       ),
-                    )
+                    ),
+                  ] else
+                    const SizedBox.shrink(),
                 ],
               ),
               body: Column(
                 children: [
                   const ChatAlert(),
+                  _ChatSearchPanel(
+                    onResultTap: _handleSearchResultTap,
+                  ),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration:
@@ -1700,7 +2168,9 @@ class _ChatState extends State<Chat> {
                                       key: _messageListKey,
                                       child: DashChat(
                                         currentUser: user,
-                                        onSend: (_) => _handleSendMessage(),
+                                        onSend: widget.readOnly
+                                            ? (_) {}
+                                            : (_) => _handleSendMessage(),
                                         messages: dashMessages,
                                         typingUsers:
                                             typingUsers.take(1).toList(),
@@ -2380,10 +2850,12 @@ class _ChatState extends State<Chat> {
                                                   _clearMessageSelection();
                                                 }
                                               },
-                                              onLongPress: () =>
-                                                  _toggleMessageSelection(
-                                                messageModel.stanzaID,
-                                              ),
+                                              onLongPress: widget.readOnly
+                                                  ? null
+                                                  : () =>
+                                                      _toggleMessageSelection(
+                                                        messageModel.stanzaID,
+                                                      ),
                                               child: alignedBubble,
                                             );
                                             final animatedStack = AnimatedSize(

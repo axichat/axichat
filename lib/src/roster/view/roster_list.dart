@@ -1,7 +1,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -34,7 +36,35 @@ class RosterList extends StatelessWidget {
           );
         }
 
-        if (items.isEmpty) {
+        var visibleItems = List<RosterItem>.from(items);
+
+        final searchState = context.watch<HomeSearchCubit?>()?.state;
+        final tabState = searchState?.stateFor(HomeTab.contacts);
+        final searchActive = searchState?.active ?? false;
+        final query =
+            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+        final filterId = tabState?.filterId;
+        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+
+        if (filterId != null) {
+          visibleItems = visibleItems
+              .where((item) => _rosterMatchesFilter(item, filterId))
+              .toList();
+        }
+
+        if (visibleItems.isNotEmpty && query.isNotEmpty) {
+          visibleItems = visibleItems
+              .where((item) => _rosterMatchesQuery(item, query))
+              .toList();
+        }
+
+        visibleItems.sort(
+          (a, b) => sortOrder.isNewestFirst
+              ? a.title.toLowerCase().compareTo(b.title.toLowerCase())
+              : b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
+
+        if (visibleItems.isEmpty) {
           return Center(
             child: Text(
               'No contacts yet',
@@ -46,9 +76,9 @@ class RosterList extends StatelessWidget {
         return ColoredBox(
           color: context.colorScheme.background,
           child: ListView.builder(
-            itemCount: items.length,
+            itemCount: visibleItems.length,
             itemBuilder: (context, index) {
-              final item = items![index];
+              final item = visibleItems[index];
               final open =
                   context.watch<ChatsCubit?>()?.state.openJid == item.jid;
               return ListItemPadding(
@@ -104,4 +134,22 @@ class RosterList extends StatelessWidget {
       },
     );
   }
+}
+
+bool _rosterMatchesFilter(RosterItem item, String? filterId) {
+  switch (filterId) {
+    case 'online':
+      return !item.presence.isUnavailable;
+    case 'offline':
+      return item.presence.isUnavailable;
+    default:
+      return true;
+  }
+}
+
+bool _rosterMatchesQuery(RosterItem item, String query) {
+  final lower = query.toLowerCase();
+  return item.title.toLowerCase().contains(lower) ||
+      item.jid.toLowerCase().contains(lower) ||
+      (item.status?.toLowerCase().contains(lower) ?? false);
 }

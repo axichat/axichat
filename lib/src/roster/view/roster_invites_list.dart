@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -31,7 +33,28 @@ class RosterInvitesList extends StatelessWidget {
           );
         }
 
-        if (invites.isEmpty) {
+        final searchState = context.watch<HomeSearchCubit?>()?.state;
+        final tabState = searchState?.stateFor(HomeTab.invites);
+        final searchActive = searchState?.active ?? false;
+        final query =
+            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+
+        var visibleInvites = List<Invite>.from(invites);
+
+        if (query.isNotEmpty) {
+          visibleInvites = visibleInvites
+              .where((invite) => _inviteMatchesQuery(invite, query))
+              .toList();
+        }
+
+        visibleInvites.sort(
+          (a, b) => sortOrder.isNewestFirst
+              ? a.title.toLowerCase().compareTo(b.title.toLowerCase())
+              : b.title.toLowerCase().compareTo(a.title.toLowerCase()),
+        );
+
+        if (visibleInvites.isEmpty) {
           return Center(
             child: Text(
               'No invites yet',
@@ -43,9 +66,9 @@ class RosterInvitesList extends StatelessWidget {
         return ColoredBox(
           color: context.colorScheme.background,
           child: ListView.builder(
-            itemCount: invites.length,
+            itemCount: visibleInvites.length,
             itemBuilder: (context, index) {
-              final invite = invites![index];
+              final invite = visibleInvites[index];
               return BlocSelector<RosterCubit, RosterState, bool>(
                 selector: (state) =>
                     state is RosterLoading && state.jid == invite.jid,
@@ -98,4 +121,10 @@ class RosterInvitesList extends StatelessWidget {
       },
     );
   }
+}
+
+bool _inviteMatchesQuery(Invite invite, String query) {
+  final lower = query.toLowerCase();
+  return invite.title.toLowerCase().contains(lower) ||
+      invite.jid.toLowerCase().contains(lower);
 }

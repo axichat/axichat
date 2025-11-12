@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
+import 'package:axichat/src/chats/view/archived_chat_screen.dart';
 import 'package:axichat/src/chats/view/archives_screen.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';
@@ -46,7 +47,12 @@ class TransitionGoRouteData extends GoRouteData {
     TypedGoRoute<ProfileRoute>(
       path: ProfileRoute.path,
       routes: [
-        TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path),
+        TypedGoRoute<ArchivesRoute>(
+          path: ArchivesRoute.path,
+          routes: [
+            TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
+          ],
+        ),
       ],
     ),
     TypedGoRoute<ComposeRoute>(path: ComposeRoute.path),
@@ -88,6 +94,24 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
   @override
   Widget build(BuildContext context, GoRouterState state) => ArchivesScreen(
         locate: state.extra! as T Function<T>(),
+      );
+}
+
+class ArchivedChatRoute extends TransitionGoRouteData
+    with AuthenticationRouteData {
+  const ArchivedChatRoute({required this.jid});
+
+  static const path = 'chat/:jid';
+
+  final String jid;
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) => ArchivedChatScreen(
+        locate: state.extra! as T Function<T>(),
+        jid: jid,
       );
 }
 

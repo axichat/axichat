@@ -7,9 +7,12 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,10 +31,7 @@ class ChatsList extends StatelessWidget {
       selector: (state) {
         final items = state.items;
         if (items == null) return null;
-        return items
-            .where((chat) => !chat.archived)
-            .where(state.filter)
-            .toList();
+        return items.where((chat) => !chat.archived).toList();
       },
       builder: (context, items) {
         if (items == null) {
@@ -42,7 +42,39 @@ class ChatsList extends StatelessWidget {
           );
         }
 
-        if (items.isEmpty) {
+        final searchState = context.watch<HomeSearchCubit?>()?.state;
+        final tabState = searchState?.stateFor(HomeTab.chats);
+        final searchActive = searchState?.active ?? false;
+        final query =
+            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+        final filterId = tabState?.filterId;
+        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+        final rosterContacts =
+            context.watch<RosterCubit?>()?.contacts ?? const <String>{};
+
+        var visibleItems = items
+            .where(
+              (chat) => _chatMatchesFilter(
+                chat,
+                filterId,
+                rosterContacts,
+              ),
+            )
+            .toList();
+
+        if (query.isNotEmpty) {
+          visibleItems = visibleItems
+              .where((chat) => _chatMatchesQuery(chat, query))
+              .toList();
+        }
+
+        visibleItems.sort(
+          (a, b) => sortOrder.isNewestFirst
+              ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+              : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
+        );
+
+        if (visibleItems.isEmpty) {
           return Center(
             child: Text(
               'No chats yet',
@@ -54,7 +86,7 @@ class ChatsList extends StatelessWidget {
         return ColoredBox(
           color: context.colorScheme.background,
           child: ListView.builder(
-            itemCount: items.length + 1,
+            itemCount: visibleItems.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
                 final calendarBloc = context.read<CalendarBloc?>();
@@ -75,7 +107,7 @@ class ChatsList extends StatelessWidget {
                 return ListItemPadding(child: tile);
               }
 
-              final item = items[index - 1];
+              final item = visibleItems[index - 1];
               return ListItemPadding(
                 child: ChatListTile(item: item),
               );
@@ -87,15 +119,48 @@ class ChatsList extends StatelessWidget {
   }
 }
 
+bool _chatMatchesFilter(
+  Chat chat,
+  String? filterId,
+  Set<String> contacts,
+) {
+  final normalized = filterId ?? 'all';
+  switch (normalized) {
+    case 'contacts':
+      return !chat.hidden && contacts.contains(chat.jid);
+    case 'nonContacts':
+      return !chat.hidden && !contacts.contains(chat.jid);
+    case 'xmpp':
+      return !chat.hidden && chat.transport.isXmpp;
+    case 'email':
+      return !chat.hidden && chat.transport.isEmail;
+    case 'hidden':
+      return chat.hidden;
+    default:
+      return !chat.hidden;
+  }
+}
+
+bool _chatMatchesQuery(Chat chat, String query) {
+  if (query.isEmpty) return true;
+  final lower = query.toLowerCase();
+  return chat.title.toLowerCase().contains(lower) ||
+      chat.jid.toLowerCase().contains(lower) ||
+      (chat.lastMessage?.toLowerCase().contains(lower) ?? false) ||
+      (chat.alert?.toLowerCase().contains(lower) ?? false);
+}
+
 class ChatListTile extends StatefulWidget {
   const ChatListTile({
     super.key,
     required this.item,
     this.archivedContext = false,
+    this.onArchivedTap,
   });
 
   final Chat item;
   final bool archivedContext;
+  final Future<void> Function(Chat chat)? onArchivedTap;
 
   @override
   State<ChatListTile> createState() => _ChatListTileState();
@@ -239,7 +304,7 @@ class _ChatListTileState extends State<ChatListTile> {
                 : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -265,9 +330,11 @@ class _ChatListTileState extends State<ChatListTile> {
     final chatsCubit = context.read<ChatsCubit?>();
     if (chatsCubit == null) return;
     if (widget.archivedContext && chat.archived) {
-      await chatsCubit.toggleArchived(jid: chat.jid, archived: false);
-      if (!mounted) return;
-      _showMessage('Archived chat restored');
+      final handler = widget.onArchivedTap;
+      if (handler != null) {
+        await handler(chat);
+        return;
+      }
     }
     unawaited(chatsCubit.toggleChat(jid: chat.jid));
   }
@@ -329,28 +396,29 @@ class _ChatListTileState extends State<ChatListTile> {
                 setState(() => _showActions = false);
               },
       ),
-      ContextActionButton(
-        icon: Icon(
-          chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
-          size: 16,
+      if (!widget.archivedContext)
+        ContextActionButton(
+          icon: Icon(
+            chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
+            size: 16,
+          ),
+          label: chat.hidden ? 'Show' : 'Hide',
+          onPressed: chatsCubit == null
+              ? null
+              : () async {
+                  await chatsCubit.toggleHidden(
+                    jid: chat.jid,
+                    hidden: !chat.hidden,
+                  );
+                  if (!mounted) return;
+                  _showMessage(
+                    chat.hidden
+                        ? 'Chat is visible again'
+                        : 'Chat hidden (use filter to reveal)',
+                  );
+                  setState(() => _showActions = false);
+                },
         ),
-        label: chat.hidden ? 'Show' : 'Hide',
-        onPressed: chatsCubit == null
-            ? null
-            : () async {
-                await chatsCubit.toggleHidden(
-                  jid: chat.jid,
-                  hidden: !chat.hidden,
-                );
-                if (!mounted) return;
-                _showMessage(
-                  chat.hidden
-                      ? 'Chat is visible again'
-                      : 'Chat hidden (use filter to reveal)',
-                );
-                setState(() => _showActions = false);
-              },
-      ),
       ContextActionButton(
         icon: const Icon(LucideIcons.trash2, size: 16),
         label: 'Delete',

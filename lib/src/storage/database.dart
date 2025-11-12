@@ -44,6 +44,14 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Future<List<Message>> searchChatMessages({
+    required String jid,
+    required String query,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    int limit,
+    bool ascending,
+  });
+
   Future<Message?> getMessageByStanzaID(String stanzaID);
 
   Future<Message?> getMessageByOriginID(String originID);
@@ -963,6 +971,56 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
             ),
       ]);
     return query.get();
+  }
+
+  @override
+  Future<List<Message>> searchChatMessages({
+    required String jid,
+    required String query,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    int limit = 200,
+    bool ascending = false,
+  }) async {
+    if (query.trim().isEmpty) return const [];
+    final filterValue = filter.index;
+    final orderClause = ascending ? 'ASC' : 'DESC';
+    final normalizedQuery = query.trim().toLowerCase();
+    final likePattern = '%${_escapeLikePattern(normalizedQuery)}%';
+    final selectable = customSelect(
+      '''
+      SELECT m.*
+      FROM messages m
+      LEFT JOIN message_copies mc ON mc.dc_msg_id = m.delta_msg_id
+      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+      LEFT JOIN message_participants mp
+        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+      WHERE m.chat_jid = ?
+        AND LOWER(COALESCE(m.body, '')) LIKE ? ESCAPE '\\'
+        AND (
+          CASE WHEN ? = 0 THEN
+            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+          ELSE
+            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+      ORDER BY m.timestamp $orderClause
+      LIMIT ?
+      ''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<String>(likePattern),
+        Variable<int>(filterValue),
+        Variable<int>(limit),
+      ],
+      readsFrom: {
+        messages,
+        messageCopies,
+        messageShares,
+        messageParticipants,
+      },
+    );
+    return selectable.map((row) => messages.map(row.data)).get();
   }
 
   Future<Message?> getLastMessageForChat(String jid) async {
@@ -1932,6 +1990,13 @@ QueryExecutor _openDatabase(File file, String passphrase) {
 Future<File> dbFileFor(String prefix) async {
   final path = (await getApplicationDocumentsDirectory()).path;
   return File(p.join(path, '$prefix.axichat.drift'));
+}
+
+String _escapeLikePattern(String input) {
+  return input
+      .replaceAll(r'\', r'\\')
+      .replaceAll('%', r'\%')
+      .replaceAll('_', r'\_');
 }
 
 typedef HashFunction = mox.HashFunction;
