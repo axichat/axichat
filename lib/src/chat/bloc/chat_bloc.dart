@@ -272,16 +272,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _onChatMessageFocused(
+  Future<void> _onChatMessageFocused(
     ChatMessageFocused event,
     Emitter<ChatState> emit,
-  ) {
-    emit(
-      state.copyWith(
-        focused:
-            state.items.where((e) => e.stanzaID == event.messageID).firstOrNull,
-      ),
-    );
+  ) async {
+    final messageId = event.messageID;
+    if (messageId == null) {
+      emit(state.copyWith(focused: null));
+      return;
+    }
+    var target = state.items.where((e) => e.stanzaID == messageId).firstOrNull;
+    if (target == null) {
+      final fetched = await _messageService.loadMessageByStanzaId(messageId);
+      if (fetched != null) {
+        final updatedItems = List<Message>.from(state.items)
+          ..removeWhere((msg) => msg.stanzaID == fetched.stanzaID)
+          ..add(fetched)
+          ..sort(
+            (a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+              a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0),
+            ),
+          );
+        emit(state.copyWith(items: updatedItems, focused: fetched));
+        return;
+      }
+    }
+    emit(state.copyWith(focused: target));
   }
 
   Future<void> _onChatTypingStarted(

@@ -77,6 +77,26 @@ mixin MessageService on XmppBase, BaseStreamService {
         },
       );
 
+  Future<List<Message>> searchChatMessages({
+    required String jid,
+    required String query,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    SearchSortOrder sortOrder = SearchSortOrder.newestFirst,
+    int limit = 200,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+    return await _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.searchChatMessages(
+        jid: jid,
+        query: trimmed,
+        filter: filter,
+        limit: limit,
+        ascending: sortOrder == SearchSortOrder.oldestFirst,
+      ),
+    );
+  }
+
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = basePageItemLimit,
@@ -334,6 +354,12 @@ mixin MessageService on XmppBase, BaseStreamService {
         senderJid: sender,
         emojis: emojis,
       ),
+    );
+  }
+
+  Future<Message?> loadMessageByStanzaId(String stanzaID) async {
+    return await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(stanzaID),
     );
   }
 

@@ -263,20 +263,21 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                           ),
                                         ),
                                       ),
-                                      OverflowBar(
-                                        overflowAlignment:
-                                            OverflowBarAlignment.center,
-                                        spacing: 8.0,
-                                        overflowSpacing: 8.0,
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        alignment: WrapAlignment.center,
                                         children: [
-                                          ShadButton.secondary(
+                                          ShadButton.outline(
+                                            size: ShadButtonSize.sm,
                                             child: const Text('View archives'),
                                             onPressed: () => context.push(
                                               const ArchivesRoute().location,
                                               extra: widget.locate,
                                             ),
                                           ).withTapBounce(),
-                                          ShadButton.secondary(
+                                          ShadButton.outline(
+                                            size: ShadButtonSize.sm,
                                             child:
                                                 const Text('Change password'),
                                             onPressed: () => setState(() {
@@ -284,13 +285,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                                   _ProfileRoute.changePassword;
                                             }),
                                           ).withTapBounce(),
-                                          ShadButton.secondary(
-                                            child: Text(
-                                              'Delete account',
-                                              style: TextStyle(
-                                                  color: context
-                                                      .colorScheme.destructive),
-                                            ),
+                                          ShadButton.destructive(
+                                            size: ShadButtonSize.sm,
+                                            child: const Text('Delete account'),
                                             onPressed: () => setState(() {
                                               _profileRoute =
                                                   _ProfileRoute.delete;

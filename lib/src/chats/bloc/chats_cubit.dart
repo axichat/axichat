@@ -17,7 +17,6 @@ class ChatsCubit extends Cubit<ChatsState> {
             openJid: null,
             openCalendar: false,
             items: null,
-            filter: _defaultFilter,
             creationStatus: RequestStatus.none,
           ),
         ) {
@@ -40,16 +39,6 @@ class ChatsCubit extends Cubit<ChatsState> {
       openJid: items.where((e) => e.open).firstOrNull?.jid,
       items: items,
     ));
-  }
-
-  static bool _defaultFilter(Chat chat) => !chat.hidden;
-
-  void filterChats(bool Function(Chat) filter) {
-    emit(state.copyWith(filter: filter));
-  }
-
-  void resetFilter() {
-    emit(state.copyWith(filter: _defaultFilter));
   }
 
   Future<void> toggleChat({required String jid}) async {
@@ -88,6 +77,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     required String jid,
     required bool archived,
   }) async {
+    if (archived && state.openJid == jid) {
+      await _chatsService.closeChat();
+    }
     await _chatsService.toggleChatArchived(jid: jid, archived: archived);
   }
 
@@ -95,6 +87,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     required String jid,
     required bool hidden,
   }) async {
+    if (hidden && state.openJid == jid) {
+      await _chatsService.closeChat();
+    }
     await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
   }
 
