@@ -41,6 +41,7 @@ import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -109,7 +110,7 @@ const _cutoutMaxWidthFraction = 0.9;
 const _reactionOverflowGlyphWidth = 18.0;
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
-const _recipientCutoutPadding = EdgeInsets.fromLTRB(10, 8, 10, 6);
+const _recipientCutoutPadding = EdgeInsets.fromLTRB(10, 4, 10, 6);
 const _recipientCutoutOffset = Offset.zero;
 const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
@@ -595,7 +596,7 @@ class _ChatState extends State<Chat> {
   var _chatRoute = _ChatRoute.main;
   String? _selectedMessageId;
   final _messageKeys = <String, GlobalKey>{};
-  final _messageBubbleKeys = <String, GlobalKey>{};
+  final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
   GlobalKey? _activeSelectionExtrasKey;
   GlobalKey? _reactionManagerKey;
@@ -1333,7 +1334,10 @@ class _ChatState extends State<Chat> {
       }
     }
 
-    collect(_messageBubbleKeys[selectedId], padding: 12);
+    final bubbleRect = _bubbleRegionRegistry.rectFor(selectedId);
+    if (bubbleRect != null) {
+      hitRegions.add(bubbleRect.inflate(12));
+    }
     for (final key in _selectionActionButtonKeys) {
       collect(key, padding: 0);
     }
@@ -1738,6 +1742,7 @@ class _ChatState extends State<Chat> {
     _textController.removeListener(_typingListener);
     _textController.dispose();
     _emojiPopoverController.dispose();
+    _bubbleRegionRegistry.clear();
     super.dispose();
   }
 
@@ -2629,12 +2634,6 @@ class _ChatState extends State<Chat> {
                                                   chainedNext: chainedNext,
                                                   isSelected: isSelected,
                                                 );
-                                                final bubbleKey =
-                                                    _messageBubbleKeys
-                                                        .putIfAbsent(
-                                                  messageModel.stanzaID,
-                                                  () => GlobalKey(),
-                                                );
                                                 final bubbleMaxWidth =
                                                     clampedBubbleWidth;
                                                 final bubbleConstraints =
@@ -2703,8 +2702,8 @@ class _ChatState extends State<Chat> {
                                                     shadowValue,
                                                     child,
                                                   ) {
-                                                    return ChatBubbleSurface(
-                                                      key: bubbleKey,
+                                                    final bubbleSurface =
+                                                        ChatBubbleSurface(
                                                       isSelf: self,
                                                       backgroundColor:
                                                           bubbleColor,
@@ -2775,6 +2774,13 @@ class _ChatState extends State<Chat> {
                                                                       _recipientCutoutMinThickness,
                                                                 )
                                                               : null,
+                                                    );
+                                                    return _MessageBubbleRegion(
+                                                      messageId:
+                                                          messageModel.stanzaID,
+                                                      registry:
+                                                          _bubbleRegionRegistry,
+                                                      child: bubbleSurface,
                                                     );
                                                   },
                                                 );
@@ -3707,6 +3713,108 @@ class _RecipientOverflowAvatar extends StatelessWidget {
   }
 }
 
+class _BubbleRegionRegistry {
+  final _regions = <String, RenderBox>{};
+
+  Rect? rectFor(String messageId) {
+    final renderBox = _regions[messageId];
+    if (renderBox == null || !renderBox.attached) {
+      return null;
+    }
+    final origin = renderBox.localToGlobal(Offset.zero);
+    return origin & renderBox.size;
+  }
+
+  void register(String messageId, RenderBox renderBox) {
+    _regions[messageId] = renderBox;
+  }
+
+  void unregister(String messageId, RenderBox renderBox) {
+    final current = _regions[messageId];
+    if (identical(current, renderBox)) {
+      _regions.remove(messageId);
+    }
+  }
+
+  void clear() {
+    _regions.clear();
+  }
+}
+
+class _MessageBubbleRegion extends SingleChildRenderObjectWidget {
+  const _MessageBubbleRegion({
+    required this.messageId,
+    required this.registry,
+    required super.child,
+  });
+
+  final String messageId;
+  final _BubbleRegionRegistry registry;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderMessageBubbleRegion(
+        messageId: messageId,
+        registry: registry,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderMessageBubbleRegion renderObject,
+  ) {
+    renderObject
+      ..messageId = messageId
+      ..registry = registry;
+  }
+}
+
+class _RenderMessageBubbleRegion extends RenderProxyBox {
+  _RenderMessageBubbleRegion({
+    required String messageId,
+    required _BubbleRegionRegistry registry,
+  })  : _messageId = messageId,
+        _registry = registry;
+
+  String _messageId;
+  set messageId(String value) {
+    if (value == _messageId) return;
+    _registry.unregister(_messageId, this);
+    _messageId = value;
+    _registry.register(_messageId, this);
+  }
+
+  _BubbleRegionRegistry _registry;
+  set registry(_BubbleRegionRegistry value) {
+    if (identical(value, _registry)) return;
+    _registry.unregister(_messageId, this);
+    _registry = value;
+    _registry.register(_messageId, this);
+  }
+
+  void _register() {
+    _registry.register(_messageId, this);
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _register();
+  }
+
+  @override
+  void detach() {
+    _registry.unregister(_messageId, this);
+    super.detach();
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    _register();
+  }
+}
+
 class _PendingAttachmentList extends StatelessWidget {
   const _PendingAttachmentList({
     required this.attachments,
@@ -4356,7 +4464,7 @@ TextStyle _reactionCountTextStyle(
 }) {
   final colors = context.colorScheme;
   return context.textTheme.small.copyWith(
-    color: highlighted ? colors.primary : colors.mutedForeground,
+    color: highlighted ? colors.primary : colors.foreground,
     fontWeight: FontWeight.w600,
   );
 }
