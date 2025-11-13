@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -414,6 +415,33 @@ class EmailService {
     return ShareContext(
       shareId: shareId,
       participants: chats,
+    );
+  }
+
+  Future<EmailAttachment?> attachmentForMessage(Message message) async {
+    final metadataId = message.fileMetadataID;
+    if (metadataId == null) return null;
+    await _ensureReady();
+    final db = await _databaseBuilder();
+    final metadata = await db.getFileMetadata(metadataId);
+    if (metadata == null) return null;
+    final path = metadata.path;
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      return null;
+    }
+    final size = metadata.sizeBytes ?? await file.length();
+    return EmailAttachment(
+      path: path,
+      fileName: metadata.filename,
+      sizeBytes: size,
+      mimeType: metadata.mimeType,
+      width: metadata.width,
+      height: metadata.height,
+      caption: message.body,
     );
   }
 

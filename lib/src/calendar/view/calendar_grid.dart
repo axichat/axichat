@@ -108,7 +108,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _layoutTheme.edgeScrollSlowOffsetPerFrame;
   double get _taskPopoverHorizontalGap => _layoutTheme.popoverGap;
   double get _zoomControlsElevation => _layoutTheme.zoomControlsElevation;
-  double get _zoomControlsBorderRadius => _layoutTheme.zoomControlsBorderRadius;
   double get _zoomControlsPaddingHorizontal =>
       _layoutTheme.zoomControlsPaddingHorizontal;
   double get _zoomControlsPaddingVertical =>
@@ -1515,7 +1514,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return Material(
       elevation: _zoomControlsElevation + 1,
       color: colors.card,
-      shadowColor: Colors.black.withOpacity(0.12),
+      shadowColor: Colors.black.withValues(alpha: 0.12),
       shape: SquircleBorder(
         cornerRadius: 26,
         side: BorderSide(color: colors.border),

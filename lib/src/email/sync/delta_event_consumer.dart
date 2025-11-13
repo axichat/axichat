@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/email/email_metadata.dart';
+import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -49,7 +50,10 @@ class DeltaEventConsumer {
         await _markAcked(event.data2);
         break;
       case DeltaEventType.msgFailed:
-        await _markFailed(event.data2);
+        await _markFailed(
+          msgId: event.data2,
+          reason: event.data2Text,
+        );
         break;
       case DeltaEventType.msgRead:
         await _markDisplayed(event.data2);
@@ -132,11 +136,12 @@ class DeltaEventConsumer {
     await db.markMessageAcked(_stanzaId(msgId));
   }
 
-  Future<void> _markFailed(int msgId) async {
+  Future<void> _markFailed({required int msgId, String? reason}) async {
     final db = await _db();
+    final resolved = DeltaErrorMapper.resolve(reason);
     await db.saveMessageError(
       stanzaID: _stanzaId(msgId),
-      error: MessageError.serviceUnavailable,
+      error: resolved,
     );
   }
 

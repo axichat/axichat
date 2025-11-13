@@ -85,6 +85,8 @@ dependencies:
     path: packages/delta_ffi
   share_plus: ^10.0.0
   share_handler: ^0.0.25
+  image: ^4.2.0
+  shimmer: ^3.0.0
 
 dependency_overrides:
   pinenacl: ^0.6.0

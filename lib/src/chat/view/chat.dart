@@ -1759,7 +1759,22 @@ class _ChatState extends State<Chat> {
           onPointerMove: _handlePointerMove,
           onPointerUp: _handlePointerUp,
           onPointerCancel: _handlePointerCancel,
-          child: BlocBuilder<ChatBloc, ChatState>(
+          child: BlocConsumer<ChatBloc, ChatState>(
+            listenWhen: (previous, current) {
+              if (current.composerHydrationId == 0) return false;
+              return previous.composerHydrationId !=
+                  current.composerHydrationId;
+            },
+            listener: (context, state) {
+              final text = state.composerHydrationText ?? '';
+              _textController
+                ..text = text
+                ..selection = TextSelection.collapsed(offset: text.length);
+              _composerHasText = text.trim().isNotEmpty;
+              if (!_focusNode.hasFocus) {
+                _focusNode.requestFocus();
+              }
+            },
             builder: (context, state) {
               final profile = context.watch<ProfileCubit?>()?.state;
               final readOnly = widget.readOnly;
@@ -2033,13 +2048,16 @@ class _ChatState extends State<Chat> {
                                         currentUserId,
                                       ),
                                     );
+                                    final bodyText = e.body;
+                                    final errorLabel = e.error.asString;
+                                    final renderedText = e.error.isNotNone
+                                        ? '$errorLabel${bodyText?.isNotEmpty == true ? ': "${bodyText!.trim()}"' : ''}'
+                                        : (bodyText ?? '');
                                     dashMessages.add(
                                       ChatMessage(
                                         user: author,
                                         createdAt: e.timestamp!,
-                                        text:
-                                            '${e.error.isNotNone ? e.error.asString : ''}'
-                                            '${e.error.isNotNone && e.body?.isNotEmpty == true ? ': "${e.body}"' : e.body}',
+                                        text: renderedText,
                                         status: e.error.isNotNone
                                             ? MessageStatus.failed
                                             : e.displayed
