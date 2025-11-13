@@ -13,6 +13,7 @@ import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
+import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
 import 'package:axichat/src/chat/view/chat_cutout_composer.dart';
 import 'package:axichat/src/chat/view/chat_drawer.dart';
 import 'package:axichat/src/chat/view/chat_message_details.dart';
@@ -100,18 +101,15 @@ const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
 const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const _reactionChipPadding = EdgeInsets.symmetric(horizontal: 0.2, vertical: 2);
-const _reactionChipLabelSpacing = 2.0;
 const _reactionChipSpacing = 0.6;
 const _reactionOverflowSpacing = 4.0;
-const _reactionCutoutStartFraction = 0.1;
-const _reactionCutoutEndFraction = 0.9;
-const _reactionCutoutAlignment = 0.76;
+const _reactionSubscriptPadding = 3.0;
 const _reactionCornerClearance = 12.0;
 const _cutoutMaxWidthFraction = 0.9;
 const _reactionOverflowGlyphWidth = 18.0;
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
-const _recipientCutoutPadding = EdgeInsets.fromLTRB(10, 12, 10, 6);
+const _recipientCutoutPadding = EdgeInsets.fromLTRB(10, 8, 10, 6);
 const _recipientCutoutOffset = Offset.zero;
 const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
@@ -171,7 +169,7 @@ const _messageFilterOptions = [
 ];
 
 final List<chat_models.Chat> _debugEmailRecipients = List.generate(
-  20,
+  2,
   (index) => chat_models.Chat(
     jid: 'debug${index + 1}@example.com',
     title: 'Debug Recipient ${index + 1}',
@@ -180,6 +178,43 @@ final List<chat_models.Chat> _debugEmailRecipients = List.generate(
     emailAddress: 'debug${index + 1}@example.com',
   ),
 );
+
+const _debugReactionEmojis = [
+  '👍',
+  '❤️',
+  '😂',
+  '😮',
+  '😢',
+  '🙏',
+  '🔥',
+  '👏',
+  '😎',
+  '🤔',
+  '😴',
+  '😡',
+  '🥳',
+  '🤯',
+  '😇',
+  '🤖',
+  '👀',
+  '💯',
+  '🎉',
+  '🫡',
+];
+
+final List<ReactionPreview> _debugReactionPreviews = List.unmodifiable(
+  List.generate(
+    _debugReactionEmojis.length,
+    (index) => ReactionPreview(
+      emoji: _debugReactionEmojis[index],
+      count: (index % 3) + 1,
+      reactedBySelf: index == 0,
+    ),
+  ),
+);
+
+const _debugReactionBody =
+    'Incoming preview bubble showcasing reaction overflow.';
 
 class _ChatSearchToggleButton extends StatelessWidget {
   const _ChatSearchToggleButton();
@@ -2029,6 +2064,51 @@ class _ChatState extends State<Chat> {
                                       ),
                                     );
                                   }
+                                  if (!isEmailChat) {
+                                    final chatJid = state.chat?.jid ??
+                                        'preview@axichat.dev';
+                                    final debugMessageId =
+                                        '__debug_reactions_$chatJid';
+                                    final debugTimestamp =
+                                        DateTime.now().toUtc();
+                                    const debugSenderJid =
+                                        'preview@axichat.dev';
+                                    final debugModel = Message(
+                                      stanzaID: debugMessageId,
+                                      senderJid: debugSenderJid,
+                                      chatJid: chatJid,
+                                      body: _debugReactionBody,
+                                      timestamp: debugTimestamp,
+                                      reactionsPreview: _debugReactionPreviews,
+                                    );
+                                    dashMessages.add(
+                                      ChatMessage(
+                                        user: ChatUser(
+                                          id: debugSenderJid,
+                                          firstName: state.chat?.title ??
+                                              'Preview Contact',
+                                        ),
+                                        createdAt: debugTimestamp,
+                                        text: _debugReactionBody,
+                                        customProperties: {
+                                          'id': debugMessageId,
+                                          'body': _debugReactionBody,
+                                          'edited': false,
+                                          'retracted': false,
+                                          'error': MessageError.none,
+                                          'encrypted': false,
+                                          'trust': null,
+                                          'trusted': null,
+                                          'isSelf': false,
+                                          'model': debugModel,
+                                          'quoted': null,
+                                          'reactions': _debugReactionPreviews,
+                                          'shareParticipants':
+                                              const <chat_models.Chat>[],
+                                        },
+                                      ),
+                                    );
+                                  }
                                   final emptyStateLabel = searchFiltering
                                       ? 'No matches'
                                       : 'No messages';
@@ -2607,80 +2687,94 @@ class _ChatState extends State<Chat> {
                                                   left: _chatHorizontalPadding,
                                                   right: _chatHorizontalPadding,
                                                 );
-                                                final bubble = LayoutBuilder(
-                                                  builder: (context,
-                                                      innerConstraints) {
-                                                    final width =
-                                                        innerConstraints
-                                                            .maxWidth;
-                                                    final bubbleWidth =
-                                                        width.isFinite &&
-                                                                width > 0
-                                                            ? width
-                                                            : null;
-                                                    final cutouts =
-                                                        <CutoutSpec>[];
-                                                    if (showCompactReactions) {
-                                                      cutouts.addAll(
-                                                        _buildReactionCutouts(
-                                                          reactions: reactions,
-                                                          message: messageModel,
-                                                          canReact: canReact,
-                                                          isSelf: self,
-                                                          bubbleWidth:
-                                                              bubbleWidth,
-                                                        ),
-                                                      );
-                                                    }
-                                                    if (showRecipientCutout) {
-                                                      cutouts.addAll(
-                                                        _buildRecipientCutouts(
-                                                          recipients:
-                                                              recipientCutoutParticipants,
-                                                          isSelf: self,
-                                                          bubbleWidth:
-                                                              bubbleWidth,
-                                                        ),
-                                                      );
-                                                    }
-                                                    return TweenAnimationBuilder<
+                                                final bubble =
+                                                    TweenAnimationBuilder<
                                                         double>(
-                                                      tween: Tween<double>(
-                                                        begin: 0,
-                                                        end: isSelected
-                                                            ? 1.0
-                                                            : 0.0,
+                                                  tween: Tween<double>(
+                                                    begin: 0,
+                                                    end: isSelected ? 1.0 : 0.0,
+                                                  ),
+                                                  duration:
+                                                      _bubbleFocusDuration,
+                                                  curve: _bubbleFocusCurve,
+                                                  child: bubbleContent,
+                                                  builder: (
+                                                    context,
+                                                    shadowValue,
+                                                    child,
+                                                  ) {
+                                                    return ChatBubbleSurface(
+                                                      key: bubbleKey,
+                                                      isSelf: self,
+                                                      backgroundColor:
+                                                          bubbleColor,
+                                                      borderColor: borderColor,
+                                                      borderRadius:
+                                                          bubbleBorderRadius,
+                                                      shadowOpacity:
+                                                          shadowValue,
+                                                      shadows:
+                                                          _selectedBubbleShadows(
+                                                        bubbleHighlightColor,
                                                       ),
-                                                      duration:
-                                                          _bubbleFocusDuration,
-                                                      curve: _bubbleFocusCurve,
-                                                      child: bubbleContent,
-                                                      builder: (
-                                                        context,
-                                                        shadowValue,
-                                                        child,
-                                                      ) {
-                                                        return CutoutSurface(
-                                                          key: bubbleKey,
-                                                          backgroundColor:
-                                                              bubbleColor,
-                                                          borderColor:
-                                                              borderColor,
-                                                          shape:
-                                                              ContinuousRectangleBorder(
-                                                            borderRadius:
-                                                                bubbleBorderRadius,
-                                                          ),
-                                                          cutouts: cutouts,
-                                                          shadows:
-                                                              _selectedBubbleShadows(
-                                                            bubbleHighlightColor,
-                                                          ),
-                                                          shadowOpacity:
-                                                              shadowValue,
-                                                          child: child!,
-                                                        );
-                                                      },
+                                                      bubbleWidthFraction:
+                                                          _cutoutMaxWidthFraction,
+                                                      cornerClearance:
+                                                          _bubbleRadius +
+                                                              _reactionCornerClearance,
+                                                      body: child!,
+                                                      reactionOverlay:
+                                                          showCompactReactions
+                                                              ? _ReactionStrip(
+                                                                  reactions:
+                                                                      reactions,
+                                                                  onReactionTap:
+                                                                      canReact
+                                                                          ? (emoji) =>
+                                                                              _toggleQuickReaction(
+                                                                                messageModel,
+                                                                                emoji,
+                                                                              )
+                                                                          : null,
+                                                                )
+                                                              : null,
+                                                      reactionStyle:
+                                                          showCompactReactions
+                                                              ? const CutoutStyle(
+                                                                  depth:
+                                                                      _reactionCutoutDepth,
+                                                                  cornerRadius:
+                                                                      _reactionCutoutRadius,
+                                                                  padding:
+                                                                      _reactionCutoutPadding,
+                                                                  offset:
+                                                                      _reactionStripOffset,
+                                                                  minThickness:
+                                                                      _reactionCutoutThickness,
+                                                                )
+                                                              : null,
+                                                      recipientOverlay:
+                                                          showRecipientCutout
+                                                              ? _RecipientCutoutStrip(
+                                                                  recipients:
+                                                                      recipientCutoutParticipants,
+                                                                )
+                                                              : null,
+                                                      recipientStyle:
+                                                          showRecipientCutout
+                                                              ? const CutoutStyle(
+                                                                  depth:
+                                                                      _recipientCutoutDepth,
+                                                                  cornerRadius:
+                                                                      _recipientCutoutRadius,
+                                                                  padding:
+                                                                      _recipientCutoutPadding,
+                                                                  offset:
+                                                                      _recipientCutoutOffset,
+                                                                  minThickness:
+                                                                      _recipientCutoutMinThickness,
+                                                                )
+                                                              : null,
                                                     );
                                                   },
                                                 );
@@ -3193,210 +3287,6 @@ class _ChatState extends State<Chat> {
         );
   }
 
-  List<CutoutSpec> _buildReactionCutouts({
-    required List<ReactionPreview> reactions,
-    required Message? message,
-    required bool canReact,
-    required bool isSelf,
-    required double? bubbleWidth,
-  }) {
-    if (reactions.isEmpty) {
-      return const [];
-    }
-    final bubbleWidthValid = bubbleWidth != null &&
-        bubbleWidth.isFinite &&
-        bubbleWidth > 0 &&
-        !bubbleWidth.isNaN;
-    final maxThickness = _resolveCutoutLimit(
-      bubbleWidth: bubbleWidth,
-      minThickness: _reactionCutoutThickness,
-    );
-    double limitThickness = maxThickness;
-    if (bubbleWidthValid) {
-      final anchoredLimit = _anchoredReactionThickness(
-        bubbleWidth: bubbleWidth,
-        thickness: maxThickness,
-        isSelf: isSelf,
-      );
-      if (anchoredLimit <= 0) {
-        return const [];
-      }
-      limitThickness = math.min(maxThickness, anchoredLimit);
-    }
-    final maxContentWidth = math.max(
-      0.0,
-      limitThickness - _reactionCutoutPadding.horizontal,
-    );
-    final layout = _layoutReactionStrip(
-      context: context,
-      reactions: reactions,
-      maxContentWidth: maxContentWidth,
-    );
-    if (layout.totalWidth <= 0) {
-      return const [];
-    }
-    var resolvedThickness = math.max(
-      _reactionCutoutThickness,
-      layout.totalWidth + _reactionCutoutPadding.horizontal,
-    );
-    resolvedThickness = math.min(resolvedThickness, limitThickness);
-    if (!bubbleWidthValid) {
-      final alignmentX = _reactionAlignmentForBubble(
-        bubbleWidth: bubbleWidth,
-        thickness: resolvedThickness,
-        isSelf: isSelf,
-      );
-      return [
-        CutoutSpec(
-          edge: CutoutEdge.bottom,
-          alignment: Alignment(alignmentX, 1),
-          depth: _reactionCutoutDepth,
-          thickness: resolvedThickness,
-          cornerRadius: _reactionCutoutRadius,
-          child: Transform.translate(
-            offset: _reactionStripOffset,
-            child: Padding(
-              padding: _reactionCutoutPadding,
-              child: _ReactionStrip(
-                reactions: layout.items,
-                overflowed: layout.overflowed,
-                onReactionTap: canReact && message != null
-                    ? (emoji) => _toggleQuickReaction(message, emoji)
-                    : null,
-              ),
-            ),
-          ),
-        ),
-      ];
-    }
-    final placement = _reactionCutoutPlacement(
-      bubbleWidth: bubbleWidth,
-      requestedThickness: resolvedThickness,
-      isSelf: isSelf,
-    );
-    if (placement.thickness <= 0) {
-      return const [];
-    }
-    return [
-      CutoutSpec(
-        edge: CutoutEdge.bottom,
-        alignment: placement.alignment,
-        depth: _reactionCutoutDepth,
-        thickness: placement.thickness,
-        cornerRadius: _reactionCutoutRadius,
-        child: Transform.translate(
-          offset: _reactionStripOffset,
-          child: Padding(
-            padding: _reactionCutoutPadding,
-            child: _ReactionStrip(
-              reactions: layout.items,
-              overflowed: layout.overflowed,
-              onReactionTap: canReact && message != null
-                  ? (emoji) => _toggleQuickReaction(message, emoji)
-                  : null,
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
-  List<CutoutSpec> _buildRecipientCutouts({
-    required List<chat_models.Chat> recipients,
-    required bool isSelf,
-    required double? bubbleWidth,
-  }) {
-    if (recipients.isEmpty) {
-      return const [];
-    }
-    final maxThickness = _resolveCutoutLimit(
-      bubbleWidth: bubbleWidth,
-      minThickness: _recipientCutoutMinThickness,
-    );
-    final maxContentWidth =
-        math.max(0.0, maxThickness - _recipientCutoutPadding.horizontal);
-    final layout = _layoutRecipientStrip(recipients, maxContentWidth);
-    if (layout.totalWidth <= 0) {
-      return const [];
-    }
-    final resolvedThickness = math.min(
-      maxThickness,
-      math.max(
-        _recipientCutoutMinThickness,
-        layout.totalWidth + _recipientCutoutPadding.horizontal,
-      ),
-    );
-    final alignmentX = _reactionAlignmentForBubble(
-      bubbleWidth: bubbleWidth,
-      thickness: resolvedThickness,
-      isSelf: isSelf,
-    );
-    return [
-      CutoutSpec(
-        edge: CutoutEdge.bottom,
-        alignment: Alignment(alignmentX, 1),
-        depth: _recipientCutoutDepth,
-        thickness: resolvedThickness,
-        cornerRadius: _recipientCutoutRadius,
-        child: Transform.translate(
-          offset: _recipientCutoutOffset,
-          child: Padding(
-            padding: _recipientCutoutPadding,
-            child: _RecipientCutoutStrip(
-              recipients: layout.items,
-              overflowed: layout.overflowed,
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
-  double _reactionAlignmentForBubble({
-    required double? bubbleWidth,
-    required double thickness,
-    required bool isSelf,
-  }) {
-    if (bubbleWidth == null ||
-        !bubbleWidth.isFinite ||
-        bubbleWidth <= 0 ||
-        bubbleWidth.isNaN) {
-      return isSelf ? -_reactionCutoutAlignment : _reactionCutoutAlignment;
-    }
-    const safeInset = _bubbleRadius + _reactionCornerClearance;
-    final halfThickness = thickness / 2;
-    final minCenter = safeInset + halfThickness;
-    final maxCenter = bubbleWidth - safeInset - halfThickness;
-    if (maxCenter <= minCenter) {
-      return 0;
-    }
-    final targetCenter = isSelf ? minCenter : maxCenter;
-    final fraction = (targetCenter / bubbleWidth).clamp(0.0, 1.0);
-    return (fraction * 2) - 1;
-  }
-
-  double _resolveCutoutLimit({
-    required double? bubbleWidth,
-    required double minThickness,
-  }) {
-    const fallbackBoost = 80.0;
-    final fallback = minThickness + fallbackBoost;
-    if (bubbleWidth == null ||
-        !bubbleWidth.isFinite ||
-        bubbleWidth <= 0 ||
-        bubbleWidth.isNaN) {
-      return fallback;
-    }
-    const safeInset = (_bubbleRadius + _reactionCornerClearance) * 2;
-    final safeWidth = bubbleWidth - safeInset;
-    final fractionWidth = bubbleWidth * _cutoutMaxWidthFraction;
-    final limit = math.max(0.0, math.min(safeWidth, fractionWidth));
-    if (limit <= 0) {
-      return fallback;
-    }
-    return math.min(limit, bubbleWidth);
-  }
-
   Map<String, FanOutRecipientState> _latestRecipientStatuses(
     ChatState state,
   ) {
@@ -3448,115 +3338,6 @@ class _CutoutLayoutResult<T> {
   final List<T> items;
   final bool overflowed;
   final double totalWidth;
-}
-
-class _ReactionCutoutPlacement {
-  const _ReactionCutoutPlacement({
-    required this.thickness,
-    required this.alignment,
-  });
-
-  final double thickness;
-  final Alignment alignment;
-}
-
-double _anchoredReactionThickness({
-  required double? bubbleWidth,
-  required double thickness,
-  required bool isSelf,
-}) {
-  if (bubbleWidth == null ||
-      !bubbleWidth.isFinite ||
-      bubbleWidth <= 0 ||
-      bubbleWidth.isNaN) {
-    return thickness;
-  }
-  const minEdge = _bubbleRadius + _reactionCornerClearance;
-  final maxEdge = bubbleWidth - minEdge;
-  if (maxEdge <= minEdge) {
-    return math.min(thickness, math.max(0.0, bubbleWidth));
-  }
-  final anchorFraction =
-      isSelf ? _reactionCutoutEndFraction : _reactionCutoutStartFraction;
-  final limitFraction =
-      isSelf ? _reactionCutoutStartFraction : _reactionCutoutEndFraction;
-  final anchorEdge = _clampEdge(
-    bubbleWidth * anchorFraction,
-    minEdge,
-    maxEdge,
-  );
-  final limitEdge = _clampEdge(
-    bubbleWidth * limitFraction,
-    minEdge,
-    maxEdge,
-  );
-  final availableSpan =
-      (isSelf ? anchorEdge - limitEdge : limitEdge - anchorEdge)
-          .clamp(0.0, bubbleWidth);
-  if (availableSpan <= 0) {
-    return math.min(thickness, bubbleWidth * 0.25);
-  }
-  return math.min(thickness, availableSpan);
-}
-
-_ReactionCutoutPlacement _reactionCutoutPlacement({
-  required double? bubbleWidth,
-  required double requestedThickness,
-  required bool isSelf,
-}) {
-  if (bubbleWidth == null ||
-      !bubbleWidth.isFinite ||
-      bubbleWidth <= 0 ||
-      bubbleWidth.isNaN) {
-    final fallbackAlignment = Alignment(
-      isSelf ? -_reactionCutoutAlignment : _reactionCutoutAlignment,
-      1,
-    );
-    return _ReactionCutoutPlacement(
-      thickness: requestedThickness,
-      alignment: fallbackAlignment,
-    );
-  }
-  const minEdge = _bubbleRadius + _reactionCornerClearance;
-  final maxEdge = bubbleWidth - minEdge;
-  if (maxEdge <= minEdge) {
-    return _ReactionCutoutPlacement(
-      thickness: math.min(requestedThickness, math.max(0.0, bubbleWidth)),
-      alignment: const Alignment(0, 1),
-    );
-  }
-  final anchorFraction =
-      isSelf ? _reactionCutoutEndFraction : _reactionCutoutStartFraction;
-  final limitFraction =
-      isSelf ? _reactionCutoutStartFraction : _reactionCutoutEndFraction;
-  final anchorEdge = _clampEdge(
-    bubbleWidth * anchorFraction,
-    minEdge,
-    maxEdge,
-  );
-  final limitEdge = _clampEdge(
-    bubbleWidth * limitFraction,
-    minEdge,
-    maxEdge,
-  );
-  final availableSpan =
-      (isSelf ? anchorEdge - limitEdge : limitEdge - anchorEdge)
-          .clamp(0.0, bubbleWidth);
-  final thickness = math.min(requestedThickness, availableSpan);
-  final center =
-      isSelf ? anchorEdge - thickness / 2 : anchorEdge + thickness / 2;
-  final fraction = (center / bubbleWidth).clamp(0.0, 1.0);
-  return _ReactionCutoutPlacement(
-    thickness: thickness,
-    alignment: Alignment(fraction * 2 - 1, 1),
-  );
-}
-
-double _clampEdge(double value, double min, double max) {
-  if (value.isNaN) return min;
-  if (min >= max) return min;
-  final double clamped = value.clamp(min, max);
-  return clamped;
 }
 
 _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
@@ -3656,7 +3437,13 @@ double _measureReactionChipWidth({
       textDirection: textDirection,
       textScaler: textScaler,
     )..layout();
-    width += _reactionChipLabelSpacing + countPainter.width;
+    width = math.max(
+      width,
+      emojiPainter.width +
+          countPainter.width * 0.8 +
+          _reactionSubscriptPadding +
+          _reactionChipPadding.horizontal,
+    );
   }
 
   return width;
@@ -3721,39 +3508,52 @@ _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip(
 class _ReactionStrip extends StatelessWidget {
   const _ReactionStrip({
     required this.reactions,
-    required this.overflowed,
     this.onReactionTap,
   });
 
   final List<ReactionPreview> reactions;
-  final bool overflowed;
   final void Function(String emoji)? onReactionTap;
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (var i = 0; i < reactions.length; i++) {
-      if (i != 0) {
-        children.add(const SizedBox(width: _reactionChipSpacing));
-      }
-      children.add(
-        _ReactionChip(
-          data: reactions[i],
-          onTap: onReactionTap == null
-              ? null
-              : () => onReactionTap!(reactions[i].emoji),
-        ),
-      );
-    }
-    if (overflowed) {
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(width: _reactionOverflowSpacing));
-      }
-      children.add(const _ReactionOverflowGlyph());
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: children,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.hasBoundedWidth &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : double.infinity;
+        final layout = _layoutReactionStrip(
+          context: context,
+          reactions: reactions,
+          maxContentWidth: maxWidth,
+        );
+        final items = layout.items;
+        final children = <Widget>[];
+        for (var i = 0; i < items.length; i++) {
+          if (i != 0) {
+            children.add(const SizedBox(width: _reactionChipSpacing));
+          }
+          children.add(
+            _ReactionChip(
+              data: items[i],
+              onTap: onReactionTap == null
+                  ? null
+                  : () => onReactionTap!(items[i].emoji),
+            ),
+          );
+        }
+        if (layout.overflowed) {
+          if (children.isNotEmpty) {
+            children.add(const SizedBox(width: _reactionOverflowSpacing));
+          }
+          children.add(const _ReactionOverflowGlyph());
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: children,
+        );
+      },
     );
   }
 }
@@ -3784,58 +3584,58 @@ class _ReactionOverflowGlyph extends StatelessWidget {
 }
 
 class _RecipientCutoutStrip extends StatelessWidget {
-  const _RecipientCutoutStrip({
-    required this.recipients,
-    required this.overflowed,
-  });
+  const _RecipientCutoutStrip({required this.recipients});
 
   final List<chat_models.Chat> recipients;
-  final bool overflowed;
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[];
-    for (var i = 0; i < recipients.length; i++) {
-      final offset = i * (_recipientAvatarSize - _recipientAvatarOverlap);
-      children.add(
-        Positioned(
-          left: offset,
-          child: _RecipientAvatarBadge(chat: recipients[i]),
-        ),
-      );
-    }
-    if (overflowed) {
-      final offset = recipients.isEmpty
-          ? 0.0
-          : recipients.length *
-                  (_recipientAvatarSize - _recipientAvatarOverlap) +
-              _recipientOverflowGap;
-      children.add(
-        Positioned(
-          left: offset,
-          child: const _RecipientOverflowAvatar(),
-        ),
-      );
-    }
-    final totalWidth = overflowed
-        ? (recipients.isEmpty
-                ? 0.0
-                : recipients.length *
-                        (_recipientAvatarSize - _recipientAvatarOverlap) +
-                    _recipientOverflowGap) +
-            _recipientAvatarSize
-        : recipients.isEmpty
-            ? _recipientAvatarSize
-            : _recipientAvatarSize +
-                math.max(0, recipients.length - 1) *
-                    (_recipientAvatarSize - _recipientAvatarOverlap);
-    return SizedBox(
-      width: totalWidth,
-      height: _recipientAvatarSize,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: children,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.hasBoundedWidth &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : double.infinity;
+        final layout = _layoutRecipientStrip(recipients, maxWidth);
+        final visible = layout.items;
+        final overflowed = layout.overflowed;
+        final children = <Widget>[];
+        for (var i = 0; i < visible.length; i++) {
+          final offset = i * (_recipientAvatarSize - _recipientAvatarOverlap);
+          children.add(
+            Positioned(
+              left: offset,
+              child: _RecipientAvatarBadge(chat: visible[i]),
+            ),
+          );
+        }
+        if (overflowed) {
+          final offset = visible.isEmpty
+              ? 0.0
+              : visible.length *
+                      (_recipientAvatarSize - _recipientAvatarOverlap) +
+                  _recipientOverflowGap;
+          children.add(
+            Positioned(
+              left: offset,
+              child: const _RecipientOverflowAvatar(),
+            ),
+          );
+        }
+        final baseWidth = layout.totalWidth;
+        final totalWidth = overflowed
+            ? baseWidth + _recipientOverflowGap + _recipientAvatarSize
+            : math.max(baseWidth, _recipientAvatarSize);
+        return SizedBox(
+          width: totalWidth,
+          height: _recipientAvatarSize,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: children,
+          ),
+        );
+      },
     );
   }
 }
@@ -4513,20 +4313,24 @@ class _ReactionChip extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: _reactionChipPadding,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
             Text(
               data.emoji,
               style: emojiStyle,
             ),
-            if (data.count > 1) ...[
-              const SizedBox(width: _reactionChipLabelSpacing),
-              Text(
-                data.count.toString(),
-                style: countStyle,
+            if (data.count > 1)
+              Positioned(
+                right: -_reactionSubscriptPadding,
+                bottom: -_reactionSubscriptPadding,
+                child: Text(
+                  data.count.toString(),
+                  style: countStyle.copyWith(
+                    fontSize: (countStyle.fontSize ?? 10) * 0.9,
+                  ),
+                ),
               ),
-            ],
           ],
         ),
       ),
