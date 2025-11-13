@@ -11,11 +11,13 @@ class CalendarTile extends StatelessWidget {
     super.key,
     required this.onTap,
     this.nextTask,
+    this.currentTask,
     this.dueReminderCount = 0,
   });
 
   final VoidCallback onTap;
   final CalendarTask? nextTask;
+  final CalendarTask? currentTask;
   final int dueReminderCount;
 
   @override
@@ -36,7 +38,14 @@ class CalendarTile extends StatelessWidget {
         ),
     ];
 
-    final scheduledTime = nextTask?.scheduledTime;
+    final CalendarTask? displayTask = currentTask ?? nextTask;
+    final String subtitleText = currentTask != null
+        ? 'Now: ${currentTask!.title}'
+        : nextTask != null
+            ? 'Next: ${nextTask!.title}'
+            : 'No upcoming tasks';
+
+    final scheduledTime = displayTask?.scheduledTime;
     final List<Widget>? trailingActions = scheduledTime == null
         ? null
         : <Widget>[
@@ -54,7 +63,7 @@ class CalendarTile extends StatelessWidget {
         highlight: showBadge,
       ),
       title: 'Calendar',
-      subtitle: nextTask?.title ?? 'No upcoming tasks',
+      subtitle: subtitleText,
       subtitlePlaceholder: 'No upcoming tasks',
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       minTileHeight: 60,

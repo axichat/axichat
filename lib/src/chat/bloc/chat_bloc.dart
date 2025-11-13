@@ -827,12 +827,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         error,
         stackTrace,
       );
+      final mappedError = DeltaErrorMapper.resolve(error.message);
+      final readableMessage = mappedError.asString;
       _markPendingAttachmentFailed(
         current.id,
         emit,
-        message: error.message,
+        message: readableMessage,
       );
-      emit(state.copyWith(composerError: error.message));
+      emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment for chat ${chat.jid}',

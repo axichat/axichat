@@ -31,6 +31,9 @@ class EmailAttachmentOptimizer {
       final encodedBytes = encodeAsJpeg
           ? img.encodeJpg(resized, quality: _jpegQuality)
           : img.encodePng(resized, level: 6);
+      if (encodedBytes.length >= bytes.length) {
+        return attachment;
+      }
       final tempPath = await _writeOptimizedFile(
         bytes: encodedBytes,
         extension: encodeAsJpeg ? '.jpg' : p.extension(attachment.fileName),

@@ -4,6 +4,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
@@ -194,6 +195,16 @@ class _CalendarWidgetState extends State<CalendarWidget>
     final chatsCubit = context.read<ChatsCubit?>();
     if (chatsCubit != null && chatsCubit.state.openCalendar) {
       chatsCubit.toggleCalendar();
+      return;
+    }
+
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      if (router.canPop()) {
+        router.pop();
+      } else {
+        router.go('/');
+      }
       return;
     }
 
