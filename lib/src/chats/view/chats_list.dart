@@ -215,6 +215,18 @@ class _ChatListTileState extends State<ChatListTile> {
                 ) +
                 16.0,
           );
+    final chatsCubit = context.watch<ChatsCubit?>();
+    final selectedJids = chatsCubit?.state.selectedJids ?? const <String>{};
+    final selectionActive = selectedJids.isNotEmpty;
+    final isSelected = selectedJids.contains(item.jid);
+    if (selectionActive && _showActions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _showActions = false;
+        });
+      });
+    }
 
     final brightness = Theme.of(context).brightness;
     final selectionOverlay = colors.primary.withValues(
@@ -223,14 +235,39 @@ class _ChatListTileState extends State<ChatListTile> {
     final tileBackgroundColor = item.open
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
+    VoidCallback? tileOnTap;
+    if (chatsCubit == null) {
+      tileOnTap = () {
+        unawaited(_handleTap(item));
+      };
+    } else if (selectionActive) {
+      tileOnTap = () => chatsCubit.toggleChatSelection(item.jid);
+    } else {
+      tileOnTap = () {
+        unawaited(_handleTap(item));
+      };
+    }
+    final tileOnLongPress = chatsCubit == null
+        ? null
+        : () {
+            if (selectionActive) {
+              chatsCubit.toggleChatSelection(item.jid);
+            } else {
+              chatsCubit.ensureChatSelected(item.jid);
+            }
+            if (_showActions) {
+              setState(() => _showActions = false);
+            }
+          };
     final tile = AxiListTile(
       key: Key(item.jid),
-      onTap: () => _handleTap(item),
+      onTap: tileOnTap,
+      onLongPress: tileOnLongPress,
       leadingConstraints: const BoxConstraints(
         maxWidth: 72,
         maxHeight: 80,
       ),
-      selected: item.open,
+      selected: item.open || isSelected,
       paintSurface: false,
       contentPadding: const EdgeInsets.only(left: 16.0, right: 40.0),
       tapBounce: false,
@@ -268,7 +305,7 @@ class _ChatListTileState extends State<ChatListTile> {
         child: _ChatActionsToggle(
           backgroundColor: tileBackgroundColor,
           expanded: _showActions,
-          onPressed: _toggleActions,
+          onPressed: selectionActive ? null : _toggleActions,
         ),
       ),
       if (timestampLabel != null)
@@ -325,7 +362,26 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
     );
 
-    return tileSurface.withTapBounce();
+    Widget interactiveTile = tileSurface.withTapBounce();
+    if (selectionActive) {
+      interactiveTile = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          interactiveTile,
+          Positioned(
+            top: 12,
+            right: 20,
+            child: IgnorePointer(
+              child: SelectionIndicator(
+                visible: true,
+                selected: isSelected,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return interactiveTile;
   }
 
   void _toggleActions() {
@@ -350,6 +406,17 @@ class _ChatListTileState extends State<ChatListTile> {
   List<Widget> _buildActionButtons(BuildContext context, Chat chat) {
     final chatsCubit = context.read<ChatsCubit?>();
     return [
+      ContextActionButton(
+        icon: const Icon(LucideIcons.squareCheck, size: 16),
+        label: 'Select',
+        onPressed: chatsCubit == null
+            ? null
+            : () {
+                chatsCubit.ensureChatSelected(chat.jid);
+                if (!mounted) return;
+                setState(() => _showActions = false);
+              },
+      ),
       ContextActionButton(
         icon: Icon(
           chat.favorited ? LucideIcons.starOff : LucideIcons.star,
@@ -735,7 +802,7 @@ class _ChatActionsToggle extends StatelessWidget {
 
   final Color backgroundColor;
   final bool expanded;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

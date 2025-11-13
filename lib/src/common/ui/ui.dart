@@ -23,6 +23,7 @@ export 'axi_transport_chip.dart';
 export 'axi_tap_bounce.dart';
 export 'axi_version.dart';
 export 'cutout.dart';
+export 'selection_indicator.dart';
 export 'display_fingerprint.dart';
 export 'display_time_since.dart';
 export 'axi_tab_bar.dart';

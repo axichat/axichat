@@ -13,6 +13,7 @@ class AxiListTile extends StatelessWidget {
     this.actions,
     this.selected = false,
     this.onTap,
+    this.onLongPress,
     this.menuItems,
     this.surfaceColor,
     this.surfaceShape,
@@ -30,6 +31,7 @@ class AxiListTile extends StatelessWidget {
   final List<Widget>? actions;
   final bool selected;
   final void Function()? onTap;
+  final void Function()? onLongPress;
   final List<Widget>? menuItems;
   final Color? surfaceColor;
   final ShapeBorder? surfaceShape;
@@ -67,6 +69,7 @@ class AxiListTile extends StatelessWidget {
       tileColor: Colors.transparent,
       iconColor: colors.foreground,
       onTap: onTap,
+      onLongPress: onLongPress,
       leading: leading == null
           ? null
           : ConstrainedBox(

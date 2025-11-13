@@ -595,6 +595,7 @@ class _ChatState extends State<Chat> {
 
   var _chatRoute = _ChatRoute.main;
   String? _selectedMessageId;
+  final _multiSelectedMessageIds = <String>{};
   final _messageKeys = <String, GlobalKey>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
@@ -614,6 +615,11 @@ class _ChatState extends State<Chat> {
   var _sendingAttachment = false;
   double _recipientBarHeight = 0;
 
+  bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
+
+  bool get _anySelectionActive =>
+      _selectedMessageId != null || _multiSelectActive;
+
   void _typingListener() {
     final text = _textController.text;
     final hasText = text.isNotEmpty;
@@ -623,8 +629,8 @@ class _ChatState extends State<Chat> {
         _composerHasText = trimmedHasText;
       });
     }
-    if (hasText && _selectedMessageId != null) {
-      _clearMessageSelection();
+    if (hasText && _anySelectionActive) {
+      _clearAllSelections();
     }
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
@@ -1364,6 +1370,10 @@ class _ChatState extends State<Chat> {
 
   void _toggleMessageSelection(String messageId) {
     if (widget.readOnly) return;
+    if (_multiSelectActive) {
+      _toggleMultiSelectMessage(messageId);
+      return;
+    }
     if (_selectedMessageId == messageId) {
       _clearMessageSelection();
     } else {
@@ -1386,6 +1396,72 @@ class _ChatState extends State<Chat> {
       _selectionAutoscrollScheduled = false;
       _selectionAutoscrollInProgress = false;
     });
+  }
+
+  void _startMultiSelect(String messageId) {
+    if (widget.readOnly) return;
+    if (_multiSelectedMessageIds.length == 1 &&
+        _multiSelectedMessageIds.contains(messageId) &&
+        _selectedMessageId == null) {
+      return;
+    }
+    _clearMessageSelection();
+    setState(() {
+      _multiSelectedMessageIds
+        ..clear()
+        ..add(messageId);
+    });
+  }
+
+  void _toggleMultiSelectMessage(String messageId) {
+    if (widget.readOnly) return;
+    final mutated = _multiSelectedMessageIds.contains(messageId);
+    setState(() {
+      if (mutated) {
+        _multiSelectedMessageIds.remove(messageId);
+      } else {
+        _multiSelectedMessageIds.add(messageId);
+      }
+    });
+  }
+
+  void _clearMultiSelection() {
+    if (_multiSelectedMessageIds.isEmpty) return;
+    setState(() {
+      _multiSelectedMessageIds.clear();
+    });
+  }
+
+  void _clearAllSelections() {
+    _clearMessageSelection();
+    _clearMultiSelection();
+  }
+
+  void _pruneMessageSelection(Set<String> availableIds) {
+    if (_multiSelectActive) {
+      final missing = _multiSelectedMessageIds
+          .where((id) => !availableIds.contains(id))
+          .toList();
+      if (missing.isEmpty) return;
+      final missingSet = missing.toSet();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _multiSelectedMessageIds.removeWhere(missingSet.contains);
+        });
+      });
+    }
+  }
+
+  List<Message> _collectSelectedMessages(List<Message> orderedMessages) {
+    if (_multiSelectedMessageIds.isEmpty) return const [];
+    final selected = <Message>[];
+    for (final message in orderedMessages) {
+      if (_multiSelectedMessageIds.contains(message.stanzaID)) {
+        selected.add(message);
+      }
+    }
+    return selected;
   }
 
   void _selectMessage(String messageId) {
@@ -1997,6 +2073,9 @@ class _ChatState extends State<Chat> {
                                       messageById[item.stanzaID] = item;
                                     }
                                   }
+                                  _pruneMessageSelection(
+                                    messageById.keys.toSet(),
+                                  );
                                   final activeItems = searchFiltering
                                       ? searchResults
                                       : state.items;
@@ -2004,6 +2083,16 @@ class _ChatState extends State<Chat> {
                                       .where((e) =>
                                           e.body != null || e.error.isNotNone)
                                       .toList();
+                                  final selectedMessages =
+                                      _collectSelectedMessages(filteredItems);
+                                  if (_multiSelectActive &&
+                                      selectedMessages.isEmpty) {
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      if (!mounted) return;
+                                      _clearMultiSelection();
+                                    });
+                                  }
                                   final selectionActive =
                                       _selectedMessageId != null;
                                   final selectionSpacerVisibleHeight =
@@ -2494,11 +2583,23 @@ class _ChatState extends State<Chat> {
                                                     const <ReactionPreview>[];
                                                 final canReact =
                                                     !isEmailTransport;
+                                                final isSingleSelection =
+                                                    !_multiSelectActive &&
+                                                        _selectedMessageId ==
+                                                            messageModel
+                                                                .stanzaID;
+                                                final isMultiSelection =
+                                                    _multiSelectActive &&
+                                                        _multiSelectedMessageIds
+                                                            .contains(
+                                                                messageModel
+                                                                    .stanzaID);
                                                 final isSelected =
-                                                    _selectedMessageId ==
-                                                        messageModel.stanzaID;
+                                                    isSingleSelection ||
+                                                        isMultiSelection;
                                                 final showReactionManager =
-                                                    canReact && isSelected;
+                                                    canReact &&
+                                                        isSingleSelection;
                                                 final showCompactReactions =
                                                     reactions.isNotEmpty &&
                                                         !showReactionManager;
@@ -2806,14 +2907,36 @@ class _ChatState extends State<Chat> {
                                                     ? Alignment.centerRight
                                                     : Alignment.centerLeft;
                                                 final targetAlignment =
-                                                    isSelected
+                                                    isSingleSelection
                                                         ? Alignment.center
                                                         : baseAlignment;
+                                                Widget bubbleWithIndicator =
+                                                    bubble;
+                                                if (_multiSelectActive) {
+                                                  bubbleWithIndicator = Stack(
+                                                    clipBehavior: Clip.none,
+                                                    children: [
+                                                      bubble,
+                                                      Positioned(
+                                                        top: -10,
+                                                        right:
+                                                            self ? -12 : null,
+                                                        left: self ? null : -12,
+                                                        child:
+                                                            SelectionIndicator(
+                                                          visible: true,
+                                                          selected:
+                                                              isMultiSelection,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  );
+                                                }
                                                 final shadowedBubble =
                                                     ConstrainedBox(
                                                   constraints:
                                                       bubbleConstraints,
-                                                  child: bubble,
+                                                  child: bubbleWithIndicator,
                                                 );
                                                 final alignedBubble =
                                                     AnimatedAlign(
@@ -2828,7 +2951,7 @@ class _ChatState extends State<Chat> {
                                                         MessageStatus.failed;
                                                 List<GlobalKey>?
                                                     actionButtonKeys;
-                                                if (isSelected) {
+                                                if (isSingleSelection) {
                                                   const baseActionCount = 6;
                                                   final actionCount =
                                                       baseActionCount +
@@ -2855,7 +2978,7 @@ class _ChatState extends State<Chat> {
                                                           ),
                                                         );
                                                     _focusNode.requestFocus();
-                                                    _clearMessageSelection();
+                                                    _clearAllSelections();
                                                   },
                                                   onForward: () =>
                                                       _handleForward(
@@ -2876,6 +2999,12 @@ class _ChatState extends State<Chat> {
                                                   onDetails: () =>
                                                       _showMessageDetails(
                                                           message),
+                                                  onSelect: _multiSelectActive
+                                                      ? null
+                                                      : () => _startMultiSelect(
+                                                            messageModel
+                                                                .stanzaID,
+                                                          ),
                                                   onResend: canResend
                                                       ? () => context
                                                           .read<ChatBloc>()
@@ -2888,7 +3017,7 @@ class _ChatState extends State<Chat> {
                                                   hitRegionKeys:
                                                       actionButtonKeys,
                                                 );
-                                                if (isSelected) {
+                                                if (isSingleSelection) {
                                                   _activeSelectionExtrasKey ??=
                                                       GlobalKey();
                                                   _scheduleSelectionAutoscroll();
@@ -2900,17 +3029,19 @@ class _ChatState extends State<Chat> {
                                                   _activeSelectionExtrasKey =
                                                       null;
                                                 }
-                                                final attachmentsKey = isSelected
-                                                    ? _activeSelectionExtrasKey
-                                                    : null;
+                                                final attachmentsKey =
+                                                    isSingleSelection
+                                                        ? _activeSelectionExtrasKey
+                                                        : null;
                                                 final recipientHeadroom =
                                                     showRecipientCutout
                                                         ? _recipientCutoutDepth
                                                         : 0.0;
-                                                final attachmentTopPadding = (isSelected
-                                                        ? _selectionAttachmentSelectedGap
-                                                        : _selectionAttachmentBaseGap) +
-                                                    recipientHeadroom;
+                                                final attachmentTopPadding =
+                                                    (isSingleSelection
+                                                            ? _selectionAttachmentSelectedGap
+                                                            : _selectionAttachmentBaseGap) +
+                                                        recipientHeadroom;
                                                 final attachmentBottomPadding =
                                                     _selectionExtrasViewportGap +
                                                         (showReactionManager
@@ -2969,7 +3100,7 @@ class _ChatState extends State<Chat> {
                                                       ),
                                                     );
                                                   },
-                                                  child: isSelected
+                                                  child: isSingleSelection
                                                       ? KeyedSubtree(
                                                           key: attachmentsKey,
                                                           child: Padding(
@@ -3025,7 +3156,11 @@ class _ChatState extends State<Chat> {
                                                   behavior: HitTestBehavior
                                                       .translucent,
                                                   onTap: () {
-                                                    if (isSelected) {
+                                                    if (_multiSelectActive) {
+                                                      _toggleMultiSelectMessage(
+                                                        messageModel.stanzaID,
+                                                      );
+                                                    } else if (isSingleSelection) {
                                                       _clearMessageSelection();
                                                     }
                                                   },
@@ -3081,19 +3216,49 @@ class _ChatState extends State<Chat> {
                                         ),
                                       ),
                                       quoteSection,
-                                      _buildComposer(
-                                        isEmailTransport: isEmailTransport,
-                                        hintText: composerHintText,
-                                        recipients: recipients,
-                                        availableEmailChats: emailSuggestions,
-                                        latestStatuses: latestStatuses,
-                                        pendingAttachments: pendingAttachments,
-                                        composerError: state.composerError,
-                                        showAttachmentWarning:
-                                            showAttachmentWarning,
-                                        retryReport: retryReport,
-                                        retryShareId: retryShareId,
-                                      ),
+                                      if (_multiSelectActive &&
+                                          selectedMessages.isNotEmpty)
+                                        _MessageSelectionToolbar(
+                                          count: selectedMessages.length,
+                                          onClear: _clearMultiSelection,
+                                          onCopy: () => _copySelectedMessages(
+                                            List<Message>.of(
+                                              selectedMessages,
+                                            ),
+                                          ),
+                                          onShare: () => _shareSelectedMessages(
+                                            List<Message>.of(
+                                              selectedMessages,
+                                            ),
+                                          ),
+                                          onForward: () =>
+                                              _forwardSelectedMessages(
+                                            List<Message>.of(
+                                              selectedMessages,
+                                            ),
+                                          ),
+                                          onAddToCalendar: () =>
+                                              _addSelectedToCalendar(
+                                            List<Message>.of(
+                                              selectedMessages,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        _buildComposer(
+                                          isEmailTransport: isEmailTransport,
+                                          hintText: composerHintText,
+                                          recipients: recipients,
+                                          availableEmailChats: emailSuggestions,
+                                          latestStatuses: latestStatuses,
+                                          pendingAttachments:
+                                              pendingAttachments,
+                                          composerError: state.composerError,
+                                          showAttachmentWarning:
+                                              showAttachmentWarning,
+                                          retryReport: retryReport,
+                                          retryShareId: retryShareId,
+                                        ),
                                     ],
                                   );
                                 },
@@ -3140,7 +3305,7 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleForward(Message message) async {
-    _clearMessageSelection();
+    _clearAllSelections();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
     context.read<ChatBloc>().add(
@@ -3166,7 +3331,7 @@ class _ChatState extends State<Chat> {
       content,
       subject: 'Shared from $chatTitle',
     );
-    _clearMessageSelection();
+    _clearAllSelections();
   }
 
   Future<void> _copyMessage({
@@ -3178,14 +3343,14 @@ class _ChatState extends State<Chat> {
     await Clipboard.setData(
       ClipboardData(text: copiedText),
     );
-    _clearMessageSelection();
+    _clearAllSelections();
   }
 
   Future<void> _handleAddToCalendar({
     required ChatMessage dashMessage,
     required Message model,
   }) async {
-    _clearMessageSelection();
+    _clearAllSelections();
     final seededText = (model.body ?? dashMessage.text).trim();
     if (seededText.isEmpty) {
       _showSnackbar('Message has no text to add to calendar');
@@ -3223,6 +3388,104 @@ class _ChatState extends State<Chat> {
         );
       },
     );
+  }
+
+  String _displayTextForMessage(Message message) {
+    final body = (message.body ?? '').trim();
+    if (message.error.isNotNone) {
+      final label = message.error.asString;
+      return body.isEmpty ? label : '$label: "$body"';
+    }
+    return body;
+  }
+
+  String _joinedMessageText(List<Message> messages) {
+    final buffer = StringBuffer();
+    for (final message in messages) {
+      final text = _displayTextForMessage(message);
+      if (text.isEmpty) continue;
+      if (buffer.isNotEmpty) buffer.write('\n\n');
+      buffer.write(text);
+    }
+    return buffer.toString();
+  }
+
+  Future<void> _copySelectedMessages(List<Message> messages) async {
+    final joined = _joinedMessageText(messages);
+    if (joined.isEmpty) {
+      _showSnackbar('Selected messages have no text to copy');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: joined));
+    _clearMultiSelection();
+  }
+
+  Future<void> _shareSelectedMessages(List<Message> messages) async {
+    final joined = _joinedMessageText(messages).trim();
+    if (joined.isEmpty) {
+      _showSnackbar('Selected messages have no text to share');
+      return;
+    }
+    final chatTitle =
+        context.read<ChatBloc>().state.chat?.title ?? 'Axichat message';
+    await Share.share(
+      joined,
+      subject: 'Shared from $chatTitle',
+    );
+    _clearMultiSelection();
+  }
+
+  Future<void> _forwardSelectedMessages(List<Message> messages) async {
+    if (messages.isEmpty) return;
+    final target = await _selectForwardTarget();
+    if (!mounted || target == null) return;
+    for (final message in messages) {
+      context.read<ChatBloc>().add(
+            ChatMessageForwardRequested(
+              message: message,
+              target: target,
+            ),
+          );
+    }
+    _clearMultiSelection();
+  }
+
+  Future<void> _addSelectedToCalendar(List<Message> messages) async {
+    final joined = _joinedMessageText(messages).trim();
+    if (joined.isEmpty) {
+      _showSnackbar('Selected messages have no text to add to calendar');
+      return;
+    }
+    final calendarBloc = context.read<CalendarBloc?>();
+    if (calendarBloc == null) {
+      _showSnackbar('Calendar is unavailable right now');
+      return;
+    }
+    final CalendarBloc availableCalendarBloc = calendarBloc;
+    final locationHelper =
+        LocationAutocompleteHelper.fromState(availableCalendarBloc.state);
+    await showQuickAddModal(
+      context: context,
+      prefilledText: joined,
+      locationHelper: locationHelper,
+      onTaskAdded: (task) {
+        availableCalendarBloc.add(
+          CalendarEvent.taskAdded(
+            title: task.title,
+            scheduledTime: task.scheduledTime,
+            description: task.description,
+            duration: task.duration,
+            deadline: task.deadline,
+            location: task.location,
+            endDate: task.endDate,
+            priority: task.priority ?? TaskPriority.none,
+            startHour: task.startHour,
+            recurrence: task.recurrence,
+          ),
+        );
+      },
+    );
+    _clearMultiSelection();
   }
 
   void _showMessageDetails(ChatMessage message) {
@@ -4522,6 +4785,7 @@ class _MessageActionBar extends StatelessWidget {
     required this.onShare,
     required this.onAddToCalendar,
     required this.onDetails,
+    required this.onSelect,
     this.onResend,
     this.hitRegionKeys,
   });
@@ -4532,6 +4796,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onAddToCalendar;
   final VoidCallback onDetails;
+  final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final List<GlobalKey>? hitRegionKeys;
 
@@ -4545,6 +4810,12 @@ class _MessageActionBar extends StatelessWidget {
     }
 
     final actions = <Widget>[
+      ContextActionButton(
+        key: nextKey(),
+        icon: const Icon(LucideIcons.squareCheck, size: 16),
+        label: 'Select',
+        onPressed: onSelect,
+      ),
       ContextActionButton(
         key: nextKey(),
         icon: const Icon(LucideIcons.reply, size: 16),
@@ -4597,6 +4868,99 @@ class _MessageActionBar extends StatelessWidget {
       runSpacing: 8,
       alignment: WrapAlignment.center,
       children: actions,
+    );
+  }
+}
+
+class _MessageSelectionToolbar extends StatelessWidget {
+  const _MessageSelectionToolbar({
+    required this.count,
+    required this.onClear,
+    required this.onCopy,
+    required this.onShare,
+    required this.onForward,
+    required this.onAddToCalendar,
+  });
+
+  final int count;
+  final VoidCallback onClear;
+  final VoidCallback onCopy;
+  final VoidCallback onShare;
+  final VoidCallback onForward;
+  final VoidCallback onAddToCalendar;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.background,
+          border: Border(
+            top: BorderSide(color: colors.border, width: 1),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _composerHorizontalInset,
+            18,
+            _composerHorizontalInset,
+            12,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$count selected',
+                      style: textTheme.muted,
+                    ),
+                  ),
+                  ShadButton.outline(
+                    onPressed: onClear,
+                    child: const Text('Cancel'),
+                  ).withTapBounce(),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  ContextActionButton(
+                    icon: const Icon(LucideIcons.reply, size: 16),
+                    label: 'Forward',
+                    onPressed: onForward,
+                  ),
+                  ContextActionButton(
+                    icon: const Icon(LucideIcons.copy, size: 16),
+                    label: 'Copy',
+                    onPressed: onCopy,
+                  ),
+                  ContextActionButton(
+                    icon: const Icon(LucideIcons.share2, size: 16),
+                    label: 'Share',
+                    onPressed: onShare,
+                  ),
+                  ContextActionButton(
+                    icon: const Icon(LucideIcons.calendarPlus, size: 16),
+                    label: 'Add to calendar',
+                    onPressed: onAddToCalendar,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -12,8 +12,9 @@ import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observe
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
-import 'package:axichat/src/chat/view/chat.dart';
+import 'package:axichat/src/chat/view/chat.dart' as chat_view;
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -34,6 +35,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:axichat/src/roster/view/roster_invites_list.dart';
 import 'package:axichat/src/roster/view/roster_list.dart';
+import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -162,7 +164,7 @@ class HomeScreen extends StatelessWidget {
                             ? const CalendarWidget()
                             : openJid == null ||
                                     context.read<XmppService?>() == null
-                                ? const GuestChat()
+                                ? const chat_view.GuestChat()
                                 : MultiBlocProvider(
                                     providers: [
                                       BlocProvider(
@@ -210,7 +212,7 @@ class HomeScreen extends StatelessWidget {
                                         ),
                                       */
                                     ],
-                                    child: const Chat(),
+                                    child: const chat_view.Chat(),
                                   ),
                       ),
                     );
@@ -382,6 +384,18 @@ class _NexusState extends State<Nexus> {
     final showToast = ShadToaster.maybeOf(context)?.show;
     final searchState = context.watch<HomeSearchCubit?>();
     final searchActive = searchState?.state.active ?? false;
+    final chatsCubit = context.watch<ChatsCubit?>();
+    List<chat_models.Chat> selectedChats = const <chat_models.Chat>[];
+    if (chatsCubit != null &&
+        chatsCubit.state.selectedJids.isNotEmpty &&
+        chatsCubit.state.items != null) {
+      selectedChats = chatsCubit.state.items!
+          .where(
+            (chat) => chatsCubit.state.selectedJids.contains(chat.jid),
+          )
+          .toList();
+    }
+    final selectionActive = selectedChats.isNotEmpty && chatsCubit != null;
     return Column(
       children: [
         AxiAppBar(
@@ -465,21 +479,27 @@ class _NexusState extends State<Nexus> {
             ),
           ),
         ),
-        AxiTabBar(
-          backgroundColor: context.colorScheme.background,
-          tabs: widget.tabs.map((tab) {
-            if (tab.id == HomeTab.invites) {
-              final length = context.watch<RosterCubit?>()?.inviteCount;
-              return Tab(
-                child: AxiBadge(
-                  count: length ?? 0,
-                  child: Text(tab.label),
-                ),
-              );
-            }
-            return Tab(text: tab.label);
-          }).toList(),
-        ),
+        if (selectionActive)
+          ChatSelectionActionBar(
+            chatsCubit: chatsCubit,
+            selectedChats: selectedChats,
+          )
+        else
+          AxiTabBar(
+            backgroundColor: context.colorScheme.background,
+            tabs: widget.tabs.map((tab) {
+              if (tab.id == HomeTab.invites) {
+                final length = context.watch<RosterCubit?>()?.inviteCount;
+                return Tab(
+                  child: AxiBadge(
+                    count: length ?? 0,
+                    child: Text(tab.label),
+                  ),
+                );
+              }
+              return Tab(text: tab.label);
+            }).toList(),
+          ),
         const ProfileTile(),
       ],
     );
