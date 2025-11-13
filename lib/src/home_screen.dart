@@ -472,7 +472,7 @@ class _NexusState extends State<Nexus> {
                   return Scaffold(
                     extendBodyBehindAppBar: true,
                     body: tab.body,
-                    floatingActionButton: tab.fab,
+                    floatingActionButton: selectionActive ? null : tab.fab,
                   );
                 }).toList(),
               ),
@@ -484,7 +484,7 @@ class _NexusState extends State<Nexus> {
             chatsCubit: chatsCubit,
             selectedChats: selectedChats,
           )
-        else
+        else ...[
           AxiTabBar(
             backgroundColor: context.colorScheme.background,
             tabs: widget.tabs.map((tab) {
@@ -500,7 +500,8 @@ class _NexusState extends State<Nexus> {
               return Tab(text: tab.label);
             }).toList(),
           ),
-        const ProfileTile(),
+          const ProfileTile(),
+        ],
       ],
     );
   }
