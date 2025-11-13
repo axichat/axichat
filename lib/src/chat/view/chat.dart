@@ -102,15 +102,16 @@ const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 const _reactionChipPadding = EdgeInsets.symmetric(horizontal: 0.4, vertical: 2);
 const _reactionChipLabelSpacing = 2.0;
 const _reactionChipSpacing = 2.0;
+const _reactionCutoutStartFraction = 0.1;
+const _reactionCutoutEndFraction = 0.9;
 const _reactionCutoutAlignment = 0.76;
 const _reactionCornerClearance = 12.0;
 const _cutoutMaxWidthFraction = 0.9;
 const _reactionOverflowGlyphWidth = 18.0;
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
-const _recipientCutoutPadding =
-    EdgeInsets.symmetric(horizontal: 10, vertical: 6);
-const _recipientCutoutOffset = Offset(0, -2);
+const _recipientCutoutPadding = EdgeInsets.fromLTRB(10, 12, 10, 6);
+const _recipientCutoutOffset = Offset.zero;
 const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
@@ -168,7 +169,7 @@ const _messageFilterOptions = [
 ];
 
 final List<chat_models.Chat> _debugEmailRecipients = List.generate(
-  10,
+  20,
   (index) => chat_models.Chat(
     jid: 'debug${index + 1}@example.com',
     title: 'Debug Recipient ${index + 1}',
@@ -2581,11 +2582,26 @@ class _ChatState extends State<Chat> {
                                                     isRenderableBubble &&
                                                         (next == null ||
                                                             nextIsTailSpacer);
+                                                final baseOuterBottom =
+                                                    isLatestBubble ? 12.0 : 2.0;
+                                                var extraOuterBottom = 0.0;
+                                                if (showCompactReactions) {
+                                                  extraOuterBottom = math.max(
+                                                    extraOuterBottom,
+                                                    _reactionCutoutDepth,
+                                                  );
+                                                }
+                                                if (showRecipientCutout) {
+                                                  extraOuterBottom = math.max(
+                                                    extraOuterBottom,
+                                                    _recipientCutoutDepth,
+                                                  );
+                                                }
                                                 final outerPadding =
                                                     EdgeInsets.only(
                                                   top: 2,
-                                                  bottom:
-                                                      isLatestBubble ? 12 : 2,
+                                                  bottom: baseOuterBottom +
+                                                      extraOuterBottom,
                                                   left: _chatHorizontalPadding,
                                                   right: _chatHorizontalPadding,
                                                 );
@@ -2766,9 +2782,14 @@ class _ChatState extends State<Chat> {
                                                 final attachmentsKey = isSelected
                                                     ? _activeSelectionExtrasKey
                                                     : null;
-                                                final attachmentTopPadding = isSelected
-                                                    ? _selectionAttachmentSelectedGap
-                                                    : _selectionAttachmentBaseGap;
+                                                final recipientHeadroom =
+                                                    showRecipientCutout
+                                                        ? _recipientCutoutDepth
+                                                        : 0.0;
+                                                final attachmentTopPadding = (isSelected
+                                                        ? _selectionAttachmentSelectedGap
+                                                        : _selectionAttachmentBaseGap) +
+                                                    recipientHeadroom;
                                                 final attachmentBottomPadding =
                                                     _selectionExtrasViewportGap +
                                                         (showReactionManager
@@ -3183,8 +3204,18 @@ class _ChatState extends State<Chat> {
       bubbleWidth: bubbleWidth,
       minThickness: _reactionCutoutThickness,
     );
-    final maxContentWidth =
-        math.max(0.0, maxThickness - _reactionCutoutPadding.horizontal);
+    final anchoredLimit = _anchoredReactionThickness(
+      bubbleWidth: bubbleWidth,
+      thickness: maxThickness,
+      isSelf: isSelf,
+    );
+    if (anchoredLimit <= 0) {
+      return const [];
+    }
+    final maxContentWidth = math.max(
+      0.0,
+      anchoredLimit - _reactionCutoutPadding.horizontal,
+    );
     final layout = _layoutReactionStrip(
       context: context,
       reactions: reactions,
@@ -3193,24 +3224,25 @@ class _ChatState extends State<Chat> {
     if (layout.totalWidth <= 0) {
       return const [];
     }
-    final resolvedThickness = math.min(
-      maxThickness,
-      math.max(
-        _reactionCutoutThickness,
-        layout.totalWidth + _reactionCutoutPadding.horizontal,
-      ),
+    var resolvedThickness = math.max(
+      _reactionCutoutThickness,
+      layout.totalWidth + _reactionCutoutPadding.horizontal,
     );
-    final alignmentX = _reactionAlignmentForBubble(
+    resolvedThickness = math.min(resolvedThickness, anchoredLimit);
+    final placement = _reactionCutoutPlacement(
       bubbleWidth: bubbleWidth,
-      thickness: resolvedThickness,
+      requestedThickness: resolvedThickness,
       isSelf: isSelf,
     );
+    if (placement.thickness <= 0) {
+      return const [];
+    }
     return [
       CutoutSpec(
         edge: CutoutEdge.bottom,
-        alignment: Alignment(alignmentX, 1),
+        alignment: placement.alignment,
         depth: _reactionCutoutDepth,
-        thickness: resolvedThickness,
+        thickness: placement.thickness,
         cornerRadius: _reactionCutoutRadius,
         child: Transform.translate(
           offset: _reactionStripOffset,
@@ -3376,6 +3408,115 @@ class _CutoutLayoutResult<T> {
   final List<T> items;
   final bool overflowed;
   final double totalWidth;
+}
+
+class _ReactionCutoutPlacement {
+  const _ReactionCutoutPlacement({
+    required this.thickness,
+    required this.alignment,
+  });
+
+  final double thickness;
+  final Alignment alignment;
+}
+
+double _anchoredReactionThickness({
+  required double? bubbleWidth,
+  required double thickness,
+  required bool isSelf,
+}) {
+  if (bubbleWidth == null ||
+      !bubbleWidth.isFinite ||
+      bubbleWidth <= 0 ||
+      bubbleWidth.isNaN) {
+    return thickness;
+  }
+  const minEdge = _bubbleRadius + _reactionCornerClearance;
+  final maxEdge = bubbleWidth - minEdge;
+  if (maxEdge <= minEdge) {
+    return math.min(thickness, math.max(0.0, bubbleWidth));
+  }
+  final anchorFraction =
+      isSelf ? _reactionCutoutEndFraction : _reactionCutoutStartFraction;
+  final limitFraction =
+      isSelf ? _reactionCutoutStartFraction : _reactionCutoutEndFraction;
+  final anchorEdge = _clampEdge(
+    bubbleWidth * anchorFraction,
+    minEdge,
+    maxEdge,
+  );
+  final limitEdge = _clampEdge(
+    bubbleWidth * limitFraction,
+    minEdge,
+    maxEdge,
+  );
+  final availableSpan =
+      (isSelf ? anchorEdge - limitEdge : limitEdge - anchorEdge)
+          .clamp(0.0, bubbleWidth);
+  if (availableSpan <= 0) {
+    return math.min(thickness, bubbleWidth * 0.25);
+  }
+  return math.min(thickness, availableSpan);
+}
+
+_ReactionCutoutPlacement _reactionCutoutPlacement({
+  required double? bubbleWidth,
+  required double requestedThickness,
+  required bool isSelf,
+}) {
+  if (bubbleWidth == null ||
+      !bubbleWidth.isFinite ||
+      bubbleWidth <= 0 ||
+      bubbleWidth.isNaN) {
+    final fallbackAlignment = Alignment(
+      isSelf ? -_reactionCutoutAlignment : _reactionCutoutAlignment,
+      1,
+    );
+    return _ReactionCutoutPlacement(
+      thickness: requestedThickness,
+      alignment: fallbackAlignment,
+    );
+  }
+  const minEdge = _bubbleRadius + _reactionCornerClearance;
+  final maxEdge = bubbleWidth - minEdge;
+  if (maxEdge <= minEdge) {
+    return _ReactionCutoutPlacement(
+      thickness: math.min(requestedThickness, math.max(0.0, bubbleWidth)),
+      alignment: const Alignment(0, 1),
+    );
+  }
+  final anchorFraction =
+      isSelf ? _reactionCutoutEndFraction : _reactionCutoutStartFraction;
+  final limitFraction =
+      isSelf ? _reactionCutoutStartFraction : _reactionCutoutEndFraction;
+  final anchorEdge = _clampEdge(
+    bubbleWidth * anchorFraction,
+    minEdge,
+    maxEdge,
+  );
+  final limitEdge = _clampEdge(
+    bubbleWidth * limitFraction,
+    minEdge,
+    maxEdge,
+  );
+  final availableSpan =
+      (isSelf ? anchorEdge - limitEdge : limitEdge - anchorEdge)
+          .clamp(0.0, bubbleWidth);
+  final thickness = math.min(requestedThickness, availableSpan);
+  final center =
+      isSelf ? anchorEdge - thickness / 2 : anchorEdge + thickness / 2;
+  final fraction = (center / bubbleWidth).clamp(0.0, 1.0);
+  return _ReactionCutoutPlacement(
+    thickness: thickness,
+    alignment: Alignment(fraction * 2 - 1, 1),
+  );
+}
+
+double _clampEdge(double value, double min, double max) {
+  if (value.isNaN) return min;
+  if (min >= max) return min;
+  final double clamped = value.clamp(min, max);
+  return clamped;
 }
 
 _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
