@@ -209,6 +209,13 @@ lib/src/storage/
 
 ```
 
+## 🧱 Custom Render Objects Playbook
+
+- When a widget must react to geometry discovered in the same layout pass (chat bubble cutouts, overlap-aware paddings, etc.), promote it to a `MultiChildRenderObjectWidget` so the render object can lay out the body, compute limits, and then size overlays without juggling `GlobalKey`s or post-frame hacks.
+- Define parent-data slots (`body`, `reaction`, `recipients`, …) for each child so layout/paint/hit-test steps stay deterministic; this also keeps animation math centralized instead of replicated in widgets.
+- If other systems (selection hit regions, autoscroll) need bubble bounds, register the render boxes in a tiny registry on attach/detach rather than scattering duplicate global keys—registries avoid reparenting assertions and are cheaper to query.
+- Keep render-object configuration strictly declarative (e.g., `CutoutStyle` structs describing depth/radius/padding) so designers can tweak visuals from widget code without touching the render-layer implementation every time.
+
 ## 🔐 SECURITY REQUIREMENTS
 
 **NEVER log/expose:** JIDs, passwords, message content, keys

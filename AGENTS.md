@@ -36,6 +36,10 @@
 - For complex animated shells (calendar cards, tabbed panels, etc.) prefer extracting layout + painting into a custom `RenderObject` instead of layering `addPostFrameCallback`/`findRenderObject` hacks—use the render-object-driven pattern documented in `docs/tab_container_study.md`.
 - Treat `DeadlinePickerField` as the single source of truth for calendar/date picking. Update it once and only adjust parameters (e.g., `showTimeSelectors`) per use-case.
 - When a screen needs a unique tweak, factor that logic into reusable helpers or slots (header/body/footer builders) instead of forking the widget. Before creating a variant, diff against the original implementation (scheduled task editor) to confirm behaviour alignment.
+- When a widget’s layout must react to geometry that is only known during the same pass (e.g., chat bubble cutouts), graduate it to a `MultiChildRenderObjectWidget` so the render object can size the body first, then clamp overlays without relying on `GlobalKey` lookups or post-frame measurement.
+- Give render objects explicit slots via parent data (body/reactions/recipients, etc.) so layout, painting, and hit-testing stay deterministic; this avoids accidental sibling order bugs and keeps animation math centralized.
+- If other subsystems need live bounds (selection hit regions, autoscroll), prefer a small render-object registry that records `RenderBox` instances on attach/detach instead of scattering duplicate `GlobalKey`s—registries are cheaper and eliminate reparenting assertions.
+- Keep render-object parameters declarative (e.g., pass a `CutoutStyle` struct describing depth/radius/padding) so feature teams can change visuals without editing the render layer every time.
 
 ## Testing Guidelines
 
