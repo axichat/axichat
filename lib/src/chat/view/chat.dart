@@ -99,9 +99,10 @@ const _reactionCutoutThickness = 34.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
 const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
-const _reactionChipPadding = EdgeInsets.symmetric(horizontal: 0.4, vertical: 2);
+const _reactionChipPadding = EdgeInsets.symmetric(horizontal: 0.2, vertical: 2);
 const _reactionChipLabelSpacing = 2.0;
-const _reactionChipSpacing = 2.0;
+const _reactionChipSpacing = 0.6;
+const _reactionOverflowSpacing = 4.0;
 const _reactionCutoutStartFraction = 0.1;
 const _reactionCutoutEndFraction = 0.9;
 const _reactionCutoutAlignment = 0.76;
@@ -116,6 +117,7 @@ const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
 const _recipientBubbleInset = _recipientCutoutDepth;
+const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
@@ -2612,7 +2614,8 @@ class _ChatState extends State<Chat> {
                                                         innerConstraints
                                                             .maxWidth;
                                                     final bubbleWidth =
-                                                        width.isFinite
+                                                        width.isFinite &&
+                                                                width > 0
                                                             ? width
                                                             : null;
                                                     final cutouts =
@@ -3200,21 +3203,29 @@ class _ChatState extends State<Chat> {
     if (reactions.isEmpty) {
       return const [];
     }
+    final bubbleWidthValid = bubbleWidth != null &&
+        bubbleWidth.isFinite &&
+        bubbleWidth > 0 &&
+        !bubbleWidth.isNaN;
     final maxThickness = _resolveCutoutLimit(
       bubbleWidth: bubbleWidth,
       minThickness: _reactionCutoutThickness,
     );
-    final anchoredLimit = _anchoredReactionThickness(
-      bubbleWidth: bubbleWidth,
-      thickness: maxThickness,
-      isSelf: isSelf,
-    );
-    if (anchoredLimit <= 0) {
-      return const [];
+    double limitThickness = maxThickness;
+    if (bubbleWidthValid) {
+      final anchoredLimit = _anchoredReactionThickness(
+        bubbleWidth: bubbleWidth,
+        thickness: maxThickness,
+        isSelf: isSelf,
+      );
+      if (anchoredLimit <= 0) {
+        return const [];
+      }
+      limitThickness = math.min(maxThickness, anchoredLimit);
     }
     final maxContentWidth = math.max(
       0.0,
-      anchoredLimit - _reactionCutoutPadding.horizontal,
+      limitThickness - _reactionCutoutPadding.horizontal,
     );
     final layout = _layoutReactionStrip(
       context: context,
@@ -3228,7 +3239,36 @@ class _ChatState extends State<Chat> {
       _reactionCutoutThickness,
       layout.totalWidth + _reactionCutoutPadding.horizontal,
     );
-    resolvedThickness = math.min(resolvedThickness, anchoredLimit);
+    resolvedThickness = math.min(resolvedThickness, limitThickness);
+    if (!bubbleWidthValid) {
+      final alignmentX = _reactionAlignmentForBubble(
+        bubbleWidth: bubbleWidth,
+        thickness: resolvedThickness,
+        isSelf: isSelf,
+      );
+      return [
+        CutoutSpec(
+          edge: CutoutEdge.bottom,
+          alignment: Alignment(alignmentX, 1),
+          depth: _reactionCutoutDepth,
+          thickness: resolvedThickness,
+          cornerRadius: _reactionCutoutRadius,
+          child: Transform.translate(
+            offset: _reactionStripOffset,
+            child: Padding(
+              padding: _reactionCutoutPadding,
+              child: _ReactionStrip(
+                reactions: layout.items,
+                overflowed: layout.overflowed,
+                onReactionTap: canReact && message != null
+                    ? (emoji) => _toggleQuickReaction(message, emoji)
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
     final placement = _reactionCutoutPlacement(
       bubbleWidth: bubbleWidth,
       requestedThickness: resolvedThickness,
@@ -3707,7 +3747,7 @@ class _ReactionStrip extends StatelessWidget {
     }
     if (overflowed) {
       if (children.isNotEmpty) {
-        children.add(const SizedBox(width: _reactionChipSpacing));
+        children.add(const SizedBox(width: _reactionOverflowSpacing));
       }
       children.add(const _ReactionOverflowGlyph());
     }
@@ -3730,10 +3770,13 @@ class _ReactionOverflowGlyph extends StatelessWidget {
       child: Center(
         child: Text(
           '…',
-          style: context.textTheme.small.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colors.mutedForeground,
-          ),
+          style: context.textTheme.small
+              .copyWith(
+                fontWeight: FontWeight.w600,
+                color: colors.mutedForeground,
+                height: 1,
+              )
+              .apply(leadingDistribution: TextLeadingDistribution.even),
         ),
       ),
     );
@@ -3765,7 +3808,8 @@ class _RecipientCutoutStrip extends StatelessWidget {
       final offset = recipients.isEmpty
           ? 0.0
           : recipients.length *
-              (_recipientAvatarSize - _recipientAvatarOverlap);
+                  (_recipientAvatarSize - _recipientAvatarOverlap) +
+              _recipientOverflowGap;
       children.add(
         Positioned(
           left: offset,
@@ -3773,12 +3817,18 @@ class _RecipientCutoutStrip extends StatelessWidget {
         ),
       );
     }
-    final visibleCount = recipients.length + (overflowed ? 1 : 0);
-    final totalWidth = visibleCount <= 0
-        ? _recipientAvatarSize
-        : _recipientAvatarSize +
-            math.max(0, visibleCount - 1) *
-                (_recipientAvatarSize - _recipientAvatarOverlap);
+    final totalWidth = overflowed
+        ? (recipients.isEmpty
+                ? 0.0
+                : recipients.length *
+                        (_recipientAvatarSize - _recipientAvatarOverlap) +
+                    _recipientOverflowGap) +
+            _recipientAvatarSize
+        : recipients.isEmpty
+            ? _recipientAvatarSize
+            : _recipientAvatarSize +
+                math.max(0, recipients.length - 1) *
+                    (_recipientAvatarSize - _recipientAvatarOverlap);
     return SizedBox(
       width: totalWidth,
       height: _recipientAvatarSize,
@@ -3838,24 +3888,19 @@ class _RecipientOverflowAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return Container(
+    return SizedBox(
       width: _recipientAvatarSize,
       height: _recipientAvatarSize,
-      decoration: BoxDecoration(
-        color: colors.muted.withValues(alpha: 0.2),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: colors.card,
-          width: 1.6,
-        ),
-      ),
       child: Center(
         child: Text(
           '…',
-          style: context.textTheme.small.copyWith(
-            fontWeight: FontWeight.bold,
-            color: colors.mutedForeground,
-          ),
+          style: context.textTheme.small
+              .copyWith(
+                fontWeight: FontWeight.w700,
+                color: colors.mutedForeground,
+                height: 1,
+              )
+              .apply(leadingDistribution: TextLeadingDistribution.even),
         ),
       ),
     );
