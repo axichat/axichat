@@ -46,6 +46,7 @@ class CutoutStyle {
     required this.padding,
     required this.offset,
     required this.minThickness,
+    this.cornerClearance,
   });
 
   final double depth;
@@ -53,9 +54,10 @@ class CutoutStyle {
   final EdgeInsets padding;
   final Offset offset;
   final double minThickness;
+  final double? cornerClearance;
 }
 
-enum _CutoutAnchor { top, bottom }
+enum _CutoutAnchor { top, bottom, left, right }
 
 enum _CutoutType { reaction, recipient, selection }
 
@@ -334,7 +336,7 @@ class RenderChatBubbleSurface extends RenderBox
       child: _selectionChild,
       style: selectionStyle,
       type: _CutoutType.selection,
-      anchor: _CutoutAnchor.top,
+      anchor: isSelf ? _CutoutAnchor.right : _CutoutAnchor.left,
     );
   }
 
@@ -345,48 +347,76 @@ class RenderChatBubbleSurface extends RenderBox
     required _CutoutAnchor anchor,
   }) {
     if (child == null || style == null) return;
-    final maxThickness = _resolveCutoutLimit(
-      bubbleWidth: size.width,
+    final styleCornerClearance = style.cornerClearance ?? cornerClearance;
+    final horizontalAnchor =
+        anchor == _CutoutAnchor.top || anchor == _CutoutAnchor.bottom;
+    final bubbleExtent = horizontalAnchor ? size.width : size.height;
+    var maxThickness = _resolveCutoutLimit(
+      bubbleExtent: bubbleExtent,
       minThickness: style.minThickness,
-      cornerClearance: cornerClearance,
-      fraction: bubbleWidthFraction,
+      cornerClearance: styleCornerClearance,
+      fraction: horizontalAnchor ? bubbleWidthFraction : 1.0,
     );
-    if (maxThickness <= 0) return;
-    final maxContentWidth =
-        math.max(0.0, maxThickness - style.padding.horizontal);
-    if (maxContentWidth <= 0) return;
-    child.layout(
-      BoxConstraints(
-        minWidth: 0,
-        maxWidth: maxContentWidth,
-      ),
-      parentUsesSize: true,
-    );
+    maxThickness = math.max(maxThickness, style.minThickness);
+    final paddingExtent =
+        horizontalAnchor ? style.padding.horizontal : style.padding.vertical;
+    final maxContentExtent = math.max(0.0, maxThickness - paddingExtent);
+    final unboundedSelection =
+        type == _CutoutType.selection && !horizontalAnchor;
+    final childConstraints = horizontalAnchor
+        ? BoxConstraints(
+            minWidth: 0,
+            maxWidth: unboundedSelection ? double.infinity : maxContentExtent,
+          )
+        : BoxConstraints(
+            minHeight: 0,
+            maxHeight: unboundedSelection ? double.infinity : maxContentExtent,
+          );
+    if (!unboundedSelection && maxContentExtent <= 0) {
+      child.layout(BoxConstraints.tight(Size.zero), parentUsesSize: true);
+      return;
+    }
+    child.layout(childConstraints, parentUsesSize: true);
     final childSize = child.size;
-    if (childSize.width <= 0 || childSize.height <= 0) return;
+    final childExtent = horizontalAnchor ? childSize.width : childSize.height;
+    if (childExtent <= 0) return;
 
-    var resolvedThickness = math.max(
-      style.minThickness,
-      childSize.width + style.padding.horizontal,
-    );
-    resolvedThickness = math.min(resolvedThickness, maxThickness);
-
-    final placement = _reactionCutoutPlacement(
-      bubbleWidth: size.width,
-      requestedThickness: resolvedThickness,
-      isSelf: isSelf,
-      cornerClearance: cornerClearance,
+    final desiredThickness = childExtent + paddingExtent;
+    final resolvedThickness = math.min(
+      math.max(style.minThickness, desiredThickness),
+      maxThickness,
     );
 
-    final double top = anchor == _CutoutAnchor.bottom
-        ? size.height - style.depth
-        : -style.depth;
-    final rect = Rect.fromLTWH(
-      placement.left,
-      top,
-      placement.width,
-      style.depth * 2,
-    );
+    final depth = style.depth;
+    final intrude = depth * 2;
+
+    double rectLeft;
+    double rectTop;
+    double rectWidth;
+    double rectHeight;
+
+    if (horizontalAnchor) {
+      rectLeft = _horizontalCutoutLeft(
+        bubbleWidth: size.width,
+        requestedThickness: resolvedThickness,
+        isSelf: isSelf,
+        cornerClearance: styleCornerClearance,
+      );
+      rectWidth = resolvedThickness;
+      rectHeight = intrude;
+      rectTop = anchor == _CutoutAnchor.top ? -depth : size.height - depth;
+    } else {
+      rectTop = _verticalCutoutTop(
+        bubbleHeight: size.height,
+        requestedThickness: resolvedThickness,
+        cornerClearance: styleCornerClearance,
+      );
+      rectHeight = resolvedThickness;
+      rectWidth = intrude;
+      rectLeft = anchor == _CutoutAnchor.left ? -depth : size.width - depth;
+    }
+
+    final rect = Rect.fromLTWH(rectLeft, rectTop, rectWidth, rectHeight);
 
     final childParentData = child.parentData as _ChatBubbleParentData;
     childParentData.offset = Offset(
@@ -557,27 +587,27 @@ Path _buildBubblePath(
 }
 
 double _resolveCutoutLimit({
-  required double? bubbleWidth,
+  required double? bubbleExtent,
   required double minThickness,
   required double cornerClearance,
   required double fraction,
 }) {
   const fallbackBoost = 80.0;
   final fallback = minThickness + fallbackBoost;
-  if (bubbleWidth == null ||
-      !bubbleWidth.isFinite ||
-      bubbleWidth <= 0 ||
-      bubbleWidth.isNaN) {
+  if (bubbleExtent == null ||
+      !bubbleExtent.isFinite ||
+      bubbleExtent <= 0 ||
+      bubbleExtent.isNaN) {
     return fallback;
   }
   final safeInset = (cornerClearance * 2);
-  final safeWidth = bubbleWidth - safeInset;
-  final fractionWidth = bubbleWidth * fraction;
-  final limit = math.max(0.0, math.min(safeWidth, fractionWidth));
+  final safeExtent = bubbleExtent - safeInset;
+  final fractionExtent = bubbleExtent * fraction;
+  final limit = math.max(0.0, math.min(safeExtent, fractionExtent));
   if (limit <= 0) {
     return fallback;
   }
-  return math.min(limit, bubbleWidth);
+  return math.min(limit, bubbleExtent);
 }
 
 double _reactionAlignmentForBubble({
@@ -605,7 +635,7 @@ double _reactionAlignmentForBubble({
   return (fraction * 2) - 1;
 }
 
-_CutoutPlacement _reactionCutoutPlacement({
+double _horizontalCutoutLeft({
   required double? bubbleWidth,
   required double requestedThickness,
   required bool isSelf,
@@ -615,8 +645,7 @@ _CutoutPlacement _reactionCutoutPlacement({
       !bubbleWidth.isFinite ||
       bubbleWidth <= 0 ||
       bubbleWidth.isNaN) {
-    final left = isSelf ? 0.0 : 0.0;
-    return _CutoutPlacement(width: requestedThickness, left: left);
+    return 0.0;
   }
   final alignment = _reactionAlignmentForBubble(
     bubbleWidth: bubbleWidth,
@@ -626,18 +655,30 @@ _CutoutPlacement _reactionCutoutPlacement({
   );
   final center = ((alignment + 1) / 2) * bubbleWidth;
   final maxLeft = math.max(0.0, bubbleWidth - requestedThickness);
-  final left = (center - requestedThickness / 2).clamp(0.0, maxLeft);
-  return _CutoutPlacement(width: requestedThickness, left: left);
+  return (center - requestedThickness / 2).clamp(0.0, maxLeft);
+}
+
+double _verticalCutoutTop({
+  required double? bubbleHeight,
+  required double requestedThickness,
+  required double cornerClearance,
+}) {
+  if (bubbleHeight == null ||
+      !bubbleHeight.isFinite ||
+      bubbleHeight <= 0 ||
+      bubbleHeight.isNaN) {
+    return 0.0;
+  }
+  final safeInset = cornerClearance;
+  final minTop = safeInset;
+  final maxTop =
+      math.max(minTop, bubbleHeight - safeInset - requestedThickness);
+  final centerTop = (bubbleHeight - requestedThickness) / 2;
+  if (maxTop <= minTop) {
+    return centerTop.clamp(
+        0.0, math.max(0.0, bubbleHeight - requestedThickness));
+  }
+  return centerTop.clamp(minTop, maxTop);
 }
 
 double _blurSigma(double radius) => radius * 0.57735 + 0.5;
-
-class _CutoutPlacement {
-  const _CutoutPlacement({
-    required this.width,
-    required this.left,
-  });
-
-  final double width;
-  final double left;
-}
