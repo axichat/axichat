@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/routes.dart';
@@ -30,6 +31,18 @@ class _ArchivesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chatsCubit = context.watch<ChatsCubit?>();
+    List<Chat> selectedChats = const <Chat>[];
+    if (chatsCubit != null &&
+        chatsCubit.state.selectedJids.isNotEmpty &&
+        chatsCubit.state.items != null) {
+      selectedChats = chatsCubit.state.items!
+          .where(
+            (chat) => chatsCubit.state.selectedJids.contains(chat.jid),
+          )
+          .toList();
+    }
+    final selectionActive = selectedChats.isNotEmpty && chatsCubit != null;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Archive'),
@@ -94,6 +107,12 @@ class _ArchivesView extends StatelessWidget {
           );
         },
       ),
+      bottomNavigationBar: selectionActive
+          ? ChatSelectionActionBar(
+              chatsCubit: chatsCubit,
+              selectedChats: selectedChats,
+            )
+          : null,
     );
   }
 }

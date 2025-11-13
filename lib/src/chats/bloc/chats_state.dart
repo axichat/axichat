@@ -7,5 +7,6 @@ class ChatsState with _$ChatsState {
     required bool openCalendar,
     required List<Chat>? items,
     required RequestStatus creationStatus,
+    @Default(<String>{}) Set<String> selectedJids,
   }) = _ChatsState;
 }

@@ -35,9 +35,13 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   void _updateChats(List<Chat> items) {
+    final availableJids = items.map((chat) => chat.jid).toSet();
+    final retainedSelection =
+        state.selectedJids.where((jid) => availableJids.contains(jid)).toSet();
     emit(state.copyWith(
       openJid: items.where((e) => e.open).firstOrNull?.jid,
       items: items,
+      selectedJids: retainedSelection,
     ));
   }
 
@@ -116,5 +120,72 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   Future<void> deleteChatMessages({required String jid}) async {
     await _chatsService.deleteChatMessages(jid: jid);
+  }
+
+  void ensureChatSelected(String jid) {
+    if (state.selectedJids.contains(jid)) return;
+    final updated = Set<String>.of(state.selectedJids)..add(jid);
+    emit(state.copyWith(selectedJids: updated));
+  }
+
+  void toggleChatSelection(String jid) {
+    final updated = Set<String>.of(state.selectedJids);
+    if (!updated.remove(jid)) {
+      updated.add(jid);
+    }
+    emit(state.copyWith(selectedJids: updated));
+  }
+
+  void clearSelection() {
+    if (state.selectedJids.isEmpty) return;
+    emit(state.copyWith(selectedJids: const <String>{}));
+  }
+
+  Future<void> bulkToggleFavorited({required bool favorited}) async {
+    final targets = state.selectedJids.toList();
+    if (targets.isEmpty) return;
+    for (final jid in targets) {
+      await _chatsService.toggleChatFavorited(
+        jid: jid,
+        favorited: favorited,
+      );
+    }
+    clearSelection();
+  }
+
+  Future<void> bulkToggleArchived({required bool archived}) async {
+    final targets = state.selectedJids.toList();
+    if (targets.isEmpty) return;
+    for (final jid in targets) {
+      if (archived && state.openJid == jid) {
+        await _chatsService.closeChat();
+      }
+      await _chatsService.toggleChatArchived(jid: jid, archived: archived);
+    }
+    clearSelection();
+  }
+
+  Future<void> bulkToggleHidden({required bool hidden}) async {
+    final targets = state.selectedJids.toList();
+    if (targets.isEmpty) return;
+    for (final jid in targets) {
+      if (hidden && state.openJid == jid) {
+        await _chatsService.closeChat();
+      }
+      await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
+    }
+    clearSelection();
+  }
+
+  Future<void> bulkDeleteSelectedChats() async {
+    final targets = state.selectedJids.toList();
+    if (targets.isEmpty) return;
+    for (final jid in targets) {
+      if (state.openJid == jid) {
+        await _chatsService.closeChat();
+      }
+      await _chatsService.deleteChat(jid: jid);
+    }
+    clearSelection();
   }
 }
