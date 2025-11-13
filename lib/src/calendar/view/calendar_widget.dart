@@ -38,7 +38,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
   late final TabController _mobileTabController;
   late final AnimationController _tasksTabPulseController;
   late final Animation<double> _tasksTabPulse;
-  DateTime? _lastSyncToastTime;
   bool _usesMobileLayout = false;
   CalendarBloc? _calendarBloc;
   final GlobalKey<TaskSidebarState> _sidebarKey = GlobalKey<TaskSidebarState>();
@@ -143,16 +142,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
     // Handle errors
     if (state.error != null && mounted) {
       FeedbackSystem.showError(context, state.error!);
-    }
-
-    // Handle sync success
-    if (state.lastSyncTime != null &&
-        state.lastSyncTime != _lastSyncToastTime &&
-        DateTime.now().difference(state.lastSyncTime!).inSeconds < 3) {
-      if (mounted) {
-        _lastSyncToastTime = state.lastSyncTime;
-        FeedbackSystem.showSuccess(context, 'Calendar synced successfully!');
-      }
     }
   }
 

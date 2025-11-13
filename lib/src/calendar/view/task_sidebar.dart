@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
+
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
 import 'package:flutter/scheduler.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
@@ -14,6 +16,7 @@ import '../bloc/calendar_state.dart';
 import '../models/calendar_model.dart';
 import '../constants.dart';
 import '../models/calendar_task.dart';
+import '../utils/calendar_transfer_service.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/task_title_validation.dart';
@@ -21,6 +24,7 @@ import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import '../utils/nl_parser_service.dart';
 import '../utils/nl_schedule_adapter.dart';
+import 'calendar_transfer_sheet.dart';
 import 'edit_task_dropdown.dart';
 import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
@@ -81,6 +85,8 @@ class TaskSidebarState extends State<TaskSidebar>
   double _sidebarAutoScrollOffsetPerFrame = 0;
   static const double _autoScrollHorizontalSlop = 32.0;
   BaseCalendarBloc? _calendarBloc;
+  final CalendarTransferService _transferService =
+      const CalendarTransferService();
   BaseCalendarBloc get _bloc {
     final BaseCalendarBloc? bloc = _calendarBloc;
     if (bloc == null) {
@@ -774,6 +780,10 @@ class TaskSidebarState extends State<TaskSidebar>
               ? () => bloc.add(const CalendarEvent.selectionCleared())
               : null,
         ),
+        TaskSecondaryButton(
+          label: 'Export selected',
+          onPressed: hasTasks ? () => _exportSelectedTasks(tasks) : null,
+        ),
         TaskDestructiveButton(
           label: 'Delete selected',
           onPressed: hasTasks
@@ -782,6 +792,38 @@ class TaskSidebarState extends State<TaskSidebar>
         ),
       ],
     );
+  }
+
+  Future<void> _exportSelectedTasks(List<CalendarTask> tasks) async {
+    if (tasks.isEmpty) {
+      FeedbackSystem.showInfo(context, 'Select tasks to export first.');
+      return;
+    }
+    final format = await showCalendarExportFormatSheet(
+      context,
+      title: 'Export selected tasks',
+    );
+    if (!mounted || format == null) return;
+    try {
+      final file = await _transferService.exportTasks(
+        tasks: tasks,
+        format: format,
+        fileNamePrefix: 'axichat_tasks',
+      );
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Axichat tasks export',
+        text: 'Selected tasks export (${format.label})',
+      );
+      if (!mounted) return;
+      FeedbackSystem.showSuccess(context, 'Export ready to share.');
+    } catch (error) {
+      if (!mounted) return;
+      FeedbackSystem.showError(
+        context,
+        'Failed to export selected tasks: $error',
+      );
+    }
   }
 
   Widget _buildPriorityControls(List<CalendarTask> tasks) {
@@ -2874,7 +2916,7 @@ class TaskSidebarState extends State<TaskSidebar>
             : hostMediaQuery.size.height - safeTopInset;
         void closeSheet() {
           _sidebarController.setActivePopoverTaskId(null);
-          Navigator.of(sheetContext).pop();
+          Navigator.of(sheetContext).maybePop();
         }
 
         return AnimatedPadding(
@@ -2941,7 +2983,7 @@ class TaskSidebarState extends State<TaskSidebar>
               );
               _taskPopoverControllers.remove(task.id)?.dispose();
               _sidebarController.setActivePopoverTaskId(null);
-              Navigator.of(sheetContext).pop();
+              Navigator.of(sheetContext).maybePop();
             },
           ),
         );

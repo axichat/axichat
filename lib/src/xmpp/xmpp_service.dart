@@ -755,6 +755,11 @@ class XmppService extends XmppBase
     _calendarSyncCallback = callback;
   }
 
+  /// Clear any calendar sync callback to avoid calling disposed handlers.
+  void clearCalendarSyncCallback() {
+    _calendarSyncCallback = null;
+  }
+
   static String generateResource() => 'axi.${generateRandomString(
         length: 7,
         seed: DateTime.now().millisecondsSinceEpoch,

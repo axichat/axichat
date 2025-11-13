@@ -517,7 +517,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             Text('Are you sure you want to delete "${widget.task.title}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).maybePop(),
             child: const Text('Cancel'),
           ),
           TextButton(
@@ -525,7 +525,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
               context
                   .read<T>()
                   .add(CalendarEvent.taskDeleted(taskId: widget.task.id));
-              Navigator.of(context).pop();
+              Navigator.of(context).maybePop();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),

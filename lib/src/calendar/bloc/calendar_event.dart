@@ -50,6 +50,10 @@ class CalendarEvent with _$CalendarEvent {
     required String operation,
   }) = CalendarRemoteTaskApplied;
 
+  const factory CalendarEvent.tasksImported({
+    required List<CalendarTask> tasks,
+  }) = CalendarTasksImported;
+
   const factory CalendarEvent.viewChanged({
     required CalendarView view,
   }) = CalendarViewChanged;
