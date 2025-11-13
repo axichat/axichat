@@ -1177,7 +1177,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               return _buildTaskContextActions(
                 task: resolved,
                 state: state,
-                onTaskDeleted: () => Navigator.of(sheetContext).pop(),
+                onTaskDeleted: () => Navigator.of(sheetContext).maybePop(),
                 includeDeleteAction: false,
                 includeCompletionAction: false,
                 includePriorityActions: false,
@@ -1185,7 +1185,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 stripTaskKeyword: true,
               );
             },
-            onClose: () => Navigator.of(sheetContext).pop(),
+            onClose: () => Navigator.of(sheetContext).maybePop(),
             scaffoldMessenger: scaffoldMessenger,
             locationHelper: LocationAutocompleteHelper.fromState(state),
             onTaskUpdated: (updatedTask) {
@@ -1231,7 +1231,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   taskId: taskId,
                 ),
               );
-              Navigator.of(sheetContext).pop();
+              Navigator.of(sheetContext).maybePop();
             },
           ),
         );
@@ -3313,7 +3313,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
   }
 
   void _handleSubmit() {
-    Navigator.of(context).pop(_selected);
+    Navigator.of(context).maybePop(_selected);
   }
 
   @override
@@ -3371,7 +3371,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
                   Expanded(
                     child: TaskSecondaryButton(
                       label: 'Cancel',
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
                   Expanded(

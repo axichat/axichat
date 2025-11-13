@@ -79,6 +79,7 @@ abstract class BaseCalendarBloc
     on<CalendarRedoRequested>(_onRedoRequested);
     on<CalendarTaskFocusRequested>(_onTaskFocusRequested);
     on<CalendarTaskFocusCleared>(_onTaskFocusCleared);
+    on<CalendarTasksImported>(_onTasksImported);
   }
 
   final CalendarReminderController? _reminderController;
@@ -1679,6 +1680,51 @@ abstract class BaseCalendarBloc
       return;
     }
     emit(state.copyWith(pendingFocus: null));
+  }
+
+  Future<void> _onTasksImported(
+    CalendarTasksImported event,
+    Emitter<CalendarState> emit,
+  ) async {
+    final List<CalendarTask> incoming = event.tasks;
+    if (incoming.isEmpty) {
+      return;
+    }
+    try {
+      emit(state.copyWith(isLoading: true, error: null));
+      _recordUndoSnapshot();
+      final now = _now();
+      final existingIds = state.model.tasks.keys.toSet();
+      final additions = <String, CalendarTask>{};
+      for (final original in incoming) {
+        CalendarTask next = original;
+        if (next.id.isEmpty || existingIds.contains(next.id)) {
+          next = next.copyWith(id: const Uuid().v4());
+        }
+        final startHour = next.startHour ??
+            (next.scheduledTime != null
+                ? next.scheduledTime!.hour + (next.scheduledTime!.minute / 60.0)
+                : null);
+        additions[next.id] = next.copyWith(
+          startHour: startHour,
+          modifiedAt: now,
+        );
+        existingIds.add(next.id);
+      }
+      final updatedModel = state.model.replaceTasks(additions);
+      emitModel(
+        updatedModel,
+        emit,
+        isLoading: false,
+        isSelectionMode: false,
+        selectedTaskIds: const <String>{},
+      );
+      for (final task in additions.values) {
+        await onTaskAdded(task);
+      }
+    } catch (error) {
+      await _handleError(error, 'Failed to import tasks', emit);
+    }
   }
 
   DateTime? _focusAnchorFor(String taskId) {

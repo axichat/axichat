@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
-import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:bloc/bloc.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
@@ -15,7 +16,9 @@ class CalendarBloc extends BaseCalendarBloc {
     required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
     required super.storage,
     super.reminderController,
+    VoidCallback? onDispose,
   })  : _syncManagerBuilder = syncManagerBuilder,
+        _onDispose = onDispose,
         super(
           storagePrefix: authStoragePrefix,
           storageId: 'state',
@@ -29,6 +32,7 @@ class CalendarBloc extends BaseCalendarBloc {
 
   final CalendarSyncManager Function(CalendarBloc bloc) _syncManagerBuilder;
   late final CalendarSyncManager _syncManager;
+  final VoidCallback? _onDispose;
 
   @override
   Future<void> onTaskAdded(CalendarTask task) async {
@@ -72,6 +76,12 @@ class CalendarBloc extends BaseCalendarBloc {
   @override
   void logError(String message, Object error) {
     developer.log(message, name: 'CalendarBloc');
+  }
+
+  @override
+  Future<void> close() async {
+    _onDispose?.call();
+    return super.close();
   }
 
   Future<void> _onCalendarSyncRequested(

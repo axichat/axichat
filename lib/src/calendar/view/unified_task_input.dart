@@ -181,7 +181,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
             ),
           ),
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.close),
           ),
         ],
@@ -315,7 +315,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
           setState(() => _isSubmitting = false);
         } else if (!state.isLoading && _isSubmitting) {
           // Task saved successfully
-          Navigator.of(context).pop();
+          Navigator.of(context).maybePop();
         }
       },
       builder: (context, state) {
@@ -349,7 +349,7 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
                     label: 'Cancel',
                     onPressed: state.isLoading
                         ? null
-                        : () => Navigator.of(context).pop(),
+                        : () => Navigator.of(context).maybePop(),
                   ),
                   TaskPrimaryButton(
                     label: 'Save',

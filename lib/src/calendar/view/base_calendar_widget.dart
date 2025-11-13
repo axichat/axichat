@@ -47,22 +47,6 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
             }
           }
         }
-
-        if (!widget.isGuestMode &&
-            !state.isSyncing &&
-            state.lastSyncTime != null &&
-            state.error == null) {
-          if (state.lastSyncTime!.difference(DateTime.now()).abs().inSeconds <
-              5) {
-            if (context.mounted) {
-              final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-              if (scaffoldMessenger != null) {
-                FeedbackSystem.showSuccess(
-                    context, 'Calendar synced successfully!');
-              }
-            }
-          }
-        }
       },
       builder: (context, state) {
         return Scaffold(

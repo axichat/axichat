@@ -284,11 +284,15 @@ class HomeScreen extends StatelessWidget {
                       final manager = CalendarSyncManager(
                         readModel: () => bloc.currentModel,
                         applyModel: (model) async {
+                          if (bloc.isClosed) return;
                           bloc.add(
                             CalendarEvent.remoteModelApplied(model: model),
                           );
                         },
                         sendCalendarMessage: (message) async {
+                          if (bloc.isClosed) {
+                            return;
+                          }
                           final jid = xmppService.myJid;
                           if (jid != null) {
                             await xmppService.sendMessage(
@@ -301,11 +305,15 @@ class HomeScreen extends StatelessWidget {
                       );
 
                       xmppService.setCalendarSyncCallback(
-                        manager.onCalendarMessage,
+                        (syncMessage) async {
+                          if (bloc.isClosed) return;
+                          await manager.onCalendarMessage(syncMessage);
+                        },
                       );
                       return manager;
                     },
                     storage: storage,
+                    onDispose: xmppService.clearCalendarSyncCallback,
                   )..add(const CalendarEvent.started());
                 },
               ),

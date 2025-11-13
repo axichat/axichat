@@ -879,7 +879,7 @@ Future<void> showQuickAddModal({
       initialValidationMessage: initialValidationMessage,
       onDismiss: () {
         if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+          Navigator.of(context).maybePop();
         }
       },
     ),
