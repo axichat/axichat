@@ -302,11 +302,17 @@ class _ChatListTileState extends State<ChatListTile> {
         depth: 32,
         thickness: 46,
         cornerRadius: 18,
-        child: _ChatActionsToggle(
-          backgroundColor: tileBackgroundColor,
-          expanded: _showActions,
-          onPressed: selectionActive ? null : _toggleActions,
-        ),
+        child: selectionActive
+            ? _ChatSelectionCutoutButton(
+                backgroundColor: tileBackgroundColor,
+                selected: isSelected,
+                onPressed: () => chatsCubit?.toggleChatSelection(item.jid),
+              )
+            : _ChatActionsToggle(
+                backgroundColor: tileBackgroundColor,
+                expanded: _showActions,
+                onPressed: _toggleActions,
+              ),
       ),
       if (timestampLabel != null)
         CutoutSpec(
@@ -362,26 +368,7 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
     );
 
-    Widget interactiveTile = tileSurface.withTapBounce();
-    if (selectionActive) {
-      interactiveTile = Stack(
-        clipBehavior: Clip.none,
-        children: [
-          interactiveTile,
-          Positioned(
-            top: 12,
-            right: 20,
-            child: IgnorePointer(
-              child: SelectionIndicator(
-                visible: true,
-                selected: isSelected,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return interactiveTile;
+    return tileSurface.withTapBounce();
   }
 
   void _toggleActions() {
@@ -578,50 +565,53 @@ class _ChatListTileState extends State<ChatListTile> {
                   child: const Text('Continue'),
                 ).withTapBounce(),
               ],
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Delete chat: ${chat.title}',
-                    style: context.textTheme.small,
-                  ),
-                  const SizedBox.square(dimension: 10.0),
-                  ShadGestureDetector(
-                    cursor: SystemMouseCursors.click,
-                    hoverStrategies: mobileHoverStrategies,
-                    onTap: () =>
-                        setState(() => deleteMessages = !deleteMessages),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Checkbox(
-                          value: deleteMessages,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                          activeColor: context.colorScheme.primary,
-                          checkColor: context.colorScheme.primaryForeground,
-                          side: BorderSide(
-                            color: context.colorScheme.border,
-                            width: 1.4,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          onChanged: (value) =>
-                              setState(() => deleteMessages = value ?? false),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Permanently delete messages',
-                            style: context.textTheme.muted,
-                          ),
-                        ),
-                      ],
+              child: Material(
+                type: MaterialType.transparency,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Delete chat: ${chat.title}',
+                      style: context.textTheme.small,
                     ),
-                  ),
-                ],
+                    const SizedBox.square(dimension: 10.0),
+                    ShadGestureDetector(
+                      cursor: SystemMouseCursors.click,
+                      hoverStrategies: mobileHoverStrategies,
+                      onTap: () =>
+                          setState(() => deleteMessages = !deleteMessages),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Checkbox(
+                            value: deleteMessages,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                            activeColor: context.colorScheme.primary,
+                            checkColor: context.colorScheme.primaryForeground,
+                            side: BorderSide(
+                              color: context.colorScheme.border,
+                              width: 1.4,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            onChanged: (value) =>
+                                setState(() => deleteMessages = value ?? false),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Permanently delete messages',
+                              style: context.textTheme.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -830,6 +820,37 @@ class _ChatActionsToggle extends StatelessWidget {
         ),
         onPressed: onPressed,
       ).withTapBounce(),
+    );
+  }
+}
+
+class _ChatSelectionCutoutButton extends StatelessWidget {
+  const _ChatSelectionCutoutButton({
+    required this.backgroundColor,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final Color backgroundColor;
+  final bool selected;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        color: backgroundColor,
+        shape: SquircleBorder(
+          cornerRadius: 14,
+          side: BorderSide(color: colors.border, width: 1.4),
+        ),
+      ),
+      child: SelectionIndicator(
+        visible: true,
+        selected: selected,
+        onPressed: onPressed,
+      ),
     );
   }
 }

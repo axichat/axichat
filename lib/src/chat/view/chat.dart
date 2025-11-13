@@ -117,6 +117,11 @@ const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
 const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
+const _selectionCutoutDepth = 18.0;
+const _selectionCutoutRadius = 16.0;
+const _selectionCutoutPadding = EdgeInsets.fromLTRB(8, 6, 8, 8);
+const _selectionCutoutOffset = Offset(0, -4);
+const _selectionCutoutThickness = 44.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
@@ -2616,6 +2621,32 @@ class _ChatState extends State<Chat> {
                                                         isEmailChat &&
                                                         recipientCutoutParticipants
                                                             .isNotEmpty;
+                                                Widget? selectionOverlay;
+                                                CutoutStyle? selectionStyle;
+                                                if (_multiSelectActive) {
+                                                  selectionOverlay =
+                                                      SelectionIndicator(
+                                                    visible: true,
+                                                    selected: isMultiSelection,
+                                                    onPressed: () =>
+                                                        _toggleMultiSelectMessage(
+                                                      messageModel,
+                                                    ),
+                                                  );
+                                                  selectionStyle =
+                                                      const CutoutStyle(
+                                                    depth:
+                                                        _selectionCutoutDepth,
+                                                    cornerRadius:
+                                                        _selectionCutoutRadius,
+                                                    padding:
+                                                        _selectionCutoutPadding,
+                                                    offset:
+                                                        _selectionCutoutOffset,
+                                                    minThickness:
+                                                        _selectionCutoutThickness,
+                                                  );
+                                                }
                                                 final bubbleContentKey = message
                                                             .customProperties?[
                                                         'id'] ??
@@ -2901,6 +2932,10 @@ class _ChatState extends State<Chat> {
                                                                       _recipientCutoutMinThickness,
                                                                 )
                                                               : null,
+                                                      selectionOverlay:
+                                                          selectionOverlay,
+                                                      selectionStyle:
+                                                          selectionStyle,
                                                     );
                                                     return _MessageBubbleRegion(
                                                       messageId:
@@ -2918,33 +2953,11 @@ class _ChatState extends State<Chat> {
                                                     isSingleSelection
                                                         ? Alignment.center
                                                         : baseAlignment;
-                                                Widget bubbleWithIndicator =
-                                                    bubble;
-                                                if (_multiSelectActive) {
-                                                  bubbleWithIndicator = Stack(
-                                                    clipBehavior: Clip.none,
-                                                    children: [
-                                                      bubble,
-                                                      Positioned(
-                                                        top: -10,
-                                                        right:
-                                                            self ? -12 : null,
-                                                        left: self ? null : -12,
-                                                        child:
-                                                            SelectionIndicator(
-                                                          visible: true,
-                                                          selected:
-                                                              isMultiSelection,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  );
-                                                }
                                                 final shadowedBubble =
                                                     ConstrainedBox(
                                                   constraints:
                                                       bubbleConstraints,
-                                                  child: bubbleWithIndicator,
+                                                  child: bubble,
                                                 );
                                                 final alignedBubble =
                                                     AnimatedAlign(
