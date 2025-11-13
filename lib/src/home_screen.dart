@@ -35,7 +35,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:axichat/src/roster/view/roster_invites_list.dart';
 import 'package:axichat/src/roster/view/roster_list.dart';
-import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -385,7 +385,7 @@ class _NexusState extends State<Nexus> {
     final searchState = context.watch<HomeSearchCubit?>();
     final searchActive = searchState?.state.active ?? false;
     final chatsCubit = context.watch<ChatsCubit?>();
-    List<chat_models.Chat> selectedChats = const <chat_models.Chat>[];
+    List<Chat> selectedChats = const <Chat>[];
     if (chatsCubit != null &&
         chatsCubit.state.selectedJids.isNotEmpty &&
         chatsCubit.state.items != null) {
@@ -472,6 +472,7 @@ class _NexusState extends State<Nexus> {
                   return Scaffold(
                     extendBodyBehindAppBar: true,
                     body: tab.body,
+                    floatingActionButtonAnimator: const _ScaleOnlyFabAnimator(),
                     floatingActionButton: selectionActive ? null : tab.fab,
                   );
                 }).toList(),
@@ -524,6 +525,50 @@ class _SearchToggleButton extends StatelessWidget {
       onPressed: onPressed,
     );
   }
+}
+
+class _ScaleOnlyFabAnimator extends FloatingActionButtonAnimator {
+  const _ScaleOnlyFabAnimator();
+
+  static const Curve _moveCurve = Curves.easeInOutCubic;
+
+  @override
+  Offset getOffset({
+    required Offset begin,
+    required Offset end,
+    required double progress,
+  }) {
+    final t = _moveCurve.transform(progress);
+    return Offset.lerp(begin, end, t)!;
+  }
+
+  @override
+  Animation<double> getScaleAnimation({required Animation<double> parent}) {
+    const curveOut = Interval(0.0, 0.5, curve: Curves.easeIn);
+    const curveIn = Interval(0.5, 1.0, curve: Curves.easeOut);
+    return TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: curveOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: curveIn)),
+        weight: 50,
+      ),
+    ]).animate(parent);
+  }
+
+  @override
+  Animation<double> getRotationAnimation({
+    required Animation<double> parent,
+  }) =>
+      const AlwaysStoppedAnimation<double>(0.0);
+
+  @override
+  double getAnimationRestart(double previousValue) =>
+      FloatingActionButtonAnimator.scaling.getAnimationRestart(previousValue);
 }
 
 class _HomeSearchPanel extends StatefulWidget {

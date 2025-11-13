@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/axi_tap_bounce.dart';
 import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -15,7 +16,7 @@ class SelectionIndicator extends StatelessWidget {
   final bool selected;
   final VoidCallback? onPressed;
 
-  static const _size = 28.0;
+  static const double size = 28.0;
   static const _animationDuration = Duration(milliseconds: 150);
   static const _cornerRadius = 16.0;
 
@@ -50,7 +51,7 @@ class SelectionIndicator extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onPressed,
         child: child,
-      );
+      ).withTapBounce();
     }
     return AnimatedOpacity(
       duration: _animationDuration,
@@ -60,8 +61,8 @@ class SelectionIndicator extends StatelessWidget {
         scale: visible ? 1 : 0.94,
         curve: Curves.easeInOut,
         child: SizedBox(
-          width: _size,
-          height: _size,
+          width: size,
+          height: size,
           child: child,
         ),
       ),
