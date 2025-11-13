@@ -306,7 +306,7 @@ class _ChatListTileState extends State<ChatListTile> {
             secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,

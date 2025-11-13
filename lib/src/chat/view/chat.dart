@@ -16,7 +16,6 @@ import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chat/view/chat_cutout_composer.dart';
 import 'package:axichat/src/chat/view/chat_drawer.dart';
 import 'package:axichat/src/chat/view/chat_message_details.dart';
-import 'package:axichat/src/chat/view/incoming_banner.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -100,9 +99,22 @@ const _reactionCutoutThickness = 34.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
 const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
-const _reactionChipSpacing = 3.0;
+const _reactionChipPadding = EdgeInsets.symmetric(horizontal: 0.4, vertical: 2);
+const _reactionChipLabelSpacing = 2.0;
+const _reactionChipSpacing = 2.0;
 const _reactionCutoutAlignment = 0.76;
 const _reactionCornerClearance = 12.0;
+const _cutoutMaxWidthFraction = 0.9;
+const _reactionOverflowGlyphWidth = 18.0;
+const _recipientCutoutDepth = 16.0;
+const _recipientCutoutRadius = 18.0;
+const _recipientCutoutPadding =
+    EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+const _recipientCutoutOffset = Offset(0, -2);
+const _recipientAvatarSize = 28.0;
+const _recipientAvatarOverlap = 10.0;
+const _recipientCutoutMinThickness = 48.0;
+const _recipientBubbleInset = _recipientCutoutDepth;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
@@ -154,6 +166,17 @@ const _messageFilterOptions = [
     'All with contact',
   ),
 ];
+
+final List<chat_models.Chat> _debugEmailRecipients = List.generate(
+  10,
+  (index) => chat_models.Chat(
+    jid: 'debug${index + 1}@example.com',
+    title: 'Debug Recipient ${index + 1}',
+    type: chat_models.ChatType.chat,
+    lastChangeTimestamp: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    emailAddress: 'debug${index + 1}@example.com',
+  ),
+);
 
 class _ChatSearchToggleButton extends StatelessWidget {
   const _ChatSearchToggleButton();
@@ -2194,6 +2217,13 @@ class _ChatState extends State<Chat> {
                                                                 .Chat>?) ??
                                                         const <chat_models
                                                             .Chat>[];
+                                                final recipientCutoutParticipants =
+                                                    isEmailChat
+                                                        ? <chat_models.Chat>[
+                                                            ...bannerParticipants,
+                                                            ..._debugEmailRecipients,
+                                                          ]
+                                                        : bannerParticipants;
                                                 final extraStyle = context
                                                     .textTheme.muted
                                                     .copyWith(
@@ -2366,6 +2396,11 @@ class _ChatState extends State<Chat> {
                                                 final showCompactReactions =
                                                     reactions.isNotEmpty &&
                                                         !showReactionManager;
+                                                final showRecipientCutout =
+                                                    !showCompactReactions &&
+                                                        isEmailChat &&
+                                                        recipientCutoutParticipants
+                                                            .isNotEmpty;
                                                 final bubbleContentKey = message
                                                             .customProperties?[
                                                         'id'] ??
@@ -2380,26 +2415,6 @@ class _ChatState extends State<Chat> {
                                                               .senderJid ==
                                                           user.id,
                                                     ),
-                                                  );
-                                                }
-                                                if (bannerParticipants
-                                                    .isNotEmpty) {
-                                                  bubbleChildren.add(
-                                                    IncomingBanner(
-                                                      participants:
-                                                          bannerParticipants,
-                                                      onParticipantTap:
-                                                          (participant) => context
-                                                              .read<
-                                                                  ChatsCubit?>()
-                                                              ?.toggleChat(
-                                                                jid: participant
-                                                                    .jid,
-                                                              ),
-                                                    ),
-                                                  );
-                                                  bubbleChildren.add(
-                                                    const SizedBox(height: 4),
                                                   );
                                                 }
                                                 if (isError) {
@@ -2504,13 +2519,23 @@ class _ChatState extends State<Chat> {
                                                     ),
                                                   );
                                                 }
+                                                var bubbleBottomInset = 0.0;
+                                                if (showCompactReactions) {
+                                                  bubbleBottomInset =
+                                                      _reactionBubbleInset;
+                                                }
+                                                if (showRecipientCutout) {
+                                                  bubbleBottomInset = math.max(
+                                                    bubbleBottomInset,
+                                                    _recipientBubbleInset,
+                                                  );
+                                                }
                                                 final bubblePadding =
-                                                    showCompactReactions
+                                                    bubbleBottomInset > 0
                                                         ? _bubblePadding.add(
-                                                            const EdgeInsets
-                                                                .only(
+                                                            EdgeInsets.only(
                                                               bottom:
-                                                                  _reactionBubbleInset,
+                                                                  bubbleBottomInset,
                                                             ),
                                                           )
                                                         : _bubblePadding;
@@ -2574,21 +2599,31 @@ class _ChatState extends State<Chat> {
                                                         width.isFinite
                                                             ? width
                                                             : null;
-                                                    final List<CutoutSpec>
-                                                        cutouts =
-                                                        showCompactReactions
-                                                            ? _buildReactionCutouts(
-                                                                reactions:
-                                                                    reactions,
-                                                                message:
-                                                                    messageModel,
-                                                                canReact:
-                                                                    canReact,
-                                                                isSelf: self,
-                                                                bubbleWidth:
-                                                                    bubbleWidth,
-                                                              )
-                                                            : const [];
+                                                    final cutouts =
+                                                        <CutoutSpec>[];
+                                                    if (showCompactReactions) {
+                                                      cutouts.addAll(
+                                                        _buildReactionCutouts(
+                                                          reactions: reactions,
+                                                          message: messageModel,
+                                                          canReact: canReact,
+                                                          isSelf: self,
+                                                          bubbleWidth:
+                                                              bubbleWidth,
+                                                        ),
+                                                      );
+                                                    }
+                                                    if (showRecipientCutout) {
+                                                      cutouts.addAll(
+                                                        _buildRecipientCutouts(
+                                                          recipients:
+                                                              recipientCutoutParticipants,
+                                                          isSelf: self,
+                                                          bubbleWidth:
+                                                              bubbleWidth,
+                                                        ),
+                                                      );
+                                                    }
                                                     return TweenAnimationBuilder<
                                                         double>(
                                                       tween: Tween<double>(
@@ -3144,34 +3179,30 @@ class _ChatState extends State<Chat> {
     if (reactions.isEmpty) {
       return const [];
     }
-    const maxVisible = 4;
-    final visible = reactions.take(maxVisible).toList();
-    const emojiSpacing = _reactionChipSpacing;
-    final spacing =
-        visible.length > 1 ? (visible.length - 1) * emojiSpacing : 0.0;
-    final baseWidth = visible.fold<double>(0, (sum, reaction) {
-          final countWidth = reaction.count > 1
-              ? 8 + (reaction.count.toString().length * 4)
-              : 0;
-          return sum + 14 + countWidth;
-        }) +
-        spacing +
-        _reactionCutoutPadding.horizontal;
-    var thickness = baseWidth.clamp(
-        _reactionCutoutThickness, _reactionCutoutThickness + 80);
-    if (bubbleWidth != null &&
-        bubbleWidth.isFinite &&
-        bubbleWidth > (_bubbleRadius + _reactionCornerClearance) * 2) {
-      final maxThickness =
-          bubbleWidth - (_bubbleRadius + _reactionCornerClearance) * 2;
-      thickness = thickness.clamp(
-        _reactionCutoutThickness,
-        math.max(_reactionCutoutThickness, maxThickness),
-      );
+    final maxThickness = _resolveCutoutLimit(
+      bubbleWidth: bubbleWidth,
+      minThickness: _reactionCutoutThickness,
+    );
+    final maxContentWidth =
+        math.max(0.0, maxThickness - _reactionCutoutPadding.horizontal);
+    final layout = _layoutReactionStrip(
+      context: context,
+      reactions: reactions,
+      maxContentWidth: maxContentWidth,
+    );
+    if (layout.totalWidth <= 0) {
+      return const [];
     }
+    final resolvedThickness = math.min(
+      maxThickness,
+      math.max(
+        _reactionCutoutThickness,
+        layout.totalWidth + _reactionCutoutPadding.horizontal,
+      ),
+    );
     final alignmentX = _reactionAlignmentForBubble(
       bubbleWidth: bubbleWidth,
-      thickness: thickness,
+      thickness: resolvedThickness,
       isSelf: isSelf,
     );
     return [
@@ -3179,17 +3210,69 @@ class _ChatState extends State<Chat> {
         edge: CutoutEdge.bottom,
         alignment: Alignment(alignmentX, 1),
         depth: _reactionCutoutDepth,
-        thickness: thickness,
+        thickness: resolvedThickness,
         cornerRadius: _reactionCutoutRadius,
         child: Transform.translate(
           offset: _reactionStripOffset,
           child: Padding(
             padding: _reactionCutoutPadding,
             child: _ReactionStrip(
-              reactions: visible,
+              reactions: layout.items,
+              overflowed: layout.overflowed,
               onReactionTap: canReact && message != null
                   ? (emoji) => _toggleQuickReaction(message, emoji)
                   : null,
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<CutoutSpec> _buildRecipientCutouts({
+    required List<chat_models.Chat> recipients,
+    required bool isSelf,
+    required double? bubbleWidth,
+  }) {
+    if (recipients.isEmpty) {
+      return const [];
+    }
+    final maxThickness = _resolveCutoutLimit(
+      bubbleWidth: bubbleWidth,
+      minThickness: _recipientCutoutMinThickness,
+    );
+    final maxContentWidth =
+        math.max(0.0, maxThickness - _recipientCutoutPadding.horizontal);
+    final layout = _layoutRecipientStrip(recipients, maxContentWidth);
+    if (layout.totalWidth <= 0) {
+      return const [];
+    }
+    final resolvedThickness = math.min(
+      maxThickness,
+      math.max(
+        _recipientCutoutMinThickness,
+        layout.totalWidth + _recipientCutoutPadding.horizontal,
+      ),
+    );
+    final alignmentX = _reactionAlignmentForBubble(
+      bubbleWidth: bubbleWidth,
+      thickness: resolvedThickness,
+      isSelf: isSelf,
+    );
+    return [
+      CutoutSpec(
+        edge: CutoutEdge.bottom,
+        alignment: Alignment(alignmentX, 1),
+        depth: _recipientCutoutDepth,
+        thickness: resolvedThickness,
+        cornerRadius: _recipientCutoutRadius,
+        child: Transform.translate(
+          offset: _recipientCutoutOffset,
+          child: Padding(
+            padding: _recipientCutoutPadding,
+            child: _RecipientCutoutStrip(
+              recipients: layout.items,
+              overflowed: layout.overflowed,
             ),
           ),
         ),
@@ -3218,6 +3301,28 @@ class _ChatState extends State<Chat> {
     final targetCenter = isSelf ? minCenter : maxCenter;
     final fraction = (targetCenter / bubbleWidth).clamp(0.0, 1.0);
     return (fraction * 2) - 1;
+  }
+
+  double _resolveCutoutLimit({
+    required double? bubbleWidth,
+    required double minThickness,
+  }) {
+    const fallbackBoost = 80.0;
+    final fallback = minThickness + fallbackBoost;
+    if (bubbleWidth == null ||
+        !bubbleWidth.isFinite ||
+        bubbleWidth <= 0 ||
+        bubbleWidth.isNaN) {
+      return fallback;
+    }
+    const safeInset = (_bubbleRadius + _reactionCornerClearance) * 2;
+    final safeWidth = bubbleWidth - safeInset;
+    final fractionWidth = bubbleWidth * _cutoutMaxWidthFraction;
+    final limit = math.max(0.0, math.min(safeWidth, fractionWidth));
+    if (limit <= 0) {
+      return fallback;
+    }
+    return math.min(limit, bubbleWidth);
   }
 
   Map<String, FanOutRecipientState> _latestRecipientStatuses(
@@ -3261,31 +3366,357 @@ class _ChatState extends State<Chat> {
   }
 }
 
+class _CutoutLayoutResult<T> {
+  const _CutoutLayoutResult({
+    required this.items,
+    required this.overflowed,
+    required this.totalWidth,
+  });
+
+  final List<T> items;
+  final bool overflowed;
+  final double totalWidth;
+}
+
+_CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
+  required BuildContext context,
+  required List<ReactionPreview> reactions,
+  required double maxContentWidth,
+}) {
+  if (reactions.isEmpty || maxContentWidth <= 0) {
+    return const _CutoutLayoutResult(
+      items: <ReactionPreview>[],
+      overflowed: false,
+      totalWidth: 0,
+    );
+  }
+
+  final textDirection = Directionality.of(context);
+  final mediaQuery = MediaQuery.maybeOf(context);
+  final textScaler =
+      mediaQuery == null ? TextScaler.noScaling : mediaQuery.textScaler;
+
+  final visible = <ReactionPreview>[];
+  final additions = <double>[];
+  double used = 0;
+
+  for (final reaction in reactions) {
+    final spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
+    final addition = spacing +
+        _measureReactionChipWidth(
+          context: context,
+          reaction: reaction,
+          textDirection: textDirection,
+          textScaler: textScaler,
+        );
+    if (used + addition > maxContentWidth) {
+      break;
+    }
+    visible.add(reaction);
+    additions.add(addition);
+    used += addition;
+  }
+
+  final truncated = visible.length < reactions.length;
+  double totalWidth = used;
+
+  if (truncated) {
+    var spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
+    const glyphWidth = _reactionOverflowGlyphWidth;
+    while (visible.isNotEmpty &&
+        totalWidth + spacing + glyphWidth > maxContentWidth) {
+      totalWidth -= additions.removeLast();
+      visible.removeLast();
+      spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
+    }
+    if (visible.isEmpty) {
+      totalWidth = math.min(glyphWidth, maxContentWidth);
+    } else {
+      totalWidth = math.min(maxContentWidth, totalWidth + spacing + glyphWidth);
+    }
+  }
+
+  return _CutoutLayoutResult(
+    items: visible,
+    overflowed: truncated,
+    totalWidth: totalWidth,
+  );
+}
+
+double _measureReactionChipWidth({
+  required BuildContext context,
+  required ReactionPreview reaction,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
+}) {
+  final emojiPainter = TextPainter(
+    text: TextSpan(
+      text: reaction.emoji,
+      style:
+          _reactionEmojiTextStyle(context, highlighted: reaction.reactedBySelf),
+    ),
+    maxLines: 1,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  )..layout();
+
+  var width = emojiPainter.width + _reactionChipPadding.horizontal;
+
+  if (reaction.count > 1) {
+    final countPainter = TextPainter(
+      text: TextSpan(
+        text: reaction.count.toString(),
+        style: _reactionCountTextStyle(
+          context,
+          highlighted: reaction.reactedBySelf,
+        ),
+      ),
+      maxLines: 1,
+      textDirection: textDirection,
+      textScaler: textScaler,
+    )..layout();
+    width += _reactionChipLabelSpacing + countPainter.width;
+  }
+
+  return width;
+}
+
+_CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip(
+  List<chat_models.Chat> recipients,
+  double maxContentWidth,
+) {
+  if (recipients.isEmpty || maxContentWidth <= 0) {
+    return const _CutoutLayoutResult(
+      items: <chat_models.Chat>[],
+      overflowed: false,
+      totalWidth: 0,
+    );
+  }
+
+  final visible = <chat_models.Chat>[];
+  final additions = <double>[];
+  double used = 0;
+
+  for (final recipient in recipients) {
+    final addition = visible.isEmpty
+        ? _recipientAvatarSize
+        : _recipientAvatarSize - _recipientAvatarOverlap;
+    if (used + addition > maxContentWidth) {
+      break;
+    }
+    visible.add(recipient);
+    additions.add(addition);
+    used += addition;
+  }
+
+  final truncated = visible.length < recipients.length;
+  double totalWidth = used;
+
+  if (truncated) {
+    var ellipsisWidth = visible.isEmpty
+        ? _recipientAvatarSize
+        : _recipientAvatarSize - _recipientAvatarOverlap;
+    while (visible.isNotEmpty && totalWidth + ellipsisWidth > maxContentWidth) {
+      totalWidth -= additions.removeLast();
+      visible.removeLast();
+      ellipsisWidth = visible.isEmpty
+          ? _recipientAvatarSize
+          : _recipientAvatarSize - _recipientAvatarOverlap;
+    }
+    if (visible.isEmpty) {
+      totalWidth = math.min(ellipsisWidth, maxContentWidth);
+    } else {
+      totalWidth = math.min(maxContentWidth, totalWidth + ellipsisWidth);
+    }
+  }
+
+  return _CutoutLayoutResult(
+    items: visible,
+    overflowed: truncated,
+    totalWidth: totalWidth,
+  );
+}
+
 class _ReactionStrip extends StatelessWidget {
   const _ReactionStrip({
     required this.reactions,
+    required this.overflowed,
     this.onReactionTap,
   });
 
   final List<ReactionPreview> reactions;
+  final bool overflowed;
   final void Function(String emoji)? onReactionTap;
 
   @override
   Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < reactions.length; i++) {
+      if (i != 0) {
+        children.add(const SizedBox(width: _reactionChipSpacing));
+      }
+      children.add(
+        _ReactionChip(
+          data: reactions[i],
+          onTap: onReactionTap == null
+              ? null
+              : () => onReactionTap!(reactions[i].emoji),
+        ),
+      );
+    }
+    if (overflowed) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(width: _reactionChipSpacing));
+      }
+      children.add(const _ReactionOverflowGlyph());
+    }
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < reactions.length; i++) ...[
-          _ReactionChip(
-            data: reactions[i],
-            onTap: onReactionTap == null
-                ? null
-                : () => onReactionTap!(reactions[i].emoji),
+      children: children,
+    );
+  }
+}
+
+class _ReactionOverflowGlyph extends StatelessWidget {
+  const _ReactionOverflowGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return SizedBox(
+      width: _reactionOverflowGlyphWidth,
+      height: 18,
+      child: Center(
+        child: Text(
+          '…',
+          style: context.textTheme.small.copyWith(
+            fontWeight: FontWeight.w600,
+            color: colors.mutedForeground,
           ),
-          if (i != reactions.length - 1)
-            const SizedBox(width: _reactionChipSpacing),
-        ],
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecipientCutoutStrip extends StatelessWidget {
+  const _RecipientCutoutStrip({
+    required this.recipients,
+    required this.overflowed,
+  });
+
+  final List<chat_models.Chat> recipients;
+  final bool overflowed;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < recipients.length; i++) {
+      final offset = i * (_recipientAvatarSize - _recipientAvatarOverlap);
+      children.add(
+        Positioned(
+          left: offset,
+          child: _RecipientAvatarBadge(chat: recipients[i]),
+        ),
+      );
+    }
+    if (overflowed) {
+      final offset = recipients.isEmpty
+          ? 0.0
+          : recipients.length *
+              (_recipientAvatarSize - _recipientAvatarOverlap);
+      children.add(
+        Positioned(
+          left: offset,
+          child: const _RecipientOverflowAvatar(),
+        ),
+      );
+    }
+    final visibleCount = recipients.length + (overflowed ? 1 : 0);
+    final totalWidth = visibleCount <= 0
+        ? _recipientAvatarSize
+        : _recipientAvatarSize +
+            math.max(0, visibleCount - 1) *
+                (_recipientAvatarSize - _recipientAvatarOverlap);
+    return SizedBox(
+      width: totalWidth,
+      height: _recipientAvatarSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _RecipientAvatarBadge extends StatelessWidget {
+  const _RecipientAvatarBadge({required this.chat});
+
+  final chat_models.Chat chat;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final label = chat.contactDisplayName ?? chat.title;
+    final trimmed = label.trim();
+    final initialCode = trimmed.isEmpty ? null : trimmed.runes.first;
+    final initial = initialCode == null
+        ? '?'
+        : String.fromCharCode(initialCode).toUpperCase();
+    final background = stringToColor(chat.jid);
+    final textColor = colors.background;
+    return Container(
+      width: _recipientAvatarSize,
+      height: _recipientAvatarSize,
+      decoration: BoxDecoration(
+        color: background,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: colors.card,
+          width: 1.6,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            fontSize: _recipientAvatarSize * 0.45,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecipientOverflowAvatar extends StatelessWidget {
+  const _RecipientOverflowAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return Container(
+      width: _recipientAvatarSize,
+      height: _recipientAvatarSize,
+      decoration: BoxDecoration(
+        color: colors.muted.withValues(alpha: 0.2),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: colors.card,
+          width: 1.6,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          '…',
+          style: context.textTheme.small.copyWith(
+            fontWeight: FontWeight.bold,
+            color: colors.mutedForeground,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -3886,25 +4317,16 @@ class _ReactionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final highlighted = data.reactedBySelf;
-    final emojiStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontSize: 16,
-              fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
-            ) ??
-        TextStyle(
-          fontSize: 16,
-          fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
-        );
-    final countStyle = context.textTheme.small.copyWith(
-      color: highlighted ? colors.primary : colors.mutedForeground,
-      fontWeight: FontWeight.w600,
-    );
+    final emojiStyle =
+        _reactionEmojiTextStyle(context, highlighted: highlighted);
+    final countStyle =
+        _reactionCountTextStyle(context, highlighted: highlighted);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 0.4, vertical: 2),
+        padding: _reactionChipPadding,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3913,7 +4335,7 @@ class _ReactionChip extends StatelessWidget {
               style: emojiStyle,
             ),
             if (data.count > 1) ...[
-              const SizedBox(width: 2),
+              const SizedBox(width: _reactionChipLabelSpacing),
               Text(
                 data.count.toString(),
                 style: countStyle,
@@ -3924,6 +4346,29 @@ class _ReactionChip extends StatelessWidget {
       ),
     );
   }
+}
+
+TextStyle _reactionEmojiTextStyle(
+  BuildContext context, {
+  required bool highlighted,
+}) {
+  final base = Theme.of(context).textTheme.bodyMedium ??
+      const TextStyle(fontSize: 16, fontWeight: FontWeight.w500);
+  return base.copyWith(
+    fontSize: 16,
+    fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
+  );
+}
+
+TextStyle _reactionCountTextStyle(
+  BuildContext context, {
+  required bool highlighted,
+}) {
+  final colors = context.colorScheme;
+  return context.textTheme.small.copyWith(
+    color: highlighted ? colors.primary : colors.mutedForeground,
+    fontWeight: FontWeight.w600,
+  );
 }
 
 class _SelectionHeadroomSpacer extends StatelessWidget {
