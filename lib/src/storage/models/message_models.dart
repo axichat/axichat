@@ -40,7 +40,15 @@ enum MessageError {
   unknownOmemoError,
   fileDecryptionFailure,
   fileEncryptionFailure,
-  plaintextFileInOmemo;
+  plaintextFileInOmemo,
+  // Email-specific failures must remain at the end to preserve
+  // the stored enum indexes.
+  emailSendFailure,
+  emailAttachmentTooLarge,
+  emailRecipientRejected,
+  emailAuthenticationFailed,
+  emailBounced,
+  emailThrottled;
 
   bool get isNone => this == none;
 
@@ -73,6 +81,15 @@ enum MessageError {
         omemoUnsupported => 'Contact doesn\'t support encryption',
         encryptionFailure => 'Encryption failed',
         invalidEnvelope => 'Invalid contents',
+        plaintextFileInOmemo =>
+          'Attachment could not be encrypted. Please try again.',
+        emailSendFailure => 'Email failed to send',
+        emailAttachmentTooLarge => 'Attachment is too large to send',
+        emailRecipientRejected => 'Recipient email server rejected the message',
+        emailAuthenticationFailed =>
+          'Email credentials were rejected by the server',
+        emailBounced => 'Email bounced back from the recipient',
+        emailThrottled => 'Email sending temporarily throttled',
         _ => toString(),
       };
 

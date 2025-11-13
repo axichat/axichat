@@ -222,7 +222,10 @@ class ChatMessageDetails extends StatelessWidget {
                         'Error',
                         style: context.textTheme.muted,
                       ),
-                      Text(message.error.asString),
+                      Text(
+                        message.error.asString,
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   ),
               ],

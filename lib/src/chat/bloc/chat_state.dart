@@ -18,5 +18,7 @@ class ChatState with _$ChatState {
     @Default(<String, ShareContext>{}) Map<String, ShareContext> shareContexts,
     @Default(<PendingAttachment>[]) List<PendingAttachment> pendingAttachments,
     String? composerError,
+    @Default(0) int composerHydrationId,
+    String? composerHydrationText,
   }) = _ChatState;
 }

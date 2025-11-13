@@ -5,6 +5,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatAttachmentPreview extends StatelessWidget {
@@ -142,14 +143,11 @@ class _ImageAttachment extends StatelessWidget {
                 const Center(child: Icon(Icons.broken_image_outlined)),
             loadingBuilder: (context, child, progress) {
               if (progress == null) return child;
-              return Center(
-                child: CircularProgressIndicator(
-                  value: progress.expectedTotalBytes == null
-                      ? null
-                      : progress.cumulativeBytesLoaded /
-                          progress.expectedTotalBytes!,
-                ),
-              );
+              final value = progress.expectedTotalBytes == null
+                  ? null
+                  : progress.cumulativeBytesLoaded /
+                      progress.expectedTotalBytes!;
+              return _AttachmentLoadingPlaceholder(progress: value);
             },
           );
     return _AttachmentSurface(
@@ -173,6 +171,62 @@ class _ImageAttachment extends StatelessWidget {
       return metadata.width! / metadata.height!;
     }
     return 4 / 3;
+  }
+}
+
+class _AttachmentLoadingPlaceholder extends StatelessWidget {
+  const _AttachmentLoadingPlaceholder({this.progress});
+
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final label = progress == null
+        ? 'Loading attachment'
+        : 'Loading ${(progress!.clamp(0, 1) * 100).toStringAsFixed(0)}%';
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Shimmer.fromColors(
+          baseColor: colors.muted.withValues(alpha: 0.2),
+          highlightColor: colors.muted.withValues(alpha: 0.35),
+          child: Container(color: colors.card),
+        ),
+        Center(
+          child: DecoratedBox(
+            decoration: ShapeDecoration(
+              color: colors.background.withValues(alpha: 0.85),
+              shape: SquircleBorder(cornerRadius: 12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.image,
+                    size: 16,
+                    color: colors.mutedForeground,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: context.textTheme.small.copyWith(
+                      color: colors.mutedForeground,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

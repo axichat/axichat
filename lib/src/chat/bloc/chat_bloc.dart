@@ -5,6 +5,8 @@ import 'package:async/async.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/attachment_optimizer.dart';
+import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
@@ -163,6 +165,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final OmemoService? _omemoService;
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
+  var _composerHydrationSeed = 0;
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
@@ -239,6 +242,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       fanOutDrafts: resetContext ? const {} : state.fanOutDrafts,
       shareContexts: resetContext ? const {} : state.shareContexts,
       composerError: resetContext ? null : state.composerError,
+      composerHydrationText: resetContext ? null : state.composerHydrationText,
+      composerHydrationId: resetContext ? 0 : state.composerHydrationId,
     ));
     if (event.chat.deltaChatId != null && _transport.isXmpp) {
       _transport = MessageTransport.email;
@@ -418,6 +423,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           quotedMessage: sameChatQuote,
         );
       }
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send email message for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+      if (isEmailChat) {
+        final mappedError = DeltaErrorMapper.resolve(error.message);
+        final nextHydrationId = ++_composerHydrationSeed;
+        emit(
+          state.copyWith(
+            composerError: mappedError.asString,
+            composerHydrationId: nextHydrationId,
+            composerHydrationText: trimmedText,
+          ),
+        );
+      }
     } on XmppMessageException catch (_) {
       // Don't panic. User will see a visual difference in the message bubble.
     } on Exception catch (error, stackTrace) {
@@ -581,10 +603,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final isEmailMessage = message.deltaChatId != null;
     try {
       if (isEmailMessage) {
-        final emailService = _emailService;
-        final chat = state.chat;
-        if (emailService == null || chat == null) return;
-        await emailService.sendMessage(chat: chat, body: message.body!);
+        await _rehydrateEmailDraft(message, emit);
+        return;
       } else {
         await _messageService.resendMessage(message.stanzaID);
       }
@@ -610,10 +630,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final caption = rawCaption?.isNotEmpty == true
         ? _composeEmailBody(rawCaption!, quotedDraft)
         : null;
-    _addPendingAttachment(
-      event.attachment.copyWith(caption: caption),
-      emit,
-    );
+    var preparedAttachment = event.attachment.copyWith(caption: caption);
+    try {
+      preparedAttachment =
+          await EmailAttachmentOptimizer.optimize(preparedAttachment);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to optimize attachment', error, stackTrace);
+    }
+    _addPendingAttachment(preparedAttachment, emit);
     if (state.quoting != null) {
       emit(state.copyWith(quoting: null));
     }
@@ -949,6 +973,95 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return changed ? recipients : state.recipients;
+  }
+
+  Future<void> _rehydrateEmailDraft(
+    Message message,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    final service = _emailService;
+    if (chat == null || service == null) return;
+    ShareContext? shareContext = state.shareContexts[message.stanzaID];
+    shareContext ??= await service.shareContextForMessage(message);
+    final recipients = _recipientsForHydration(
+      chat: chat,
+      shareContext: shareContext,
+    );
+    var pendingAttachments = state.pendingAttachments;
+    if (message.fileMetadataID != null) {
+      final attachment = await service.attachmentForMessage(message);
+      if (attachment != null &&
+          !_hasPendingAttachmentForPath(
+            pendingAttachments: pendingAttachments,
+            path: attachment.path,
+          )) {
+        pendingAttachments = [
+          ...pendingAttachments,
+          PendingAttachment(
+            id: _nextPendingAttachmentId(),
+            attachment: attachment,
+          ),
+        ];
+      }
+    }
+    final nextHydrationId = ++_composerHydrationSeed;
+    emit(
+      state.copyWith(
+        recipients: recipients,
+        pendingAttachments: pendingAttachments,
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: message.body ?? '',
+        composerError: message.error.isNotNone
+            ? message.error.asString
+            : state.composerError,
+      ),
+    );
+  }
+
+  List<ComposerRecipient> _recipientsForHydration({
+    required Chat chat,
+    ShareContext? shareContext,
+  }) {
+    final recipients = _syncRecipientsForChat(chat);
+    if (shareContext == null) {
+      return recipients;
+    }
+    final updated = List<ComposerRecipient>.from(recipients);
+    for (final participant in shareContext.participants) {
+      final jid = participant.jid;
+      if (jid == chat.jid) {
+        continue;
+      }
+      final target = FanOutTarget.chat(participant);
+      final index = updated.indexWhere((recipient) => recipient.key == jid);
+      if (index >= 0) {
+        updated[index] = updated[index].copyWith(
+          target: target,
+          included: true,
+        );
+      } else {
+        updated.add(
+          ComposerRecipient(target: target, included: true),
+        );
+      }
+    }
+    return updated;
+  }
+
+  bool _hasPendingAttachmentForPath({
+    required List<PendingAttachment> pendingAttachments,
+    required String? path,
+  }) {
+    if (path == null || path.isEmpty) {
+      return false;
+    }
+    for (final pending in pendingAttachments) {
+      if (pending.attachment.path == path) {
+        return true;
+      }
+    }
+    return false;
   }
 
   ComposerRecipient? _recipientForChat(String jid) {
