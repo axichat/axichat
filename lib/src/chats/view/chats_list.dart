@@ -97,12 +97,17 @@ class ChatsList extends StatelessWidget {
                       )
                     : BlocBuilder<CalendarBloc, CalendarState>(
                         bloc: calendarBloc,
-                        builder: (context, state) => CalendarTile(
-                          onTap: () =>
-                              context.read<ChatsCubit>().toggleCalendar(),
-                          nextTask: state.nextTask,
-                          dueReminderCount: state.dueReminders?.length ?? 0,
-                        ),
+                        builder: (context, state) {
+                          final currentTask =
+                              state.currentTaskAt(DateTime.now());
+                          return CalendarTile(
+                            onTap: () =>
+                                context.read<ChatsCubit>().toggleCalendar(),
+                            currentTask: currentTask,
+                            nextTask: state.nextTask,
+                            dueReminderCount: state.dueReminders?.length ?? 0,
+                          );
+                        },
                       );
                 return ListItemPadding(child: tile);
               }
@@ -514,13 +519,39 @@ class _ChatListTileState extends State<ChatListTile> {
                     style: context.textTheme.small,
                   ),
                   const SizedBox.square(dimension: 10.0),
-                  ShadCheckbox(
-                    value: deleteMessages,
-                    onChanged: (value) =>
-                        setState(() => deleteMessages = value),
-                    label: Text(
-                      'Permanently delete messages',
-                      style: context.textTheme.muted,
+                  ShadGestureDetector(
+                    cursor: SystemMouseCursors.click,
+                    hoverStrategies: mobileHoverStrategies,
+                    onTap: () =>
+                        setState(() => deleteMessages = !deleteMessages),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Checkbox(
+                          value: deleteMessages,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          activeColor: context.colorScheme.primary,
+                          checkColor: context.colorScheme.primaryForeground,
+                          side: BorderSide(
+                            color: context.colorScheme.border,
+                            width: 1.4,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          onChanged: (value) =>
+                              setState(() => deleteMessages = value ?? false),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Permanently delete messages',
+                            style: context.textTheme.muted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

@@ -197,6 +197,26 @@ extension CalendarStateExtensions on CalendarState {
     return results;
   }
 
+  CalendarTask? currentTaskAt(DateTime moment) {
+    CalendarTask? active;
+    for (final task in model.tasks.values) {
+      if (task.isCompleted) continue;
+      final start = task.scheduledTime;
+      if (start == null) continue;
+      final Duration fallbackDuration =
+          task.effectiveDuration ?? const Duration(hours: 1);
+      final DateTime end = task.effectiveEndDate ?? start.add(fallbackDuration);
+      final bool startsBeforeOrNow = !start.isAfter(moment);
+      final bool endsAfterNow = end.isAfter(moment);
+      if (startsBeforeOrNow && endsAfterNow) {
+        if (active == null || (active.scheduledTime ?? moment).isAfter(start)) {
+          active = task;
+        }
+      }
+    }
+    return active;
+  }
+
   bool _overlapsRange(
     DateTime eventStart,
     DateTime eventEnd,
