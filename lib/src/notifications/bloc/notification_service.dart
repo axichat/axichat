@@ -140,6 +140,7 @@ class NotificationService {
     String? body,
     List<FutureOr<bool>> extraConditions = const [],
     bool allowForeground = false,
+    String? payload,
   }) async {
     if (mute) return;
     if (!await hasAllNotificationPermissions()) return;
@@ -157,7 +158,7 @@ class NotificationService {
       title,
       body,
       notificationDetails,
-      payload: title,
+      payload: payload,
     );
   }
 

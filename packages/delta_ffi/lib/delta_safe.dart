@@ -55,6 +55,13 @@ class DeltaMessageType {
   static const int file = 60;
 }
 
+class DeltaChatType {
+  static const int single = 100;
+  static const int group = 200;
+  static const int verifiedGroup = 300;
+  static const int broadcast = 400;
+}
+
 class DeltaContextHandle {
   DeltaContextHandle._(this._bindings, this._context);
 
@@ -202,11 +209,43 @@ class DeltaContextHandle {
     try {
       final name =
           _takeString(_bindings.dc_chat_get_name(chatPtr), bindings: _bindings);
-      final address = _takeString(
+      final mailingListAddress = _takeString(
         _bindings.dc_chat_get_mailinglist_addr(chatPtr),
         bindings: _bindings,
       );
-      return DeltaChat(id: chatId, name: name, contactAddress: address);
+      final type = _bindings.dc_chat_get_type(chatPtr);
+      final contactId = _bindings.dc_chat_get_contact_id(chatPtr);
+      String? contactAddress;
+      String? contactName;
+      if (contactId > 0) {
+        final contactPtr = _bindings.dc_get_contact(_context, contactId);
+        if (contactPtr != ffi.nullptr) {
+          try {
+            contactAddress = _cleanString(
+              _takeString(
+                _bindings.dc_contact_get_addr(contactPtr),
+                bindings: _bindings,
+              ),
+            );
+            contactName = _cleanString(
+              _takeString(
+                _bindings.dc_contact_get_name(contactPtr),
+                bindings: _bindings,
+              ),
+            );
+          } finally {
+            _bindings.dc_contact_unref(contactPtr);
+          }
+        }
+      }
+      return DeltaChat(
+        id: chatId,
+        name: name ?? contactName,
+        contactAddress: contactAddress ?? mailingListAddress,
+        contactId: contactId == 0 ? null : contactId,
+        contactName: contactName,
+        type: type == 0 ? null : type,
+      );
     } finally {
       _bindings.dc_chat_unref(chatPtr);
     }
@@ -235,6 +274,14 @@ class DeltaContextHandle {
       final fileBytes = _bindings.dc_msg_get_filebytes(msgPtr);
       final width = _bindings.dc_msg_get_width(msgPtr);
       final height = _bindings.dc_msg_get_height(msgPtr);
+      final timestampSeconds = _bindings.dc_msg_get_timestamp(msgPtr);
+      final timestamp = timestampSeconds == 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              timestampSeconds * 1000,
+              isUtc: true,
+            ).toLocal();
+      final isOutgoing = _bindings.dc_msg_is_outgoing(msgPtr) != 0;
       return DeltaMessage(
         id: id,
         chatId: chatId,
@@ -246,6 +293,8 @@ class DeltaContextHandle {
         fileSize: fileBytes == 0 ? null : fileBytes,
         width: width == 0 ? null : width,
         height: height == 0 ? null : height,
+        timestamp: timestamp,
+        isOutgoing: isOutgoing,
       );
     } finally {
       _bindings.dc_msg_unref(msgPtr);
@@ -370,11 +419,21 @@ class DeltaCoreEvent {
 }
 
 class DeltaChat {
-  const DeltaChat({required this.id, this.name, this.contactAddress});
+  const DeltaChat({
+    required this.id,
+    this.name,
+    this.contactAddress,
+    this.contactId,
+    this.contactName,
+    this.type,
+  });
 
   final int id;
   final String? name;
   final String? contactAddress;
+  final int? contactId;
+  final String? contactName;
+  final int? type;
 }
 
 class DeltaMessage {
@@ -389,6 +448,8 @@ class DeltaMessage {
     this.fileSize,
     this.width,
     this.height,
+    this.timestamp,
+    this.isOutgoing = false,
   });
 
   final int id;
@@ -401,6 +462,8 @@ class DeltaMessage {
   final int? fileSize;
   final int? width;
   final int? height;
+  final DateTime? timestamp;
+  final bool isOutgoing;
 
   bool get hasFile => filePath != null && filePath!.isNotEmpty;
 }

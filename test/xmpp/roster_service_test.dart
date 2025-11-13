@@ -68,6 +68,7 @@ main() {
         body: any(named: 'body'),
         extraConditions: any(named: 'extraConditions'),
         allowForeground: any(named: 'allowForeground'),
+        payload: any(named: 'payload'),
       ),
     ).thenAnswer((_) async {});
     database = XmppDrift(

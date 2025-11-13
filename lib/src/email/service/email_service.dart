@@ -76,15 +76,13 @@ class EmailService {
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
-  static final RegisteredCredentialKey _addressKey =
-      CredentialStore.registerKey('chatmail_address');
-  static final RegisteredCredentialKey _passwordKey =
-      CredentialStore.registerKey('chatmail_password');
-
   String? _databasePrefix;
   String? _databasePassphrase;
   EmailAccount? _activeAccount;
+  String? _activeCredentialScope;
   bool _running = false;
+  final Map<String, RegisteredCredentialKey> _addressKeys = {};
+  final Map<String, RegisteredCredentialKey> _passwordKeys = {};
 
   EmailAccount? get activeAccount => _activeAccount;
 
@@ -92,9 +90,12 @@ class EmailService {
 
   Stream<DeltaCoreEvent> get events => _transport.events;
 
-  Future<EmailAccount?> currentAccount() async {
-    final address = await _credentialStore.read(key: _addressKey);
-    final password = await _credentialStore.read(key: _passwordKey);
+  Future<EmailAccount?> currentAccount(String jid) async {
+    final scope = _scopeForJid(jid);
+    final address =
+        await _credentialStore.read(key: _addressKeyForScope(scope));
+    final password =
+        await _credentialStore.read(key: _passwordKeyForScope(scope));
     if (address == null || password == null) {
       return null;
     }
@@ -107,6 +108,7 @@ class EmailService {
     required String databasePassphrase,
     required String jid,
   }) async {
+    final scope = _scopeForJid(jid);
     final needsInit = _databasePrefix != databasePrefix ||
         _databasePassphrase != databasePassphrase;
     if (needsInit) {
@@ -127,8 +129,13 @@ class EmailService {
       _listenerAttached = true;
     }
 
-    var address = await _credentialStore.read(key: _addressKey);
-    var password = await _credentialStore.read(key: _passwordKey);
+    _activeCredentialScope = scope;
+
+    final addressKey = _addressKeyForScope(scope);
+    final passwordKey = _passwordKeyForScope(scope);
+
+    var address = await _credentialStore.read(key: addressKey);
+    var password = await _credentialStore.read(key: passwordKey);
     var generatedAddress = false;
 
     if (address == null || password == null) {
@@ -136,8 +143,8 @@ class EmailService {
           _generateAddress(localPart: displayName);
       address = preferredAddress;
       password = generateRandomString(length: 24);
-      await _credentialStore.write(key: _addressKey, value: address);
-      await _credentialStore.write(key: _passwordKey, value: password);
+      await _credentialStore.write(key: addressKey, value: address);
+      await _credentialStore.write(key: passwordKey, value: password);
       generatedAddress = true;
     }
 
@@ -155,8 +162,7 @@ class EmailService {
         stackTrace,
       );
       if (generatedAddress) {
-        await _credentialStore.delete(key: _addressKey);
-        await _credentialStore.delete(key: _passwordKey);
+        await _clearCredentials(scope);
         throw EmailProvisioningException(
           'Email address $address is unavailable. Please choose a different username.',
         );
@@ -183,17 +189,33 @@ class EmailService {
     _running = false;
   }
 
-  Future<void> shutdown() => stop();
+  Future<void> shutdown({
+    String? jid,
+    bool clearCredentials = false,
+  }) async {
+    await stop();
+    if (!clearCredentials) {
+      return;
+    }
+    final scope = _scopeForOptionalJid(jid);
+    if (scope != null) {
+      await _clearCredentials(scope);
+    }
+  }
 
-  Future<void> burn() async {
+  Future<void> burn({String? jid}) async {
+    final scope = _scopeForOptionalJid(jid);
+    await stop();
     _detachTransportListener();
     await _transport.dispose();
     _running = false;
-    _activeAccount = null;
-    await _credentialStore.delete(key: _addressKey);
-    await _credentialStore.delete(key: _passwordKey);
+    if (scope != null) {
+      await _clearCredentials(scope);
+    }
     _databasePrefix = null;
     _databasePassphrase = null;
+    _activeAccount = null;
+    _activeCredentialScope = null;
   }
 
   Future<Chat> ensureChatForAddress({
@@ -558,6 +580,7 @@ class EmailService {
       await notificationService.sendNotification(
         title: chat?.title ?? message.senderJid,
         body: notificationBody,
+        payload: chat?.jid,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -683,12 +706,13 @@ class EmailService {
   }
 
   String _generateAddress({required String localPart}) {
-    final normalizedLocal = localPart.toLowerCase();
+    final normalizedLocal =
+        localPart.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9._-]'), '');
     return '$normalizedLocal@$_chatmailDomain';
   }
 
   String? _preferredAddressFromJid(String jid) {
-    final bare = jid.split('/').first;
+    final bare = _normalizeJid(jid);
     final parts = bare.split('@');
     if (parts.length != 2) {
       return null;
@@ -698,7 +722,12 @@ class EmailService {
     if (local.isEmpty || domain.isEmpty) {
       return null;
     }
-    return '$local@$domain';
+    if (_chatmailDomain.toLowerCase() == domain) {
+      return '$local@$domain';
+    }
+    final resolvedDomain =
+        _chatmailDomain.isEmpty ? domain : _chatmailDomain.toLowerCase();
+    return '$local@$resolvedDomain';
   }
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
@@ -708,6 +737,36 @@ class EmailService {
       }
       return (a.favorited ? 0 : 1) - (b.favorited ? 0 : 1);
     });
+
+  RegisteredCredentialKey _addressKeyForScope(String scope) {
+    return _addressKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey('chatmail_address_$scope'),
+    );
+  }
+
+  RegisteredCredentialKey _passwordKeyForScope(String scope) {
+    return _passwordKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey('chatmail_password_$scope'),
+    );
+  }
+
+  String _scopeForJid(String jid) => _normalizeJid(jid).toLowerCase();
+
+  String? _scopeForOptionalJid(String? jid) =>
+      jid == null ? _activeCredentialScope : _scopeForJid(jid);
+
+  String _normalizeJid(String jid) => jid.split('/').first;
+
+  Future<void> _clearCredentials(String scope) async {
+    await _credentialStore.delete(key: _addressKeyForScope(scope));
+    await _credentialStore.delete(key: _passwordKeyForScope(scope));
+    if (_activeCredentialScope == scope) {
+      _activeCredentialScope = null;
+      _activeAccount = null;
+    }
+  }
 }
 
 const _deltaDomain = 'delta.chat';

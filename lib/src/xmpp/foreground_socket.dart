@@ -23,10 +23,18 @@ const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
 
 bool launchedFromNotification = false;
+String? _launchedNotificationChatJid;
 
 @pragma("vm:entry-point")
 void notificationTapBackground(NotificationResponse notificationResponse) {
   launchedFromNotification = true;
+  _launchedNotificationChatJid = notificationResponse.payload;
+}
+
+String? takeLaunchedNotificationChatJid() {
+  final payload = _launchedNotificationChatJid;
+  _launchedNotificationChatJid = null;
+  return payload;
 }
 
 @pragma('vm:entry-point')

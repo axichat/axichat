@@ -63,11 +63,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
         if (launchedFromNotification) {
           launchedFromNotification = false;
-          final appLaunchDetails =
-              await notificationService?.getAppNotificationAppLaunchDetails();
-          if (appLaunchDetails?.notificationResponse?.payload
-              case final chatJid?) {
-            xmppService.openChat(chatJid);
+          final payload = takeLaunchedNotificationChatJid();
+          if (payload != null) {
+            xmppService.openChat(payload);
+          } else {
+            final appLaunchDetails =
+                await notificationService?.getAppNotificationAppLaunchDetails();
+            if (appLaunchDetails?.notificationResponse?.payload
+                case final chatJid?) {
+              xmppService.openChat(chatJid);
+            }
           }
         }
 
@@ -75,8 +80,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             lifeCycleState == AppLifecycleState.resumed ||
                 lifeCycleState == AppLifecycleState.inactive);
         await _emailService?.setClientState(
-          lifeCycleState == AppLifecycleState.resumed ||
-              lifeCycleState == AppLifecycleState.inactive,
+          lifeCycleState != AppLifecycleState.detached,
         );
       },
     );
@@ -98,6 +102,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final XmppService _xmppService;
   final EmailService? _emailService;
   final http.Client _httpClient;
+  String? _authenticatedJid;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -105,7 +110,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> close() async {
     _lifecycleListener.dispose();
     await _credentialStore.close();
-    await _emailService?.shutdown();
+    await _emailService?.shutdown(jid: _authenticatedJid);
     return super.close();
   }
 
@@ -200,6 +205,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     }
 
+    _authenticatedJid = jid;
+
     try {
       final displayName = jid.split('@').first;
       await _emailService?.ensureProvisioned(
@@ -281,6 +288,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {
     if (state is! AuthenticationComplete) return;
+    final currentJid = _authenticatedJid;
 
     switch (severity) {
       case LogoutSeverity.auto:
@@ -295,11 +303,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     await _xmppService.disconnect();
     if (severity == LogoutSeverity.burn) {
-      await _emailService?.burn();
+      await _emailService?.burn(jid: currentJid);
     } else {
-      await _emailService?.shutdown();
+      await _emailService?.shutdown(
+        jid: currentJid,
+        clearCredentials: severity == LogoutSeverity.normal,
+      );
     }
 
+    _authenticatedJid = null;
     emit(const AuthenticationNone());
   }
 

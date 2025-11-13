@@ -30,7 +30,18 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
 
   Future<void> _loadAccount() async {
     final emailService = context.read<EmailService>();
-    final account = await emailService.currentAccount();
+    final credentialStore = context.read<CredentialStore>();
+    final jidKey = CredentialStore.registerKey('jid');
+    final jid = await credentialStore.read(key: jidKey);
+    if (jid == null) {
+      if (!mounted) return;
+      setState(() {
+        _account = null;
+        _status = 'Log in to provision Chatmail.';
+      });
+      return;
+    }
+    final account = await emailService.currentAccount(jid);
     if (!mounted) return;
     setState(() {
       _account = account;
