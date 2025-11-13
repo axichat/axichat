@@ -6,6 +6,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -78,6 +79,8 @@ void main() {
     ).thenAnswer((_) async {});
     when(() => credentialStore.read(key: any(named: 'key')))
         .thenAnswer((_) async => null);
+    when(() => credentialStore.delete(key: any(named: 'key')))
+        .thenAnswer((_) async => true);
     when(
       () => credentialStore.write(
         key: any(named: 'key'),
@@ -89,6 +92,7 @@ void main() {
           body: any(named: 'body'),
           extraConditions: any(named: 'extraConditions'),
           allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
         )).thenAnswer((_) async {});
   });
 
@@ -144,6 +148,7 @@ void main() {
         body: message.body,
         extraConditions: any(named: 'extraConditions'),
         allowForeground: any(named: 'allowForeground'),
+        payload: chat.jid,
       ),
     ).called(1);
 
@@ -324,6 +329,74 @@ void main() {
     ).called(1);
 
     addTearDown(service.shutdown);
+  });
+
+  test('ensureProvisioned scopes credentials per jid and domain', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      chatmailDomain: 'chatmail.example',
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@axi.im',
+    );
+
+    verify(
+      () => credentialStore.write(
+        key: any(named: 'key'),
+        value: 'alice@chatmail.example',
+      ),
+    ).called(1);
+
+    verify(
+      () => transport.configureAccount(
+        address: 'alice@chatmail.example',
+        password: any(named: 'password'),
+        displayName: any(named: 'displayName'),
+        additional: any(named: 'additional'),
+      ),
+    ).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('shutdown only clears scoped credentials when requested', () async {
+    final deletedKeys = <String>[];
+    when(() => credentialStore.delete(key: any(named: 'key'))).thenAnswer(
+      (invocation) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        deletedKeys.add(key.value);
+        return true;
+      },
+    );
+
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+    );
+
+    await service.shutdown(jid: 'bob@axi.im');
+    expect(deletedKeys, isEmpty);
+
+    await service.shutdown(jid: 'bob@axi.im', clearCredentials: true);
+
+    expect(deletedKeys.length, greaterThanOrEqualTo(2));
+    expect(deletedKeys.every((key) => key.contains('bob@axi.im')), isTrue);
   });
 
   test('fanOutSend preserves participant count when retrying a subset',

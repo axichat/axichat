@@ -493,6 +493,7 @@ class XmppService extends XmppBase
             !await _dbOpReturning<XmppDatabase, bool>((db) async =>
                 (await db.getChat(message.chatJid))?.muted ?? false),
           ],
+          payload: message.chatJid,
         );
       },
     );

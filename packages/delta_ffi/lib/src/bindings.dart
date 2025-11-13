@@ -489,6 +489,95 @@ class DeltaChatBindings {
   late final _dc_chat_get_mailinglist_addr = _dc_chat_get_mailinglist_addrPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_chat_t>)>();
 
+  int dc_chat_get_type(
+    ffi.Pointer<dc_chat_t> chat,
+  ) {
+    return _dc_chat_get_type(
+      chat,
+    );
+  }
+
+  late final _dc_chat_get_typePtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_chat_t>)>>(
+          'dc_chat_get_type');
+  late final _dc_chat_get_type =
+      _dc_chat_get_typePtr.asFunction<int Function(ffi.Pointer<dc_chat_t>)>();
+
+  int dc_chat_get_contact_id(
+    ffi.Pointer<dc_chat_t> chat,
+  ) {
+    return _dc_chat_get_contact_id(
+      chat,
+    );
+  }
+
+  late final _dc_chat_get_contact_idPtr =
+      _lookup<ffi.NativeFunction<ffi.Uint32 Function(ffi.Pointer<dc_chat_t>)>>(
+          'dc_chat_get_contact_id');
+  late final _dc_chat_get_contact_id = _dc_chat_get_contact_idPtr
+      .asFunction<int Function(ffi.Pointer<dc_chat_t>)>();
+
+  ffi.Pointer<dc_contact_t> dc_get_contact(
+    ffi.Pointer<dc_context_t> ctx,
+    int contact_id,
+  ) {
+    return _dc_get_contact(
+      ctx,
+      contact_id,
+    );
+  }
+
+  late final _dc_get_contactPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_contact_t> Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_get_contact');
+  late final _dc_get_contact = _dc_get_contactPtr.asFunction<
+      ffi.Pointer<dc_contact_t> Function(ffi.Pointer<dc_context_t>, int)>();
+
+  void dc_contact_unref(
+    ffi.Pointer<dc_contact_t> contact,
+  ) {
+    return _dc_contact_unref(
+      contact,
+    );
+  }
+
+  late final _dc_contact_unrefPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_contact_t>)>>(
+          'dc_contact_unref');
+  late final _dc_contact_unref = _dc_contact_unrefPtr
+      .asFunction<void Function(ffi.Pointer<dc_contact_t>)>();
+
+  ffi.Pointer<ffi.Char> dc_contact_get_addr(
+    ffi.Pointer<dc_contact_t> contact,
+  ) {
+    return _dc_contact_get_addr(
+      contact,
+    );
+  }
+
+  late final _dc_contact_get_addrPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_contact_t>)>>('dc_contact_get_addr');
+  late final _dc_contact_get_addr = _dc_contact_get_addrPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_contact_t>)>();
+
+  ffi.Pointer<ffi.Char> dc_contact_get_name(
+    ffi.Pointer<dc_contact_t> contact,
+  ) {
+    return _dc_contact_get_name(
+      contact,
+    );
+  }
+
+  late final _dc_contact_get_namePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_contact_t>)>>('dc_contact_get_name');
+  late final _dc_contact_get_name = _dc_contact_get_namePtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_contact_t>)>();
+
   ffi.Pointer<dc_msg_t> dc_get_msg(
     ffi.Pointer<dc_context_t> ctx,
     int msg_id,
@@ -576,6 +665,34 @@ class DeltaChatBindings {
           'dc_msg_get_viewtype');
   late final _dc_msg_get_viewtype =
       _dc_msg_get_viewtypePtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_get_timestamp(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_timestamp(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_timestampPtr =
+      _lookup<ffi.NativeFunction<ffi.Uint64 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_timestamp');
+  late final _dc_msg_get_timestamp = _dc_msg_get_timestampPtr
+      .asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_is_outgoing(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_is_outgoing(
+      msg,
+    );
+  }
+
+  late final _dc_msg_is_outgoingPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_is_outgoing');
+  late final _dc_msg_is_outgoing =
+      _dc_msg_is_outgoingPtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
 
   ffi.Pointer<dc_msg_t> dc_msg_new(
     ffi.Pointer<dc_context_t> ctx,
@@ -825,6 +942,8 @@ final class dc_event_emitter extends ffi.Opaque {}
 
 final class dc_chat extends ffi.Opaque {}
 
+final class dc_contact extends ffi.Opaque {}
+
 final class dc_msg extends ffi.Opaque {}
 
 typedef dc_context_t = dc_context;
@@ -832,6 +951,7 @@ typedef dc_event_emitter_t = dc_event_emitter;
 typedef dc_event_t = dc_event;
 typedef dc_msg_t = dc_msg;
 typedef dc_chat_t = dc_chat;
+typedef dc_contact_t = dc_contact;
 
 const int __WORDSIZE = 64;
 
@@ -1012,3 +1132,13 @@ const int DC_MSG_VOICE = 41;
 const int DC_MSG_VIDEO = 50;
 
 const int DC_MSG_FILE = 60;
+
+const int DC_CHAT_TYPE_UNDEFINED = 0;
+
+const int DC_CHAT_TYPE_SINGLE = 100;
+
+const int DC_CHAT_TYPE_GROUP = 200;
+
+const int DC_CHAT_TYPE_VERIFIED_GROUP = 300;
+
+const int DC_CHAT_TYPE_BROADCAST = 400;

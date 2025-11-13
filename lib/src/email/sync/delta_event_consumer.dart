@@ -58,6 +58,9 @@ class DeltaEventConsumer {
       case DeltaEventType.msgRead:
         await _markDisplayed(event.data2);
         break;
+      case DeltaEventType.chatModified:
+        await _refreshChat(event.data1);
+        break;
       default:
         _log.finer('Ignoring Delta event ${event.type}');
     }
@@ -76,11 +79,12 @@ class DeltaEventConsumer {
     if (existing != null) {
       return;
     }
+    final timestamp = msg.timestamp ?? DateTime.timestamp();
     var message = Message(
       stanzaID: stanzaId,
       senderJid: chat.jid,
       chatJid: chat.jid,
-      timestamp: DateTime.timestamp(),
+      timestamp: timestamp,
       body: msg.text,
       encryptionProtocol: EncryptionProtocol.none,
       received: true,
@@ -97,6 +101,7 @@ class DeltaEventConsumer {
     );
     message = await _attachFileMetadata(db: db, message: message, delta: msg);
     await db.saveMessage(message);
+    await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
 
   Future<void> _hydrateMessage(int chatId, int msgId) async {
@@ -109,11 +114,12 @@ class DeltaEventConsumer {
     if (existing != null) {
       return;
     }
+    final timestamp = msg.timestamp ?? DateTime.timestamp();
     var message = Message(
       stanzaID: stanzaId,
       senderJid: _deltaSelfJid,
       chatJid: chat.jid,
-      timestamp: DateTime.timestamp(),
+      timestamp: timestamp,
       body: msg.text,
       encryptionProtocol: EncryptionProtocol.none,
       acked: true,
@@ -129,6 +135,7 @@ class DeltaEventConsumer {
     );
     message = await _attachFileMetadata(db: db, message: message, delta: msg);
     await db.saveMessage(message);
+    await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
 
   Future<void> _markAcked(int msgId) async {
@@ -158,19 +165,75 @@ class DeltaEventConsumer {
       return existing;
     }
     final remote = await _context.getChat(chatId);
-    final chat = Chat(
-      jid: jid,
-      title: remote?.name ?? 'Chat $chatId',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.timestamp(),
-      encryptionProtocol: EncryptionProtocol.none,
-      contactDisplayName: remote?.name,
-      contactID: remote?.contactAddress,
-      emailAddress: remote?.contactAddress,
-      deltaChatId: chatId,
+    final chat = _chatFromRemote(
+      chatId: chatId,
+      remote: remote,
     );
     await db.createChat(chat);
     return chat;
+  }
+
+  Chat _chatFromRemote({
+    required int chatId,
+    required DeltaChat? remote,
+  }) {
+    final emailAddress = remote?.contactAddress;
+    final title = remote?.name ?? remote?.contactName ?? 'Chat $chatId';
+    return Chat(
+      jid: _chatJid(chatId),
+      title: title,
+      type: _mapChatType(remote?.type),
+      lastChangeTimestamp: DateTime.timestamp(),
+      encryptionProtocol: EncryptionProtocol.none,
+      contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
+      contactID: emailAddress,
+      emailAddress: emailAddress,
+      deltaChatId: chatId,
+    );
+  }
+
+  Future<void> _refreshChat(int chatId) async {
+    final db = await _db();
+    final remote = await _context.getChat(chatId);
+    if (remote == null) return;
+    final jid = _chatJid(chatId);
+    final existing = await db.getChat(jid);
+    if (existing == null) {
+      await db.createChat(_chatFromRemote(chatId: chatId, remote: remote));
+      return;
+    }
+    final updated = existing.copyWith(
+      title: remote.name ?? remote.contactName ?? existing.title,
+      contactDisplayName:
+          remote.contactName ?? remote.name ?? existing.contactDisplayName,
+      contactID: remote.contactAddress ?? existing.contactID,
+      emailAddress: remote.contactAddress ?? existing.emailAddress,
+      type: _mapChatType(remote.type),
+    );
+    if (updated != existing) {
+      await db.updateChat(updated);
+    }
+  }
+
+  Future<void> _updateChatTimestamp({
+    required int chatId,
+    required DateTime timestamp,
+  }) async {
+    final db = await _db();
+    final chat = await db.getChat(_chatJid(chatId));
+    if (chat == null) return;
+    if (!chat.lastChangeTimestamp.isBefore(timestamp)) return;
+    await db.updateChat(chat.copyWith(lastChangeTimestamp: timestamp));
+  }
+
+  ChatType _mapChatType(int? type) {
+    switch (type) {
+      case DeltaChatType.group:
+      case DeltaChatType.verifiedGroup:
+        return ChatType.groupChat;
+      default:
+        return ChatType.chat;
+    }
   }
 
   Future<XmppDatabase> _db() async {

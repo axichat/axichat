@@ -71,6 +71,8 @@ void main() {
             title: any(named: 'title'),
             body: any(named: 'body'),
             extraConditions: any(named: 'extraConditions'),
+            allowForeground: any(named: 'allowForeground'),
+            payload: any(named: 'payload'),
           )).thenAnswer((_) async {});
 
       messageEvent = generateRandomMessageEvent();
@@ -192,6 +194,8 @@ void main() {
               title: messageEvent.from.toBare().toString(),
               body: messageEvent.text,
               extraConditions: any(named: 'extraConditions'),
+              allowForeground: any(named: 'allowForeground'),
+              payload: any(named: 'payload'),
             )).called(1);
       },
     );

@@ -13,6 +13,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:delta_ffi/delta_safe.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
@@ -39,6 +40,8 @@ class MockEmailService extends Mock implements EmailService {}
 
 class MockOmemoService extends Mock implements OmemoService {}
 
+class MockDeltaContextHandle extends Mock implements DeltaContextHandle {}
+
 class MockCapability extends Mock implements Capability {}
 
 class MockPolicy extends Mock implements Policy {}
@@ -64,6 +67,10 @@ class FakeOmemoDeviceList extends Fake implements OmemoDeviceList {}
 class FakeOmemoTrust extends Fake implements OmemoTrust {}
 
 class FakeOmemoBundleCache extends Fake implements OmemoBundleCache {}
+
+class FakeChat extends Fake implements Chat {}
+
+class FakeMessage extends Fake implements Message {}
 
 void registerOmemoFallbacks() {
   registerFallbackValue(FakeOmemoDevice());

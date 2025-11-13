@@ -206,12 +206,14 @@ class EmailDeltaTransport implements ChatTransport {
       throw StateError('Transport not initialized');
     }
     final msgId = await _context!.sendText(chatId: chatId, message: body);
+    final deltaMessage = await _context!.getMessage(msgId);
     await _recordOutgoing(
       chatId: chatId,
       msgId: msgId,
       body: body,
       shareId: shareId,
       localBodyOverride: localBodyOverride,
+      timestamp: deltaMessage?.timestamp,
     );
     return msgId;
   }
@@ -252,6 +254,7 @@ class EmailDeltaTransport implements ChatTransport {
       metadata: metadata,
       shareId: shareId,
       localBodyOverride: captionOverride,
+      timestamp: deltaMessage?.timestamp,
     );
     return msgId;
   }
@@ -280,6 +283,7 @@ class EmailDeltaTransport implements ChatTransport {
     FileMetadataData? metadata,
     String? shareId,
     String? localBodyOverride,
+    DateTime? timestamp,
   }) async {
     final db = await _databaseBuilder();
     final chat = await _ensureChat(chatId);
@@ -287,11 +291,12 @@ class EmailDeltaTransport implements ChatTransport {
       await db.saveFileMetadata(metadata);
     }
     final displayBody = localBodyOverride ?? body;
+    final resolvedTimestamp = timestamp ?? DateTime.timestamp();
     final message = Message(
       stanzaID: _stanzaId(msgId),
       senderJid: _selfJid,
       chatJid: chat.jid,
-      timestamp: DateTime.timestamp(),
+      timestamp: resolvedTimestamp,
       body: displayBody,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
@@ -301,6 +306,9 @@ class EmailDeltaTransport implements ChatTransport {
       fileMetadataID: metadata?.id,
     );
     await db.saveMessage(message);
+    await db.updateChat(
+      chat.copyWith(lastChangeTimestamp: resolvedTimestamp),
+    );
     if (shareId != null) {
       await db.insertMessageCopy(
         shareId: shareId,
@@ -318,15 +326,17 @@ class EmailDeltaTransport implements ChatTransport {
       return existing;
     }
     final remote = await _context!.getChat(chatId);
+    final title = remote?.name ?? remote?.contactName ?? 'Chat $chatId';
+    final emailAddress = remote?.contactAddress;
     final chat = Chat(
       jid: jid,
-      title: remote?.name ?? 'Chat $chatId',
-      type: ChatType.chat,
+      title: title,
+      type: _mapChatType(remote?.type),
       lastChangeTimestamp: DateTime.timestamp(),
       encryptionProtocol: EncryptionProtocol.none,
-      contactDisplayName: remote?.name,
-      contactID: remote?.contactAddress,
-      emailAddress: remote?.contactAddress,
+      contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
+      contactID: emailAddress,
+      emailAddress: emailAddress,
       deltaChatId: chatId,
     );
     await db.createChat(chat);
@@ -377,6 +387,16 @@ class EmailDeltaTransport implements ChatTransport {
 
   void removeEventListener(void Function(DeltaCoreEvent event) listener) {
     _eventListeners.remove(listener);
+  }
+
+  ChatType _mapChatType(int? type) {
+    switch (type) {
+      case DeltaChatType.group:
+      case DeltaChatType.verifiedGroup:
+        return ChatType.groupChat;
+      default:
+        return ChatType.chat;
+    }
   }
 
   FileMetadataData _metadataForAttachment(
