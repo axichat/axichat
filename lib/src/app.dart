@@ -361,6 +361,12 @@ class MaterialAxichat extends StatelessWidget {
                   ),
                 ),
               ),
+              checkboxTheme: CheckboxThemeData(
+                shape: ContinuousRectangleBorder(borderRadius: globalRadius),
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                visualDensity: VisualDensity.standard,
+                side: BorderSide(color: materialColors.border, width: 1.2),
+              ),
               scrollbarTheme: ScrollbarThemeData(
                 thickness: const WidgetStatePropertyAll<double>(4),
                 radius: const Radius.circular(999),

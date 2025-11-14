@@ -60,83 +60,100 @@ class _LoginFormState extends State<LoginForm> {
       builder: (context, state) {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
+        const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         return Form(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                LoginForm.title,
-                style: context.textTheme.h3,
-              ),
-              state is AuthenticationFailure
-                  ? Padding(
-                      padding: const EdgeInsets.all(10.0),
-                      child: Text(
-                        state.errorText,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.colorScheme.destructive,
-                        ),
-                      ),
-                    )
-                  : const SizedBox(height: 40),
-              NotificationRequest(
-                notificationService: context.read<NotificationService>(),
-                capability: context.read<Capability>(),
-              ),
-              const SizedBox.square(dimension: 16.0),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: AxiTextFormField(
-                  key: loginUsernameKey,
-                  autocorrect: false,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
-                  ],
-                  placeholder: const Text('Username'),
-                  enabled: !loading,
-                  controller: _jidTextController,
-                  trailing: Text('@${state.server}'),
-                  validator: (text) {
-                    if (text.isEmpty) {
-                      return 'Enter a username';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: PasswordInput(
-                  key: loginPasswordKey,
-                  enabled: !loading,
-                  controller: _passwordTextController,
-                ),
-              ),
-              const SizedBox.square(dimension: 16.0),
-              Builder(
-                builder: (context) {
-                  return ShadButton(
-                    key: loginSubmitKey,
-                    enabled: !loading,
-                    onPressed: () => _onPressed(context),
-                    leading: AnimatedCrossFade(
-                      crossFadeState: loading
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration: context.read<SettingsCubit>().animationDuration,
-                      firstChild: const SizedBox(),
-                      secondChild: AxiProgressIndicator(
-                        color: context.colorScheme.primaryForeground,
-                        semanticsLabel: 'Waiting for login',
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: horizontalPadding,
+                    child: Text(
+                      LoginForm.title,
+                      style: context.textTheme.h3,
+                    ),
+                  ),
+                  Padding(
+                    padding: horizontalPadding,
+                    child: Text(
+                      state is AuthenticationFailure ? state.errorText : '',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: context.colorScheme.destructive,
                       ),
                     ),
-                    trailing: const SizedBox.shrink(),
-                    child: const Text('Log in'),
-                  ).withTapBounce(enabled: !loading);
-                },
+                  ),
+                  Padding(
+                    padding: horizontalPadding,
+                    child: NotificationRequest(
+                      notificationService: context.read<NotificationService>(),
+                      capability: context.read<Capability>(),
+                    ),
+                  ),
+                  const SizedBox.square(dimension: 16.0),
+                  Padding(
+                    padding: horizontalPadding,
+                    child: AxiTextFormField(
+                      key: loginUsernameKey,
+                      autocorrect: false,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp('[a-zA-Z0-9]'),
+                        ),
+                      ],
+                      placeholder: const Text('Username'),
+                      enabled: !loading,
+                      controller: _jidTextController,
+                      trailing: Text('@${state.server}'),
+                      validator: (text) {
+                        if (text.isEmpty) {
+                          return 'Enter a username';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: horizontalPadding,
+                    child: PasswordInput(
+                      key: loginPasswordKey,
+                      enabled: !loading,
+                      controller: _passwordTextController,
+                    ),
+                  ),
+                  const SizedBox.square(dimension: 20.0),
+                  Padding(
+                    padding: horizontalPadding,
+                    child: Builder(
+                      builder: (context) {
+                        return ShadButton(
+                          key: loginSubmitKey,
+                          enabled: !loading,
+                          onPressed: () => _onPressed(context),
+                          leading: AnimatedCrossFade(
+                            crossFadeState: loading
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration:
+                                context.read<SettingsCubit>().animationDuration,
+                            firstChild: const SizedBox(),
+                            secondChild: AxiProgressIndicator(
+                              color: context.colorScheme.primaryForeground,
+                              semanticsLabel: 'Waiting for login',
+                            ),
+                          ),
+                          trailing: const SizedBox.shrink(),
+                          child: const Text('Log in'),
+                        ).withTapBounce(enabled: !loading);
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },

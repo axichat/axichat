@@ -1,10 +1,10 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiIconButton extends StatelessWidget {
   static const double kDefaultSize = 36.0;
+  static const double kTapTargetSize = 48.0;
 
   const AxiIconButton({
     super.key,
@@ -27,28 +27,51 @@ class AxiIconButton extends StatelessWidget {
     final Color resolvedForeground = color ?? colors.foreground;
     final Color resolvedBorder = borderColor ?? colors.border;
 
-    Widget child = ShadIconButton.outline(
-      decoration: ShadDecoration(border: ShadBorder.all(color: resolvedBorder)),
-      height: kDefaultSize,
+    final decoration = ShapeDecoration(
+      color: colors.card,
+      shape: SquircleBorder(
+        cornerRadius: 18,
+        side: BorderSide(color: resolvedBorder),
+      ),
+    );
+
+    Widget visual = Container(
       width: kDefaultSize,
-      foregroundColor: resolvedForeground,
-      onPressed: onPressed,
-      iconSize: context.iconTheme.size,
-      icon: Icon(
+      height: kDefaultSize,
+      decoration: decoration,
+      alignment: Alignment.center,
+      child: Icon(
         iconData,
+        size: context.iconTheme.size,
+        color: resolvedForeground,
       ),
     );
 
-    child = child.withTapBounce(enabled: onPressed != null);
-
-    if (tooltip == null) return child;
-
-    return AxiTooltip(
-      builder: (context) => Text(
-        tooltip!,
-        style: context.textTheme.muted,
-      ),
-      child: child,
+    visual = SizedBox(
+      width: kTapTargetSize,
+      height: kTapTargetSize,
+      child: Center(child: visual),
     );
+
+    Widget tappable = Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: SquircleBorder(cornerRadius: 24),
+        child: visual,
+      ),
+    ).withTapBounce(enabled: onPressed != null);
+
+    if (tooltip != null) {
+      tappable = AxiTooltip(
+        builder: (context) => Text(
+          tooltip!,
+          style: context.textTheme.muted,
+        ),
+        child: tappable,
+      );
+    }
+
+    return tappable;
   }
 }
