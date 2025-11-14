@@ -45,7 +45,7 @@ class DraftsList extends StatelessWidget {
 
         if (filterId == 'attachments') {
           visibleItems = visibleItems
-              .where((draft) => draft.fileMetadataID != null)
+              .where((draft) => draft.attachmentMetadataIds.isNotEmpty)
               .toList();
         }
 
@@ -87,6 +87,7 @@ class DraftsList extends StatelessWidget {
                       'id': item.id,
                       'jids': item.jids,
                       'body': item.body,
+                      'attachments': item.attachmentMetadataIds,
                     },
                   ),
                   menuItems: [

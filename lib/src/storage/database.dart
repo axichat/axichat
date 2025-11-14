@@ -133,6 +133,7 @@ abstract interface class XmppDatabase implements Database {
     int? id,
     required List<String> jids,
     required String body,
+    List<String> attachmentMetadataIds = const [],
   });
 
   Future<void> removeDraft(int id);
@@ -839,7 +840,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -872,6 +873,34 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
         if (from < 7) {
           await m.addColumn(chats, chats.archived);
           await m.addColumn(chats, chats.hidden);
+        }
+        if (from < 8) {
+          await customStatement(
+            '''
+CREATE TABLE drafts_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  jids TEXT NOT NULL,
+  body TEXT,
+  attachment_metadata_ids TEXT NOT NULL DEFAULT '[]'
+)
+''',
+          );
+          await customStatement(
+            '''
+INSERT INTO drafts_new (id, jids, body, attachment_metadata_ids)
+SELECT
+  id,
+  jids,
+  body,
+  CASE
+    WHEN file_metadata_i_d IS NULL OR length(file_metadata_i_d) = 0 THEN '[]'
+    ELSE '[' || quote(file_metadata_i_d) || ']'
+  END
+FROM drafts
+''',
+          );
+          await customStatement('DROP TABLE drafts');
+          await customStatement('ALTER TABLE drafts_new RENAME TO drafts');
         }
         if (rebuildReactions) {
           await m.createTable(reactions);
@@ -1317,11 +1346,13 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     int? id,
     required List<String> jids,
     required String body,
+    List<String> attachmentMetadataIds = const [],
   }) =>
       draftsAccessor.insertOrUpdateOne(DraftsCompanion(
         id: Value.absentIfNull(id),
         jids: Value(jids),
         body: Value(body),
+        attachmentMetadataIds: Value(attachmentMetadataIds),
       ));
 
   @override

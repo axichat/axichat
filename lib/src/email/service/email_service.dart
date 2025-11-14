@@ -510,6 +510,7 @@ class EmailService {
       width: metadata.width,
       height: metadata.height,
       caption: message.body,
+      metadataId: metadata.id,
     );
   }
 

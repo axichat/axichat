@@ -157,7 +157,7 @@ class Draft with _$Draft implements Insertable<Draft> {
     required int id,
     required List<String> jids,
     String? body,
-    String? fileMetadataID,
+    @Default(<String>[]) List<String> attachmentMetadataIds,
   }) = _Draft;
 
   const Draft._();
@@ -168,7 +168,7 @@ class Draft with _$Draft implements Insertable<Draft> {
         id: Value(id),
         jids: Value(jids),
         body: Value.absentIfNull(body),
-        fileMetadataID: Value.absentIfNull(fileMetadataID),
+        attachmentMetadataIds: Value(attachmentMetadataIds),
       ).toColumns(nullToAbsent);
 }
 
@@ -180,5 +180,6 @@ class Drafts extends Table {
 
   TextColumn get body => text().nullable()();
 
-  TextColumn get fileMetadataID => text().nullable()();
+  TextColumn get attachmentMetadataIds =>
+      text().map(ListConverter<String>()).withDefault(const Constant('[]'))();
 }

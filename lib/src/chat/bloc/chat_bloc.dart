@@ -1002,12 +1002,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final trimmed = rawText.trim();
-    final body = trimmed.isEmpty ? '' : _composeEmailBody(trimmed, quotedDraft);
+    final body =
+        trimmed.isEmpty ? '' : _composeEmailBody(trimmed, quotedDraft);
     final signature = _draftSignature(
       recipients: resolvedRecipients,
       body: body,
       pendingAttachments: state.pendingAttachments,
     );
+    final attachments =
+        state.pendingAttachments.map((pending) => pending.attachment).toList();
     if (_lastOfflineDraftSignature == signature) {
       emit(
         _attachToast(
@@ -1025,6 +1028,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         id: null,
         jids: resolvedRecipients,
         body: body,
+        attachments: attachments,
       );
       _lastOfflineDraftSignature = signature;
       emit(

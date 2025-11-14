@@ -160,6 +160,7 @@ class ChatDrawer extends StatelessWidget {
                   'locate': context.read,
                   'jids': ['spam@axichat.com'],
                   'body': 'I want to report \'$jid\' for spam.',
+                  'attachments': const <String>[],
                 },
               ),
               child: const Text('Report spam'),

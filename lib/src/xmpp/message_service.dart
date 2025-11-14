@@ -418,9 +418,55 @@ mixin MessageService on XmppBase, BaseStreamService {
     int? id,
     required List<String> jids,
     required String body,
+    List<EmailAttachment> attachments = const [],
   }) async {
+    final metadataIds = <String>[];
+    for (final attachment in attachments) {
+      final metadataId = await _persistDraftAttachmentMetadata(attachment);
+      metadataIds.add(metadataId);
+    }
     return await _dbOpReturning<XmppDatabase, int>(
-      (db) => db.saveDraft(id: id, jids: jids, body: body),
+      (db) => db.saveDraft(
+        id: id,
+        jids: jids,
+        body: body,
+        attachmentMetadataIds: metadataIds,
+      ),
+    );
+  }
+
+  Future<List<EmailAttachment>> loadDraftAttachments(
+    Iterable<String> metadataIds,
+  ) async {
+    if (metadataIds.isEmpty) return const [];
+    return await _dbOpReturning<XmppDatabase, List<EmailAttachment>>(
+      (db) async {
+        final attachments = <EmailAttachment>[];
+        for (final metadataId in metadataIds) {
+          final metadata = await db.getFileMetadata(metadataId);
+          final path = metadata?.path;
+          if (metadata == null || path == null || path.isEmpty) {
+            continue;
+          }
+          final file = File(path);
+          if (!await file.exists()) {
+            continue;
+          }
+          final size = metadata.sizeBytes ?? await file.length();
+          attachments.add(
+            EmailAttachment(
+              path: path,
+              fileName: metadata.filename,
+              sizeBytes: size,
+              mimeType: metadata.mimeType,
+              width: metadata.width,
+              height: metadata.height,
+              metadataId: metadata.id,
+            ),
+          );
+        }
+        return attachments;
+      },
     );
   }
 
@@ -437,6 +483,21 @@ mixin MessageService on XmppBase, BaseStreamService {
         stanzaID: stanzaID,
       ),
     );
+  }
+
+  Future<String> _persistDraftAttachmentMetadata(
+      EmailAttachment attachment) async {
+    final metadata = FileMetadataData(
+      id: attachment.metadataId ?? uuid.v4(),
+      filename: attachment.fileName,
+      path: attachment.path,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+    );
+    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+    return metadata.id;
   }
 
   Future<void> _ensureCapabilityCacheLoaded() async {

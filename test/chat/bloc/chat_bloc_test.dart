@@ -98,6 +98,7 @@ void main() {
         id: any(named: 'id'),
         jids: any(named: 'jids'),
         body: any(named: 'body'),
+        attachments: any(named: 'attachments'),
       ),
     ).thenAnswer((_) async => 1);
   });
@@ -625,13 +626,17 @@ void main() {
     bloc.add(const ChatMessageSent(text: 'Offline draft'));
     await _pumpBloc();
 
-    verify(
+    final verification = verify(
       () => messageService.saveDraft(
         id: null,
         jids: any(named: 'jids'),
         body: 'Offline draft',
+        attachments: any(named: 'attachments'),
       ),
-    ).called(1);
+    )..called(1);
+    final capturedAttachments =
+        verification.captured.last as List<EmailAttachment>;
+    expect(capturedAttachments, isEmpty);
     verifyNever(() => emailService.sendMessage(
         chat: any(named: 'chat'), body: any(named: 'body')));
     expect(bloc.state.toastId, greaterThan(0));

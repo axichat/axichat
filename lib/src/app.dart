@@ -447,6 +447,7 @@ class MaterialAxichat extends StatelessWidget {
         'locate': context.read,
         'body': payload.text,
         'jids': [''],
+        'attachments': const <String>[],
       },
     );
     context.read<ShareIntentCubit>().consume();

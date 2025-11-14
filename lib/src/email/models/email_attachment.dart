@@ -7,6 +7,7 @@ class EmailAttachment {
     this.width,
     this.height,
     this.caption,
+    this.metadataId,
   });
 
   final String path;
@@ -16,6 +17,7 @@ class EmailAttachment {
   final int? width;
   final int? height;
   final String? caption;
+  final String? metadataId;
 
   EmailAttachment copyWith({
     String? path,
@@ -25,6 +27,7 @@ class EmailAttachment {
     int? width,
     int? height,
     String? caption,
+    String? metadataId,
   }) =>
       EmailAttachment(
         path: path ?? this.path,
@@ -34,6 +37,7 @@ class EmailAttachment {
         width: width ?? this.width,
         height: height ?? this.height,
         caption: caption ?? this.caption,
+        metadataId: metadataId ?? this.metadataId,
       );
 
   bool get isImage =>

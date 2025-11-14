@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -86,9 +87,14 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required int? id,
     required List<String> jids,
     required String body,
+    List<EmailAttachment> attachments = const [],
   }) async {
-    final savedID =
-        await _messageService.saveDraft(id: id, jids: jids, body: body);
+    final savedID = await _messageService.saveDraft(
+      id: id,
+      jids: jids,
+      body: body,
+      attachments: attachments,
+    );
     emit(DraftSaveComplete());
     return savedID;
   }
