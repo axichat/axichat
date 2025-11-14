@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -390,6 +391,12 @@ class MaterialAxichat extends StatelessWidget {
           },
           routerConfig: _router,
           builder: (context, child) {
+            final shadTheme = ShadTheme.of(context);
+            final brightness = Theme.of(context).brightness;
+            CalendarPalette.update(
+              scheme: shadTheme.colorScheme,
+              brightness: brightness,
+            );
             final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
             final routedContent = MultiBlocListener(
               listeners: [

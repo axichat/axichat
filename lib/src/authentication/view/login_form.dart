@@ -104,6 +104,7 @@ class _LoginFormState extends State<LoginForm> {
                           RegExp('[a-zA-Z0-9]'),
                         ),
                       ],
+                      keyboardType: TextInputType.emailAddress,
                       placeholder: const Text('Username'),
                       enabled: !loading,
                       controller: _jidTextController,
@@ -116,6 +117,7 @@ class _LoginFormState extends State<LoginForm> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 12),
                   Padding(
                     padding: horizontalPadding,
                     child: PasswordInput(
@@ -129,7 +131,9 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding,
                     child: Builder(
                       builder: (context) {
-                        return ShadButton(
+                        final animationDuration =
+                            context.read<SettingsCubit>().animationDuration;
+                        final button = ShadButton(
                           key: loginSubmitKey,
                           enabled: !loading,
                           onPressed: () => _onPressed(context),
@@ -148,6 +152,16 @@ class _LoginFormState extends State<LoginForm> {
                           trailing: const SizedBox.shrink(),
                           child: const Text('Log in'),
                         ).withTapBounce(enabled: !loading);
+                        return AnimatedSize(
+                          duration: animationDuration,
+                          curve: Curves.easeInOut,
+                          alignment: Alignment.centerLeft,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: 1,
+                            child: button,
+                          ),
+                        );
                       },
                     ),
                   ),

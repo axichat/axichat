@@ -453,8 +453,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(calendarBorderRadius),
-              borderSide:
-                  const BorderSide(color: calendarPrimaryColor, width: 2),
+              borderSide: BorderSide(color: calendarPrimaryColor, width: 2),
             ),
             filled: true,
             fillColor: Colors.white,

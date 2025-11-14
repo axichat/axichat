@@ -20,7 +20,7 @@ class CalendarCompletionCheckbox extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool? checkboxValue = isIndeterminate ? null : value;
     final bool isEnabled = onChanged != null;
-    const Color activeColor = calendarPrimaryColor;
+    final Color activeColor = calendarPrimaryColor;
     final Color borderColor =
         isEnabled ? activeColor : calendarBorderColor.withValues(alpha: 0.6);
     final double borderWidth = value ? 2 : 1.5;

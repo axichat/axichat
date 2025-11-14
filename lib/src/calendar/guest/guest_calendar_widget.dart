@@ -156,9 +156,10 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
       basePadding.right,
       calendarGutterMd,
     );
+    final accent = calendarPrimaryColor;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.04),
+        color: accent.withValues(alpha: 0.04),
         border: const Border(
           bottom: BorderSide(color: calendarBorderColor, width: 1),
         ),
@@ -169,20 +170,21 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
           AxiIconButton(
             iconData: Icons.arrow_back,
             tooltip: 'Back to login',
-            onPressed: () {
-              final router = GoRouter.of(context);
-              if (router.canPop()) {
-                router.pop();
-              } else {
-                router.go('/login');
+            onPressed: () async {
+              final navigator =
+                  GoRouter.of(context).routerDelegate.navigatorKey.currentState;
+              if (navigator != null && await navigator.maybePop()) {
+                return;
               }
+              if (!mounted) return;
+              context.go('/login');
             },
           ),
           const SizedBox(width: calendarGutterMd),
           Icon(
             Icons.info_outline_rounded,
             size: 18,
-            color: Colors.blue.shade600,
+            color: accent,
           ),
           const SizedBox(width: calendarGutterMd),
           Expanded(

@@ -13,6 +13,7 @@ import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,90 +35,125 @@ class ChatsList extends StatelessWidget {
         return items.where((chat) => !chat.archived).toList();
       },
       builder: (context, items) {
+        final duration = context.read<SettingsCubit>().animationDuration;
+        Widget child;
         if (items == null) {
-          return Center(
-            child: AxiProgressIndicator(
-              color: context.colorScheme.foreground,
-            ),
-          );
-        }
-
-        final searchState = context.watch<HomeSearchCubit?>()?.state;
-        final tabState = searchState?.stateFor(HomeTab.chats);
-        final searchActive = searchState?.active ?? false;
-        final query =
-            searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-        final filterId = tabState?.filterId;
-        final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
-        final rosterContacts =
-            context.watch<RosterCubit?>()?.contacts ?? const <String>{};
-
-        var visibleItems = items
-            .where(
-              (chat) => _chatMatchesFilter(
-                chat,
-                filterId,
-                rosterContacts,
+          child = KeyedSubtree(
+            key: const ValueKey('chats-loading'),
+            child: Center(
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
               ),
-            )
-            .toList();
-
-        if (query.isNotEmpty) {
-          visibleItems = visibleItems
-              .where((chat) => _chatMatchesQuery(chat, query))
-              .toList();
-        }
-
-        visibleItems.sort(
-          (a, b) => sortOrder.isNewestFirst
-              ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-              : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
-        );
-
-        if (visibleItems.isEmpty) {
-          return Center(
-            child: Text(
-              'No chats yet',
-              style: context.textTheme.muted,
             ),
           );
-        }
+        } else {
+          final searchState = context.watch<HomeSearchCubit?>()?.state;
+          final tabState = searchState?.stateFor(HomeTab.chats);
+          final searchActive = searchState?.active ?? false;
+          final query =
+              searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
+          final filterId = tabState?.filterId;
+          final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
+          final rosterContacts =
+              context.watch<RosterCubit?>()?.contacts ?? const <String>{};
 
-        return ColoredBox(
-          color: context.colorScheme.background,
-          child: ListView.builder(
-            itemCount: visibleItems.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                final calendarBloc = context.read<CalendarBloc?>();
-                final tile = calendarBloc == null
-                    ? CalendarTile(
-                        onTap: () =>
-                            context.read<ChatsCubit>().toggleCalendar(),
-                      )
-                    : BlocBuilder<CalendarBloc, CalendarState>(
-                        bloc: calendarBloc,
-                        builder: (context, state) {
-                          final currentTask =
-                              state.currentTaskAt(DateTime.now());
-                          return CalendarTile(
+          var visibleItems = items
+              .where(
+                (chat) => _chatMatchesFilter(
+                  chat,
+                  filterId,
+                  rosterContacts,
+                ),
+              )
+              .toList();
+
+          if (query.isNotEmpty) {
+            visibleItems = visibleItems
+                .where((chat) => _chatMatchesQuery(chat, query))
+                .toList();
+          }
+
+          visibleItems.sort(
+            (a, b) => sortOrder.isNewestFirst
+                ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+                : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
+          );
+
+          Widget body;
+          if (visibleItems.isEmpty) {
+            body = Center(
+              child: Text(
+                'No chats yet',
+                style: context.textTheme.muted,
+              ),
+            );
+          } else {
+            body = ColoredBox(
+              color: context.colorScheme.background,
+              child: ListView.builder(
+                itemCount: visibleItems.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    final calendarBloc = context.read<CalendarBloc?>();
+                    final tile = calendarBloc == null
+                        ? CalendarTile(
                             onTap: () =>
                                 context.read<ChatsCubit>().toggleCalendar(),
-                            currentTask: currentTask,
-                            nextTask: state.nextTask,
-                            dueReminderCount: state.dueReminders?.length ?? 0,
+                          )
+                        : BlocBuilder<CalendarBloc, CalendarState>(
+                            bloc: calendarBloc,
+                            builder: (context, state) {
+                              final currentTask =
+                                  state.currentTaskAt(DateTime.now());
+                              return CalendarTile(
+                                onTap: () =>
+                                    context.read<ChatsCubit>().toggleCalendar(),
+                                currentTask: currentTask,
+                                nextTask: state.nextTask,
+                                dueReminderCount:
+                                    state.dueReminders?.length ?? 0,
+                              );
+                            },
                           );
-                        },
-                      );
-                return ListItemPadding(child: tile);
-              }
+                    return ListItemPadding(child: tile);
+                  }
 
-              final item = visibleItems[index - 1];
-              return ListItemPadding(
-                child: ChatListTile(item: item),
-              );
-            },
-          ),
+                  final item = visibleItems[index - 1];
+                  return ListItemPadding(
+                    child: ChatListTile(item: item),
+                  );
+                },
+              ),
+            );
+          }
+
+          child = KeyedSubtree(
+            key: const ValueKey('chats-loaded'),
+            child: body,
+          );
+        }
+
+        return AnimatedSwitcher(
+          duration: duration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (widget, animation) {
+            final offsetAnimation = Tween<Offset>(
+              begin: const Offset(0, 0.08),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            ));
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: offsetAnimation,
+                child: widget,
+              ),
+            );
+          },
+          child: child,
         );
       },
     );

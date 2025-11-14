@@ -7,6 +7,7 @@ export 'axi_context_menu_region.dart';
 export 'axi_avatar.dart';
 export 'axi_badge.dart';
 export 'axi_confirm.dart';
+export 'axi_checkbox_form_field.dart';
 export 'axi_cutout.dart';
 export 'axi_delete_menu_item.dart';
 export 'axi_fab.dart';
@@ -56,9 +57,29 @@ const basePageItemLimit = 15;
 
 const axiGreen = Color(0xff80ffa0);
 
+class CalendarPalette {
+  CalendarPalette._();
+
+  static Color _primary = const Color(0xFF0969DA);
+  static Color _primaryHover = const Color(0xFF0860CA);
+
+  static Color get primary => _primary;
+  static Color get primaryHover => _primaryHover;
+
+  static void update({
+    required ShadColorScheme scheme,
+    required Brightness brightness,
+  }) {
+    _primary = scheme.primary;
+    final mixTarget =
+        brightness == Brightness.dark ? Colors.white : Colors.black;
+    _primaryHover = Color.lerp(_primary, mixTarget, 0.12) ?? _primary;
+  }
+}
+
+Color get calendarPrimaryColor => CalendarPalette.primary;
+Color get calendarPrimaryHoverColor => CalendarPalette.primaryHover;
 // Ultrathink calendar color palette
-const calendarPrimaryColor = Color(0xFF0969DA);
-const calendarPrimaryHoverColor = Color(0xFF0860CA);
 const calendarBackgroundColor = Color(0xFFFFFFFF);
 const calendarContainerColor = Color(0xFFFFFFFF);
 const calendarSidebarBackgroundColor = Color(0xFFF7F8FA);
@@ -364,7 +385,7 @@ const calendarCardShadow = [
 ];
 
 // Task-specific constants - updated to match target design
-const taskCompletedColor = calendarPrimaryColor;
+Color get taskCompletedColor => calendarPrimaryColor;
 const calendarCardRadius = 6.0;
 
 // Task priority colors matching target HTML design exactly
