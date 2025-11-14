@@ -1,5 +1,17 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
+class ChatTransportPreference {
+  const ChatTransportPreference({
+    required this.transport,
+    required this.defaultTransport,
+    required this.isExplicit,
+  });
+
+  final MessageTransport transport;
+  final MessageTransport defaultTransport;
+  final bool isExplicit;
+}
+
 mixin ChatsService on XmppBase, BaseStreamService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
@@ -15,14 +27,14 @@ mixin ChatsService on XmppBase, BaseStreamService {
         () => XmppStateStore.registerKey('chat_view_filter_$jid'),
       );
 
-  MessageTransport _transportFrom(Object? raw) {
+  MessageTransport? _transportFrom(Object? raw) {
     if (raw is String) {
       return MessageTransport.values.firstWhere(
         (transport) => transport.name == raw,
         orElse: () => MessageTransport.xmpp,
       );
     }
-    return MessageTransport.xmpp;
+    return null;
   }
 
   MessageTimelineFilter _viewFilterFrom(Object? raw) {
@@ -35,13 +47,46 @@ mixin ChatsService on XmppBase, BaseStreamService {
     return MessageTimelineFilter.allWithContact;
   }
 
-  Future<MessageTransport> loadChatTransportPreference(String jid) async {
+  Future<MessageTransport> _defaultTransportForChat(String jid) async {
     try {
-      return await _dbOpReturning<XmppStateStore, MessageTransport>(
-        (store) => _transportFrom(store.read(key: _transportKeyFor(jid))),
+      return await _dbOpReturning<XmppDatabase, MessageTransport>(
+        (db) async {
+          final chat = await db.getChat(jid);
+          return chat?.defaultTransport ?? MessageTransport.xmpp;
+        },
       );
     } on XmppAbortedException {
       return MessageTransport.xmpp;
+    }
+  }
+
+  Future<ChatTransportPreference> loadChatTransportPreference(
+      String jid) async {
+    final defaultTransport = await _defaultTransportForChat(jid);
+    try {
+      return await _dbOpReturning<XmppStateStore, ChatTransportPreference>(
+        (store) {
+          final stored = _transportFrom(store.read(key: _transportKeyFor(jid)));
+          if (stored == null) {
+            return ChatTransportPreference(
+              transport: defaultTransport,
+              defaultTransport: defaultTransport,
+              isExplicit: false,
+            );
+          }
+          return ChatTransportPreference(
+            transport: stored,
+            defaultTransport: defaultTransport,
+            isExplicit: true,
+          );
+        },
+      );
+    } on XmppAbortedException {
+      return ChatTransportPreference(
+        transport: defaultTransport,
+        defaultTransport: defaultTransport,
+        isExplicit: false,
+      );
     }
   }
 
@@ -54,6 +99,13 @@ mixin ChatsService on XmppBase, BaseStreamService {
         key: _transportKeyFor(jid),
         value: transport.name,
       ),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> clearChatTransportPreference({required String jid}) async {
+    await _dbOp<XmppStateStore>(
+      (store) => store.delete(key: _transportKeyFor(jid)),
       awaitDatabase: true,
     );
   }
@@ -81,8 +133,7 @@ mixin ChatsService on XmppBase, BaseStreamService {
     );
   }
 
-  Stream<MessageTransport> watchChatTransportPreference(String jid) async* {
-    yield await loadChatTransportPreference(jid);
+  Stream<MessageTransport?> watchChatTransportPreference(String jid) async* {
     try {
       final store = await _dbOpReturning<XmppStateStore, XmppStateStore>(
         (store) => store,

@@ -173,21 +173,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   RestartableTimer? _typingTimer;
   MessageTransport _transport = MessageTransport.xmpp;
+  bool _hasExplicitTransportPreference = false;
 
   bool get encryptionAvailable => _omemoService != null;
-  bool get _isEmailChat {
-    final chat = state.chat;
-    if (chat == null) return false;
-    if (_transport.isEmail) return true;
-    return chat.transport.isEmail;
-  }
+  bool get _isEmailChat => _transport.isEmail;
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
   Future<void> _initializeTransport() async {
     if (jid == null) return;
     try {
-      _transport = await _chatsService.loadChatTransportPreference(jid!);
+      final preference = await _chatsService.loadChatTransportPreference(jid!);
+      _transport = preference.transport;
+      _hasExplicitTransportPreference = preference.isExplicit;
     } on Exception catch (error, stackTrace) {
       _log.fine(
         'Failed to load transport preference for $jid',
@@ -245,14 +243,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       composerHydrationText: resetContext ? null : state.composerHydrationText,
       composerHydrationId: resetContext ? 0 : state.composerHydrationId,
     ));
-    if (event.chat.deltaChatId != null && _transport.isXmpp) {
-      _transport = MessageTransport.email;
-      unawaited(
-        _chatsService.saveChatTransportPreference(
-          jid: event.chat.jid,
-          transport: _transport,
-        ),
-      );
+    final defaultTransport = event.chat.defaultTransport;
+    if (!_hasExplicitTransportPreference && _transport != defaultTransport) {
+      _transport = defaultTransport;
     }
   }
 
@@ -494,13 +487,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final chat = state.chat;
     if (chat == null) return;
-    if (_transport == event.transport) return;
+    final defaultTransport = chat.defaultTransport;
+    if (_transport == event.transport) {
+      final selectingDefault = event.transport == defaultTransport;
+      if (!selectingDefault || !_hasExplicitTransportPreference) {
+        return;
+      }
+    }
     try {
-      _transport = event.transport;
-      await _chatsService.saveChatTransportPreference(
-        jid: chat.jid,
-        transport: event.transport,
-      );
+      if (event.transport == defaultTransport) {
+        _transport = defaultTransport;
+        _hasExplicitTransportPreference = false;
+        await _chatsService.clearChatTransportPreference(jid: chat.jid);
+      } else {
+        _transport = event.transport;
+        _hasExplicitTransportPreference = true;
+        await _chatsService.saveChatTransportPreference(
+          jid: chat.jid,
+          transport: event.transport,
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to change transport for chat ${chat.jid}',

@@ -20,6 +20,242 @@ class DeltaChatBindings {
           lookup)
       : _lookup = lookup;
 
+  ffi.Pointer<dc_accounts_t> dc_accounts_new(
+    ffi.Pointer<ffi.Char> dir,
+    int writable,
+  ) {
+    return _dc_accounts_new(
+      dir,
+      writable,
+    );
+  }
+
+  late final _dc_accounts_newPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_accounts_t> Function(
+              ffi.Pointer<ffi.Char>, ffi.Int32)>>('dc_accounts_new');
+  late final _dc_accounts_new = _dc_accounts_newPtr.asFunction<
+      ffi.Pointer<dc_accounts_t> Function(ffi.Pointer<ffi.Char>, int)>();
+
+  void dc_accounts_unref(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_unref(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_unrefPtr = _lookup<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_unref');
+  late final _dc_accounts_unref = _dc_accounts_unrefPtr
+      .asFunction<void Function(ffi.Pointer<dc_accounts_t>)>();
+
+  int dc_accounts_add_account(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_add_account(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_add_accountPtr = _lookup<
+          ffi.NativeFunction<ffi.Uint32 Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_add_account');
+  late final _dc_accounts_add_account = _dc_accounts_add_accountPtr
+      .asFunction<int Function(ffi.Pointer<dc_accounts_t>)>();
+
+  int dc_accounts_add_closed_account(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_add_closed_account(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_add_closed_accountPtr = _lookup<
+          ffi.NativeFunction<ffi.Uint32 Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_add_closed_account');
+  late final _dc_accounts_add_closed_account =
+      _dc_accounts_add_closed_accountPtr
+          .asFunction<int Function(ffi.Pointer<dc_accounts_t>)>();
+
+  int dc_accounts_migrate_account(
+    ffi.Pointer<dc_accounts_t> accounts,
+    ffi.Pointer<ffi.Char> dbfile,
+  ) {
+    return _dc_accounts_migrate_account(
+      accounts,
+      dbfile,
+    );
+  }
+
+  late final _dc_accounts_migrate_accountPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Uint32 Function(ffi.Pointer<dc_accounts_t>,
+              ffi.Pointer<ffi.Char>)>>('dc_accounts_migrate_account');
+  late final _dc_accounts_migrate_account =
+      _dc_accounts_migrate_accountPtr.asFunction<
+          int Function(ffi.Pointer<dc_accounts_t>, ffi.Pointer<ffi.Char>)>();
+
+  int dc_accounts_remove_account(
+    ffi.Pointer<dc_accounts_t> accounts,
+    int account_id,
+  ) {
+    return _dc_accounts_remove_account(
+      accounts,
+      account_id,
+    );
+  }
+
+  late final _dc_accounts_remove_accountPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int32 Function(ffi.Pointer<dc_accounts_t>,
+              ffi.Uint32)>>('dc_accounts_remove_account');
+  late final _dc_accounts_remove_account = _dc_accounts_remove_accountPtr
+      .asFunction<int Function(ffi.Pointer<dc_accounts_t>, int)>();
+
+  ffi.Pointer<dc_array_t> dc_accounts_get_all(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_get_all(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_get_allPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(
+              ffi.Pointer<dc_accounts_t>)>>('dc_accounts_get_all');
+  late final _dc_accounts_get_all = _dc_accounts_get_allPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_accounts_t>)>();
+
+  ffi.Pointer<dc_context_t> dc_accounts_get_account(
+    ffi.Pointer<dc_accounts_t> accounts,
+    int account_id,
+  ) {
+    return _dc_accounts_get_account(
+      accounts,
+      account_id,
+    );
+  }
+
+  late final _dc_accounts_get_accountPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_context_t> Function(ffi.Pointer<dc_accounts_t>,
+              ffi.Uint32)>>('dc_accounts_get_account');
+  late final _dc_accounts_get_account = _dc_accounts_get_accountPtr.asFunction<
+      ffi.Pointer<dc_context_t> Function(ffi.Pointer<dc_accounts_t>, int)>();
+
+  void dc_accounts_start_io(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_start_io(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_start_ioPtr = _lookup<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_start_io');
+  late final _dc_accounts_start_io = _dc_accounts_start_ioPtr
+      .asFunction<void Function(ffi.Pointer<dc_accounts_t>)>();
+
+  void dc_accounts_stop_io(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_stop_io(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_stop_ioPtr = _lookup<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_stop_io');
+  late final _dc_accounts_stop_io = _dc_accounts_stop_ioPtr
+      .asFunction<void Function(ffi.Pointer<dc_accounts_t>)>();
+
+  void dc_accounts_maybe_network(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_maybe_network(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_maybe_networkPtr = _lookup<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_maybe_network');
+  late final _dc_accounts_maybe_network = _dc_accounts_maybe_networkPtr
+      .asFunction<void Function(ffi.Pointer<dc_accounts_t>)>();
+
+  void dc_accounts_maybe_network_lost(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_maybe_network_lost(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_maybe_network_lostPtr = _lookup<
+          ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_accounts_t>)>>(
+      'dc_accounts_maybe_network_lost');
+  late final _dc_accounts_maybe_network_lost =
+      _dc_accounts_maybe_network_lostPtr
+          .asFunction<void Function(ffi.Pointer<dc_accounts_t>)>();
+
+  int dc_accounts_background_fetch(
+    ffi.Pointer<dc_accounts_t> accounts,
+    int timeout,
+  ) {
+    return _dc_accounts_background_fetch(
+      accounts,
+      timeout,
+    );
+  }
+
+  late final _dc_accounts_background_fetchPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int32 Function(ffi.Pointer<dc_accounts_t>,
+              ffi.Uint64)>>('dc_accounts_background_fetch');
+  late final _dc_accounts_background_fetch = _dc_accounts_background_fetchPtr
+      .asFunction<int Function(ffi.Pointer<dc_accounts_t>, int)>();
+
+  void dc_accounts_set_push_device_token(
+    ffi.Pointer<dc_accounts_t> accounts,
+    ffi.Pointer<ffi.Char> token,
+  ) {
+    return _dc_accounts_set_push_device_token(
+      accounts,
+      token,
+    );
+  }
+
+  late final _dc_accounts_set_push_device_tokenPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_accounts_t>,
+              ffi.Pointer<ffi.Char>)>>('dc_accounts_set_push_device_token');
+  late final _dc_accounts_set_push_device_token =
+      _dc_accounts_set_push_device_tokenPtr.asFunction<
+          void Function(ffi.Pointer<dc_accounts_t>, ffi.Pointer<ffi.Char>)>();
+
+  ffi.Pointer<dc_event_emitter_t> dc_accounts_get_event_emitter(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _dc_accounts_get_event_emitter(
+      accounts,
+    );
+  }
+
+  late final _dc_accounts_get_event_emitterPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_event_emitter_t> Function(
+              ffi.Pointer<dc_accounts_t>)>>('dc_accounts_get_event_emitter');
+  late final _dc_accounts_get_event_emitter =
+      _dc_accounts_get_event_emitterPtr.asFunction<
+          ffi.Pointer<dc_event_emitter_t> Function(
+              ffi.Pointer<dc_accounts_t>)>();
+
   ffi.Pointer<dc_context_t> dc_context_new(
     ffi.Pointer<ffi.Char> os_name,
     ffi.Pointer<ffi.Char> dbfile,
@@ -339,6 +575,20 @@ class DeltaChatBindings {
   late final _dc_event_get_data2_str = _dc_event_get_data2_strPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_event_t>)>();
 
+  int dc_event_get_account_id(
+    ffi.Pointer<dc_event_t> event,
+  ) {
+    return _dc_event_get_account_id(
+      event,
+    );
+  }
+
+  late final _dc_event_get_account_idPtr =
+      _lookup<ffi.NativeFunction<ffi.Uint32 Function(ffi.Pointer<dc_event_t>)>>(
+          'dc_event_get_account_id');
+  late final _dc_event_get_account_id = _dc_event_get_account_idPtr
+      .asFunction<int Function(ffi.Pointer<dc_event_t>)>();
+
   void dc_str_unref(
     ffi.Pointer<ffi.Char> value,
   ) {
@@ -352,6 +602,51 @@ class DeltaChatBindings {
           'dc_str_unref');
   late final _dc_str_unref =
       _dc_str_unrefPtr.asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+
+  void dc_array_unref(
+    ffi.Pointer<dc_array_t> array,
+  ) {
+    return _dc_array_unref(
+      array,
+    );
+  }
+
+  late final _dc_array_unrefPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_array_t>)>>(
+          'dc_array_unref');
+  late final _dc_array_unref =
+      _dc_array_unrefPtr.asFunction<void Function(ffi.Pointer<dc_array_t>)>();
+
+  int dc_array_get_cnt(
+    ffi.Pointer<dc_array_t> array,
+  ) {
+    return _dc_array_get_cnt(
+      array,
+    );
+  }
+
+  late final _dc_array_get_cntPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_array_t>)>>(
+          'dc_array_get_cnt');
+  late final _dc_array_get_cnt =
+      _dc_array_get_cntPtr.asFunction<int Function(ffi.Pointer<dc_array_t>)>();
+
+  int dc_array_get_id(
+    ffi.Pointer<dc_array_t> array,
+    int index,
+  ) {
+    return _dc_array_get_id(
+      array,
+      index,
+    );
+  }
+
+  late final _dc_array_get_idPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Uint32 Function(
+              ffi.Pointer<dc_array_t>, ffi.Int32)>>('dc_array_get_id');
+  late final _dc_array_get_id = _dc_array_get_idPtr
+      .asFunction<int Function(ffi.Pointer<dc_array_t>, int)>();
 
   int dc_create_contact(
     ffi.Pointer<dc_context_t> ctx,
@@ -936,6 +1231,10 @@ final class _opaque_pthread_t extends ffi.Struct {
 
 final class dc_context extends ffi.Opaque {}
 
+final class dc_accounts extends ffi.Opaque {}
+
+final class dc_array extends ffi.Opaque {}
+
 final class dc_event extends ffi.Opaque {}
 
 final class dc_event_emitter extends ffi.Opaque {}
@@ -952,6 +1251,8 @@ typedef dc_event_t = dc_event;
 typedef dc_msg_t = dc_msg;
 typedef dc_chat_t = dc_chat;
 typedef dc_contact_t = dc_contact;
+typedef dc_accounts_t = dc_accounts;
+typedef dc_array_t = dc_array;
 
 const int __WORDSIZE = 64;
 
@@ -1142,3 +1443,5 @@ const int DC_CHAT_TYPE_GROUP = 200;
 const int DC_CHAT_TYPE_VERIFIED_GROUP = 300;
 
 const int DC_CHAT_TYPE_BROADCAST = 400;
+
+const int DC_EVENT_CONFIGURE_PROGRESS = 2041;

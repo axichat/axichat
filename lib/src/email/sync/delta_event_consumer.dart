@@ -15,10 +15,13 @@ const _deltaSelfJid = 'dc-self@$_deltaDomain';
 class DeltaEventType {
   static const msgsChanged = 2000;
   static const incomingMsg = 2005;
+  static const incomingMsgBunch = 2006;
   static const msgDelivered = 2010;
   static const msgFailed = 2012;
   static const msgRead = 2015;
   static const chatModified = 2020;
+  static const configureProgress = 2041;
+  static const accountsBackgroundFetchDone = 2200;
 }
 
 class DeltaEventConsumer {

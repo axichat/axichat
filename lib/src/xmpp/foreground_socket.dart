@@ -21,6 +21,206 @@ const destroyPrefix = 'Destroy';
 const dataPrefix = 'Data';
 const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
+const emailKeepalivePrefix = 'EmailKeepalive';
+const emailKeepaliveTickPrefix = 'EmailKeepaliveTick';
+const emailKeepaliveStartCommand = 'Start';
+const emailKeepaliveStopCommand = 'Stop';
+const foregroundClientXmpp = 'xmpp_socket';
+const foregroundClientEmailKeepalive = 'email_keepalive';
+const _foregroundServiceId = 256;
+
+typedef ForegroundTaskMessageHandler = FutureOr<void> Function(String data);
+
+class ForegroundServiceConfig {
+  const ForegroundServiceConfig({
+    required this.notificationTitle,
+    required this.notificationText,
+    required this.notificationIcon,
+  });
+
+  final String notificationTitle;
+  final String notificationText;
+  final NotificationIcon notificationIcon;
+}
+
+abstract class ForegroundTaskBridge {
+  Future<void> acquire({
+    required String clientId,
+    ForegroundServiceConfig? config,
+  });
+
+  Future<void> release(String clientId);
+
+  Future<void> send(List<Object> parts);
+
+  void registerListener(
+    String clientId,
+    ForegroundTaskMessageHandler handler,
+  );
+
+  void unregisterListener(String clientId);
+}
+
+ForegroundTaskBridge _foregroundTaskBridge = FlutterForegroundTaskBridge();
+
+ForegroundTaskBridge get foregroundTaskBridge => _foregroundTaskBridge;
+
+@visibleForTesting
+set foregroundTaskBridge(ForegroundTaskBridge bridge) {
+  _foregroundTaskBridge = bridge;
+}
+
+class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
+  FlutterForegroundTaskBridge();
+
+  final Map<String, int> _usageCounts = {};
+  final Map<String, ForegroundTaskMessageHandler> _listeners = {};
+  bool _callbackRegistered = false;
+  Completer<void>? _startCompleter;
+
+  int get _totalUsage =>
+      _usageCounts.values.fold(0, (previous, element) => previous + element);
+
+  @override
+  void registerListener(
+    String clientId,
+    ForegroundTaskMessageHandler handler,
+  ) {
+    _listeners[clientId] = handler;
+    if (_callbackRegistered) {
+      return;
+    }
+    FlutterForegroundTask.initCommunicationPort();
+    FlutterForegroundTask.addTaskDataCallback(_handleTaskData);
+    _callbackRegistered = true;
+  }
+
+  @override
+  void unregisterListener(String clientId) {
+    _listeners.remove(clientId);
+    if (_listeners.isEmpty && _totalUsage == 0) {
+      _detachCallbackIfUnused();
+    }
+  }
+
+  void _handleTaskData(dynamic data) {
+    if (data is! String) {
+      return;
+    }
+    for (final handler in List.of(_listeners.values)) {
+      final result = handler(data);
+      if (result is Future<void>) {
+        unawaited(result);
+      }
+    }
+  }
+
+  @override
+  Future<void> acquire({
+    required String clientId,
+    ForegroundServiceConfig? config,
+  }) async {
+    final totalBefore = _totalUsage;
+    _usageCounts[clientId] = (_usageCounts[clientId] ?? 0) + 1;
+    if (totalBefore > 0) {
+      return;
+    }
+    try {
+      await _startService(config ?? _defaultConfig());
+    } on Exception {
+      _decrementUsage(clientId);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> release(String clientId) async {
+    _decrementUsage(clientId);
+    if (_totalUsage == 0) {
+      await _stopService();
+    }
+  }
+
+  void _decrementUsage(String clientId) {
+    final current = _usageCounts[clientId];
+    if (current == null) {
+      return;
+    }
+    if (current <= 1) {
+      _usageCounts.remove(clientId);
+    } else {
+      _usageCounts[clientId] = current - 1;
+    }
+  }
+
+  Future<void> _startService(ForegroundServiceConfig config) async {
+    if (_startCompleter != null) {
+      return _startCompleter!.future;
+    }
+    final completer = Completer<void>();
+    _startCompleter = completer;
+    initForegroundService();
+    try {
+      final result = await FlutterForegroundTask.startService(
+        serviceId: _foregroundServiceId,
+        notificationTitle: config.notificationTitle,
+        notificationText: config.notificationText,
+        notificationIcon: config.notificationIcon,
+        callback: startCallback,
+        notificationInitialRoute: '/',
+      );
+      if (result is! ServiceRequestSuccess) {
+        if (_listeners.isEmpty) {
+          _detachCallbackIfUnused();
+        }
+        final error = result is ServiceRequestFailure ? result.error : null;
+        throw ForegroundServiceUnavailableException(
+          error is Exception ? error : null,
+        );
+      }
+      completer.complete();
+    } on Exception catch (error, stackTrace) {
+      completer.completeError(error, stackTrace);
+      rethrow;
+    } finally {
+      _startCompleter = null;
+    }
+  }
+
+  Future<void> _stopService() async {
+    await FlutterForegroundTask.stopService();
+    _detachCallbackIfUnused();
+  }
+
+  ForegroundServiceConfig _defaultConfig() => buildForegroundServiceConfig(
+        notificationText: toBeginningOfSentenceCase(
+              ConnectionState.connecting.name,
+            ) ??
+            ConnectionState.connecting.name,
+      );
+
+  @override
+  Future<void> send(List<Object> parts) async {
+    await FlutterForegroundTask.sendDataToTask(parts.join(join));
+  }
+
+  void _detachCallbackIfUnused() {
+    if (_callbackRegistered && _listeners.isEmpty) {
+      FlutterForegroundTask.removeTaskDataCallback(_handleTaskData);
+      _callbackRegistered = false;
+    }
+  }
+}
+
+ForegroundServiceConfig buildForegroundServiceConfig({
+  required String notificationText,
+}) =>
+    ForegroundServiceConfig(
+      notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
+      notificationText: notificationText,
+      notificationIcon:
+          const NotificationIcon(metaDataName: 'im.axi.axichat.APP_ICON'),
+    );
 
 bool launchedFromNotification = false;
 String? _launchedNotificationChatJid;
@@ -48,6 +248,9 @@ class ForegroundSocket extends TaskHandler {
   XmppSocketWrapper? _socket;
   late final StreamSubscription<String> _dataSubscription;
   late final StreamSubscription<mox.XmppSocketEvent> _eventSubscription;
+  bool _emailKeepaliveEnabled = false;
+  Duration _emailKeepaliveInterval = const Duration(seconds: 45);
+  DateTime? _nextEmailKeepalive;
 
   static void _sendToMain(List<Object> strings) {
     final data = strings.join(join);
@@ -96,11 +299,17 @@ class ForegroundSocket extends TaskHandler {
       return _socket?.write(data.substring('$writePrefix$join'.length));
     } else if (data.startsWith('$closePrefix$join')) {
       return _socket?.close();
+    } else if (data.startsWith('$emailKeepalivePrefix$join')) {
+      _handleEmailKeepaliveCommand(
+        data.substring('$emailKeepalivePrefix$join'.length),
+      );
     }
   }
 
   @override
-  void onRepeatEvent(DateTime timestamp) {}
+  void onRepeatEvent(DateTime timestamp) {
+    _maybeEmitEmailKeepalive(timestamp);
+  }
 
   @override
   Future<void> onDestroy(DateTime timestamp, _) async {
@@ -108,23 +317,70 @@ class ForegroundSocket extends TaskHandler {
     _socket = null;
     await _dataSubscription.cancel();
     await _eventSubscription.cancel();
+    _emailKeepaliveEnabled = false;
+    _nextEmailKeepalive = null;
+  }
+
+  void _handleEmailKeepaliveCommand(String payload) {
+    final parts = payload.split(join);
+    if (parts.isEmpty) {
+      return;
+    }
+    switch (parts.first) {
+      case emailKeepaliveStartCommand:
+        final intervalMs =
+            parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+        _emailKeepaliveInterval = intervalMs > 0
+            ? Duration(milliseconds: intervalMs)
+            : const Duration(seconds: 45);
+        _emailKeepaliveEnabled = true;
+        final now = DateTime.now();
+        _nextEmailKeepalive = now.add(_emailKeepaliveInterval);
+        _emitEmailKeepaliveTick();
+        break;
+      case emailKeepaliveStopCommand:
+        _emailKeepaliveEnabled = false;
+        _nextEmailKeepalive = null;
+        break;
+    }
+  }
+
+  void _maybeEmitEmailKeepalive(DateTime timestamp) {
+    if (!_emailKeepaliveEnabled) {
+      return;
+    }
+    final nextTick = _nextEmailKeepalive;
+    if (nextTick == null || !timestamp.isBefore(nextTick)) {
+      _emitEmailKeepaliveTick();
+      _nextEmailKeepalive = timestamp.add(_emailKeepaliveInterval);
+    }
+  }
+
+  void _emitEmailKeepaliveTick() {
+    _sendToMain([
+      emailKeepaliveTickPrefix,
+      DateTime.now().millisecondsSinceEpoch,
+    ]);
   }
 }
 
 class ForegroundSocketWrapper implements XmppSocketWrapper {
-  ForegroundSocketWrapper();
+  ForegroundSocketWrapper({ForegroundTaskBridge? bridge})
+      : _bridge = bridge ?? foregroundTaskBridge;
 
   static final _log = Logger('ForegroundSocketWrapper');
 
+  final ForegroundTaskBridge _bridge;
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
       StreamController.broadcast();
 
   var _connect = Completer<bool>();
   var _secure = Completer<bool>();
+  var _listenerRegistered = false;
+  var _serviceAcquired = false;
 
-  Future<void> _onReceiveTaskData(Object data) async {
-    if (data is! String) return;
+  Future<void> _onReceiveTaskData(String data) async {
     _log.fine('Received main: $data');
     if (data.startsWith('$dataPrefix$join')) {
       _dataStream.add(data.substring('$dataPrefix$join'.length));
@@ -142,10 +398,10 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     }
   }
 
-  static void _sendToTask(List<Object> strings) {
+  void _sendToTask(List<Object> strings) {
     final data = strings.join(join);
     _log.info('Sending to task: $data');
-    FlutterForegroundTask.sendDataToTask(data);
+    unawaited(_bridge.send(strings));
   }
 
   @override
@@ -183,33 +439,30 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   Future<bool> connect(String domain, {String? host, int? port}) async {
     await reset();
 
-    _log.info('Starting foreground service...');
-    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
-    initForegroundService();
-    final ServiceRequestResult startResult;
-    try {
-      startResult = await FlutterForegroundTask.startService(
-        serviceId: 256,
-        notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
-        notificationText:
-            toBeginningOfSentenceCase(ConnectionState.connecting.name),
-        notificationIcon:
-            const NotificationIcon(metaDataName: 'im.axi.axichat.APP_ICON'),
-        callback: startCallback,
-        notificationInitialRoute: '/',
+    if (!_listenerRegistered) {
+      _bridge.registerListener(
+        foregroundClientXmpp,
+        _onReceiveTaskData,
       );
-    } on Exception catch (error) {
-      FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
-      throw ForegroundServiceUnavailableException(error);
+      _listenerRegistered = true;
     }
 
-    if (startResult is! ServiceRequestSuccess) {
-      FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
-      final error =
-          startResult is ServiceRequestFailure ? startResult.error : null;
-      throw ForegroundServiceUnavailableException(
-        error is Exception ? error : null,
+    final notificationText = toBeginningOfSentenceCase(
+          ConnectionState.connecting.name,
+        ) ??
+        ConnectionState.connecting.name;
+
+    try {
+      await _bridge.acquire(
+        clientId: foregroundClientXmpp,
+        config: buildForegroundServiceConfig(
+          notificationText: notificationText,
+        ),
       );
+      _serviceAcquired = true;
+    } on Exception {
+      _detachListener();
+      rethrow;
     }
 
     _sendToTask([
@@ -248,9 +501,24 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   Future<void> reset() async {
     _connect = Completer<bool>();
     _secure = Completer<bool>();
-    if (!await FlutterForegroundTask.isRunningService) return;
-    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
-    await FlutterForegroundTask.stopService();
+    await _releaseService();
+    _detachListener();
+  }
+
+  Future<void> _releaseService() async {
+    if (!_serviceAcquired) {
+      return;
+    }
+    await _bridge.release(foregroundClientXmpp);
+    _serviceAcquired = false;
+  }
+
+  void _detachListener() {
+    if (!_listenerRegistered) {
+      return;
+    }
+    _bridge.unregisterListener(foregroundClientXmpp);
+    _listenerRegistered = false;
   }
 }
 

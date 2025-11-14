@@ -9,7 +9,9 @@ import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:delta_ffi/delta_safe.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -17,11 +19,60 @@ import '../../mocks.dart';
 
 class MockEmailDeltaTransport extends Mock implements EmailDeltaTransport {}
 
+class FakeForegroundBridge implements ForegroundTaskBridge {
+  final Map<String, ForegroundTaskMessageHandler> _listeners = {};
+  final Set<String> _acquiredClients = <String>{};
+  final List<List<Object>> sent = [];
+
+  bool isClientAcquired(String clientId) => _acquiredClients.contains(clientId);
+
+  @override
+  Future<void> acquire({
+    required String clientId,
+    ForegroundServiceConfig? config,
+  }) async {
+    _acquiredClients.add(clientId);
+  }
+
+  @override
+  Future<void> release(String clientId) async {
+    _acquiredClients.remove(clientId);
+  }
+
+  @override
+  Future<void> send(List<Object> parts) async {
+    sent.add(parts);
+  }
+
+  @override
+  void registerListener(
+    String clientId,
+    ForegroundTaskMessageHandler handler,
+  ) {
+    _listeners[clientId] = handler;
+  }
+
+  @override
+  void unregisterListener(String clientId) {
+    _listeners.remove(clientId);
+  }
+
+  void emit(String data) {
+    for (final handler in List.of(_listeners.values)) {
+      final result = handler(data);
+      if (result is Future) {
+        unawaited(result);
+      }
+    }
+  }
+}
+
 void main() {
   late MockCredentialStore credentialStore;
   late MockXmppDatabase database;
   late MockNotificationService notificationService;
   late MockEmailDeltaTransport transport;
+  late FakeForegroundBridge foregroundBridge;
 
   late void Function(DeltaCoreEvent) listener;
 
@@ -36,6 +87,7 @@ void main() {
     database = MockXmppDatabase();
     notificationService = MockNotificationService();
     transport = MockEmailDeltaTransport();
+    foregroundBridge = FakeForegroundBridge();
 
     when(() => transport.addEventListener(any())).thenAnswer((invocation) {
       listener =
@@ -47,6 +99,11 @@ void main() {
     when(() => transport.selfJid).thenReturn('dc-self@user.delta.chat');
     when(() => transport.start()).thenAnswer((_) async {});
     when(() => transport.stop()).thenAnswer((_) async {});
+    when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {});
+    when(() => transport.notifyNetworkLost()).thenAnswer((_) async {});
+    when(() => transport.performBackgroundFetch(any()))
+        .thenAnswer((_) async => true);
+    when(() => transport.registerPushToken(any())).thenAnswer((_) async {});
     when(
       () => transport.sendText(
         chatId: any(named: 'chatId'),
@@ -130,6 +187,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     listener(
@@ -137,6 +195,25 @@ void main() {
         type: DeltaEventType.incomingMsg,
         data1: chatId,
         data2: msgId,
+      ),
+    );
+
+    await pumpMicrotasks();
+    verifyNever(
+      () => notificationService.sendNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+        payload: any(named: 'payload'),
+      ),
+    );
+
+    listener(
+      const DeltaCoreEvent(
+        type: DeltaEventType.incomingMsgBunch,
+        data1: 0,
+        data2: 0,
       ),
     );
 
@@ -155,12 +232,82 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test('flushes pending notifications after debounce when no bunch arrives',
+      () {
+    fakeAsync((async) {
+      const chatId = 9;
+      const msgId = 77;
+      final message = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'peer@axi.im',
+        chatJid: 'dc-$chatId@delta.chat',
+        timestamp: DateTime.now(),
+        body: 'Queued hello',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final chat = Chat(
+        jid: 'dc-$chatId@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: chatId,
+        emailAddress: 'peer@example.com',
+      );
+      when(() => database.getMessageByStanzaID('dc-msg-$msgId'))
+          .thenAnswer((_) async => message);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      );
+
+      listener(
+        const DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      async.flushMicrotasks();
+      verifyNever(
+        () => notificationService.sendNotification(
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+        ),
+      );
+
+      async.elapse(const Duration(milliseconds: 600));
+      async.flushMicrotasks();
+
+      verify(
+        () => notificationService.sendNotification(
+          title: chat.title,
+          body: message.body,
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: chat.jid,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    });
+  });
+
   test('setClientState keeps IO in sync with app lifecycle', () async {
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.start();
@@ -175,12 +322,164 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test('registerPushToken defers until provisioning completes', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.registerPushToken('token-123');
+    verifyNever(() => transport.registerPushToken(any()));
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    verify(() => transport.registerPushToken('token-123')).called(1);
+    addTearDown(service.shutdown);
+  });
+
+  test('handleNetworkAvailable/lost call transport when provisioned', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.handleNetworkAvailable();
+    await service.handleNetworkLost();
+    verifyNever(() => transport.notifyNetworkAvailable());
+    verifyNever(() => transport.notifyNetworkLost());
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    await service.handleNetworkAvailable();
+    await service.handleNetworkLost();
+
+    verify(() => transport.notifyNetworkAvailable()).called(1);
+    verify(() => transport.notifyNetworkLost()).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('performBackgroundFetch delegates to transport when ready', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    expect(await service.performBackgroundFetch(), isFalse);
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    expect(
+      await service.performBackgroundFetch(
+        timeout: const Duration(seconds: 5),
+      ),
+      isTrue,
+    );
+
+    verify(
+      () => transport.performBackgroundFetch(
+        const Duration(seconds: 5),
+      ),
+    ).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('foreground keepalive ignored before provisioning', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.setForegroundKeepalive(true);
+    verifyNever(() => transport.start());
+    expect(
+      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      isFalse,
+    );
+    expect(foregroundBridge.sent, isEmpty);
+    addTearDown(service.shutdown);
+  });
+
+  test('foreground keepalive performs periodic fetches', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+    );
+
+    await service.setForegroundKeepalive(true);
+    verify(() => transport.performBackgroundFetch(any())).called(1);
+    clearInteractions(transport);
+    expect(
+      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      isTrue,
+    );
+
+    foregroundBridge.emit(
+      '$emailKeepaliveTickPrefix$join${DateTime.now().millisecondsSinceEpoch}',
+    );
+    await pumpMicrotasks();
+    verify(() => transport.performBackgroundFetch(any())).called(1);
+    clearInteractions(transport);
+
+    await service.setForegroundKeepalive(false);
+    await service.shutdown();
+    expect(
+      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      isFalse,
+    );
+
+    foregroundBridge.emit(
+      '$emailKeepaliveTickPrefix$join${DateTime.now().millisecondsSinceEpoch}',
+    );
+    await pumpMicrotasks();
+    verifyNever(() => transport.performBackgroundFetch(any()));
+  });
+
   test('sendAttachment delegates to transport after provisioning', () async {
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(
@@ -236,6 +535,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(
@@ -337,6 +637,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
       chatmailDomain: 'chatmail.example',
     );
 
@@ -381,6 +682,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(
@@ -406,6 +708,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(
@@ -513,6 +816,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(
@@ -546,6 +850,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(
@@ -583,6 +888,7 @@ void main() {
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
     );
 
     await service.ensureProvisioned(

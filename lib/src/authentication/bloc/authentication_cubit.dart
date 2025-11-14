@@ -12,7 +12,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
@@ -84,6 +84,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
       },
     );
+    _connectivitySubscription =
+        xmppService.connectivityStream.listen((connectionState) {
+      if (connectionState == ConnectionState.connected) {
+        unawaited(_emailService?.handleNetworkAvailable());
+      } else if (connectionState == ConnectionState.notConnected ||
+          connectionState == ConnectionState.error) {
+        unawaited(_emailService?.handleNetworkLost());
+      }
+    });
+    if (_emailService != null) {
+      _foregroundListener = _updateEmailForegroundKeepalive;
+      foregroundServiceActive.addListener(_foregroundListener!);
+    }
   }
 
   final _log = Logger('AuthenticationCubit');
@@ -103,12 +116,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final EmailService? _emailService;
   final http.Client _httpClient;
   String? _authenticatedJid;
+  StreamSubscription<ConnectionState>? _connectivitySubscription;
+  VoidCallback? _foregroundListener;
 
   late final AppLifecycleListener _lifecycleListener;
 
   @override
   Future<void> close() async {
     _lifecycleListener.dispose();
+    await _connectivitySubscription?.cancel();
+    if (_foregroundListener != null) {
+      foregroundServiceActive.removeListener(_foregroundListener!);
+      _foregroundListener = null;
+    }
+    await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
     return super.close();
@@ -224,6 +245,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     emit(const AuthenticationComplete());
+    _updateEmailForegroundKeepalive();
   }
 
   Future<void> signup({
@@ -313,6 +335,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     _authenticatedJid = null;
     emit(const AuthenticationNone());
+    _updateEmailForegroundKeepalive();
   }
 
   Future<void> changePassword({
@@ -358,6 +381,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await logout(severity: LogoutSeverity.burn);
     } else {
       emit(AuthenticationUnregisterFailure(response.body));
+    }
+  }
+
+  void _updateEmailForegroundKeepalive() {
+    final emailService = _emailService;
+    if (emailService == null) return;
+    final shouldRun = foregroundServiceActive.value &&
+        _authenticatedJid != null &&
+        state is AuthenticationComplete;
+    unawaited(_setEmailForegroundKeepalive(emailService, shouldRun));
+  }
+
+  Future<void> _setEmailForegroundKeepalive(
+    EmailService service,
+    bool enabled,
+  ) async {
+    try {
+      await service.setForegroundKeepalive(enabled);
+    } catch (error, stackTrace) {
+      _log.finer(
+        'Failed to update email foreground keepalive',
+        error,
+        stackTrace,
+      );
     }
   }
 }

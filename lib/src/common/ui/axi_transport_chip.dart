@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiTransportChip extends StatelessWidget {
   const AxiTransportChip({
@@ -47,6 +48,42 @@ class AxiTransportChip extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: foreground,
           letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class AxiCompatibilityBadge extends StatelessWidget {
+  const AxiCompatibilityBadge({
+    super.key,
+    this.compact = false,
+  });
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final size = compact ? 18.0 : 22.0;
+    final iconSize = compact ? 10.0 : 12.0;
+    final borderWidth = compact ? 2.0 : 2.4;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: colors.primary,
+        border: Border.all(
+          color: colors.background,
+          width: borderWidth,
+        ),
+      ),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Icon(
+          LucideIcons.check,
+          size: iconSize,
+          color: colors.primaryForeground,
         ),
       ),
     );

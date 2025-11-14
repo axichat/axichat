@@ -10,6 +10,8 @@ extern "C" {
 typedef struct dc_context dc_context_t;
 typedef struct dc_event dc_event_t;
 typedef struct dc_event_emitter dc_event_emitter_t;
+typedef struct dc_accounts dc_accounts_t;
+typedef struct dc_array dc_array_t;
 typedef struct dc_chat dc_chat_t;
 typedef struct dc_contact dc_contact_t;
 typedef struct dc_msg dc_msg_t;
@@ -27,6 +29,28 @@ typedef struct dc_msg dc_msg_t;
 #define DC_CHAT_TYPE_GROUP 200
 #define DC_CHAT_TYPE_VERIFIED_GROUP 300
 #define DC_CHAT_TYPE_BROADCAST 400
+
+#define DC_EVENT_CONFIGURE_PROGRESS 2041
+#define DC_EVENT_INCOMING_MSG_BUNCH 2006
+#define DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE 2200
+
+dc_accounts_t* dc_accounts_new(const char* dir, int32_t writable);
+void dc_accounts_unref(dc_accounts_t* accounts);
+uint32_t dc_accounts_add_account(dc_accounts_t* accounts);
+uint32_t dc_accounts_add_closed_account(dc_accounts_t* accounts);
+uint32_t dc_accounts_migrate_account(dc_accounts_t* accounts, const char* dbfile);
+int32_t dc_accounts_remove_account(dc_accounts_t* accounts, uint32_t account_id);
+dc_array_t* dc_accounts_get_all(dc_accounts_t* accounts);
+dc_context_t* dc_accounts_get_account(dc_accounts_t* accounts, uint32_t account_id);
+void dc_accounts_start_io(dc_accounts_t* accounts);
+void dc_accounts_stop_io(dc_accounts_t* accounts);
+void dc_accounts_maybe_network(dc_accounts_t* accounts);
+void dc_accounts_maybe_network_lost(dc_accounts_t* accounts);
+int dc_accounts_background_fetch(dc_accounts_t* accounts, uint64_t timeout);
+void dc_accounts_set_push_device_token(
+    dc_accounts_t* accounts,
+    const char* token);
+dc_event_emitter_t* dc_accounts_get_event_emitter(dc_accounts_t* accounts);
 
 dc_context_t* dc_context_new(const char* os_name, const char* dbfile, const char* blobdir);
 dc_context_t* dc_context_new_closed(const char* dbfile);
@@ -50,8 +74,13 @@ int32_t dc_event_get_data1_int(dc_event_t* event);
 int32_t dc_event_get_data2_int(dc_event_t* event);
 char* dc_event_get_data1_str(dc_event_t* event);
 char* dc_event_get_data2_str(dc_event_t* event);
+uint32_t dc_event_get_account_id(dc_event_t* event);
 
 void dc_str_unref(char* value);
+
+void dc_array_unref(dc_array_t* array);
+int32_t dc_array_get_cnt(const dc_array_t* array);
+uint32_t dc_array_get_id(const dc_array_t* array, int32_t index);
 
 uint32_t dc_create_contact(dc_context_t* ctx, const char* name, const char* addr);
 uint32_t dc_create_chat_by_contact_id(dc_context_t* ctx, uint32_t contact_id);

@@ -845,6 +845,9 @@ class _ChatState extends State<Chat> {
 
   Widget _buildComposer({
     required bool isEmailTransport,
+    required MessageTransport activeTransport,
+    required bool emailCapable,
+    required bool xmppCapable,
     required String hintText,
     required List<ComposerRecipient> recipients,
     required List<chat_models.Chat> availableEmailChats,
@@ -915,7 +918,9 @@ class _ChatState extends State<Chat> {
                     hintText: hintText,
                     onSend: _handleSendMessage,
                     actions: _buildComposerAccessories(
-                      isEmailTransport: isEmailTransport,
+                      activeTransport: activeTransport,
+                      emailCapable: emailCapable,
+                      xmppCapable: xmppCapable,
                       canSend: sendEnabled,
                     ),
                     sendEnabled: sendEnabled,
@@ -1063,23 +1068,31 @@ class _ChatState extends State<Chat> {
   }
 
   List<ChatComposerAccessory> _buildComposerAccessories({
-    required bool isEmailTransport,
+    required MessageTransport activeTransport,
+    required bool emailCapable,
+    required bool xmppCapable,
     required bool canSend,
   }) {
     final accessories = <ChatComposerAccessory>[];
-    if (!isEmailTransport) {
+    if (activeTransport.isXmpp) {
       accessories.add(
         ChatComposerAccessory.leading(child: _buildEmojiButton()),
       );
     }
     accessories.add(
       ChatComposerAccessory.leading(
-        child: _buildAttachmentButton(isEmailTransport: isEmailTransport),
+        child:
+            _buildAttachmentButton(isEmailTransport: activeTransport.isEmail),
       ),
     );
     accessories.add(
       ChatComposerAccessory.trailing(
-        child: _buildSendButton(enabled: canSend),
+        child: _buildSendButton(
+          enabled: canSend,
+          transport: activeTransport,
+          emailCapable: emailCapable,
+          xmppCapable: xmppCapable,
+        ),
       ),
     );
     return accessories;
@@ -1116,28 +1129,120 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Widget _buildSendButton({required bool enabled}) {
+  Widget _buildSendButton({
+    required bool enabled,
+    required MessageTransport transport,
+    required bool emailCapable,
+    required bool xmppCapable,
+  }) {
     final colors = context.colorScheme;
-    return _cutoutIconButton(
-      icon: LucideIcons.send,
-      tooltip: 'Send message',
+    final options = <MessageTransport>[];
+    if (xmppCapable) options.add(MessageTransport.xmpp);
+    if (emailCapable) options.add(MessageTransport.email);
+    final menuEnabled = options.length > 1;
+    final tooltip = menuEnabled
+        ? 'Send message (long press to switch transport)'
+        : 'Send message';
+    final button = _cutoutIconButton(
+      tooltip: tooltip,
       activeColor: colors.primary,
       onPressed: enabled ? _handleSendMessage : null,
+      iconBuilder: (iconColor) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(LucideIcons.send, size: 24, color: iconColor),
+          Positioned(
+            right: -4,
+            bottom: -4,
+            child: _TransportGlyph(
+              transport: transport,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!menuEnabled) {
+      return button;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: (details) => _showTransportMenu(
+        anchor: details.globalPosition,
+        options: options,
+        activeTransport: transport,
+      ),
+      child: button,
     );
   }
 
+  Future<void> _showTransportMenu({
+    required Offset anchor,
+    required List<MessageTransport> options,
+    required MessageTransport activeTransport,
+  }) async {
+    if (!mounted) return;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+    final position = RelativeRect.fromLTRB(
+      anchor.dx,
+      anchor.dy,
+      overlay.size.width - anchor.dx,
+      overlay.size.height - anchor.dy,
+    );
+    final colors = context.colorScheme;
+    final selection = await showMenu<MessageTransport>(
+      context: context,
+      position: position,
+      items: options
+          .map(
+            (option) => PopupMenuItem<MessageTransport>(
+              value: option,
+              child: Row(
+                children: [
+                  Icon(
+                    option.isEmail
+                        ? LucideIcons.mail
+                        : LucideIcons.messageCircle,
+                    size: 16,
+                    color: option.isEmail ? colors.destructive : colors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(option.label)),
+                  if (option == activeTransport)
+                    Icon(
+                      LucideIcons.check,
+                      size: 16,
+                      color: colors.primary,
+                    ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+    if (selection != null && mounted) {
+      context.read<ChatBloc>().add(ChatTransportChanged(selection));
+    }
+  }
+
   Widget _cutoutIconButton({
-    required IconData icon,
+    IconData? icon,
+    Widget Function(Color iconColor)? iconBuilder,
     required String tooltip,
     Color? activeColor,
     VoidCallback? onPressed,
   }) {
+    assert(icon != null || iconBuilder != null, 'Provide an icon or builder.');
     final colors = context.colorScheme;
     final iconColor = onPressed == null
         ? colors.mutedForeground
         : (activeColor ?? colors.foreground);
+    final childIcon = iconBuilder != null
+        ? iconBuilder(iconColor)
+        : Icon(icon!, size: 24, color: iconColor);
     final button = IconButton(
-      icon: Icon(icon, size: 24, color: iconColor),
+      icon: childIcon,
       tooltip: tooltip,
       onPressed: onPressed,
       splashRadius: 24,
@@ -1886,11 +1991,15 @@ class _ChatState extends State<Chat> {
               final emailService =
                   RepositoryProvider.of<EmailService>(context, listen: false);
               final emailSelfJid = emailService.selfSenderJid;
-              final jid = state.chat?.jid;
+              final chatEntity = state.chat;
+              final jid = chatEntity?.jid;
               final transport = context.watch<ChatTransportCubit>().state;
-              final canUseEmail = (state.chat?.deltaChatId != null) ||
-                  (state.chat?.emailAddress?.isNotEmpty ?? false);
-              final isEmailChat = state.chat?.deltaChatId != null;
+              final canUseEmail = (chatEntity?.deltaChatId != null) ||
+                  (chatEntity?.emailAddress?.isNotEmpty ?? false);
+              final isEmailChat = chatEntity?.deltaChatId != null;
+              final isAxiCompatible = chatEntity?.isAxiContact ?? false;
+              final canUseXmpp =
+                  !canUseEmail || isAxiCompatible || chatEntity == null;
               final rosterContacts = context.watch<RosterCubit>().contacts;
               final isEmailTransport = canUseEmail && transport.isEmail;
               final currentUserId = isEmailTransport
@@ -1912,6 +2021,13 @@ class _ChatState extends State<Chat> {
               );
               final retryReport = retryEntry?.value;
               final retryShareId = retryEntry?.key;
+              final showCompatibilityBadge = canUseEmail && isAxiCompatible;
+              final avatarBadge = showCompatibilityBadge
+                  ? const AxiCompatibilityBadge(compact: true)
+                  : AxiTransportChip(
+                      transport: transport,
+                      compact: true,
+                    );
               final emailSuggestions =
                   (context.watch<ChatsCubit?>()?.state.items ??
                           const <chat_models.Chat>[])
@@ -2025,10 +2141,7 @@ class _ChatState extends State<Chat> {
                                         Positioned(
                                           right: -6,
                                           bottom: -4,
-                                          child: AxiTransportChip(
-                                            transport: transport,
-                                            compact: true,
-                                          ),
+                                          child: avatarBadge,
                                         ),
                                       ],
                                     ),
@@ -3330,6 +3443,9 @@ class _ChatState extends State<Chat> {
                                       else
                                         _buildComposer(
                                           isEmailTransport: isEmailTransport,
+                                          activeTransport: transport,
+                                          emailCapable: canUseEmail,
+                                          xmppCapable: canUseXmpp,
                                           hintText: composerHintText,
                                           recipients: recipients,
                                           availableEmailChats: emailSuggestions,
@@ -4716,6 +4832,33 @@ String _formatBytes(int bytes) {
 }
 
 enum _ComposerNoticeType { error, warning, info }
+
+class _TransportGlyph extends StatelessWidget {
+  const _TransportGlyph({required this.transport});
+
+  final MessageTransport transport;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final background = transport.isEmail ? colors.destructive : colors.primary;
+    final foreground = transport.isEmail
+        ? colors.destructiveForeground
+        : colors.primaryForeground;
+    final icon =
+        transport.isEmail ? LucideIcons.mail : LucideIcons.messageCircle;
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: background,
+        shape: BoxShape.circle,
+        border: Border.all(color: colors.background, width: 2),
+      ),
+      child: Icon(icon, size: 10, color: foreground),
+    );
+  }
+}
 
 class _ComposerNotice extends StatelessWidget {
   const _ComposerNotice({

@@ -14,10 +14,14 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
 
 const _defaultPageSize = 50;
 const _maxFanOutRecipients = 20;
 const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
+const _foregroundKeepaliveInterval = Duration(seconds: 45);
+const _foregroundFetchTimeout = Duration(seconds: 8);
+const _notificationFlushDelay = Duration(milliseconds: 500);
 
 class EmailAccount {
   const EmailAccount({required this.address, required this.password});
@@ -52,6 +56,7 @@ class EmailService {
     String chatmailDomain = 'nine.testrun.org',
     NotificationService? notificationService,
     Logger? logger,
+    ForegroundTaskBridge? foregroundBridge,
   })  : _credentialStore = credentialStore,
         _databaseBuilder = databaseBuilder,
         _transport = transport ??
@@ -61,7 +66,8 @@ class EmailService {
             ),
         _chatmailDomain = chatmailDomain,
         _log = logger ?? Logger('EmailService'),
-        _notificationService = notificationService {
+        _notificationService = notificationService,
+        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _eventListener = (event) => unawaited(_processDeltaEvent(event));
     _transport.addEventListener(_eventListener);
     _listenerAttached = true;
@@ -73,6 +79,7 @@ class EmailService {
   final String _chatmailDomain;
   final Logger _log;
   final NotificationService? _notificationService;
+  final ForegroundTaskBridge? _foregroundBridge;
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
@@ -83,6 +90,14 @@ class EmailService {
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
+  bool _foregroundKeepaliveEnabled = false;
+  bool _foregroundKeepaliveListenerAttached = false;
+  bool _foregroundKeepaliveServiceAcquired = false;
+  bool _foregroundKeepaliveTickScheduled = false;
+  int _foregroundKeepaliveOperationId = 0;
+  final List<_PendingNotification> _pendingNotifications = [];
+  Timer? _notificationFlushTimer;
+  String? _pendingPushToken;
 
   EmailAccount? get activeAccount => _activeAccount;
 
@@ -171,6 +186,7 @@ class EmailService {
     }
 
     await start();
+    await _applyPendingPushToken();
 
     final account = EmailAccount(address: address, password: password);
     _activeAccount = account;
@@ -194,6 +210,8 @@ class EmailService {
     bool clearCredentials = false,
   }) async {
     await stop();
+    await _stopForegroundKeepalive();
+    _clearNotificationQueue();
     if (!clearCredentials) {
       return;
     }
@@ -207,6 +225,8 @@ class EmailService {
     final scope = _scopeForOptionalJid(jid);
     await stop();
     _detachTransportListener();
+    await _stopForegroundKeepalive();
+    _clearNotificationQueue();
     await _transport.dispose();
     _running = false;
     if (scope != null) {
@@ -216,6 +236,7 @@ class EmailService {
     _databasePassphrase = null;
     _activeAccount = null;
     _activeCredentialScope = null;
+    _pendingPushToken = null;
   }
 
   Future<Chat> ensureChatForAddress({
@@ -487,6 +508,103 @@ class EmailService {
     }
   }
 
+  Future<void> registerPushToken(String token) async {
+    final normalized = token.trim();
+    if (normalized.isEmpty) return;
+    _pendingPushToken = normalized;
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _transport.registerPushToken(normalized);
+  }
+
+  Future<void> handleNetworkAvailable() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _transport.notifyNetworkAvailable();
+  }
+
+  Future<void> handleNetworkLost() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _transport.notifyNetworkLost();
+  }
+
+  Future<bool> performBackgroundFetch({
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return false;
+    }
+    return _transport.performBackgroundFetch(timeout);
+  }
+
+  Future<void> setForegroundKeepalive(bool enabled) async {
+    if (!enabled) {
+      await _stopForegroundKeepalive();
+      return;
+    }
+
+    final operationId = ++_foregroundKeepaliveOperationId;
+
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    if (_foregroundKeepaliveEnabled) {
+      return;
+    }
+    final bridge = _foregroundBridge;
+    if (bridge == null) {
+      _log.fine('Foreground bridge unavailable, skipping keepalive.');
+      return;
+    }
+
+    await start();
+    if (!_isForegroundKeepaliveOpCurrent(operationId)) {
+      return;
+    }
+
+    _attachForegroundKeepaliveListener();
+
+    try {
+      await bridge.acquire(
+        clientId: foregroundClientEmailKeepalive,
+        config: buildForegroundServiceConfig(
+          notificationText: 'Email sync active',
+        ),
+      );
+      _foregroundKeepaliveServiceAcquired = true;
+      if (!_isForegroundKeepaliveOpCurrent(operationId)) {
+        await _releaseForegroundKeepaliveResources();
+        return;
+      }
+      await bridge.send([
+        emailKeepalivePrefix,
+        emailKeepaliveStartCommand,
+        _foregroundKeepaliveInterval.inMilliseconds,
+      ]);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to enable email foreground keepalive',
+        error,
+        stackTrace,
+      );
+      _foregroundKeepaliveEnabled = false;
+      await _releaseForegroundKeepaliveResources();
+      return;
+    }
+
+    if (!_isForegroundKeepaliveOpCurrent(operationId)) {
+      await _releaseForegroundKeepaliveResources();
+      return;
+    }
+
+    _foregroundKeepaliveEnabled = true;
+    unawaited(_foregroundKeepaliveTick());
+  }
+
   Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
@@ -539,7 +657,10 @@ class EmailService {
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {
     switch (event.type) {
       case DeltaEventType.incomingMsg:
-        await _notifyIncoming(chatId: event.data1, msgId: event.data2);
+        _queueNotification(chatId: event.data1, msgId: event.data2);
+        break;
+      case DeltaEventType.incomingMsgBunch:
+        await _flushQueuedNotifications();
         break;
       case DeltaEventType.msgsChanged:
       case DeltaEventType.chatModified:
@@ -549,6 +670,26 @@ class EmailService {
       case DeltaEventType.msgRead:
       default:
         break;
+    }
+  }
+
+  void _queueNotification({required int chatId, required int msgId}) {
+    _pendingNotifications
+        .add(_PendingNotification(chatId: chatId, msgId: msgId));
+    _notificationFlushTimer ??= Timer(_notificationFlushDelay, () {
+      _notificationFlushTimer = null;
+      unawaited(_flushQueuedNotifications());
+    });
+  }
+
+  Future<void> _flushQueuedNotifications() async {
+    _notificationFlushTimer?.cancel();
+    _notificationFlushTimer = null;
+    if (_pendingNotifications.isEmpty) return;
+    final pending = List<_PendingNotification>.from(_pendingNotifications);
+    _pendingNotifications.clear();
+    for (final entry in pending) {
+      await _notifyIncoming(chatId: entry.chatId, msgId: entry.msgId);
     }
   }
 
@@ -595,6 +736,107 @@ class EmailService {
     if (!_listenerAttached) return;
     _transport.removeEventListener(_eventListener);
     _listenerAttached = false;
+  }
+
+  void _clearNotificationQueue() {
+    _notificationFlushTimer?.cancel();
+    _notificationFlushTimer = null;
+    _pendingNotifications.clear();
+  }
+
+  bool _isForegroundKeepaliveOpCurrent(int operationId) =>
+      operationId == _foregroundKeepaliveOperationId;
+
+  Future<void> _applyPendingPushToken() async {
+    final token = _pendingPushToken;
+    if (token == null || token.isEmpty) return;
+    await _transport.registerPushToken(token);
+  }
+
+  Future<void> _stopForegroundKeepalive() async {
+    _foregroundKeepaliveOperationId++;
+    if (!_foregroundKeepaliveEnabled &&
+        !_foregroundKeepaliveListenerAttached &&
+        !_foregroundKeepaliveServiceAcquired) {
+      return;
+    }
+    _foregroundKeepaliveEnabled = false;
+    _foregroundKeepaliveTickScheduled = false;
+    final bridge = _foregroundBridge;
+    if (bridge != null && _foregroundKeepaliveServiceAcquired) {
+      try {
+        await bridge.send([
+          emailKeepalivePrefix,
+          emailKeepaliveStopCommand,
+        ]);
+      } on Exception catch (error, stackTrace) {
+        _log.finer('Failed to stop email keepalive', error, stackTrace);
+      }
+    }
+    await _releaseForegroundKeepaliveResources();
+  }
+
+  void _attachForegroundKeepaliveListener() {
+    if (_foregroundKeepaliveListenerAttached) {
+      return;
+    }
+    final bridge = _foregroundBridge;
+    if (bridge == null) {
+      return;
+    }
+    bridge.registerListener(
+      foregroundClientEmailKeepalive,
+      _handleForegroundTaskMessage,
+    );
+    _foregroundKeepaliveListenerAttached = true;
+  }
+
+  Future<void> _releaseForegroundKeepaliveResources() async {
+    final bridge = _foregroundBridge;
+    if (bridge == null) {
+      _foregroundKeepaliveListenerAttached = false;
+      _foregroundKeepaliveServiceAcquired = false;
+      return;
+    }
+    if (_foregroundKeepaliveServiceAcquired) {
+      await bridge.release(foregroundClientEmailKeepalive);
+      _foregroundKeepaliveServiceAcquired = false;
+    }
+    if (_foregroundKeepaliveListenerAttached) {
+      bridge.unregisterListener(foregroundClientEmailKeepalive);
+      _foregroundKeepaliveListenerAttached = false;
+    }
+  }
+
+  void _handleForegroundTaskMessage(String data) {
+    if (!data.startsWith('$emailKeepaliveTickPrefix$join')) {
+      return;
+    }
+    if (!_foregroundKeepaliveEnabled || _foregroundKeepaliveTickScheduled) {
+      return;
+    }
+    _foregroundKeepaliveTickScheduled = true;
+    unawaited(_runForegroundKeepaliveTick());
+  }
+
+  Future<void> _runForegroundKeepaliveTick() async {
+    try {
+      await _foregroundKeepaliveTick();
+    } finally {
+      _foregroundKeepaliveTickScheduled = false;
+    }
+  }
+
+  Future<void> _foregroundKeepaliveTick() async {
+    if (!_foregroundKeepaliveEnabled) {
+      return;
+    }
+    try {
+      await handleNetworkAvailable();
+      await performBackgroundFetch(timeout: _foregroundFetchTimeout);
+    } on Exception catch (error, stackTrace) {
+      _log.finer('Foreground keepalive tick failed', error, stackTrace);
+    }
   }
 
   Future<void> _ensureReady() async {
@@ -775,3 +1017,10 @@ const _defaultDeltaSelfJid = 'dc-self@$_deltaDomain';
 String _chatJid(int chatId) => 'dc-$chatId@$_deltaDomain';
 
 String _stanzaId(int msgId) => 'dc-msg-$msgId';
+
+class _PendingNotification {
+  const _PendingNotification({required this.chatId, required this.msgId});
+
+  final int chatId;
+  final int msgId;
+}
