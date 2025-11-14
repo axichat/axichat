@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:async/async.dart';
+import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -66,40 +67,6 @@ class FanOutDraft extends Equatable {
 
   @override
   List<Object?> get props => [body, attachment, shareId];
-}
-
-enum PendingAttachmentStatus { queued, uploading, failed }
-
-class PendingAttachment extends Equatable {
-  const PendingAttachment({
-    required this.id,
-    required this.attachment,
-    this.status = PendingAttachmentStatus.queued,
-    this.errorMessage,
-  });
-
-  final String id;
-  final EmailAttachment attachment;
-  final PendingAttachmentStatus status;
-  final String? errorMessage;
-
-  PendingAttachment copyWith({
-    EmailAttachment? attachment,
-    PendingAttachmentStatus? status,
-    String? errorMessage,
-    bool clearErrorMessage = false,
-  }) {
-    return PendingAttachment(
-      id: id,
-      attachment: attachment ?? this.attachment,
-      status: status ?? this.status,
-      errorMessage:
-          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
-    );
-  }
-
-  @override
-  List<Object?> get props => [id, attachment, status, errorMessage];
 }
 
 enum ChatToastVariant { info, warning, destructive }
@@ -1002,8 +969,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final trimmed = rawText.trim();
-    final body =
-        trimmed.isEmpty ? '' : _composeEmailBody(trimmed, quotedDraft);
+    final body = trimmed.isEmpty ? '' : _composeEmailBody(trimmed, quotedDraft);
     final signature = _draftSignature(
       recipients: resolvedRecipients,
       body: body,
