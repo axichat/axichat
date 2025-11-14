@@ -30,9 +30,18 @@ typedef struct dc_msg dc_msg_t;
 #define DC_CHAT_TYPE_VERIFIED_GROUP 300
 #define DC_CHAT_TYPE_BROADCAST 400
 
+#define DC_EVENT_ERROR 400
+#define DC_EVENT_ERROR_SELF_NOT_IN_GROUP 410
 #define DC_EVENT_CONFIGURE_PROGRESS 2041
 #define DC_EVENT_INCOMING_MSG_BUNCH 2006
 #define DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE 2200
+#define DC_EVENT_CONNECTIVITY_CHANGED 2100
+#define DC_EVENT_CHANNEL_OVERFLOW 2400
+
+#define DC_CONNECTIVITY_NOT_CONNECTED 1000
+#define DC_CONNECTIVITY_CONNECTING 2000
+#define DC_CONNECTIVITY_WORKING 3000
+#define DC_CONNECTIVITY_CONNECTED 4000
 
 dc_accounts_t* dc_accounts_new(const char* dir, int32_t writable);
 void dc_accounts_unref(dc_accounts_t* accounts);
@@ -64,6 +73,8 @@ int32_t dc_set_config(dc_context_t* ctx, const char* key, const char* value);
 void dc_start_io(dc_context_t* ctx);
 void dc_stop_io(dc_context_t* ctx);
 void dc_maybe_network(dc_context_t* ctx);
+int32_t dc_get_connectivity(dc_context_t* ctx);
+char* dc_get_last_error(dc_context_t* ctx);
 
 dc_event_emitter_t* dc_get_event_emitter(dc_context_t* ctx);
 void dc_event_emitter_unref(dc_event_emitter_t* emitter);

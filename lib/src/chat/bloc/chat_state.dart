@@ -20,5 +20,6 @@ class ChatState with _$ChatState {
     String? composerError,
     @Default(0) int composerHydrationId,
     String? composerHydrationText,
+    @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
   }) = _ChatState;
 }

@@ -444,6 +444,35 @@ class DeltaChatBindings {
   late final _dc_maybe_network = _dc_maybe_networkPtr
       .asFunction<void Function(ffi.Pointer<dc_context_t>)>();
 
+  int dc_get_connectivity(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _dc_get_connectivity(
+      ctx,
+    );
+  }
+
+  late final _dc_get_connectivityPtr = _lookup<
+          ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_context_t>)>>(
+      'dc_get_connectivity');
+  late final _dc_get_connectivity = _dc_get_connectivityPtr
+      .asFunction<int Function(ffi.Pointer<dc_context_t>)>();
+
+  ffi.Pointer<ffi.Char> dc_get_last_error(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _dc_get_last_error(
+      ctx,
+    );
+  }
+
+  late final _dc_get_last_errorPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_context_t>)>>('dc_get_last_error');
+  late final _dc_get_last_error = _dc_get_last_errorPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>)>();
+
   ffi.Pointer<dc_event_emitter_t> dc_get_event_emitter(
     ffi.Pointer<dc_context_t> ctx,
   ) {
@@ -1444,4 +1473,24 @@ const int DC_CHAT_TYPE_VERIFIED_GROUP = 300;
 
 const int DC_CHAT_TYPE_BROADCAST = 400;
 
+const int DC_EVENT_ERROR = 400;
+
+const int DC_EVENT_ERROR_SELF_NOT_IN_GROUP = 410;
+
 const int DC_EVENT_CONFIGURE_PROGRESS = 2041;
+
+const int DC_EVENT_INCOMING_MSG_BUNCH = 2006;
+
+const int DC_EVENT_CONNECTIVITY_CHANGED = 2100;
+
+const int DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE = 2200;
+
+const int DC_EVENT_CHANNEL_OVERFLOW = 2400;
+
+const int DC_CONNECTIVITY_NOT_CONNECTED = 1000;
+
+const int DC_CONNECTIVITY_CONNECTING = 2000;
+
+const int DC_CONNECTIVITY_WORKING = 3000;
+
+const int DC_CONNECTIVITY_CONNECTED = 4000;

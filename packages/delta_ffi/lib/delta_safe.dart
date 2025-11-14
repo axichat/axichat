@@ -176,7 +176,7 @@ class DeltaContextHandle {
         return _bindings.dc_create_contact(_context, namePtr, addrPtr);
       });
     });
-    _ensurePositive(contactId, 'create contact');
+    _ensurePositive(contactId, 'create contact', _lastError);
     return contactId;
   }
 
@@ -185,7 +185,7 @@ class DeltaContextHandle {
       _context,
       contactId,
     );
-    _ensurePositive(chatId, 'create chat from contact');
+    _ensurePositive(chatId, 'create chat from contact', _lastError);
     return chatId;
   }
 
@@ -196,7 +196,7 @@ class DeltaContextHandle {
     final msgId = _withCString(message, (msgPtr) {
       return _bindings.dc_send_text_msg(_context, chatId, msgPtr);
     });
-    _ensurePositive(msgId, 'send text message');
+    _ensurePositive(msgId, 'send text message', _lastError);
     return msgId;
   }
 
@@ -226,7 +226,7 @@ class DeltaContextHandle {
         mimeType: mimeType,
       );
       final msgId = _bindings.dc_send_msg(_context, chatId, message);
-      _ensurePositive(msgId, 'send file message');
+      _ensurePositive(msgId, 'send file message', _lastError);
       return msgId;
     } finally {
       _bindings.dc_msg_unref(message);
@@ -349,7 +349,7 @@ class DeltaContextHandle {
         return _bindings.dc_set_config(_context, keyPtr, valuePtr);
       });
     });
-    _ensureSuccess(result, 'set config $key');
+    _ensureSuccess(result, 'set config $key', _lastError);
   }
 
   bool? _maybeIsOpen() {
@@ -359,6 +359,11 @@ class DeltaContextHandle {
       return null;
     }
   }
+
+  String? _lastError() =>
+      _takeString(_bindings.dc_get_last_error(_context), bindings: _bindings);
+
+  int connectivity() => _bindings.dc_get_connectivity(_context);
 
   void _setFileForMessage(
     ffi.Pointer<dc_msg_t> message, {
@@ -832,15 +837,27 @@ String? _takeString(
 String? _cleanString(String? value) =>
     value == null || value.isEmpty ? null : value;
 
-void _ensureSuccess(int code, String operation) {
+void _ensureSuccess(
+  int code,
+  String operation, [
+  String? Function()? errorProvider,
+]) {
   if (code == 0) {
-    throw DeltaSafeException('Failed to $operation');
+    final details = errorProvider?.call();
+    final suffix = details == null || details.isEmpty ? '' : ': $details';
+    throw DeltaSafeException('Failed to $operation$suffix');
   }
 }
 
-void _ensurePositive(int value, String operation) {
+void _ensurePositive(
+  int value,
+  String operation, [
+  String? Function()? errorProvider,
+]) {
   if (value <= 0) {
-    throw DeltaSafeException('Failed to $operation (code: $value)');
+    final details = errorProvider?.call();
+    final suffix = details == null || details.isEmpty ? '' : ': $details';
+    throw DeltaSafeException('Failed to $operation$suffix (code: $value)');
   }
 }
 
