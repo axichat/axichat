@@ -336,7 +336,7 @@ class RenderChatBubbleSurface extends RenderBox
       child: _selectionChild,
       style: selectionStyle,
       type: _CutoutType.selection,
-      anchor: isSelf ? _CutoutAnchor.left : _CutoutAnchor.right,
+      anchor: isSelf ? _CutoutAnchor.right : _CutoutAnchor.left,
     );
   }
 

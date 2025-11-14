@@ -166,6 +166,12 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
       padding: bannerPadding,
       child: Row(
         children: [
+          AxiIconButton(
+            iconData: Icons.arrow_back,
+            tooltip: 'Back to login',
+            onPressed: () => context.pop(),
+          ),
+          const SizedBox(width: calendarGutterMd),
           Icon(
             Icons.info_outline_rounded,
             size: 18,

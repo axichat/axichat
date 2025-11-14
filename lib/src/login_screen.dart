@@ -143,38 +143,44 @@ class _AuthModeToggle extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final Duration duration;
 
-  static const _gap = 12.0;
+  static const double _overlap =
+      _MorphingAuthButton._cutoutDepth - 4; // Pulls buttons together
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = math.min(320.0, math.max(220.0, constraints.maxWidth));
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _MorphingAuthButton(
-              label: 'Log in',
-              alternateLabel: 'Sign up',
-              selected: loginSelected,
-              cutoutEdge: CutoutEdge.bottom,
-              width: width,
-              duration: duration,
-              onTap: () => onChanged(true),
-              onAlternateTap: () => onChanged(false),
+        final maxWidth =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 240.0;
+        final width = math.min(240.0, math.max(190.0, maxWidth));
+        return Center(
+          child: SizedBox(
+            width: width,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _MorphingAuthButton(
+                  label: 'Log in',
+                  selected: loginSelected,
+                  cutoutEdge: CutoutEdge.bottom,
+                  width: width,
+                  duration: duration,
+                  onTap: () => onChanged(true),
+                ),
+                Transform.translate(
+                  offset: const Offset(0, -_AuthModeToggle._overlap),
+                  child: _MorphingAuthButton(
+                    label: 'Sign up',
+                    selected: !loginSelected,
+                    cutoutEdge: CutoutEdge.top,
+                    width: width,
+                    duration: duration,
+                    onTap: () => onChanged(false),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: _gap),
-            _MorphingAuthButton(
-              label: 'Sign up',
-              alternateLabel: 'Log in',
-              selected: !loginSelected,
-              cutoutEdge: CutoutEdge.top,
-              width: width,
-              duration: duration,
-              onTap: () => onChanged(false),
-              onAlternateTap: () => onChanged(true),
-            ),
-          ],
+          ),
         );
       },
     );
@@ -184,23 +190,19 @@ class _AuthModeToggle extends StatelessWidget {
 class _MorphingAuthButton extends StatefulWidget {
   const _MorphingAuthButton({
     required this.label,
-    required this.alternateLabel,
     required this.selected,
     required this.cutoutEdge,
     required this.width,
     required this.duration,
     required this.onTap,
-    required this.onAlternateTap,
   });
 
   final String label;
-  final String alternateLabel;
   final bool selected;
   final CutoutEdge cutoutEdge;
   final double width;
   final Duration duration;
   final VoidCallback onTap;
-  final VoidCallback onAlternateTap;
 
   static const double _primaryHeight = 60;
   static const double _compactHeight = 38;
@@ -253,7 +255,7 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
       builder: (context, _) {
         final t = Curves.easeInOut.transform(_controller.value);
         final expandedWidth = widget.width;
-        final compactWidth = widget.width * 0.6;
+        final compactWidth = widget.width * 0.55;
         final currentWidth =
             lerpDouble(compactWidth, expandedWidth, t) ?? expandedWidth;
         final height = lerpDouble(
@@ -269,9 +271,22 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
               t,
             ) ??
             colors.border;
-        final borderWidth = lerpDouble(1, 1.4, t) ?? 1.2;
-        final cutoutThickness = lerpDouble(0, currentWidth * 0.6, t) ?? 0;
+        final borderWidth = lerpDouble(1, 1.8, t) ?? 1.3;
+        final cutoutThickness = lerpDouble(0, widget.width - 28, t) ?? 0;
         final cutoutDepth = _MorphingAuthButton._cutoutDepth * t;
+        final fillColor =
+            Color.lerp(colors.card, colors.primary, t) ?? colors.card;
+        final textColor = Color.lerp(
+              colors.foreground,
+              colors.primaryForeground,
+              t,
+            ) ??
+            colors.foreground;
+        final edgePadding = EdgeInsets.only(
+          top: widget.cutoutEdge == CutoutEdge.top ? cutoutDepth * 0.6 : 0,
+          bottom:
+              widget.cutoutEdge == CutoutEdge.bottom ? cutoutDepth * 0.6 : 0,
+        );
         final cutouts = <CutoutSpec>[];
         if (cutoutDepth > 0.1 && cutoutThickness > 18) {
           cutouts.add(
@@ -291,7 +306,7 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
           child: GestureDetector(
             onTap: widget.onTap,
             child: CutoutSurface(
-              backgroundColor: colors.card,
+              backgroundColor: fillColor,
               borderColor: borderColor,
               shadowOpacity: 0.15 * t,
               shadows: [
@@ -306,11 +321,15 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
                 side: BorderSide(color: borderColor, width: borderWidth),
               ),
               cutouts: cutouts,
-              child: Center(
-                child: Text(
-                  widget.label,
-                  style: context.textTheme.p.copyWith(
-                    fontWeight: FontWeight.w600,
+              child: Padding(
+                padding: edgePadding,
+                child: Center(
+                  child: Text(
+                    widget.label,
+                    style: context.textTheme.p.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
                   ),
                 ),
               ),
