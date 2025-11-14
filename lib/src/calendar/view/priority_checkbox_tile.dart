@@ -59,22 +59,27 @@ class PriorityCheckboxTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Checkbox(
-              value: checkboxValue,
-              tristate: tristate,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
-              activeColor: color,
-              checkColor: Colors.white,
-              side: BorderSide(
-                color: isEnabled ? borderColor : calendarBorderColor,
-                width: borderWidth,
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: Checkbox(
+                  value: checkboxValue,
+                  tristate: tristate,
+                  activeColor: color,
+                  checkColor: Colors.white,
+                  side: BorderSide(
+                    color: isEnabled ? borderColor : calendarBorderColor,
+                    width: borderWidth,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  onChanged: isEnabled
+                      ? (checked) => onChanged!(checked ?? false)
+                      : null,
+                ),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-              onChanged:
-                  isEnabled ? (checked) => onChanged!(checked ?? false) : null,
             ),
             const SizedBox(width: calendarFormGap),
             Expanded(

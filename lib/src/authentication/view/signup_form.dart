@@ -143,31 +143,35 @@ class _SignupFormState extends State<SignupForm> {
   Widget _buildProgressMeter(BuildContext context) {
     final colors = context.colorScheme;
     final duration = context.read<SettingsCubit>().animationDuration;
-    final progress = _progressValue.clamp(0.0, 1.0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final targetPercent = (_progressValue * 100).clamp(0.0, 100.0);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetPercent),
+      duration: duration,
+      curve: Curves.easeInOut,
+      builder: (context, animatedPercent, child) {
+        final clampedPercent = animatedPercent.clamp(0.0, 100.0);
+        final fillFraction = (clampedPercent / 100).clamp(0.0, 1.0);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Account setup',
-              style: context.textTheme.muted,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Account setup',
+                  style: context.textTheme.muted,
+                ),
+                Text(
+                  '${clampedPercent.round()}%',
+                  style: context.textTheme.muted.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              '$_completedStepCount / $_progressSegmentCount',
-              style: context.textTheme.muted.copyWith(
-                color: colors.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final maxWidth = constraints.maxWidth;
-            return Stack(
+            const SizedBox(height: 8),
+            Stack(
               children: [
                 Container(
                   height: 8,
@@ -176,27 +180,22 @@ class _SignupFormState extends State<SignupForm> {
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                AnimatedContainer(
-                  duration: duration,
-                  curve: Curves.easeInOut,
-                  width: maxWidth * progress,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        colors.primary,
-                        colors.primary.withValues(alpha: 0.7),
-                      ],
+                FractionallySizedBox(
+                  widthFactor: fillFraction,
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
               ],
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-      ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        );
+      },
     );
   }
 
@@ -217,255 +216,287 @@ class _SignupFormState extends State<SignupForm> {
       builder: (context, state) {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildProgressMeter(context),
-            Text(
-              SignupForm.title,
-              style: context.textTheme.h3,
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10.0),
-              child: Text(
-                _errorText ?? '',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: context.colorScheme.destructive,
+        const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
+        const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: horizontalPadding,
+                  child: _buildProgressMeter(context),
                 ),
-              ),
-            ),
-            NotificationRequest(
-              notificationService: context.read<NotificationService>(),
-              capability: context.read<Capability>(),
-            ),
-            const SizedBox.square(dimension: 16.0),
-            AnimatedSize(
-              duration: context.read<SettingsCubit>().animationDuration,
-              curve: Curves.easeIn,
-              child: AnimatedSwitcher(
-                duration: context.read<SettingsCubit>().animationDuration,
-                switchInCurve: Curves.easeIn,
-                switchOutCurve: Curves.easeOut,
-                transitionBuilder: AnimatedSwitcher.defaultTransitionBuilder,
-                child: [
-                  Form(
-                    key: _formKeys[0],
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: AxiTextFormField(
-                        key: UniqueKey(),
-                        autocorrect: false,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'[a-z0-9._-]'),
-                          ),
-                        ],
-                        description: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6.0),
-                          child: Text('Case insensitive'),
-                        ),
-                        placeholder: const Text('Username'),
-                        enabled: !loading,
-                        controller: _jidTextController,
-                        trailing: Text('@${state.server}'),
-                        validator: (text) {
-                          if (text.isEmpty) {
-                            return 'Enter a username';
-                          }
-                          if (!_usernamePattern.hasMatch(text)) {
-                            return '4-20 alphanumeric, allowing ".", "_" and "-".';
-                          }
-                          return null;
-                        },
-                      ),
+                Padding(
+                  padding: horizontalPadding,
+                  child: Text(
+                    SignupForm.title,
+                    style: context.textTheme.h3,
+                  ),
+                ),
+                Padding(
+                  padding: horizontalPadding,
+                  child: Text(
+                    _errorText ?? '',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: context.colorScheme.destructive,
                     ),
                   ),
-                  Form(
-                    key: _formKeys[1],
-                    child: Column(
-                      key: UniqueKey(),
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: PasswordInput(
-                            enabled: !loading,
-                            controller: _passwordTextController,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: PasswordInput(
-                            enabled: !loading,
-                            controller: _password2TextController,
-                            confirmValidator: (text) =>
-                                text != _passwordTextController.text
-                                    ? 'Passwords don\'t match'
-                                    : null,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            //fromLTRB(16.0, 8.0, 16.0, 16.0),
-                            child: TermsCheckbox(
-                              enabled: !loading,
-                            ),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: ShadCheckboxFormField(
-                              enabled: !loading,
-                              initialValue: false,
-                              inputLabel: const Text('Allow insecure password'),
-                              inputSublabel: const Text('Not recommended'),
-                              onChanged: (value) =>
-                                  allowInsecurePassword = value,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                ),
+                Padding(
+                  padding: horizontalPadding,
+                  child: NotificationRequest(
+                    notificationService: context.read<NotificationService>(),
+                    capability: context.read<Capability>(),
                   ),
-                  Form(
-                    key: _formKeys[2],
-                    child: Column(
-                      key: UniqueKey(),
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        FutureBuilder(
-                          future: _captchaSrc,
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return SizedBox(
-                                height: captchaSize.height,
-                                width: captchaSize.width,
-                                child:
-                                    const Center(child: AxiProgressIndicator()),
-                              );
-                            }
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Image.network(
-                                  snapshot.requireData,
-                                  height: captchaSize.height,
-                                  loadingBuilder: (_, child, progress) =>
-                                      progress == null
-                                          ? child
-                                          : const Center(
-                                              child: AxiProgressIndicator()),
-                                  errorBuilder: (_, __, ___) => Text(
-                                    'Failed to load captcha, try again later.',
-                                    style: TextStyle(
-                                        color: context.colorScheme.destructive),
-                                  ),
-                                ),
-                                ShadIconButton.ghost(
-                                  icon: const Icon(LucideIcons.refreshCw),
-                                  onPressed: () => setState(() {
-                                    _captchaSrc = _loadCaptchaSrc();
-                                  }),
-                                ).withTapBounce(),
-                              ],
-                            );
-                          },
-                        ),
-                        SizedBox(
-                          width: captchaSize.width,
+                ),
+                const SizedBox.square(dimension: 16.0),
+                Padding(
+                  padding: horizontalPadding,
+                  child: AnimatedSize(
+                    duration: context.read<SettingsCubit>().animationDuration,
+                    curve: Curves.easeIn,
+                    child: AnimatedSwitcher(
+                      duration: context.read<SettingsCubit>().animationDuration,
+                      switchInCurve: Curves.easeIn,
+                      switchOutCurve: Curves.easeOut,
+                      transitionBuilder:
+                          AnimatedSwitcher.defaultTransitionBuilder,
+                      child: [
+                        Form(
+                          key: _formKeys[0],
                           child: Padding(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: fieldSpacing,
                             child: AxiTextFormField(
                               autocorrect: false,
-                              keyboardType: TextInputType.number,
-                              placeholder: const Text('Enter the above text'),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'[a-z0-9._-]'),
+                                ),
+                              ],
+                              description: const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 6.0),
+                                child: Text('Case insensitive'),
+                              ),
+                              placeholder: const Text('Username'),
                               enabled: !loading,
-                              controller: _captchaTextController,
+                              controller: _jidTextController,
+                              trailing: Text('@${state.server}'),
                               validator: (text) {
                                 if (text.isEmpty) {
-                                  return 'Enter the text from the image';
+                                  return 'Enter a username';
+                                }
+                                if (!_usernamePattern.hasMatch(text)) {
+                                  return '4-20 alphanumeric, allowing ".", "_" and "-".';
                                 }
                                 return null;
                               },
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ][_currentIndex],
-              ),
-            ),
-            const SizedBox.square(dimension: 16.0),
-            Builder(
-              builder: (context) {
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  spacing: 8.0,
-                  children: [
-                    if (_currentIndex >= 1)
-                      ShadButton.secondary(
-                        enabled: !loading,
-                        onPressed: () => setState(() {
-                          _currentIndex--;
-                        }),
-                        child: const Text('Back'),
-                      ).withTapBounce(enabled: !loading),
-                    if (_currentIndex < _formKeys.length - 1)
-                      ShadButton(
-                        enabled: !loading,
-                        onPressed: () async {
-                          if (_formKeys[_currentIndex]
-                                  .currentState
-                                  ?.validate() ==
-                              false) {
-                            return;
-                          }
-                          if (_currentIndex == 1 &&
-                              !allowInsecurePassword &&
-                              !await context
-                                  .read<AuthenticationCubit>()
-                                  .checkNotPwned(
-                                      password: _passwordTextController.text)) {
-                            return;
-                          }
-                          setState(() {
-                            _currentIndex++;
-                            _errorText = null;
-                          });
-                        },
-                        child: const Text('Continue'),
-                      ).withTapBounce(enabled: !loading)
-                    else
-                      ShadButton(
-                        enabled: !loading,
-                        onPressed: () => _onPressed(context),
-                        leading: AnimatedCrossFade(
-                          crossFadeState: loading
-                              ? CrossFadeState.showSecond
-                              : CrossFadeState.showFirst,
-                          duration:
-                              context.read<SettingsCubit>().animationDuration,
-                          firstChild: const SizedBox(),
-                          secondChild: AxiProgressIndicator(
-                            color: context.colorScheme.primaryForeground,
-                            semanticsLabel: 'Waiting for signup',
+                        Form(
+                          key: _formKeys[1],
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                padding: fieldSpacing,
+                                child: PasswordInput(
+                                  enabled: !loading,
+                                  controller: _passwordTextController,
+                                ),
+                              ),
+                              Padding(
+                                padding: fieldSpacing,
+                                child: PasswordInput(
+                                  enabled: !loading,
+                                  controller: _password2TextController,
+                                  confirmValidator: (text) =>
+                                      text != _passwordTextController.text
+                                          ? 'Passwords don\'t match'
+                                          : null,
+                                ),
+                              ),
+                              Padding(
+                                padding: fieldSpacing,
+                                child: TermsCheckbox(
+                                  enabled: !loading,
+                                ),
+                              ),
+                              Padding(
+                                padding: fieldSpacing,
+                                child: ShadCheckboxFormField(
+                                  enabled: !loading,
+                                  initialValue: false,
+                                  inputLabel:
+                                      const Text('Allow insecure password'),
+                                  inputSublabel: const Text('Not recommended'),
+                                  onChanged: (value) =>
+                                      allowInsecurePassword = value,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        trailing: const SizedBox.shrink(),
-                        child: const Text('Sign up'),
-                      ).withTapBounce(enabled: !loading),
-                  ],
-                );
-              },
+                        Form(
+                          key: _formKeys[2],
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                padding: fieldSpacing,
+                                child: FutureBuilder(
+                                  future: _captchaSrc,
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData) {
+                                      return SizedBox(
+                                        height: captchaSize.height,
+                                        width: captchaSize.width,
+                                        child: const Center(
+                                          child: AxiProgressIndicator(),
+                                        ),
+                                      );
+                                    }
+                                    return Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Image.network(
+                                            snapshot.requireData,
+                                            height: captchaSize.height,
+                                            loadingBuilder: (_, child,
+                                                    progress) =>
+                                                progress == null
+                                                    ? child
+                                                    : const Center(
+                                                        child:
+                                                            AxiProgressIndicator()),
+                                            errorBuilder: (_, __, ___) => Text(
+                                              'Failed to load captcha, try again later.',
+                                              style: TextStyle(
+                                                color: context
+                                                    .colorScheme.destructive,
+                                              ),
+                                            ),
+                                          ),
+                                          ShadIconButton.ghost(
+                                            icon: const Icon(
+                                                LucideIcons.refreshCw),
+                                            onPressed: () => setState(() {
+                                              _captchaSrc = _loadCaptchaSrc();
+                                            }),
+                                          ).withTapBounce(),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              Padding(
+                                padding: fieldSpacing,
+                                child: SizedBox(
+                                  width: captchaSize.width,
+                                  child: AxiTextFormField(
+                                    autocorrect: false,
+                                    keyboardType: TextInputType.number,
+                                    placeholder:
+                                        const Text('Enter the above text'),
+                                    enabled: !loading,
+                                    controller: _captchaTextController,
+                                    validator: (text) {
+                                      if (text.isEmpty) {
+                                        return 'Enter the text from the image';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ][_currentIndex],
+                    ),
+                  ),
+                ),
+                const SizedBox.square(dimension: 16.0),
+                Padding(
+                  padding: horizontalPadding,
+                  child: Builder(
+                    builder: (context) {
+                      return Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: [
+                          if (_currentIndex >= 1)
+                            ShadButton.secondary(
+                              enabled: !loading,
+                              onPressed: () => setState(() {
+                                _currentIndex--;
+                              }),
+                              child: const Text('Back'),
+                            ).withTapBounce(enabled: !loading),
+                          if (_currentIndex < _formKeys.length - 1)
+                            ShadButton(
+                              enabled: !loading,
+                              onPressed: () async {
+                                if (_formKeys[_currentIndex]
+                                        .currentState
+                                        ?.validate() ==
+                                    false) {
+                                  return;
+                                }
+                                if (_currentIndex == 1 &&
+                                    !allowInsecurePassword &&
+                                    !await context
+                                        .read<AuthenticationCubit>()
+                                        .checkNotPwned(
+                                            password:
+                                                _passwordTextController.text)) {
+                                  return;
+                                }
+                                setState(() {
+                                  _currentIndex++;
+                                  _errorText = null;
+                                });
+                              },
+                              child: const Text('Continue'),
+                            ).withTapBounce(enabled: !loading),
+                          if (_currentIndex == _formKeys.length - 1)
+                            ShadButton(
+                              enabled: !loading,
+                              onPressed: () => _onPressed(context),
+                              leading: AnimatedCrossFade(
+                                crossFadeState: loading
+                                    ? CrossFadeState.showSecond
+                                    : CrossFadeState.showFirst,
+                                duration: context
+                                    .read<SettingsCubit>()
+                                    .animationDuration,
+                                firstChild: const SizedBox(),
+                                secondChild: AxiProgressIndicator(
+                                  color: context.colorScheme.primaryForeground,
+                                  semanticsLabel: 'Waiting for signup',
+                                ),
+                              ),
+                              trailing: const SizedBox.shrink(),
+                              child: const Text('Sign up'),
+                            ).withTapBounce(enabled: !loading),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );

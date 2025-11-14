@@ -1,4 +1,3 @@
-import 'package:axichat/src/common/ui/axi_progress_indicator.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -26,41 +25,20 @@ class ShorebirdChecker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    return AnimatedSize(
       duration: context.watch<SettingsCubit>().animationDuration,
-      child: FutureBuilder(
+      curve: Curves.easeInOut,
+      child: FutureBuilder<bool>(
         future: checkShorebird(),
         builder: (context, snapshot) {
-          if (snapshot.error is UpdateException) {
-            return const Padding(
-              padding: EdgeInsets.all(4.0),
-              child: Text('Error occurred while fetching update.'),
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Padding(
-              padding: EdgeInsets.all(4.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AxiProgressIndicator(),
-                  SizedBox.square(
-                    dimension: 8.0,
-                  ),
-                  Text('Checking for updates'),
-                ],
-              ),
-            );
-          }
-          if (!snapshot.requireData) {
-            return const Padding(
-              padding: EdgeInsets.all(4.0),
-              child: Text('No OTA updates available'),
-            );
+          final hasUpdate = snapshot.connectionState == ConnectionState.done &&
+              snapshot.hasData &&
+              snapshot.requireData;
+          if (!hasUpdate) {
+            return const SizedBox.shrink();
           }
           return const Padding(
-            padding: EdgeInsets.all(4.0),
+            padding: EdgeInsets.all(8.0),
             child: Text('Update available: log out and restart the app'),
           );
         },

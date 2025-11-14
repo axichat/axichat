@@ -169,7 +169,14 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
           AxiIconButton(
             iconData: Icons.arrow_back,
             tooltip: 'Back to login',
-            onPressed: () => context.pop(),
+            onPressed: () {
+              final router = GoRouter.of(context);
+              if (router.canPop()) {
+                router.pop();
+              } else {
+                router.go('/login');
+              }
+            },
           ),
           const SizedBox(width: calendarGutterMd),
           Icon(

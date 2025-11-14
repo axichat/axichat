@@ -64,10 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             crossAxisAlignment: CrossAxisAlignment.center,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: ShorebirdChecker(),
-                              ),
+                              const ShorebirdChecker(),
                               DecoratedBox(
                                 decoration: ShapeDecoration(
                                   color: colors.card,
@@ -91,11 +88,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 24),
+                              // NOTE: Keep the morphing auth toggle below for later polish.
+                              /*
                               _AuthModeToggle(
                                 loginSelected: _login,
-                                duration: context
-                                    .read<SettingsCubit>()
-                                    .animationDuration,
+                                duration:
+                                    context.read<SettingsCubit>().animationDuration,
                                 onChanged: (isLogin) {
                                   if (_login == isLogin) return;
                                   setState(() {
@@ -103,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   });
                                 },
                               ),
-                              const SizedBox(height: 18),
+                              */
                               ShadButton.outline(
                                 onPressed: () => context.go('/guest-calendar'),
                                 child: const Row(
@@ -113,6 +111,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                     SizedBox(width: 8),
                                     Text('Try Calendar (Guest Mode)'),
                                   ],
+                                ),
+                              ).withTapBounce(),
+                              const SizedBox(height: 18),
+                              ShadButton.ghost(
+                                onPressed: () {
+                                  setState(() {
+                                    _login = !_login;
+                                  });
+                                },
+                                child: Text(
+                                  _login
+                                      ? 'New? Sign up'
+                                      : 'Already registered? Log in',
                                 ),
                               ).withTapBounce(),
                             ],
@@ -132,6 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// ignore: unused_element
 class _AuthModeToggle extends StatelessWidget {
   const _AuthModeToggle({
     required this.loginSelected,

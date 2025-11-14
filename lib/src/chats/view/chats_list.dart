@@ -583,22 +583,27 @@ class _ChatListTileState extends State<ChatListTile> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Checkbox(
-                            value: deleteMessages,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            activeColor: context.colorScheme.primary,
-                            checkColor: context.colorScheme.primaryForeground,
-                            side: BorderSide(
-                              color: context.colorScheme.border,
-                              width: 1.4,
+                          SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: Center(
+                              child: Checkbox(
+                                value: deleteMessages,
+                                activeColor: context.colorScheme.primary,
+                                checkColor:
+                                    context.colorScheme.primaryForeground,
+                                side: BorderSide(
+                                  color: context.colorScheme.border,
+                                  width: 1.4,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                onChanged: (value) => setState(
+                                  () => deleteMessages = value ?? false,
+                                ),
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            onChanged: (value) =>
-                                setState(() => deleteMessages = value ?? false),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
