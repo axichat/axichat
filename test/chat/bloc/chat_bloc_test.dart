@@ -3,12 +3,13 @@ import 'dart:async';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
-import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -16,6 +17,12 @@ import '../../mocks.dart';
 
 Future<void> _pumpBloc() async {
   await Future<void>.delayed(Duration.zero);
+}
+
+void _mockEmailSync(MockEmailService service) {
+  when(() => service.syncState).thenReturn(const EmailSyncState.ready());
+  when(() => service.syncStateStream)
+      .thenAnswer((_) => const Stream<EmailSyncState>.empty());
 }
 
 void main() {
@@ -168,6 +175,7 @@ void main() {
 
   test('fan-out send uses EmailService and records report state', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
@@ -249,6 +257,7 @@ void main() {
 
   test('prevents send when no recipients are selected', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
@@ -287,6 +296,7 @@ void main() {
 
   test('surface FanOutValidationException messages to the UI', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
@@ -335,6 +345,7 @@ void main() {
 
   test('retry event replays only failed recipients', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
@@ -424,6 +435,7 @@ void main() {
 
   test('queued attachment sends when composer dispatches send', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
@@ -483,6 +495,7 @@ void main() {
 
   test('failed attachment can be retried', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
@@ -502,7 +515,10 @@ void main() {
     ).thenAnswer((_) async {
       attempts++;
       if (attempts == 1) {
-        throw const DeltaSafeException('failed to send');
+        throw const DeltaAttachmentTooLargeException(
+          operation: 'send email attachment',
+          message: 'failed to send',
+        );
       }
       return 1;
     });
@@ -539,5 +555,40 @@ void main() {
     expect(attempts, 2);
 
     await bloc.close();
+  });
+
+  test('email sync status updates composer error', () async {
+    final emailService = MockEmailService();
+    final syncController = StreamController<EmailSyncState>.broadcast();
+    when(() => emailService.syncStateStream)
+        .thenAnswer((_) => syncController.stream);
+    when(() => emailService.syncState).thenReturn(const EmailSyncState.ready());
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 1,
+      emailAddress: 'peer@example.com',
+    );
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      notificationService: notificationService,
+      emailService: emailService,
+    );
+
+    messageStreamController.add(const <Message>[]);
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+
+    syncController.add(const EmailSyncState.offline('Network down'));
+    await _pumpBloc();
+    expect(bloc.state.composerError, 'Network down');
+
+    syncController.add(const EmailSyncState.ready());
+    await _pumpBloc();
+    expect(bloc.state.composerError, isNull);
+
+    await bloc.close();
+    await syncController.close();
   });
 }

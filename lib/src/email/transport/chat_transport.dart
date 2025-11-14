@@ -50,6 +50,9 @@ abstract class ChatTransport {
     String? displayName,
   });
 
+  /// Returns the coarse connectivity state defined by Delta Chat core.
+  Future<int?> connectivity();
+
   /// Stream of raw core events emitted by the transport.
   Stream<DeltaCoreEvent> get events;
 }

@@ -6,10 +6,12 @@ import 'package:delta_ffi/delta_safe.dart';
 
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -22,6 +24,9 @@ const _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
 const _foregroundKeepaliveInterval = Duration(seconds: 45);
 const _foregroundFetchTimeout = Duration(seconds: 8);
 const _notificationFlushDelay = Duration(milliseconds: 500);
+const _connectivityConnectedMin = 4000;
+const _connectivityWorkingMin = 3000;
+const _connectivityConnectingMin = 2000;
 
 class EmailAccount {
   const EmailAccount({required this.address, required this.password});
@@ -98,12 +103,20 @@ class EmailService {
   final List<_PendingNotification> _pendingNotifications = [];
   Timer? _notificationFlushTimer;
   String? _pendingPushToken;
+  final _syncStateController =
+      StreamController<EmailSyncState>.broadcast(sync: true);
+  EmailSyncState _syncState = const EmailSyncState.ready();
+  bool _channelOverflowRecoveryInProgress = false;
 
   EmailAccount? get activeAccount => _activeAccount;
 
   bool get isRunning => _running;
 
   Stream<DeltaCoreEvent> get events => _transport.events;
+
+  EmailSyncState get syncState => _syncState;
+
+  Stream<EmailSyncState> get syncStateStream => _syncStateController.stream;
 
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
@@ -274,7 +287,10 @@ class EmailService {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
-    return _transport.sendText(chatId: chatId, body: body);
+    return _guardDeltaOperation(
+      operation: 'send email message',
+      body: () => _transport.sendText(chatId: chatId, body: body),
+    );
   }
 
   Future<int> sendAttachment({
@@ -284,9 +300,12 @@ class EmailService {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
-    return _transport.sendAttachment(
-      chatId: chatId,
-      attachment: attachment,
+    return _guardDeltaOperation(
+      operation: 'send email attachment',
+      body: () => _transport.sendAttachment(
+        chatId: chatId,
+        attachment: attachment,
+      ),
     );
   }
 
@@ -384,18 +403,24 @@ class EmailService {
           final updatedAttachment = attachment.copyWith(
             caption: transmitCaption,
           );
-          msgId = await _transport.sendAttachment(
-            chatId: chatId,
-            attachment: updatedAttachment,
-            shareId: resolvedShareId,
-            captionOverride: sanitizedCaption,
+          msgId = await _guardDeltaOperation(
+            operation: 'fan-out attachment',
+            body: () => _transport.sendAttachment(
+              chatId: chatId,
+              attachment: updatedAttachment,
+              shareId: resolvedShareId,
+              captionOverride: sanitizedCaption,
+            ),
           );
         } else {
-          msgId = await _transport.sendText(
-            chatId: chatId,
-            body: transmitBody,
-            shareId: resolvedShareId,
-            localBodyOverride: sanitizedBody,
+          msgId = await _guardDeltaOperation(
+            operation: 'fan-out message',
+            body: () => _transport.sendText(
+              chatId: chatId,
+              body: transmitBody,
+              shareId: resolvedShareId,
+              localBodyOverride: sanitizedBody,
+            ),
           );
         }
         if (!originatorCaptured) {
@@ -656,6 +681,12 @@ class EmailService {
 
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {
     switch (event.type) {
+      case DeltaEventType.error:
+        _handleCoreError(event.data2Text);
+        break;
+      case DeltaEventType.errorSelfNotInGroup:
+        _handleSelfNotInGroup(event.data2Text);
+        break;
       case DeltaEventType.incomingMsg:
         _queueNotification(chatId: event.data1, msgId: event.data2);
         break;
@@ -668,6 +699,16 @@ class EmailService {
       case DeltaEventType.msgDelivered:
       case DeltaEventType.msgFailed:
       case DeltaEventType.msgRead:
+        break;
+      case DeltaEventType.accountsBackgroundFetchDone:
+        _handleBackgroundFetchDone();
+        break;
+      case DeltaEventType.connectivityChanged:
+        unawaited(_refreshConnectivityState());
+        break;
+      case DeltaEventType.channelOverflow:
+        unawaited(_handleChannelOverflow());
+        break;
       default:
         break;
     }
@@ -730,6 +771,111 @@ class EmailService {
         stackTrace,
       );
     }
+  }
+
+  void _handleCoreError(String? message) {
+    final exception = DeltaChatExceptionMapper.fromCoreMessage(
+      operation: 'email transport',
+      message: message,
+    );
+    if (exception.code == DeltaChatErrorCode.network) {
+      _updateSyncState(
+        EmailSyncState.offline(
+          exception.message,
+          exception: exception,
+        ),
+      );
+      return;
+    }
+    _updateSyncState(
+      EmailSyncState.error(
+        exception.message,
+        exception: exception,
+      ),
+    );
+  }
+
+  void _handleSelfNotInGroup(String? message) {
+    final details = message?.trim();
+    _updateSyncState(
+      EmailSyncState.error(
+        details?.isNotEmpty == true
+            ? details!
+            : 'Email group membership changed. Try reopening the chat.',
+      ),
+    );
+  }
+
+  Future<void> _refreshConnectivityState() async {
+    try {
+      final connectivity = await _transport.connectivity();
+      if (connectivity == null) return;
+      if (connectivity >= _connectivityConnectedMin) {
+        _updateSyncState(const EmailSyncState.ready());
+      } else if (connectivity >= _connectivityWorkingMin) {
+        _updateSyncState(
+          const EmailSyncState.recovering('Syncing email…'),
+        );
+      } else if (connectivity >= _connectivityConnectingMin) {
+        _updateSyncState(
+          const EmailSyncState.recovering('Connecting to email servers…'),
+        );
+      } else {
+        _updateSyncState(
+          const EmailSyncState.offline(
+            'Disconnected from email servers.',
+          ),
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to refresh email connectivity', error, stackTrace);
+    }
+  }
+
+  void _handleBackgroundFetchDone() {
+    if (_syncState.status == EmailSyncStatus.ready) {
+      return;
+    }
+    _updateSyncState(const EmailSyncState.ready());
+  }
+
+  Future<void> _handleChannelOverflow() async {
+    if (_channelOverflowRecoveryInProgress) {
+      return;
+    }
+    _channelOverflowRecoveryInProgress = true;
+    _updateSyncState(
+      const EmailSyncState.recovering(
+        'Refreshing email sync after interruption…',
+      ),
+    );
+    try {
+      final success =
+          await _transport.performBackgroundFetch(_foregroundFetchTimeout);
+      if (!success) {
+        await _transport.notifyNetworkAvailable();
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to recover from Delta channel overflow',
+        error,
+        stackTrace,
+      );
+      _updateSyncState(
+        const EmailSyncState.error(
+          'Email sync could not refresh. Try reopening the app.',
+        ),
+      );
+    } finally {
+      _channelOverflowRecoveryInProgress = false;
+    }
+    await _refreshConnectivityState();
+  }
+
+  void _updateSyncState(EmailSyncState next) {
+    if (_syncState == next) return;
+    _syncState = next;
+    _syncStateController.add(next);
   }
 
   void _detachTransportListener() {
@@ -1007,6 +1153,20 @@ class EmailService {
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
+    }
+  }
+
+  Future<T> _guardDeltaOperation<T>({
+    required String operation,
+    required Future<T> Function() body,
+  }) async {
+    try {
+      return await body();
+    } on DeltaSafeException catch (error) {
+      throw DeltaChatExceptionMapper.fromDeltaSafe(
+        error,
+        operation: operation,
+      );
     }
   }
 }

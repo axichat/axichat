@@ -13,6 +13,8 @@ const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
 
 class DeltaEventType {
+  static const error = 400;
+  static const errorSelfNotInGroup = 410;
   static const msgsChanged = 2000;
   static const incomingMsg = 2005;
   static const incomingMsgBunch = 2006;
@@ -22,6 +24,8 @@ class DeltaEventType {
   static const chatModified = 2020;
   static const configureProgress = 2041;
   static const accountsBackgroundFetchDone = 2200;
+  static const connectivityChanged = 2100;
+  static const channelOverflow = 2400;
 }
 
 class DeltaEventConsumer {

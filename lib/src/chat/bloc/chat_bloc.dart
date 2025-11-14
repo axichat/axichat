@@ -6,8 +6,10 @@ import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -117,6 +119,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
+    on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
@@ -153,6 +156,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       unawaited(_initializeTransport());
       unawaited(_initializeViewFilter());
     }
+    _emailSyncSubscription = _emailService?.syncStateStream.listen(
+      (syncState) => add(_EmailSyncStateChanged(syncState)),
+    );
+    final initialSyncState = _emailService?.syncState;
+    if (initialSyncState != null) {
+      add(_EmailSyncStateChanged(initialSyncState));
+    }
   }
 
   static const messageBatchSize = 50;
@@ -169,7 +179,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
+  StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   var _currentMessageLimit = messageBatchSize;
+  String? _emailSyncComposerMessage;
 
   RestartableTimer? _typingTimer;
   MessageTransport _transport = MessageTransport.xmpp;
@@ -225,6 +237,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> close() async {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
+    await _emailSyncSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     return super.close();
@@ -268,6 +281,41 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
     }
+  }
+
+  void _onEmailSyncStateChanged(
+    _EmailSyncStateChanged event,
+    Emitter<ChatState> emit,
+  ) {
+    final nextState = event.state;
+    if (!_isEmailChat) {
+      if (state.emailSyncState != nextState) {
+        emit(state.copyWith(emailSyncState: nextState));
+      }
+      return;
+    }
+    var composerError = state.composerError;
+    if (nextState.status == EmailSyncStatus.ready) {
+      if (composerError != null && composerError == _emailSyncComposerMessage) {
+        composerError = null;
+      }
+      _emailSyncComposerMessage = null;
+    } else {
+      final fallback = nextState.status == EmailSyncStatus.offline
+          ? 'Email is offline. Messages will send automatically when the connection returns.'
+          : nextState.status == EmailSyncStatus.recovering
+              ? 'Email sync is refreshing…'
+              : 'Email sync failed. Please try again.';
+      final message = nextState.message ?? fallback;
+      _emailSyncComposerMessage = message;
+      composerError = message;
+    }
+    emit(
+      state.copyWith(
+        emailSyncState: nextState,
+        composerError: composerError,
+      ),
+    );
   }
 
   Future<void> _onChatMessageFocused(
@@ -416,7 +464,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           quotedMessage: sameChatQuote,
         );
       }
-    } on DeltaSafeException catch (error, stackTrace) {
+    } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
         'Failed to send email message for chat ${chat.jid}',
         error,
@@ -827,7 +875,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachment: current.attachment,
       );
       _removePendingAttachment(current.id, emit);
-    } on DeltaSafeException catch (error, stackTrace) {
+    } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment for chat ${chat.jid}',
         error,

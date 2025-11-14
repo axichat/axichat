@@ -165,6 +165,15 @@ class EmailDeltaTransport implements ChatTransport {
     return accounts.backgroundFetch(timeout);
   }
 
+  @override
+  Future<int?> connectivity() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return null;
+    }
+    await _ensureContextReady();
+    return _context?.connectivity();
+  }
+
   Future<void> registerPushToken(String token) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
