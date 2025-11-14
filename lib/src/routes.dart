@@ -12,6 +12,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 part 'routes.g.dart';
 
@@ -125,14 +126,29 @@ class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   Widget build(BuildContext context, GoRouterState state) {
-    final extra = state.extra! as Map<String, dynamic>;
+    final extra = state.extra as Map<String, dynamic>?;
+    final locator = _resolveLocator(context, extra);
     return ComposeScreen(
-      locate: extra['locate'] as T Function<T>(),
-      id: extra['id'],
-      jids: extra['jids'] ?? [''],
-      body: extra['body'] ?? '',
-      attachmentMetadataIds: extra['attachments'] ?? const <String>[],
+      locate: locator,
+      id: extra?['id'],
+      jids: extra?['jids'] ?? [''],
+      body: extra?['body'] ?? '',
+      attachmentMetadataIds: extra?['attachments'] ?? const <String>[],
     );
+  }
+
+  T Function<T>()? _resolveLocator(
+    BuildContext context,
+    Map<String, dynamic>? extra,
+  ) {
+    final dynamic extraLocator = extra?['locate'];
+    if (extraLocator != null) {
+      return <T>() => (extraLocator as dynamic).call<T>();
+    }
+    final rootContext =
+        GoRouter.of(context).routerDelegate.navigatorKey.currentContext;
+    if (rootContext == null) return null;
+    return <T>() => Provider.of<T>(rootContext, listen: false);
   }
 }
 

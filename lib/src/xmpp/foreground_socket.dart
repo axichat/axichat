@@ -201,7 +201,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
 
   @override
   Future<void> send(List<Object> parts) async {
-    await FlutterForegroundTask.sendDataToTask(parts.join(join));
+    FlutterForegroundTask.sendDataToTask(parts.join(join));
   }
 
   void _detachCallbackIfUnused() {
@@ -328,8 +328,7 @@ class ForegroundSocket extends TaskHandler {
     }
     switch (parts.first) {
       case emailKeepaliveStartCommand:
-        final intervalMs =
-            parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+        final intervalMs = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
         _emailKeepaliveInterval = intervalMs > 0
             ? Duration(milliseconds: intervalMs)
             : const Duration(seconds: 45);
@@ -448,9 +447,8 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     }
 
     final notificationText = toBeginningOfSentenceCase(
-          ConnectionState.connecting.name,
-        ) ??
-        ConnectionState.connecting.name;
+      ConnectionState.connecting.name,
+    );
 
     try {
       await _bridge.acquire(
