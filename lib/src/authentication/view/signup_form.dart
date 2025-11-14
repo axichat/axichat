@@ -170,9 +170,13 @@ class _SignupFormState extends State<SignupForm> {
       return;
     }
     _captchaRetryTimer = Timer(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
+      if (!mounted || _captchaHasLoadedOnce) {
+        _captchaRetryTimer?.cancel();
+        _captchaRetryTimer = null;
+        return;
+      }
       _captchaRetryTimer = null;
-      _reloadCaptcha();
+      _reloadCaptcha(resetFirstLoad: true);
     });
   }
 
@@ -656,7 +660,7 @@ class _SignupFormState extends State<SignupForm> {
                                   RegExp(r'[a-z0-9._-]'),
                                 ),
                               ],
-                              keyboardType: TextInputType.emailAddress,
+                              keyboardType: TextInputType.name,
                               description: const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 6.0),
                                 child: Text('Case insensitive'),
