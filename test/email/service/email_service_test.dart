@@ -262,7 +262,7 @@ void main() {
         databaseBuilder: () async => database,
         transport: transport,
         notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
+        foregroundBridge: foregroundBridge,
       );
 
       listener(

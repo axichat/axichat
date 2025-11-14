@@ -6,6 +6,8 @@ import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ComposeScreen extends StatelessWidget {
@@ -15,14 +17,14 @@ class ComposeScreen extends StatelessWidget {
     this.jids = const [''],
     this.body = '',
     this.attachmentMetadataIds = const [],
-    required this.locate,
+    this.locate,
   });
 
   final int? id;
   final List<String> jids;
   final String body;
   final List<String> attachmentMetadataIds;
-  final T Function<T>() locate;
+  final T Function<T>()? locate;
 
   @override
   Widget build(BuildContext context) {
@@ -76,15 +78,15 @@ class ComposeScreen extends StatelessWidget {
                 child: MultiRepositoryProvider(
                   providers: [
                     RepositoryProvider.value(
-                      value: locate<MessageService>(),
+                      value: _locate<MessageService>(context),
                     ),
                   ],
                   child: Builder(
                     builder: (context) {
-                      final chatsCubit = _maybeLocate<ChatsCubit>();
+                      final chatsCubit = _maybeLocate<ChatsCubit>(context);
                       final providers = <BlocProvider<dynamic>>[
                         BlocProvider.value(
-                          value: locate<DraftCubit>(),
+                          value: _locate<DraftCubit>(context),
                         ),
                       ];
                       if (chatsCubit != null) {
@@ -112,11 +114,28 @@ class ComposeScreen extends StatelessWidget {
     );
   }
 
-  T? _maybeLocate<T>() {
+  T? _maybeLocate<T>(BuildContext context) {
     try {
-      return locate<T>();
+      return _locate<T>(context);
     } catch (_) {
       return null;
+    }
+  }
+
+  T _locate<T>(BuildContext context) {
+    final locator = locate;
+    if (locator != null) {
+      return locator<T>();
+    }
+    try {
+      return context.read<T>();
+    } on ProviderNotFoundException {
+      final rootContext =
+          GoRouter.of(context).routerDelegate.navigatorKey.currentContext;
+      if (rootContext != null) {
+        return Provider.of<T>(rootContext, listen: false);
+      }
+      rethrow;
     }
   }
 }

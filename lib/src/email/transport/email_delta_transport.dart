@@ -31,6 +31,7 @@ class EmailDeltaTransport implements ChatTransport {
   DeltaContextHandle? _context;
   bool _contextOpened = false;
   Future<void>? _contextOpening;
+  bool _accountsSupported = false;
   DeltaEventConsumer? _eventConsumer;
   StreamSubscription<DeltaCoreEvent>? _eventSubscription;
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
@@ -115,7 +116,11 @@ class EmailDeltaTransport implements ChatTransport {
   @override
   Future<void> start() async {
     await _ensureContextReady();
-    await _accounts!.startIo();
+    if (_accounts != null) {
+      await _accounts!.startIo();
+    } else {
+      await _context!.startIo();
+    }
     _eventSubscription ??= _context!.events().listen((event) async {
       try {
         await _eventConsumer?.handle(event);
@@ -132,7 +137,11 @@ class EmailDeltaTransport implements ChatTransport {
   Future<void> stop() async {
     await _eventSubscription?.cancel();
     _eventSubscription = null;
-    await _accounts?.stopIo();
+    if (_accounts != null) {
+      await _accounts?.stopIo();
+    } else {
+      await _context?.stopIo();
+    }
   }
 
   @override
@@ -195,44 +204,12 @@ class EmailDeltaTransport implements ChatTransport {
       if (prefix == null || passphrase == null) {
         throw StateError('Transport not initialized');
       }
-      var resetAttempted = false;
-      while (true) {
-        _accounts ??= await _createAccounts(prefix);
-        final legacyFile = await _deltaDatabaseFile(prefix);
-        final legacyPath = await legacyFile.exists() ? legacyFile.path : null;
-        final accountId = await _accounts!.ensureAccount(
-          legacyDatabasePath: legacyPath,
-        );
-        _context ??= _accounts!.contextFor(accountId);
-        if (!_contextOpened) {
-          try {
-            await _context!.open(passphrase: passphrase);
-            _contextOpened = true;
-          } on DeltaSafeException catch (error, stackTrace) {
-            if (resetAttempted) {
-              rethrow;
-            }
-            resetAttempted = true;
-            _log.warning(
-              'Failed to open Delta account at ${legacyFile.path}, resetting storage',
-              error,
-              stackTrace,
-            );
-            await _resetAccountsStorage(prefix);
-            await _accounts?.dispose();
-            _accounts = null;
-            _context = null;
-            _contextOpened = false;
-            _eventConsumer = null;
-            continue;
-          }
-        }
-        _eventConsumer ??= DeltaEventConsumer(
-          databaseBuilder: _databaseBuilder,
-          context: _context!,
-          logger: _log,
-        );
-        break;
+      var opened = false;
+      if (_accountsSupported) {
+        opened = await _tryOpenAccountsContext(prefix, passphrase);
+      }
+      if (!opened) {
+        await _openLegacyContext(prefix, passphrase);
       }
       completer.complete();
     } catch (error, stackTrace) {
@@ -242,6 +219,165 @@ class EmailDeltaTransport implements ChatTransport {
       rethrow;
     } finally {
       _contextOpening = null;
+    }
+  }
+
+  Future<bool> _tryOpenAccountsContext(
+    String prefix,
+    String passphrase,
+  ) async {
+    var firstFailure = true;
+    bool shouldRetry(Exception error) {
+      final message = error.toString();
+      final isAllocFailure = message.contains('allocate Delta accounts');
+      final isBadInput = message.contains('No such file or directory');
+      if (isAllocFailure || isBadInput) {
+        return false;
+      }
+      if (firstFailure) {
+        firstFailure = false;
+        return true;
+      }
+      return false;
+    }
+
+    var resetAttempted = false;
+    while (true) {
+      try {
+        _accounts ??= await _createAccounts(prefix);
+      } on DeltaSafeException catch (error, stackTrace) {
+        _log.warning(
+          'Delta accounts unavailable, falling back to legacy mode',
+          error,
+          stackTrace,
+        );
+        _accountsSupported = false;
+        await _accounts?.dispose();
+        _accounts = null;
+        _context = null;
+        _contextOpened = false;
+        _eventConsumer = null;
+        return false;
+      }
+      final legacyFile = await _deltaDatabaseFile(prefix);
+      final legacyPath = await legacyFile.exists() ? legacyFile.path : null;
+      int accountId;
+      try {
+        accountId = await _accounts!.ensureAccount(
+          legacyDatabasePath: legacyPath,
+        );
+      } on DeltaSafeException catch (error, stackTrace) {
+        if (!shouldRetry(error)) {
+          _log.warning(
+            'Delta accounts ensureAccount failed; disabling accounts support',
+            error,
+            stackTrace,
+          );
+          _accountsSupported = false;
+          await _accounts?.dispose();
+          _accounts = null;
+          _context = null;
+          _contextOpened = false;
+          _eventConsumer = null;
+          return false;
+        }
+        _log.warning(
+          'Delta accounts ensureAccount failed, resetting storage',
+          error,
+          stackTrace,
+        );
+        await _resetAccountsStorage(prefix);
+        await _accounts?.dispose();
+        _accounts = null;
+        continue;
+      }
+      _context ??= _accounts!.contextFor(accountId);
+      if (!_contextOpened) {
+        try {
+          await _context!.open(passphrase: passphrase);
+          _contextOpened = true;
+        } on DeltaSafeException catch (error, stackTrace) {
+          final retry = shouldRetry(error) ||
+              (resetAttempted == false && !_accountsSupported);
+          if (!retry) {
+            _log.warning(
+              'Failed to open Delta account at ${legacyFile.path}; disabling accounts support',
+              error,
+              stackTrace,
+            );
+            _accountsSupported = false;
+            await _accounts?.dispose();
+            _accounts = null;
+            _context = null;
+            _contextOpened = false;
+            _eventConsumer = null;
+            return false;
+          }
+          resetAttempted = true;
+          _log.warning(
+            'Failed to open Delta account at ${legacyFile.path}, resetting storage',
+            error,
+            stackTrace,
+          );
+          await _resetAccountsStorage(prefix);
+          await _accounts?.dispose();
+          _accounts = null;
+          _context = null;
+          _contextOpened = false;
+          _eventConsumer = null;
+          continue;
+        }
+      }
+      _eventConsumer ??= DeltaEventConsumer(
+        databaseBuilder: _databaseBuilder,
+        context: _context!,
+        logger: _log,
+      );
+      return true;
+    }
+  }
+
+  Future<void> _openLegacyContext(String prefix, String passphrase) async {
+    final file = await _deltaDatabaseFile(prefix);
+    await file.parent.create(recursive: true);
+    var resetAttempted = false;
+    while (true) {
+      if (_context == null) {
+        _log.fine('Opening legacy Delta context at ${file.path}');
+        _context = await _deltaSafe.createContext(
+          databasePath: file.path,
+          osName: 'dart',
+        );
+        _contextOpened = false;
+        _eventConsumer = DeltaEventConsumer(
+          databaseBuilder: _databaseBuilder,
+          context: _context!,
+          logger: _log,
+        );
+      }
+      if (_contextOpened) {
+        break;
+      }
+      try {
+        await _context!.open(passphrase: passphrase);
+        _contextOpened = true;
+      } on DeltaSafeException catch (error, stackTrace) {
+        if (resetAttempted) {
+          rethrow;
+        }
+        resetAttempted = true;
+        _log.warning(
+          'Delta context open failed, resetting mailbox database at ${file.path}',
+          error,
+          stackTrace,
+        );
+        await _context?.close();
+        _context = null;
+        _contextOpened = false;
+        _eventConsumer = null;
+        await _deleteDatabaseArtifacts(file);
+        continue;
+      }
     }
   }
 
@@ -491,7 +627,18 @@ class EmailDeltaTransport implements ChatTransport {
   Future<DeltaAccountsHandle> _createAccounts(String prefix) async {
     final directory = await _accountsDirectory(prefix);
     await directory.create(recursive: true);
-    return _deltaSafe.createAccounts(directory: directory.path);
+    try {
+      return await _deltaSafe.createAccounts(directory: directory.path);
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to open Delta accounts at ${directory.path}, resetting storage',
+        error,
+        stackTrace,
+      );
+      await _resetAccountsStorage(prefix);
+      await directory.create(recursive: true);
+      return _deltaSafe.createAccounts(directory: directory.path);
+    }
   }
 
   Future<Directory> _accountsDirectory(String prefix) async {

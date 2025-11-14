@@ -30,67 +30,55 @@ sealed class DeltaChatException extends Equatable implements Exception {
 
 class DeltaNetworkException extends DeltaChatException {
   const DeltaNetworkException({
-    required String operation,
-    required String message,
+    required super.operation,
+    required super.message,
   }) : super(
           code: DeltaChatErrorCode.network,
-          operation: operation,
-          message: message,
         );
 }
 
 class DeltaAuthException extends DeltaChatException {
   const DeltaAuthException({
-    required String operation,
-    required String message,
+    required super.operation,
+    required super.message,
   }) : super(
           code: DeltaChatErrorCode.auth,
-          operation: operation,
-          message: message,
         );
 }
 
 class DeltaServerException extends DeltaChatException {
   const DeltaServerException({
-    required String operation,
-    required String message,
+    required super.operation,
+    required super.message,
   }) : super(
           code: DeltaChatErrorCode.server,
-          operation: operation,
-          message: message,
         );
 }
 
 class DeltaAttachmentTooLargeException extends DeltaChatException {
   const DeltaAttachmentTooLargeException({
-    required String operation,
-    required String message,
+    required super.operation,
+    required super.message,
   }) : super(
           code: DeltaChatErrorCode.attachmentTooLarge,
-          operation: operation,
-          message: message,
         );
 }
 
 class DeltaPermissionException extends DeltaChatException {
   const DeltaPermissionException({
-    required String operation,
-    required String message,
+    required super.operation,
+    required super.message,
   }) : super(
           code: DeltaChatErrorCode.permission,
-          operation: operation,
-          message: message,
         );
 }
 
 class DeltaInternalException extends DeltaChatException {
   const DeltaInternalException({
-    required String operation,
-    required String message,
+    required super.operation,
+    required super.message,
   }) : super(
           code: DeltaChatErrorCode.internal,
-          operation: operation,
-          message: message,
         );
 }
 
@@ -111,7 +99,7 @@ class DeltaChatExceptionMapper {
     required String operation,
     String? message,
   }) {
-    final fallback = 'Email operation failed.';
+    const fallback = 'Email operation failed.';
     final normalized = (message ?? '').trim();
     final resolvedMessage = normalized.isEmpty ? fallback : normalized;
     final lower = resolvedMessage.toLowerCase();

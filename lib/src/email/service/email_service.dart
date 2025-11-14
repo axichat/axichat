@@ -85,6 +85,11 @@ class EmailService {
   final Logger _log;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
+  final RegisteredCredentialKey _legacyAddressKey =
+      CredentialStore.registerKey('chatmail_address');
+  final RegisteredCredentialKey _legacyPasswordKey =
+      CredentialStore.registerKey('chatmail_password');
+  final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
@@ -120,6 +125,7 @@ class EmailService {
 
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
+    await _migrateLegacyCredentialKeys(scope);
     final address =
         await _credentialStore.read(key: _addressKeyForScope(scope));
     final password =
@@ -159,8 +165,11 @@ class EmailService {
 
     _activeCredentialScope = scope;
 
+    await _migrateLegacyCredentialKeys(scope);
+
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
+    final provisionedKey = _provisionedKeyForScope(scope);
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
@@ -176,26 +185,51 @@ class EmailService {
       generatedAddress = true;
     }
 
-    _log.info('Configuring Chatmail account credentials');
-    try {
-      await _transport.configureAccount(
-        address: address,
-        password: password,
-        displayName: displayName,
-      );
-    } on DeltaSafeException catch (error, stackTrace) {
-      _log.warning(
-        'Failed to configure Chatmail account for $jid',
-        error,
-        stackTrace,
-      );
-      if (generatedAddress) {
-        await _clearCredentials(scope);
-        throw EmailProvisioningException(
-          'Email address $address is unavailable. Please choose a different username.',
+    var alreadyProvisioned =
+        (await _credentialStore.read(key: provisionedKey)) == 'true';
+    if (!alreadyProvisioned && !generatedAddress) {
+      alreadyProvisioned = true;
+      await _credentialStore.write(key: provisionedKey, value: 'true');
+    }
+
+    if (!alreadyProvisioned || generatedAddress) {
+      _log.info('Configuring Chatmail account credentials');
+      try {
+        await _transport.configureAccount(
+          address: address,
+          password: password,
+          displayName: displayName,
         );
+        await _credentialStore.write(key: provisionedKey, value: 'true');
+      } on DeltaSafeException catch (error, stackTrace) {
+        await _credentialStore.write(key: provisionedKey, value: 'false');
+        final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
+          error,
+          operation: 'configure Chatmail account',
+        );
+        _log.warning(
+          'Failed to configure Chatmail account for $jid',
+          error,
+          stackTrace,
+        );
+        if (!generatedAddress && mapped.code == DeltaChatErrorCode.network) {
+          _log.info(
+            'Continuing with cached Chatmail credentials for $jid after network failure.',
+          );
+        } else {
+          if (generatedAddress) {
+            await _clearCredentials(scope);
+            throw EmailProvisioningException(
+              'Email address $address is unavailable. Please choose a different username.',
+            );
+          }
+          throw mapped;
+        }
       }
-      rethrow;
+    } else {
+      _log.fine(
+        'Reusing existing Chatmail account credentials for $jid without reconfiguration.',
+      );
     }
 
     await start();
@@ -1141,6 +1175,43 @@ class EmailService {
     );
   }
 
+  RegisteredCredentialKey _provisionedKeyForScope(String scope) {
+    return _provisionedKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey('chatmail_provisioned_$scope'),
+    );
+  }
+
+  Future<void> _migrateLegacyCredentialKeys(String scope) async {
+    final legacyAddress = await _credentialStore.read(key: _legacyAddressKey);
+    final legacyPassword = await _credentialStore.read(key: _legacyPasswordKey);
+    if (legacyAddress == null && legacyPassword == null) {
+      return;
+    }
+
+    final addressKey = _addressKeyForScope(scope);
+    final passwordKey = _passwordKeyForScope(scope);
+    final currentAddress = await _credentialStore.read(key: addressKey);
+    final currentPassword = await _credentialStore.read(key: passwordKey);
+
+    if (currentAddress == null && legacyAddress != null) {
+      await _credentialStore.write(key: addressKey, value: legacyAddress);
+    }
+    if (currentPassword == null && legacyPassword != null) {
+      await _credentialStore.write(key: passwordKey, value: legacyPassword);
+    }
+    if ((legacyAddress ?? currentAddress) != null &&
+        (legacyPassword ?? currentPassword) != null) {
+      await _credentialStore.write(
+        key: _provisionedKeyForScope(scope),
+        value: 'true',
+      );
+    }
+
+    await _credentialStore.delete(key: _legacyAddressKey);
+    await _credentialStore.delete(key: _legacyPasswordKey);
+  }
+
   String _scopeForJid(String jid) => _normalizeJid(jid).toLowerCase();
 
   String? _scopeForOptionalJid(String? jid) =>
@@ -1151,6 +1222,7 @@ class EmailService {
   Future<void> _clearCredentials(String scope) async {
     await _credentialStore.delete(key: _addressKeyForScope(scope));
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
+    await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;
