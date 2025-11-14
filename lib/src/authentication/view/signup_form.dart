@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -60,6 +61,9 @@ class _SignupFormState extends State<SignupForm> {
   bool _showAllowInsecureError = false;
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
+  int _allowInsecureResetTick = 0;
+  bool _captchaHasLoadedOnce = false;
+  Timer? _captchaRetryTimer;
 
   var _currentIndex = 0;
   String? _errorText;
@@ -94,6 +98,7 @@ class _SignupFormState extends State<SignupForm> {
     _captchaTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
+    _captchaRetryTimer?.cancel();
     super.dispose();
   }
 
@@ -111,6 +116,7 @@ class _SignupFormState extends State<SignupForm> {
     }
     if (_insecurePasswordReason == null && allowInsecurePassword) {
       allowInsecurePassword = false;
+      _allowInsecureResetTick++;
     }
     setState(() {});
   }
@@ -145,6 +151,39 @@ class _SignupFormState extends State<SignupForm> {
     }
     return document.findAllElements('img').firstOrNull?.getAttribute('src') ??
         '';
+  }
+
+  void _reloadCaptcha({bool resetFirstLoad = false}) {
+    _captchaRetryTimer?.cancel();
+    _captchaRetryTimer = null;
+    if (resetFirstLoad) {
+      _captchaHasLoadedOnce = false;
+    }
+    if (!mounted) return;
+    setState(() {
+      _captchaSrc = _loadCaptchaSrc();
+    });
+  }
+
+  void _scheduleInitialCaptchaRetry() {
+    if (_captchaHasLoadedOnce || _captchaRetryTimer != null) {
+      return;
+    }
+    _captchaRetryTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      _captchaRetryTimer = null;
+      _reloadCaptcha();
+    });
+  }
+
+  void _markCaptchaLoaded() {
+    if (_captchaHasLoadedOnce) return;
+    _captchaRetryTimer?.cancel();
+    _captchaRetryTimer = null;
+    if (!mounted) return;
+    setState(() {
+      _captchaHasLoadedOnce = true;
+    });
   }
 
   static const captchaSize = Size(180, 70);
@@ -405,7 +444,6 @@ class _SignupFormState extends State<SignupForm> {
   ) {
     final duration = context.read<SettingsCubit>().animationDuration;
     final reason = _visibleInsecurePasswordReason;
-    final showReasonMessage = reason == _InsecurePasswordReason.weak;
     return AnimatedSwitcher(
       duration: duration,
       switchInCurve: Curves.easeIn,
@@ -416,18 +454,9 @@ class _SignupFormState extends State<SignupForm> {
               key: ValueKey(reason),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (showReasonMessage) ...[
-                  Text(
-                    _insecurePasswordMessage(reason),
-                    style: context.textTheme.muted.copyWith(
-                      color: context.colorScheme.foreground,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
                 AxiCheckboxFormField(
                   key: ValueKey(
-                    '${reason.name}-${allowInsecurePassword ? 1 : 0}',
+                    '${reason.name}-$_allowInsecureResetTick',
                   ),
                   enabled: !loading && !_pwnedCheckInProgress,
                   initialValue: allowInsecurePassword,
@@ -465,15 +494,6 @@ class _SignupFormState extends State<SignupForm> {
               ],
             ),
     );
-  }
-
-  String _insecurePasswordMessage(_InsecurePasswordReason reason) {
-    switch (reason) {
-      case _InsecurePasswordReason.breached:
-        return 'This password has been found in a hacked database.';
-      case _InsecurePasswordReason.weak:
-        return 'This password looks weak. Check the box below if you still want to use it.';
-    }
   }
 
   Future<void> _handleContinuePressed(BuildContext context) async {
@@ -563,7 +583,12 @@ class _SignupFormState extends State<SignupForm> {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
+        const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
+        final animationDuration =
+            context.read<SettingsCubit>().animationDuration;
+        final showGlobalError =
+            !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -573,7 +598,7 @@ class _SignupFormState extends State<SignupForm> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: horizontalPadding,
+                  padding: errorPadding,
                   child: _buildProgressMeter(context),
                 ),
                 Padding(
@@ -585,12 +610,19 @@ class _SignupFormState extends State<SignupForm> {
                 ),
                 Padding(
                   padding: horizontalPadding,
-                  child: Text(
-                    _errorText ?? '',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: context.colorScheme.destructive,
-                    ),
+                  child: AnimatedSwitcher(
+                    duration: animationDuration,
+                    child: showGlobalError
+                        ? Text(
+                            _errorText!,
+                            key: const ValueKey('signup-global-error-text'),
+                            style: TextStyle(
+                              color: context.colorScheme.destructive,
+                            ),
+                          )
+                        : const SizedBox(
+                            key: ValueKey('signup-global-error-empty'),
+                          ),
                   ),
                 ),
                 Padding(
@@ -690,49 +722,57 @@ class _SignupFormState extends State<SignupForm> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Padding(
-                                padding: fieldSpacing,
-                                child: FutureBuilder(
+                                padding: fieldSpacing +
+                                    const EdgeInsets.only(top: 20),
+                                child: FutureBuilder<String>(
                                   future: _captchaSrc,
                                   builder: (context, snapshot) {
-                                    if (!snapshot.hasData) {
-                                      return SizedBox(
-                                        height: captchaSize.height,
-                                        width: captchaSize.width,
-                                        child: const Center(
-                                          child: AxiProgressIndicator(),
-                                        ),
+                                    final hasValidUrl = snapshot.hasData &&
+                                        (snapshot.data?.isNotEmpty ?? false);
+                                    final encounteredError =
+                                        snapshot.hasError ||
+                                            (snapshot.hasData && !hasValidUrl);
+                                    Widget captchaSurface;
+                                    if (encounteredError) {
+                                      if (_captchaHasLoadedOnce) {
+                                        captchaSurface =
+                                            const _CaptchaErrorMessage();
+                                      } else {
+                                        _scheduleInitialCaptchaRetry();
+                                        captchaSurface =
+                                            const _CaptchaSkeleton();
+                                      }
+                                    } else if (!snapshot.hasData) {
+                                      captchaSurface = const _CaptchaSkeleton();
+                                    } else {
+                                      final captchaUrl = snapshot.requireData;
+                                      captchaSurface = _CaptchaImage(
+                                        url: captchaUrl,
+                                        showErrorMessageOnError:
+                                            _captchaHasLoadedOnce,
+                                        onLoaded: _markCaptchaLoaded,
+                                        onInitialError:
+                                            _scheduleInitialCaptchaRetry,
                                       );
                                     }
                                     return Align(
                                       alignment: Alignment.centerLeft,
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Image.network(
-                                            snapshot.requireData,
-                                            height: captchaSize.height,
-                                            loadingBuilder: (_, child,
-                                                    progress) =>
-                                                progress == null
-                                                    ? child
-                                                    : const Center(
-                                                        child:
-                                                            AxiProgressIndicator()),
-                                            errorBuilder: (_, __, ___) => Text(
-                                              'Failed to load captcha, try again later.',
-                                              style: TextStyle(
-                                                color: context
-                                                    .colorScheme.destructive,
-                                              ),
-                                            ),
+                                          _CaptchaFrame(
+                                            child: captchaSurface,
                                           ),
-                                          ShadIconButton.ghost(
-                                            icon: const Icon(
-                                                LucideIcons.refreshCw),
-                                            onPressed: () => setState(() {
-                                              _captchaSrc = _loadCaptchaSrc();
-                                            }),
-                                          ).withTapBounce(),
+                                          const SizedBox(width: 12),
+                                          AxiIconButton(
+                                            iconData: LucideIcons.refreshCw,
+                                            tooltip: 'Reload captcha',
+                                            onPressed: loading
+                                                ? null
+                                                : () => _reloadCaptcha(),
+                                          ),
                                         ],
                                       ),
                                     );
@@ -780,62 +820,70 @@ class _SignupFormState extends State<SignupForm> {
                       final isPasswordStep = _currentIndex == 1;
                       final isCheckingPwned =
                           isPasswordStep && _pwnedCheckInProgress;
-                      final animationDuration =
-                          context.read<SettingsCubit>().animationDuration;
-                      return Wrap(
-                        spacing: 8.0,
-                        runSpacing: 8.0,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: animationDuration,
-                            child: _currentIndex >= 1
-                                ? ShadButton.secondary(
-                                    key: const ValueKey('signup-back-button'),
-                                    enabled: !loading && !isCheckingPwned,
-                                    onPressed: () => setState(() {
-                                      _currentIndex--;
-                                    }),
-                                    child: const Text('Back'),
-                                  ).withTapBounce(
-                                    enabled: !loading && !isCheckingPwned)
-                                : const SizedBox(
-                                    key: ValueKey('signup-back-button-empty'),
-                                  ),
-                          ),
-                          if (_currentIndex < _formKeys.length - 1)
-                            ShadButton(
-                              enabled: !loading && !isCheckingPwned,
-                              onPressed: () async {
-                                await _handleContinuePressed(context);
-                              },
-                              leading: AnimatedCrossFade(
-                                crossFadeState: isCheckingPwned
-                                    ? CrossFadeState.showSecond
-                                    : CrossFadeState.showFirst,
-                                duration: context
-                                    .read<SettingsCubit>()
-                                    .animationDuration,
-                                firstChild: const SizedBox(),
-                                secondChild: AxiProgressIndicator(
-                                  color: context.colorScheme.primaryForeground,
-                                  semanticsLabel: 'Checking password safety',
+                      final showBackButton = _currentIndex >= 1;
+                      final showNextButton =
+                          _currentIndex < _formKeys.length - 1;
+                      final showSubmitButton = !showNextButton;
+
+                      final backButton = AnimatedSize(
+                        duration: animationDuration,
+                        curve: Curves.easeInOut,
+                        alignment: Alignment.centerLeft,
+                        child: showBackButton
+                            ? Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ShadButton.secondary(
+                                  enabled: !loading && !isCheckingPwned,
+                                  onPressed: () => setState(() {
+                                    _currentIndex--;
+                                  }),
+                                  child: const Text('Back'),
+                                ).withTapBounce(
+                                  enabled: !loading && !isCheckingPwned,
                                 ),
+                              )
+                            : const SizedBox.shrink(),
+                      );
+
+                      final continueButton = showNextButton
+                          ? Padding(
+                              padding: EdgeInsets.only(
+                                right: showSubmitButton ? 8 : 0,
                               ),
-                              trailing: const SizedBox.shrink(),
-                              child: const Text('Continue'),
-                            ).withTapBounce(
-                                enabled: !loading && !isCheckingPwned),
-                          if (_currentIndex == _formKeys.length - 1)
-                            ShadButton(
+                              child: ShadButton(
+                                enabled: !loading && !isCheckingPwned,
+                                onPressed: () async {
+                                  await _handleContinuePressed(context);
+                                },
+                                leading: AnimatedCrossFade(
+                                  crossFadeState: isCheckingPwned
+                                      ? CrossFadeState.showSecond
+                                      : CrossFadeState.showFirst,
+                                  duration: animationDuration,
+                                  firstChild: const SizedBox(),
+                                  secondChild: AxiProgressIndicator(
+                                    color:
+                                        context.colorScheme.primaryForeground,
+                                    semanticsLabel: 'Checking password safety',
+                                  ),
+                                ),
+                                trailing: const SizedBox.shrink(),
+                                child: const Text('Continue'),
+                              ).withTapBounce(
+                                enabled: !loading && !isCheckingPwned,
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final submitButton = showSubmitButton
+                          ? ShadButton(
                               enabled: !loading,
                               onPressed: () => _onPressed(context),
                               leading: AnimatedCrossFade(
                                 crossFadeState: loading
                                     ? CrossFadeState.showSecond
                                     : CrossFadeState.showFirst,
-                                duration: context
-                                    .read<SettingsCubit>()
-                                    .animationDuration,
+                                duration: animationDuration,
                                 firstChild: const SizedBox(),
                                 secondChild: AxiProgressIndicator(
                                   color: context.colorScheme.primaryForeground,
@@ -844,7 +892,16 @@ class _SignupFormState extends State<SignupForm> {
                               ),
                               trailing: const SizedBox.shrink(),
                               child: const Text('Sign up'),
-                            ).withTapBounce(enabled: !loading),
+                            ).withTapBounce(enabled: !loading)
+                          : const SizedBox.shrink();
+
+                      return Wrap(
+                        spacing: 0,
+                        runSpacing: 8,
+                        children: [
+                          backButton,
+                          if (showNextButton) continueButton,
+                          if (showSubmitButton) submitButton,
                         ],
                       );
                     },
@@ -855,6 +912,185 @@ class _SignupFormState extends State<SignupForm> {
           ),
         );
       },
+    );
+  }
+}
+
+class _CaptchaFrame extends StatelessWidget {
+  const _CaptchaFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final radius = BorderRadius.circular(14);
+    return Container(
+      width: _SignupFormState.captchaSize.width,
+      height: _SignupFormState.captchaSize.height,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: colors.border),
+        color: colors.card,
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: SizedBox.expand(child: child),
+      ),
+    );
+  }
+}
+
+class _CaptchaImage extends StatefulWidget {
+  const _CaptchaImage({
+    required this.url,
+    required this.onLoaded,
+    required this.onInitialError,
+    required this.showErrorMessageOnError,
+  });
+
+  final String url;
+  final VoidCallback onLoaded;
+  final VoidCallback onInitialError;
+  final bool showErrorMessageOnError;
+
+  @override
+  State<_CaptchaImage> createState() => _CaptchaImageState();
+}
+
+class _CaptchaImageState extends State<_CaptchaImage> {
+  bool _isReady = false;
+  bool _readyNotified = false;
+
+  @override
+  void didUpdateWidget(covariant _CaptchaImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _isReady = false;
+      _readyNotified = false;
+    }
+  }
+
+  void _handleImageReady() {
+    if (_readyNotified) return;
+    _readyNotified = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _isReady = true;
+      });
+      widget.onLoaded();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget image = Image.network(
+      widget.url,
+      fit: BoxFit.cover,
+      frameBuilder: (context, child, frame, _) {
+        if (frame != null) {
+          _handleImageReady();
+        }
+        return child;
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+        return child;
+      },
+      errorBuilder: (context, error, stackTrace) {
+        if (widget.showErrorMessageOnError) {
+          return const _CaptchaErrorMessage();
+        }
+        widget.onInitialError();
+        return const _CaptchaSkeleton();
+      },
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedOpacity(
+          opacity: _isReady ? 0 : 1,
+          duration: const Duration(milliseconds: 220),
+          child: const _CaptchaSkeleton(),
+        ),
+        AnimatedOpacity(
+          opacity: _isReady ? 1 : 0,
+          duration: const Duration(milliseconds: 220),
+          child: image,
+        ),
+      ],
+    );
+  }
+}
+
+class _CaptchaSkeleton extends StatefulWidget {
+  const _CaptchaSkeleton();
+
+  @override
+  State<_CaptchaSkeleton> createState() => _CaptchaSkeletonState();
+}
+
+class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = context.colorScheme.border.withValues(alpha: 0.35);
+    final highlight = context.colorScheme.card.withValues(alpha: 0.8);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final shimmer = _controller.value;
+        final start = (shimmer - 0.25).clamp(0.0, 1.0);
+        final mid = shimmer.clamp(0.0, 1.0);
+        final end = (shimmer + 0.25).clamp(0.0, 1.0);
+        return SizedBox.expand(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [base, highlight, base],
+                stops: [start, mid, end],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CaptchaErrorMessage extends StatelessWidget {
+  const _CaptchaErrorMessage();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: Center(
+        child: Text(
+          'Unable to load captcha.\nTap refresh to try again.',
+          textAlign: TextAlign.center,
+          style: context.textTheme.muted.copyWith(
+            color: context.colorScheme.destructive,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }

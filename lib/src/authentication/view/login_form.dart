@@ -61,6 +61,7 @@ class _LoginFormState extends State<LoginForm> {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
+        const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         return Form(
           child: Align(
             alignment: Alignment.topCenter,
@@ -70,7 +71,7 @@ class _LoginFormState extends State<LoginForm> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: horizontalPadding,
+                    padding: errorPadding,
                     child: Text(
                       LoginForm.title,
                       style: context.textTheme.h3,
@@ -80,7 +81,6 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding,
                     child: Text(
                       state is AuthenticationFailure ? state.errorText : '',
-                      textAlign: TextAlign.center,
                       style: TextStyle(
                         color: context.colorScheme.destructive,
                       ),
