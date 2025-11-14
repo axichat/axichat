@@ -215,7 +215,6 @@ class _ChatListTileState extends State<ChatListTile> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final colors = context.colorScheme;
-    final transport = item.transport;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadThickness = showUnreadBadge
@@ -307,10 +306,7 @@ class _ChatListTileState extends State<ChatListTile> {
       paintSurface: false,
       contentPadding: const EdgeInsets.only(left: 16.0, right: 40.0),
       tapBounce: false,
-      leading: _TransportAwareAvatar(
-        jid: item.jid,
-        transport: transport,
-      ),
+      leading: _TransportAwareAvatar(chat: item),
       title: item.title,
       subtitle: item.lastMessage,
       subtitlePlaceholder: 'No messages',
@@ -738,16 +734,29 @@ double _measureUnreadBadgeHeight(BuildContext context, int count) {
 }
 
 class _TransportAwareAvatar extends StatelessWidget {
-  const _TransportAwareAvatar({
-    required this.jid,
-    required this.transport,
-  });
+  const _TransportAwareAvatar({required this.chat});
 
-  final String jid;
-  final MessageTransport transport;
+  final Chat chat;
 
   @override
   Widget build(BuildContext context) {
+    final jid = chat.jid;
+    final supportsEmail = chat.transport.isEmail;
+    final isAxiCompatible = chat.isAxiContact;
+    Widget badge;
+    if (supportsEmail && isAxiCompatible) {
+      badge = const AxiCompatibilityBadge(compact: true);
+    } else if (supportsEmail) {
+      badge = const AxiTransportChip(
+        transport: MessageTransport.email,
+        compact: true,
+      );
+    } else {
+      badge = const AxiTransportChip(
+        transport: MessageTransport.xmpp,
+        compact: true,
+      );
+    }
     const avatarSize = 46.0;
     return SizedBox(
       width: avatarSize + 6,
@@ -765,10 +774,7 @@ class _TransportAwareAvatar extends StatelessWidget {
           Positioned(
             right: -6,
             bottom: -4,
-            child: AxiTransportChip(
-              transport: transport,
-              compact: true,
-            ),
+            child: badge,
           ),
         ],
       ),

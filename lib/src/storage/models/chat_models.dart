@@ -405,10 +405,19 @@ class Contacts extends Table {
 }
 
 extension ChatTransportExtension on Chat {
-  MessageTransport get transport => (deltaChatId != null ||
-          (emailAddress != null && emailAddress!.isNotEmpty))
+  static final _axiDomainPattern = RegExp(r'@axi\.im$', caseSensitive: false);
+
+  bool get supportsEmail =>
+      deltaChatId != null || (emailAddress?.isNotEmpty ?? false);
+
+  bool get isAxiContact => _axiDomainPattern.hasMatch(jid.toLowerCase());
+
+  MessageTransport get defaultTransport => supportsEmail && !isAxiContact
       ? MessageTransport.email
       : MessageTransport.xmpp;
+
+  MessageTransport get transport =>
+      supportsEmail ? MessageTransport.email : MessageTransport.xmpp;
 }
 
 @Freezed(toJson: false, fromJson: false)

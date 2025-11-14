@@ -6,6 +6,7 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,8 +66,18 @@ void main() {
         transport: any(named: 'transport'),
       ),
     ).thenAnswer((_) async {});
-    when(() => chatsService.loadChatTransportPreference(any()))
-        .thenAnswer((_) async => MessageTransport.xmpp);
+    when(
+      () => chatsService.clearChatTransportPreference(
+        jid: any(named: 'jid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => chatsService.loadChatTransportPreference(any())).thenAnswer(
+      (_) async => const ChatTransportPreference(
+        transport: MessageTransport.xmpp,
+        defaultTransport: MessageTransport.xmpp,
+        isExplicit: false,
+      ),
+    );
     when(() => chatsService.loadChatViewFilter(any()))
         .thenAnswer((_) async => MessageTimelineFilter.directOnly);
     when(
@@ -113,6 +124,45 @@ void main() {
           transport: MessageTransport.email,
         ),
       ).called(1);
+    },
+  );
+
+  blocTest<ChatBloc, ChatState>(
+    'clears stored preference when switching back to chat default',
+    setUp: () {
+      when(() => chatsService.loadChatTransportPreference(any())).thenAnswer(
+        (_) async => const ChatTransportPreference(
+          transport: MessageTransport.email,
+          defaultTransport: MessageTransport.xmpp,
+          isExplicit: true,
+        ),
+      );
+    },
+    build: () {
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        notificationService: notificationService,
+      );
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      return bloc;
+    },
+    act: (bloc) => bloc.add(const ChatTransportChanged(MessageTransport.xmpp)),
+    expect: () => [
+      ChatState(items: const <Message>[], chat: initialChat),
+    ],
+    verify: (_) {
+      verify(
+        () => chatsService.clearChatTransportPreference(jid: initialChat.jid),
+      ).called(1);
+      verifyNever(
+        () => chatsService.saveChatTransportPreference(
+          jid: any(named: 'jid'),
+          transport: MessageTransport.xmpp,
+        ),
+      );
     },
   );
 

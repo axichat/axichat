@@ -27,6 +27,7 @@ class EmailDeltaTransport implements ChatTransport {
   final DeltaSafe _deltaSafe;
   final Logger _log;
 
+  DeltaAccountsHandle? _accounts;
   DeltaContextHandle? _context;
   bool _contextOpened = false;
   Future<void>? _contextOpening;
@@ -62,7 +63,6 @@ class EmailDeltaTransport implements ChatTransport {
 
     _databasePrefix = databasePrefix;
     _databasePassphrase = databasePassphrase;
-    await _ensureContextOpen();
   }
 
   @override
@@ -77,20 +77,45 @@ class EmailDeltaTransport implements ChatTransport {
         throw StateError('Call ensureInitialized before configureAccount');
       }
     }
-    await _ensureContextOpen();
+    await _ensureContextReady();
     _accountAddress = address;
-    await _context!.configureAccount(
-      address: address,
-      password: password,
-      displayName: displayName,
-      additional: additional,
-    );
+    final context = _context!;
+    final completer = Completer<void>();
+    late final StreamSubscription<DeltaCoreEvent> subscription;
+    subscription = context.events().listen((event) {
+      if (event.type != DeltaEventType.configureProgress) {
+        return;
+      }
+      if (event.data1 == 1000 && !completer.isCompleted) {
+        completer.complete();
+      } else if (event.data1 == 0 && !completer.isCompleted) {
+        completer.completeError(
+          DeltaSafeException(
+            event.data2Text ?? 'Failed to configure Chatmail account',
+          ),
+        );
+      }
+    });
+    try {
+      await context.configureAccount(
+        address: address,
+        password: password,
+        displayName: displayName,
+        additional: additional,
+      );
+      await completer.future.timeout(const Duration(seconds: 60),
+          onTimeout: () {
+        throw const DeltaSafeException('Chatmail configuration timed out');
+      });
+    } finally {
+      await subscription.cancel();
+    }
   }
 
   @override
   Future<void> start() async {
-    await _ensureContextOpen();
-    await _context!.startIo();
+    await _ensureContextReady();
+    await _accounts!.startIo();
     _eventSubscription ??= _context!.events().listen((event) async {
       try {
         await _eventConsumer?.handle(event);
@@ -107,7 +132,7 @@ class EmailDeltaTransport implements ChatTransport {
   Future<void> stop() async {
     await _eventSubscription?.cancel();
     _eventSubscription = null;
-    await _context?.stopIo();
+    await _accounts?.stopIo();
   }
 
   @override
@@ -117,7 +142,38 @@ class EmailDeltaTransport implements ChatTransport {
     _eventListeners.clear();
   }
 
-  Future<void> _ensureContextOpen() async {
+  Future<void> notifyNetworkAvailable() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    await _accounts?.maybeNetworkAvailable();
+  }
+
+  Future<void> notifyNetworkLost() async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    await _accounts?.maybeNetworkLost();
+  }
+
+  Future<bool> performBackgroundFetch(Duration timeout) async {
+    await _ensureContextReady();
+    final accounts = _accounts;
+    if (accounts == null) return false;
+    return accounts.backgroundFetch(timeout);
+  }
+
+  Future<void> registerPushToken(String token) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    await _accounts?.setPushDeviceToken(token);
+  }
+
+  Future<void> _ensureContextReady() async {
     if (_contextOpening != null) {
       await _contextOpening!;
       return;
@@ -130,46 +186,44 @@ class EmailDeltaTransport implements ChatTransport {
       if (prefix == null || passphrase == null) {
         throw StateError('Transport not initialized');
       }
-      final file = await _deltaDatabaseFile(prefix);
-      await file.parent.create(recursive: true);
       var resetAttempted = false;
       while (true) {
-        if (_context == null) {
-          _log.fine('Opening Delta context at ${file.path}');
-          _context = await _deltaSafe.createContext(
-            databasePath: file.path,
-            osName: 'dart',
-          );
-          _contextOpened = false;
-          _eventConsumer = DeltaEventConsumer(
-            databaseBuilder: _databaseBuilder,
-            context: _context!,
-            logger: _log,
-          );
-        }
-        if (_contextOpened) {
-          break;
-        }
-        try {
-          await _context!.open(passphrase: passphrase);
-          _contextOpened = true;
-        } on DeltaSafeException catch (error, stackTrace) {
-          if (resetAttempted) {
-            rethrow;
+        _accounts ??= await _createAccounts(prefix);
+        final legacyFile = await _deltaDatabaseFile(prefix);
+        final legacyPath = await legacyFile.exists() ? legacyFile.path : null;
+        final accountId = await _accounts!.ensureAccount(
+          legacyDatabasePath: legacyPath,
+        );
+        _context ??= _accounts!.contextFor(accountId);
+        if (!_contextOpened) {
+          try {
+            await _context!.open(passphrase: passphrase);
+            _contextOpened = true;
+          } on DeltaSafeException catch (error, stackTrace) {
+            if (resetAttempted) {
+              rethrow;
+            }
+            resetAttempted = true;
+            _log.warning(
+              'Failed to open Delta account at ${legacyFile.path}, resetting storage',
+              error,
+              stackTrace,
+            );
+            await _resetAccountsStorage(prefix);
+            await _accounts?.dispose();
+            _accounts = null;
+            _context = null;
+            _contextOpened = false;
+            _eventConsumer = null;
+            continue;
           }
-          resetAttempted = true;
-          _log.warning(
-            'Delta context open failed, resetting mailbox database at ${file.path}',
-            error,
-            stackTrace,
-          );
-          await _context?.close();
-          _context = null;
-          _eventConsumer = null;
-          _contextOpened = false;
-          await _deleteDatabaseArtifacts(file);
-          continue;
         }
+        _eventConsumer ??= DeltaEventConsumer(
+          databaseBuilder: _databaseBuilder,
+          context: _context!,
+          logger: _log,
+        );
+        break;
       }
       completer.complete();
     } catch (error, stackTrace) {
@@ -189,10 +243,13 @@ class EmailDeltaTransport implements ChatTransport {
     }
     await _eventSubscription?.cancel();
     _eventSubscription = null;
-    await _context?.close();
-    _context = null;
     _eventConsumer = null;
     _contextOpened = false;
+    _context = null;
+    if (_accounts != null) {
+      await _accounts!.dispose();
+      _accounts = null;
+    }
   }
 
   @override
@@ -420,6 +477,34 @@ class EmailDeltaTransport implements ChatTransport {
     if (attachment.isVideo) return DeltaMessageType.video;
     if (attachment.isAudio) return DeltaMessageType.audio;
     return DeltaMessageType.file;
+  }
+
+  Future<DeltaAccountsHandle> _createAccounts(String prefix) async {
+    final directory = await _accountsDirectory(prefix);
+    await directory.create(recursive: true);
+    return _deltaSafe.createAccounts(directory: directory.path);
+  }
+
+  Future<Directory> _accountsDirectory(String prefix) async {
+    final databaseFile = await _deltaDatabaseFile(prefix);
+    return Directory('${databaseFile.path}.accounts');
+  }
+
+  Future<void> _resetAccountsStorage(String prefix) async {
+    final directory = await _accountsDirectory(prefix);
+    if (await directory.exists()) {
+      try {
+        await directory.delete(recursive: true);
+      } on IOException catch (error, stackTrace) {
+        _log.warning(
+          'Failed to delete Delta accounts directory ${directory.path}',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    final legacy = await _deltaDatabaseFile(prefix);
+    await _deleteDatabaseArtifacts(legacy);
   }
 }
 

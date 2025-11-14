@@ -41,7 +41,20 @@ class DeltaSafe {
       throw const DeltaSafeException('Failed to allocate Delta Chat context');
     }
 
-    return DeltaContextHandle._(_bindings, ctx);
+    return DeltaContextHandle._owned(_bindings, ctx);
+  }
+
+  Future<DeltaAccountsHandle> createAccounts({
+    required String directory,
+    bool writable = true,
+  }) async {
+    final accounts = _withCString(directory, (dirPtr) {
+      return _bindings.dc_accounts_new(dirPtr, writable ? 1 : 0);
+    });
+    if (accounts == ffi.nullptr) {
+      throw const DeltaSafeException('Failed to allocate Delta accounts');
+    }
+    return DeltaAccountsHandle._(_bindings, accounts);
   }
 }
 
@@ -63,16 +76,25 @@ class DeltaChatType {
 }
 
 class DeltaContextHandle {
-  DeltaContextHandle._(this._bindings, this._context);
+  DeltaContextHandle._owned(this._bindings, this._context)
+      : _accountsOwner = null,
+        _accountId = null,
+        _ownsContext = true;
+
+  DeltaContextHandle._borrowed(
+    this._bindings,
+    this._context,
+    this._accountsOwner,
+    this._accountId,
+  ) : _ownsContext = false;
 
   final DeltaChatBindings _bindings;
   final ffi.Pointer<dc_context_t> _context;
+  final DeltaAccountsHandle? _accountsOwner;
+  final int? _accountId;
+  final bool _ownsContext;
 
-  ffi.Pointer<dc_event_emitter_t>? _eventEmitter;
-  ReceivePort? _eventPort;
-  StreamSubscription<_DeltaRawEvent>? _eventSubscription;
-  StreamController<DeltaCoreEvent>? _eventController;
-  Isolate? _eventIsolate;
+  _DeltaEventLoop? _eventLoop;
 
   bool _opened = false;
   bool _ioRunning = false;
@@ -111,28 +133,38 @@ class DeltaContextHandle {
 
   Future<void> startIo() async {
     _ensureState(_opened, 'start IO');
+    final owner = _accountsOwner;
+    if (owner != null) {
+      await owner.startIo();
+      return;
+    }
     if (_ioRunning) return;
     _bindings.dc_start_io(_context);
     _ioRunning = true;
-    await _ensureEventLoop();
   }
 
   Future<void> stopIo() async {
+    final owner = _accountsOwner;
+    if (owner != null) {
+      await owner.stopIo();
+      return;
+    }
     if (!_ioRunning) return;
-    await _teardownEventLoop();
     _bindings.dc_stop_io(_context);
     _ioRunning = false;
   }
 
   Stream<DeltaCoreEvent> events() {
-    _eventController ??= StreamController<DeltaCoreEvent>.broadcast(
-      onListen: () {
-        if (_ioRunning) {
-          _ensureEventLoop();
-        }
-      },
+    final owner = _accountsOwner;
+    final accountId = _accountId;
+    if (owner != null && accountId != null) {
+      return owner.eventsFor(accountId);
+    }
+    _eventLoop ??= _DeltaEventLoop(
+      emitterFactory: () => _bindings.dc_get_event_emitter(_context),
+      debugLabel: 'context-${_context.address}',
     );
-    return _eventController!.stream;
+    return _eventLoop!.stream;
   }
 
   Future<int> createContact({
@@ -302,9 +334,12 @@ class DeltaContextHandle {
   }
 
   Future<void> close() async {
+    if (_accountsOwner != null || !_ownsContext) {
+      return;
+    }
     await stopIo();
-    await _eventController?.close();
-    _eventController = null;
+    await _eventLoop?.dispose();
+    _eventLoop = null;
     _bindings.dc_context_unref(_context);
   }
 
@@ -315,51 +350,6 @@ class DeltaContextHandle {
       });
     });
     _ensureSuccess(result, 'set config $key');
-  }
-
-  Future<void> _ensureEventLoop() async {
-    if (_eventIsolate != null) {
-      return;
-    }
-    _eventEmitter ??= _bindings.dc_get_event_emitter(_context);
-    if (_eventEmitter == null || _eventEmitter == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to obtain Delta event emitter');
-    }
-
-    _eventPort = ReceivePort('delta-events');
-    _eventSubscription = _eventPort!.cast<_DeltaRawEvent>().listen((event) {
-      _eventController?.add(
-        DeltaCoreEvent(
-          type: event.type,
-          data1: event.data1,
-          data2: event.data2,
-          data1Text: event.data1Text,
-          data2Text: event.data2Text,
-        ),
-      );
-    });
-
-    _eventIsolate = await Isolate.spawn<_EventLoopConfig>(
-      _eventLoop,
-      _EventLoopConfig(
-        emitterAddress: _eventEmitter!.address,
-        sendPort: _eventPort!.sendPort,
-      ),
-      debugName: 'delta-event-loop',
-    );
-  }
-
-  Future<void> _teardownEventLoop() async {
-    _eventIsolate?.kill(priority: Isolate.immediate);
-    _eventIsolate = null;
-    await _eventSubscription?.cancel();
-    _eventSubscription = null;
-    _eventPort?.close();
-    _eventPort = null;
-    if (_eventEmitter != null && _eventEmitter != ffi.nullptr) {
-      _bindings.dc_event_emitter_unref(_eventEmitter!);
-      _eventEmitter = null;
-    }
   }
 
   bool? _maybeIsOpen() {
@@ -402,6 +392,130 @@ class DeltaContextHandle {
   }
 }
 
+class DeltaAccountsHandle {
+  DeltaAccountsHandle._(this._bindings, this._accounts);
+
+  final DeltaChatBindings _bindings;
+  final ffi.Pointer<dc_accounts_t> _accounts;
+
+  _DeltaEventLoop? _eventLoop;
+  bool _ioRunning = false;
+  bool _disposed = false;
+
+  Future<int> ensureAccount({String? legacyDatabasePath}) async {
+    final existing = _existingAccountId();
+    if (existing != null && existing != 0) {
+      return existing;
+    }
+    if (legacyDatabasePath != null) {
+      final migrated = _withCString(legacyDatabasePath, (dbPtr) {
+        return _bindings.dc_accounts_migrate_account(_accounts, dbPtr);
+      });
+      if (migrated != 0) {
+        return migrated;
+      }
+    }
+    final accountId = _bindings.dc_accounts_add_account(_accounts);
+    if (accountId == 0) {
+      throw const DeltaSafeException('Failed to allocate Delta account');
+    }
+    return accountId;
+  }
+
+  DeltaContextHandle contextFor(int accountId) {
+    final ctx = _bindings.dc_accounts_get_account(_accounts, accountId);
+    if (ctx == ffi.nullptr) {
+      throw DeltaSafeException('Account $accountId is unavailable');
+    }
+    return DeltaContextHandle._borrowed(
+      _bindings,
+      ctx,
+      this,
+      accountId,
+    );
+  }
+
+  Stream<DeltaCoreEvent> eventsFor(int accountId) {
+    final stream = _ensureEventStream();
+    return stream.where(
+      (event) => event.accountId == null || event.accountId == accountId,
+    );
+  }
+
+  Future<void> startIo() async {
+    if (_ioRunning) return;
+    _bindings.dc_accounts_start_io(_accounts);
+    _ioRunning = true;
+  }
+
+  Future<void> stopIo() async {
+    if (!_ioRunning) return;
+    _bindings.dc_accounts_stop_io(_accounts);
+    _ioRunning = false;
+  }
+
+  Future<void> maybeNetworkAvailable() async {
+    _bindings.dc_accounts_maybe_network(_accounts);
+  }
+
+  Future<void> maybeNetworkLost() async {
+    _bindings.dc_accounts_maybe_network_lost(_accounts);
+  }
+
+  Future<bool> backgroundFetch(Duration timeout) async {
+    final seconds = timeout.inSeconds <= 0 ? 1 : timeout.inSeconds;
+    final result = _bindings.dc_accounts_background_fetch(
+      _accounts,
+      seconds,
+    );
+    return result != 0;
+  }
+
+  Future<void> setPushDeviceToken(String token) async {
+    final trimmed = token.trim();
+    if (trimmed.isEmpty) return;
+    _withCString(trimmed, (tokenPtr) {
+      _bindings.dc_accounts_set_push_device_token(
+        _accounts,
+        tokenPtr,
+      );
+    });
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    await stopIo();
+    await _eventLoop?.dispose();
+    _eventLoop = null;
+    _bindings.dc_accounts_unref(_accounts);
+    _disposed = true;
+  }
+
+  Stream<DeltaCoreEvent> _ensureEventStream() {
+    _eventLoop ??= _DeltaEventLoop(
+      emitterFactory: () => _bindings.dc_accounts_get_event_emitter(_accounts),
+      debugLabel: 'accounts',
+    );
+    return _eventLoop!.stream;
+  }
+
+  int? _existingAccountId() {
+    final array = _bindings.dc_accounts_get_all(_accounts);
+    if (array == ffi.nullptr) {
+      return null;
+    }
+    try {
+      final count = _bindings.dc_array_get_cnt(array);
+      if (count <= 0) {
+        return null;
+      }
+      return _bindings.dc_array_get_id(array, 0);
+    } finally {
+      _bindings.dc_array_unref(array);
+    }
+  }
+}
+
 class DeltaCoreEvent {
   const DeltaCoreEvent({
     required this.type,
@@ -409,6 +523,7 @@ class DeltaCoreEvent {
     required this.data2,
     this.data1Text,
     this.data2Text,
+    this.accountId,
   });
 
   final int type;
@@ -416,6 +531,7 @@ class DeltaCoreEvent {
   final int data2;
   final String? data1Text;
   final String? data2Text;
+  final int? accountId;
 }
 
 class DeltaChat {
@@ -468,6 +584,121 @@ class DeltaMessage {
   bool get hasFile => filePath != null && filePath!.isNotEmpty;
 }
 
+class _DeltaEventLoop {
+  _DeltaEventLoop({
+    required ffi.Pointer<dc_event_emitter_t> Function() emitterFactory,
+    required String debugLabel,
+  })  : _emitterFactory = emitterFactory,
+        _debugLabel = debugLabel;
+  final ffi.Pointer<dc_event_emitter_t> Function() _emitterFactory;
+  final String _debugLabel;
+  late final StreamController<DeltaCoreEvent> _controller =
+      StreamController<DeltaCoreEvent>.broadcast(
+    onListen: _handleListen,
+  );
+
+  ReceivePort? _eventPort;
+  ReceivePort? _controlPort;
+  StreamSubscription<dynamic>? _eventSubscription;
+  StreamSubscription<dynamic>? _controlSubscription;
+  SendPort? _loopControlPort;
+  Isolate? _isolate;
+  ffi.Pointer<dc_event_emitter_t>? _emitter;
+  bool _started = false;
+  bool _stopRequested = false;
+  bool _disposed = false;
+  Completer<void>? _stoppedCompleter;
+
+  Stream<DeltaCoreEvent> get stream => _controller.stream;
+
+  void _handleListen() {
+    if (_started || _disposed) {
+      return;
+    }
+    _started = true;
+    unawaited(_startLoop());
+  }
+
+  Future<void> _startLoop() async {
+    _emitter ??= _emitterFactory();
+    if (_emitter == null || _emitter == ffi.nullptr) {
+      _controller.addError(
+        const DeltaSafeException('Failed to obtain Delta event emitter'),
+      );
+      await _controller.close();
+      return;
+    }
+
+    _eventPort = ReceivePort('delta-events($_debugLabel)');
+    _controlPort = ReceivePort('delta-events-control($_debugLabel)');
+
+    _eventSubscription = _eventPort!.listen((message) {
+      if (message is _DeltaRawEvent) {
+        _controller.add(
+          DeltaCoreEvent(
+            type: message.type,
+            data1: message.data1,
+            data2: message.data2,
+            data1Text: message.data1Text,
+            data2Text: message.data2Text,
+            accountId: message.accountId == 0 ? null : message.accountId,
+          ),
+        );
+      }
+    });
+
+    _controlSubscription = _controlPort!.listen((message) {
+      if (message is SendPort) {
+        _loopControlPort = message;
+      } else if (message is _EventLoopStatus &&
+          message.code == _EventLoopStatusCode.stopped) {
+        _stoppedCompleter?.complete();
+      }
+    });
+
+    _isolate = await Isolate.spawn<_EventLoopConfig>(
+      _eventLoop,
+      _EventLoopConfig(
+        emitterAddress: _emitter!.address,
+        eventPort: _eventPort!.sendPort,
+        controlPort: _controlPort!.sendPort,
+        label: _debugLabel,
+      ),
+      debugName: 'delta-event-loop($_debugLabel)',
+    );
+  }
+
+  void _requestStop() {
+    if (_stopRequested || _loopControlPort == null) {
+      return;
+    }
+    _stopRequested = true;
+    _stoppedCompleter ??= Completer<void>();
+    _loopControlPort!.send(const _EventLoopCommandStop());
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    if (_started) {
+      _requestStop();
+      if (_stoppedCompleter != null) {
+        await _stoppedCompleter!.future
+            .timeout(const Duration(seconds: 5), onTimeout: () {});
+      }
+    }
+    await _eventSubscription?.cancel();
+    await _controlSubscription?.cancel();
+    _eventPort?.close();
+    _controlPort?.close();
+    await _controller.close();
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+    _loopControlPort = null;
+    _emitter = null;
+  }
+}
+
 class DeltaSafeException implements Exception {
   const DeltaSafeException(this.message);
 
@@ -484,6 +715,7 @@ class _DeltaRawEvent {
     required this.data2,
     this.data1Text,
     this.data2Text,
+    required this.accountId,
   });
 
   final int type;
@@ -491,25 +723,57 @@ class _DeltaRawEvent {
   final int data2;
   final String? data1Text;
   final String? data2Text;
+  final int accountId;
+}
+
+class _EventLoopCommandStop {
+  const _EventLoopCommandStop();
+}
+
+enum _EventLoopStatusCode { stopped }
+
+class _EventLoopStatus {
+  const _EventLoopStatus(this.code);
+
+  final _EventLoopStatusCode code;
 }
 
 class _EventLoopConfig {
   const _EventLoopConfig({
     required this.emitterAddress,
-    required this.sendPort,
+    required this.eventPort,
+    required this.controlPort,
+    required this.label,
   });
 
   final int emitterAddress;
-  final SendPort sendPort;
+  final SendPort eventPort;
+  final SendPort controlPort;
+  final String label;
 }
 
 void _eventLoop(_EventLoopConfig config) {
   final bindings = DeltaChatBindings(loadDeltaLibrary());
   final emitter =
       ffi.Pointer<dc_event_emitter_t>.fromAddress(config.emitterAddress);
+  final controlReceive =
+      ReceivePort('delta-event-loop-control(${config.label})');
+  config.controlPort.send(controlReceive.sendPort);
+  var shouldStop = false;
+  final controlSubscription = controlReceive.listen((message) {
+    if (message is _EventLoopCommandStop) {
+      shouldStop = true;
+    }
+  });
   while (true) {
     final eventPtr = bindings.dc_get_next_event(emitter);
     if (eventPtr == ffi.nullptr) {
+      if (shouldStop) {
+        config.controlPort.send(
+          const _EventLoopStatus(_EventLoopStatusCode.stopped),
+        );
+        break;
+      }
       continue;
     }
     final type = bindings.dc_event_get_id(eventPtr);
@@ -523,17 +787,22 @@ void _eventLoop(_EventLoopConfig config) {
       bindings.dc_event_get_data2_str(eventPtr),
       bindings: bindings,
     );
-    config.sendPort.send(
+    final accountId = bindings.dc_event_get_account_id(eventPtr);
+    config.eventPort.send(
       _DeltaRawEvent(
         type: type,
         data1: data1,
         data2: data2,
         data1Text: data1Str,
         data2Text: data2Str,
+        accountId: accountId,
       ),
     );
     bindings.dc_event_unref(eventPtr);
   }
+  controlSubscription.cancel();
+  controlReceive.close();
+  bindings.dc_event_emitter_unref(emitter);
 }
 
 ffi.Pointer<ffi.Char> _toCString(String value) =>
