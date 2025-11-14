@@ -75,6 +75,7 @@ class ProfileTile extends StatelessWidget {
                 extra: {
                   'locate': context.read,
                   'jids': ['feedback@axi.im'],
+                  'attachments': const <String>[],
                 },
               ),
             ),

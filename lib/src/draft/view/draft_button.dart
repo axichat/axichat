@@ -15,7 +15,10 @@ class DraftButton extends StatelessWidget {
       child: AxiFab(
         onPressed: () => context.push(
           const ComposeRoute().location,
-          extra: {'locate': context.read},
+          extra: {
+            'locate': context.read,
+            'attachments': const <String>[],
+          },
         ),
         iconData: LucideIcons.pencilLine,
         text: 'Compose',

@@ -95,6 +95,7 @@ class RosterList extends StatelessWidget {
                         extra: {
                           'locate': context.read,
                           'jids': [item.jid],
+                          'attachments': const <String>[],
                         },
                       ),
                     ),

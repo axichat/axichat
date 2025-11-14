@@ -1,8 +1,9 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -13,12 +14,14 @@ class ComposeScreen extends StatelessWidget {
     this.id,
     this.jids = const [''],
     this.body = '',
+    this.attachmentMetadataIds = const [],
     required this.locate,
   });
 
   final int? id;
   final List<String> jids;
   final String body;
+  final List<String> attachmentMetadataIds;
   final T Function<T>() locate;
 
   @override
@@ -70,19 +73,35 @@ class ComposeScreen extends StatelessWidget {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: MultiBlocProvider(
+                child: MultiRepositoryProvider(
                   providers: [
-                    BlocProvider.value(
-                      value: locate<DraftCubit>(),
-                    ),
-                    BlocProvider.value(
-                      value: locate<RosterCubit>(),
+                    RepositoryProvider.value(
+                      value: locate<MessageService>(),
                     ),
                   ],
-                  child: DraftForm(
-                    id: id,
-                    jids: jids,
-                    body: body,
+                  child: Builder(
+                    builder: (context) {
+                      final chatsCubit = _maybeLocate<ChatsCubit>();
+                      final providers = <BlocProvider<dynamic>>[
+                        BlocProvider.value(
+                          value: locate<DraftCubit>(),
+                        ),
+                      ];
+                      if (chatsCubit != null) {
+                        providers.add(
+                          BlocProvider.value(value: chatsCubit),
+                        );
+                      }
+                      return MultiBlocProvider(
+                        providers: providers,
+                        child: DraftForm(
+                          id: id,
+                          jids: jids,
+                          body: body,
+                          attachmentMetadataIds: attachmentMetadataIds,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -91,5 +110,13 @@ class ComposeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  T? _maybeLocate<T>() {
+    try {
+      return locate<T>();
+    } catch (_) {
+      return null;
+    }
   }
 }
