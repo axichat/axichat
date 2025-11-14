@@ -73,17 +73,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                     side: BorderSide(color: colors.border),
                                   ),
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(24.0),
-                                  child: AnimatedCrossFade(
-                                    crossFadeState: _login
-                                        ? CrossFadeState.showFirst
-                                        : CrossFadeState.showSecond,
-                                    duration: context
-                                        .read<SettingsCubit>()
-                                        .animationDuration,
-                                    firstChild: const LoginForm(),
-                                    secondChild: const SignupForm(),
+                                child: AnimatedCrossFade(
+                                  crossFadeState: _login
+                                      ? CrossFadeState.showFirst
+                                      : CrossFadeState.showSecond,
+                                  duration: context
+                                      .read<SettingsCubit>()
+                                      .animationDuration,
+                                  firstChild: const Padding(
+                                    padding: EdgeInsets.all(24.0),
+                                    child: LoginForm(),
+                                  ),
+                                  secondChild: const Padding(
+                                    padding: EdgeInsets.all(24.0),
+                                    child: SignupForm(),
                                   ),
                                 ),
                               ),
