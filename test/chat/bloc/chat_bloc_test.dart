@@ -93,6 +93,13 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) async {});
+    when(
+      () => messageService.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+      ),
+    ).thenAnswer((_) async => 1);
   });
 
   tearDown(() async {
@@ -590,5 +597,46 @@ void main() {
 
     await bloc.close();
     await syncController.close();
+  });
+
+  test('saves drafts when email sync is offline', () async {
+    final emailService = MockEmailService();
+    when(() => emailService.syncState)
+        .thenReturn(const EmailSyncState.offline('offline'));
+    when(() => emailService.syncStateStream)
+        .thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 4,
+      emailAddress: 'ally@example.com',
+    );
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      notificationService: notificationService,
+      emailService: emailService,
+    );
+
+    chatStreamController.add(emailChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(const ChatMessageSent(text: 'Offline draft'));
+    await _pumpBloc();
+
+    verify(
+      () => messageService.saveDraft(
+        id: null,
+        jids: any(named: 'jids'),
+        body: 'Offline draft',
+      ),
+    ).called(1);
+    verifyNever(() => emailService.sendMessage(
+        chat: any(named: 'chat'), body: any(named: 'body')));
+    expect(bloc.state.toastId, greaterThan(0));
+    expect(bloc.state.toast?.message, contains('Drafts'));
+
+    await bloc.close();
   });
 }
