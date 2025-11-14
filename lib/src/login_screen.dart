@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
@@ -142,278 +143,181 @@ class _AuthModeToggle extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final Duration duration;
 
+  static const _gap = 12.0;
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedSize(
-      duration: duration,
-      curve: Curves.easeInOut,
-      child: AnimatedSwitcher(
-        duration: duration,
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: loginSelected
-            ? _YinYangCard(
-                key: const ValueKey(_AuthMode.login),
-                mode: _AuthMode.login,
-                duration: duration,
-                onPrimaryPressed: () => onChanged(true),
-                onCutoutPressed: () => onChanged(false),
-              )
-            : _YinYangCard(
-                key: const ValueKey(_AuthMode.signup),
-                mode: _AuthMode.signup,
-                duration: duration,
-                onPrimaryPressed: () => onChanged(false),
-                onCutoutPressed: () => onChanged(true),
-              ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = math.min(320.0, math.max(220.0, constraints.maxWidth));
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MorphingAuthButton(
+              label: 'Log in',
+              alternateLabel: 'Sign up',
+              selected: loginSelected,
+              cutoutEdge: CutoutEdge.bottom,
+              width: width,
+              duration: duration,
+              onTap: () => onChanged(true),
+              onAlternateTap: () => onChanged(false),
+            ),
+            const SizedBox(height: _gap),
+            _MorphingAuthButton(
+              label: 'Sign up',
+              alternateLabel: 'Log in',
+              selected: !loginSelected,
+              cutoutEdge: CutoutEdge.top,
+              width: width,
+              duration: duration,
+              onTap: () => onChanged(false),
+              onAlternateTap: () => onChanged(true),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-enum _AuthMode { login, signup }
-
-class _YinYangCard extends StatelessWidget {
-  const _YinYangCard({
-    super.key,
-    required this.mode,
+class _MorphingAuthButton extends StatefulWidget {
+  const _MorphingAuthButton({
+    required this.label,
+    required this.alternateLabel,
+    required this.selected,
+    required this.cutoutEdge,
+    required this.width,
     required this.duration,
-    required this.onPrimaryPressed,
-    required this.onCutoutPressed,
+    required this.onTap,
+    required this.onAlternateTap,
   });
 
-  final _AuthMode mode;
+  final String label;
+  final String alternateLabel;
+  final bool selected;
+  final CutoutEdge cutoutEdge;
+  final double width;
   final Duration duration;
-  final VoidCallback onPrimaryPressed;
-  final VoidCallback onCutoutPressed;
+  final VoidCallback onTap;
+  final VoidCallback onAlternateTap;
 
-  static const _cutoutDepth = 48.0;
-  static const _cornerRadius = 26.0;
-
-  bool get _isLogin => mode == _AuthMode.login;
+  static const double _primaryHeight = 60;
+  static const double _compactHeight = 38;
+  static const double _cutoutDepth = 22;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final accent = _isLogin ? colors.primary : colors.accent;
-    final primaryLabel = _isLogin ? 'Log in' : 'Sign up';
-    final primarySubtitle = _isLogin
-        ? 'Welcome back to your encrypted chats'
-        : 'Create your secure Axichat ID';
-    final primaryIcon = _isLogin ? Icons.lock_outline : Icons.person_add_alt_1;
-    final alternateLabel = _isLogin ? 'Sign up' : 'Log in';
-    final alternateSubtitle =
-        _isLogin ? 'Need an account? Create one.' : 'Already onboard? Log in.';
-    final alternateIcon =
-        _isLogin ? Icons.person_add_alt : Icons.lock_open_outlined;
-    final cutoutEdge = _isLogin ? CutoutEdge.bottom : CutoutEdge.top;
-    final topPadding = cutoutEdge == CutoutEdge.top ? _cutoutDepth : 0.0;
-    final bottomPadding = cutoutEdge == CutoutEdge.bottom ? _cutoutDepth : 0.0;
-
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth = constraints.maxWidth;
-          final resolvedThickness = math.max(180.0, maxWidth - 64);
-          final shape = SquircleBorder(
-            cornerRadius: _cornerRadius,
-            side: BorderSide(color: colors.border),
-          );
-          return CutoutSurface(
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            shadowOpacity: 0.22,
-            shadows: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 36,
-                offset: const Offset(0, 20),
-              ),
-            ],
-            shape: shape,
-            cutouts: [
-              CutoutSpec(
-                edge: cutoutEdge,
-                alignment: Alignment.center,
-                depth: _cutoutDepth,
-                thickness: resolvedThickness,
-                cornerRadius: 22,
-                child: _YinYangCutoutButton(
-                  label: alternateLabel,
-                  subtitle: alternateSubtitle,
-                  icon: alternateIcon,
-                  accent: accent,
-                  onPressed: onCutoutPressed,
-                ),
-              ),
-            ],
-            child: _YinYangPrimaryBody(
-              label: primaryLabel,
-              subtitle: primarySubtitle,
-              icon: primaryIcon,
-              accent: accent,
-              onPressed: onPrimaryPressed,
-              alignStart: _isLogin,
-            ),
-          );
-        },
-      ),
-    );
-  }
+  State<_MorphingAuthButton> createState() => _MorphingAuthButtonState();
 }
 
-class _YinYangPrimaryBody extends StatelessWidget {
-  const _YinYangPrimaryBody({
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onPressed,
-    required this.alignStart,
-  });
-
-  final String label;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onPressed;
-  final bool alignStart;
+class _MorphingAuthButtonState extends State<_MorphingAuthButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final alignment =
-        alignStart ? CrossAxisAlignment.start : CrossAxisAlignment.end;
-    final textAlign = alignStart ? TextAlign.left : TextAlign.right;
-    final gradient = LinearGradient(
-      begin: alignStart ? Alignment.topLeft : Alignment.topRight,
-      end: alignStart ? Alignment.bottomRight : Alignment.bottomLeft,
-      colors: [
-        accent.withValues(alpha: 0.18),
-        accent.withValues(alpha: 0.08),
-      ],
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+      value: widget.selected ? 1 : 0,
     );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(_YinYangCard._cornerRadius - 4),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 28, 28, 48),
-          child: Column(
-            crossAxisAlignment: alignment,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 28, color: accent),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                textAlign: textAlign,
-                style: context.textTheme.h3.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colors.foreground,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                textAlign: textAlign,
-                style: context.textTheme.p.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).withTapBounce();
   }
-}
 
-class _YinYangCutoutButton extends StatelessWidget {
-  const _YinYangCutoutButton({
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onPressed,
-  });
+  @override
+  void didUpdateWidget(covariant _MorphingAuthButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+    if (oldWidget.selected != widget.selected) {
+      if (widget.selected) {
+        _controller.animateTo(1, curve: Curves.easeInOut);
+      } else {
+        _controller.animateTo(0, curve: Curves.easeInOut);
+      }
+    }
+  }
 
-  final String label;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onPressed;
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.background,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: colors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 26,
-                offset: const Offset(0, 16),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        final expandedWidth = widget.width;
+        final compactWidth = widget.width * 0.6;
+        final currentWidth =
+            lerpDouble(compactWidth, expandedWidth, t) ?? expandedWidth;
+        final height = lerpDouble(
+              _MorphingAuthButton._compactHeight,
+              _MorphingAuthButton._primaryHeight,
+              t,
+            ) ??
+            _MorphingAuthButton._primaryHeight;
+        final borderRadius = lerpDouble(18, 26, t) ?? 26;
+        final borderColor = Color.lerp(
+              colors.border.withValues(alpha: 0.9),
+              colors.primary,
+              t,
+            ) ??
+            colors.border;
+        final borderWidth = lerpDouble(1, 1.4, t) ?? 1.2;
+        final cutoutThickness = lerpDouble(0, currentWidth * 0.6, t) ?? 0;
+        final cutoutDepth = _MorphingAuthButton._cutoutDepth * t;
+        final cutouts = <CutoutSpec>[];
+        if (cutoutDepth > 0.1 && cutoutThickness > 18) {
+          cutouts.add(
+            CutoutSpec(
+              edge: widget.cutoutEdge,
+              alignment: Alignment.center,
+              depth: cutoutDepth,
+              thickness: cutoutThickness,
+              cornerRadius: 18,
+              child: const SizedBox.shrink(),
+            ),
+          );
+        }
+        return SizedBox(
+          width: currentWidth,
+          height: height,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: CutoutSurface(
+              backgroundColor: colors.card,
+              borderColor: borderColor,
+              shadowOpacity: 0.15 * t,
+              shadows: [
+                BoxShadow(
+                  color: colors.primary.withValues(alpha: 0.2 * t),
+                  blurRadius: 18,
+                  offset: Offset(0, 12 * t),
+                ),
+              ],
+              shape: SquircleBorder(
+                cornerRadius: borderRadius,
+                side: BorderSide(color: borderColor, width: borderWidth),
               ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: onPressed,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                child: Row(
-                  children: [
-                    Icon(icon, size: 22, color: accent),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            label,
-                            style: context.textTheme.p.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: accent,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            subtitle,
-                            style: context.textTheme.small.copyWith(
-                              color: colors.mutedForeground,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: colors.mutedForeground,
-                    ),
-                  ],
+              cutouts: cutouts,
+              child: Center(
+                child: Text(
+                  widget.label,
+                  style: context.textTheme.p.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
+            ).withTapBounce(),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
