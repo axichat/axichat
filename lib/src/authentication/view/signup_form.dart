@@ -30,6 +30,7 @@ class _SignupFormState extends State<SignupForm> {
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
   late TextEditingController _captchaTextController;
+  static final _usernamePattern = RegExp(r'^[a-z][a-z0-9._-]{3,19}$');
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -49,19 +50,36 @@ class _SignupFormState extends State<SignupForm> {
   void initState() {
     super.initState();
     _captchaSrc = _loadCaptchaSrc();
-    _jidTextController = TextEditingController();
-    _passwordTextController = TextEditingController();
-    _password2TextController = TextEditingController();
-    _captchaTextController = TextEditingController();
+    _jidTextController = TextEditingController()
+      ..addListener(_handleFieldProgressChanged);
+    _passwordTextController = TextEditingController()
+      ..addListener(_handleFieldProgressChanged);
+    _password2TextController = TextEditingController()
+      ..addListener(_handleFieldProgressChanged);
+    _captchaTextController = TextEditingController()
+      ..addListener(_handleFieldProgressChanged);
   }
 
   @override
   void dispose() {
-    _jidTextController.dispose();
-    _passwordTextController.dispose();
-    _password2TextController.dispose();
-    _captchaTextController.dispose();
+    _jidTextController
+      ..removeListener(_handleFieldProgressChanged)
+      ..dispose();
+    _passwordTextController
+      ..removeListener(_handleFieldProgressChanged)
+      ..dispose();
+    _password2TextController
+      ..removeListener(_handleFieldProgressChanged)
+      ..dispose();
+    _captchaTextController
+      ..removeListener(_handleFieldProgressChanged)
+      ..dispose();
     super.dispose();
+  }
+
+  void _handleFieldProgressChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _onPressed(BuildContext context) async {
@@ -97,6 +115,90 @@ class _SignupFormState extends State<SignupForm> {
   }
 
   static const captchaSize = Size(180, 70);
+  static const _progressSegmentCount = 3;
+
+  bool get _isUsernameValid =>
+      _usernamePattern.hasMatch(_jidTextController.text);
+
+  bool get _passwordWithinBounds =>
+      _passwordTextController.text.length >= passwordMinLength &&
+      _passwordTextController.text.length <= passwordMaxLength;
+
+  bool get _passwordsMatch =>
+      _password2TextController.text.isNotEmpty &&
+      _password2TextController.text == _passwordTextController.text;
+
+  bool get _arePasswordsValid => _passwordWithinBounds && _passwordsMatch;
+
+  bool get _captchaComplete => _captchaTextController.text.trim().isNotEmpty;
+
+  int get _completedStepCount => [
+        _isUsernameValid,
+        _arePasswordsValid,
+        _captchaComplete,
+      ].where((complete) => complete).length;
+
+  double get _progressValue => _completedStepCount / _progressSegmentCount;
+
+  Widget _buildProgressMeter(BuildContext context) {
+    final colors = context.colorScheme;
+    final duration = context.read<SettingsCubit>().animationDuration;
+    final progress = _progressValue.clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Account setup',
+              style: context.textTheme.muted,
+            ),
+            Text(
+              '$_completedStepCount / $_progressSegmentCount',
+              style: context.textTheme.muted.copyWith(
+                color: colors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
+            return Stack(
+              children: [
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: colors.muted.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeInOut,
+                  width: maxWidth * progress,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        colors.primary,
+                        colors.primary.withValues(alpha: 0.7),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,8 +218,10 @@ class _SignupFormState extends State<SignupForm> {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _buildProgressMeter(context),
             Text(
               SignupForm.title,
               style: context.textTheme.h3,
@@ -170,8 +274,7 @@ class _SignupFormState extends State<SignupForm> {
                           if (text.isEmpty) {
                             return 'Enter a username';
                           }
-                          if (!RegExp(r'^[a-z][a-z0-9._-]{3,19}$')
-                              .hasMatch(text)) {
+                          if (!_usernamePattern.hasMatch(text)) {
                             return '4-20 alphanumeric, allowing ".", "_" and "-".';
                           }
                           return null;
