@@ -19,7 +19,7 @@ enum ShadColor {
 class SettingsState with _$SettingsState {
   const factory SettingsState({
     @Default(ThemeMode.light) ThemeMode themeMode,
-    @Default(ShadColor.neutral) ShadColor shadColor,
+    @Default(ShadColor.blue) ShadColor shadColor,
     @Default(false) bool mute,
     @Default(true) bool readReceipts,
     @Default(true) bool indicateTyping,

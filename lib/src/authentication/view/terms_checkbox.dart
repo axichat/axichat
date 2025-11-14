@@ -1,7 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 const termsUrl = 'https://axichat.com/terms.pdf';
 const privacyUrl = 'https://axichat.com/privacy.pdf';
@@ -15,11 +14,11 @@ class TermsCheckbox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: ShadCheckboxFormField(
+      child: AxiCheckboxFormField(
         enabled: enabled,
         initialValue: false,
         inputLabel: const Text('I accept the terms and conditions'),
-        onChanged: (v) {},
+        onChanged: (_) {},
         inputSublabel: RichText(
           text: TextSpan(
             style: context.textTheme.muted,
@@ -51,7 +50,7 @@ class TermsCheckbox extends StatelessWidget {
           ),
         ),
         validator: (v) {
-          if (!v) {
+          if (v != true) {
             return 'You must accept the terms and conditions';
           }
           return null;

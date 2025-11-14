@@ -790,12 +790,10 @@ class _CalendarDropdown extends StatelessWidget {
               }
               if (isSelectedWeek) {
                 backgroundColor = calendarPrimaryColor.withValues(alpha: 0.12);
-                border =
-                    const BorderSide(color: calendarPrimaryColor, width: 1);
+                border = BorderSide(color: calendarPrimaryColor, width: 1);
               }
               if (isToday && !isSelectedDay) {
-                border =
-                    const BorderSide(color: calendarPrimaryColor, width: 1.5);
+                border = BorderSide(color: calendarPrimaryColor, width: 1.5);
               }
               if (isSelectedDay) {
                 backgroundColor = calendarPrimaryColor;

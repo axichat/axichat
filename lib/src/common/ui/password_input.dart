@@ -3,7 +3,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const passwordMinLength = 12;
 const passwordMaxLength = 64;
 
 class PasswordInput extends StatefulWidget {
@@ -13,11 +12,13 @@ class PasswordInput extends StatefulWidget {
     this.placeholder,
     this.enabled = false,
     this.confirmValidator,
+    this.validator,
   });
 
   final bool enabled;
   final String? placeholder;
   final String? Function(String)? confirmValidator;
+  final FormFieldValidator<String>? validator;
   final TextEditingController controller;
 
   @override
@@ -53,18 +54,28 @@ class _PasswordInputState extends State<PasswordInput> {
           setState(() => obscure = !obscure);
         },
       ).withTapBounce(),
-      validator: widget.confirmValidator ??
-          (text) {
-            if (text.isEmpty) {
-              return 'Enter a password';
-            }
-            if (text.length < passwordMinLength ||
-                text.length > passwordMaxLength) {
-              return 'Must be between $passwordMinLength '
-                  'and $passwordMaxLength characters';
-            }
-            return null;
-          },
+      validator: (text) {
+        final confirmationValidator =
+            widget.confirmValidator ?? _defaultValidator;
+        final baseResult = confirmationValidator(text);
+        if (baseResult != null) {
+          return baseResult;
+        }
+        if (widget.validator != null) {
+          return widget.validator!(text);
+        }
+        return null;
+      },
     );
+  }
+
+  String? _defaultValidator(String text) {
+    if (text.isEmpty) {
+      return 'Enter a password';
+    }
+    if (text.length > passwordMaxLength) {
+      return 'Must be $passwordMaxLength characters or fewer';
+    }
+    return null;
   }
 }

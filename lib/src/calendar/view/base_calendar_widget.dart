@@ -409,6 +409,9 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
   Widget _buildAddTaskFab(BuildContext context) {
     return BlocBuilder<T, CalendarState>(
       builder: (context, state) {
+        final themeColors = context.colorScheme;
+        final accent = calendarPrimaryColor;
+        final onAccent = themeColors.primaryForeground;
         return ActionFeedback(
           onTap: () {
             showTaskInput(context, state.selectedDate);
@@ -420,8 +423,8 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
             child: Container(
               width: 56,
               height: 56,
-              decoration: const BoxDecoration(
-                color: Colors.blue,
+              decoration: BoxDecoration(
+                color: accent,
                 shape: BoxShape.circle,
                 boxShadow: calendarMediumShadow,
               ),
@@ -437,17 +440,17 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                   borderRadius: BorderRadius.circular(28),
                   child: Center(
                     child: state.isLoading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: onAccent,
                             ),
                           )
-                        : const Icon(
+                        : Icon(
                             Icons.add,
-                            color: Colors.white,
+                            color: onAccent,
                             size: 24,
                           ),
                   ),

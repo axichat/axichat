@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -25,12 +26,25 @@ class SignupForm extends StatefulWidget {
   State<SignupForm> createState() => _SignupFormState();
 }
 
+enum _PasswordStrengthLevel { empty, weak, medium, stronger }
+
+enum _InsecurePasswordReason { weak, breached }
+
 class _SignupFormState extends State<SignupForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
   late TextEditingController _captchaTextController;
   static final _usernamePattern = RegExp(r'^[a-z][a-z0-9._-]{3,19}$');
+  static final _digitCharacters = RegExp(r'[0-9]');
+  static final _lowercaseCharacters = RegExp(r'[a-z]');
+  static final _uppercaseCharacters = RegExp(r'[A-Z]');
+  static final _symbolCharacters = RegExp(r'[^A-Za-z0-9]');
+  static const double _maxEntropyBits = 120;
+  static const double _weakEntropyThreshold = 50;
+  static const double _strongEntropyThreshold = 80;
+  static const _strengthMediumColor = Color(0xFFF97316);
+  static const _strengthStrongColor = Color(0xFF22C55E);
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -38,8 +52,14 @@ class _SignupFormState extends State<SignupForm> {
     GlobalKey<FormState>(),
   ];
 
-  var allowInsecurePassword = false;
-  var rememberMe = true;
+  bool allowInsecurePassword = false;
+  bool rememberMe = true;
+  bool _passwordBreached = false;
+  String? _lastBreachedPassword;
+  bool _pwnedCheckInProgress = false;
+  bool _showAllowInsecureError = false;
+  bool _showBreachedError = false;
+  String _lastPasswordValue = '';
 
   var _currentIndex = 0;
   String? _errorText;
@@ -79,6 +99,19 @@ class _SignupFormState extends State<SignupForm> {
 
   void _handleFieldProgressChanged() {
     if (!mounted) return;
+    final password = _passwordTextController.text;
+    if (_lastPasswordValue != password) {
+      _lastPasswordValue = password;
+      _showAllowInsecureError = false;
+      _showBreachedError = false;
+      if (_passwordBreached && _lastBreachedPassword != password) {
+        _passwordBreached = false;
+        _lastBreachedPassword = null;
+      }
+    }
+    if (_insecurePasswordReason == null && allowInsecurePassword) {
+      allowInsecurePassword = false;
+    }
     setState(() {});
   }
 
@@ -117,11 +150,61 @@ class _SignupFormState extends State<SignupForm> {
   static const captchaSize = Size(180, 70);
   static const _progressSegmentCount = 3;
 
+  double get _passwordEntropyBits {
+    final password = _passwordTextController.text;
+    if (password.isEmpty) {
+      return 0;
+    }
+    final pool = _estimateCharacterPool(password);
+    return password.length * (math.log(pool) / math.ln2);
+  }
+
+  _PasswordStrengthLevel get _passwordStrengthLevel {
+    if (_passwordTextController.text.isEmpty) {
+      return _PasswordStrengthLevel.empty;
+    }
+    final entropy = _passwordEntropyBits;
+    if (entropy < _weakEntropyThreshold) {
+      return _PasswordStrengthLevel.weak;
+    }
+    if (entropy < _strongEntropyThreshold) {
+      return _PasswordStrengthLevel.medium;
+    }
+    return _PasswordStrengthLevel.stronger;
+  }
+
+  _InsecurePasswordReason? get _insecurePasswordReason {
+    if (_passwordBreached) {
+      return _InsecurePasswordReason.breached;
+    }
+    if (_passwordStrengthLevel == _PasswordStrengthLevel.weak) {
+      return _InsecurePasswordReason.weak;
+    }
+    return null;
+  }
+
+  int _estimateCharacterPool(String password) {
+    var pool = 0;
+    if (_digitCharacters.hasMatch(password)) {
+      pool += 10;
+    }
+    if (_lowercaseCharacters.hasMatch(password)) {
+      pool += 26;
+    }
+    if (_uppercaseCharacters.hasMatch(password)) {
+      pool += 26;
+    }
+    if (_symbolCharacters.hasMatch(password)) {
+      pool += 33;
+    }
+    return pool == 0 ? 1 : pool;
+  }
+
   bool get _isUsernameValid =>
       _usernamePattern.hasMatch(_jidTextController.text);
 
   bool get _passwordWithinBounds =>
-      _passwordTextController.text.length >= passwordMinLength &&
+      _passwordTextController.text.isNotEmpty &&
       _passwordTextController.text.length <= passwordMaxLength;
 
   bool get _passwordsMatch =>
@@ -131,6 +214,19 @@ class _SignupFormState extends State<SignupForm> {
   bool get _arePasswordsValid => _passwordWithinBounds && _passwordsMatch;
 
   bool get _captchaComplete => _captchaTextController.text.trim().isNotEmpty;
+
+  bool get _hasStartedPasswordConfirmation =>
+      _passwordTextController.text.isNotEmpty &&
+      _password2TextController.text.isNotEmpty;
+
+  _InsecurePasswordReason? get _visibleInsecurePasswordReason {
+    final reason = _insecurePasswordReason;
+    if (reason == _InsecurePasswordReason.weak &&
+        !_hasStartedPasswordConfirmation) {
+      return null;
+    }
+    return reason;
+  }
 
   int get _completedStepCount => [
         _isUsernameValid,
@@ -197,6 +293,256 @@ class _SignupFormState extends State<SignupForm> {
         );
       },
     );
+  }
+
+  Widget _buildPasswordStrengthMeter(BuildContext context) {
+    final colors = context.colorScheme;
+    final duration = context.read<SettingsCubit>().animationDuration;
+    final targetBits = _passwordEntropyBits.clamp(0.0, _maxEntropyBits);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetBits),
+      duration: duration,
+      curve: Curves.easeInOut,
+      builder: (context, animatedBits, child) {
+        final normalized = (animatedBits / _maxEntropyBits).clamp(0.0, 1.0);
+        final level = _passwordStrengthLevel;
+        final fillColor = _strengthColor(level, colors);
+        final showBreachWarning = _showBreachedError && _passwordBreached;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Password strength',
+                  style: context.textTheme.muted,
+                ),
+                Text(
+                  _strengthLabel(level),
+                  style: context.textTheme.muted.copyWith(
+                    color: fillColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Stack(
+              children: [
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: colors.muted.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                FractionallySizedBox(
+                  widthFactor: normalized,
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: fillColor,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            AnimatedSwitcher(
+              duration: duration,
+              child: showBreachWarning
+                  ? Padding(
+                      key: const ValueKey('breach-warning'),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'This password has been found in a hacked database.',
+                        style: context.textTheme.muted.copyWith(
+                          color: colors.destructive,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _strengthLabel(_PasswordStrengthLevel level) {
+    switch (level) {
+      case _PasswordStrengthLevel.empty:
+        return 'None';
+      case _PasswordStrengthLevel.weak:
+        return 'Weak';
+      case _PasswordStrengthLevel.medium:
+        return 'Medium';
+      case _PasswordStrengthLevel.stronger:
+        return 'Stronger';
+    }
+  }
+
+  Color _strengthColor(
+    _PasswordStrengthLevel level,
+    ShadColorScheme colors,
+  ) {
+    switch (level) {
+      case _PasswordStrengthLevel.weak:
+      case _PasswordStrengthLevel.empty:
+        return colors.destructive;
+      case _PasswordStrengthLevel.medium:
+        return _strengthMediumColor;
+      case _PasswordStrengthLevel.stronger:
+        return _strengthStrongColor;
+    }
+  }
+
+  Widget _buildAllowInsecurePasswordNotice(
+    BuildContext context,
+    bool loading,
+  ) {
+    final duration = context.read<SettingsCubit>().animationDuration;
+    final reason = _visibleInsecurePasswordReason;
+    final showReasonMessage = reason == _InsecurePasswordReason.weak;
+    return AnimatedSwitcher(
+      duration: duration,
+      switchInCurve: Curves.easeIn,
+      switchOutCurve: Curves.easeOut,
+      child: reason == null
+          ? const SizedBox.shrink()
+          : Column(
+              key: ValueKey(reason),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showReasonMessage) ...[
+                  Text(
+                    _insecurePasswordMessage(reason),
+                    style: context.textTheme.muted.copyWith(
+                      color: context.colorScheme.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                AxiCheckboxFormField(
+                  key: ValueKey(
+                    '${reason.name}-${allowInsecurePassword ? 1 : 0}',
+                  ),
+                  enabled: !loading && !_pwnedCheckInProgress,
+                  initialValue: allowInsecurePassword,
+                  inputLabel: const Text('I understand the risk'),
+                  inputSublabel: Text(
+                    reason == _InsecurePasswordReason.breached
+                        ? 'Allow this password even though it appeared in a breach.'
+                        : 'Allow this password even though it is considered weak.',
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      allowInsecurePassword = value;
+                      if (value) {
+                        _showAllowInsecureError = false;
+                        _showBreachedError = false;
+                      }
+                    });
+                  },
+                ),
+                AnimatedOpacity(
+                  opacity:
+                      _showAllowInsecureError && !allowInsecurePassword ? 1 : 0,
+                  duration: duration,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4, top: 4),
+                    child: Text(
+                      'Check the box above to continue.',
+                      style: TextStyle(
+                        color: context.colorScheme.destructive,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  String _insecurePasswordMessage(_InsecurePasswordReason reason) {
+    switch (reason) {
+      case _InsecurePasswordReason.breached:
+        return 'This password has been found in a hacked database.';
+      case _InsecurePasswordReason.weak:
+        return 'This password looks weak. Check the box below if you still want to use it.';
+    }
+  }
+
+  Future<void> _handleContinuePressed(BuildContext context) async {
+    final formState = _formKeys[_currentIndex].currentState;
+    if (formState?.validate() == false) {
+      return;
+    }
+    if (_currentIndex == 1) {
+      await _advanceFromPasswordStep(context);
+      return;
+    }
+    _goToNextSignupStep();
+  }
+
+  Future<void> _advanceFromPasswordStep(BuildContext context) async {
+    final password = _passwordTextController.text;
+    final isWeak = _passwordStrengthLevel == _PasswordStrengthLevel.weak;
+    if ((isWeak || _passwordBreached) && !allowInsecurePassword) {
+      if (!mounted) return;
+      setState(() {
+        _showAllowInsecureError = true;
+        _showBreachedError = _passwordBreached;
+      });
+      return;
+    }
+
+    if (allowInsecurePassword) {
+      _goToNextSignupStep();
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _pwnedCheckInProgress = true;
+    });
+    final notPwned = await context
+        .read<AuthenticationCubit>()
+        .checkNotPwned(password: password);
+    if (!mounted) return;
+    setState(() {
+      _pwnedCheckInProgress = false;
+    });
+
+    if (!notPwned) {
+      setState(() {
+        _passwordBreached = true;
+        _lastBreachedPassword = password;
+        _showBreachedError = true;
+        _showAllowInsecureError = true;
+      });
+      _formKeys[1].currentState?.validate();
+      return;
+    }
+
+    setState(() {
+      _passwordBreached = false;
+      _lastBreachedPassword = null;
+    });
+    _goToNextSignupStep();
+  }
+
+  void _goToNextSignupStep() {
+    if (!mounted) return;
+    setState(() {
+      _currentIndex++;
+      _errorText = null;
+      _showAllowInsecureError = false;
+      _showBreachedError = false;
+    });
   }
 
   @override
@@ -278,6 +624,7 @@ class _SignupFormState extends State<SignupForm> {
                                   RegExp(r'[a-z0-9._-]'),
                                 ),
                               ],
+                              keyboardType: TextInputType.emailAddress,
                               description: const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 6.0),
                                 child: Text('Case insensitive'),
@@ -307,14 +654,14 @@ class _SignupFormState extends State<SignupForm> {
                               Padding(
                                 padding: fieldSpacing,
                                 child: PasswordInput(
-                                  enabled: !loading,
+                                  enabled: !loading && !_pwnedCheckInProgress,
                                   controller: _passwordTextController,
                                 ),
                               ),
                               Padding(
                                 padding: fieldSpacing,
                                 child: PasswordInput(
-                                  enabled: !loading,
+                                  enabled: !loading && !_pwnedCheckInProgress,
                                   controller: _password2TextController,
                                   confirmValidator: (text) =>
                                       text != _passwordTextController.text
@@ -324,20 +671,13 @@ class _SignupFormState extends State<SignupForm> {
                               ),
                               Padding(
                                 padding: fieldSpacing,
-                                child: TermsCheckbox(
-                                  enabled: !loading,
-                                ),
+                                child: _buildPasswordStrengthMeter(context),
                               ),
                               Padding(
                                 padding: fieldSpacing,
-                                child: ShadCheckboxFormField(
-                                  enabled: !loading,
-                                  initialValue: false,
-                                  inputLabel:
-                                      const Text('Allow insecure password'),
-                                  inputSublabel: const Text('Not recommended'),
-                                  onChanged: (value) =>
-                                      allowInsecurePassword = value,
+                                child: _buildAllowInsecurePasswordNotice(
+                                  context,
+                                  loading,
                                 ),
                               ),
                             ],
@@ -419,6 +759,12 @@ class _SignupFormState extends State<SignupForm> {
                                   ),
                                 ),
                               ),
+                              Padding(
+                                padding: fieldSpacing,
+                                child: TermsCheckbox(
+                                  enabled: !loading,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -431,44 +777,54 @@ class _SignupFormState extends State<SignupForm> {
                   padding: horizontalPadding,
                   child: Builder(
                     builder: (context) {
+                      final isPasswordStep = _currentIndex == 1;
+                      final isCheckingPwned =
+                          isPasswordStep && _pwnedCheckInProgress;
+                      final animationDuration =
+                          context.read<SettingsCubit>().animationDuration;
                       return Wrap(
                         spacing: 8.0,
                         runSpacing: 8.0,
                         children: [
-                          if (_currentIndex >= 1)
-                            ShadButton.secondary(
-                              enabled: !loading,
-                              onPressed: () => setState(() {
-                                _currentIndex--;
-                              }),
-                              child: const Text('Back'),
-                            ).withTapBounce(enabled: !loading),
+                          AnimatedSwitcher(
+                            duration: animationDuration,
+                            child: _currentIndex >= 1
+                                ? ShadButton.secondary(
+                                    key: const ValueKey('signup-back-button'),
+                                    enabled: !loading && !isCheckingPwned,
+                                    onPressed: () => setState(() {
+                                      _currentIndex--;
+                                    }),
+                                    child: const Text('Back'),
+                                  ).withTapBounce(
+                                    enabled: !loading && !isCheckingPwned)
+                                : const SizedBox(
+                                    key: ValueKey('signup-back-button-empty'),
+                                  ),
+                          ),
                           if (_currentIndex < _formKeys.length - 1)
                             ShadButton(
-                              enabled: !loading,
+                              enabled: !loading && !isCheckingPwned,
                               onPressed: () async {
-                                if (_formKeys[_currentIndex]
-                                        .currentState
-                                        ?.validate() ==
-                                    false) {
-                                  return;
-                                }
-                                if (_currentIndex == 1 &&
-                                    !allowInsecurePassword &&
-                                    !await context
-                                        .read<AuthenticationCubit>()
-                                        .checkNotPwned(
-                                            password:
-                                                _passwordTextController.text)) {
-                                  return;
-                                }
-                                setState(() {
-                                  _currentIndex++;
-                                  _errorText = null;
-                                });
+                                await _handleContinuePressed(context);
                               },
+                              leading: AnimatedCrossFade(
+                                crossFadeState: isCheckingPwned
+                                    ? CrossFadeState.showSecond
+                                    : CrossFadeState.showFirst,
+                                duration: context
+                                    .read<SettingsCubit>()
+                                    .animationDuration,
+                                firstChild: const SizedBox(),
+                                secondChild: AxiProgressIndicator(
+                                  color: context.colorScheme.primaryForeground,
+                                  semanticsLabel: 'Checking password safety',
+                                ),
+                              ),
+                              trailing: const SizedBox.shrink(),
                               child: const Text('Continue'),
-                            ).withTapBounce(enabled: !loading),
+                            ).withTapBounce(
+                                enabled: !loading && !isCheckingPwned),
                           if (_currentIndex == _formKeys.length - 1)
                             ShadButton(
                               enabled: !loading,

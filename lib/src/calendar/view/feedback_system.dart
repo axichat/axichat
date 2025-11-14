@@ -274,15 +274,22 @@ class FeedbackSystem {
     BuildContext context,
     FeedbackType type,
   ) {
+    final scheme = ShadTheme.of(context).colorScheme;
     switch (type) {
       case FeedbackType.success:
-        return (background: Colors.green.shade600, foreground: Colors.white);
+        return (background: const Color(0xFF22C55E), foreground: Colors.white);
       case FeedbackType.info:
-        return (background: Colors.blue.shade600, foreground: Colors.white);
+        return (
+          background: calendarPrimaryColor,
+          foreground: scheme.primaryForeground,
+        );
       case FeedbackType.warning:
-        return (background: Colors.orange.shade600, foreground: Colors.white);
+        return (background: const Color(0xFFF97316), foreground: Colors.white);
       case FeedbackType.error:
-        return (background: Colors.red.shade600, foreground: Colors.white);
+        return (
+          background: scheme.destructive,
+          foreground: scheme.destructiveForeground,
+        );
     }
   }
 

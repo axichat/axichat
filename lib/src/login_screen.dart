@@ -87,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 12),
                               // NOTE: Keep the morphing auth toggle below for later polish.
                               /*
                               _AuthModeToggle(
@@ -102,18 +102,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 },
                               ),
                               */
-                              ShadButton.outline(
-                                onPressed: () => context.go('/guest-calendar'),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.calendar_today),
-                                    SizedBox(width: 8),
-                                    Text('Try Calendar (Guest Mode)'),
-                                  ],
-                                ),
-                              ).withTapBounce(),
-                              const SizedBox(height: 18),
                               ShadButton.ghost(
                                 onPressed: () {
                                   setState(() {
@@ -126,6 +114,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                       : 'Already registered? Log in',
                                 ),
                               ).withTapBounce(),
+                              const SizedBox(height: 18),
+                              ShadButton.outline(
+                                onPressed: () => context.go('/guest-calendar'),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.calendar_today),
+                                    SizedBox(width: 8),
+                                    Text('Try Calendar (Guest Mode)'),
+                                  ],
+                                ),
+                              ).withTapBounce(),
+                              const SizedBox(height: 18),
                             ],
                           ),
                         ),

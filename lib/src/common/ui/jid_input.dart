@@ -73,6 +73,7 @@ class JidInput extends StatelessWidget {
           controller: controller,
           focusNode: focus,
           autocorrect: false,
+          keyboardType: TextInputType.emailAddress,
           enabled: enabled,
           placeholder: const Text('john@axi.im'),
           // description: describe

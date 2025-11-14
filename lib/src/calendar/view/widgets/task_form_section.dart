@@ -735,7 +735,7 @@ class TaskSecondaryButton extends StatelessWidget {
     this.icon,
     this.size = ShadButtonSize.sm,
     this.foregroundColor = calendarSubtitleColor,
-    this.hoverForegroundColor = calendarPrimaryColor,
+    this.hoverForegroundColor,
     this.hoverBackgroundColor,
   });
 
@@ -745,7 +745,7 @@ class TaskSecondaryButton extends StatelessWidget {
   final IconData? icon;
   final ShadButtonSize size;
   final Color foregroundColor;
-  final Color hoverForegroundColor;
+  final Color? hoverForegroundColor;
   final Color? hoverBackgroundColor;
 
   @override
@@ -755,7 +755,7 @@ class TaskSecondaryButton extends StatelessWidget {
       size: size,
       onPressed: disabled ? null : onPressed,
       foregroundColor: foregroundColor,
-      hoverForegroundColor: hoverForegroundColor,
+      hoverForegroundColor: hoverForegroundColor ?? calendarPrimaryColor,
       hoverBackgroundColor:
           hoverBackgroundColor ?? calendarPrimaryColor.withValues(alpha: 0.08),
       child: isBusy
