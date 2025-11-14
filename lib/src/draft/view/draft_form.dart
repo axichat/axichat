@@ -3,11 +3,14 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
+import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
@@ -42,13 +45,15 @@ class DraftForm extends StatefulWidget {
 class _DraftFormState extends State<DraftForm> {
   late final MessageService _messageService;
   late final TextEditingController _bodyTextController;
+  late final FocusNode _bodyFocusNode;
   late List<ComposerRecipient> _recipients;
-  late List<EmailAttachment> _attachments;
+  late List<PendingAttachment> _pendingAttachments;
 
   late var id = widget.id;
   late MessageTransport _transport;
   bool _loadingAttachments = false;
   bool _addingAttachment = false;
+  int _pendingAttachmentSeed = 0;
 
   @override
   void initState() {
@@ -56,8 +61,9 @@ class _DraftFormState extends State<DraftForm> {
     _messageService = context.read<MessageService>();
     _bodyTextController = TextEditingController(text: widget.body)
       ..addListener(_bodyListener);
+    _bodyFocusNode = FocusNode();
     _recipients = _initialRecipients();
-    _attachments = const [];
+    _pendingAttachments = const [];
     _transport = _defaultTransportFor(_recipients);
     if (widget.attachmentMetadataIds.isNotEmpty) {
       unawaited(_hydrateAttachments());
@@ -68,6 +74,7 @@ class _DraftFormState extends State<DraftForm> {
   void dispose() {
     _bodyTextController.removeListener(_bodyListener);
     _bodyTextController.dispose();
+    _bodyFocusNode.dispose();
     super.dispose();
   }
 
@@ -102,18 +109,25 @@ class _DraftFormState extends State<DraftForm> {
             final hasRecipients =
                 _recipients.any((recipient) => recipient.included);
             final bodyText = _bodyTextController.text.trim();
+            final pendingAttachments = _pendingAttachments;
+            final hasAttachments = pendingAttachments.isNotEmpty;
+            final hasQueuedAttachments = pendingAttachments.any(
+              (attachment) =>
+                  attachment.status == PendingAttachmentStatus.queued,
+            );
             final attachmentsBlocked =
-                _transport == MessageTransport.xmpp && _attachments.isNotEmpty;
+                _transport == MessageTransport.xmpp && hasAttachments;
             final canSave = enabled &&
-                (hasRecipients ||
-                    bodyText.isNotEmpty ||
-                    _attachments.isNotEmpty);
+                (hasRecipients || bodyText.isNotEmpty || hasAttachments);
             final canDiscard = enabled &&
-                (id != null || bodyText.isNotEmpty || _attachments.isNotEmpty);
+                (id != null || bodyText.isNotEmpty || hasAttachments);
             final canSend = enabled &&
                 hasRecipients &&
-                bodyText.isNotEmpty &&
-                !attachmentsBlocked;
+                !attachmentsBlocked &&
+                ((_transport == MessageTransport.email &&
+                        (bodyText.isNotEmpty || hasQueuedAttachments)) ||
+                    (_transport == MessageTransport.xmpp &&
+                        bodyText.isNotEmpty));
 
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -154,6 +168,7 @@ class _DraftFormState extends State<DraftForm> {
                 const SizedBox(height: 12),
                 AxiTextFormField(
                   controller: _bodyTextController,
+                  focusNode: _bodyFocusNode,
                   enabled: enabled,
                   minLines: 7,
                   maxLines: 7,
@@ -253,17 +268,36 @@ class _DraftFormState extends State<DraftForm> {
       value.toLowerCase().endsWith('@axi.im');
 
   Future<void> _hydrateAttachments() async {
+    if (widget.attachmentMetadataIds.isEmpty) {
+      return;
+    }
     setState(() => _loadingAttachments = true);
     try {
-      final hydrated = await _messageService
-          .loadDraftAttachments(widget.attachmentMetadataIds);
+      final pending =
+          await _pendingAttachmentsFromMetadata(widget.attachmentMetadataIds);
       if (!mounted) return;
-      setState(() => _attachments = hydrated);
+      setState(() => _pendingAttachments = pending);
     } finally {
       if (mounted) {
         setState(() => _loadingAttachments = false);
       }
     }
+  }
+
+  Future<List<PendingAttachment>> _pendingAttachmentsFromMetadata(
+    Iterable<String> metadataIds,
+  ) async {
+    if (metadataIds.isEmpty) return const [];
+    final hydrated =
+        await _messageService.loadDraftAttachments(metadataIds.toList());
+    return hydrated
+        .map(
+          (attachment) => PendingAttachment(
+            id: attachment.metadataId ?? _nextPendingAttachmentId(),
+            attachment: attachment,
+          ),
+        )
+        .toList();
   }
 
   void _handleRecipientAdded(FanOutTarget target) {
@@ -322,7 +356,13 @@ class _DraftFormState extends State<DraftForm> {
       attachment = await EmailAttachmentOptimizer.optimize(attachment);
       if (!mounted) return;
       setState(() {
-        _attachments = [..._attachments, attachment];
+        _pendingAttachments = [
+          ..._pendingAttachments,
+          PendingAttachment(
+            id: attachment.metadataId ?? _nextPendingAttachmentId(),
+            attachment: attachment,
+          ),
+        ];
       });
     } on PlatformException catch (error) {
       _showToast(error.message ?? 'Unable to attach file.');
@@ -335,22 +375,65 @@ class _DraftFormState extends State<DraftForm> {
     }
   }
 
-  void _handleAttachmentRemoved(String id) {
+  void _handlePendingAttachmentRemoved(String id) {
     setState(() {
-      _attachments.removeWhere((attachment) => attachment.metadataId == id);
+      _pendingAttachments =
+          _pendingAttachments.where((pending) => pending.id != id).toList();
     });
   }
 
   Future<void> _handleSaveDraft() async {
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit == null) return;
-    final savedId = await draftCubit.saveDraft(
+    final attachmentIds =
+        _pendingAttachments.map((pending) => pending.id).toList();
+    final DraftSaveResult result = await draftCubit.saveDraft(
       id: id,
       jids: _recipientStrings(),
       body: _bodyTextController.text,
-      attachments: _attachments,
+      attachments: _currentAttachments(),
     );
-    setState(() => id = savedId);
+    if (!mounted) return;
+    setState(() => id = result.draftId);
+    await _applyAttachmentMetadataIds(
+      metadataIds: result.attachmentMetadataIds,
+      expectedAttachmentIds: attachmentIds,
+    );
+  }
+
+  Future<void> _applyAttachmentMetadataIds({
+    required List<String> metadataIds,
+    required List<String> expectedAttachmentIds,
+  }) async {
+    if (!mounted || metadataIds.isEmpty) {
+      return;
+    }
+    if (metadataIds.length != expectedAttachmentIds.length) {
+      return;
+    }
+    final idToMetadata = <String, String>{};
+    for (var index = 0; index < expectedAttachmentIds.length; index++) {
+      idToMetadata[expectedAttachmentIds[index]] = metadataIds[index];
+    }
+    var changed = false;
+    final updated = <PendingAttachment>[];
+    for (final pending in _pendingAttachments) {
+      final metadataId = idToMetadata[pending.id];
+      if (metadataId == null || pending.attachment.metadataId == metadataId) {
+        updated.add(pending);
+        continue;
+      }
+      changed = true;
+      updated.add(
+        pending.copyWith(
+          attachment: pending.attachment.copyWith(metadataId: metadataId),
+        ),
+      );
+    }
+    if (!changed) {
+      return;
+    }
+    setState(() => _pendingAttachments = updated);
   }
 
   Future<void> _handleDiscard() async {
@@ -361,7 +444,7 @@ class _DraftFormState extends State<DraftForm> {
     setState(() {
       id = null;
       _recipients = [];
-      _attachments = const [];
+      _pendingAttachments = const [];
       _bodyTextController.clear();
     });
     _showToast('Draft discarded.');
@@ -370,14 +453,22 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleSendDraft() async {
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit == null) return;
-    await draftCubit.sendDraft(
+    final succeeded = await draftCubit.sendDraft(
       id: id,
-      jids: _recipientStrings(),
+      xmppJids: _recipientStrings(),
+      emailTargets: _recipientTargets(),
       body: _bodyTextController.text,
       transport: _transport,
+      attachments: _currentAttachments(),
     );
-    if (!mounted) return;
-    context.pop();
+    if (!mounted) {
+      return;
+    }
+    if (succeeded) {
+      context.pop();
+    } else {
+      _bodyFocusNode.requestFocus();
+    }
   }
 
   List<String> _recipientStrings() {
@@ -394,6 +485,16 @@ class _DraftFormState extends State<DraftForm> {
         .toList();
   }
 
+  List<FanOutTarget> _recipientTargets() {
+    return _recipients
+        .where((recipient) => recipient.included)
+        .map((recipient) => recipient.target)
+        .toList();
+  }
+
+  List<EmailAttachment> _currentAttachments() =>
+      _pendingAttachments.map((pending) => pending.attachment).toList();
+
   void _showToast(String message) {
     ShadToaster.maybeOf(context)?.show(
       ShadToast(
@@ -405,9 +506,17 @@ class _DraftFormState extends State<DraftForm> {
     );
   }
 
+  String _nextPendingAttachmentId() =>
+      'draft-pending-${_pendingAttachmentSeed++}';
+
   Widget _buildAttachmentsSection({required bool enabled}) {
-    final colors = context.colorScheme;
-    final attachments = _attachments;
+    final attachments = _pendingAttachments;
+    final canSelectAttachment = enabled && !_addingAttachment;
+    final addHandler = !enabled
+        ? null
+        : (_transport == MessageTransport.email
+            ? _handleAttachmentAdded
+            : _showAttachmentInfoDialog);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -415,11 +524,11 @@ class _DraftFormState extends State<DraftForm> {
           children: [
             const Text('Attachments'),
             const Spacer(),
-            ShadButton.outline(
-              enabled: enabled && !_addingAttachment,
-              onPressed: enabled ? _handleAttachmentAdded : null,
-              child: const Text('Add'),
-            ).withTapBounce(enabled: enabled && !_addingAttachment),
+            IconButton(
+              tooltip: 'Add attachment',
+              onPressed: canSelectAttachment ? addHandler : null,
+              icon: const Icon(LucideIcons.paperclip),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -431,39 +540,129 @@ class _DraftFormState extends State<DraftForm> {
             style: context.textTheme.muted,
           )
         else
-          Column(
-            children: attachments
-                .map(
-                  (attachment) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(attachment.fileName),
-                    subtitle: Text(_formatBytes(attachment.sizeBytes)),
-                    trailing: IconButton(
-                      icon: Icon(LucideIcons.x, color: colors.foreground),
-                      onPressed: () {
-                        final metadataId = attachment.metadataId;
-                        if (metadataId == null) {
-                          setState(() => _attachments = _attachments
-                              .where((item) => item != attachment)
-                              .toList());
-                        } else {
-                          _handleAttachmentRemoved(metadataId);
-                        }
-                      },
-                    ),
-                  ),
-                )
-                .toList(),
+          PendingAttachmentList(
+            attachments: attachments,
+            onRetry: _handlePendingAttachmentRetry,
+            onRemove: _handlePendingAttachmentRemoved,
+            onPressed: _handlePendingAttachmentPressed,
+            onLongPress: _handlePendingAttachmentLongPressed,
           ),
       ],
     );
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    final mb = kb / 1024;
-    return '${mb.toStringAsFixed(1)} MB';
+  void _handlePendingAttachmentRetry(String id) {}
+
+  void _handlePendingAttachmentPressed(PendingAttachment pending) {
+    _showPendingAttachmentActions(pending);
+  }
+
+  void _handlePendingAttachmentLongPressed(PendingAttachment pending) {
+    _showPendingAttachmentActions(pending);
+  }
+
+  Future<void> _showAttachmentPreview(PendingAttachment pending) async {
+    if (!mounted) return;
+    final attachment = pending.attachment;
+    final file = File(attachment.path);
+    if (!await file.exists()) {
+      _showToast('File no longer exists at ${attachment.path}.');
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Image.file(
+                  file,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  icon: const Icon(LucideIcons.x),
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final attachment = pending.attachment;
+        final sizeLabel = formatBytes(attachment.sizeBytes);
+        final colors = Theme.of(context).colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    attachmentIcon(attachment),
+                    color: colors.primary,
+                  ),
+                  title: Text(attachment.fileName),
+                  subtitle: Text(sizeLabel),
+                ),
+                if (attachment.isImage)
+                  ListTile(
+                    leading: const Icon(LucideIcons.image),
+                    title: const Text('Preview'),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _showAttachmentPreview(pending);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(LucideIcons.trash2),
+                  title: const Text('Remove attachment'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _handlePendingAttachmentRemoved(pending.id);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showAttachmentInfoDialog() async {
+    if (!mounted) return;
+    await showShadDialog<void>(
+      context: context,
+      builder: (dialogContext) => ShadDialog(
+        title: const Text('Email only'),
+        actions: [
+          ShadButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ).withTapBounce(),
+        ],
+        child: const Text(
+          'Attachments are only available when sending via email. '
+          'Switch transports to add files.',
+        ),
+      ),
+    );
   }
 }

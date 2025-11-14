@@ -414,7 +414,7 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
   }
 
-  Future<int> saveDraft({
+  Future<DraftSaveResult> saveDraft({
     int? id,
     required List<String> jids,
     required String body,
@@ -425,13 +425,17 @@ mixin MessageService on XmppBase, BaseStreamService {
       final metadataId = await _persistDraftAttachmentMetadata(attachment);
       metadataIds.add(metadataId);
     }
-    return await _dbOpReturning<XmppDatabase, int>(
+    final savedId = await _dbOpReturning<XmppDatabase, int>(
       (db) => db.saveDraft(
         id: id,
         jids: jids,
         body: body,
         attachmentMetadataIds: metadataIds,
       ),
+    );
+    return DraftSaveResult(
+      draftId: savedId,
+      attachmentMetadataIds: List.unmodifiable(metadataIds),
     );
   }
 

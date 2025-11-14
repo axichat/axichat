@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
@@ -100,7 +102,12 @@ void main() {
         body: any(named: 'body'),
         attachments: any(named: 'attachments'),
       ),
-    ).thenAnswer((_) async => 1);
+    ).thenAnswer(
+      (_) async => const DraftSaveResult(
+        draftId: 1,
+        attachmentMetadataIds: [],
+      ),
+    );
   });
 
   tearDown(() async {

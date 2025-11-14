@@ -4,6 +4,7 @@ class AxiTextFormField extends ShadInputFormField {
   AxiTextFormField({
     super.key,
     super.controller,
+    super.focusNode,
     super.placeholder,
     super.keyboardType,
     super.enabled,
