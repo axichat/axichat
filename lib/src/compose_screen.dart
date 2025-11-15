@@ -15,6 +15,7 @@ class ComposeScreen extends StatelessWidget {
     this.id,
     this.jids = const [''],
     this.body = '',
+    this.subject = '',
     this.attachmentMetadataIds = const [],
     required this.locate,
   });
@@ -22,6 +23,7 @@ class ComposeScreen extends StatelessWidget {
   final int? id;
   final List<String> jids;
   final String body;
+  final String subject;
   final List<String> attachmentMetadataIds;
   final T Function<T>() locate;
 
@@ -109,6 +111,7 @@ class ComposeScreen extends StatelessWidget {
                           id: id,
                           jids: jids,
                           body: body,
+                          subject: subject,
                           attachmentMetadataIds: attachmentMetadataIds,
                         ),
                       );

@@ -418,8 +418,17 @@ mixin MessageService on XmppBase, BaseStreamService {
     int? id,
     required List<String> jids,
     required String body,
+    String? subject,
     List<EmailAttachment> attachments = const [],
   }) async {
+    final previousMetadataIds = id == null
+        ? const <String>[]
+        : await _dbOpReturning<XmppDatabase, List<String>>(
+            (db) async {
+              final draft = await db.getDraft(id);
+              return draft?.attachmentMetadataIds ?? const <String>[];
+            },
+          );
     final metadataIds = <String>[];
     for (final attachment in attachments) {
       final metadataId = await _persistDraftAttachmentMetadata(attachment);
@@ -430,9 +439,16 @@ mixin MessageService on XmppBase, BaseStreamService {
         id: id,
         jids: jids,
         body: body,
+        subject: subject,
         attachmentMetadataIds: metadataIds,
       ),
     );
+    final staleMetadataIds = previousMetadataIds
+        .where((existing) => !metadataIds.contains(existing))
+        .toList();
+    if (staleMetadataIds.isNotEmpty) {
+      await _deleteAttachmentMetadata(staleMetadataIds);
+    }
     return DraftSaveResult(
       draftId: savedId,
       attachmentMetadataIds: List.unmodifiable(metadataIds),
@@ -475,9 +491,18 @@ mixin MessageService on XmppBase, BaseStreamService {
   }
 
   Future<void> deleteDraft({required int id}) async {
+    final metadataIds = await _dbOpReturning<XmppDatabase, List<String>>(
+      (db) async {
+        final draft = await db.getDraft(id);
+        return draft?.attachmentMetadataIds ?? const <String>[];
+      },
+    );
     await _dbOp<XmppDatabase>(
       (db) => db.removeDraft(id),
     );
+    if (metadataIds.isNotEmpty) {
+      await _deleteAttachmentMetadata(metadataIds);
+    }
   }
 
   Future<void> _handleMessageSendFailure(String stanzaID) async {
@@ -502,6 +527,19 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
     await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     return metadata.id;
+  }
+
+  Future<void> _deleteAttachmentMetadata(
+    Iterable<String> metadataIds,
+  ) async {
+    if (metadataIds.isEmpty) return;
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        for (final metadataId in metadataIds) {
+          await db.deleteFileMetadata(metadataId);
+        }
+      },
+    );
   }
 
   Future<void> _ensureCapabilityCacheLoaded() async {

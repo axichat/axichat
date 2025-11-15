@@ -6,6 +6,7 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -50,6 +51,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<String> xmppJids,
     required List<FanOutTarget> emailTargets,
     required String body,
+    String? subject,
     MessageTransport transport = MessageTransport.xmpp,
     List<EmailAttachment> attachments = const [],
   }) async {
@@ -59,6 +61,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         await _sendEmailDraft(
           targets: emailTargets,
           body: body,
+          subject: subject,
           attachments: attachments,
         );
       } else {
@@ -90,12 +93,14 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required int? id,
     required List<String> jids,
     required String body,
+    String? subject,
     List<EmailAttachment> attachments = const [],
   }) async {
     final result = await _messageService.saveDraft(
       id: id,
       jids: jids,
       body: body,
+      subject: subject,
       attachments: attachments,
     );
     emit(DraftSaveComplete());
@@ -109,6 +114,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   Future<void> _sendEmailDraft({
     required List<FanOutTarget> targets,
     required String body,
+    String? subject,
     required List<EmailAttachment> attachments,
   }) async {
     final emailService = _emailService;
@@ -119,13 +125,17 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       throw const FanOutValidationException('Select at least one recipient.');
     }
     final trimmedBody = body.trim();
-    if (trimmedBody.isEmpty && attachments.isEmpty) {
+    final hasSubject = subject?.trim().isNotEmpty == true;
+    if (!hasSubject && trimmedBody.isEmpty && attachments.isEmpty) {
       throw const FanOutValidationException('Message cannot be empty.');
     }
-    if (trimmedBody.isNotEmpty) {
+    final shareId = ShareTokenCodec.generateShareId();
+    if (trimmedBody.isNotEmpty || hasSubject) {
       final report = await emailService.fanOutSend(
         targets: targets,
         body: trimmedBody,
+        subject: subject,
+        shareId: shareId,
       );
       _throwIfFanOutFailed(
         report,
@@ -136,6 +146,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       final report = await emailService.fanOutSend(
         targets: targets,
         attachment: attachment,
+        subject: subject,
+        shareId: shareId,
       );
       _throwIfFanOutFailed(
         report,

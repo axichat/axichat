@@ -134,6 +134,7 @@ class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
       id: extra?['id'],
       jids: extra?['jids'] ?? [''],
       body: extra?['body'] ?? '',
+      subject: extra?['subject'] ?? '',
       attachmentMetadataIds: extra?['attachments'] ?? const <String>[],
     );
   }

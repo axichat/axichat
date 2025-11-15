@@ -116,7 +116,8 @@ enum MessageError {
 enum MessageWarning {
   none,
   fileIntegrityFailure,
-  plaintextFileInOmemo;
+  plaintextFileInOmemo,
+  emailSpamQuarantined;
 
   bool get isNotNone => this != none;
 }
@@ -479,6 +480,8 @@ class MessageShares extends Table {
   IntColumn get originatorDcMsgId => integer().nullable()();
 
   TextColumn get subjectToken => text().nullable()();
+
+  TextColumn get subject => text().nullable()();
 
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.timestamp())();

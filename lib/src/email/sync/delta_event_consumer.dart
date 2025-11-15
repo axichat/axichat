@@ -87,12 +87,28 @@ class DeltaEventConsumer {
       return;
     }
     final timestamp = msg.timestamp ?? DateTime.timestamp();
+    final emailAddress = chat.emailAddress?.toLowerCase();
+    if (emailAddress != null &&
+        emailAddress.isNotEmpty &&
+        await db.isEmailAddressBlocked(emailAddress)) {
+      await db.incrementEmailBlockCount(emailAddress);
+      return;
+    }
+    var warning = MessageWarning.none;
+    final bool isSpamAddress = emailAddress != null &&
+        emailAddress.isNotEmpty &&
+        await db.isEmailAddressSpam(emailAddress);
+    if (isSpamAddress) {
+      warning = MessageWarning.emailSpamQuarantined;
+      await db.markChatSpam(jid: chat.jid, spam: true);
+    }
     var message = Message(
       stanzaID: stanzaId,
       senderJid: chat.jid,
       chatJid: chat.jid,
       timestamp: timestamp,
       body: msg.text,
+      warning: warning,
       encryptionProtocol: EncryptionProtocol.none,
       received: true,
       acked: true,
@@ -301,8 +317,11 @@ class DeltaEventConsumer {
     if (match == null) {
       return message;
     }
-    final sanitized = message.copyWith(body: match.cleanedBody);
     final share = await db.getMessageShareByToken(match.token);
+    final cleanedBody = share?.subject?.isNotEmpty == true
+        ? _stripSubjectHeader(match.cleanedBody, share!.subject!)
+        : match.cleanedBody;
+    final sanitized = message.copyWith(body: cleanedBody);
     if (share != null) {
       await db.insertMessageCopy(
         shareId: share.shareId,
@@ -317,3 +336,13 @@ class DeltaEventConsumer {
 String _chatJid(int chatId) => 'dc-$chatId@$_deltaDomain';
 
 String _stanzaId(int msgId) => 'dc-msg-$msgId';
+
+String _stripSubjectHeader(String body, String subject) {
+  final trimmedBody = body.trimLeft();
+  if (!trimmedBody.startsWith(subject)) {
+    return trimmedBody;
+  }
+  var remainder = trimmedBody.substring(subject.length);
+  remainder = remainder.replaceFirst(RegExp(r'^\s+'), '');
+  return remainder;
+}

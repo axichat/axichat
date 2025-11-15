@@ -596,8 +596,11 @@ class _ChatState extends State<Chat> {
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
   late final TextEditingController _textController;
+  late final TextEditingController _subjectController;
+  late final FocusNode _subjectFocusNode;
   late final ScrollController _scrollController;
   bool _composerHasText = false;
+  String _lastSubjectValue = '';
   final _approvedAttachmentSenders = <String>{};
   final _fileMetadataFutures = <String, Future<FileMetadataData?>>{};
 
@@ -643,6 +646,46 @@ class _ChatState extends State<Chat> {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
+  }
+
+  void _handleSubjectChanged() {
+    final text = _subjectController.text;
+    if (_lastSubjectValue == text) {
+      return;
+    }
+    _lastSubjectValue = text;
+    context.read<ChatBloc>().add(ChatSubjectChanged(text));
+  }
+
+  Widget? _buildSubjectField(
+    BuildContext context, {
+    required bool isEmailTransport,
+  }) {
+    if (!isEmailTransport) {
+      return null;
+    }
+    final colors = context.colorScheme;
+    return TextField(
+      controller: _subjectController,
+      focusNode: _subjectFocusNode,
+      textInputAction: TextInputAction.next,
+      onSubmitted: (_) => _focusNode.requestFocus(),
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: colors.foreground,
+          ),
+      decoration: InputDecoration(
+        hintText: 'Subject',
+        hintStyle: context.textTheme.muted.copyWith(
+          color: colors.mutedForeground,
+        ),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        isCollapsed: true,
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -830,8 +873,9 @@ class _ChatState extends State<Chat> {
       (attachment) => attachment.status == PendingAttachmentStatus.queued,
     );
     final isEmailTransport = context.read<ChatTransportCubit>().state.isEmail;
-    final canSend =
-        text.isNotEmpty || (isEmailTransport && hasQueuedAttachments);
+    final hasSubject = _subjectController.text.trim().isNotEmpty;
+    final canSend = text.isNotEmpty ||
+        (isEmailTransport && (hasQueuedAttachments || hasSubject));
     if (!canSend) return;
     bloc.add(ChatMessageSent(text: text));
     if (text.isNotEmpty) {
@@ -864,9 +908,14 @@ class _ChatState extends State<Chat> {
     final hasQueuedAttachments = pendingAttachments.any(
       (attachment) => attachment.status == PendingAttachmentStatus.queued,
     );
-    final sendEnabled =
-        _composerHasText || (isEmailTransport && hasQueuedAttachments);
+    final hasSubjectText = _subjectController.text.trim().isNotEmpty;
+    final sendEnabled = _composerHasText ||
+        (isEmailTransport && (hasQueuedAttachments || hasSubjectText));
     Widget? attachmentTray;
+    final subjectHeader = _buildSubjectField(
+      context,
+      isEmailTransport: isEmailTransport,
+    );
     final showAttachmentTray =
         isEmailTransport && pendingAttachments.isNotEmpty;
     if (showAttachmentTray) {
@@ -914,6 +963,7 @@ class _ChatState extends State<Chat> {
                     focusNode: _focusNode,
                     hintText: hintText,
                     onSend: _handleSendMessage,
+                    header: subjectHeader,
                     actions: _buildComposerAccessories(
                       activeTransport: activeTransport,
                       emailCapable: emailCapable,
@@ -957,10 +1007,15 @@ class _ChatState extends State<Chat> {
           .length;
       if (failedCount > 0) {
         final label = failedCount == 1 ? 'recipient' : 'recipients';
+        final subjectLabel = retryReport.subject?.trim();
+        final hasSubjectLabel = subjectLabel?.isNotEmpty == true;
+        final failureMessage = hasSubjectLabel
+            ? 'Subject "$subjectLabel" failed to send to $failedCount $label.'
+            : 'Failed to send to $failedCount $label.';
         notices.add(
           _ComposerNotice(
             type: _ComposerNoticeType.info,
-            message: 'Failed to send to $failedCount $label.',
+            message: failureMessage,
             actionLabel: 'Retry',
             onAction: () => context
                 .read<ChatBloc>()
@@ -1917,8 +1972,11 @@ class _ChatState extends State<Chat> {
     _emojiPopoverController = ShadPopoverController();
     _focusNode = FocusNode();
     _textController = TextEditingController();
+    _subjectController = TextEditingController();
+    _subjectFocusNode = FocusNode();
     _scrollController = ScrollController();
     _textController.addListener(_typingListener);
+    _subjectController.addListener(_handleSubjectChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _captureBaseSelectionHeadroom();
     });
@@ -1930,6 +1988,9 @@ class _ChatState extends State<Chat> {
     _focusNode.dispose();
     _textController.removeListener(_typingListener);
     _textController.dispose();
+    _subjectController.removeListener(_handleSubjectChanged);
+    _subjectController.dispose();
+    _subjectFocusNode.dispose();
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
     super.dispose();
@@ -1980,6 +2041,23 @@ class _ChatState extends State<Chat> {
                       ),
                   };
                   show(toastWidget);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    current.emailSubjectHydrationId != 0 &&
+                    previous.emailSubjectHydrationId !=
+                        current.emailSubjectHydrationId,
+                listener: (context, state) {
+                  final subject = state.emailSubjectHydrationText ?? '';
+                  _subjectController
+                    ..text = subject
+                    ..selection =
+                        TextSelection.collapsed(offset: subject.length);
+                  _lastSubjectValue = subject;
+                  if (subject.isNotEmpty && !_subjectFocusNode.hasFocus) {
+                    _subjectFocusNode.requestFocus();
+                  }
                 },
               ),
             ],
@@ -2273,6 +2351,7 @@ class _ChatState extends State<Chat> {
                                       contentWidth,
                                     );
                                     final dashMessages = <ChatMessage>[];
+                                    final shownSubjectShares = <String>{};
                                     for (var index = 0;
                                         index < filteredItems.length;
                                         index++) {
@@ -2292,14 +2371,29 @@ class _ChatState extends State<Chat> {
                                       final quotedMessage = e.quoting == null
                                           ? null
                                           : messageById[e.quoting!];
+                                      final shareContext =
+                                          shareContexts[e.stanzaID];
                                       final bannerParticipants =
                                           List<chat_models.Chat>.of(
                                         _participantsForBanner(
-                                          shareContexts[e.stanzaID],
+                                          shareContext,
                                           state.chat?.jid,
                                           currentUserId,
                                         ),
                                       );
+                                      bool showSubjectHeader = false;
+                                      String? subjectLabel;
+                                      if (shareContext?.subject
+                                              ?.trim()
+                                              .isNotEmpty ==
+                                          true) {
+                                        subjectLabel =
+                                            shareContext!.subject!.trim();
+                                        if (shownSubjectShares
+                                            .add(shareContext.shareId)) {
+                                          showSubjectHeader = true;
+                                        }
+                                      }
                                       final bodyText = e.body;
                                       final errorLabel = e.error.asString;
                                       final renderedText = e.error.isNotNone
@@ -2334,8 +2428,11 @@ class _ChatState extends State<Chat> {
                                             'model': e,
                                             'quoted': quotedMessage,
                                             'reactions': e.reactionsPreview,
+                                            'shareContext': shareContext,
                                             'shareParticipants':
                                                 bannerParticipants,
+                                            'showSubject': showSubjectHeader,
+                                            'subjectLabel': subjectLabel,
                                           },
                                         ),
                                       );
@@ -2851,6 +2948,42 @@ class _ChatState extends State<Chat> {
                                                       ),
                                                     ]);
                                                   } else {
+                                                    final subjectLabel =
+                                                        (message.customProperties?[
+                                                                'subjectLabel']
+                                                            as String?);
+                                                    final showSubjectBanner =
+                                                        (message.customProperties?[
+                                                                        'showSubject']
+                                                                    as bool?) ==
+                                                                true &&
+                                                            subjectLabel !=
+                                                                null;
+                                                    if (showSubjectBanner) {
+                                                      final String subjectText =
+                                                          subjectLabel;
+                                                      bubbleChildren.add(
+                                                        Text(
+                                                          subjectText,
+                                                          style: Theme.of(
+                                                            context,
+                                                          )
+                                                              .textTheme
+                                                              .titleMedium
+                                                              ?.copyWith(
+                                                                color:
+                                                                    textColor,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                        ),
+                                                      );
+                                                      bubbleChildren
+                                                          .add(const SizedBox(
+                                                        height: 6,
+                                                      ));
+                                                    }
                                                     bubbleChildren.add(
                                                       DynamicInlineText(
                                                         key: ValueKey(

@@ -87,6 +87,7 @@ class DraftsList extends StatelessWidget {
                       'id': item.id,
                       'jids': item.jids,
                       'body': item.body,
+                      'subject': item.subject ?? '',
                       'attachments': item.attachmentMetadataIds,
                     },
                   ),
@@ -104,8 +105,10 @@ class DraftsList extends StatelessWidget {
                   leading: AxiAvatar(
                     jid: recipients == 1 ? item.jids[0] : recipients.toString(),
                   ),
-                  title: item.jids.join(', '),
-                  subtitle: item.body,
+                  title: '${_subjectLabel(item)} — ${_recipientLabel(item)}',
+                  subtitle: item.body?.isNotEmpty == true
+                      ? item.body
+                      : item.jids.join(', '),
                 ),
               );
             },
@@ -120,5 +123,19 @@ bool _draftMatchesQuery(Draft draft, String query) {
   final lower = query.toLowerCase();
   final recipients = draft.jids.join(', ').toLowerCase();
   return recipients.contains(lower) ||
-      (draft.body?.toLowerCase().contains(lower) ?? false);
+      (draft.body?.toLowerCase().contains(lower) ?? false) ||
+      (draft.subject?.toLowerCase().contains(lower) ?? false);
+}
+
+String _subjectLabel(Draft draft) {
+  final subject = draft.subject?.trim();
+  if (subject == null || subject.isEmpty) {
+    return '(no subject)';
+  }
+  return subject;
+}
+
+String _recipientLabel(Draft draft) {
+  final count = draft.jids.length;
+  return count == 1 ? '1 recipient' : '$count recipients';
 }

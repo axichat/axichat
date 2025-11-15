@@ -109,13 +109,21 @@ Map<String, String> _cargoEnvForTarget({
   required CodeConfig codeConfig,
 }) {
   final env = <String, String>{};
+
+  // For CARGO_TARGET_* vars we need an upper-case triple with underscores.
+  // Example: aarch64-apple-darwin -> AARCH64_APPLE_DARWIN
+  final tripleKeyCargo = triple.toUpperCase().replaceAll('-', '_');
+
+  // For cc (CC_*, CFLAGS_*, etc.) we use the target in lower-case,
+  // with '-' replaced by '_' as cc expects.
+  // Example: aarch64-apple-darwin -> aarch64_apple_darwin
+  final tripleKeyCc = triple.replaceAll('-', '_');
   final cCompiler = codeConfig.cCompiler;
   if (cCompiler != null) {
     var compilerPath = cCompiler.compiler.toFilePath();
     final archiverPath = cCompiler.archiver.toFilePath();
     var linkerPath = cCompiler.linker.toFilePath();
     String? cxxPath;
-    final tripleKey = triple.toUpperCase().replaceAll('-', '_');
     final toolchainDir = File(compilerPath).parent.path;
 
     if (codeConfig.targetOS == OS.android) {
@@ -133,22 +141,51 @@ Map<String, String> _cargoEnvForTarget({
         cxxPath = targetClangxx;
       }
       final targetArg = '--target=$targetPrefix';
-      env['CFLAGS_$tripleKey'] = targetArg;
-      env['CXXFLAGS_$tripleKey'] = targetArg;
+      env['CFLAGS_$tripleKeyCc'] = targetArg;
+      env['CXXFLAGS_$tripleKeyCc'] = targetArg;
     }
 
-    env['CARGO_TARGET_${tripleKey}_LINKER'] = linkerPath;
-    env['CARGO_TARGET_${tripleKey}_AR'] = archiverPath;
-    env['CC_$tripleKey'] = compilerPath;
+    env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = linkerPath;
+    env['CARGO_TARGET_${tripleKeyCargo}_AR'] = archiverPath;
+    env['CC_$tripleKeyCc'] = compilerPath;
     if (cxxPath != null) {
-      env['CXX_$tripleKey'] = cxxPath;
+      env['CXX_$tripleKeyCc'] = cxxPath;
     }
-    env['AR_$tripleKey'] = archiverPath;
+    env['AR_$tripleKeyCc'] = archiverPath;
     env['PATH'] = [
       File(linkerPath).parent.path,
       File(compilerPath).parent.path,
       Platform.environment['PATH'] ?? '',
     ].where((element) => element.isNotEmpty).join(':');
+  }
+
+  // For macOS targets (e.g. aarch64-apple-darwin), ensure the SDK is visible
+  // so headers like TargetConditionals.h can be found.
+  if (codeConfig.targetOS == OS.macOS && triple.endsWith('-apple-darwin')) {
+    String? sdkRoot = Platform.environment['SDKROOT'];
+    if (sdkRoot == null || sdkRoot.isEmpty) {
+      try {
+        final result = Process.runSync(
+          'xcrun',
+          ['--sdk', 'macosx', '--show-sdk-path'],
+        );
+        if (result.exitCode == 0 && result.stdout is String) {
+          sdkRoot = (result.stdout as String).trim();
+        }
+      } catch (_) {
+        // Ignore failure; we'll just skip setting SDKROOT.
+      }
+    }
+    if (sdkRoot != null && sdkRoot.isNotEmpty) {
+      env['SDKROOT'] = sdkRoot;
+      final cflagsKey = 'CFLAGS_$tripleKeyCc';
+      final existing = env[cflagsKey];
+      final sysrootFlag = '-isysroot $sdkRoot';
+      env[cflagsKey] = [
+        if (existing != null && existing.isNotEmpty) existing,
+        sysrootFlag,
+      ].join(' ');
+    }
   }
 
   if (codeConfig.targetOS == OS.android) {

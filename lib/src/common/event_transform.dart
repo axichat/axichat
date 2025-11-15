@@ -6,3 +6,6 @@ const downTime = Duration(milliseconds: 100);
 
 EventTransformer<E> blocThrottle<E>(Duration duration) =>
     (events, mapper) => droppable<E>().call(events.throttle(duration), mapper);
+
+EventTransformer<E> blocDebounce<E>(Duration duration) =>
+    (events, mapper) => droppable<E>().call(events.debounce(duration), mapper);
