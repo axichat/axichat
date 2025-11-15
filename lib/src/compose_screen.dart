@@ -77,36 +77,36 @@ class ComposeScreen extends StatelessWidget {
                   side: BorderSide(color: context.colorScheme.border),
                 ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: MultiRepositoryProvider(
-                  providers: [
-                    RepositoryProvider<MessageService>.value(
-                      value: messageService,
-                    ),
-                  ],
-                  child: Builder(
-                    builder: (context) {
-                      final chatsCubit = _maybeLocate<ChatsCubit>();
-                      final draftCubit = _maybeLocate<DraftCubit>();
-                      final providers = <BlocProvider<dynamic>>[
-                        if (draftCubit != null)
-                          BlocProvider<DraftCubit>.value(value: draftCubit)
-                        else
-                          BlocProvider<DraftCubit>(
-                            create: (context) => DraftCubit(
-                              messageService: messageService,
-                              emailService: emailService,
-                            ),
+              child: MultiRepositoryProvider(
+                providers: [
+                  RepositoryProvider<MessageService>.value(
+                    value: messageService,
+                  ),
+                ],
+                child: Builder(
+                  builder: (context) {
+                    final chatsCubit = _maybeLocate<ChatsCubit>();
+                    final draftCubit = _maybeLocate<DraftCubit>();
+                    final providers = <BlocProvider<dynamic>>[
+                      if (draftCubit != null)
+                        BlocProvider<DraftCubit>.value(value: draftCubit)
+                      else
+                        BlocProvider<DraftCubit>(
+                          create: (context) => DraftCubit(
+                            messageService: messageService,
+                            emailService: emailService,
                           ),
-                      ];
-                      if (chatsCubit != null) {
-                        providers.add(
-                          BlocProvider.value(value: chatsCubit),
-                        );
-                      }
-                      return MultiBlocProvider(
-                        providers: providers,
+                        ),
+                    ];
+                    if (chatsCubit != null) {
+                      providers.add(
+                        BlocProvider.value(value: chatsCubit),
+                      );
+                    }
+                    return MultiBlocProvider(
+                      providers: providers,
+                      child: Container(
+                        margin: EdgeInsets.all(16.0),
                         child: DraftForm(
                           id: id,
                           jids: jids,
@@ -114,9 +114,9 @@ class ComposeScreen extends StatelessWidget {
                           subject: subject,
                           attachmentMetadataIds: attachmentMetadataIds,
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

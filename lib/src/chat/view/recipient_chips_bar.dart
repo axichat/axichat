@@ -1,6 +1,5 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/string_to_color.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -236,7 +235,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     required Color backgroundColor,
   }) {
     final suggestions = widget.availableChats
-        .where((chat) => chat.transport.isEmail)
         .where(
           (chat) => !widget.recipients
               .any((recipient) => recipient.target.chat?.jid == chat.jid),

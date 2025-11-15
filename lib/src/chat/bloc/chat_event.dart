@@ -113,15 +113,6 @@ final class ChatAlertHidden extends ChatEvent {
   List<Object?> get props => [forever];
 }
 
-final class ChatTransportChanged extends ChatEvent {
-  const ChatTransportChanged(this.transport);
-
-  final MessageTransport transport;
-
-  @override
-  List<Object?> get props => [transport];
-}
-
 final class ChatQuoteRequested extends ChatEvent {
   const ChatQuoteRequested(this.message);
 

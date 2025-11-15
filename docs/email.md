@@ -6,7 +6,7 @@ Implementation note: the entire email transport stack must live under `lib/src/e
 
 Current implementation snapshot (Nov 2025):
 - `EmailService` provisions Chatmail credentials, starts the Delta transport, and mirrors Delta events into the shared Drift database so existing chat streams pick up email traffic.
-- UI exposes `MessageTransport` toggles in both compose and chat views; selections persist per chat via the state store (`XmppStateStore`) and `ChatTransportCubit`.
+- Composer UI now routes messages automatically: subjects and recipient chips are available for both transports, attachments or non-`@axi.im` recipients force email fan-out, while pure `@axi.im` text sends over XMPP. Users no longer choose transports manually.
 - `ChatBloc`/`DraftCubit` route sends to SMTP when the email transport is active while suppressing typing markers and read receipts for those chats.
 - Notifications are raised for incoming email messages unless the chat is muted; logout/burn flows tear down the Delta context and clear stored credentials.
 
@@ -29,8 +29,8 @@ Build & tooling notes
 Manual QA checklist
 -------------------
 1. Sign up or log in to create a fresh profile; verify Chatmail credentials are provisioned silently (no prompts).
-2. Compose a new message, toggle the transport to Email, and send to an external address—confirm the message arrives and the chat badge shows “Email”.
-3. Switch the in-chat transport back to XMPP, send, then reopen the chat to ensure the persisted preference loads correctly.
+2. Compose a new message with a non-`@axi.im` recipient (or with an attachment); verify it sends via email automatically and the chat badge reflects the transport.
+3. Remove non-axi recipients so only axi contacts remain; send again and confirm the message uses XMPP without requiring manual switches.
 4. Background the app; after a minute send an email reply from the remote party and verify notifications still fire.
 5. Re-open the app and confirm the Delta inbox resyncs (no duplicate messages, unread counts accurate).
 

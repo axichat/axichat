@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -116,7 +117,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
-    on<ChatTransportChanged>(_onChatTransportChanged);
     on<ChatLoadEarlier>(_onChatLoadEarlier);
     on<ChatAlertHidden>(_onChatAlertHidden);
     on<ChatQuoteRequested>(_onChatQuoteRequested);
@@ -142,7 +142,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .chatStream(jid!)
           .listen((chat) => chat == null ? null : add(_ChatUpdated(chat)));
       _subscribeToMessages(limit: messageBatchSize, filter: state.viewFilter);
-      unawaited(_initializeTransport());
       unawaited(_initializeViewFilter());
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
@@ -155,6 +154,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   static const messageBatchSize = 50;
+  static final RegExp _axiDomainPattern =
+      RegExp(r'@axi\.im$', caseSensitive: false);
 
   final String? jid;
   final MessageService _messageService;
@@ -174,37 +175,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _emailSyncComposerMessage;
 
   RestartableTimer? _typingTimer;
-  MessageTransport _transport = MessageTransport.xmpp;
-  bool _hasExplicitTransportPreference = false;
 
   bool get encryptionAvailable => _omemoService != null;
-  bool get _isEmailChat {
-    if (_transport.isEmail) {
-      return true;
-    }
-    if (_hasExplicitTransportPreference) {
-      return false;
-    }
-    final defaultTransport = state.chat?.defaultTransport;
-    return defaultTransport?.isEmail ?? false;
-  }
+  bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
-
-  Future<void> _initializeTransport() async {
-    if (jid == null) return;
-    try {
-      final preference = await _chatsService.loadChatTransportPreference(jid!);
-      _transport = preference.transport;
-      _hasExplicitTransportPreference = preference.isExplicit;
-    } on Exception catch (error, stackTrace) {
-      _log.fine(
-        'Failed to load transport preference for $jid',
-        error,
-        stackTrace,
-      );
-    }
-  }
 
   Future<void> _initializeViewFilter() async {
     if (jid == null) return;
@@ -259,10 +234,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
     ));
-    final defaultTransport = event.chat.defaultTransport;
-    if (!_hasExplicitTransportPreference && _transport != defaultTransport) {
-      _transport = defaultTransport;
-    }
   }
 
   Future<void> _onChatMessagesUpdated(
@@ -270,7 +241,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     emit(state.copyWith(items: event.items));
-    if (_isEmailChat) {
+    if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(event.items, emit);
     }
 
@@ -383,7 +354,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(typing: false));
     final chat = state.chat;
     if (chat == null) return;
-    final isEmailChat = _isEmailChat;
     final trimmedText = event.text.trim();
     final attachments = List<PendingAttachment>.from(state.pendingAttachments);
     final queuedAttachments = attachments
@@ -393,11 +363,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final hasSubject = state.emailSubject?.trim().isNotEmpty == true;
     final quotedDraft = state.quoting;
+    if (trimmedText.isEmpty && !hasQueuedAttachments && !hasSubject) {
+      emit(
+        state.copyWith(
+          composerError: 'Message cannot be empty.',
+        ),
+      );
+      return;
+    }
+    if (state.composerError != null) {
+      emit(state.copyWith(composerError: null));
+    }
+    final recipients = _resolveComposerRecipients(chat);
+    final split = _splitRecipientsForSend(
+      recipients: recipients,
+      forceEmail: hasQueuedAttachments,
+    );
+    final emailRecipients = split.emailRecipients;
+    final xmppRecipients = split.xmppRecipients;
+    final requiresEmail = emailRecipients.isNotEmpty || hasQueuedAttachments;
+    final service = _emailService;
+    if (requiresEmail && service == null) {
+      emit(
+        state.copyWith(
+          composerError: 'Email sending is unavailable for this chat.',
+        ),
+      );
+      return;
+    }
     var emailSendSucceeded = false;
+    var xmppSendSucceeded = false;
     try {
-      if (isEmailChat) {
-        final recipients = _includedRecipients();
-        if (recipients.isEmpty) {
+      if (requiresEmail) {
+        if (emailRecipients.isEmpty) {
           emit(
             state.copyWith(
               composerError: 'Select at least one recipient.',
@@ -405,38 +403,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
           return;
         }
-        final hasBody = trimmedText.isNotEmpty;
-        if (!hasBody && !hasQueuedAttachments && !hasSubject) {
+        final invalidEmailRecipients = emailRecipients.where(
+          (recipient) {
+            final targetChat = recipient.target.chat;
+            if (targetChat != null) {
+              return !targetChat.supportsEmail;
+            }
+            return recipient.target.address?.isNotEmpty != true;
+          },
+        );
+        if (invalidEmailRecipients.isNotEmpty) {
           emit(
             state.copyWith(
-              composerError: 'Message cannot be empty.',
+              composerError: 'Email is unavailable for one or more recipients.',
             ),
           );
           return;
         }
-        if (state.composerError != null) {
-          emit(state.copyWith(composerError: null));
-        }
-        final service = _emailService;
-        if (service == null) {
-          throw StateError('EmailService not available for email chat.');
-        }
+        final hasBody = trimmedText.isNotEmpty;
+        final body = hasBody
+            ? _composeEmailBody(trimmedText, quotedDraft)
+            : (hasSubject ? '' : null);
         if (state.emailSyncState.requiresAttention) {
           await _handleBrokenEmailSend(
             chat: chat,
-            recipients: recipients,
+            recipients: emailRecipients,
             rawText: trimmedText,
             quotedDraft: quotedDraft,
             emit: emit,
           );
           return;
         }
-        final body =
-            hasBody ? _composeEmailBody(trimmedText, quotedDraft) : null;
-        if (_shouldFanOut(recipients, chat)) {
-          if (body != null) {
+        if (body != null) {
+          final shouldFanOut = _shouldFanOut(emailRecipients, chat);
+          if (shouldFanOut) {
             final sent = await _sendFanOut(
-              recipients: recipients,
+              recipients: emailRecipients,
               text: body,
               subject: state.emailSubject,
               emit: emit,
@@ -444,47 +446,51 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             if (!sent) {
               return;
             }
-          }
-          if (hasQueuedAttachments) {
-            await _sendQueuedAttachments(
-              attachments: queuedAttachments,
-              chat: chat,
-              service: service,
-              recipients: recipients,
-              emit: emit,
-            );
-          }
-        } else {
-          if (body != null) {
-            await service.sendMessage(
+          } else {
+            await service!.sendMessage(
               chat: chat,
               body: body,
               subject: state.emailSubject,
             );
           }
-          if (hasQueuedAttachments) {
-            await _sendQueuedAttachments(
-              attachments: queuedAttachments,
-              chat: chat,
-              service: service,
-              recipients: recipients,
-              emit: emit,
-            );
-          }
+          emailSendSucceeded = true;
         }
-        emailSendSucceeded = true;
-      } else {
-        if (trimmedText.isEmpty) return;
+        if (hasQueuedAttachments) {
+          await _sendQueuedAttachments(
+            attachments: queuedAttachments,
+            chat: chat,
+            service: service!,
+            recipients: emailRecipients,
+            emit: emit,
+          );
+          emailSendSucceeded = true;
+        }
+      }
+      if (xmppRecipients.isNotEmpty) {
+        final xmppBody = _composeXmppBody(
+          body: trimmedText,
+          subject: state.emailSubject,
+        );
+        if (xmppBody.isNotEmpty) {
+          await _sendXmppFanOut(
+            recipients: xmppRecipients,
+            body: xmppBody,
+            quotedDraft: quotedDraft,
+          );
+          xmppSendSucceeded = true;
+        }
+      } else if (!requiresEmail && trimmedText.isNotEmpty) {
         final sameChatQuote =
             quotedDraft != null && quotedDraft.chatJid == chat.jid
                 ? quotedDraft
                 : null;
         await _messageService.sendMessage(
-          jid: jid!,
+          jid: chat.jid,
           text: trimmedText,
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
         );
+        xmppSendSucceeded = true;
       }
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
@@ -492,7 +498,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         error,
         stackTrace,
       );
-      if (isEmailChat) {
+      if (requiresEmail) {
         final mappedError = DeltaErrorMapper.resolve(error.message);
         final nextHydrationId = ++_composerHydrationSeed;
         emit(
@@ -515,7 +521,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (state.quoting != null) {
         emit(state.copyWith(quoting: null));
       }
-      if (isEmailChat && emailSendSucceeded) {
+      if ((emailSendSucceeded || xmppSendSucceeded) &&
+          (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);
       }
     }
@@ -552,51 +559,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (jid == null) return;
     await _omemoService?.recreateSessions(jid: jid!);
-  }
-
-  Future<void> _onChatTransportChanged(
-    ChatTransportChanged event,
-    Emitter<ChatState> emit,
-  ) async {
-    final chat = state.chat;
-    if (chat == null) return;
-    final defaultTransport = chat.defaultTransport;
-    if (_transport == event.transport) {
-      final selectingDefault = event.transport == defaultTransport;
-      if (!selectingDefault || !_hasExplicitTransportPreference) {
-        return;
-      }
-    }
-    try {
-      if (event.transport == defaultTransport) {
-        _transport = defaultTransport;
-        _hasExplicitTransportPreference = false;
-        await _chatsService.clearChatTransportPreference(jid: chat.jid);
-      } else {
-        _transport = event.transport;
-        _hasExplicitTransportPreference = true;
-        await _chatsService.saveChatTransportPreference(
-          jid: chat.jid,
-          transport: event.transport,
-        );
-      }
-      if (!event.transport.isEmail &&
-          (state.emailSubject?.isNotEmpty ?? false)) {
-        emit(
-          state.copyWith(
-            emailSubject: '',
-            emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
-            emailSubjectHydrationText: '',
-          ),
-        );
-      }
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to change transport for chat ${chat.jid}',
-        error,
-        stackTrace,
-      );
-    }
   }
 
   Future<void> _onChatLoadEarlier(
@@ -710,10 +672,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAttachmentPicked event,
     Emitter<ChatState> emit,
   ) async {
-    if (!_isEmailChat) return;
     final chat = state.chat;
     final service = _emailService;
-    if (chat == null || service == null) return;
+    if (chat == null || service == null || !chat.supportsEmail) {
+      return;
+    }
     final quotedDraft = state.quoting;
     final rawCaption = event.attachment.caption?.trim();
     final caption = rawCaption?.isNotEmpty == true
@@ -794,7 +757,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatComposerRecipientAdded event,
     Emitter<ChatState> emit,
   ) {
-    if (!_isEmailChat) return;
     final recipients = List<ComposerRecipient>.from(state.recipients);
     final index =
         recipients.indexWhere((recipient) => recipient.key == event.target.key);
@@ -813,7 +775,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatComposerRecipientRemoved event,
     Emitter<ChatState> emit,
   ) {
-    if (!_isEmailChat) return;
     final recipients = List<ComposerRecipient>.from(state.recipients);
     final index = recipients
         .indexWhere((recipient) => recipient.key == event.recipientKey);
@@ -828,7 +789,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatComposerRecipientToggled event,
     Emitter<ChatState> emit,
   ) {
-    if (!_isEmailChat) return;
     final recipients = List<ComposerRecipient>.from(state.recipients);
     final index = recipients
         .indexWhere((recipient) => recipient.key == event.recipientKey);
@@ -892,9 +852,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatSubjectChanged event,
     Emitter<ChatState> emit,
   ) {
-    if (!_isEmailChat) {
-      return;
-    }
     if (state.emailSubject == event.subject) {
       return;
     }
@@ -1161,11 +1118,57 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   List<ComposerRecipient> _includedRecipients() =>
       state.recipients.where((recipient) => recipient.included).toList();
 
+  List<ComposerRecipient> _resolveComposerRecipients(Chat chat) {
+    final recipients = _includedRecipients();
+    if (recipients.isNotEmpty) {
+      return recipients;
+    }
+    return [
+      ComposerRecipient(
+        target: FanOutTarget.chat(chat),
+        included: true,
+        pinned: true,
+      ),
+    ];
+  }
+
+  ({
+    List<ComposerRecipient> emailRecipients,
+    List<ComposerRecipient> xmppRecipients
+  }) _splitRecipientsForSend({
+    required List<ComposerRecipient> recipients,
+    required bool forceEmail,
+  }) {
+    final emailRecipients = <ComposerRecipient>[];
+    final xmppRecipients = <ComposerRecipient>[];
+    for (final recipient in recipients) {
+      final targetChat = recipient.target.chat;
+      if (forceEmail) {
+        emailRecipients.add(recipient);
+        continue;
+      }
+      if (targetChat == null) {
+        emailRecipients.add(recipient);
+        continue;
+      }
+      final identifier = targetChat.jid.toLowerCase();
+      final isAxiRecipient =
+          identifier.isNotEmpty && _axiDomainPattern.hasMatch(identifier);
+      final prefersXmpp = isAxiRecipient && !targetChat.transport.isEmail;
+      if (prefersXmpp) {
+        xmppRecipients.add(recipient);
+      } else {
+        emailRecipients.add(recipient);
+      }
+    }
+    return (
+      emailRecipients: emailRecipients,
+      xmppRecipients: xmppRecipients,
+    );
+  }
+
   bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
     if (recipients.isEmpty) return false;
-    if (state.emailSubject?.trim().isNotEmpty == true) {
-      return true;
-    }
     if (recipients.length == 1) {
       final targetChat = recipients.single.target.chat;
       if (targetChat != null && targetChat.jid == chat.jid) {
@@ -1173,6 +1176,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return true;
+  }
+
+  String _composeXmppBody({
+    required String body,
+    required String? subject,
+  }) =>
+      ChatSubjectCodec.composeXmppBody(
+        body: body,
+        subject: subject,
+      );
+
+  Future<void> _sendXmppFanOut({
+    required List<ComposerRecipient> recipients,
+    required String body,
+    required Message? quotedDraft,
+  }) async {
+    final processed = <String>{};
+    for (final recipient in recipients) {
+      final targetChat = recipient.target.chat;
+      final targetJid = targetChat?.jid;
+      if (targetChat == null || targetJid == null) {
+        continue;
+      }
+      if (!processed.add(targetJid)) continue;
+      final quote = quotedDraft != null && quotedDraft.chatJid == targetJid
+          ? quotedDraft
+          : null;
+      await _messageService.sendMessage(
+        jid: targetJid,
+        text: body,
+        encryptionProtocol: targetChat.encryptionProtocol,
+        quotedMessage: quote,
+      );
+    }
   }
 
   Future<bool> _sendFanOut({
@@ -1430,9 +1467,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   List<ComposerRecipient> _syncRecipientsForChat(Chat chat) {
-    if (!chat.transport.isEmail) {
-      return const [];
-    }
     final recipients = List<ComposerRecipient>.from(state.recipients);
     final key = chat.jid;
     final index = recipients.indexWhere(
