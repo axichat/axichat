@@ -118,11 +118,16 @@ const _recipientCutoutOffset = Offset.zero;
 const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
-const _selectionCutoutDepth = 18.0;
+const _selectionCutoutDepth = 16.0;
 const _selectionCutoutRadius = 16.0;
-const _selectionCutoutPadding = EdgeInsets.fromLTRB(8, 6, 8, 8);
-const _selectionCutoutOffset = Offset(0, -4);
-const _selectionCutoutThickness = 44.0;
+const _selectionCutoutPadding = EdgeInsets.all(6);
+const _selectionCutoutOffset = Offset.zero;
+const _selectionCutoutThickness = SelectionIndicator.size + 12.0;
+const _selectionCutoutCornerClearance = 0.0;
+const _selectionBubbleInteriorInset = _selectionCutoutDepth + 6.0;
+const _selectionBubbleVerticalInset = 4.0;
+const _selectionOuterInset =
+    _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
@@ -2906,6 +2911,8 @@ class _ChatState extends State<Chat> {
                                                           _selectionCutoutOffset,
                                                       minThickness:
                                                           _selectionCutoutThickness,
+                                                      cornerClearance:
+                                                          _selectionCutoutCornerClearance,
                                                     );
                                                   }
                                                   final bubbleContentKey = message
@@ -3078,15 +3085,40 @@ class _ChatState extends State<Chat> {
                                                       _recipientBubbleInset,
                                                     );
                                                   }
-                                                  final bubblePadding =
-                                                      bubbleBottomInset > 0
-                                                          ? _bubblePadding.add(
-                                                              EdgeInsets.only(
-                                                                bottom:
-                                                                    bubbleBottomInset,
-                                                              ),
-                                                            )
-                                                          : _bubblePadding;
+                                                  EdgeInsetsGeometry
+                                                      bubblePadding =
+                                                      _bubblePadding;
+                                                  if (bubbleBottomInset > 0) {
+                                                    bubblePadding =
+                                                        bubblePadding.add(
+                                                      EdgeInsets.only(
+                                                        bottom:
+                                                            bubbleBottomInset,
+                                                      ),
+                                                    );
+                                                  }
+                                                  if (selectionOverlay !=
+                                                      null) {
+                                                    bubblePadding =
+                                                        bubblePadding.add(
+                                                      EdgeInsets.only(
+                                                        left: self
+                                                            ? 0
+                                                            : _selectionBubbleInteriorInset,
+                                                        right: self
+                                                            ? _selectionBubbleInteriorInset
+                                                            : 0,
+                                                      ),
+                                                    );
+                                                    bubblePadding =
+                                                        bubblePadding.add(
+                                                      const EdgeInsets
+                                                          .symmetric(
+                                                        vertical:
+                                                            _selectionBubbleVerticalInset,
+                                                      ),
+                                                    );
+                                                  }
                                                   final bubbleBorderRadius =
                                                       _bubbleBorderRadius(
                                                     isSelf: self,
@@ -3142,15 +3174,31 @@ class _ChatState extends State<Chat> {
                                                       _recipientCutoutDepth,
                                                     );
                                                   }
+                                                  double extraOuterLeft = 0;
+                                                  double extraOuterRight = 0;
+                                                  if (selectionOverlay !=
+                                                      null) {
+                                                    const selectionInset =
+                                                        _selectionOuterInset;
+                                                    if (self) {
+                                                      extraOuterRight +=
+                                                          selectionInset;
+                                                    } else {
+                                                      extraOuterLeft +=
+                                                          selectionInset;
+                                                    }
+                                                  }
                                                   final outerPadding =
                                                       EdgeInsets.only(
                                                     top: 2,
                                                     bottom: baseOuterBottom +
                                                         extraOuterBottom,
                                                     left:
-                                                        _chatHorizontalPadding,
+                                                        _chatHorizontalPadding +
+                                                            extraOuterLeft,
                                                     right:
-                                                        _chatHorizontalPadding,
+                                                        _chatHorizontalPadding +
+                                                            extraOuterRight,
                                                   );
                                                   final bubble =
                                                       TweenAnimationBuilder<
