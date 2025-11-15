@@ -157,6 +157,7 @@ class Draft with _$Draft implements Insertable<Draft> {
     required int id,
     required List<String> jids,
     String? body,
+    String? subject,
     @Default(<String>[]) List<String> attachmentMetadataIds,
   }) = _Draft;
 
@@ -168,6 +169,7 @@ class Draft with _$Draft implements Insertable<Draft> {
         id: Value(id),
         jids: Value(jids),
         body: Value.absentIfNull(body),
+        subject: Value.absentIfNull(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
       ).toColumns(nullToAbsent);
 }
@@ -179,6 +181,8 @@ class Drafts extends Table {
   TextColumn get jids => text().map(ListConverter<String>())();
 
   TextColumn get body => text().nullable()();
+
+  TextColumn get subject => text().nullable()();
 
   TextColumn get attachmentMetadataIds =>
       text().map(ListConverter<String>()).withDefault(const Constant('[]'))();

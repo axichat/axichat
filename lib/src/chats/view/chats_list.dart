@@ -32,7 +32,7 @@ class ChatsList extends StatelessWidget {
       selector: (state) {
         final items = state.items;
         if (items == null) return null;
-        return items.where((chat) => !chat.archived).toList();
+        return items.where((chat) => !chat.archived && !chat.spam).toList();
       },
       builder: (context, items) {
         final duration = context.read<SettingsCubit>().animationDuration;

@@ -8,3 +8,9 @@ const chatsSearchFilters = [
   HomeSearchFilter(id: 'email', label: 'Email only'),
   HomeSearchFilter(id: 'hidden', label: 'Hidden'),
 ];
+
+const spamSearchFilters = [
+  HomeSearchFilter(id: 'all', label: 'All spam'),
+  HomeSearchFilter(id: 'email', label: 'Email'),
+  HomeSearchFilter(id: 'xmpp', label: 'XMPP'),
+];

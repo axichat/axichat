@@ -62,6 +62,4 @@ class CalendarStorageManager {
     _registry.unregisterPrefix(authStoragePrefix);
     _authStorage = null;
   }
-
-  String _storageToken(String prefix, String id) => '$prefix$id';
 }

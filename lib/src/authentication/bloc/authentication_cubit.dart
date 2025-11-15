@@ -170,6 +170,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       emit(const AuthenticationNone());
       return;
     }
+    final String resolvedJid = jid;
+    final String resolvedPassword = password;
 
     final databasePrefixStorageKey =
         CredentialStore.registerKey('${jid}_database_prefix');
@@ -187,18 +189,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     databasePassphrase ??= generateRandomString();
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
-    final bool usingStoredCredentials = username == null || password == null;
+    final bool usingStoredCredentials = username == null;
     final preHashed = usingStoredCredentials && savedPassword != null;
-    final xmppPassword = preHashed ? savedPassword : password;
-
-    if (xmppPassword == null) {
-      emit(const AuthenticationFailure('Missing credentials.'));
-      return;
-    }
+    final String xmppPassword = usingStoredCredentials
+        ? (savedPassword ?? resolvedPassword)
+        : resolvedPassword;
 
     final emailService = _emailService;
-    if (emailPassword == null && jid != null && emailService != null) {
-      final existing = await emailService.currentAccount(jid);
+    if (emailPassword == null && emailService != null) {
+      final existing = await emailService.currentAccount(resolvedJid);
       emailPassword = existing?.password;
     }
 
@@ -210,7 +209,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     try {
       password = await _xmppService.connect(
-        jid: jid,
+        jid: resolvedJid,
         password: xmppPassword,
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,

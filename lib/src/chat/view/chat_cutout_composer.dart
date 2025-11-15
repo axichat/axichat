@@ -71,6 +71,7 @@ class ChatCutoutComposer extends StatelessWidget {
     required this.sendEnabled,
     this.minLines = 1,
     this.maxLines = 6,
+    this.header,
   });
 
   final TextEditingController controller;
@@ -81,6 +82,7 @@ class ChatCutoutComposer extends StatelessWidget {
   final bool sendEnabled;
   final int minLines;
   final int maxLines;
+  final Widget? header;
 
   @override
   Widget build(BuildContext context) {
@@ -134,39 +136,55 @@ class ChatCutoutComposer extends StatelessWidget {
           .toList(),
       child: Padding(
         padding: padding,
-        child: Shortcuts(
-          shortcuts: shortcuts,
-          child: Actions(
-            actions: actionsMap,
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              minLines: minLines,
-              maxLines: maxLines,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              style: textStyle,
-              cursorColor: colors.primary,
-              cursorHeight: cursorHeight,
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                disabledBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                isCollapsed: true,
-                contentPadding: EdgeInsets.zero,
-                hintText: hintText,
-                hintStyle: context.textTheme.muted.copyWith(
-                  color: colors.mutedForeground,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (header != null) ...[
+              header!,
+              const SizedBox(height: 8),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: colors.border.withValues(alpha: 0.8),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Shortcuts(
+              shortcuts: shortcuts,
+              child: Actions(
+                actions: actionsMap,
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  minLines: minLines,
+                  maxLines: maxLines,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  style: textStyle,
+                  cursorColor: colors.primary,
+                  cursorHeight: cursorHeight,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    isCollapsed: true,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: hintText,
+                    hintStyle: context.textTheme.muted.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                  onSubmitted: (_) {
+                    if (sendEnabled) onSend();
+                  },
                 ),
               ),
-              onSubmitted: (_) {
-                if (sendEnabled) onSend();
-              },
             ),
-          ),
+          ],
         ),
       ),
     );

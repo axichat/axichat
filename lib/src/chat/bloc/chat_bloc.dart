@@ -59,14 +59,16 @@ class FanOutDraft extends Equatable {
     this.body,
     this.attachment,
     required this.shareId,
+    this.subject,
   });
 
   final String? body;
   final EmailAttachment? attachment;
   final String shareId;
+  final String? subject;
 
   @override
-  List<Object?> get props => [body, attachment, shareId];
+  List<Object?> get props => [body, attachment, shareId, subject];
 }
 
 enum ChatToastVariant { info, warning, destructive }
@@ -130,6 +132,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatComposerRecipientRemoved>(_onComposerRecipientRemoved);
     on<ChatComposerRecipientToggled>(_onComposerRecipientToggled);
     on<ChatFanOutRetryRequested>(_onFanOutRetryRequested);
+    on<ChatSubjectChanged>(
+      _onChatSubjectChanged,
+      transformer: blocDebounce(const Duration(milliseconds: 200)),
+    );
     if (jid != null) {
       _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
@@ -172,7 +178,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _hasExplicitTransportPreference = false;
 
   bool get encryptionAvailable => _omemoService != null;
-  bool get _isEmailChat => _transport.isEmail;
+  bool get _isEmailChat {
+    if (_transport.isEmail) {
+      return true;
+    }
+    if (_hasExplicitTransportPreference) {
+      return false;
+    }
+    final defaultTransport = state.chat?.defaultTransport;
+    return defaultTransport?.isEmail ?? false;
+  }
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
@@ -239,6 +254,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       composerError: resetContext ? null : state.composerError,
       composerHydrationText: resetContext ? null : state.composerHydrationText,
       composerHydrationId: resetContext ? 0 : state.composerHydrationId,
+      emailSubject: resetContext ? null : state.emailSubject,
+      emailSubjectHydrationText:
+          resetContext ? null : state.emailSubjectHydrationText,
+      emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
     ));
     final defaultTransport = event.chat.defaultTransport;
     if (!_hasExplicitTransportPreference && _transport != defaultTransport) {
@@ -372,7 +391,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             (attachment) => attachment.status == PendingAttachmentStatus.queued)
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
+    final hasSubject = state.emailSubject?.trim().isNotEmpty == true;
     final quotedDraft = state.quoting;
+    var emailSendSucceeded = false;
     try {
       if (isEmailChat) {
         final recipients = _includedRecipients();
@@ -385,7 +406,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
         final hasBody = trimmedText.isNotEmpty;
-        if (!hasBody && !hasQueuedAttachments) {
+        if (!hasBody && !hasQueuedAttachments && !hasSubject) {
           emit(
             state.copyWith(
               composerError: 'Message cannot be empty.',
@@ -417,6 +438,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final sent = await _sendFanOut(
               recipients: recipients,
               text: body,
+              subject: state.emailSubject,
               emit: emit,
             );
             if (!sent) {
@@ -434,7 +456,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           }
         } else {
           if (body != null) {
-            await service.sendMessage(chat: chat, body: body);
+            await service.sendMessage(
+              chat: chat,
+              body: body,
+              subject: state.emailSubject,
+            );
           }
           if (hasQueuedAttachments) {
             await _sendQueuedAttachments(
@@ -446,6 +472,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             );
           }
         }
+        emailSendSucceeded = true;
       } else {
         if (trimmedText.isEmpty) return;
         final sameChatQuote =
@@ -487,6 +514,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } finally {
       if (state.quoting != null) {
         emit(state.copyWith(quoting: null));
+      }
+      if (isEmailChat && emailSendSucceeded) {
+        _clearEmailSubject(emit);
       }
     }
   }
@@ -548,6 +578,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _chatsService.saveChatTransportPreference(
           jid: chat.jid,
           transport: event.transport,
+        );
+      }
+      if (!event.transport.isEmail &&
+          (state.emailSubject?.isNotEmpty ?? false)) {
+        emit(
+          state.copyWith(
+            emailSubject: '',
+            emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
+            emailSubjectHydrationText: '',
+          ),
         );
       }
     } on Exception catch (error, stackTrace) {
@@ -843,8 +883,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       text: draft.body,
       attachment: draft.attachment,
       shareId: draft.shareId,
+      subject: draft.subject,
       emit: emit,
     );
+  }
+
+  void _onChatSubjectChanged(
+    ChatSubjectChanged event,
+    Emitter<ChatState> emit,
+  ) {
+    if (!_isEmailChat) {
+      return;
+    }
+    if (state.emailSubject == event.subject) {
+      return;
+    }
+    emit(state.copyWith(emailSubject: event.subject));
   }
 
   Future<void> _stopTyping() async {
@@ -874,6 +928,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final succeeded = await _sendFanOut(
         recipients: recipients,
         attachment: current.attachment,
+        subject: state.emailSubject,
         emit: emit,
       );
       if (succeeded) {
@@ -973,6 +1028,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final signature = _draftSignature(
       recipients: resolvedRecipients,
       body: body,
+      subject: state.emailSubject,
       pendingAttachments: state.pendingAttachments,
     );
     final attachments =
@@ -994,6 +1050,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         id: null,
         jids: resolvedRecipients,
         body: body,
+        subject: state.emailSubject,
         attachments: attachments,
       );
       _lastOfflineDraftSignature = signature;
@@ -1050,12 +1107,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String _draftSignature({
     required List<String> recipients,
     required String body,
+    required String? subject,
     required List<PendingAttachment> pendingAttachments,
   }) {
     final sortedRecipients = List<String>.from(recipients)..sort();
     final buffer = StringBuffer(sortedRecipients.join(','))
       ..write('::')
-      ..write(body);
+      ..write(body)
+      ..write('::subject:')
+      ..write(subject ?? '');
     if (pendingAttachments.isNotEmpty) {
       final attachmentKeys = pendingAttachments
           .map((pending) => pending.attachment.path)
@@ -1074,6 +1134,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         toastId: base.toastId + 1,
       );
 
+  void _clearEmailSubject(Emitter<ChatState> emit) {
+    if (state.emailSubject?.isEmpty ?? true) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        emailSubject: '',
+        emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
+        emailSubjectHydrationText: '',
+      ),
+    );
+  }
+
   String _composeEmailBody(String body, Message? quoted) {
     if (quoted?.body?.isNotEmpty != true) {
       return body;
@@ -1090,6 +1163,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
     if (recipients.isEmpty) return false;
+    if (state.emailSubject?.trim().isNotEmpty == true) {
+      return true;
+    }
     if (recipients.length == 1) {
       final targetChat = recipients.single.target.chat;
       if (targetChat != null && targetChat.jid == chat.jid) {
@@ -1104,6 +1180,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? text,
     EmailAttachment? attachment,
     String? shareId,
+    String? subject,
     required Emitter<ChatState> emit,
   }) async {
     final service = _emailService;
@@ -1115,6 +1192,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         body: text,
         attachment: attachment,
         shareId: effectiveShareId,
+        subject: subject,
       );
       final mergedRecipients = _mergeRecipientsWithReport(report);
       final reports =
@@ -1127,6 +1205,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           body: text,
           attachment: attachment,
           shareId: report.shareId,
+          subject: subject,
         );
       emit(state.copyWith(
         recipients: mergedRecipients,
@@ -1210,6 +1289,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     final nextHydrationId = ++_composerHydrationSeed;
+    final nextSubject = shareContext?.subject;
+    final shouldHydrateSubject =
+        nextSubject != null && nextSubject != state.emailSubject;
     emit(
       state.copyWith(
         recipients: recipients,
@@ -1219,6 +1301,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerError: message.error.isNotNone
             ? message.error.asString
             : state.composerError,
+        emailSubject: shouldHydrateSubject ? nextSubject : state.emailSubject,
+        emailSubjectHydrationId: shouldHydrateSubject
+            ? state.emailSubjectHydrationId + 1
+            : state.emailSubjectHydrationId,
+        emailSubjectHydrationText:
+            shouldHydrateSubject ? nextSubject : state.emailSubject,
       ),
     );
   }

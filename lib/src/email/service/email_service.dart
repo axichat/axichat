@@ -6,6 +6,8 @@ import 'package:delta_ffi/delta_safe.dart';
 
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
+import 'package:axichat/src/email/service/email_blocking_service.dart';
+import 'package:axichat/src/email/service/email_spam_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
@@ -71,7 +73,9 @@ class EmailService {
         _chatmailDomain = chatmailDomain,
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
-        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
+        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge,
+        blocking = EmailBlockingService(databaseBuilder: databaseBuilder),
+        spam = EmailSpamService(databaseBuilder: databaseBuilder) {
     _eventListener = (event) => unawaited(_processDeltaEvent(event));
     _transport.addEventListener(_eventListener);
     _listenerAttached = true;
@@ -84,6 +88,8 @@ class EmailService {
   final Logger _log;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
+  final EmailBlockingService blocking;
+  final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
@@ -171,10 +177,10 @@ class EmailService {
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
 
-    final resolvedAddress =
-        (normalizedOverrideAddress != null && normalizedOverrideAddress.isNotEmpty)
-            ? normalizedOverrideAddress
-            : preferredAddress;
+    final resolvedAddress = (normalizedOverrideAddress != null &&
+            normalizedOverrideAddress.isNotEmpty)
+        ? normalizedOverrideAddress
+        : preferredAddress;
     if (resolvedAddress == null || resolvedAddress.isEmpty) {
       throw StateError('Failed to resolve email address for $jid');
     }
@@ -185,7 +191,8 @@ class EmailService {
     }
 
     final resolvedPasswordOverride = passwordOverride;
-    if (resolvedPasswordOverride != null && resolvedPasswordOverride.isNotEmpty) {
+    if (resolvedPasswordOverride != null &&
+        resolvedPasswordOverride.isNotEmpty) {
       if (password == null || password != resolvedPasswordOverride) {
         password = resolvedPasswordOverride;
         credentialsMutated = true;
@@ -193,10 +200,6 @@ class EmailService {
       }
     } else if (password == null) {
       throw StateError('Failed to resolve email password for $jid');
-    }
-
-    if (password == null) {
-      throw StateError('Failed to resolve email credentials for $jid');
     }
 
     var alreadyProvisioned =
@@ -226,9 +229,13 @@ class EmailService {
           error,
           stackTrace,
         );
-        await _clearCredentials(scope);
+        final shouldClearCredentials =
+            credentialsMutated && mapped.code != DeltaChatErrorCode.network;
+        if (shouldClearCredentials) {
+          await _clearCredentials(scope);
+        }
         if (mapped.code == DeltaChatErrorCode.network) {
-          throw EmailProvisioningException(
+          throw const EmailProvisioningException(
             'Unable to reach axi.im email services. Please try again.',
           );
         }
@@ -303,9 +310,12 @@ class EmailService {
     String? displayName,
   }) async {
     await _ensureReady();
-    final chatId = await _transport.ensureChatForAddress(
-      address: address,
-      displayName: displayName,
+    final chatId = await _guardDeltaOperation(
+      operation: 'ensure email chat',
+      body: () => _transport.ensureChatForAddress(
+        address: address,
+        displayName: displayName,
+      ),
     );
     return _waitForChat(chatId);
   }
@@ -319,24 +329,71 @@ class EmailService {
     if (address == null) {
       throw StateError('Email chat ${chat.jid} missing emailAddress metadata.');
     }
-    final chatId = await _transport.ensureChatForAddress(
+    return ensureChatForAddress(
       address: address,
       displayName: chat.contactDisplayName ?? chat.title,
     );
-    return _waitForChat(chatId);
   }
 
   Future<int> sendMessage({
     required Chat chat,
     required String body,
+    String? subject,
   }) async {
     final deltaChat = await ensureChatForEmailChat(chat);
     final chatId = deltaChat.deltaChatId!;
     await _ensureReady();
-    return _guardDeltaOperation(
+    final normalizedSubject = _normalizeSubject(subject);
+    final trimmedBody = body.trim();
+    String? shareId;
+    String? subjectToken;
+    if (normalizedSubject != null) {
+      shareId = ShareTokenCodec.generateShareId();
+      subjectToken = _shareTokenForShare(shareId);
+      final db = await _databaseBuilder();
+      final participants = await _buildShareParticipants(
+        shareId: shareId,
+        chats: [deltaChat],
+      );
+      final shareRecord = MessageShareData(
+        shareId: shareId,
+        originatorDcMsgId: null,
+        subjectToken: subjectToken,
+        subject: normalizedSubject,
+        createdAt: DateTime.timestamp(),
+        participantCount: participants.length,
+      );
+      await db.createMessageShare(
+        share: shareRecord,
+        participants: participants,
+      );
+    }
+    final transmitBody = subjectToken != null
+        ? ShareTokenCodec.injectToken(
+            token: subjectToken,
+            body: _composeSubjectEnvelope(
+              subject: normalizedSubject,
+              body: trimmedBody,
+            ),
+          )
+        : trimmedBody;
+    final msgId = await _guardDeltaOperation(
       operation: 'send email message',
-      body: () => _transport.sendText(chatId: chatId, body: body),
+      body: () => _transport.sendText(
+        chatId: chatId,
+        body: transmitBody,
+        shareId: shareId,
+        localBodyOverride: trimmedBody,
+      ),
     );
+    if (shareId != null) {
+      final db = await _databaseBuilder();
+      await db.assignShareOriginator(
+        shareId: shareId,
+        originatorDcMsgId: msgId,
+      );
+    }
+    return msgId;
   }
 
   Future<int> sendAttachment({
@@ -361,6 +418,7 @@ class EmailService {
     EmailAttachment? attachment,
     bool useSubjectToken = true,
     String? shareId,
+    String? subject,
   }) async {
     await _ensureReady();
     if (targets.isEmpty) {
@@ -377,8 +435,10 @@ class EmailService {
     }
     final trimmedBody = body?.trim();
     final hasBody = trimmedBody?.isNotEmpty == true;
+    final normalizedSubject = _normalizeSubject(subject);
+    final hasSubject = normalizedSubject != null;
     final hasAttachment = attachment != null;
-    if (!hasBody && !hasAttachment) {
+    if (!hasBody && !hasAttachment && !hasSubject) {
       throw const FanOutValidationException('Message cannot be empty.');
     }
     final db = await _databaseBuilder();
@@ -394,28 +454,30 @@ class EmailService {
         shareId ?? existingShare?.shareId ?? ShareTokenCodec.generateShareId();
     final resolvedToken = existingShare?.subjectToken ??
         (useSubjectToken ? _shareTokenForShare(resolvedShareId) : null);
+    final resolvedSubject = normalizedSubject ?? existingShare?.subject;
 
-    final transmitBody = resolvedToken != null && hasBody
-        ? ShareTokenCodec.injectToken(token: resolvedToken, body: trimmedBody!)
-        : trimmedBody ?? '';
-
-    final sanitizedBody = resolvedToken != null && hasBody
-        ? ShareTokenCodec.stripToken(transmitBody)?.cleanedBody ?? trimmedBody!
-        : trimmedBody ?? '';
+    final transmitBody = resolvedToken != null
+        ? ShareTokenCodec.injectToken(
+            token: resolvedToken,
+            body: _composeSubjectEnvelope(
+              subject: resolvedSubject,
+              body: trimmedBody,
+            ),
+          )
+        : (trimmedBody ?? '');
+    final sanitizedBody = trimmedBody ?? '';
 
     final captionText = attachment?.caption?.trim();
-    final transmitCaption =
-        resolvedToken != null && captionText?.isNotEmpty == true
-            ? ShareTokenCodec.injectToken(
-                token: resolvedToken,
-                body: captionText!,
-              )
-            : captionText;
-    final sanitizedCaption =
-        resolvedToken != null && captionText?.isNotEmpty == true
-            ? ShareTokenCodec.stripToken(transmitCaption)?.cleanedBody ??
-                captionText!
-            : captionText;
+    final transmitCaption = resolvedToken != null
+        ? ShareTokenCodec.injectToken(
+            token: resolvedToken,
+            body: _composeSubjectEnvelope(
+              subject: resolvedSubject,
+              body: captionText,
+            ),
+          )
+        : captionText;
+    final sanitizedCaption = captionText ?? '';
 
     final participants = await _buildShareParticipants(
       shareId: resolvedShareId,
@@ -426,6 +488,7 @@ class EmailService {
       shareId: resolvedShareId,
       originatorDcMsgId: existingShare?.originatorDcMsgId,
       subjectToken: resolvedToken,
+      subject: resolvedSubject,
       createdAt: existingShare?.createdAt ?? DateTime.timestamp(),
       participantCount: participants.length,
     );
@@ -507,9 +570,35 @@ class EmailService {
     return FanOutSendReport(
       shareId: resolvedShareId,
       subjectToken: resolvedToken,
+      subject: resolvedSubject,
       statuses: statuses,
       attachmentWarning: attachmentWarning,
     );
+  }
+
+  String? _normalizeSubject(String? subject) {
+    final trimmed = subject?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String _composeSubjectEnvelope({
+    required String? subject,
+    required String? body,
+  }) {
+    final normalizedSubject = _normalizeSubject(subject);
+    final trimmedBody = body?.trim();
+    final hasSubject = normalizedSubject != null;
+    final hasBody = trimmedBody?.isNotEmpty == true;
+    if (!hasSubject) {
+      return trimmedBody ?? '';
+    }
+    if (!hasBody) {
+      return normalizedSubject;
+    }
+    return '$normalizedSubject\n\n$trimmedBody';
   }
 
   String _shareTokenForShare(String shareId) {
@@ -542,9 +631,13 @@ class EmailService {
         chats.add(chat);
       }
     }
+    final shareRecord = await db.getMessageShareById(shareId);
     return ShareContext(
       shareId: shareId,
       participants: chats,
+      subject: shareRecord?.subject,
+      originatorDeltaMsgId: shareRecord?.originatorDcMsgId,
+      participantCount: shareRecord?.participantCount,
     );
   }
 
@@ -807,6 +900,9 @@ class EmailService {
       final db = await _databaseBuilder();
       final message = await db.getMessageByStanzaID(_stanzaId(msgId));
       if (message == null) {
+        return;
+      }
+      if (message.warning == MessageWarning.emailSpamQuarantined) {
         return;
       }
       final selfJid = selfSenderJid;

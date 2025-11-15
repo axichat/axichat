@@ -250,6 +250,15 @@ mixin ChatsService on XmppBase, BaseStreamService {
     );
   }
 
+  Future<void> toggleChatSpam({
+    required String jid,
+    required bool spam,
+  }) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.markChatSpam(jid: jid, spam: spam),
+    );
+  }
+
   Future<List<Message>> loadCompleteChatHistory({
     required String jid,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,

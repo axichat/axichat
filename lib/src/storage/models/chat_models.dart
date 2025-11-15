@@ -262,6 +262,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool favorited,
     @Default(false) bool archived,
     @Default(false) bool hidden,
+    @Default(false) bool spam,
     @Default(true) bool markerResponsive,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
@@ -289,6 +290,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required bool favorited,
     required bool archived,
     required bool hidden,
+    required bool spam,
     required bool markerResponsive,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
@@ -327,6 +329,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         favorited: Value(favorited),
         archived: Value(archived),
         hidden: Value(hidden),
+        spam: Value(spam),
         markerResponsive: Value(markerResponsive),
         encryptionProtocol: Value(encryptionProtocol),
         contactID: Value.absentIfNull(contactID),
@@ -370,6 +373,8 @@ class Chats extends Table {
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
 
   BoolColumn get hidden => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get spam => boolean().withDefault(const Constant(false))();
 
   BoolColumn get markerResponsive =>
       boolean().withDefault(const Constant(true))();
@@ -441,4 +446,73 @@ class Blocklist extends Table {
 
   @override
   Set<Column> get primaryKey => {jid};
+}
+
+@Freezed(toJson: false, fromJson: false)
+class EmailBlocklistEntry
+    with _$EmailBlocklistEntry
+    implements Insertable<EmailBlocklistEntry> {
+  const factory EmailBlocklistEntry({
+    required String address,
+    required DateTime blockedAt,
+    @Default(0) int blockedMessageCount,
+    DateTime? lastBlockedMessageAt,
+  }) = _EmailBlocklistEntry;
+
+  const EmailBlocklistEntry._();
+
+  @override
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
+      EmailBlocklistCompanion(
+        address: Value(address),
+        blockedAt: Value(blockedAt),
+        blockedMessageCount: Value(blockedMessageCount),
+        lastBlockedMessageAt: Value.absentIfNull(lastBlockedMessageAt),
+      ).toColumns(nullToAbsent);
+}
+
+@UseRowClass(EmailBlocklistEntry)
+class EmailBlocklist extends Table {
+  TextColumn get address => text()();
+
+  DateTimeColumn get blockedAt =>
+      dateTime().clientDefault(() => DateTime.timestamp())();
+
+  IntColumn get blockedMessageCount =>
+      integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get lastBlockedMessageAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {address};
+}
+
+@Freezed(toJson: false, fromJson: false)
+class EmailSpamEntry
+    with _$EmailSpamEntry
+    implements Insertable<EmailSpamEntry> {
+  const factory EmailSpamEntry({
+    required String address,
+    required DateTime flaggedAt,
+  }) = _EmailSpamEntry;
+
+  const EmailSpamEntry._();
+
+  @override
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
+      EmailSpamlistCompanion(
+        address: Value(address),
+        flaggedAt: Value(flaggedAt),
+      ).toColumns(nullToAbsent);
+}
+
+@UseRowClass(EmailSpamEntry)
+class EmailSpamlist extends Table {
+  TextColumn get address => text()();
+
+  DateTimeColumn get flaggedAt =>
+      dateTime().clientDefault(() => DateTime.timestamp())();
+
+  @override
+  Set<Column> get primaryKey => {address};
 }

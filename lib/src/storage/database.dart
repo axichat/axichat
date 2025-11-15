@@ -113,6 +113,11 @@ abstract interface class XmppDatabase implements Database {
     required int originatorDcMsgId,
   });
 
+  Future<void> saveMessageShareSubject({
+    required String shareId,
+    required String? subject,
+  });
+
   Future<MessageShareData?> getMessageShareByToken(String token);
 
   Future<MessageShareData?> getMessageShareById(String shareId);
@@ -133,6 +138,7 @@ abstract interface class XmppDatabase implements Database {
     int? id,
     required List<String> jids,
     required String body,
+    String? subject,
     List<String> attachmentMetadataIds = const [],
   });
 
@@ -190,6 +196,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<FileMetadataData?> getFileMetadata(String id);
 
+  Future<void> deleteFileMetadata(String id);
+
   Stream<List<Chat>> watchChats({required int start, required int end});
 
   Future<List<Chat>> getChats({required int start, required int end});
@@ -224,6 +232,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markChatHidden({
     required String jid,
     required bool hidden,
+  });
+
+  Future<void> markChatSpam({
+    required String jid,
+    required bool spam,
   });
 
   Future<void> markChatMarkerResponsive({
@@ -315,6 +328,26 @@ abstract interface class XmppDatabase implements Database {
   Future<void> replaceBlocklist(List<String> blocks);
 
   Future<void> deleteBlocklist();
+
+  Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
+
+  Future<List<EmailBlocklistEntry>> getEmailBlocklist();
+
+  Future<void> addEmailBlock(String address);
+
+  Future<void> removeEmailBlock(String address);
+
+  Future<bool> isEmailAddressBlocked(String address);
+
+  Future<void> incrementEmailBlockCount(String address);
+
+  Stream<List<EmailSpamEntry>> watchEmailSpamlist();
+
+  Future<void> addEmailSpam(String address);
+
+  Future<void> removeEmailSpam(String address);
+
+  Future<bool> isEmailAddressSpam(String address);
 
   Future<void> deleteAll();
 
@@ -418,6 +451,13 @@ class MessageSharesAccessor
       (update(table)..where((tbl) => tbl.shareId.equals(shareId))).write(
         MessageSharesCompanion(
           originatorDcMsgId: Value(originatorDcMsgId),
+        ),
+      );
+
+  Future<void> updateSubject(String shareId, String? subject) =>
+      (update(table)..where((tbl) => tbl.shareId.equals(shareId))).write(
+        MessageSharesCompanion(
+          subject: Value(subject),
         ),
       );
 
@@ -784,6 +824,50 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   Future<void> deleteAll() => delete(blocklist).go();
 }
 
+@DriftAccessor(tables: [EmailBlocklist])
+class EmailBlocklistAccessor
+    extends BaseAccessor<EmailBlocklistEntry, $EmailBlocklistTable>
+    with _$EmailBlocklistAccessorMixin {
+  EmailBlocklistAccessor(super.attachedDatabase);
+
+  @override
+  $EmailBlocklistTable get table => emailBlocklist;
+
+  @override
+  Future<EmailBlocklistEntry?> selectOne(String address) =>
+      (select(table)..where((tbl) => tbl.address.equals(address)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(String address) =>
+      (delete(table)..where((tbl) => tbl.address.equals(address))).go();
+
+  Stream<List<EmailBlocklistEntry>> watchEntries() => select(table).watch();
+
+  Future<List<EmailBlocklistEntry>> selectEntries() => select(table).get();
+}
+
+@DriftAccessor(tables: [EmailSpamlist])
+class EmailSpamlistAccessor
+    extends BaseAccessor<EmailSpamEntry, $EmailSpamlistTable>
+    with _$EmailSpamlistAccessorMixin {
+  EmailSpamlistAccessor(super.attachedDatabase);
+
+  @override
+  $EmailSpamlistTable get table => emailSpamlist;
+
+  @override
+  Future<EmailSpamEntry?> selectOne(String address) =>
+      (select(table)..where((tbl) => tbl.address.equals(address)))
+          .getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(String address) =>
+      (delete(table)..where((tbl) => tbl.address.equals(address))).go();
+
+  Stream<List<EmailSpamEntry>> watchEntries() => select(table).watch();
+}
+
 @DriftDatabase(tables: [
   Messages,
   MessageShares,
@@ -805,6 +889,8 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   Blocklist,
   Stickers,
   StickerPacks,
+  EmailBlocklist,
+  EmailSpamlist,
 ], daos: [
   MessagesAccessor,
   MessageSharesAccessor,
@@ -822,6 +908,8 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
   RosterAccessor,
   InvitesAccessor,
   BlocklistAccessor,
+  EmailBlocklistAccessor,
+  EmailSpamlistAccessor,
 ])
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
   XmppDrift._(this._file, super.e) : super();
@@ -838,9 +926,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
 
   final _log = Logger('XmppDrift');
   final File _file;
+  String _normalizeEmail(String address) => address.trim().toLowerCase();
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration {
@@ -894,7 +983,7 @@ SELECT
   body,
   CASE
     WHEN file_metadata_i_d IS NULL OR length(file_metadata_i_d) = 0 THEN '[]'
-    ELSE '[' || quote(file_metadata_i_d) || ']'
+    ELSE json_array(file_metadata_i_d)
   END
 FROM drafts
 ''',
@@ -920,6 +1009,17 @@ ON message_shares(subject_token)
 WHERE subject_token IS NOT NULL
 ''',
           );
+        }
+        if (from < 10) {
+          await m.addColumn(messageShares, messageShares.subject);
+          await m.addColumn(drafts, drafts.subject);
+        }
+        if (from < 11) {
+          await m.createTable(emailBlocklist);
+        }
+        if (from < 12) {
+          await m.addColumn(chats, chats.spam);
+          await m.createTable(emailSpamlist);
         }
       },
       beforeOpen: (_) async {
@@ -1324,6 +1424,13 @@ WHERE subject_token IS NOT NULL
       messageSharesAccessor.updateOriginator(shareId, originatorDcMsgId);
 
   @override
+  Future<void> saveMessageShareSubject({
+    required String shareId,
+    required String? subject,
+  }) =>
+      messageSharesAccessor.updateSubject(shareId, subject);
+
+  @override
   Future<MessageShareData?> getMessageShareByToken(String token) =>
       messageSharesAccessor.selectByToken(token);
 
@@ -1362,12 +1469,14 @@ WHERE subject_token IS NOT NULL
     int? id,
     required List<String> jids,
     required String body,
+    String? subject,
     List<String> attachmentMetadataIds = const [],
   }) =>
       draftsAccessor.insertOrUpdateOne(DraftsCompanion(
         id: Value.absentIfNull(id),
         jids: Value(jids),
         body: Value(body),
+        subject: Value.absentIfNull(subject),
         attachmentMetadataIds: Value(attachmentMetadataIds),
       ));
 
@@ -1535,6 +1644,11 @@ WHERE subject_token IS NOT NULL
       fileMetadataAccessor.selectOne(id);
 
   @override
+  Future<void> deleteFileMetadata(String id) async {
+    await fileMetadataAccessor.deleteOne(id);
+  }
+
+  @override
   Stream<List<Chat>> watchChats({required int start, required int end}) {
     return chatsAccessor.watchAll();
   }
@@ -1636,6 +1750,15 @@ WHERE subject_token IS NOT NULL
     _log.info('Marking chat: $jid as hidden: $hidden');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(hidden: Value(hidden)));
+  }
+
+  @override
+  Future<void> markChatSpam({
+    required String jid,
+    required bool spam,
+  }) async {
+    await (update(chats)..where((tbl) => tbl.jid.equals(jid)))
+        .write(ChatsCompanion(spam: Value(spam)));
   }
 
   @override
@@ -1916,6 +2039,96 @@ WHERE subject_token IS NOT NULL
   Future<void> deleteBlocklist() async {
     _log.info('Deleting blocklist...');
     await blocklistAccessor.deleteAll();
+  }
+
+  @override
+  Stream<List<EmailBlocklistEntry>> watchEmailBlocklist() =>
+      emailBlocklistAccessor.watchEntries();
+
+  @override
+  Future<List<EmailBlocklistEntry>> getEmailBlocklist() =>
+      emailBlocklistAccessor.selectEntries();
+
+  @override
+  Future<void> addEmailBlock(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return;
+    }
+    await emailBlocklistAccessor.insertOrUpdateOne(
+      EmailBlocklistCompanion.insert(address: normalized),
+    );
+  }
+
+  @override
+  Future<void> removeEmailBlock(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return;
+    }
+    await emailBlocklistAccessor.deleteOne(normalized);
+  }
+
+  @override
+  Future<bool> isEmailAddressBlocked(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final existing = await emailBlocklistAccessor.selectOne(normalized);
+    return existing != null;
+  }
+
+  @override
+  Future<void> incrementEmailBlockCount(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return;
+    }
+    await customStatement(
+      '''
+INSERT INTO email_blocklist(address, blocked_message_count, last_blocked_message_at)
+VALUES(?, 1, CURRENT_TIMESTAMP)
+ON CONFLICT(address) DO UPDATE SET
+  blocked_message_count = blocked_message_count + 1,
+  last_blocked_message_at = excluded.last_blocked_message_at
+''',
+      [normalized],
+    );
+  }
+
+  @override
+  Stream<List<EmailSpamEntry>> watchEmailSpamlist() =>
+      emailSpamlistAccessor.watchEntries();
+
+  @override
+  Future<void> addEmailSpam(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return;
+    }
+    await emailSpamlistAccessor.insertOrUpdateOne(
+      EmailSpamlistCompanion.insert(address: normalized),
+    );
+  }
+
+  @override
+  Future<void> removeEmailSpam(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return;
+    }
+    await emailSpamlistAccessor.deleteOne(normalized);
+  }
+
+  @override
+  Future<bool> isEmailAddressSpam(String address) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final existing = await emailSpamlistAccessor.selectOne(normalized);
+    return existing != null;
   }
 
   Future<void> _rebuildMessagesTable(Migrator m) async {

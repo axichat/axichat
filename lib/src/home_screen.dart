@@ -36,6 +36,7 @@ import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:axichat/src/roster/view/roster_invites_list.dart';
 import 'package:axichat/src/roster/view/roster_list.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -88,6 +89,13 @@ class HomeScreen extends StatelessWidget {
             children: [ChatsFilterButton(), DraftButton()],
           ),
           searchFilters: chatsSearchFilters,
+        ),
+      if (isChat)
+        const HomeTabEntry(
+          id: HomeTab.spam,
+          label: 'Spam',
+          body: SpamList(key: PageStorageKey('Spam')),
+          searchFilters: spamSearchFilters,
         ),
       if (isRoster)
         const HomeTabEntry(

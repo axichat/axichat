@@ -35,8 +35,9 @@ class ChatMessageDetails extends StatelessWidget {
         final emailSelfJid = emailService?.selfSenderJid;
         final isFromSelf = message.senderJid == profileState.jid ||
             (emailSelfJid != null && message.senderJid == emailSelfJid);
+        final shareContext = state.shareContexts[message.stanzaID];
         final shareParticipants = _shareParticipants(
-          state.shareContexts[message.stanzaID]?.participants ?? const <Chat>[],
+          shareContext?.participants ?? const <Chat>[],
           state.chat?.jid,
           profileState.jid,
         );
@@ -63,6 +64,24 @@ class ChatMessageDetails extends StatelessWidget {
                   message.body ?? '',
                   style: context.textTheme.lead,
                 ),
+                if (shareContext?.subject?.isNotEmpty == true)
+                  Column(
+                    spacing: 8,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Subject',
+                        style: context.textTheme.muted,
+                      ),
+                      Text(
+                        shareContext!.subject!,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 if (showEmailRecipients)
                   Column(
                     spacing: 8,

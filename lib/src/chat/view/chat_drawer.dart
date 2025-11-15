@@ -5,11 +5,11 @@ import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/filter_toggle.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatDrawer extends StatelessWidget {
@@ -31,6 +31,7 @@ class ChatDrawer extends StatelessWidget {
     final isEmailTransport = canUseEmail && transport.isEmail;
     final encryptionAvailable =
         context.read<ChatBloc>().encryptionAvailable && !isEmailTransport;
+    final isSpamChat = chat?.spam ?? false;
     final colors = context.colorScheme;
     return Drawer(
       backgroundColor: colors.background,
@@ -154,19 +155,48 @@ class ChatDrawer extends StatelessWidget {
                 size: context.iconTheme.size,
               ),
               foregroundColor: context.colorScheme.destructive,
-              onPressed: () => context.push(
-                const ComposeRoute().location,
-                extra: {
-                  'locate': context.read,
-                  'jids': ['spam@axichat.com'],
-                  'body': 'I want to report \'$jid\' for spam.',
-                  'attachments': const <String>[],
-                },
-              ),
-              child: const Text('Report spam'),
+              onPressed: () async {
+                final targetChat = chat;
+                final currentJid = jid;
+                if (targetChat == null || currentJid == null) {
+                  return;
+                }
+                final xmppService = context.read<XmppService?>();
+                final emailService =
+                    RepositoryProvider.of<EmailService?>(context);
+                final sendToSpam = !targetChat.spam;
+                await xmppService?.toggleChatSpam(
+                  jid: currentJid,
+                  spam: sendToSpam,
+                );
+                final address = targetChat.emailAddress?.trim();
+                if (targetChat.transport.isEmail &&
+                    address?.isNotEmpty == true) {
+                  if (sendToSpam) {
+                    await emailService?.spam.mark(address!);
+                  } else {
+                    await emailService?.spam.unmark(address!);
+                  }
+                }
+                if (!context.mounted) return;
+                final toastMessage = sendToSpam
+                    ? 'Sent ${targetChat.title} to spam.'
+                    : 'Returned ${targetChat.title} to inbox.';
+                ShadToaster.maybeOf(context)?.show(
+                  ShadToast(
+                    title: Text(sendToSpam ? 'Reported' : 'Restored'),
+                    description: Text(toastMessage),
+                    alignment: Alignment.topRight,
+                    showCloseIconOnlyWhenHovered: false,
+                  ),
+                );
+              },
+              child: Text(isSpamChat ? 'Move to inbox' : 'Report spam'),
             ).withTapBounce(),
             BlockButtonInline(
               jid: jid!,
+              emailAddress: chat?.emailAddress,
+              transport: transport,
               showIcon: true,
               mainAxisAlignment: MainAxisAlignment.start,
             ),

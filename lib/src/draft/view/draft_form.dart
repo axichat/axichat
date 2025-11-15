@@ -30,12 +30,14 @@ class DraftForm extends StatefulWidget {
     this.id,
     this.jids = const [''],
     this.body = '',
+    this.subject = '',
     this.attachmentMetadataIds = const [],
   });
 
   final int? id;
   final List<String> jids;
   final String body;
+  final String subject;
   final List<String> attachmentMetadataIds;
 
   @override
@@ -45,7 +47,9 @@ class DraftForm extends StatefulWidget {
 class _DraftFormState extends State<DraftForm> {
   late final MessageService _messageService;
   late final TextEditingController _bodyTextController;
+  late final TextEditingController _subjectTextController;
   late final FocusNode _bodyFocusNode;
+  late final FocusNode _subjectFocusNode;
   late List<ComposerRecipient> _recipients;
   late List<PendingAttachment> _pendingAttachments;
 
@@ -61,7 +65,10 @@ class _DraftFormState extends State<DraftForm> {
     _messageService = context.read<MessageService>();
     _bodyTextController = TextEditingController(text: widget.body)
       ..addListener(_bodyListener);
+    _subjectTextController = TextEditingController(text: widget.subject)
+      ..addListener(_subjectListener);
     _bodyFocusNode = FocusNode();
+    _subjectFocusNode = FocusNode();
     _recipients = _initialRecipients();
     _pendingAttachments = const [];
     _transport = _defaultTransportFor(_recipients);
@@ -74,11 +81,15 @@ class _DraftFormState extends State<DraftForm> {
   void dispose() {
     _bodyTextController.removeListener(_bodyListener);
     _bodyTextController.dispose();
+    _subjectTextController.removeListener(_subjectListener);
+    _subjectTextController.dispose();
     _bodyFocusNode.dispose();
+    _subjectFocusNode.dispose();
     super.dispose();
   }
 
   void _bodyListener() => setState(() {});
+  void _subjectListener() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +120,7 @@ class _DraftFormState extends State<DraftForm> {
             final hasRecipients =
                 _recipients.any((recipient) => recipient.included);
             final bodyText = _bodyTextController.text.trim();
+            final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
             final hasAttachments = pendingAttachments.isNotEmpty;
             final hasQueuedAttachments = pendingAttachments.any(
@@ -118,14 +130,19 @@ class _DraftFormState extends State<DraftForm> {
             final attachmentsBlocked =
                 _transport == MessageTransport.xmpp && hasAttachments;
             final canSave = enabled &&
-                (hasRecipients || bodyText.isNotEmpty || hasAttachments);
+                (hasRecipients ||
+                    bodyText.isNotEmpty ||
+                    hasAttachments ||
+                    subjectText.isNotEmpty);
             final canDiscard = enabled &&
                 (id != null || bodyText.isNotEmpty || hasAttachments);
             final canSend = enabled &&
                 hasRecipients &&
                 !attachmentsBlocked &&
                 ((_transport == MessageTransport.email &&
-                        (bodyText.isNotEmpty || hasQueuedAttachments)) ||
+                        (bodyText.isNotEmpty ||
+                            hasQueuedAttachments ||
+                            subjectText.isNotEmpty)) ||
                     (_transport == MessageTransport.xmpp &&
                         bodyText.isNotEmpty));
 
@@ -164,6 +181,19 @@ class _DraftFormState extends State<DraftForm> {
                   latestStatuses: const {},
                 ),
                 const SizedBox(height: 12),
+                if (_transport == MessageTransport.email) ...[
+                  AxiTextFormField(
+                    controller: _subjectTextController,
+                    focusNode: _subjectFocusNode,
+                    enabled: enabled,
+                    minLines: 1,
+                    maxLines: 1,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+                    placeholder: const Text('Subject'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _buildAttachmentsSection(enabled: enabled),
                 const SizedBox(height: 12),
                 AxiTextFormField(
@@ -391,6 +421,7 @@ class _DraftFormState extends State<DraftForm> {
       id: id,
       jids: _recipientStrings(),
       body: _bodyTextController.text,
+      subject: _subjectTextController.text,
       attachments: _currentAttachments(),
     );
     if (!mounted) return;
@@ -446,6 +477,7 @@ class _DraftFormState extends State<DraftForm> {
       _recipients = [];
       _pendingAttachments = const [];
       _bodyTextController.clear();
+      _subjectTextController.clear();
     });
     _showToast('Draft discarded.');
   }
@@ -458,6 +490,7 @@ class _DraftFormState extends State<DraftForm> {
       xmppJids: _recipientStrings(),
       emailTargets: _recipientTargets(),
       body: _bodyTextController.text,
+      subject: _subjectTextController.text,
       transport: _transport,
       attachments: _currentAttachments(),
     );

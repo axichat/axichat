@@ -8,6 +8,7 @@ enum HomeTab {
   contacts,
   invites,
   blocked,
+  spam,
   drafts;
 }
 

@@ -27,11 +27,13 @@ class FanOutSendReport extends Equatable {
     required this.shareId,
     required this.statuses,
     this.subjectToken,
+    this.subject,
     this.attachmentWarning = false,
   });
 
   final String shareId;
   final String? subjectToken;
+  final String? subject;
   final bool attachmentWarning;
   final List<FanOutRecipientStatus> statuses;
 
@@ -39,7 +41,7 @@ class FanOutSendReport extends Equatable {
 
   @override
   List<Object?> get props =>
-      [shareId, subjectToken, attachmentWarning, statuses];
+      [shareId, subjectToken, subject, attachmentWarning, statuses];
 }
 
 class FanOutTarget extends Equatable {
@@ -79,11 +81,27 @@ class ShareContext extends Equatable {
   const ShareContext({
     required this.shareId,
     required this.participants,
+    this.subject,
+    this.originatorDeltaMsgId,
+    this.participantCount,
   });
 
   final String shareId;
   final List<Chat> participants;
+  final String? subject;
+  final int? originatorDeltaMsgId;
+  final int? participantCount;
+
+  bool isOriginator(Message message) {
+    final originatorId = originatorDeltaMsgId;
+    final messageId = message.deltaMsgId;
+    if (originatorId == null || messageId == null) {
+      return false;
+    }
+    return originatorId == messageId;
+  }
 
   @override
-  List<Object?> get props => [shareId, participants];
+  List<Object?> get props =>
+      [shareId, participants, subject, originatorDeltaMsgId, participantCount];
 }

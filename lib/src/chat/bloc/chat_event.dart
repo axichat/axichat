@@ -249,3 +249,12 @@ final class ChatFanOutRetryRequested extends ChatEvent {
   @override
   List<Object?> get props => [shareId];
 }
+
+final class ChatSubjectChanged extends ChatEvent {
+  const ChatSubjectChanged(this.subject);
+
+  final String subject;
+
+  @override
+  List<Object?> get props => [subject];
+}
