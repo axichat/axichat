@@ -26,20 +26,29 @@ class AxiCutout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final mediaQuery = MediaQuery.maybeOf(context);
+    final textScaler = mediaQuery?.textScaler ?? const TextScaler.linear(1);
+    double scaled(double value) => textScaler.scale(value);
+    final resolvedPadding = padding ??
+        EdgeInsets.symmetric(
+          horizontal: scaled(10),
+          vertical: scaled(4),
+        );
+    final resolvedBorderWidth = borderWidth * scaled(1);
+    final resolvedCornerRadius = cornerRadius * scaled(1);
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: background ?? colors.card,
         shape: SquircleBorder(
-          cornerRadius: cornerRadius,
+          cornerRadius: resolvedCornerRadius,
           side: BorderSide(
             color: borderColor ?? colors.background,
-            width: borderWidth,
+            width: resolvedBorderWidth,
           ),
         ),
       ),
       child: Padding(
-        padding:
-            padding ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: resolvedPadding,
         child: child,
       ),
     );

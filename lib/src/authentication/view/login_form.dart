@@ -62,6 +62,8 @@ class _LoginFormState extends State<LoginForm> {
             state is AuthenticationComplete;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
+        final errorText =
+            state is AuthenticationFailure ? state.errorText : null;
         return Form(
           child: Align(
             alignment: Alignment.topCenter,
@@ -79,12 +81,19 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   Padding(
                     padding: horizontalPadding,
-                    child: Text(
-                      state is AuthenticationFailure ? state.errorText : '',
-                      style: TextStyle(
-                        color: context.colorScheme.destructive,
-                      ),
-                    ),
+                    child: errorText == null || errorText.isEmpty
+                        ? const SizedBox.shrink()
+                        : Semantics(
+                            liveRegion: true,
+                            container: true,
+                            label: 'Error: $errorText',
+                            child: Text(
+                              errorText,
+                              style: TextStyle(
+                                color: context.colorScheme.destructive,
+                              ),
+                            ),
+                          ),
                   ),
                   Padding(
                     padding: horizontalPadding,

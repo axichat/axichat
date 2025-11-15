@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_button_inline.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -33,174 +35,209 @@ class ChatDrawer extends StatelessWidget {
         context.read<ChatBloc>().encryptionAvailable && !isEmailTransport;
     final isSpamChat = chat?.spam ?? false;
     final colors = context.colorScheme;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final drawerWidth = math.max(320.0, scaled(360));
+    final horizontalPadding = EdgeInsets.symmetric(horizontal: scaled(12));
     return Drawer(
       backgroundColor: colors.background,
-      width: 360.0,
+      width: drawerWidth,
       shape: const ContinuousRectangleBorder(),
-      child: Material(
-        color: colors.background,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: double.maxFinite,
-              child: DrawerHeader(
-                padding: const EdgeInsets.fromLTRB(14.0, 14.0, 14.0, 8.0),
-                decoration: const BoxDecoration(color: Colors.transparent),
-                child: Text(
-                  '${state.chat?.title}',
-                  style: context.textTheme.h4,
+      child: SafeArea(
+        child: Material(
+          color: colors.background,
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              Semantics(
+                container: true,
+                header: true,
+                child: DrawerHeader(
+                  padding: EdgeInsets.fromLTRB(
+                    scaled(14),
+                    scaled(14),
+                    scaled(14),
+                    scaled(8),
+                  ),
+                  decoration: const BoxDecoration(color: Colors.transparent),
+                  child: Text(
+                    state.chat?.title ?? 'Chat settings',
+                    style: context.textTheme.h4,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
-            ),
-            if (chat != null) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Send via',
-                      style: context.textTheme.small.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _ChatTransportSelector(
-                      transport: transport,
-                      emailEnabled: canUseEmail,
-                      onChanged: (candidate) => context
-                          .read<ChatBloc>()
-                          .add(ChatTransportChanged(candidate)),
-                    ),
-                    if (isEmailTransport)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0),
-                        child: FilterToggle(
-                          padding: EdgeInsets.zero,
-                          selected: state.viewFilter,
-                          contactName: chat.title,
-                          onChanged: (filter) => context
-                              .read<ChatBloc>()
-                              .add(ChatViewFilterChanged(filter: filter)),
+              if (chat != null) ...[
+                Padding(
+                  padding: horizontalPadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Send via',
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                  ],
+                      SizedBox(height: scaled(8)),
+                      _ChatTransportSelector(
+                        transport: transport,
+                        emailEnabled: canUseEmail,
+                        onChanged: (candidate) => context
+                            .read<ChatBloc>()
+                            .add(ChatTransportChanged(candidate)),
+                      ),
+                      if (isEmailTransport)
+                        Padding(
+                          padding: EdgeInsets.only(top: scaled(12)),
+                          child: FilterToggle(
+                            padding: EdgeInsets.zero,
+                            selected: state.viewFilter,
+                            contactName: chat.title,
+                            onChanged: (filter) => context
+                                .read<ChatBloc>()
+                                .add(ChatViewFilterChanged(filter: filter)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const _DrawerDivider(),
+              ],
+              if (encryptionAvailable)
+                Padding(
+                  padding: horizontalPadding,
+                  child: ShadSwitch(
+                    label: const Text('Encryption'),
+                    sublabel: const Text('Send messages end-to-end encrypted'),
+                    value: chat!.encryptionProtocol.isNotNone,
+                    onChanged: (encrypted) => context.read<ChatBloc>().add(
+                          ChatEncryptionChanged(
+                            protocol: encrypted
+                                ? EncryptionProtocol.omemo
+                                : EncryptionProtocol.none,
+                          ),
+                        ),
+                  ),
+                ),
+              Padding(
+                padding: horizontalPadding,
+                child: ShadSwitch(
+                  label: const Text('Notifications'),
+                  sublabel:
+                      const Text('Receive background message notifications'),
+                  value: !muted!,
+                  onChanged: (muted) =>
+                      context.read<ChatBloc>().add(ChatMuted(!muted)),
                 ),
               ),
               const _DrawerDivider(),
-            ],
-            encryptionAvailable
-                ? Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: ShadSwitch(
-                      label: const Text('Encryption'),
-                      sublabel:
-                          const Text('Send messages end-to-end encrypted'),
-                      value: chat!.encryptionProtocol.isNotNone,
-                      onChanged: (encrypted) => context.read<ChatBloc>().add(
-                            ChatEncryptionChanged(
-                              protocol: encrypted
-                                  ? EncryptionProtocol.omemo
-                                  : EncryptionProtocol.none,
-                            ),
-                          ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
-                label: const Text('Notifications'),
-                sublabel:
-                    const Text('Receive background message notifications'),
-                value: !muted!,
-                onChanged: (muted) =>
-                    context.read<ChatBloc>().add(ChatMuted(!muted)),
-              ),
-            ),
-            const _DrawerDivider(),
-            const Spacer(),
-            encryptionAvailable
-                ? ShadButton.ghost(
+              if (encryptionAvailable)
+                Padding(
+                  padding: horizontalPadding,
+                  child: Semantics(
+                    button: true,
+                    label: 'Repair encryption',
+                    hint: 'Advanced action. Prompts for confirmation.',
+                    child: ShadButton.ghost(
+                      width: double.infinity,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      leading: Icon(
+                        LucideIcons.userCog,
+                        size: context.iconTheme.size,
+                      ),
+                      foregroundColor: context.colorScheme.destructive,
+                      onPressed: () async {
+                        if (await confirm(
+                              context,
+                              text: 'Only do this is you are an expert.',
+                            ) !=
+                            true) {
+                          return;
+                        }
+                        if (context.mounted) {
+                          context
+                              .read<ChatBloc>()
+                              .add(const ChatEncryptionRepaired());
+                        }
+                      },
+                      child: const Text('Repair encryption'),
+                    ).withTapBounce(),
+                  ),
+                ),
+              Padding(
+                padding: horizontalPadding,
+                child: Semantics(
+                  button: true,
+                  label: isSpamChat
+                      ? 'Move ${chat?.title ?? 'chat'} to inbox'
+                      : 'Report ${chat?.title ?? 'chat'} as spam',
+                  child: ShadButton.ghost(
                     width: double.infinity,
                     mainAxisAlignment: MainAxisAlignment.start,
                     leading: Icon(
-                      LucideIcons.userCog,
+                      LucideIcons.flag,
                       size: context.iconTheme.size,
                     ),
                     foregroundColor: context.colorScheme.destructive,
                     onPressed: () async {
-                      if (await confirm(
-                            context,
-                            text: 'Only do this is you are an expert.',
-                          ) !=
-                          true) {
+                      final targetChat = chat;
+                      final currentJid = jid;
+                      if (targetChat == null || currentJid == null) {
                         return;
                       }
-                      if (context.mounted) {
-                        context
-                            .read<ChatBloc>()
-                            .add(const ChatEncryptionRepaired());
+                      final xmppService = context.read<XmppService?>();
+                      final emailService =
+                          RepositoryProvider.of<EmailService?>(context);
+                      final sendToSpam = !targetChat.spam;
+                      await xmppService?.toggleChatSpam(
+                        jid: currentJid,
+                        spam: sendToSpam,
+                      );
+                      final address = targetChat.emailAddress?.trim();
+                      if (targetChat.transport.isEmail &&
+                          address?.isNotEmpty == true) {
+                        if (sendToSpam) {
+                          await emailService?.spam.mark(address!);
+                        } else {
+                          await emailService?.spam.unmark(address!);
+                        }
                       }
+                      if (!context.mounted) return;
+                      final toastMessage = sendToSpam
+                          ? 'Sent ${targetChat.title} to spam.'
+                          : 'Returned ${targetChat.title} to inbox.';
+                      ShadToaster.maybeOf(context)?.show(
+                        ShadToast(
+                          title: Text(sendToSpam ? 'Reported' : 'Restored'),
+                          description: Text(toastMessage),
+                          alignment: Alignment.topRight,
+                          showCloseIconOnlyWhenHovered: false,
+                        ),
+                      );
                     },
-                    child: const Text('Repair encryption'),
-                  ).withTapBounce()
-                : const SizedBox.shrink(),
-            ShadButton.ghost(
-              width: double.infinity,
-              mainAxisAlignment: MainAxisAlignment.start,
-              leading: Icon(
-                LucideIcons.flag,
-                size: context.iconTheme.size,
+                    child: Text(isSpamChat ? 'Move to inbox' : 'Report spam'),
+                  ).withTapBounce(),
+                ),
               ),
-              foregroundColor: context.colorScheme.destructive,
-              onPressed: () async {
-                final targetChat = chat;
-                final currentJid = jid;
-                if (targetChat == null || currentJid == null) {
-                  return;
-                }
-                final xmppService = context.read<XmppService?>();
-                final emailService =
-                    RepositoryProvider.of<EmailService?>(context);
-                final sendToSpam = !targetChat.spam;
-                await xmppService?.toggleChatSpam(
-                  jid: currentJid,
-                  spam: sendToSpam,
-                );
-                final address = targetChat.emailAddress?.trim();
-                if (targetChat.transport.isEmail &&
-                    address?.isNotEmpty == true) {
-                  if (sendToSpam) {
-                    await emailService?.spam.mark(address!);
-                  } else {
-                    await emailService?.spam.unmark(address!);
-                  }
-                }
-                if (!context.mounted) return;
-                final toastMessage = sendToSpam
-                    ? 'Sent ${targetChat.title} to spam.'
-                    : 'Returned ${targetChat.title} to inbox.';
-                ShadToaster.maybeOf(context)?.show(
-                  ShadToast(
-                    title: Text(sendToSpam ? 'Reported' : 'Restored'),
-                    description: Text(toastMessage),
-                    alignment: Alignment.topRight,
-                    showCloseIconOnlyWhenHovered: false,
-                  ),
-                );
-              },
-              child: Text(isSpamChat ? 'Move to inbox' : 'Report spam'),
-            ).withTapBounce(),
-            BlockButtonInline(
-              jid: jid!,
-              emailAddress: chat?.emailAddress,
-              transport: transport,
-              showIcon: true,
-              mainAxisAlignment: MainAxisAlignment.start,
-            ),
-          ],
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  scaled(12),
+                  scaled(4),
+                  scaled(12),
+                  scaled(16),
+                ),
+                child: BlockButtonInline(
+                  jid: jid!,
+                  emailAddress: chat?.emailAddress,
+                  transport: transport,
+                  showIcon: true,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
