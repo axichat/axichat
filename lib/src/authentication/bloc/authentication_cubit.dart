@@ -116,6 +116,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final EmailService? _emailService;
   final http.Client _httpClient;
   String? _authenticatedJid;
+  EmailProvisioningException? _lastEmailProvisioningError;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   VoidCallback? _foregroundListener;
 
@@ -140,6 +141,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? password,
     bool rememberMe = false,
   }) async {
+    _lastEmailProvisioningError = null;
     if (state is AuthenticationComplete) {
       return;
     }
@@ -156,6 +158,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     late final String? jid;
+    var emailPassword = password;
     if (username == null || password == null) {
       jid = await _credentialStore.read(key: jidStorageKey);
       password = await _credentialStore.read(key: passwordStorageKey);
@@ -184,12 +187,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     databasePassphrase ??= generateRandomString();
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
-    final preHashed = savedPassword != null;
+    final bool usingStoredCredentials = username == null || password == null;
+    final preHashed = usingStoredCredentials && savedPassword != null;
+    final xmppPassword = preHashed ? savedPassword : password;
+
+    if (xmppPassword == null) {
+      emit(const AuthenticationFailure('Missing credentials.'));
+      return;
+    }
+
+    final emailService = _emailService;
+    if (emailPassword == null && jid != null && emailService != null) {
+      final existing = await emailService.currentAccount(jid);
+      emailPassword = existing?.password;
+    }
+
+    if (emailService != null && emailPassword == null) {
+      emit(const AuthenticationFailure(
+          'Stored email password missing. Please log in manually.'));
+      return;
+    }
 
     try {
       password = await _xmppService.connect(
         jid: jid,
-        password: preHashed ? savedPassword : password,
+        password: xmppPassword,
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
         preHashed: preHashed,
@@ -235,8 +257,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
         jid: jid,
+        passwordOverride: emailPassword,
+        addressOverride: jid,
       );
+      _lastEmailProvisioningError = null;
     } on EmailProvisioningException catch (error) {
+      _lastEmailProvisioningError = error;
       emit(AuthenticationFailure(error.message));
       await _xmppService.disconnect();
       return;
@@ -280,6 +306,35 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await login(username: username, password: password, rememberMe: rememberMe);
+    if (_lastEmailProvisioningError != null) {
+      await _rollbackSignup(
+        username: username,
+        host: state.server,
+        password: password,
+      );
+    }
+  }
+
+  Future<void> _rollbackSignup({
+    required String username,
+    required String host,
+    required String password,
+  }) async {
+    try {
+      await _httpClient.post(
+        AuthenticationCubit.deleteAccountUrl,
+        body: {
+          'username': username,
+          'host': host,
+          'password': password,
+        },
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to roll back signup after email provisioning error',
+          error, stackTrace);
+    } finally {
+      _lastEmailProvisioningError = null;
+    }
   }
 
   Future<bool> checkNotPwned({required String password}) async {

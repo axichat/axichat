@@ -154,6 +154,16 @@ class DeltaContextHandle {
     _ioRunning = false;
   }
 
+  Future<void> maybeNetworkAvailable() async {
+    _ensureState(_opened, 'notify network availability');
+    _bindings.dc_maybe_network(_context);
+  }
+
+  Future<void> maybeNetworkLost() async {
+    _ensureState(_opened, 'notify network change');
+    _bindings.dc_maybe_network(_context);
+  }
+
   Stream<DeltaCoreEvent> events() {
     final owner = _accountsOwner;
     final accountId = _accountId;

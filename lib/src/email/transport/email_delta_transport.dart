@@ -31,7 +31,7 @@ class EmailDeltaTransport implements ChatTransport {
   DeltaContextHandle? _context;
   bool _contextOpened = false;
   Future<void>? _contextOpening;
-  bool _accountsSupported = false;
+  bool _accountsSupported = true;
   DeltaEventConsumer? _eventConsumer;
   StreamSubscription<DeltaCoreEvent>? _eventSubscription;
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
@@ -45,6 +45,13 @@ class EmailDeltaTransport implements ChatTransport {
       _context?.events() ?? const Stream<DeltaCoreEvent>.empty();
 
   String? get selfJid => _accountAddress == null ? null : _selfJid;
+
+  void hydrateAccountAddress(String address) {
+    if (address.isEmpty) {
+      return;
+    }
+    _accountAddress = address;
+  }
 
   @override
   Future<void> ensureInitialized({
@@ -156,7 +163,12 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     await _ensureContextReady();
-    await _accounts?.maybeNetworkAvailable();
+    final accounts = _accounts;
+    if (accounts != null) {
+      await accounts.maybeNetworkAvailable();
+      return;
+    }
+    await _context?.maybeNetworkAvailable();
   }
 
   Future<void> notifyNetworkLost() async {
@@ -164,13 +176,21 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     await _ensureContextReady();
-    await _accounts?.maybeNetworkLost();
+    final accounts = _accounts;
+    if (accounts != null) {
+      await accounts.maybeNetworkLost();
+      return;
+    }
+    await _context?.maybeNetworkLost();
   }
 
   Future<bool> performBackgroundFetch(Duration timeout) async {
     await _ensureContextReady();
     final accounts = _accounts;
-    if (accounts == null) return false;
+    if (accounts == null) {
+      await _context?.maybeNetworkAvailable();
+      return false;
+    }
     return accounts.backgroundFetch(timeout);
   }
 
@@ -188,7 +208,12 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     await _ensureContextReady();
-    await _accounts?.setPushDeviceToken(token);
+    final accounts = _accounts;
+    if (accounts != null) {
+      await accounts.setPushDeviceToken(token);
+      return;
+    }
+    _log.finer('Delta accounts unavailable; deferring push token registration');
   }
 
   Future<void> _ensureContextReady() async {
@@ -661,6 +686,14 @@ class EmailDeltaTransport implements ChatTransport {
     }
     final legacy = await _deltaDatabaseFile(prefix);
     await _deleteDatabaseArtifacts(legacy);
+  }
+
+  Future<void> deleteStorageArtifacts() async {
+    final prefix = _databasePrefix;
+    if (prefix == null) {
+      return;
+    }
+    await _resetAccountsStorage(prefix);
   }
 }
 

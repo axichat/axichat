@@ -58,7 +58,7 @@ class EmailService {
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
     EmailDeltaTransport? transport,
-    String chatmailDomain = 'nine.testrun.org',
+    String chatmailDomain = 'axi.im',
     NotificationService? notificationService,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
@@ -141,6 +141,8 @@ class EmailService {
     required String databasePrefix,
     required String databasePassphrase,
     required String jid,
+    String? passwordOverride,
+    String? addressOverride,
   }) async {
     final scope = _scopeForJid(jid);
     final needsInit = _databasePrefix != databasePrefix ||
@@ -173,26 +175,49 @@ class EmailService {
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
-    var generatedAddress = false;
+    final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
+    final preferredAddress = _preferredAddressFromJid(jid);
+    var mintedAddress = false;
+    var credentialsMutated = false;
+
+    if (normalizedOverrideAddress != null && normalizedOverrideAddress.isNotEmpty) {
+      if (address == null || address != normalizedOverrideAddress) {
+        address = normalizedOverrideAddress;
+        credentialsMutated = true;
+        mintedAddress = true;
+        await _credentialStore.write(key: addressKey, value: address);
+      }
+    } else if (address == null) {
+      address = preferredAddress ?? _generateAddress(localPart: displayName);
+      credentialsMutated = true;
+      mintedAddress = true;
+      await _credentialStore.write(key: addressKey, value: address);
+    }
+
+    if (passwordOverride != null && passwordOverride.isNotEmpty) {
+      if (password == null || password != passwordOverride) {
+        password = passwordOverride;
+        credentialsMutated = true;
+        await _credentialStore.write(key: passwordKey, value: password);
+      }
+    } else if (password == null) {
+      password = generateRandomString(length: 24);
+      credentialsMutated = true;
+      await _credentialStore.write(key: passwordKey, value: password);
+    }
 
     if (address == null || password == null) {
-      final preferredAddress = _preferredAddressFromJid(jid) ??
-          _generateAddress(localPart: displayName);
-      address = preferredAddress;
-      password = generateRandomString(length: 24);
-      await _credentialStore.write(key: addressKey, value: address);
-      await _credentialStore.write(key: passwordKey, value: password);
-      generatedAddress = true;
+      throw StateError('Failed to resolve email credentials for $jid');
     }
 
     var alreadyProvisioned =
         (await _credentialStore.read(key: provisionedKey)) == 'true';
-    if (!alreadyProvisioned && !generatedAddress) {
-      alreadyProvisioned = true;
-      await _credentialStore.write(key: provisionedKey, value: 'true');
+    if (credentialsMutated) {
+      alreadyProvisioned = false;
+      await _credentialStore.write(key: provisionedKey, value: 'false');
     }
 
-    if (!alreadyProvisioned || generatedAddress) {
+    if (!alreadyProvisioned) {
       _log.info('Configuring Chatmail account credentials');
       try {
         await _transport.configureAccount(
@@ -208,16 +233,16 @@ class EmailService {
           operation: 'configure Chatmail account',
         );
         _log.warning(
-          'Failed to configure Chatmail account for $jid',
+          'Failed to configure Chatmail account',
           error,
           stackTrace,
         );
-        if (!generatedAddress && mapped.code == DeltaChatErrorCode.network) {
+        if (!credentialsMutated && mapped.code == DeltaChatErrorCode.network) {
           _log.info(
-            'Continuing with cached Chatmail credentials for $jid after network failure.',
+            'Continuing with cached Chatmail credentials after network failure.',
           );
         } else {
-          if (generatedAddress) {
+          if (mintedAddress) {
             await _clearCredentials(scope);
             throw EmailProvisioningException(
               'Email address $address is unavailable. Please choose a different username.',
@@ -228,10 +253,11 @@ class EmailService {
       }
     } else {
       _log.fine(
-        'Reusing existing Chatmail account credentials for $jid without reconfiguration.',
+        'Reusing existing Chatmail account credentials without reconfiguration.',
       );
     }
 
+    _transport.hydrateAccountAddress(address);
     await start();
     await _applyPendingPushToken();
 
@@ -275,6 +301,7 @@ class EmailService {
     await _stopForegroundKeepalive();
     _clearNotificationQueue();
     await _transport.dispose();
+    await _transport.deleteStorageArtifacts();
     _running = false;
     if (scope != null) {
       await _clearCredentials(scope);
@@ -472,8 +499,11 @@ class EmailService {
           ),
         );
       } on Exception catch (error, stackTrace) {
+        final targetId = entry.deltaChatId != null
+            ? 'dc-${entry.deltaChatId}'
+            : 'unresolved-recipient';
         _log.warning(
-          'Failed to send fan-out message to ${entry.jid}',
+          'Failed to send fan-out message to $targetId',
           error,
           stackTrace,
         );
