@@ -11,8 +11,13 @@ class ShareTokenParseResult {
 }
 
 class ShareTokenCodec {
-  static final RegExp _pattern =
-      RegExp(r'^\s*\[s:([A-Z0-9]{4,8})\]\s*', caseSensitive: false);
+  static const int _legacyTokenLength = 4;
+  static const int _minCapabilityLength = 16;
+  static const int _maxCapabilityLength = 64;
+  static final RegExp _pattern = RegExp(
+    '^\\s*\\[s:([A-Z0-9]{$_legacyTokenLength,$_maxCapabilityLength})\\]\\s*',
+    caseSensitive: false,
+  );
   static const String _alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   static final Random _random = _secureRandom();
 
@@ -46,8 +51,17 @@ class ShareTokenCodec {
   }
 
   static String subjectToken(String shareId) {
-    final normalized = shareId.replaceAll('-', '').toUpperCase();
-    return normalized.length <= 4 ? normalized : normalized.substring(0, 4);
+    final normalized =
+        shareId.toUpperCase().replaceAll(RegExp(r'[^0-9A-Z]'), '');
+    if (normalized.length < _minCapabilityLength) {
+      throw ArgumentError(
+        'shareId must contain at least $_minCapabilityLength base32 characters.',
+      );
+    }
+    if (normalized.length > _maxCapabilityLength) {
+      return normalized.substring(0, _maxCapabilityLength);
+    }
+    return normalized;
   }
 
   static String decorateToken(String token) => '[s:${token.toUpperCase()}]';

@@ -840,7 +840,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -904,6 +904,22 @@ FROM drafts
         }
         if (rebuildReactions) {
           await m.createTable(reactions);
+        }
+        if (from < 9) {
+          await customStatement(
+            '''
+UPDATE message_shares
+SET subject_token = UPPER(share_id)
+WHERE subject_token IS NOT NULL
+''',
+          );
+          await customStatement(
+            '''
+CREATE UNIQUE INDEX IF NOT EXISTS idx_message_shares_subject_token
+ON message_shares(subject_token)
+WHERE subject_token IS NOT NULL
+''',
+          );
         }
       },
       beforeOpen: (_) async {

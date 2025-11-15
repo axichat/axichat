@@ -5,10 +5,8 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
-import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
@@ -44,20 +42,17 @@ class Axichat extends StatefulWidget {
     NotificationService? notificationService,
     Capability? capability,
     Policy? policy,
-    Box<CalendarModel>? guestCalendarBox,
     required CalendarStorageManager storageManager,
   })  : _xmppService = xmppService,
         _notificationService = notificationService ?? NotificationService(),
         _capability = capability ?? const Capability(),
         _policy = policy ?? const Policy(),
-        _guestCalendarBox = guestCalendarBox,
         _storageManager = storageManager;
 
   final XmppService? _xmppService;
   final NotificationService _notificationService;
   final Capability _capability;
   final Policy _policy;
-  final Box<CalendarModel>? _guestCalendarBox;
   final CalendarStorageManager _storageManager;
 
   @override
@@ -81,11 +76,6 @@ class _AxichatState extends State<Axichat> {
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
-        if (widget._guestCalendarBox != null)
-          RepositoryProvider<Box<CalendarModel>>(
-            create: (_) => widget._guestCalendarBox!,
-            key: const Key('guest_calendar_box'),
-          ),
         RepositoryProvider<Storage?>.value(
           value: _authStorage,
           key: const Key('calendar_storage'),
@@ -104,22 +94,13 @@ class _AxichatState extends State<Axichat> {
                 if (!Hive.isAdapterRegistered(1)) {
                   Hive.registerAdapter(PresenceAdapter());
                 }
-                registerCalendarHiveAdapters(Hive);
                 await Hive.openBox(
                   XmppStateStore.boxName,
                   encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
                 );
-                final calendarBox = await Hive.openBox<CalendarModel>(
-                  'calendar',
-                  encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
-                );
-                final legacyModel = calendarBox.get('calendar');
                 final storage = await widget._storageManager.ensureAuthStorage(
                   passphrase: passphrase,
-                  legacyModel: legacyModel,
                 );
-
-                await calendarBox.close();
 
                 setState(() {
                   _authStorage = storage;

@@ -9,7 +9,7 @@ void main() {
   });
 
   test('injectToken + stripToken round trip', () {
-    const token = 'ABCD';
+    const token = '01HX5R8W7YAYR5K1R7Q7MB5G4W';
     const body = 'Hello team';
     final decorated = ShareTokenCodec.injectToken(token: token, body: body);
     expect(decorated.startsWith('[s:$token]'), isTrue);
@@ -17,5 +17,20 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.token, token);
     expect(parsed.cleanedBody, body);
+  });
+
+  test('subjectToken reuses ULID shareId as capability token', () {
+    const shareId = '01HX5R8W7YAYR5K1R7Q7MB5G4W';
+    expect(ShareTokenCodec.subjectToken(shareId), shareId);
+    final parsed = ShareTokenCodec.stripToken('[s:$shareId]');
+    expect(parsed, isNotNull);
+    expect(parsed!.token, shareId);
+  });
+
+  test('subjectToken rejects identifiers without enough entropy', () {
+    expect(
+      () => ShareTokenCodec.subjectToken('share-xyz'),
+      throwsArgumentError,
+    );
   });
 }

@@ -2,7 +2,6 @@
 
 import 'dart:io';
 
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
@@ -41,10 +40,7 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   registerCalendarHiveAdapters();
-
-  final guestCalendarBox = await _openGuestCalendarBox(storageDirectory);
-  final legacyModel = guestCalendarBox.get('calendar');
-  await storageManager.ensureGuestStorage(legacyModel: legacyModel);
+  await storageManager.ensureGuestStorage();
 
   const capability = Capability();
   final notificationService = NotificationService();
@@ -64,55 +60,15 @@ Future<void> main() async {
               child: Axichat(
                 notificationService: notificationService,
                 capability: capability,
-                guestCalendarBox: guestCalendarBox,
                 storageManager: storageManager,
               ),
             ),
           )
         : Axichat(
             capability: capability,
-            guestCalendarBox: guestCalendarBox,
             storageManager: storageManager,
           ),
   );
-}
-
-Future<Box<CalendarModel>> _openGuestCalendarBox(
-  Directory storageDirectory,
-) async {
-  try {
-    return await Hive.openBox<CalendarModel>('guest_calendar');
-  } catch (error) {
-    _logCalendarCorruption(error);
-    await _resetGuestCalendarBox(storageDirectory);
-    return Hive.openBox<CalendarModel>('guest_calendar');
-  }
-}
-
-void _logCalendarCorruption(Object error) {
-  print('Calendar data corruption detected: $error');
-  print('Clearing corrupted calendar data...');
-}
-
-Future<void> _resetGuestCalendarBox(Directory storageDirectory) async {
-  try {
-    await Hive.deleteBoxFromDisk('guest_calendar');
-    return;
-  } catch (deleteError) {
-    print('Error deleting corrupted box: $deleteError');
-  }
-
-  try {
-    final guestCalendarFiles = storageDirectory
-        .listSync()
-        .where((file) => file.path.contains('guest_calendar'));
-    for (final file in guestCalendarFiles) {
-      await file.delete();
-      print('Deleted corrupted file: ${file.path}');
-    }
-  } catch (forceDeleteError) {
-    print('Force delete failed: $forceDeleteError');
-  }
 }
 
 var _loggerConfigured = false;

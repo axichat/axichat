@@ -54,7 +54,7 @@ void main() {
     );
     await db.saveMessage(directMessage);
 
-    const shareId = 'share-xyz';
+    const shareId = '01HX5R8W7YAYR5K1R7Q7MB5G4W';
     final sharedMessage = Message(
       stanzaID: 'share-1',
       senderJid: contact.jid,
@@ -89,7 +89,7 @@ void main() {
       share: MessageShareData(
         shareId: shareId,
         originatorDcMsgId: null,
-        subjectToken: 'ABCD',
+        subjectToken: shareId,
         createdAt: DateTime.utc(2024, 1, 2),
         participantCount: participants.length,
       ),
