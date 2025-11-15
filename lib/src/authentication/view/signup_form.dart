@@ -193,6 +193,19 @@ class _SignupFormState extends State<SignupForm> {
   static const captchaSize = Size(180, 70);
   static const _progressSegmentCount = 3;
 
+  String get _currentStepLabel {
+    switch (_currentIndex) {
+      case 0:
+        return 'Choose username';
+      case 1:
+        return 'Create password';
+      case 2:
+        return 'Verify captcha';
+      default:
+        return 'Setup';
+    }
+  }
+
   double get _passwordEntropyBits {
     final password = _passwordTextController.text;
     if (password.isEmpty) {
@@ -290,49 +303,57 @@ class _SignupFormState extends State<SignupForm> {
       builder: (context, animatedPercent, child) {
         final clampedPercent = animatedPercent.clamp(0.0, 100.0);
         final fillFraction = (clampedPercent / 100).clamp(0.0, 1.0);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Account setup',
-                  style: context.textTheme.muted,
-                ),
-                Text(
-                  '${clampedPercent.round()}%',
-                  style: context.textTheme.muted.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w600,
+        final currentStepNumber =
+            (_currentIndex + 1).clamp(1, _formKeys.length);
+        final currentStepLabel = _currentStepLabel;
+        return Semantics(
+          label: 'Signup progress',
+          value:
+              'Step $currentStepNumber of ${_formKeys.length}: $currentStepLabel. ${clampedPercent.round()} percent complete.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Account setup',
+                    style: context.textTheme.muted,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Stack(
-              children: [
-                Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(999),
+                  Text(
+                    '${clampedPercent.round()}%',
+                    style: context.textTheme.muted.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                FractionallySizedBox(
-                  widthFactor: fillFraction,
-                  child: Container(
+                ],
+              ),
+              const SizedBox(height: 8),
+              Stack(
+                children: [
+                  Container(
                     height: 8,
                     decoration: BoxDecoration(
-                      color: colors.primary,
+                      color: colors.muted.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-          ],
+                  FractionallySizedBox(
+                    widthFactor: fillFraction,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         );
       },
     );
@@ -617,11 +638,16 @@ class _SignupFormState extends State<SignupForm> {
                   child: AnimatedSwitcher(
                     duration: animationDuration,
                     child: showGlobalError
-                        ? Text(
-                            _errorText!,
-                            key: const ValueKey('signup-global-error-text'),
-                            style: TextStyle(
-                              color: context.colorScheme.destructive,
+                        ? Semantics(
+                            liveRegion: true,
+                            container: true,
+                            label: 'Error: ${_errorText!}',
+                            child: Text(
+                              _errorText!,
+                              key: const ValueKey('signup-global-error-text'),
+                              style: TextStyle(
+                                color: context.colorScheme.destructive,
+                              ),
                             ),
                           )
                         : const SizedBox(
@@ -736,6 +762,13 @@ class _SignupFormState extends State<SignupForm> {
                                     final encounteredError =
                                         snapshot.hasError ||
                                             (snapshot.hasData && !hasValidUrl);
+                                    final persistentError = encounteredError &&
+                                        _captchaHasLoadedOnce;
+                                    final describingLoading =
+                                        (!snapshot.hasData &&
+                                                !encounteredError) ||
+                                            (encounteredError &&
+                                                !_captchaHasLoadedOnce);
                                     Widget captchaSurface;
                                     if (encounteredError) {
                                       if (_captchaHasLoadedOnce) {
@@ -766,16 +799,41 @@ class _SignupFormState extends State<SignupForm> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          _CaptchaFrame(
-                                            child: captchaSurface,
+                                          Semantics(
+                                            label: persistentError
+                                                ? 'Captcha unavailable'
+                                                : 'Captcha challenge',
+                                            hint: persistentError
+                                                ? 'Captcha failed to load. Use reload to try again.'
+                                                : describingLoading
+                                                    ? 'Captcha loading'
+                                                    : 'Enter the characters shown in this captcha image.',
+                                            image:
+                                                !persistentError && hasValidUrl,
+                                            child: persistentError
+                                                ? _CaptchaFrame(
+                                                    child: captchaSurface,
+                                                  )
+                                                : ExcludeSemantics(
+                                                    child: _CaptchaFrame(
+                                                      child: captchaSurface,
+                                                    ),
+                                                  ),
                                           ),
                                           const SizedBox(width: 12),
-                                          AxiIconButton(
-                                            iconData: LucideIcons.refreshCw,
-                                            tooltip: 'Reload captcha',
-                                            onPressed: loading
-                                                ? null
-                                                : () => _reloadCaptcha(),
+                                          Semantics(
+                                            button: true,
+                                            enabled: !loading,
+                                            label: 'Reload captcha',
+                                            hint:
+                                                'Get a new captcha image if you cannot read this one.',
+                                            child: AxiIconButton(
+                                              iconData: LucideIcons.refreshCw,
+                                              tooltip: 'Reload captcha',
+                                              onPressed: loading
+                                                  ? null
+                                                  : () => _reloadCaptcha(),
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -992,6 +1050,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
     Widget image = Image.network(
       widget.url,
       fit: BoxFit.cover,
+      excludeFromSemantics: true,
       frameBuilder: (context, child, frame, _) {
         if (frame != null) {
           _handleImageReady();
@@ -1055,26 +1114,28 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
   Widget build(BuildContext context) {
     final base = context.colorScheme.border.withValues(alpha: 0.35);
     final highlight = context.colorScheme.card.withValues(alpha: 0.8);
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final shimmer = _controller.value;
-        final start = (shimmer - 0.25).clamp(0.0, 1.0);
-        final mid = shimmer.clamp(0.0, 1.0);
-        final end = (shimmer + 0.25).clamp(0.0, 1.0);
-        return SizedBox.expand(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [base, highlight, base],
-                stops: [start, mid, end],
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final shimmer = _controller.value;
+          final start = (shimmer - 0.25).clamp(0.0, 1.0);
+          final mid = shimmer.clamp(0.0, 1.0);
+          final end = (shimmer + 0.25).clamp(0.0, 1.0);
+          return SizedBox.expand(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [base, highlight, base],
+                  stops: [start, mid, end],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

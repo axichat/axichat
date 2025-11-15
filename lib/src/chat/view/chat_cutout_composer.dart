@@ -87,11 +87,13 @@ class ChatCutoutComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const padding = EdgeInsetsDirectional.fromSTEB(
-      _kHorizontalInset,
-      _kVerticalInset,
-      _kHorizontalInset,
-      _kVerticalInset,
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final padding = EdgeInsetsDirectional.fromSTEB(
+      scaled(_kHorizontalInset),
+      scaled(_kVerticalInset),
+      scaled(_kHorizontalInset),
+      scaled(_kVerticalInset),
     );
     final shortcuts = sendEnabled
         ? const <ShortcutActivator, Intent>{
@@ -113,13 +115,13 @@ class ChatCutoutComposer extends StatelessWidget {
     );
     final cursorHeight = textStyle.fontSize == null
         ? null
-        : textStyle.fontSize! * textStyle.height!;
+        : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
 
     return CutoutSurface(
       backgroundColor: colors.card,
       borderColor: colors.border,
       shape: SquircleBorder(
-        cornerRadius: 18,
+        cornerRadius: scaled(18),
         side: BorderSide(color: colors.border),
       ),
       cutouts: actions
@@ -142,13 +144,13 @@ class ChatCutoutComposer extends StatelessWidget {
           children: [
             if (header != null) ...[
               header!,
-              const SizedBox(height: 8),
+              SizedBox(height: scaled(8)),
               Divider(
                 height: 1,
-                thickness: 1,
+                thickness: scaled(1),
                 color: colors.border.withValues(alpha: 0.8),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: scaled(12)),
             ],
             Shortcuts(
               shortcuts: shortcuts,

@@ -25,8 +25,16 @@ class CutoutSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    final scaleFactor =
+        mediaQuery == null ? 1.0 : mediaQuery.textScaler.scale(1);
+    final resolvedCutouts = scaleFactor == 1
+        ? cutouts
+        : cutouts
+            .map((spec) => spec.scaled(scaleFactor))
+            .toList(growable: false);
     final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
-    final clipper = _CutoutClipper(shape: shape, cutouts: cutouts);
+    final clipper = _CutoutClipper(shape: shape, cutouts: resolvedCutouts);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -36,7 +44,7 @@ class CutoutSurface extends StatelessWidget {
             shape: shape,
             backgroundColor: backgroundColor,
             borderColor: borderColor,
-            cutouts: cutouts,
+            cutouts: resolvedCutouts,
             shadows: shadows,
             shadowOpacity: resolvedShadowOpacity,
           ),
@@ -45,8 +53,8 @@ class CutoutSurface extends StatelessWidget {
             child: child,
           ),
         ),
-        if (cutouts.isNotEmpty)
-          for (final spec in cutouts) _CutoutAttachment(spec: spec),
+        if (resolvedCutouts.isNotEmpty)
+          for (final spec in resolvedCutouts) _CutoutAttachment(spec: spec),
       ],
     );
   }
@@ -68,6 +76,18 @@ class CutoutSpec {
   final double thickness;
   final Widget child;
   final double cornerRadius;
+
+  CutoutSpec scaled(double factor) {
+    if (factor == 1) return this;
+    return CutoutSpec(
+      edge: edge,
+      alignment: alignment,
+      depth: depth * factor,
+      thickness: thickness * factor,
+      child: child,
+      cornerRadius: cornerRadius * factor,
+    );
+  }
 }
 
 enum CutoutEdge { top, right, bottom, left }
