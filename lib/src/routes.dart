@@ -12,9 +12,10 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 part 'routes.g.dart';
+
+typedef ServiceLocator = T Function<T>();
 
 mixin AuthenticationRouteData on GoRouteData {
   bool get authenticationRequired;
@@ -137,18 +138,18 @@ class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
     );
   }
 
-  T Function<T>()? _resolveLocator(
+  ServiceLocator _resolveLocator(
     BuildContext context,
     Map<String, dynamic>? extra,
   ) {
-    final dynamic extraLocator = extra?['locate'];
-    if (extraLocator != null) {
-      return <T>() => (extraLocator as dynamic).call<T>();
+    final locator = extra?['locate'] as ServiceLocator?;
+    if (locator != null) {
+      return locator;
     }
-    final rootContext =
-        GoRouter.of(context).routerDelegate.navigatorKey.currentContext;
-    if (rootContext == null) return null;
-    return <T>() => Provider.of<T>(rootContext, listen: false);
+    final fallbackContext =
+        GoRouter.of(context).routerDelegate.navigatorKey.currentContext ??
+            context;
+    return <T>() => fallbackContext.read<T>();
   }
 }
 

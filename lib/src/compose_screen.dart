@@ -3,11 +3,10 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ComposeScreen extends StatelessWidget {
@@ -17,17 +16,20 @@ class ComposeScreen extends StatelessWidget {
     this.jids = const [''],
     this.body = '',
     this.attachmentMetadataIds = const [],
-    this.locate,
+    required this.locate,
   });
 
   final int? id;
   final List<String> jids;
   final String body;
   final List<String> attachmentMetadataIds;
-  final T Function<T>()? locate;
+  final T Function<T>() locate;
 
   @override
   Widget build(BuildContext context) {
+    final xmppService = locate<XmppService>();
+    final MessageService messageService = xmppService;
+    final emailService = _maybeLocate<EmailService>();
     return Scaffold(
       backgroundColor: context.colorScheme.background,
       appBar: AppBar(
@@ -77,17 +79,24 @@ class ComposeScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16.0),
                 child: MultiRepositoryProvider(
                   providers: [
-                    RepositoryProvider.value(
-                      value: _locate<MessageService>(context),
+                    RepositoryProvider<MessageService>.value(
+                      value: messageService,
                     ),
                   ],
                   child: Builder(
                     builder: (context) {
-                      final chatsCubit = _maybeLocate<ChatsCubit>(context);
+                      final chatsCubit = _maybeLocate<ChatsCubit>();
+                      final draftCubit = _maybeLocate<DraftCubit>();
                       final providers = <BlocProvider<dynamic>>[
-                        BlocProvider.value(
-                          value: _locate<DraftCubit>(context),
-                        ),
+                        if (draftCubit != null)
+                          BlocProvider<DraftCubit>.value(value: draftCubit)
+                        else
+                          BlocProvider<DraftCubit>(
+                            create: (context) => DraftCubit(
+                              messageService: messageService,
+                              emailService: emailService,
+                            ),
+                          ),
                       ];
                       if (chatsCubit != null) {
                         providers.add(
@@ -114,28 +123,11 @@ class ComposeScreen extends StatelessWidget {
     );
   }
 
-  T? _maybeLocate<T>(BuildContext context) {
+  T? _maybeLocate<T>() {
     try {
-      return _locate<T>(context);
+      return locate<T>();
     } catch (_) {
       return null;
-    }
-  }
-
-  T _locate<T>(BuildContext context) {
-    final locator = locate;
-    if (locator != null) {
-      return locator<T>();
-    }
-    try {
-      return context.read<T>();
-    } on ProviderNotFoundException {
-      final rootContext =
-          GoRouter.of(context).routerDelegate.navigatorKey.currentContext;
-      if (rootContext != null) {
-        return Provider.of<T>(rootContext, listen: false);
-      }
-      rethrow;
     }
   }
 }
