@@ -1,6 +1,5 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +11,7 @@ class BlockButtonInline extends StatelessWidget {
     super.key,
     required this.jid,
     this.emailAddress,
-    this.transport = MessageTransport.xmpp,
+    this.useEmailBlocking = false,
     this.callback,
     this.showIcon = false,
     this.mainAxisAlignment,
@@ -20,14 +19,14 @@ class BlockButtonInline extends StatelessWidget {
 
   final String jid;
   final String? emailAddress;
-  final MessageTransport transport;
+  final bool useEmailBlocking;
   final void Function()? callback;
   final bool showIcon;
   final MainAxisAlignment? mainAxisAlignment;
 
   @override
   Widget build(BuildContext context) {
-    if (transport.isEmail) {
+    if (useEmailBlocking) {
       return _buildEmailButton(context);
     }
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(

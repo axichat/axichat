@@ -8,7 +8,7 @@ const double _kCutoutDepth = 30;
 const double _kCutoutThickness = 46;
 const double _kCutoutCornerRadius = 18;
 const double _kHorizontalInset = 34;
-const double _kVerticalInset = 22;
+const double _kVerticalInset = 20;
 
 class ChatComposerAccessory {
   const ChatComposerAccessory({
@@ -87,9 +87,10 @@ class ChatCutoutComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const padding = EdgeInsetsDirectional.fromSTEB(
+    final headerAwareTopInset = header == null ? _kVerticalInset : 8.0;
+    final padding = EdgeInsetsDirectional.fromSTEB(
       _kHorizontalInset,
-      _kVerticalInset,
+      headerAwareTopInset,
       _kHorizontalInset,
       _kVerticalInset,
     );
@@ -141,14 +142,16 @@ class ChatCutoutComposer extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (header != null) ...[
-              header!,
-              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: header!,
+              ),
               Divider(
                 height: 1,
                 thickness: 1,
-                color: colors.border.withValues(alpha: 0.8),
+                color: colors.border.withValues(alpha: 0.5),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
             Shortcuts(
               shortcuts: shortcuts,

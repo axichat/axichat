@@ -11,7 +11,6 @@ import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
-import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart' as chat_view;
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
@@ -191,13 +190,6 @@ class HomeScreen extends StatelessWidget {
                                               ? context.read<XmppService>()
                                                   as OmemoService
                                               : null,
-                                        ),
-                                      ),
-                                      BlocProvider(
-                                        create: (context) => ChatTransportCubit(
-                                          chatsService:
-                                              context.read<XmppService>(),
-                                          jid: openJid,
                                         ),
                                       ),
                                       BlocProvider(

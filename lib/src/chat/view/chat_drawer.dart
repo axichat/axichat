@@ -1,7 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/view/block_button_inline.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/filter_toggle.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -25,12 +24,9 @@ class ChatDrawer extends StatelessWidget {
     final jid = state.chat?.jid;
     final muted = state.chat?.muted;
     final chat = state.chat;
-    final transport = context.watch<ChatTransportCubit>().state;
-    final canUseEmail = (chat?.deltaChatId != null) ||
-        (chat?.emailAddress?.isNotEmpty ?? false);
-    final isEmailTransport = canUseEmail && transport.isEmail;
-    final encryptionAvailable =
-        context.read<ChatBloc>().encryptionAvailable && !isEmailTransport;
+    final supportsEmail = chat?.supportsEmail ?? false;
+    final encryptionAvailable = context.read<ChatBloc>().encryptionAvailable &&
+        (chat?.defaultTransport.isEmail != true);
     final isSpamChat = chat?.spam ?? false;
     final colors = context.colorScheme;
     return Drawer(
@@ -53,39 +49,16 @@ class ChatDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            if (chat != null) ...[
+            if (chat != null && supportsEmail) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Send via',
-                      style: context.textTheme.small.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _ChatTransportSelector(
-                      transport: transport,
-                      emailEnabled: canUseEmail,
-                      onChanged: (candidate) => context
-                          .read<ChatBloc>()
-                          .add(ChatTransportChanged(candidate)),
-                    ),
-                    if (isEmailTransport)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0),
-                        child: FilterToggle(
-                          padding: EdgeInsets.zero,
-                          selected: state.viewFilter,
-                          contactName: chat.title,
-                          onChanged: (filter) => context
-                              .read<ChatBloc>()
-                              .add(ChatViewFilterChanged(filter: filter)),
-                        ),
-                      ),
-                  ],
+                child: FilterToggle(
+                  padding: EdgeInsets.zero,
+                  selected: state.viewFilter,
+                  contactName: chat.title,
+                  onChanged: (filter) => context
+                      .read<ChatBloc>()
+                      .add(ChatViewFilterChanged(filter: filter)),
                 ),
               ),
               const _DrawerDivider(),
@@ -196,96 +169,12 @@ class ChatDrawer extends StatelessWidget {
             BlockButtonInline(
               jid: jid!,
               emailAddress: chat?.emailAddress,
-              transport: transport,
+              useEmailBlocking: chat?.defaultTransport.isEmail ?? false,
               showIcon: true,
               mainAxisAlignment: MainAxisAlignment.start,
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ChatTransportSelector extends StatelessWidget {
-  const _ChatTransportSelector({
-    required this.transport,
-    required this.emailEnabled,
-    required this.onChanged,
-  });
-
-  final MessageTransport transport;
-  final bool emailEnabled;
-  final ValueChanged<MessageTransport> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final muted = context.textTheme.muted.color ??
-        colors.foreground.withValues(alpha: 0.7);
-
-    Widget buildChip(MessageTransport candidate) {
-      final selected = candidate == transport;
-      final unavailable = candidate.isEmail && !emailEnabled;
-      final foreground =
-          candidate.isEmail ? colors.destructive : colors.accentForeground;
-      final selectedColor = candidate.isEmail
-          ? colors.destructive.withValues(alpha: 0.16)
-          : colors.accent.withValues(alpha: 0.22);
-      final unselectedColor = candidate.isEmail
-          ? colors.destructive.withValues(alpha: 0.06)
-          : colors.accent.withValues(alpha: 0.1);
-      final labelColor = selected ? foreground : muted;
-
-      final chip = ChoiceChip(
-        showCheckmark: false,
-        label: Text(
-          candidate.label,
-          style: context.textTheme.small.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.3,
-            color: labelColor,
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        selected: selected,
-        onSelected: unavailable
-            ? null
-            : (value) {
-                if (value) onChanged(candidate);
-              },
-        side: BorderSide(
-          color: selected
-              ? Colors.transparent
-              : colors.border.withValues(alpha: 0.7),
-        ),
-        backgroundColor: unselectedColor,
-        selectedColor: selectedColor,
-        disabledColor: colors.border.withValues(alpha: 0.4),
-      );
-
-      if (!unavailable) {
-        return chip;
-      }
-
-      return Tooltip(
-        message: 'Email transport unavailable for this chat',
-        preferBelow: false,
-        child: chip,
-      );
-    }
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children:
-            MessageTransport.values.map(buildChip).toList(growable: false),
       ),
     );
   }

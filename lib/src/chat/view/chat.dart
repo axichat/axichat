@@ -10,7 +10,6 @@ import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
-import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
@@ -18,9 +17,9 @@ import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
 import 'package:axichat/src/chat/view/chat_cutout_composer.dart';
 import 'package:axichat/src/chat/view/chat_drawer.dart';
 import 'package:axichat/src/chat/view/chat_message_details.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
-import 'package:axichat/src/chat/view/transport_glyph.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
@@ -132,6 +131,8 @@ const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
+const _messageArrivalDuration = Duration(milliseconds: 420);
+const _messageArrivalCurve = Curves.easeOutCubic;
 const _chatHorizontalPadding = 16.0;
 const _selectionAutoscrollSlop = 4.0;
 const _selectionAttachmentBaseGap = 16.0;
@@ -608,6 +609,7 @@ class _ChatState extends State<Chat> {
   String _lastSubjectValue = '';
   final _approvedAttachmentSenders = <String>{};
   final _fileMetadataFutures = <String, Future<FileMetadataData?>>{};
+  final _animatedMessageIds = <String>{};
 
   var _chatRoute = _ChatRoute.main;
   String? _selectedMessageId;
@@ -662,33 +664,49 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatSubjectChanged(text));
   }
 
-  Widget? _buildSubjectField(
-    BuildContext context, {
-    required bool isEmailTransport,
-  }) {
-    if (!isEmailTransport) {
-      return null;
+  bool _shouldAnimateMessage(String? messageId) {
+    if (messageId == null ||
+        messageId.isEmpty ||
+        messageId == _selectionSpacerMessageId ||
+        messageId == _emptyStateMessageId) {
+      return false;
     }
+    if (_animatedMessageIds.contains(messageId)) {
+      return false;
+    }
+    _animatedMessageIds.add(messageId);
+    return true;
+  }
+
+  Widget _buildSubjectField(BuildContext context) {
     final colors = context.colorScheme;
-    return TextField(
-      controller: _subjectController,
-      focusNode: _subjectFocusNode,
-      textInputAction: TextInputAction.next,
-      onSubmitted: (_) => _focusNode.requestFocus(),
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colors.foreground,
+    final subjectStyle = context.textTheme.p.copyWith(
+      fontSize: 15,
+      height: 1.05,
+      fontWeight: FontWeight.w600,
+      color: colors.foreground,
+    );
+    return SizedBox(
+      height: 28,
+      child: TextField(
+        controller: _subjectController,
+        focusNode: _subjectFocusNode,
+        textInputAction: TextInputAction.next,
+        textCapitalization: TextCapitalization.sentences,
+        cursorColor: colors.primary,
+        onSubmitted: (_) => _focusNode.requestFocus(),
+        style: subjectStyle,
+        decoration: InputDecoration(
+          hintText: 'Subject',
+          hintStyle: context.textTheme.muted.copyWith(
+            color: colors.mutedForeground,
           ),
-      decoration: InputDecoration(
-        hintText: 'Subject',
-        hintStyle: context.textTheme.muted.copyWith(
-          color: colors.mutedForeground,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          isCollapsed: true,
+          contentPadding: EdgeInsets.zero,
         ),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        isCollapsed: true,
-        contentPadding: EdgeInsets.zero,
       ),
     );
   }
@@ -877,10 +895,8 @@ class _ChatState extends State<Chat> {
     final hasQueuedAttachments = pendingAttachments.any(
       (attachment) => attachment.status == PendingAttachmentStatus.queued,
     );
-    final isEmailTransport = context.read<ChatTransportCubit>().state.isEmail;
     final hasSubject = _subjectController.text.trim().isNotEmpty;
-    final canSend = text.isNotEmpty ||
-        (isEmailTransport && (hasQueuedAttachments || hasSubject));
+    final canSend = text.isNotEmpty || hasQueuedAttachments || hasSubject;
     if (!canSend) return;
     bloc.add(ChatMessageSent(text: text));
     if (text.isNotEmpty) {
@@ -890,13 +906,10 @@ class _ChatState extends State<Chat> {
   }
 
   Widget _buildComposer({
-    required bool isEmailTransport,
-    required MessageTransport activeTransport,
     required bool emailCapable,
-    required bool xmppCapable,
     required String hintText,
     required List<ComposerRecipient> recipients,
-    required List<chat_models.Chat> availableEmailChats,
+    required List<chat_models.Chat> availableChats,
     required Map<String, FanOutRecipientState> latestStatuses,
     required List<PendingAttachment> pendingAttachments,
     String? composerError,
@@ -914,15 +927,11 @@ class _ChatState extends State<Chat> {
       (attachment) => attachment.status == PendingAttachmentStatus.queued,
     );
     final hasSubjectText = _subjectController.text.trim().isNotEmpty;
-    final sendEnabled = _composerHasText ||
-        (isEmailTransport && (hasQueuedAttachments || hasSubjectText));
+    final sendEnabled =
+        _composerHasText || hasQueuedAttachments || hasSubjectText;
     Widget? attachmentTray;
-    final subjectHeader = _buildSubjectField(
-      context,
-      isEmailTransport: isEmailTransport,
-    );
-    final showAttachmentTray =
-        isEmailTransport && pendingAttachments.isNotEmpty;
+    final subjectHeader = _buildSubjectField(context);
+    final showAttachmentTray = pendingAttachments.isNotEmpty;
     if (showAttachmentTray) {
       attachmentTray = PendingAttachmentList(
         attachments: pendingAttachments,
@@ -970,9 +979,7 @@ class _ChatState extends State<Chat> {
                     onSend: _handleSendMessage,
                     header: subjectHeader,
                     actions: _buildComposerAccessories(
-                      activeTransport: activeTransport,
                       emailCapable: emailCapable,
-                      xmppCapable: xmppCapable,
                       canSend: sendEnabled,
                     ),
                     sendEnabled: sendEnabled,
@@ -984,10 +991,6 @@ class _ChatState extends State<Chat> {
         ),
       ),
     );
-    if (!isEmailTransport) {
-      _ensureRecipientBarHeightCleared();
-      return composer;
-    }
     final notices = <Widget>[];
     if (composerError != null && composerError.isNotEmpty) {
       notices.add(
@@ -1044,7 +1047,7 @@ class _ChatState extends State<Chat> {
         onSizeChanged: _handleRecipientBarSizeChanged,
         child: RecipientChipsBar(
           recipients: recipients,
-          availableChats: availableEmailChats,
+          availableChats: availableChats,
           latestStatuses: latestStatuses,
           onRecipientAdded: (target) =>
               context.read<ChatBloc>().add(ChatComposerRecipientAdded(target)),
@@ -1125,33 +1128,18 @@ class _ChatState extends State<Chat> {
   }
 
   List<ChatComposerAccessory> _buildComposerAccessories({
-    required MessageTransport activeTransport,
     required bool emailCapable,
-    required bool xmppCapable,
     required bool canSend,
   }) {
-    final accessories = <ChatComposerAccessory>[];
-    if (activeTransport.isXmpp) {
-      accessories.add(
-        ChatComposerAccessory.leading(child: _buildEmojiButton()),
-      );
-    }
-    accessories.add(
+    final accessories = <ChatComposerAccessory>[
+      ChatComposerAccessory.leading(child: _buildEmojiButton()),
       ChatComposerAccessory.leading(
-        child:
-            _buildAttachmentButton(isEmailTransport: activeTransport.isEmail),
+        child: _buildAttachmentButton(emailCapable: emailCapable),
       ),
-    );
-    accessories.add(
       ChatComposerAccessory.trailing(
-        child: _buildSendButton(
-          enabled: canSend,
-          transport: activeTransport,
-          emailCapable: emailCapable,
-          xmppCapable: xmppCapable,
-        ),
+        child: _buildSendButton(enabled: canSend),
       ),
-    );
+    ];
     return accessories;
   }
 
@@ -1174,113 +1162,27 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Widget _buildAttachmentButton({required bool isEmailTransport}) {
+  Widget _buildAttachmentButton({required bool emailCapable}) {
     return _cutoutIconButton(
       icon: LucideIcons.paperclip,
       tooltip: 'Attachments',
-      onPressed: isEmailTransport
+      onPressed: emailCapable
           ? (_sendingAttachment ? null : _handleAttachmentPressed)
           : () => _showAttachmentInfoDialog(
-                isEmailTransport: isEmailTransport,
+                supportsEmail: emailCapable,
               ),
     );
   }
 
-  Widget _buildSendButton({
-    required bool enabled,
-    required MessageTransport transport,
-    required bool emailCapable,
-    required bool xmppCapable,
-  }) {
+  Widget _buildSendButton({required bool enabled}) {
     final colors = context.colorScheme;
-    final options = <MessageTransport>[];
-    if (xmppCapable) options.add(MessageTransport.xmpp);
-    if (emailCapable) options.add(MessageTransport.email);
-    final menuEnabled = options.length > 1;
-    final tooltip = menuEnabled
-        ? 'Send message (long press to switch transport)'
-        : 'Send message';
     final button = _cutoutIconButton(
-      tooltip: tooltip,
+      tooltip: 'Send message',
       activeColor: colors.primary,
       onPressed: enabled ? _handleSendMessage : null,
-      iconBuilder: (iconColor) => Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(LucideIcons.send, size: 24, color: iconColor),
-          Positioned(
-            right: -4,
-            bottom: -4,
-            child: TransportGlyph(
-              transport: transport,
-            ),
-          ),
-        ],
-      ),
+      icon: LucideIcons.send,
     );
-    if (!menuEnabled) {
-      return button;
-    }
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onLongPressStart: (details) => _showTransportMenu(
-        anchor: details.globalPosition,
-        options: options,
-        activeTransport: transport,
-      ),
-      child: button,
-    );
-  }
-
-  Future<void> _showTransportMenu({
-    required Offset anchor,
-    required List<MessageTransport> options,
-    required MessageTransport activeTransport,
-  }) async {
-    if (!mounted) return;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (overlay == null) return;
-    final position = RelativeRect.fromLTRB(
-      anchor.dx,
-      anchor.dy,
-      overlay.size.width - anchor.dx,
-      overlay.size.height - anchor.dy,
-    );
-    final colors = context.colorScheme;
-    final selection = await showMenu<MessageTransport>(
-      context: context,
-      position: position,
-      items: options
-          .map(
-            (option) => PopupMenuItem<MessageTransport>(
-              value: option,
-              child: Row(
-                children: [
-                  Icon(
-                    option.isEmail
-                        ? LucideIcons.mail
-                        : LucideIcons.messageCircle,
-                    size: 16,
-                    color: option.isEmail ? colors.destructive : colors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(option.label)),
-                  if (option == activeTransport)
-                    Icon(
-                      LucideIcons.check,
-                      size: 16,
-                      color: colors.primary,
-                    ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-    );
-    if (selection != null && mounted) {
-      context.read<ChatBloc>().add(ChatTransportChanged(selection));
-    }
+    return button;
   }
 
   Widget _cutoutIconButton({
@@ -1372,13 +1274,13 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _showAttachmentInfoDialog({
-    required bool isEmailTransport,
+    required bool supportsEmail,
   }) async {
     if (!mounted) return;
-    final message = isEmailTransport
-        ? 'Attachments are limited to trusted email chats.'
-        : 'File uploads are on the roadmap. Inline previews for received files '
-            'are available now.';
+    final message = supportsEmail
+        ? 'Attachments are temporarily unavailable.'
+        : 'This chat does not support email fallback yet, so attachments '
+            'cannot be sent.';
     await showShadDialog<void>(
       context: context,
       builder: (dialogContext) => ShadDialog(
@@ -2065,6 +1967,11 @@ class _ChatState extends State<Chat> {
                   }
                 },
               ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat?.jid != current.chat?.jid,
+                listener: (_, __) => _animatedMessageIds.clear(),
+              ),
             ],
             child: BlocConsumer<ChatBloc, ChatState>(
               listenWhen: (previous, current) {
@@ -2090,18 +1997,15 @@ class _ChatState extends State<Chat> {
                 final emailSelfJid = emailService.selfSenderJid;
                 final chatEntity = state.chat;
                 final jid = chatEntity?.jid;
-                final transport = context.watch<ChatTransportCubit>().state;
-                final canUseEmail = (chatEntity?.deltaChatId != null) ||
-                    (chatEntity?.emailAddress?.isNotEmpty ?? false);
+                final supportsEmail = chatEntity?.supportsEmail ?? false;
                 final isEmailChat = chatEntity?.deltaChatId != null;
                 final isAxiCompatible = chatEntity?.isAxiContact ?? false;
-                final canUseXmpp =
-                    !canUseEmail || isAxiCompatible || chatEntity == null;
                 final rosterContacts = context.watch<RosterCubit>().contacts;
-                final isEmailTransport = canUseEmail && transport.isEmail;
-                final currentUserId = isEmailTransport
+                final isDefaultEmail =
+                    chatEntity?.defaultTransport.isEmail ?? false;
+                final currentUserId = isDefaultEmail
                     ? (emailSelfJid ?? profile?.jid ?? '')
-                    : (profile?.jid ?? '');
+                    : (profile?.jid ?? emailSelfJid ?? '');
                 final shareContexts = state.shareContexts;
                 final recipients = state.recipients;
                 final pendingAttachments = state.pendingAttachments;
@@ -2118,17 +2022,14 @@ class _ChatState extends State<Chat> {
                 );
                 final retryReport = retryEntry?.value;
                 final retryShareId = retryEntry?.key;
-                final showCompatibilityBadge = canUseEmail && isAxiCompatible;
-                final avatarBadge = showCompatibilityBadge
+                final showCompatibilityBadge = supportsEmail && isAxiCompatible;
+                final Widget? avatarBadge = showCompatibilityBadge
                     ? const AxiCompatibilityBadge(compact: true)
-                    : AxiTransportChip(
-                        transport: transport,
-                        compact: true,
-                      );
-                final emailSuggestions =
+                    : null;
+                final availableChats =
                     (context.watch<ChatsCubit?>()?.state.items ??
                             const <chat_models.Chat>[])
-                        .where((chat) => chat.transport.isEmail)
+                        .where((chat) => chat.jid != chatEntity?.jid)
                         .toList();
                 final user = ChatUser(
                   id: currentUserId,
@@ -2186,7 +2087,7 @@ class _ChatState extends State<Chat> {
                                         });
                                       }
                                       if (_textController.text.isNotEmpty) {
-                                        if (!isEmailTransport) {
+                                        if (!isDefaultEmail) {
                                           context
                                               .read<DraftCubit?>()
                                               ?.saveDraft(
@@ -2238,11 +2139,12 @@ class _ChatState extends State<Chat> {
                                                     status: item.status,
                                                   ),
                                           ),
-                                          Positioned(
-                                            right: -6,
-                                            bottom: -4,
-                                            child: avatarBadge,
-                                          ),
+                                          if (avatarBadge != null)
+                                            Positioned(
+                                              right: -6,
+                                              bottom: -4,
+                                              child: avatarBadge,
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -2281,6 +2183,17 @@ class _ChatState extends State<Chat> {
                         ] else
                           const SizedBox.shrink(),
                       ],
+                      bottom: jid == null
+                          ? null
+                          : PreferredSize(
+                              preferredSize: const Size.fromHeight(44),
+                              child: _ChatFilterIndicator(
+                                filter: state.viewFilter,
+                                onFilterSelected: (filter) => context
+                                    .read<ChatBloc>()
+                                    .add(ChatViewFilterChanged(filter: filter)),
+                              ),
+                            ),
                     ),
                     body: Column(
                       children: [
@@ -2367,6 +2280,8 @@ class _ChatState extends State<Chat> {
                                           emailSelfJid != null &&
                                               e.senderJid == emailSelfJid;
                                       final isSelf = isSelfXmpp || isSelfEmail;
+                                      final isEmailMessage =
+                                          e.deltaMsgId != null;
                                       final author = isSelf
                                           ? user
                                           : ChatUser(
@@ -2388,6 +2303,7 @@ class _ChatState extends State<Chat> {
                                       );
                                       bool showSubjectHeader = false;
                                       String? subjectLabel;
+                                      String bodyText = e.body ?? '';
                                       if (shareContext?.subject
                                               ?.trim()
                                               .isNotEmpty ==
@@ -2398,12 +2314,23 @@ class _ChatState extends State<Chat> {
                                             .add(shareContext.shareId)) {
                                           showSubjectHeader = true;
                                         }
+                                      } else {
+                                        final split =
+                                            ChatSubjectCodec.splitXmppBody(
+                                          e.body,
+                                        );
+                                        subjectLabel = split.subject;
+                                        bodyText = split.body;
                                       }
-                                      final bodyText = e.body;
+                                      if (!showSubjectHeader &&
+                                          shareContext == null &&
+                                          subjectLabel?.isNotEmpty == true) {
+                                        showSubjectHeader = true;
+                                      }
                                       final errorLabel = e.error.asString;
                                       final renderedText = e.error.isNotNone
-                                          ? '$errorLabel${bodyText?.isNotEmpty == true ? ': "${bodyText!.trim()}"' : ''}'
-                                          : (bodyText ?? '');
+                                          ? '$errorLabel${bodyText.isNotEmpty ? ': "${bodyText.trim()}"' : ''}'
+                                          : bodyText;
                                       dashMessages.add(
                                         ChatMessage(
                                           user: author,
@@ -2421,7 +2348,7 @@ class _ChatState extends State<Chat> {
                                                               .pending,
                                           customProperties: {
                                             'id': e.stanzaID,
-                                            'body': e.body,
+                                            'body': bodyText,
                                             'edited': e.edited,
                                             'retracted': e.retracted,
                                             'error': e.error,
@@ -2438,6 +2365,7 @@ class _ChatState extends State<Chat> {
                                                 bannerParticipants,
                                             'showSubject': showSubjectHeader,
                                             'subjectLabel': subjectLabel,
+                                            'isEmailMessage': isEmailMessage,
                                           },
                                         ),
                                       );
@@ -2567,7 +2495,7 @@ class _ChatState extends State<Chat> {
                                         ),
                                       ),
                                     );
-                                    final composerHintText = isEmailTransport
+                                    final composerHintText = isDefaultEmail
                                         ? 'Send email message'
                                         : 'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message';
                                     Widget quoteSection;
@@ -2792,6 +2720,20 @@ class _ChatState extends State<Chat> {
                                                           ? colors
                                                               .primaryForeground
                                                           : timestampColor;
+                                                  final isEmailMessage = (message
+                                                                  .customProperties?[
+                                                              'isEmailMessage']
+                                                          as bool?) ??
+                                                      ((message.customProperties?[
+                                                                      'model']
+                                                                  as Message?)
+                                                              ?.deltaMsgId !=
+                                                          null);
+                                                  final transportIconData =
+                                                      isEmailMessage
+                                                          ? LucideIcons.mail
+                                                          : LucideIcons
+                                                              .messageCircle;
                                                   final time = TextSpan(
                                                     text:
                                                         '${message.createdAt.hour.toString().padLeft(2, '0')}:'
@@ -2816,6 +2758,22 @@ class _ChatState extends State<Chat> {
                                                       fontSize: iconSize,
                                                       fontFamily: iconFamily,
                                                       package: iconPackage,
+                                                    ),
+                                                  );
+                                                  final transportDetail =
+                                                      TextSpan(
+                                                    text: String.fromCharCode(
+                                                      transportIconData
+                                                          .codePoint,
+                                                    ),
+                                                    style: TextStyle(
+                                                      color: timeColor,
+                                                      fontSize: iconSize,
+                                                      fontFamily:
+                                                          transportIconData
+                                                              .fontFamily,
+                                                      package: transportIconData
+                                                          .fontPackage,
                                                     ),
                                                   );
                                                   final trusted =
@@ -2859,8 +2817,7 @@ class _ChatState extends State<Chat> {
                                                           as List<
                                                               ReactionPreview>?) ??
                                                       const <ReactionPreview>[];
-                                                  final canReact =
-                                                      !isEmailTransport;
+                                                  final canReact = !isEmailChat;
                                                   final isSingleSelection =
                                                       !_multiSelectActive &&
                                                           _selectedMessageId ==
@@ -2998,6 +2955,7 @@ class _ChatState extends State<Chat> {
                                                         text: parsedText.body,
                                                         details: [
                                                           time,
+                                                          transportDetail,
                                                           if (self) status,
                                                           if (verification !=
                                                               null)
@@ -3541,6 +3499,22 @@ class _ChatState extends State<Chat> {
                                                     messageModel.stanzaID,
                                                     () => GlobalKey(),
                                                   );
+                                                  final bubbleDisplay =
+                                                      isRenderableBubble
+                                                          ? _MessageArrivalAnimator(
+                                                              key: ValueKey(
+                                                                'arrival-${messageModel.stanzaID}',
+                                                              ),
+                                                              animate:
+                                                                  _shouldAnimateMessage(
+                                                                messageModel
+                                                                    .stanzaID,
+                                                              ),
+                                                              isSelf: self,
+                                                              child:
+                                                                  alignedBubble,
+                                                            )
+                                                          : alignedBubble;
                                                   final selectableBubble =
                                                       GestureDetector(
                                                     behavior: HitTestBehavior
@@ -3561,7 +3535,7 @@ class _ChatState extends State<Chat> {
                                                               messageModel
                                                                   .stanzaID,
                                                             ),
-                                                    child: alignedBubble,
+                                                    child: bubbleDisplay,
                                                   );
                                                   final animatedStack =
                                                       AnimatedSize(
@@ -3637,14 +3611,10 @@ class _ChatState extends State<Chat> {
                                           )
                                         else
                                           _buildComposer(
-                                            isEmailTransport: isEmailTransport,
-                                            activeTransport: transport,
-                                            emailCapable: canUseEmail,
-                                            xmppCapable: canUseXmpp,
+                                            emailCapable: supportsEmail,
                                             hintText: composerHintText,
                                             recipients: recipients,
-                                            availableEmailChats:
-                                                emailSuggestions,
+                                            availableChats: availableChats,
                                             latestStatuses: latestStatuses,
                                             pendingAttachments:
                                                 pendingAttachments,
@@ -4748,6 +4718,103 @@ class _MessageActionBar extends StatelessWidget {
   }
 }
 
+class _MessageArrivalAnimator extends StatefulWidget {
+  const _MessageArrivalAnimator({
+    required this.child,
+    required this.animate,
+    required this.isSelf,
+    super.key,
+  });
+
+  final Widget child;
+  final bool animate;
+  final bool isSelf;
+
+  @override
+  State<_MessageArrivalAnimator> createState() =>
+      _MessageArrivalAnimatorState();
+}
+
+class _MessageArrivalAnimatorState extends State<_MessageArrivalAnimator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _size;
+  late final Animation<Offset> _slide;
+  late bool _completed;
+
+  @override
+  void initState() {
+    super.initState();
+    _completed = !widget.animate;
+    _controller = AnimationController(
+      vsync: this,
+      duration: _messageArrivalDuration,
+    );
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: _messageArrivalCurve,
+    );
+    _size = curve;
+    _slide = Tween<Offset>(
+      begin: Offset(widget.isSelf ? 0.15 : -0.15, 0.1),
+      end: Offset.zero,
+    ).animate(curve);
+    _controller.addStatusListener(_handleStatus);
+    if (widget.animate) {
+      _controller.forward();
+    } else {
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageArrivalAnimator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.animate && !oldWidget.animate) {
+      _completed = false;
+      _controller
+        ..value = 0
+        ..forward();
+    } else if (!widget.animate && !_completed) {
+      _controller.value = 1;
+      _completed = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeStatusListener(_handleStatus);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted) {
+      setState(() {
+        _completed = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_completed) {
+      return widget.child;
+    }
+    return SizeTransition(
+      sizeFactor: _size,
+      axisAlignment: -1,
+      child: FadeTransition(
+        opacity: _size,
+        child: SlideTransition(
+          position: _slide,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageSelectionToolbar extends StatelessWidget {
   const _MessageSelectionToolbar({
     required this.count,
@@ -4836,6 +4903,99 @@ class _MessageSelectionToolbar extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChatFilterIndicator extends StatelessWidget {
+  const _ChatFilterIndicator({
+    required this.filter,
+    required this.onFilterSelected,
+  });
+
+  final MessageTimelineFilter filter;
+  final ValueChanged<MessageTimelineFilter> onFilterSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final option = _messageFilterOptions.firstWhere(
+      (option) => option.filter == filter,
+      orElse: () => _messageFilterOptions.first,
+    );
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(
+          top: BorderSide(color: colors.border),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      child: Row(
+        children: [
+          Icon(
+            LucideIcons.listFilter,
+            size: 16,
+            color: colors.mutedForeground,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Showing ${option.label.toLowerCase()}',
+              style: context.textTheme.small.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          PopupMenuButton<MessageTimelineFilter>(
+            tooltip: 'Change which messages are shown',
+            position: PopupMenuPosition.under,
+            onSelected: onFilterSelected,
+            itemBuilder: (context) => _messageFilterOptions
+                .map(
+                  (entry) => PopupMenuItem<MessageTimelineFilter>(
+                    value: entry.filter,
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(entry.label)),
+                        if (entry.filter == filter)
+                          Icon(
+                            LucideIcons.check,
+                            size: 16,
+                            color: colors.primary,
+                          ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: colors.border),
+                color: colors.card,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    option.label,
+                    style: context.textTheme.small,
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    LucideIcons.chevronDown,
+                    size: 14,
+                    color: colors.mutedForeground,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5078,11 +5238,18 @@ class _QuotedMessagePreview extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            Text(
-              message.body ?? '(no content)',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.textTheme.small,
+            Builder(
+              builder: (context) {
+                final split = ChatSubjectCodec.splitXmppBody(message.body);
+                final previewText =
+                    split.body.isNotEmpty ? split.body : split.subject;
+                return Text(
+                  previewText ?? '(no content)',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textTheme.small,
+                );
+              },
             ),
           ],
         ),
@@ -5133,11 +5300,20 @@ class _QuoteBanner extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  message.body ?? '(no content)',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.small,
+                Builder(
+                  builder: (context) {
+                    final split = ChatSubjectCodec.splitXmppBody(
+                      message.body,
+                    );
+                    final previewText =
+                        split.body.isNotEmpty ? split.body : split.subject;
+                    return Text(
+                      previewText ?? '(no content)',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.small,
+                    );
+                  },
                 ),
               ],
             ),

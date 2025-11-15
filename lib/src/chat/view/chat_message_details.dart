@@ -42,7 +42,17 @@ class ChatMessageDetails extends StatelessWidget {
           profileState.jid,
         );
         final transport = state.chat?.transport;
-        final protocolLabel = transport?.label ?? 'Chat';
+        final isEmailMessage = message.deltaMsgId != null;
+        final protocolLabel = isEmailMessage
+            ? MessageTransport.email.label
+            : transport?.label ?? MessageTransport.xmpp.label;
+        final protocolIcon = Icon(
+          isEmailMessage ? LucideIcons.mail : LucideIcons.messageCircle,
+          size: 16,
+          color: isEmailMessage
+              ? context.colorScheme.destructive
+              : context.colorScheme.primary,
+        );
         final timestamp = message.timestamp?.toLocal();
         final timestampLabel = timestamp == null
             ? 'Unknown'
@@ -221,6 +231,7 @@ class ChatMessageDetails extends StatelessWidget {
                         _MessageDetailsInfo(
                           label: 'Protocol',
                           value: protocolLabel,
+                          leading: protocolIcon,
                         ),
                         if (message.deviceID != null)
                           _MessageDetailsInfo(
@@ -358,10 +369,12 @@ class _MessageDetailsInfo extends StatelessWidget {
   const _MessageDetailsInfo({
     required this.label,
     required this.value,
+    this.leading,
   });
 
   final String label;
   final String value;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -373,11 +386,28 @@ class _MessageDetailsInfo extends StatelessWidget {
           label,
           style: context.textTheme.muted,
         ),
-        SelectableText(
-          value,
-          textAlign: TextAlign.center,
-          style: context.textTheme.small,
-        ),
+        if (leading == null)
+          SelectableText(
+            value,
+            textAlign: TextAlign.center,
+            style: context.textTheme.small,
+          )
+        else
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              leading!,
+              const SizedBox(width: 6),
+              Flexible(
+                child: SelectableText(
+                  value,
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.small,
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }

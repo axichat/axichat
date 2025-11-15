@@ -1,7 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
-import 'package:axichat/src/chat/bloc/chat_transport_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -63,12 +62,6 @@ class ArchivedChatScreen extends StatelessWidget {
             notificationService: notificationService,
             emailService: emailService,
             omemoService: omemoService,
-          ),
-        ),
-        BlocProvider(
-          create: (_) => ChatTransportCubit(
-            chatsService: xmppService,
-            jid: jid,
           ),
         ),
         BlocProvider(
