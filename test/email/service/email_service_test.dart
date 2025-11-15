@@ -723,7 +723,7 @@ void main() {
     final existingShare = MessageShareData(
       shareId: shareId,
       originatorDcMsgId: 41,
-      subjectToken: '[s:1234]',
+      subjectToken: '01HX5R8W7YAYR5K1R7Q7MB5G4W',
       createdAt: createdAt,
       participantCount: 3,
     );

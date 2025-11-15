@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
 
-import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
@@ -85,10 +84,6 @@ class EmailService {
   final Logger _log;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
-  final RegisteredCredentialKey _legacyAddressKey =
-      CredentialStore.registerKey('chatmail_address');
-  final RegisteredCredentialKey _legacyPasswordKey =
-      CredentialStore.registerKey('chatmail_password');
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
@@ -125,7 +120,6 @@ class EmailService {
 
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
-    await _migrateLegacyCredentialKeys(scope);
     final address =
         await _credentialStore.read(key: _addressKeyForScope(scope));
     final password =
@@ -167,8 +161,6 @@ class EmailService {
 
     _activeCredentialScope = scope;
 
-    await _migrateLegacyCredentialKeys(scope);
-
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
     final provisionedKey = _provisionedKeyForScope(scope);
@@ -177,36 +169,33 @@ class EmailService {
     var password = await _credentialStore.read(key: passwordKey);
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
-    var mintedAddress = false;
     var credentialsMutated = false;
 
-    if (normalizedOverrideAddress != null && normalizedOverrideAddress.isNotEmpty) {
-      if (address == null || address != normalizedOverrideAddress) {
-        address = normalizedOverrideAddress;
-        credentialsMutated = true;
-        mintedAddress = true;
-        await _credentialStore.write(key: addressKey, value: address);
-      }
-    } else if (address == null) {
-      address = preferredAddress ?? _generateAddress(localPart: displayName);
+    final resolvedAddress =
+        (normalizedOverrideAddress != null && normalizedOverrideAddress.isNotEmpty)
+            ? normalizedOverrideAddress
+            : preferredAddress;
+    if (resolvedAddress == null || resolvedAddress.isEmpty) {
+      throw StateError('Failed to resolve email address for $jid');
+    }
+    if (address == null || address != resolvedAddress) {
+      address = resolvedAddress;
       credentialsMutated = true;
-      mintedAddress = true;
       await _credentialStore.write(key: addressKey, value: address);
     }
 
-    if (passwordOverride != null && passwordOverride.isNotEmpty) {
-      if (password == null || password != passwordOverride) {
-        password = passwordOverride;
+    final resolvedPasswordOverride = passwordOverride;
+    if (resolvedPasswordOverride != null && resolvedPasswordOverride.isNotEmpty) {
+      if (password == null || password != resolvedPasswordOverride) {
+        password = resolvedPasswordOverride;
         credentialsMutated = true;
         await _credentialStore.write(key: passwordKey, value: password);
       }
     } else if (password == null) {
-      password = generateRandomString(length: 24);
-      credentialsMutated = true;
-      await _credentialStore.write(key: passwordKey, value: password);
+      throw StateError('Failed to resolve email password for $jid');
     }
 
-    if (address == null || password == null) {
+    if (password == null) {
       throw StateError('Failed to resolve email credentials for $jid');
     }
 
@@ -237,19 +226,15 @@ class EmailService {
           error,
           stackTrace,
         );
-        if (!credentialsMutated && mapped.code == DeltaChatErrorCode.network) {
-          _log.info(
-            'Continuing with cached Chatmail credentials after network failure.',
+        await _clearCredentials(scope);
+        if (mapped.code == DeltaChatErrorCode.network) {
+          throw EmailProvisioningException(
+            'Unable to reach axi.im email services. Please try again.',
           );
-        } else {
-          if (mintedAddress) {
-            await _clearCredentials(scope);
-            throw EmailProvisioningException(
-              'Email address $address is unavailable. Please choose a different username.',
-            );
-          }
-          throw mapped;
         }
+        throw EmailProvisioningException(
+          'Email address $address is unavailable. Please choose a different username.',
+        );
       }
     } else {
       _log.fine(
@@ -408,9 +393,7 @@ class EmailService {
     final resolvedShareId =
         shareId ?? existingShare?.shareId ?? ShareTokenCodec.generateShareId();
     final resolvedToken = existingShare?.subjectToken ??
-        (useSubjectToken
-            ? ShareTokenCodec.subjectToken(resolvedShareId)
-            : null);
+        (useSubjectToken ? _shareTokenForShare(resolvedShareId) : null);
 
     final transmitBody = resolvedToken != null && hasBody
         ? ShareTokenCodec.injectToken(token: resolvedToken, body: trimmedBody!)
@@ -527,6 +510,21 @@ class EmailService {
       statuses: statuses,
       attachmentWarning: attachmentWarning,
     );
+  }
+
+  String _shareTokenForShare(String shareId) {
+    try {
+      return ShareTokenCodec.subjectToken(shareId);
+    } on ArgumentError catch (error, stackTrace) {
+      _log.warning(
+        'Rejected invalid share identifier $shareId for subject token',
+        error,
+        stackTrace,
+      );
+      throw const FanOutValidationException(
+        'Unable to derive share token for the provided identifier.',
+      );
+    }
   }
 
   Future<ShareContext?> shareContextForMessage(Message message) async {
@@ -1158,12 +1156,6 @@ class EmailService {
     }
   }
 
-  String _generateAddress({required String localPart}) {
-    final normalizedLocal =
-        localPart.trim().toLowerCase().replaceAll(RegExp('[^a-z0-9._-]'), '');
-    return '$normalizedLocal@$_chatmailDomain';
-  }
-
   String? _preferredAddressFromJid(String jid) {
     final bare = _normalizeJid(jid);
     final parts = bare.split('@');
@@ -1210,36 +1202,6 @@ class EmailService {
       scope,
       () => CredentialStore.registerKey('chatmail_provisioned_$scope'),
     );
-  }
-
-  Future<void> _migrateLegacyCredentialKeys(String scope) async {
-    final legacyAddress = await _credentialStore.read(key: _legacyAddressKey);
-    final legacyPassword = await _credentialStore.read(key: _legacyPasswordKey);
-    if (legacyAddress == null && legacyPassword == null) {
-      return;
-    }
-
-    final addressKey = _addressKeyForScope(scope);
-    final passwordKey = _passwordKeyForScope(scope);
-    final currentAddress = await _credentialStore.read(key: addressKey);
-    final currentPassword = await _credentialStore.read(key: passwordKey);
-
-    if (currentAddress == null && legacyAddress != null) {
-      await _credentialStore.write(key: addressKey, value: legacyAddress);
-    }
-    if (currentPassword == null && legacyPassword != null) {
-      await _credentialStore.write(key: passwordKey, value: legacyPassword);
-    }
-    if ((legacyAddress ?? currentAddress) != null &&
-        (legacyPassword ?? currentPassword) != null) {
-      await _credentialStore.write(
-        key: _provisionedKeyForScope(scope),
-        value: 'true',
-      );
-    }
-
-    await _credentialStore.delete(key: _legacyAddressKey);
-    await _credentialStore.delete(key: _legacyPasswordKey);
   }
 
   String _scopeForJid(String jid) => _normalizeJid(jid).toLowerCase();

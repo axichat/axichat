@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
@@ -54,48 +52,26 @@ void main() {
       }
     });
 
-    test('ensureGuestStorage registers and seeds legacy model', () async {
-      final legacyTask = CalendarTask.create(title: 'legacy');
-      final legacyModel = CalendarModel.empty().addTask(legacyTask);
-
-      final storage =
-          await manager.ensureGuestStorage(legacyModel: legacyModel);
+    test('ensureGuestStorage registers guest storage once', () async {
+      final storage = await manager.ensureGuestStorage();
 
       expect(registry.storageForPrefix(guestStoragePrefix), same(storage));
-      final token = '${guestStoragePrefix}state';
-      final cached = storage.read(token) as Map<String, dynamic>?;
-      expect(cached, isNotNull);
-      final modelJson = cached!['model'] as Map<String, dynamic>;
-      final tasksJson = modelJson['tasks'] as Map<String, dynamic>;
-      expect(tasksJson.values, isNotEmpty);
+
+      final secondCall = await manager.ensureGuestStorage();
+      expect(identical(storage, secondCall), isTrue);
     });
 
-    test('ensureAuthStorage registers encrypted storage and seeds once',
-        () async {
-      final legacyTask = CalendarTask.create(title: 'auth-legacy');
-      final legacyModel = CalendarModel.empty().addTask(legacyTask);
-
+    test('ensureAuthStorage registers encrypted storage once', () async {
       final storage = await manager.ensureAuthStorage(
         passphrase: 'secret-passphrase',
-        legacyModel: legacyModel,
       );
 
       expect(registry.storageForPrefix(authStoragePrefix), same(storage));
-      final token = '${authStoragePrefix}state';
-      final cached = storage.read(token) as Map<String, dynamic>?;
-      expect(cached, isNotNull);
-      final modelJson = cached!['model'] as Map<String, dynamic>;
-      final tasksJson = modelJson['tasks'] as Map<String, dynamic>;
-      expect(tasksJson.values, isNotEmpty);
 
-      // Subsequent calls reuse the same storage without reseeding.
       final secondCall = await manager.ensureAuthStorage(
         passphrase: 'secret-passphrase',
-        legacyModel: CalendarModel.empty(),
       );
       expect(identical(storage, secondCall), isTrue);
-      final reseeded = secondCall.read(token) as Map<String, dynamic>?;
-      expect(reseeded, cached);
     });
   });
 }

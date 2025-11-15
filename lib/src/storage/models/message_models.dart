@@ -487,6 +487,9 @@ class MessageShares extends Table {
 
   @override
   Set<Column> get primaryKey => {shareId};
+
+  @override
+  List<String> get customConstraints => const ['UNIQUE(subject_token)'];
 }
 
 @DataClassName('MessageParticipantData')
