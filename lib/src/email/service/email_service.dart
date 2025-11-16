@@ -213,8 +213,8 @@ class EmailService {
       await _credentialStore.write(key: provisionedKey, value: 'false');
     }
 
-    final normalizedAddress = address!;
-    final normalizedPassword = password!;
+    final normalizedAddress = address;
+    final normalizedPassword = password;
 
     if (!alreadyProvisioned) {
       _log.info('Configuring Chatmail account credentials');
@@ -1286,11 +1286,11 @@ class EmailService {
     final host = _chatmailServerHostFor(address);
     return {
       'mail_server': host,
-      'mail_port': _chatmailSmtpPort,
+      'mail_port': _chatmailImapPort,
       'mail_security': _chatmailSecurityMode,
-      'imap_server': host,
-      'imap_port': _chatmailImapPort,
-      'imap_security': _chatmailSecurityMode,
+      'send_server': host,
+      'send_port': _chatmailSmtpPort,
+      'send_security': _chatmailSecurityMode,
     };
   }
 
