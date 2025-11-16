@@ -1089,6 +1089,46 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  Future<void> _stashComposerDraftIfDirty() async {
+    final chatBloc = context.read<ChatBloc>();
+    final chat = chatBloc.state.chat;
+    final draftCubit = context.read<DraftCubit?>();
+    if (chat == null || draftCubit == null) {
+      return;
+    }
+    final body = _textController.text;
+    final subject = _subjectController.text;
+    final trimmedBody = body.trim();
+    final trimmedSubject = subject.trim();
+    final attachments = chatBloc.state.pendingAttachments
+        .map((pending) => pending.attachment)
+        .toList();
+    final recipients = _resolveDraftRecipients(
+      chat: chat,
+      recipients: chatBloc.state.recipients,
+    );
+    final hasRecipientChanges = recipients.length > 1 ||
+        (recipients.isNotEmpty && recipients.first != chat.jid);
+    final hasContent = trimmedBody.isNotEmpty ||
+        trimmedSubject.isNotEmpty ||
+        attachments.isNotEmpty ||
+        hasRecipientChanges;
+    if (!hasContent) {
+      return;
+    }
+    try {
+      await draftCubit.saveDraft(
+        id: null,
+        jids: recipients,
+        body: body,
+        subject: trimmedSubject.isEmpty ? null : subject,
+        attachments: attachments,
+      );
+    } catch (_) {
+      // Ignore best-effort auto-save failures.
+    }
+  }
+
   List<String> _resolveDraftRecipients({
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
@@ -1111,6 +1151,12 @@ class _ChatState extends State<Chat> {
       return [chat.jid];
     }
     return resolved.toList();
+  }
+
+  Future<void> _handleEditMessage(Message message) async {
+    await _stashComposerDraftIfDirty();
+    if (!mounted) return;
+    context.read<ChatBloc>().add(ChatMessageEditRequested(message));
   }
 
   Widget _buildComposer({
@@ -3542,13 +3588,24 @@ class _ChatState extends State<Chat> {
                                                   final canResend =
                                                       message.status ==
                                                           MessageStatus.failed;
+                                                  final canEdit =
+                                                      message.status ==
+                                                          MessageStatus.failed;
+                                                  final includeSelectAction =
+                                                      !_multiSelectActive;
                                                   List<GlobalKey>?
                                                       actionButtonKeys;
                                                   if (isSingleSelection) {
                                                     const baseActionCount = 6;
                                                     final actionCount =
                                                         baseActionCount +
-                                                            (canResend ? 1 : 0);
+                                                            (canResend
+                                                                ? 1
+                                                                : 0) +
+                                                            (canEdit ? 1 : 0) +
+                                                            (includeSelectAction
+                                                                ? 1
+                                                                : 0);
                                                     actionButtonKeys =
                                                         List.generate(
                                                             actionCount,
@@ -3595,17 +3652,25 @@ class _ChatState extends State<Chat> {
                                                     onDetails: () =>
                                                         _showMessageDetails(
                                                             message),
-                                                    onSelect: _multiSelectActive
-                                                        ? null
-                                                        : () =>
-                                                            _startMultiSelect(
-                                                              messageModel,
-                                                            ),
+                                                    onSelect:
+                                                        includeSelectAction
+                                                            ? () =>
+                                                                _startMultiSelect(
+                                                                  messageModel,
+                                                                )
+                                                            : null,
                                                     onResend: canResend
                                                         ? () => context
                                                             .read<ChatBloc>()
                                                             .add(
                                                               ChatMessageResendRequested(
+                                                                messageModel,
+                                                              ),
+                                                            )
+                                                        : null,
+                                                    onEdit: canEdit
+                                                        ? () => unawaited(
+                                                              _handleEditMessage(
                                                                 messageModel,
                                                               ),
                                                             )
@@ -4924,6 +4989,7 @@ class _MessageActionBar extends StatelessWidget {
     required this.onDetails,
     required this.onSelect,
     this.onResend,
+    this.onEdit,
     this.hitRegionKeys,
   });
 
@@ -4935,6 +5001,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback onDetails;
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
+  final VoidCallback? onEdit;
   final List<GlobalKey>? hitRegionKeys;
 
   @override
@@ -4970,6 +5037,13 @@ class _MessageActionBar extends StatelessWidget {
           icon: const Icon(LucideIcons.repeat, size: 16),
           label: 'Resend',
           onPressed: onResend!,
+        ),
+      if (onEdit != null)
+        ContextActionButton(
+          key: nextKey(),
+          icon: const Icon(LucideIcons.pencilLine, size: 16),
+          label: 'Edit',
+          onPressed: onEdit!,
         ),
       ContextActionButton(
         key: nextKey(),

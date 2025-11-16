@@ -66,6 +66,8 @@ enum MessageError {
           'Recipient\'s client or server does not support this action',
         serverNotFound => 'Could not reach server',
         serverTimeout => 'Server timeout',
+        unknown =>
+          'Message failed to send. Check your connection and try again.',
         notEncryptedForDevice => 'Message not encrypted for this device',
         malformedKey => 'Message has malformed encrypted key',
         unknownSPK => 'Message has unknown Signed Prekey',
