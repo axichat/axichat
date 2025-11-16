@@ -99,7 +99,7 @@ const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 const _bubbleRadius = 18.0;
 const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
-const _reactionCutoutThickness = 34.0;
+const _reactionCutoutMinThickness = 28.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
 const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
@@ -119,7 +119,7 @@ const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
 const _selectionCutoutDepth = 20.0;
 const _selectionCutoutRadius = 16.0;
-const _selectionCutoutPadding = EdgeInsets.fromLTRB(2, 6, 2, 6);
+const _selectionCutoutPadding = EdgeInsets.fromLTRB(4, 6, 4, 6);
 const _selectionCutoutOffset = Offset.zero;
 const _selectionCutoutThickness = SelectionIndicator.size + 12.0;
 const _selectionCutoutCornerClearance = 0.0;
@@ -127,10 +127,10 @@ const _selectionBubbleInteriorInset = _selectionCutoutDepth + 6.0;
 const _selectionBubbleVerticalInset = 4.0;
 const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
-const _selectionIndicatorInboundGap = 8.0;
-const _selectionIndicatorOutboundGap = 10.0;
-const _selectionBubbleInboundExtraGap = 2.0;
-const _selectionBubbleOutboundExtraGap = 4.0;
+const _selectionIndicatorInboundGap = 10.0;
+const _selectionIndicatorOutboundGap = 14.0;
+const _selectionBubbleInboundExtraGap = 4.0;
+const _selectionBubbleOutboundExtraGap = 8.0;
 const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
@@ -662,8 +662,12 @@ class _ChatState extends State<Chat> {
   }
 
   void _toggleSettingsPanel() {
+    final nextExpanded = !_settingsPanelExpanded;
+    if (nextExpanded) {
+      context.read<ChatSearchCubit?>()?.setActive(false);
+    }
     setState(() {
-      _settingsPanelExpanded = !_settingsPanelExpanded;
+      _settingsPanelExpanded = nextExpanded;
     });
   }
 
@@ -717,25 +721,19 @@ class _ChatState extends State<Chat> {
     final textScaler = MediaQuery.of(context).textScaler;
     double scaled(double value) => textScaler.scale(value);
     final iconSize = scaled(16);
+    final showDirectOnly = state.viewFilter == MessageTimelineFilter.directOnly;
     final buttons = <Widget>[
       ContextActionButton(
         icon: Icon(
-          state.viewFilter == MessageTimelineFilter.allWithContact
-              ? LucideIcons.mailCheck
-              : LucideIcons.mail,
+          showDirectOnly ? LucideIcons.user : LucideIcons.users,
           size: iconSize,
         ),
-        label: 'Show all',
-        onPressed: state.viewFilter == MessageTimelineFilter.allWithContact
-            ? null
-            : () => _setViewFilter(MessageTimelineFilter.allWithContact),
-      ),
-      ContextActionButton(
-        icon: Icon(LucideIcons.userCheck, size: iconSize),
-        label: 'Direct only',
-        onPressed: state.viewFilter == MessageTimelineFilter.directOnly
-            ? null
-            : () => _setViewFilter(MessageTimelineFilter.directOnly),
+        label: showDirectOnly ? 'Showing direct only' : 'Showing all',
+        onPressed: () => _setViewFilter(
+          showDirectOnly
+              ? MessageTimelineFilter.allWithContact
+              : MessageTimelineFilter.directOnly,
+        ),
       ),
     ];
     final notificationsEnabled = !chat.muted;
@@ -1023,6 +1021,98 @@ class _ChatState extends State<Chat> {
     _focusNode.requestFocus();
   }
 
+  Future<void> _handleSendButtonLongPress() async {
+    if (widget.readOnly) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final colors = context.colorScheme;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(LucideIcons.save, color: colors.primary),
+                title: const Text('Save as draft'),
+                onTap: () => Navigator.of(context).pop('save'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || action != 'save') return;
+    await _saveComposerAsDraft();
+  }
+
+  Future<void> _saveComposerAsDraft() async {
+    final chatBloc = context.read<ChatBloc>();
+    final chat = chatBloc.state.chat;
+    final draftCubit = context.read<DraftCubit?>();
+    if (chat == null || draftCubit == null) {
+      _showSnackbar('Drafts are unavailable right now.');
+      return;
+    }
+    final body = _textController.text;
+    final subject = _subjectController.text;
+    final trimmedBody = body.trim();
+    final trimmedSubject = subject.trim();
+    final attachments = chatBloc.state.pendingAttachments
+        .map((pending) => pending.attachment)
+        .toList();
+    final hasContent = trimmedBody.isNotEmpty ||
+        trimmedSubject.isNotEmpty ||
+        attachments.isNotEmpty;
+    if (!hasContent) {
+      _showSnackbar('Add a message, subject, or attachment before saving.');
+      return;
+    }
+    final recipients = _resolveDraftRecipients(
+      chat: chat,
+      recipients: chatBloc.state.recipients,
+    );
+    try {
+      await draftCubit.saveDraft(
+        id: null,
+        jids: recipients,
+        body: body,
+        subject: trimmedSubject.isEmpty ? null : subject,
+        attachments: attachments,
+      );
+      if (!mounted) return;
+      _showSnackbar('Saved to Drafts.');
+    } catch (_) {
+      if (!mounted) return;
+      _showSnackbar('Failed to save draft. Try again.');
+    }
+  }
+
+  List<String> _resolveDraftRecipients({
+    required chat_models.Chat chat,
+    required List<ComposerRecipient> recipients,
+  }) {
+    if (recipients.isEmpty) {
+      return [chat.jid];
+    }
+    final resolved = <String>{};
+    for (final recipient in recipients) {
+      if (!recipient.included) continue;
+      final chatJid = recipient.target.chat?.jid;
+      final address = recipient.target.address;
+      if (chatJid != null && chatJid.isNotEmpty) {
+        resolved.add(chatJid);
+      } else if (address != null && address.isNotEmpty) {
+        resolved.add(address);
+      }
+    }
+    if (resolved.isEmpty) {
+      return [chat.jid];
+    }
+    return resolved.toList();
+  }
+
   Widget _buildComposer({
     required String hintText,
     required List<ComposerRecipient> recipients,
@@ -1292,6 +1382,7 @@ class _ChatState extends State<Chat> {
       tooltip: 'Send message',
       activeColor: colors.primary,
       onPressed: enabled ? _handleSendMessage : null,
+      onLongPress: widget.readOnly ? null : _handleSendButtonLongPress,
       icon: LucideIcons.send,
     );
     return button;
@@ -1303,6 +1394,7 @@ class _ChatState extends State<Chat> {
     required String tooltip,
     Color? activeColor,
     VoidCallback? onPressed,
+    VoidCallback? onLongPress,
   }) {
     assert(icon != null || iconBuilder != null, 'Provide an icon or builder.');
     final colors = context.colorScheme;
@@ -1338,12 +1430,22 @@ class _ChatState extends State<Chat> {
       ),
       child: button,
     );
+    Widget interactiveChild =
+        decorated.withTapBounce(enabled: onPressed != null);
+    if (onLongPress != null) {
+      interactiveChild = GestureDetector(
+        behavior: HitTestBehavior.deferToChild,
+        onLongPress: onLongPress,
+        child: interactiveChild,
+      );
+    }
     return Semantics(
       button: true,
       enabled: onPressed != null,
       label: tooltip,
       onTap: onPressed,
-      child: decorated.withTapBounce(enabled: onPressed != null),
+      onLongPress: onLongPress,
+      child: interactiveChild,
     );
   }
 
@@ -2043,6 +2145,14 @@ class _ChatState extends State<Chat> {
         final trimmedQuery = searchState.query.trim();
         final searchFiltering = searchState.active && trimmedQuery.isNotEmpty;
         final searchResults = searchState.results;
+        if (searchState.active && _settingsPanelExpanded) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_settingsPanelExpanded) return;
+            setState(() {
+              _settingsPanelExpanded = false;
+            });
+          });
+        }
         final showToast = ShadToaster.maybeOf(context)?.show;
         return Listener(
           behavior: HitTestBehavior.translucent,
@@ -2317,12 +2427,6 @@ class _ChatState extends State<Chat> {
                               tooltip: showSettingsPanel
                                   ? 'Close settings'
                                   : 'Chat settings',
-                              color: showSettingsPanel
-                                  ? context.colorScheme.primary
-                                  : null,
-                              borderColor: showSettingsPanel
-                                  ? context.colorScheme.primary
-                                  : null,
                               onPressed: _toggleSettingsPanel,
                             ),
                           ],
@@ -3373,7 +3477,7 @@ class _ChatState extends State<Chat> {
                                                                     offset:
                                                                         _reactionStripOffset,
                                                                     minThickness:
-                                                                        _reactionCutoutThickness,
+                                                                        _reactionCutoutMinThickness,
                                                                   )
                                                                 : null,
                                                         recipientOverlay:
@@ -4195,6 +4299,10 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   final additions = <double>[];
   double used = 0;
 
+  final limit = maxContentWidth.isFinite
+      ? math.max(0.0, maxContentWidth - 1)
+      : maxContentWidth;
+
   for (final reaction in reactions) {
     final spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
     final addition = spacing +
@@ -4204,7 +4312,7 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
           textDirection: textDirection,
           textScaler: textScaler,
         );
-    if (used + addition > maxContentWidth) {
+    if (limit.isFinite && used + addition > limit) {
       break;
     }
     visible.add(reaction);
@@ -4219,7 +4327,8 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
     var spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
     const glyphWidth = _reactionOverflowGlyphWidth;
     while (visible.isNotEmpty &&
-        totalWidth + spacing + glyphWidth > maxContentWidth) {
+        limit.isFinite &&
+        totalWidth + spacing + glyphWidth > limit) {
       totalWidth -= additions.removeLast();
       visible.removeLast();
       spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
@@ -4229,6 +4338,8 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
     } else {
       totalWidth = math.min(maxContentWidth, totalWidth + spacing + glyphWidth);
     }
+  } else {
+    totalWidth = math.min(maxContentWidth, totalWidth);
   }
 
   return _CutoutLayoutResult(
@@ -5156,43 +5267,31 @@ class _ChatSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final panel = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Divider(
-          height: 1,
-          thickness: 1,
-          color: colors.border,
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final panel = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border(
+          bottom: BorderSide(color: colors.border),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: children,
-          ),
-        ),
-      ],
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: children,
+      ),
     );
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      transitionBuilder: (child, animation) {
-        return ClipRect(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: SizeTransition(
-              sizeFactor: animation,
-              axisAlignment: -1,
-              child: FadeTransition(
-                opacity: animation,
-                child: child,
-              ),
-            ),
-          ),
-        );
-      },
-      child: visible ? panel : const SizedBox.shrink(),
+    return AnimatedCrossFade(
+      duration: animationDuration,
+      reverseDuration: animationDuration,
+      sizeCurve: Curves.easeInOutCubic,
+      crossFadeState:
+          visible ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      firstChild: const SizedBox.shrink(),
+      secondChild: panel,
     );
   }
 }

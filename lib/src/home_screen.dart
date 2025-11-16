@@ -31,27 +31,14 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
-import 'package:axichat/src/roster/view/roster_add_button.dart';
-import 'package:axichat/src/roster/view/roster_invites_list.dart';
-import 'package:axichat/src/roster/view/roster_list.dart';
-import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/spam/view/spam_list.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-const _contactsSearchFilters = [
-  HomeSearchFilter(id: 'all', label: 'All contacts'),
-  HomeSearchFilter(id: 'online', label: 'Online'),
-  HomeSearchFilter(id: 'offline', label: 'Offline'),
-];
-
-const _invitesSearchFilters = [
-  HomeSearchFilter(id: 'all', label: 'All invites'),
-];
 
 const _blocklistSearchFilters = [
   HomeSearchFilter(id: 'all', label: 'All blocked'),
@@ -95,21 +82,6 @@ class HomeScreen extends StatelessWidget {
           label: 'Spam',
           body: SpamList(key: PageStorageKey('Spam')),
           searchFilters: spamSearchFilters,
-        ),
-      if (isRoster)
-        const HomeTabEntry(
-          id: HomeTab.contacts,
-          label: 'Contacts',
-          body: RosterList(key: PageStorageKey('Contacts')),
-          fab: RosterAddButton(),
-          searchFilters: _contactsSearchFilters,
-        ),
-      if (isRoster)
-        const HomeTabEntry(
-          id: HomeTab.invites,
-          label: 'New',
-          body: RosterInvitesList(key: PageStorageKey('New')),
-          searchFilters: _invitesSearchFilters,
         ),
       if (isBlocking)
         const HomeTabEntry(
@@ -259,7 +231,8 @@ class HomeScreen extends StatelessWidget {
             if (isPresence)
               BlocProvider(
                 create: (context) => ProfileCubit(
-                  presenceService: context.read<XmppService>(),
+                  presenceService:
+                      context.read<XmppService>() as PresenceService,
                   omemoService: isOmemo
                       ? context.read<XmppService>() as OmemoService
                       : null,

@@ -269,6 +269,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     String? contactDisplayName,
     String? contactAvatarPath,
     String? contactAvatarHash,
+    String? contactJid,
     mox.ChatState? chatState,
     int? deltaChatId,
     String? emailAddress,
@@ -297,6 +298,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String? contactDisplayName,
     required String? contactAvatarPath,
     required String? contactAvatarHash,
+    required String? contactJid,
     required mox.ChatState? chatState,
     required int? deltaChatId,
     required String? emailAddress,
@@ -307,6 +309,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         title: mox.JID.fromString(jid).local,
         type: ChatType.chat,
         lastChangeTimestamp: DateTime.now(),
+        contactJid: jid,
       );
 
   const Chat._();
@@ -336,6 +339,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         contactDisplayName: Value.absentIfNull(contactDisplayName),
         contactAvatarPath: Value.absentIfNull(contactAvatarPath),
         contactAvatarHash: Value.absentIfNull(contactAvatarHash),
+        contactJid: Value.absentIfNull(contactJid),
         chatState: Value.absentIfNull(chatState),
         deltaChatId: Value.absentIfNull(deltaChatId),
         emailAddress: Value.absentIfNull(emailAddress),
@@ -390,6 +394,8 @@ class Chats extends Table {
 
   TextColumn get contactAvatarHash => text().nullable()();
 
+  TextColumn get contactJid => text().nullable()();
+
   TextColumn get chatState => textEnum<mox.ChatState>().nullable()();
 
   IntColumn get deltaChatId => integer().nullable()();
@@ -409,13 +415,19 @@ class Contacts extends Table {
   Set<Column> get primaryKey => {nativeID};
 }
 
+extension ChatThreadExtension on Chat {
+  String get remoteJid => contactJid ?? jid;
+
+  bool get hasDetachedThread => contactJid != null && contactJid != jid;
+}
+
 extension ChatTransportExtension on Chat {
   static final _axiDomainPattern = RegExp(r'@axi\.im$', caseSensitive: false);
 
   bool get supportsEmail =>
       deltaChatId != null || (emailAddress?.isNotEmpty ?? false);
 
-  bool get isAxiContact => _axiDomainPattern.hasMatch(jid.toLowerCase());
+  bool get isAxiContact => _axiDomainPattern.hasMatch(remoteJid.toLowerCase());
 
   MessageTransport get defaultTransport => supportsEmail && !isAxiContact
       ? MessageTransport.email
