@@ -11,6 +11,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -231,6 +232,8 @@ class _MorphingAuthButton extends StatefulWidget {
 class _MorphingAuthButtonState extends State<_MorphingAuthButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  late final FocusNode _focusNode;
+  bool _focused = false;
 
   @override
   void initState() {
@@ -240,6 +243,7 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
       duration: widget.duration,
       value: widget.selected ? 1 : 0,
     );
+    _focusNode = FocusNode(debugLabel: 'auth-toggle-${widget.label}');
   }
 
   @override
@@ -260,6 +264,7 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -270,86 +275,132 @@ class _MorphingAuthButtonState extends State<_MorphingAuthButton>
       animation: _controller,
       builder: (context, _) {
         final t = Curves.easeInOut.transform(_controller.value);
-        final expandedWidth = widget.width;
-        final compactWidth = widget.width * 0.55;
+        final textScaler = MediaQuery.of(context).textScaler;
+        double scaled(double value) => textScaler.scale(value);
+        final scaleFactor = textScaler.scale(1);
+        final baseWidth = widget.width;
+        final expandedWidth = math.max(baseWidth, scaled(baseWidth));
+        final compactWidth = math.max(
+            expandedWidth * 0.55, scaled(_MorphingAuthButton._primaryHeight));
         final currentWidth =
             lerpDouble(compactWidth, expandedWidth, t) ?? expandedWidth;
-        final height = lerpDouble(
-              _MorphingAuthButton._compactHeight,
-              _MorphingAuthButton._primaryHeight,
-              t,
-            ) ??
-            _MorphingAuthButton._primaryHeight;
-        final borderRadius = lerpDouble(18, 26, t) ?? 26;
-        final borderColor = Color.lerp(
-              colors.border.withValues(alpha: 0.9),
-              colors.primary,
-              t,
-            ) ??
+        final compactHeight = scaled(_MorphingAuthButton._compactHeight);
+        final primaryHeight = scaled(_MorphingAuthButton._primaryHeight);
+        final height =
+            lerpDouble(compactHeight, primaryHeight, t) ?? primaryHeight;
+        final borderRadius =
+            lerpDouble(scaled(18), scaled(26), t) ?? scaled(26);
+        final baseBorderColor = Color.lerp(
+                colors.border.withValues(alpha: 0.9), colors.primary, t) ??
             colors.border;
-        final borderWidth = lerpDouble(1, 1.8, t) ?? 1.3;
-        final cutoutThickness = lerpDouble(0, widget.width - 28, t) ?? 0;
-        final cutoutDepth = _MorphingAuthButton._cutoutDepth * t;
-        final fillColor =
+        final borderColor = _focused ? colors.primary : baseBorderColor;
+        final borderWidth =
+            lerpDouble(scaled(1), scaled(1.8), t) ?? scaled(1.3);
+        final baseCutoutThickness =
+            lerpDouble(0, math.max(widget.width - 28, 0), t) ?? 0;
+        final baseCutoutDepth = _MorphingAuthButton._cutoutDepth * t;
+        final visualCutoutDepth = baseCutoutDepth * scaleFactor;
+        final baseFillColor =
             Color.lerp(colors.card, colors.primary, t) ?? colors.card;
-        final textColor = Color.lerp(
-              colors.foreground,
-              colors.primaryForeground,
-              t,
-            ) ??
-            colors.foreground;
+        final fillColor = _focused && !widget.selected
+            ? Color.alphaBlend(
+                colors.primary.withValues(alpha: 0.08),
+                baseFillColor,
+              )
+            : baseFillColor;
+        final textColor =
+            Color.lerp(colors.foreground, colors.primaryForeground, t) ??
+                colors.foreground;
         final edgePadding = EdgeInsets.only(
-          top: widget.cutoutEdge == CutoutEdge.top ? cutoutDepth * 0.6 : 0,
-          bottom:
-              widget.cutoutEdge == CutoutEdge.bottom ? cutoutDepth * 0.6 : 0,
+          top:
+              widget.cutoutEdge == CutoutEdge.top ? visualCutoutDepth * 0.6 : 0,
+          bottom: widget.cutoutEdge == CutoutEdge.bottom
+              ? visualCutoutDepth * 0.6
+              : 0,
         );
         final cutouts = <CutoutSpec>[];
-        if (cutoutDepth > 0.1 && cutoutThickness > 18) {
+        if (baseCutoutDepth > 0.1 && baseCutoutThickness > 18) {
           cutouts.add(
             CutoutSpec(
               edge: widget.cutoutEdge,
               alignment: Alignment.center,
-              depth: cutoutDepth,
-              thickness: cutoutThickness,
+              depth: baseCutoutDepth,
+              thickness: baseCutoutThickness,
               cornerRadius: 18,
               child: const SizedBox.shrink(),
             ),
           );
         }
+        final buttonSurface = CutoutSurface(
+          backgroundColor: fillColor,
+          borderColor: borderColor,
+          shadowOpacity: 0.15 * t,
+          shadows: [
+            BoxShadow(
+              color: colors.primary.withValues(alpha: 0.2 * t),
+              blurRadius: scaled(18),
+              offset: Offset(0, scaled(12) * t),
+            ),
+          ],
+          shape: SquircleBorder(
+            cornerRadius: borderRadius,
+            side: BorderSide(color: borderColor, width: borderWidth),
+          ),
+          cutouts: cutouts,
+          child: Padding(
+            padding: edgePadding,
+            child: Center(
+              child: Text(
+                widget.label,
+                textAlign: TextAlign.center,
+                style: context.textTheme.p.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+            ),
+          ),
+        ).withTapBounce();
+
         return SizedBox(
           width: currentWidth,
           height: height,
-          child: GestureDetector(
-            onTap: widget.onTap,
-            child: CutoutSurface(
-              backgroundColor: fillColor,
-              borderColor: borderColor,
-              shadowOpacity: 0.15 * t,
-              shadows: [
-                BoxShadow(
-                  color: colors.primary.withValues(alpha: 0.2 * t),
-                  blurRadius: 18,
-                  offset: Offset(0, 12 * t),
-                ),
-              ],
-              shape: SquircleBorder(
-                cornerRadius: borderRadius,
-                side: BorderSide(color: borderColor, width: borderWidth),
+          child: FocusableActionDetector(
+            focusNode: _focusNode,
+            enabled: true,
+            mouseCursor: SystemMouseCursors.click,
+            onShowFocusHighlight: (focused) {
+              if (_focused != focused) {
+                setState(() => _focused = focused);
+              }
+            },
+            shortcuts: const {
+              SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+              SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+            },
+            actions: {
+              ActivateIntent: CallbackAction<ActivateIntent>(
+                onInvoke: (intent) {
+                  widget.onTap();
+                  return null;
+                },
               ),
-              cutouts: cutouts,
-              child: Padding(
-                padding: edgePadding,
-                child: Center(
-                  child: Text(
-                    widget.label,
-                    style: context.textTheme.p.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
-                ),
+            },
+            child: Semantics(
+              container: true,
+              button: true,
+              selected: widget.selected,
+              label: widget.label,
+              hint: widget.selected
+                  ? 'Current selection'
+                  : 'Activate to select ${widget.label}',
+              onTap: widget.onTap,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                child: buttonSurface,
               ),
-            ).withTapBounce(),
+            ),
           ),
         );
       },

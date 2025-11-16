@@ -1190,21 +1190,25 @@ class _ChatState extends State<Chat> {
   }) {
     assert(icon != null || iconBuilder != null, 'Provide an icon or builder.');
     final colors = context.colorScheme;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
     final iconColor = onPressed == null
         ? colors.mutedForeground
         : (activeColor ?? colors.foreground);
     final childIcon = iconBuilder != null
         ? iconBuilder(iconColor)
-        : Icon(icon!, size: 24, color: iconColor);
+        : Icon(icon!, size: scaled(24), color: iconColor);
+    final minButtonExtent = scaled(50);
+    final splashRadius = scaled(24);
     final button = IconButton(
       icon: childIcon,
       tooltip: tooltip,
       onPressed: onPressed,
-      splashRadius: 24,
+      splashRadius: splashRadius,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(
-        minWidth: 50,
-        minHeight: 50,
+      constraints: BoxConstraints(
+        minWidth: minButtonExtent,
+        minHeight: minButtonExtent,
       ),
       visualDensity: VisualDensity.compact,
     );
@@ -1212,13 +1216,19 @@ class _ChatState extends State<Chat> {
       decoration: ShapeDecoration(
         color: colors.card,
         shape: SquircleBorder(
-          cornerRadius: 14,
-          side: BorderSide(color: colors.border, width: 1.4),
+          cornerRadius: scaled(14),
+          side: BorderSide(color: colors.border, width: scaled(1.4)),
         ),
       ),
       child: button,
     );
-    return decorated.withTapBounce(enabled: onPressed != null);
+    return Semantics(
+      button: true,
+      enabled: onPressed != null,
+      label: tooltip,
+      onTap: onPressed,
+      child: decorated.withTapBounce(enabled: onPressed != null),
+    );
   }
 
   Future<void> _handleAttachmentPressed() async {
@@ -4671,6 +4681,8 @@ class _MessageActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
     var keyIndex = 0;
     GlobalKey? nextKey() {
       if (hitRegionKeys == null) return null;
@@ -4733,8 +4745,8 @@ class _MessageActionBar extends StatelessWidget {
       ),
     ];
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: scaled(8),
+      runSpacing: scaled(8),
       alignment: WrapAlignment.center,
       children: actions,
     );
@@ -4855,6 +4867,8 @@ class _MessageSelectionToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
     return SafeArea(
       top: false,
       left: false,
@@ -4867,11 +4881,11 @@ class _MessageSelectionToolbar extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            _composerHorizontalInset,
-            18,
-            _composerHorizontalInset,
-            12,
+          padding: EdgeInsets.fromLTRB(
+            scaled(_composerHorizontalInset),
+            scaled(18),
+            scaled(_composerHorizontalInset),
+            scaled(12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4892,10 +4906,10 @@ class _MessageSelectionToolbar extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: scaled(12)),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: scaled(8),
+                runSpacing: scaled(8),
                 alignment: WrapAlignment.center,
                 children: [
                   ContextActionButton(

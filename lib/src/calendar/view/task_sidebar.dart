@@ -3,43 +3,43 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
 import 'package:flutter/scheduler.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
-import '../models/calendar_model.dart';
 import '../constants.dart';
+import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../utils/calendar_transfer_service.dart';
 import '../utils/location_autocomplete.dart';
-import '../utils/recurrence_utils.dart';
-import '../utils/task_title_validation.dart';
-import '../utils/responsive_helper.dart';
-import '../utils/time_formatter.dart';
 import '../utils/nl_parser_service.dart';
 import '../utils/nl_schedule_adapter.dart';
+import '../utils/recurrence_utils.dart';
+import '../utils/responsive_helper.dart';
+import '../utils/task_title_validation.dart';
+import '../utils/time_formatter.dart';
 import 'calendar_transfer_sheet.dart';
-import 'edit_task_dropdown.dart';
-import 'layout/calendar_layout.dart';
 import 'controllers/calendar_sidebar_controller.dart';
 import 'controllers/task_draft_controller.dart';
+import 'edit_task_dropdown.dart';
+import 'feedback_system.dart';
+import 'layout/calendar_layout.dart';
 import 'models/task_context_action.dart';
 import 'widgets/calendar_drag_target.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/deadline_picker_field.dart';
+import 'widgets/location_inline_suggestion.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/recurrence_spacing_tokens.dart';
-import 'widgets/location_inline_suggestion.dart';
+import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
-import 'widgets/task_field_character_hint.dart';
-import 'feedback_system.dart';
 
 class TaskSidebar extends StatefulWidget {
   const TaskSidebar({
@@ -66,6 +66,7 @@ class TaskSidebarState extends State<TaskSidebar>
   final FocusNode _titleFocusNode = FocusNode(debugLabel: 'sidebarTitleInput');
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  late final Listenable _formActivityListenable;
   final TextEditingController _selectionTitleController =
       TextEditingController();
   final TextEditingController _selectionDescriptionController =
@@ -87,6 +88,7 @@ class TaskSidebarState extends State<TaskSidebar>
   BaseCalendarBloc? _calendarBloc;
   final CalendarTransferService _transferService =
       const CalendarTransferService();
+
   BaseCalendarBloc get _bloc {
     final BaseCalendarBloc? bloc = _calendarBloc;
     if (bloc == null) {
@@ -114,6 +116,7 @@ class TaskSidebarState extends State<TaskSidebar>
   String? _quickTaskError;
 
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
+
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
   final Map<String, ShadPopoverController> _taskPopoverControllers = {};
@@ -140,6 +143,17 @@ class TaskSidebarState extends State<TaskSidebar>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
 
   bool get _isTouchOnlyInput => !_hasPrecisePointerInput;
+
+  bool get _hasSidebarFormValues =>
+      _titleController.text.trim().isNotEmpty ||
+      _descriptionController.text.trim().isNotEmpty ||
+      _locationController.text.trim().isNotEmpty ||
+      _draftController.startTime != null ||
+      _draftController.endTime != null ||
+      _draftController.deadline != null ||
+      _draftController.recurrence.isActive ||
+      _draftController.isImportant ||
+      _draftController.isUrgent;
 
   void handleExternalGridDragStarted({required bool isTouchMode}) {
     if (_externalGridDragActive) {
@@ -465,6 +479,12 @@ class TaskSidebarState extends State<TaskSidebar>
       maxWidth: _layoutTheme.sidebarMinWidth,
     );
     _draftController = TaskDraftController();
+    _formActivityListenable = Listenable.merge([
+      _titleController,
+      _descriptionController,
+      _locationController,
+      _draftController,
+    ]);
     _selectionRecurrenceNotifier =
         ValueNotifier<RecurrenceFormValue>(const RecurrenceFormValue());
     _selectionRecurrenceMixedNotifier = ValueNotifier<bool>(false);
@@ -611,14 +631,38 @@ class TaskSidebarState extends State<TaskSidebar>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ADD TASK',
-            style: calendarHeaderTextStyle.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-              color: calendarTimeLabelColor,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'ADD TASK',
+                  style: calendarHeaderTextStyle.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                    color: calendarTimeLabelColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: calendarGutterSm),
+              AnimatedBuilder(
+                animation: _formActivityListenable,
+                builder: (context, _) {
+                  final bool enabled = _hasSidebarFormValues;
+                  final button = ShadButton.outline(
+                    size: ShadButtonSize.sm,
+                    onPressed: enabled ? _handleClearFieldsPressed : null,
+                    child: const Text('Clear fields'),
+                  );
+                  return MouseRegion(
+                    cursor: enabled
+                        ? SystemMouseCursors.click
+                        : SystemMouseCursors.basic,
+                    child: button,
+                  );
+                },
+              ),
+            ],
           ),
           const SizedBox(height: calendarSidebarSectionSpacing),
           _buildQuickTaskInput(locationHelper),
@@ -1943,33 +1987,36 @@ class TaskSidebarState extends State<TaskSidebar>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                InkWell(
-                  onTap: () => _sidebarController.toggleSection(section),
-                  child: Padding(
-                    padding: calendarFieldPadding,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: calendarSubtitleColor,
-                              letterSpacing: 0.5,
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: InkWell(
+                    onTap: () => _sidebarController.toggleSection(section),
+                    child: Padding(
+                      padding: calendarFieldPadding,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: calendarSubtitleColor,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
-                        ),
-                        _buildCountBadge(itemCount, isExpanded),
-                        const SizedBox(width: calendarGutterSm),
-                        Icon(
-                          isExpanded
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                          size: 18,
-                          color: calendarSubtitleColor,
-                        ),
-                      ],
+                          _buildCountBadge(itemCount, isExpanded),
+                          const SizedBox(width: calendarGutterSm),
+                          Icon(
+                            isExpanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                            size: 18,
+                            color: calendarSubtitleColor,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -2005,35 +2052,38 @@ class TaskSidebarState extends State<TaskSidebar>
                             );
                           },
                           builder: (context, isHovering, __) {
-                            return GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () =>
-                                  _sidebarController.toggleSection(section),
-                              child: AnimatedContainer(
-                                key: ValueKey('${section.name}-collapsed'),
-                                duration: const Duration(milliseconds: 120),
-                                padding:
-                                    const EdgeInsets.fromLTRB(14, 6, 14, 6),
-                                constraints:
-                                    const BoxConstraints(minHeight: 40),
-                                decoration: BoxDecoration(
-                                  color: isHovering
-                                      ? calendarPrimaryColor.withValues(
-                                          alpha: 0.12)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(
-                                    calendarBorderRadius,
+                            return MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () =>
+                                    _sidebarController.toggleSection(section),
+                                child: AnimatedContainer(
+                                  key: ValueKey('${section.name}-collapsed'),
+                                  duration: const Duration(milliseconds: 120),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                                  constraints:
+                                      const BoxConstraints(minHeight: 40),
+                                  decoration: BoxDecoration(
+                                    color: isHovering
+                                        ? calendarPrimaryColor.withValues(
+                                            alpha: 0.12)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(
+                                      calendarBorderRadius,
+                                    ),
+                                    border: isHovering
+                                        ? Border.all(
+                                            color: calendarPrimaryColor,
+                                            width: 1.5,
+                                          )
+                                        : null,
                                   ),
-                                  border: isHovering
-                                      ? Border.all(
-                                          color: calendarPrimaryColor,
-                                          width: 1.5,
-                                        )
-                                      : null,
-                                ),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: collapsedChild,
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: collapsedChild,
+                                  ),
                                 ),
                               ),
                             );
@@ -2404,7 +2454,10 @@ class TaskSidebarState extends State<TaskSidebar>
     CalendarTask task,
     CalendarSidebarState uiState,
   ) {
-    final Widget baseTile = _buildTaskTile(task, uiState: uiState);
+    final Widget baseTile = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: _buildTaskTile(task, uiState: uiState),
+    );
     final Widget fadedTile = Opacity(
       opacity: 0.3,
       child: _buildTaskTile(
@@ -2469,13 +2522,16 @@ class TaskSidebarState extends State<TaskSidebar>
                 ? Builder(
                     builder: (tileContext) {
                       if (_shouldUseSheetMenus(tileContext)) {
-                        return InkWell(
-                          borderRadius:
-                              BorderRadius.circular(calendarBorderRadius),
-                          hoverColor: calendarSidebarBackgroundColor.withValues(
-                              alpha: 0.5),
-                          onTap: () => _showTaskEditSheet(tileContext, task),
-                          child: _buildTaskTileBody(task),
+                        return MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: InkWell(
+                            borderRadius:
+                                BorderRadius.circular(calendarBorderRadius),
+                            hoverColor: calendarSidebarBackgroundColor
+                                .withValues(alpha: 0.5),
+                            onTap: () => _showTaskEditSheet(tileContext, task),
+                            child: _buildTaskTileBody(task),
+                          ),
                         );
                       }
 
@@ -2671,13 +2727,16 @@ class TaskSidebarState extends State<TaskSidebar>
                             },
                           );
                         },
-                        child: InkWell(
-                          borderRadius:
-                              BorderRadius.circular(calendarBorderRadius),
-                          hoverColor: calendarSidebarBackgroundColor.withValues(
-                              alpha: 0.5),
-                          onTap: () => _toggleTaskPopover(task.id),
-                          child: _buildTaskTileBody(task),
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: InkWell(
+                            borderRadius:
+                                BorderRadius.circular(calendarBorderRadius),
+                            hoverColor: calendarSidebarBackgroundColor
+                                .withValues(alpha: 0.5),
+                            onTap: () => _toggleTaskPopover(task.id),
+                            child: _buildTaskTileBody(task),
+                          ),
                         ),
                       );
                     },
@@ -2769,107 +2828,110 @@ class TaskSidebarState extends State<TaskSidebar>
     Widget? trailing,
     String? scheduleLabel,
   }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: calendarTitleColor,
-                      ),
-                    ),
-                    if (scheduleLabel != null) ...[
-                      const SizedBox(height: calendarInsetSm),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        scheduleLabel,
+                        task.title,
                         style: const TextStyle(
-                          fontSize: 11,
-                          color: calendarSubtitleColor,
-                          letterSpacing: 0.1,
+                          fontSize: 13,
+                          color: calendarTitleColor,
                         ),
                       ),
+                      if (scheduleLabel != null) ...[
+                        const SizedBox(height: calendarInsetSm),
+                        Text(
+                          scheduleLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: calendarSubtitleColor,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ],
                     ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: calendarInsetMd),
+                  trailing,
+                ],
+              ],
+            ),
+            if (task.description?.isNotEmpty == true) ...[
+              const SizedBox(height: calendarInsetMd),
+              Text(
+                task.description!.length > 50
+                    ? '${task.description!.substring(0, 50)}...'
+                    : task.description!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: calendarSubtitleColor,
+                ),
+              ),
+            ],
+            if (task.deadline != null) ...[
+              const SizedBox(height: calendarInsetLg),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: calendarGutterSm, vertical: calendarInsetMd),
+                decoration: BoxDecoration(
+                  color: _getDeadlineBackgroundColor(task.deadline!),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 12,
+                      color: _getDeadlineColor(task.deadline!),
+                    ),
+                    const SizedBox(width: calendarInsetMd),
+                    Text(
+                      _getFullDeadlineText(task.deadline!),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _getDeadlineColor(task.deadline!),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: calendarInsetMd),
-                trailing,
-              ],
             ],
-          ),
-          if (task.description?.isNotEmpty == true) ...[
-            const SizedBox(height: calendarInsetMd),
-            Text(
-              task.description!.length > 50
-                  ? '${task.description!.substring(0, 50)}...'
-                  : task.description!,
-              style: const TextStyle(
-                fontSize: 11,
-                color: calendarSubtitleColor,
-              ),
-            ),
-          ],
-          if (task.deadline != null) ...[
-            const SizedBox(height: calendarInsetLg),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterSm, vertical: calendarInsetMd),
-              decoration: BoxDecoration(
-                color: _getDeadlineBackgroundColor(task.deadline!),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+            if (task.location?.isNotEmpty == true) ...[
+              const SizedBox(height: calendarInsetMd),
+              Row(
                 children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 12,
-                    color: _getDeadlineColor(task.deadline!),
-                  ),
-                  const SizedBox(width: calendarInsetMd),
-                  Text(
-                    _getFullDeadlineText(task.deadline!),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _getDeadlineColor(task.deadline!),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
+                  const Text('📍 ', style: TextStyle(fontSize: 11)),
+                  Expanded(
+                    child: Text(
+                      task.location!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: calendarSubtitleColor,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-            ),
+            ],
           ],
-          if (task.location?.isNotEmpty == true) ...[
-            const SizedBox(height: calendarInsetMd),
-            Row(
-              children: [
-                const Text('📍 ', style: TextStyle(fontSize: 11)),
-                Expanded(
-                  child: Text(
-                    task.location!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: calendarSubtitleColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -3176,6 +3238,10 @@ class TaskSidebarState extends State<TaskSidebar>
       );
     }
 
+    _resetForm();
+  }
+
+  void _handleClearFieldsPressed() {
     _resetForm();
   }
 

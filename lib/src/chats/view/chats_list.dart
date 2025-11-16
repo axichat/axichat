@@ -16,6 +16,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' as intl;
@@ -210,11 +211,27 @@ class ChatListTile extends StatefulWidget {
 class _ChatListTileState extends State<ChatListTile> {
   bool _showActions = false;
   bool _exporting = false;
+  bool _focused = false;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode(debugLabel: 'chat-tile-${widget.item.jid}');
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     final colors = context.colorScheme;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadThickness = showUnreadBadge
@@ -243,12 +260,12 @@ class _ChatListTileState extends State<ChatListTile> {
     final timestampThickness = timestampLabel == null
         ? 0.0
         : math.max(
-            32.0,
+            scaled(32.0),
             _measureLabelWidth(
                   context,
                   timestampLabel,
                 ) +
-                16.0,
+                scaled(16.0),
           );
     final chatsCubit = context.watch<ChatsCubit?>();
     final selectedJids = chatsCubit?.state.selectedJids ?? const <String>{};
@@ -270,7 +287,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final tileBackgroundColor = item.open
         ? Color.alphaBlend(selectionOverlay, colors.card)
         : colors.card;
-    VoidCallback? tileOnTap;
+    late final VoidCallback tileOnTap;
     if (chatsCubit == null) {
       tileOnTap = () {
         unawaited(_handleTap(item));
@@ -294,17 +311,23 @@ class _ChatListTileState extends State<ChatListTile> {
               setState(() => _showActions = false);
             }
           };
+    final tilePadding = EdgeInsetsDirectional.only(
+      start: scaled(16),
+      end: scaled(showUnreadBadge ? 40 : 28),
+      top: scaled(4),
+      bottom: scaled(4),
+    );
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: tileOnTap,
       onLongPress: tileOnLongPress,
-      leadingConstraints: const BoxConstraints(
-        maxWidth: 72,
-        maxHeight: 80,
+      leadingConstraints: BoxConstraints(
+        maxWidth: scaled(72),
+        maxHeight: scaled(80),
       ),
       selected: item.open || isSelected,
       paintSurface: false,
-      contentPadding: const EdgeInsets.only(left: 16.0, right: 40.0),
+      contentPadding: tilePadding,
       tapBounce: false,
       leading: _TransportAwareAvatar(chat: item),
       title: item.title,
@@ -321,7 +344,7 @@ class _ChatListTileState extends State<ChatListTile> {
           thickness: unreadThickness,
           cornerRadius: _unreadBadgeCornerRadius,
           child: Transform.translate(
-            offset: const Offset(0, _unreadBadgeCutoutChildVerticalOffset),
+            offset: Offset(0, scaled(_unreadBadgeCutoutChildVerticalOffset)),
             child: _UnreadBadge(
               count: unreadCount,
               highlight: showUnreadBadge,
@@ -354,7 +377,7 @@ class _ChatListTileState extends State<ChatListTile> {
           thickness: timestampThickness,
           cornerRadius: 18,
           child: Transform.translate(
-            offset: const Offset(0, -3),
+            offset: Offset(0, -scaled(3)),
             child: DisplayTimeSince(
               timestamp: item.lastChangeTimestamp,
               style: context.textTheme.small.copyWith(
@@ -365,13 +388,14 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
     ];
 
+    final surfaceBorderColor = _focused ? colors.primary : colors.border;
     final tileSurface = CutoutSurface(
       backgroundColor: tileBackgroundColor,
-      borderColor: colors.border,
+      borderColor: surfaceBorderColor,
       cutouts: cutouts,
       shape: SquircleBorder(
-        cornerRadius: 18,
-        side: BorderSide(color: colors.border),
+        cornerRadius: scaled(18),
+        side: BorderSide(color: surfaceBorderColor),
       ),
       child: Column(
         children: [
@@ -384,12 +408,17 @@ class _ChatListTileState extends State<ChatListTile> {
                 : CrossFadeState.showFirst,
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              padding: EdgeInsetsDirectional.fromSTEB(
+                scaled(16),
+                0,
+                scaled(16),
+                scaled(20),
+              ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
+                padding: EdgeInsets.symmetric(horizontal: scaled(18)),
                 child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: scaled(8),
+                  runSpacing: scaled(8),
                   alignment: WrapAlignment.center,
                   children: _buildActionButtons(context, item),
                 ),
@@ -400,7 +429,42 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
     );
 
-    return tileSurface.withTapBounce();
+    final semanticsValue =
+        showUnreadBadge ? '$unreadCount unread messages' : 'No unread messages';
+    final semanticsHint = selectionActive
+        ? (isSelected ? 'Press to unselect chat' : 'Press to select chat')
+        : 'Press to open chat';
+    final tileContent = tileSurface.withTapBounce();
+    return FocusableActionDetector(
+      focusNode: _focusNode,
+      onShowFocusHighlight: (value) {
+        if (_focused != value) {
+          setState(() => _focused = value);
+        }
+      },
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (intent) {
+            tileOnTap();
+            return null;
+          },
+        ),
+      },
+      child: Semantics(
+        container: true,
+        button: true,
+        selected: isSelected,
+        label: item.title,
+        value: semanticsValue,
+        hint: semanticsHint,
+        onTap: tileOnTap,
+        child: tileContent,
+      ),
+    );
   }
 
   void _toggleActions() {
@@ -424,9 +488,13 @@ class _ChatListTileState extends State<ChatListTile> {
 
   List<Widget> _buildActionButtons(BuildContext context, Chat chat) {
     final chatsCubit = context.read<ChatsCubit?>();
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconSize = scaled(16);
+    final progressSize = scaled(16);
     return [
       ContextActionButton(
-        icon: const Icon(LucideIcons.squareCheck, size: 16),
+        icon: Icon(LucideIcons.squareCheck, size: iconSize),
         label: 'Select',
         onPressed: chatsCubit == null
             ? null
@@ -439,7 +507,7 @@ class _ChatListTileState extends State<ChatListTile> {
       ContextActionButton(
         icon: Icon(
           chat.favorited ? LucideIcons.starOff : LucideIcons.star,
-          size: 16,
+          size: iconSize,
         ),
         label: chat.favorited ? 'Unfavorite' : 'Favorite',
         onPressed: chatsCubit == null
@@ -455,12 +523,14 @@ class _ChatListTileState extends State<ChatListTile> {
       ),
       ContextActionButton(
         icon: _exporting
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+            ? SizedBox(
+                width: progressSize,
+                height: progressSize,
+                child: CircularProgressIndicator(
+                  strokeWidth: math.max(2, progressSize * 0.12),
+                ),
               )
-            : const Icon(LucideIcons.share2, size: 16),
+            : Icon(LucideIcons.share2, size: iconSize),
         label: _exporting ? 'Exporting...' : 'Export',
         onPressed: _exporting
             ? null
@@ -471,7 +541,7 @@ class _ChatListTileState extends State<ChatListTile> {
       ContextActionButton(
         icon: Icon(
           chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
-          size: 16,
+          size: iconSize,
         ),
         label: chat.archived ? 'Unarchive' : 'Archive',
         onPressed: chatsCubit == null
@@ -494,7 +564,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ContextActionButton(
           icon: Icon(
             chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
-            size: 16,
+            size: iconSize,
           ),
           label: chat.hidden ? 'Show' : 'Hide',
           onPressed: chatsCubit == null
@@ -514,7 +584,7 @@ class _ChatListTileState extends State<ChatListTile> {
                 },
         ),
       ContextActionButton(
-        icon: const Icon(LucideIcons.trash2, size: 16),
+        icon: Icon(LucideIcons.trash2, size: iconSize),
         label: 'Delete',
         destructive: true,
         onPressed: () => _confirmDelete(chat),
@@ -697,12 +767,14 @@ double _measureUnreadBadgeWidth(BuildContext context, int count) {
     textDirection: Directionality.of(context),
   )..layout();
   final textWidth = textPainter.width;
+  final textScaler = MediaQuery.of(context).textScaler;
+  double scaled(double value) => textScaler.scale(value);
   return math.max(
-    _unreadBadgeMinWidth,
+    scaled(_unreadBadgeMinWidth),
     textWidth +
-        (_unreadBadgeHorizontalPadding * 2) +
-        (_unreadBadgeBorderWidth * 2) +
-        _unreadBadgeCutoutClearance,
+        (scaled(_unreadBadgeHorizontalPadding) * 2) +
+        (scaled(_unreadBadgeBorderWidth) * 2) +
+        scaled(_unreadBadgeCutoutClearance),
   );
 }
 
@@ -718,6 +790,8 @@ const double _unreadBadgeCutoutChildVerticalOffset = -2.0;
 const double _unreadBadgeCutoutDepthAdjustment = -2.0;
 
 double _measureUnreadBadgeHeight(BuildContext context, int count) {
+  final textScaler = MediaQuery.of(context).textScaler;
+  double scaled(double value) => textScaler.scale(value);
   final textPainter = TextPainter(
     text: TextSpan(
       text: '$count',
@@ -729,8 +803,8 @@ double _measureUnreadBadgeHeight(BuildContext context, int count) {
     textDirection: Directionality.of(context),
   )..layout();
   return textPainter.height +
-      (_unreadBadgeVerticalPadding * 2) +
-      (_unreadBadgeBorderWidth * 2);
+      (scaled(_unreadBadgeVerticalPadding) * 2) +
+      (scaled(_unreadBadgeBorderWidth) * 2);
 }
 
 class _TransportAwareAvatar extends StatelessWidget {
@@ -794,35 +868,45 @@ class _UnreadBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
     final Color background =
         highlight ? colors.primary : colors.secondary.withValues(alpha: 0.2);
     final Color borderColor =
         highlight ? colors.background : colors.border.withValues(alpha: 0.8);
     final Color textColor =
         highlight ? colors.primaryForeground : colors.mutedForeground;
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: background,
-        shape: SquircleBorder(
-          cornerRadius: _unreadBadgeCornerRadius,
-          side: BorderSide(
-            color: borderColor,
-            width: _unreadBadgeBorderWidth,
+    final borderWidth = scaled(_unreadBadgeBorderWidth);
+    final cornerRadius = scaled(_unreadBadgeCornerRadius);
+    final horizontalPadding = scaled(_unreadBadgeHorizontalPadding);
+    final verticalPadding = scaled(_unreadBadgeVerticalPadding);
+    return Semantics(
+      container: true,
+      label: '$count unread messages',
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: background,
+          shape: SquircleBorder(
+            cornerRadius: cornerRadius,
+            side: BorderSide(
+              color: borderColor,
+              width: borderWidth,
+            ),
           ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: _unreadBadgeHorizontalPadding,
-          vertical: _unreadBadgeVerticalPadding,
-        ),
-        child: Text(
-          '$count',
-          maxLines: 1,
-          style: context.textTheme.small.copyWith(
-            color: textColor,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          child: Text(
+            '$count',
+            maxLines: 1,
+            style: context.textTheme.small.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
           ),
         ),
       ),
@@ -844,29 +928,42 @@ class _ChatActionsToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: backgroundColor,
-        shape: SquircleBorder(
-          cornerRadius: 14,
-          side: BorderSide(color: colors.border, width: 1.4),
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconSize = scaled(20);
+    final splashRadius = scaled(22);
+    final minButtonSize = scaled(40);
+    final borderWidth = scaled(1.4);
+    return Semantics(
+      container: true,
+      button: true,
+      toggled: expanded,
+      label: expanded ? 'Hide chat actions' : 'Show chat actions',
+      onTap: onPressed,
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: backgroundColor,
+          shape: SquircleBorder(
+            cornerRadius: scaled(14),
+            side: BorderSide(color: colors.border, width: borderWidth),
+          ),
         ),
+        child: IconButton(
+          iconSize: iconSize,
+          splashRadius: splashRadius,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints(
+            minWidth: minButtonSize,
+            minHeight: minButtonSize,
+          ),
+          icon: Icon(
+            expanded ? LucideIcons.x : LucideIcons.ellipsisVertical,
+            color: colors.mutedForeground,
+          ),
+          onPressed: onPressed,
+        ).withTapBounce(),
       ),
-      child: IconButton(
-        iconSize: 20,
-        splashRadius: 22,
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(
-          minWidth: 40,
-          minHeight: 40,
-        ),
-        icon: Icon(
-          expanded ? LucideIcons.x : LucideIcons.ellipsisVertical,
-          color: colors.mutedForeground,
-        ),
-        onPressed: onPressed,
-      ).withTapBounce(),
     );
   }
 }
@@ -885,18 +982,28 @@ class _ChatSelectionCutoutButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: backgroundColor,
-        shape: SquircleBorder(
-          cornerRadius: 14,
-          side: BorderSide(color: colors.border, width: 1.4),
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final borderWidth = scaled(1.4);
+    return Semantics(
+      container: true,
+      button: true,
+      toggled: selected,
+      label: selected ? 'Chat selected' : 'Select chat',
+      onTap: onPressed,
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: backgroundColor,
+          shape: SquircleBorder(
+            cornerRadius: scaled(14),
+            side: BorderSide(color: colors.border, width: borderWidth),
+          ),
         ),
-      ),
-      child: SelectionIndicator(
-        visible: true,
-        selected: selected,
-        onPressed: onPressed,
+        child: SelectionIndicator(
+          visible: true,
+          selected: selected,
+          onPressed: onPressed,
+        ),
       ),
     );
   }
