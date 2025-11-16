@@ -8,10 +8,12 @@ class AxiTransportChip extends StatelessWidget {
     super.key,
     required this.transport,
     this.compact = false,
+    this.label,
   });
 
   final MessageTransport transport;
   final bool compact;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +41,7 @@ class AxiTransportChip extends StatelessWidget {
         ),
       ),
       child: Text(
-        transport.label,
+        label ?? transport.label,
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.visible,

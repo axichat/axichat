@@ -856,6 +856,7 @@ class _TransportAwareAvatar extends StatelessWidget {
     final jid = chat.jid;
     final supportsEmail = chat.transport.isEmail;
     final isAxiCompatible = chat.isAxiContact;
+    final shouldLabelAll = !supportsEmail && isAxiCompatible;
     Widget badge;
     if (supportsEmail && isAxiCompatible) {
       badge = const AxiCompatibilityBadge(compact: true);
@@ -865,9 +866,10 @@ class _TransportAwareAvatar extends StatelessWidget {
         compact: true,
       );
     } else {
-      badge = const AxiTransportChip(
+      badge = AxiTransportChip(
         transport: MessageTransport.xmpp,
         compact: true,
+        label: shouldLabelAll ? 'All' : null,
       );
     }
     const avatarSize = 46.0;

@@ -1250,6 +1250,7 @@ WHERE subject_token IS NOT NULL
           lastMessage: Value.absentIfNull(lastMessagePreview),
           lastChangeTimestamp: DateTime.timestamp(),
           encryptionProtocol: Value(message.encryptionProtocol),
+          contactJid: Value(message.chatJid),
         ),
         onConflict: DoUpdate.withExcluded(
           (old, excluded) => ChatsCompanion.custom(
@@ -1695,6 +1696,7 @@ WHERE subject_token IS NOT NULL
           chatState: const Value(mox.ChatState.active),
           lastMessage: Value(lastMessage?.body),
           lastChangeTimestamp: lastMessage?.timestamp ?? DateTime.timestamp(),
+          contactJid: Value(jid),
         ),
         onConflict: DoUpdate(
           (old) => const ChatsCompanion(
@@ -1738,8 +1740,73 @@ WHERE subject_token IS NOT NULL
     required bool archived,
   }) async {
     _log.info('Marking chat: $jid as archived: $archived');
-    await (update(chats)..where((chats) => chats.jid.equals(jid)))
-        .write(ChatsCompanion(archived: Value(archived)));
+    await transaction(() async {
+      final chat = await chatsAccessor.selectOne(jid);
+      if (chat == null) return;
+      if (!archived) {
+        await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+          const ChatsCompanion(archived: Value(false)),
+        );
+        return;
+      }
+      if (chat.archived) {
+        return;
+      }
+      final canonicalJid = chat.contactJid ?? chat.jid;
+      final archivedJid = _generateArchivedJid(canonicalJid);
+      await _archiveChatThread(
+        chat: chat,
+        canonicalJid: canonicalJid,
+        archivedJid: archivedJid,
+      );
+      await _retargetDraftsForChat(fromJid: jid, toJid: archivedJid);
+    });
+  }
+
+  String _generateArchivedJid(String canonicalJid) {
+    final timestamp = DateTime.timestamp().microsecondsSinceEpoch;
+    return '$canonicalJid--arch--${timestamp.toRadixString(16)}';
+  }
+
+  Future<void> _archiveChatThread({
+    required Chat chat,
+    required String canonicalJid,
+    required String archivedJid,
+  }) async {
+    final archivedChat = chat.copyWith(
+      jid: archivedJid,
+      contactJid: canonicalJid,
+      archived: true,
+      open: false,
+    );
+    await chatsAccessor.insertOne(archivedChat);
+    await (update(messages)..where((tbl) => tbl.chatJid.equals(chat.jid)))
+        .write(
+      MessagesCompanion(chatJid: Value(archivedJid)),
+    );
+    await (update(notifications)..where((tbl) => tbl.chatJid.equals(chat.jid)))
+        .write(NotificationsCompanion(chatJid: Value(archivedJid)));
+    await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
+  }
+
+  Future<void> _retargetDraftsForChat({
+    required String fromJid,
+    required String toJid,
+  }) async {
+    final impactedDrafts = await draftsAccessor.selectAll();
+    for (final draft in impactedDrafts) {
+      if (!draft.jids.contains(fromJid)) continue;
+      final updated = [
+        for (final jid in draft.jids) jid == fromJid ? toJid : jid,
+      ];
+      if (listEquals(updated, draft.jids)) continue;
+      await draftsAccessor.updateOne(
+        DraftsCompanion(
+          id: Value(draft.id),
+          jids: Value(updated),
+        ),
+      );
+    }
   }
 
   @override

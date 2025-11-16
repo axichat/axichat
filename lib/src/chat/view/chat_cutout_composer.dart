@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 const double _kCutoutDepth = 30;
-const double _kCutoutThickness = 46;
+const double _kCutoutThickness = 49;
 const double _kCutoutCornerRadius = 18;
 const double _kHorizontalInset = 34;
 const double _kVerticalInset = 20;

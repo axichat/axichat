@@ -86,6 +86,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   void _bodyListener() => setState(() {});
+
   void _subjectListener() => setState(() {});
 
   @override
@@ -156,20 +157,35 @@ class _DraftFormState extends State<DraftForm> {
                   onRecipientRemoved: _handleRecipientRemoved,
                   onRecipientToggled: _handleRecipientToggled,
                   latestStatuses: const {},
-                  collapsedByDefault: true,
+                  collapsedByDefault: false,
                 ),
                 const SizedBox(height: 12),
                 Padding(
                   padding: horizontalPadding,
-                  child: AxiTextFormField(
-                    controller: _subjectTextController,
-                    focusNode: _subjectFocusNode,
-                    enabled: enabled,
-                    minLines: 1,
-                    maxLines: 1,
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-                    placeholder: const Text('Subject (optional)'),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 56,
+                          child: AxiTextFormField(
+                            controller: _subjectTextController,
+                            focusNode: _subjectFocusNode,
+                            enabled: enabled,
+                            minLines: 1,
+                            maxLines: 1,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+                            placeholder: const Text('Subject (optional)'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _DraftSendIconButton(
+                        enabled: canSend,
+                        onPressed: canSend ? _handleSendDraft : null,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -206,26 +222,21 @@ class _DraftFormState extends State<DraftForm> {
                           ),
                         ),
                       Row(
-                        spacing: 8,
-                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           ShadButton.destructive(
                             enabled: canDiscard,
                             onPressed: canDiscard ? _handleDiscard : null,
                             child: const Text('Discard'),
                           ).withTapBounce(enabled: canDiscard),
+                          const Spacer(),
                           ShadButton.outline(
                             enabled: canSave,
                             onPressed: canSave ? _handleSaveDraft : null,
                             child: const Text('Save draft'),
                           ).withTapBounce(enabled: canSave),
-                          ShadButton(
-                            enabled: canSend,
-                            onPressed: canSend ? _handleSendDraft : null,
-                            child: const Text('Send'),
-                          ).withTapBounce(enabled: canSend),
                         ],
                       ),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
@@ -560,7 +571,7 @@ class _DraftFormState extends State<DraftForm> {
           children: [
             const Text('Attachments'),
             const Spacer(),
-            _composerIconButton(
+            _DraftComposerIconButton(
               tooltip: 'Add attachment',
               icon: LucideIcons.paperclip,
               onPressed: canSelectAttachment ? addHandler : null,
@@ -584,59 +595,6 @@ class _DraftFormState extends State<DraftForm> {
             onLongPress: _handlePendingAttachmentLongPressed,
           ),
       ],
-    );
-  }
-
-  Widget _composerIconButton({
-    required String tooltip,
-    required IconData icon,
-    VoidCallback? onPressed,
-  }) {
-    final colors = context.colorScheme;
-    final enabled = onPressed != null;
-    final iconColor = enabled ? colors.foreground : colors.mutedForeground;
-    final background = colors.card;
-    final decoration = ShapeDecoration(
-      color: background,
-      shadows: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.08),
-          blurRadius: 14,
-          offset: const Offset(0, 6),
-        ),
-      ],
-      shape: SquircleBorder(
-        cornerRadius: 18,
-        side: BorderSide(color: colors.border),
-      ),
-    );
-    final child = Container(
-      width: 38,
-      height: 38,
-      decoration: decoration,
-      alignment: Alignment.center,
-      child: Icon(
-        icon,
-        size: 18,
-        color: iconColor,
-      ),
-    );
-    final tappable = Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(20),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Center(child: child),
-        ),
-      ),
-    ).withTapBounce(enabled: enabled);
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
-      child: tappable,
     );
   }
 
@@ -732,6 +690,97 @@ class _DraftFormState extends State<DraftForm> {
           ),
         );
       },
+    );
+  }
+}
+
+class _DraftSendIconButton extends StatelessWidget {
+  const _DraftSendIconButton({
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final iconColor = enabled ? colors.primary : colors.mutedForeground;
+    final borderColor = enabled ? colors.primary : colors.border;
+    // ignore: prefer_const_constructors
+    // ignore: prefer_const_constructors
+    return Tooltip(
+      message: 'Send draft',
+      waitDuration: const Duration(milliseconds: 400),
+      child: _DraftComposerIconButton(
+        tooltip: 'Send draft',
+        icon: LucideIcons.send,
+        onPressed: enabled ? onPressed : null,
+        iconColorOverride: iconColor,
+        borderColorOverride: borderColor,
+      ),
+    );
+  }
+}
+
+class _DraftComposerIconButton extends StatelessWidget {
+  const _DraftComposerIconButton({
+    required this.tooltip,
+    required this.icon,
+    this.onPressed,
+    this.iconColorOverride,
+    this.borderColorOverride,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color? iconColorOverride;
+  final Color? borderColorOverride;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final enabled = onPressed != null;
+    final iconColor = iconColorOverride ??
+        (enabled ? colors.foreground : colors.mutedForeground);
+    final borderColor = borderColorOverride ?? colors.border;
+    final button = IconButton(
+      icon: Icon(icon, size: 24, color: iconColor),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      splashRadius: 24,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: 52,
+        minHeight: 52,
+      ),
+      visualDensity: VisualDensity.compact,
+    );
+    final decorated = DecoratedBox(
+      decoration: ShapeDecoration(
+        color: colors.card,
+        shape: SquircleBorder(
+          cornerRadius: 16,
+          side: BorderSide(
+            color: borderColor,
+            width: 1.4,
+          ),
+        ),
+      ),
+      child: button,
+    );
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: tooltip,
+        onTap: enabled ? onPressed : null,
+        child: decorated.withTapBounce(enabled: enabled),
+      ),
     );
   }
 }

@@ -105,15 +105,12 @@ class ComposeScreen extends StatelessWidget {
                     }
                     return MultiBlocProvider(
                       providers: providers,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 16.0),
-                        child: DraftForm(
-                          id: id,
-                          jids: jids,
-                          body: body,
-                          subject: subject,
-                          attachmentMetadataIds: attachmentMetadataIds,
-                        ),
+                      child: DraftForm(
+                        id: id,
+                        jids: jids,
+                        body: body,
+                        subject: subject,
+                        attachmentMetadataIds: attachmentMetadataIds,
                       ),
                     );
                   },

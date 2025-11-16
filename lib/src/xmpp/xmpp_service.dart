@@ -10,8 +10,8 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -183,7 +183,7 @@ class XmppService extends XmppBase
         MessageService,
         // OmemoService,
         RosterService,
-        PresenceService,
+        // PresenceService,
         ChatsService,
         BlockingService {
   XmppService._(

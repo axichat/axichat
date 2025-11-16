@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/common/ui/axi_avatar.dart';
 import 'package:axichat/src/common/ui/string_to_color.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -12,6 +15,9 @@ const double _chipHeight = 36.0;
 const Duration _chipMotionDuration = Duration(milliseconds: 320);
 const Curve _chipMotionCurve = Curves.easeInOutCubic;
 const Duration _barAnimationDuration = Duration(milliseconds: 360);
+const int _maxAutocompleteSuggestions = 8;
+const double _suggestionTileHeight = 52;
+const double _suggestionMaxHeight = 320;
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -241,46 +247,26 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     BuildContext context, {
     required Color backgroundColor,
   }) {
-    final suggestions = widget.availableChats
+    final available = widget.availableChats
         .where(
           (chat) => !widget.recipients
               .any((recipient) => recipient.target.chat?.jid == chat.jid),
         )
         .toList();
     final knownDomains = _knownDomains();
+    final knownAddresses = _knownAddresses();
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
       child: RawAutocomplete<FanOutTarget>(
         textEditingController: _controller,
         focusNode: _focusNode,
-        optionsBuilder: (TextEditingValue value) {
-          final raw = value.text.trim();
-          final query = raw.toLowerCase();
-          if (query.isEmpty) {
-            return suggestions.take(8).map(FanOutTarget.chat);
-          }
-          final atIndex = query.indexOf('@');
-          if (atIndex >= 0) {
-            final localPart = raw.substring(0, atIndex);
-            final typedDomain = query.substring(atIndex + 1);
-            if (localPart.isEmpty) return const Iterable<FanOutTarget>.empty();
-            final domainMatches = knownDomains.where(
-              (domain) => domain.startsWith(typedDomain),
-            );
-            return domainMatches
-                .map((domain) => FanOutTarget.address(
-                      address: '$localPart@$domain',
-                    ))
-                .take(8);
-          }
-          final filtered = suggestions.where((chat) {
-            final title = chat.title.toLowerCase();
-            final address = chat.emailAddress?.toLowerCase() ?? '';
-            return title.startsWith(query) || address.startsWith(query);
-          }).toList();
-          return filtered.map(FanOutTarget.chat).take(8);
-        },
+        optionsBuilder: (TextEditingValue value) => _buildAutocompleteOptions(
+          value.text,
+          available,
+          knownDomains,
+          knownAddresses,
+        ),
         displayStringForOption: (option) =>
             option.chat?.title ?? option.address ?? '',
         fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -319,7 +305,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                         cursorColor: colors.primary,
                         maxLines: 1,
                         keyboardType: TextInputType.emailAddress,
+                        textCapitalization: TextCapitalization.none,
                         autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
                         enableSuggestions: false,
                         autofillHints: const [AutofillHints.email],
                         decoration: InputDecoration(
@@ -359,26 +348,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           child: Material(
             elevation: 4,
             borderRadius: BorderRadius.circular(8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 180, minWidth: 200),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
-                  return ListTile(
-                    dense: true,
-                    title: Text(option.chat?.title ?? option.address ?? ''),
-                    subtitle: option.chat?.emailAddress == null
-                        ? null
-                        : Text(option.chat!.emailAddress!),
-                    onTap: () {
-                      onSelected(option);
-                      _controller.clear();
-                    },
-                  );
-                },
-              ),
+            child: _AutocompleteOptionsList(
+              options: options.toList(growable: false),
+              onSelected: (option) {
+                onSelected(option);
+                _controller.clear();
+              },
             ),
           ),
         ),
@@ -506,12 +481,35 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
     for (final chat in widget.availableChats) {
       addFrom(chat.emailAddress);
+      addFrom(chat.jid);
     }
     for (final recipient in widget.recipients) {
       final target = recipient.target;
       addFrom(target.chat?.emailAddress ?? target.address);
+      addFrom(target.chat?.jid);
     }
     return domains;
+  }
+
+  Set<String> _knownAddresses() {
+    final addresses = <String>{};
+    void add(String? raw) {
+      final value = raw?.trim();
+      if (value == null || value.isEmpty) return;
+      addresses.add(value);
+    }
+
+    for (final chat in widget.availableChats) {
+      add(chat.emailAddress);
+      add(chat.jid);
+    }
+    for (final recipient in widget.recipients) {
+      final target = recipient.target;
+      add(target.address);
+      add(target.chat?.jid);
+      add(target.chat?.emailAddress);
+    }
+    return addresses;
   }
 
   String? _extractDomain(String? raw) {
@@ -524,6 +522,93 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final domain = parts.last.trim().toLowerCase();
     if (domain.isEmpty) return null;
     return domain;
+  }
+
+  Iterable<FanOutTarget> _buildAutocompleteOptions(
+    String raw,
+    List<Chat> candidates,
+    Set<String> knownDomains,
+    Set<String> knownAddresses,
+  ) {
+    final trimmed = raw.trim();
+    final query = trimmed.toLowerCase();
+    final prioritizedDomains = <String>[
+      'axi.im',
+      ...knownDomains.where((domain) => domain != 'axi.im'),
+    ];
+    if (query.isEmpty) {
+      return candidates
+          .take(_maxAutocompleteSuggestions)
+          .map(FanOutTarget.chat);
+    }
+
+    final results = <FanOutTarget>[];
+    final seen = <String>{};
+
+    bool addTarget(FanOutTarget target) {
+      final key = (target.chat?.jid ?? target.address ?? '').toLowerCase();
+      if (key.isEmpty || seen.contains(key)) return false;
+      results.add(target);
+      seen.add(key);
+      return results.length >= _maxAutocompleteSuggestions;
+    }
+
+    if (trimmed.isNotEmpty && !trimmed.contains('@')) {
+      for (final domain in prioritizedDomains) {
+        final done = addTarget(
+          FanOutTarget.address(address: '$trimmed@$domain'),
+        );
+        if (done) return results;
+      }
+    }
+
+    for (final chat in candidates) {
+      if (_chatMatchesQuery(chat, query) &&
+          addTarget(FanOutTarget.chat(chat))) {
+        if (results.length >= _maxAutocompleteSuggestions) {
+          return results;
+        }
+      }
+    }
+
+    for (final address in knownAddresses) {
+      if (address.toLowerCase().startsWith(query) &&
+          addTarget(FanOutTarget.address(address: address))) {
+        if (results.length >= _maxAutocompleteSuggestions) {
+          return results;
+        }
+      }
+    }
+
+    final atIndex = query.indexOf('@');
+    if (atIndex >= 0) {
+      final localPart = trimmed.substring(0, atIndex);
+      final typedDomain = query.substring(atIndex + 1);
+      if (localPart.isNotEmpty) {
+        for (final domain in prioritizedDomains) {
+          if (!domain.startsWith(typedDomain)) continue;
+          final done = addTarget(
+            FanOutTarget.address(address: '$localPart@$domain'),
+          );
+          if (done) {
+            return results;
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  bool _chatMatchesQuery(Chat chat, String query) {
+    final title = chat.title.toLowerCase();
+    final jid = chat.jid.toLowerCase();
+    final email = chat.emailAddress?.toLowerCase() ?? '';
+    final display = chat.contactDisplayName?.toLowerCase() ?? '';
+    return title.startsWith(query) ||
+        jid.startsWith(query) ||
+        (email.isNotEmpty && email.startsWith(query)) ||
+        (display.isNotEmpty && display.startsWith(query));
   }
 }
 
@@ -543,7 +628,6 @@ class _RecipientChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final shadColors = context.colorScheme;
     final included = recipient.included;
     final colorfulAvatars = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.colorfulAvatars,
@@ -584,15 +668,6 @@ class _RecipientChip extends StatelessWidget {
                   color: foreground,
                 ),
               ),
-            if (_showWarning)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(
-                  Icons.warning_rounded,
-                  size: 14,
-                  color: shadColors.destructive,
-                ),
-              ),
             Flexible(child: Text(_label)),
           ],
         ),
@@ -630,8 +705,6 @@ class _RecipientChip extends StatelessWidget {
 
   bool get _showLock =>
       recipient.target.chat?.encryptionProtocol.isNotNone ?? false;
-
-  bool get _showWarning => recipient.target.chat == null;
 
   Color _chipColor(BuildContext context, bool colorfulAvatars) {
     if (!colorfulAvatars) {
@@ -779,6 +852,87 @@ class _AnimatedChipWrapper extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _AutocompleteOptionsList extends StatelessWidget {
+  const _AutocompleteOptionsList({
+    required this.options,
+    required this.onSelected,
+  });
+
+  final List<FanOutTarget> options;
+  final ValueChanged<FanOutTarget> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (options.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final height = math.min(
+      options.length * _suggestionTileHeight,
+      _suggestionMaxHeight,
+    );
+    final scrollable = options.length * _suggestionTileHeight > height;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 220),
+      child: SizedBox(
+        height: height,
+        child: ListView.builder(
+          padding: EdgeInsets.zero,
+          physics: scrollable
+              ? const ClampingScrollPhysics()
+              : const NeverScrollableScrollPhysics(),
+          itemExtent: _suggestionTileHeight,
+          itemCount: options.length,
+          itemBuilder: (context, index) {
+            final option = options[index];
+            final chat = option.chat;
+            final title = chat?.title ?? option.address ?? '';
+            final subtitleSource =
+                chat?.emailAddress ?? chat?.jid ?? option.address ?? '';
+            final subtitle = subtitleSource == title ? null : subtitleSource;
+            return ListTile(
+              dense: true,
+              leading: _SuggestionAvatar(option: option),
+              title: Text(title),
+              subtitle: subtitle == null ? null : Text(subtitle),
+              onTap: () => onSelected(option),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionAvatar extends StatelessWidget {
+  const _SuggestionAvatar({required this.option});
+
+  final FanOutTarget option;
+
+  @override
+  Widget build(BuildContext context) {
+    if (option.chat != null) {
+      return AxiAvatar(
+        jid: option.chat!.jid,
+        size: 32,
+        shape: AxiAvatarShape.circle,
+      );
+    }
+    final address = option.address ?? option.chat?.emailAddress ?? '';
+    final background = stringToColor(address);
+    return CircleAvatar(
+      backgroundColor: background,
+      radius: 16,
+      child: Text(
+        address.isEmpty ? '?' : address.substring(0, 1).toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
