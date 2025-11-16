@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -24,6 +25,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -379,6 +381,8 @@ class MaterialAxichat extends StatelessWidget {
               brightness: brightness,
             );
             final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
+            final actionsEnabled = context.watch<AuthenticationCubit>().state
+                is AuthenticationComplete;
             final routedContent = MultiBlocListener(
               listeners: [
                 BlocListener<AuthenticationCubit, AuthenticationState>(
@@ -406,10 +410,25 @@ class MaterialAxichat extends StatelessWidget {
                 ],
               ),
             );
-            return AnnotatedRegion<SystemUiOverlayStyle>(
+            Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
               value: overlayStyle,
               child: routedContent,
             );
+            content = ScrollConfiguration(
+              behavior: const AxiDragScrollBehavior(),
+              child: content,
+            );
+            content = EnvScope(
+              child: _ShortcutBindings(
+                enabled: actionsEnabled,
+                router: _router,
+                child: _DesktopMenuShell(
+                  actionsEnabled: actionsEnabled,
+                  child: content,
+                ),
+              ),
+            );
+            return content;
           },
         );
       },
@@ -449,6 +468,253 @@ extension ThemeExtension on BuildContext {
       AppTheme.tokens(
         brightness: Theme.of(this).brightness,
       );
+}
+
+class ComposeIntent extends Intent {
+  const ComposeIntent();
+}
+
+class ToggleSearchIntent extends Intent {
+  const ToggleSearchIntent();
+}
+
+class ToggleCalendarIntent extends Intent {
+  const ToggleCalendarIntent();
+}
+
+class _ShortcutBindings extends StatelessWidget {
+  const _ShortcutBindings({
+    required this.enabled,
+    required this.router,
+    required this.child,
+  });
+
+  final bool enabled;
+  final GoRouter router;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return child;
+    }
+    final env = EnvScope.of(context);
+    final routedChild = Actions(
+      actions: {
+        ComposeIntent: CallbackAction<ComposeIntent>(
+          onInvoke: (_) {
+            router.push(
+              const ComposeRoute().location,
+              extra: {
+                'locate': context.read,
+                'attachments': const <String>[],
+              },
+            );
+            return null;
+          },
+        ),
+      },
+      child: child,
+    );
+    final shortcuts = <ShortcutActivator, Intent>{
+      _composeActivator(env.platform): const ComposeIntent(),
+      _searchActivator(env.platform): const ToggleSearchIntent(),
+    };
+    if (env.supportsDesktopShortcuts) {
+      shortcuts[_calendarActivator(env.platform)] =
+          const ToggleCalendarIntent();
+    }
+    return Focus(
+      autofocus: true,
+      child: Shortcuts(
+        shortcuts: shortcuts,
+        child: routedChild,
+      ),
+    );
+  }
+}
+
+class _DesktopMenuShell extends StatelessWidget {
+  const _DesktopMenuShell({
+    required this.actionsEnabled,
+    required this.child,
+  });
+
+  final bool actionsEnabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final env = EnvScope.maybeOf(context);
+    if (!actionsEnabled || env == null || !env.usesDesktopMenu) {
+      return child;
+    }
+    final composeShortcut = _composeActivator(env.platform);
+    final searchShortcut = _searchActivator(env.platform);
+    final calendarShortcut =
+        env.supportsDesktopShortcuts ? _calendarActivator(env.platform) : null;
+
+    Widget scopedChild = child;
+    if (env.platform == TargetPlatform.macOS) {
+      scopedChild = PlatformMenuBar(
+        menus: _buildPlatformMenus(
+          context: context,
+          compose: composeShortcut,
+          search: searchShortcut,
+          calendar: calendarShortcut,
+        ),
+        child: scopedChild,
+      );
+    } else {
+      final menuButtons = _buildMenuButtons(
+        context: context,
+        compose: composeShortcut,
+        search: searchShortcut,
+        calendar: calendarShortcut,
+      );
+      if (menuButtons.isNotEmpty) {
+        scopedChild = Column(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              elevation: 1,
+              child: MenuBar(
+                children: menuButtons,
+              ),
+            ),
+            Expanded(child: scopedChild),
+          ],
+        );
+      }
+    }
+    return scopedChild;
+  }
+}
+
+List<PlatformMenuItem> _buildPlatformMenus({
+  required BuildContext context,
+  required MenuSerializableShortcut compose,
+  required MenuSerializableShortcut search,
+  MenuSerializableShortcut? calendar,
+}) {
+  return [
+    PlatformMenu(
+      label: 'File',
+      menus: [
+        PlatformMenuItem(
+          label: 'New Message',
+          shortcut: compose,
+          onSelected: () => _invokeIntent(context, const ComposeIntent()),
+        ),
+      ],
+    ),
+    PlatformMenu(
+      label: 'View',
+      menus: [
+        PlatformMenuItem(
+          label: 'Toggle Search',
+          shortcut: search,
+          onSelected: () => _invokeIntent(context, const ToggleSearchIntent()),
+        ),
+        if (calendar != null)
+          PlatformMenuItem(
+            label: 'Toggle Calendar Panel',
+            shortcut: calendar,
+            onSelected: () =>
+                _invokeIntent(context, const ToggleCalendarIntent()),
+          ),
+      ],
+    ),
+  ];
+}
+
+List<Widget> _buildMenuButtons({
+  required BuildContext context,
+  required MenuSerializableShortcut compose,
+  required MenuSerializableShortcut search,
+  MenuSerializableShortcut? calendar,
+}) {
+  return [
+    SubmenuButton(
+      menuChildren: [
+        MenuItemButton(
+          shortcut: compose,
+          onPressed: () => _invokeIntent(context, const ComposeIntent()),
+          child: const Text('New Message'),
+        ),
+      ],
+      child: const Text('File'),
+    ),
+    SubmenuButton(
+      menuChildren: [
+        MenuItemButton(
+          shortcut: search,
+          onPressed: () => _invokeIntent(context, const ToggleSearchIntent()),
+          child: const Text('Toggle Search'),
+        ),
+        if (calendar != null)
+          MenuItemButton(
+            shortcut: calendar,
+            onPressed: () =>
+                _invokeIntent(context, const ToggleCalendarIntent()),
+            child: const Text('Toggle Calendar Panel'),
+          ),
+      ],
+      child: const Text('View'),
+    ),
+  ];
+}
+
+void _invokeIntent(BuildContext context, Intent intent) {
+  final targetContext = primaryFocus?.context ?? context;
+  Actions.maybeInvoke(targetContext, intent);
+}
+
+SingleActivator _composeActivator(TargetPlatform platform) {
+  final isApple = _isApplePlatform(platform);
+  return SingleActivator(
+    LogicalKeyboardKey.keyN,
+    meta: isApple,
+    control: !isApple,
+  );
+}
+
+SingleActivator _searchActivator(TargetPlatform platform) {
+  final isApple = _isApplePlatform(platform);
+  return SingleActivator(
+    LogicalKeyboardKey.keyF,
+    meta: isApple,
+    control: !isApple,
+  );
+}
+
+SingleActivator _calendarActivator(TargetPlatform platform) {
+  final isApple = _isApplePlatform(platform);
+  return SingleActivator(
+    LogicalKeyboardKey.keyC,
+    meta: isApple,
+    control: !isApple,
+    shift: true,
+  );
+}
+
+bool _isApplePlatform(TargetPlatform platform) {
+  return platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
+}
+
+class AxiDragScrollBehavior extends MaterialScrollBehavior {
+  const AxiDragScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.unknown,
+      };
 }
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {

@@ -7,6 +7,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
@@ -170,22 +171,26 @@ class _DraftFormState extends State<DraftForm> {
                       Expanded(
                         child: SizedBox(
                           height: _draftComposerControlExtent,
-                          child: AxiTextFormField(
-                            controller: _subjectTextController,
-                            focusNode: _subjectFocusNode,
-                            enabled: enabled,
-                            minLines: 1,
-                            maxLines: 1,
-                            textInputAction: TextInputAction.next,
-                            onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-                            placeholder: const Text('Subject (optional)'),
-                            constraints: const BoxConstraints(
-                              minHeight: _draftComposerControlExtent,
-                            ),
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            placeholderAlignment: Alignment.centerLeft,
-                            inputPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
+                          child: Semantics(
+                            label: 'Email subject',
+                            textField: true,
+                            child: AxiTextFormField(
+                              controller: _subjectTextController,
+                              focusNode: _subjectFocusNode,
+                              enabled: enabled,
+                              minLines: 1,
+                              maxLines: 1,
+                              textInputAction: TextInputAction.next,
+                              onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+                              placeholder: const Text('Subject (optional)'),
+                              constraints: const BoxConstraints(
+                                minHeight: _draftComposerControlExtent,
+                              ),
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              placeholderAlignment: Alignment.centerLeft,
+                              inputPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -206,13 +211,17 @@ class _DraftFormState extends State<DraftForm> {
                 const SizedBox(height: 12),
                 Padding(
                   padding: horizontalPadding,
-                  child: AxiTextFormField(
-                    controller: _bodyTextController,
-                    focusNode: _bodyFocusNode,
-                    enabled: enabled,
-                    minLines: 7,
-                    maxLines: 7,
-                    placeholder: const Text('Message'),
+                  child: Semantics(
+                    label: 'Message body',
+                    textField: true,
+                    child: AxiTextFormField(
+                      controller: _bodyTextController,
+                      focusNode: _bodyFocusNode,
+                      enabled: enabled,
+                      minLines: 7,
+                      maxLines: 7,
+                      placeholder: const Text('Message'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -573,6 +582,9 @@ class _DraftFormState extends State<DraftForm> {
   Widget _buildAttachmentsSection({required bool enabled}) {
     final attachments = _pendingAttachments;
     final canSelectAttachment = enabled && !_addingAttachment;
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final useDesktopMenu = commandSurface == CommandSurface.menu;
     final addHandler = !enabled ? null : _handleAttachmentAdded;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,7 +614,10 @@ class _DraftFormState extends State<DraftForm> {
             onRetry: _handlePendingAttachmentRetry,
             onRemove: _handlePendingAttachmentRemoved,
             onPressed: _handlePendingAttachmentPressed,
-            onLongPress: _handlePendingAttachmentLongPressed,
+            onLongPress:
+                useDesktopMenu ? null : _handlePendingAttachmentLongPressed,
+            contextMenuBuilder:
+                useDesktopMenu ? _buildAttachmentMenuItems : null,
           ),
       ],
     );
@@ -611,11 +626,40 @@ class _DraftFormState extends State<DraftForm> {
   void _handlePendingAttachmentRetry(String id) {}
 
   void _handlePendingAttachmentPressed(PendingAttachment pending) {
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    if (commandSurface == CommandSurface.menu) {
+      if (pending.attachment.isImage) {
+        _showAttachmentPreview(pending);
+      }
+      return;
+    }
     _showPendingAttachmentActions(pending);
   }
 
   void _handlePendingAttachmentLongPressed(PendingAttachment pending) {
     _showPendingAttachmentActions(pending);
+  }
+
+  List<Widget> _buildAttachmentMenuItems(PendingAttachment pending) {
+    final items = <Widget>[];
+    if (pending.attachment.isImage) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(LucideIcons.image),
+          onPressed: () => _showAttachmentPreview(pending),
+          child: const Text('Preview'),
+        ),
+      );
+    }
+    items.add(
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.trash2),
+        onPressed: () => _handlePendingAttachmentRemoved(pending.id),
+        child: const Text('Remove attachment'),
+      ),
+    );
+    return items;
   }
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {

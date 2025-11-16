@@ -5,6 +5,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class PendingAttachmentList extends StatelessWidget {
@@ -15,6 +16,7 @@ class PendingAttachmentList extends StatelessWidget {
     required this.onRemove,
     this.onPressed,
     this.onLongPress,
+    this.contextMenuBuilder,
   });
 
   final List<PendingAttachment> attachments;
@@ -22,6 +24,7 @@ class PendingAttachmentList extends StatelessWidget {
   final ValueChanged<String> onRemove;
   final ValueChanged<PendingAttachment>? onPressed;
   final ValueChanged<PendingAttachment>? onLongPress;
+  final List<Widget> Function(PendingAttachment pending)? contextMenuBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +42,7 @@ class PendingAttachmentList extends StatelessWidget {
                 onPressed: onPressed == null ? null : () => onPressed!(pending),
                 onLongPress:
                     onLongPress == null ? null : () => onLongPress!(pending),
+                contextMenuBuilder: contextMenuBuilder,
               ),
             )
             .toList(),
@@ -47,13 +51,14 @@ class PendingAttachmentList extends StatelessWidget {
   }
 }
 
-class _PendingAttachmentPreview extends StatelessWidget {
+class _PendingAttachmentPreview extends StatefulWidget {
   const _PendingAttachmentPreview({
     required this.pending,
     required this.onRetry,
     required this.onRemove,
     this.onPressed,
     this.onLongPress,
+    this.contextMenuBuilder,
   });
 
   final PendingAttachment pending;
@@ -61,37 +66,122 @@ class _PendingAttachmentPreview extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
+  final List<Widget> Function(PendingAttachment pending)? contextMenuBuilder;
+
+  @override
+  State<_PendingAttachmentPreview> createState() =>
+      _PendingAttachmentPreviewState();
+}
+
+class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
+  late final ShadContextMenuController _menuController =
+      ShadContextMenuController();
+
+  @override
+  void dispose() {
+    _menuController.dispose();
+    super.dispose();
+  }
+
+  void _showMenu() {
+    if (!mounted) return;
+    _menuController.show();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pending = widget.pending;
     Widget preview;
     if (pending.attachment.isImage) {
       preview = _PendingImageAttachment(
         pending: pending,
-        onRetry: onRetry,
-        onRemove: onRemove,
+        onRetry: widget.onRetry,
+        onRemove: widget.onRemove,
       );
     } else {
       preview = _PendingFileAttachment(
         pending: pending,
-        onRetry: onRetry,
-        onRemove: onRemove,
+        onRetry: widget.onRetry,
+        onRemove: widget.onRemove,
       );
     }
-    if (onPressed == null && onLongPress == null) {
+    final hasGesture = widget.onPressed != null || widget.onLongPress != null;
+    final builder = widget.contextMenuBuilder;
+    if (!hasGesture && builder == null) {
       return preview;
     }
-    final borderRadius = BorderRadius.circular(16);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: onPressed,
-        onLongPress: onLongPress ?? onPressed,
-        child: preview,
-      ),
+    Widget interactive = preview;
+    if (hasGesture) {
+      final borderRadius = BorderRadius.circular(16);
+      interactive = Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: borderRadius,
+          onTap: widget.onPressed,
+          onLongPress: widget.onLongPress ?? widget.onPressed,
+          child: preview,
+        ),
+      );
+    }
+    var items = <Widget>[];
+    if (builder != null) {
+      items = builder(pending);
+    }
+    final hasMenu = items.isNotEmpty;
+    if (!hasGesture && !hasMenu) {
+      return preview;
+    }
+    if (hasMenu) {
+      final allowLongPress =
+          widget.onLongPress != null || widget.contextMenuBuilder != null;
+      interactive = Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.contextMenu):
+              _ShowAttachmentMenuIntent(),
+          SingleActivator(LogicalKeyboardKey.f10, shift: true):
+              _ShowAttachmentMenuIntent(),
+        },
+        child: Actions(
+          actions: {
+            _ShowAttachmentMenuIntent:
+                CallbackAction<_ShowAttachmentMenuIntent>(
+              onInvoke: (_) {
+                _showMenu();
+                return null;
+              },
+            ),
+          },
+          child: AxiContextMenuRegion(
+            controller: _menuController,
+            longPressEnabled: allowLongPress,
+            items: items,
+            child: interactive,
+          ),
+        ),
+      );
+    }
+
+    final attachment = pending.attachment;
+    final sizeLabel = formatBytes(attachment.sizeBytes);
+    final statusMessage = _statusLabel(pending.status);
+    final hasTapHandler = widget.onPressed != null;
+    final semanticsOnTap = widget.onPressed ?? (hasMenu ? _showMenu : null);
+    final semanticsOnLongPress =
+        widget.onLongPress ?? (hasMenu ? _showMenu : null);
+
+    return Semantics(
+      label: '${attachment.fileName}, $sizeLabel',
+      hint: hasMenu ? '$statusMessage. Open menu for actions.' : statusMessage,
+      button: hasTapHandler || hasMenu,
+      onTap: semanticsOnTap,
+      onLongPress: semanticsOnLongPress,
+      child: interactive,
     );
   }
+}
+
+class _ShowAttachmentMenuIntent extends Intent {
+  const _ShowAttachmentMenuIntent();
 }
 
 class _PendingImageAttachment extends StatelessWidget {

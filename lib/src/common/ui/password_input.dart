@@ -13,6 +13,7 @@ class PasswordInput extends StatefulWidget {
     this.enabled = false,
     this.confirmValidator,
     this.validator,
+    this.semanticsLabel,
   });
 
   final bool enabled;
@@ -20,6 +21,7 @@ class PasswordInput extends StatefulWidget {
   final String? Function(String)? confirmValidator;
   final FormFieldValidator<String>? validator;
   final TextEditingController controller;
+  final String? semanticsLabel;
 
   @override
   State<PasswordInput> createState() => _PasswordInputState();
@@ -30,42 +32,50 @@ class _PasswordInputState extends State<PasswordInput> {
 
   @override
   Widget build(BuildContext context) {
-    return AxiTextFormField(
-      placeholder: Text(widget.placeholder ??
-          (widget.confirmValidator != null ? 'Confirm password' : 'Password')),
-      enabled: widget.enabled,
-      obscureText: obscure,
-      controller: widget.controller,
-      trailing: ShadIconButton(
-        backgroundColor: context.colorScheme.muted,
-        foregroundColor: context.colorScheme.mutedForeground,
-        width: 24,
-        height: 24,
-        padding: EdgeInsets.zero,
-        decoration: const ShadDecoration(
-          secondaryBorder: ShadBorder.none,
-          secondaryFocusedBorder: ShadBorder.none,
+    final defaultLabel =
+        widget.confirmValidator != null ? 'Confirm password' : 'Password';
+    final semanticsLabel = widget.semanticsLabel ?? defaultLabel;
+    return Semantics(
+      label: semanticsLabel,
+      textField: true,
+      child: AxiTextFormField(
+        placeholder: Text(
+          widget.placeholder ?? defaultLabel,
         ),
-        icon: Icon(
-          obscure ? LucideIcons.eyeOff : LucideIcons.eye,
-          size: 16,
-        ),
-        onPressed: () {
-          setState(() => obscure = !obscure);
+        enabled: widget.enabled,
+        obscureText: obscure,
+        controller: widget.controller,
+        trailing: ShadIconButton(
+          backgroundColor: context.colorScheme.muted,
+          foregroundColor: context.colorScheme.mutedForeground,
+          width: 24,
+          height: 24,
+          padding: EdgeInsets.zero,
+          decoration: const ShadDecoration(
+            secondaryBorder: ShadBorder.none,
+            secondaryFocusedBorder: ShadBorder.none,
+          ),
+          icon: Icon(
+            obscure ? LucideIcons.eyeOff : LucideIcons.eye,
+            size: 16,
+          ),
+          onPressed: () {
+            setState(() => obscure = !obscure);
+          },
+        ).withTapBounce(),
+        validator: (text) {
+          final confirmationValidator =
+              widget.confirmValidator ?? _defaultValidator;
+          final baseResult = confirmationValidator(text);
+          if (baseResult != null) {
+            return baseResult;
+          }
+          if (widget.validator != null) {
+            return widget.validator!(text);
+          }
+          return null;
         },
-      ).withTapBounce(),
-      validator: (text) {
-        final confirmationValidator =
-            widget.confirmValidator ?? _defaultValidator;
-        final baseResult = confirmationValidator(text);
-        if (baseResult != null) {
-          return baseResult;
-        }
-        if (widget.validator != null) {
-          return widget.validator!(text);
-        }
-        return null;
-      },
+      ),
     );
   }
 

@@ -52,6 +52,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final _focusNode = FocusNode();
   bool _expanded = false;
   late bool _barCollapsed;
+  bool _headerFocused = false;
   late List<ComposerRecipient> _renderedRecipients;
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
@@ -159,38 +160,76 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggleBarCollapsed,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Send to...',
-                      style: headerStyle,
-                    ),
+          FocusableActionDetector(
+            shortcuts: const {
+              SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+              SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+            },
+            actions: {
+              ActivateIntent: CallbackAction<ActivateIntent>(
+                onInvoke: (_) {
+                  _toggleBarCollapsed();
+                  return null;
+                },
+              ),
+            },
+            onShowFocusHighlight: (focused) {
+              if (_headerFocused == focused) return;
+              setState(() => _headerFocused = focused);
+            },
+            child: Semantics(
+              container: true,
+              button: true,
+              toggled: !_barCollapsed,
+              label:
+                  'Recipients ${recipients.length}, ${_barCollapsed ? 'collapsed' : 'expanded'}',
+              hint: _barCollapsed ? 'Press to expand' : 'Press to collapse',
+              onTap: _toggleBarCollapsed,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleBarCollapsed,
+                child: AnimatedContainer(
+                  duration: _barAnimationDuration,
+                  curve: Curves.easeInOutCubic,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: _headerFocused
+                        ? Border.all(
+                            color: colors.primary,
+                            width: 1.5,
+                          )
+                        : null,
                   ),
-                  const SizedBox(width: 8),
-                  _RecipientsCountBadge(
-                    count: recipients.length,
-                    expanded: !_barCollapsed,
-                    colors: colors,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Send to...',
+                          style: headerStyle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _RecipientsCountBadge(
+                        count: recipients.length,
+                        expanded: !_barCollapsed,
+                        colors: colors,
+                      ),
+                      const SizedBox(width: 4),
+                      AnimatedSwitcher(
+                        duration: _barAnimationDuration,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: Icon(
+                          arrowIcon,
+                          key: ValueKey<bool>(_barCollapsed),
+                          size: 18,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  AnimatedSwitcher(
-                    duration: _barAnimationDuration,
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    child: Icon(
-                      arrowIcon,
-                      key: ValueKey<bool>(_barCollapsed),
-                      size: 18,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
