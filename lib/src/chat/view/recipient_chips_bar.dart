@@ -22,6 +22,7 @@ class RecipientChipsBar extends StatefulWidget {
     required this.onRecipientToggled,
     required this.onRecipientRemoved,
     required this.latestStatuses,
+    this.collapsedByDefault = false,
   });
 
   final List<ComposerRecipient> recipients;
@@ -30,6 +31,7 @@ class RecipientChipsBar extends StatefulWidget {
   final ValueChanged<String> onRecipientToggled;
   final ValueChanged<String> onRecipientRemoved;
   final Map<String, FanOutRecipientState> latestStatuses;
+  final bool collapsedByDefault;
 
   @override
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
@@ -42,7 +44,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _expanded = false;
-  bool _barCollapsed = false;
+  late bool _barCollapsed;
   late List<ComposerRecipient> _renderedRecipients;
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
@@ -54,6 +56,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     super.initState();
     _focusNode.onKeyEvent = _handleKeyEvent;
     _renderedRecipients = _visibleRecipientsForState();
+    _barCollapsed = widget.collapsedByDefault;
     _collapseController = AnimationController(
       vsync: this,
       duration: _barAnimationDuration,
@@ -68,6 +71,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
+      _barCollapsed = widget.collapsedByDefault;
+      _animateCollapse(_barCollapsed);
+    }
     _syncRenderedRecipients();
   }
 
@@ -402,7 +409,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     setState(() {
       _barCollapsed = next;
     });
-    if (next) {
+    _animateCollapse(next);
+  }
+
+  void _animateCollapse(bool collapsed) {
+    if (collapsed) {
       _collapseController.animateTo(0);
     } else {
       _collapseController.animateTo(1);

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/bloc_cache.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -52,19 +51,19 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<FanOutTarget> emailTargets,
     required String body,
     String? subject,
-    MessageTransport transport = MessageTransport.xmpp,
     List<EmailAttachment> attachments = const [],
   }) async {
     emit(DraftSending());
     try {
-      if (transport == MessageTransport.email) {
+      if (emailTargets.isNotEmpty || attachments.isNotEmpty) {
         await _sendEmailDraft(
           targets: emailTargets,
           body: body,
           subject: subject,
           attachments: attachments,
         );
-      } else {
+      }
+      if (xmppJids.isNotEmpty) {
         await _sendXmppDraft(
           jids: xmppJids,
           body: body,

@@ -119,7 +119,7 @@ const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
 const _selectionCutoutDepth = 16.0;
 const _selectionCutoutRadius = 16.0;
-const _selectionCutoutPadding = EdgeInsets.all(6);
+const _selectionCutoutPadding = EdgeInsets.fromLTRB(2, 6, 2, 6);
 const _selectionCutoutOffset = Offset.zero;
 const _selectionCutoutThickness = SelectionIndicator.size + 12.0;
 const _selectionCutoutCornerClearance = 0.0;
@@ -127,6 +127,7 @@ const _selectionBubbleInteriorInset = _selectionCutoutDepth + 6.0;
 const _selectionBubbleVerticalInset = 4.0;
 const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
+const _selectionIndicatorInteriorGap = 6.0;
 const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
@@ -614,6 +615,7 @@ class _ChatState extends State<Chat> {
   var _chatRoute = _ChatRoute.main;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
+  final _selectedMessageSnapshots = <String, Message>{};
   final _messageKeys = <String, GlobalKey>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
@@ -699,7 +701,7 @@ class _ChatState extends State<Chat> {
         decoration: InputDecoration(
           hintText: 'Subject',
           hintStyle: context.textTheme.muted.copyWith(
-            color: colors.mutedForeground,
+            color: colors.mutedForeground.withValues(alpha: 0.9),
           ),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
@@ -906,7 +908,6 @@ class _ChatState extends State<Chat> {
   }
 
   Widget _buildComposer({
-    required bool emailCapable,
     required String hintText,
     required List<ComposerRecipient> recipients,
     required List<chat_models.Chat> availableChats,
@@ -979,7 +980,6 @@ class _ChatState extends State<Chat> {
                     onSend: _handleSendMessage,
                     header: subjectHeader,
                     actions: _buildComposerAccessories(
-                      emailCapable: emailCapable,
                       canSend: sendEnabled,
                     ),
                     sendEnabled: sendEnabled,
@@ -1049,6 +1049,7 @@ class _ChatState extends State<Chat> {
           recipients: recipients,
           availableChats: availableChats,
           latestStatuses: latestStatuses,
+          collapsedByDefault: true,
           onRecipientAdded: (target) =>
               context.read<ChatBloc>().add(ChatComposerRecipientAdded(target)),
           onRecipientRemoved: (key) =>
@@ -1128,13 +1129,12 @@ class _ChatState extends State<Chat> {
   }
 
   List<ChatComposerAccessory> _buildComposerAccessories({
-    required bool emailCapable,
     required bool canSend,
   }) {
     final accessories = <ChatComposerAccessory>[
       ChatComposerAccessory.leading(child: _buildEmojiButton()),
       ChatComposerAccessory.leading(
-        child: _buildAttachmentButton(emailCapable: emailCapable),
+        child: _buildAttachmentButton(),
       ),
       ChatComposerAccessory.trailing(
         child: _buildSendButton(enabled: canSend),
@@ -1162,15 +1162,11 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Widget _buildAttachmentButton({required bool emailCapable}) {
+  Widget _buildAttachmentButton() {
     return _cutoutIconButton(
       icon: LucideIcons.paperclip,
       tooltip: 'Attachments',
-      onPressed: emailCapable
-          ? (_sendingAttachment ? null : _handleAttachmentPressed)
-          : () => _showAttachmentInfoDialog(
-                supportsEmail: emailCapable,
-              ),
+      onPressed: _sendingAttachment ? null : _handleAttachmentPressed,
     );
   }
 
@@ -1271,32 +1267,6 @@ class _ChatState extends State<Chat> {
         });
       }
     }
-  }
-
-  Future<void> _showAttachmentInfoDialog({
-    required bool supportsEmail,
-  }) async {
-    if (!mounted) return;
-    final message = supportsEmail
-        ? 'Attachments are temporarily unavailable.'
-        : 'This chat does not support email fallback yet, so attachments '
-            'cannot be sent.';
-    await showShadDialog<void>(
-      context: context,
-      builder: (dialogContext) => ShadDialog(
-        title: const Text('Attachments unavailable'),
-        actions: [
-          ShadButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
-          ).withTapBounce(),
-        ],
-        child: Text(
-          message,
-          style: dialogContext.textTheme.small,
-        ),
-      ),
-    );
   }
 
   void _handlePendingAttachmentPressed(PendingAttachment pending) {
@@ -1443,10 +1413,11 @@ class _ChatState extends State<Chat> {
     return origin & renderBox.size;
   }
 
-  void _toggleMessageSelection(String messageId) {
+  void _toggleMessageSelection(Message message) {
     if (widget.readOnly) return;
+    final messageId = message.stanzaID;
     if (_multiSelectActive) {
-      _toggleMultiSelectMessage(messageId);
+      _toggleMultiSelectMessage(message);
       return;
     }
     if (_selectedMessageId == messageId) {
@@ -1473,7 +1444,8 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  void _startMultiSelect(String messageId) {
+  void _startMultiSelect(Message message) {
+    final messageId = message.stanzaID;
     if (widget.readOnly) return;
     if (_multiSelectedMessageIds.length == 1 &&
         _multiSelectedMessageIds.contains(messageId) &&
@@ -1485,17 +1457,23 @@ class _ChatState extends State<Chat> {
       _multiSelectedMessageIds
         ..clear()
         ..add(messageId);
+      _selectedMessageSnapshots
+        ..clear()
+        ..[messageId] = message;
     });
   }
 
-  void _toggleMultiSelectMessage(String messageId) {
+  void _toggleMultiSelectMessage(Message message) {
+    final messageId = message.stanzaID;
     if (widget.readOnly) return;
     final mutated = _multiSelectedMessageIds.contains(messageId);
     setState(() {
       if (mutated) {
         _multiSelectedMessageIds.remove(messageId);
+        _selectedMessageSnapshots.remove(messageId);
       } else {
         _multiSelectedMessageIds.add(messageId);
+        _selectedMessageSnapshots[messageId] = message;
       }
     });
   }
@@ -1504,6 +1482,7 @@ class _ChatState extends State<Chat> {
     if (_multiSelectedMessageIds.isEmpty) return;
     setState(() {
       _multiSelectedMessageIds.clear();
+      _selectedMessageSnapshots.clear();
     });
   }
 
@@ -1513,28 +1492,56 @@ class _ChatState extends State<Chat> {
   }
 
   void _pruneMessageSelection(Set<String> availableIds) {
-    if (_multiSelectActive) {
-      final missing = _multiSelectedMessageIds
-          .where((id) => !availableIds.contains(id))
-          .toList();
-      if (missing.isEmpty) return;
-      final missingSet = missing.toSet();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _multiSelectedMessageIds.removeWhere(missingSet.contains);
-        });
+    if (!_multiSelectActive) return;
+    final missing = _multiSelectedMessageIds
+        .where(
+          (id) =>
+              !availableIds.contains(id) &&
+              !_selectedMessageSnapshots.containsKey(id),
+        )
+        .toList();
+    if (missing.isEmpty) return;
+    final missingSet = missing.toSet();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _multiSelectedMessageIds.removeWhere(missingSet.contains);
       });
-    }
+    });
   }
 
   List<Message> _collectSelectedMessages(List<Message> orderedMessages) {
     if (_multiSelectedMessageIds.isEmpty) return const [];
     final selected = <Message>[];
+    final resolvedIds = <String>{};
     for (final message in orderedMessages) {
-      if (_multiSelectedMessageIds.contains(message.stanzaID)) {
+      final id = message.stanzaID;
+      if (_multiSelectedMessageIds.contains(id)) {
         selected.add(message);
+        resolvedIds.add(id);
+        _selectedMessageSnapshots[id] = message;
       }
+    }
+    if (selected.length == _multiSelectedMessageIds.length) {
+      return selected;
+    }
+    final missingIds = <String>[];
+    for (final id in _multiSelectedMessageIds) {
+      if (resolvedIds.contains(id)) continue;
+      final snapshot = _selectedMessageSnapshots[id];
+      if (snapshot != null) {
+        selected.add(snapshot);
+      } else {
+        missingIds.add(id);
+      }
+    }
+    if (missingIds.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _multiSelectedMessageIds.removeWhere(missingIds.contains);
+        });
+      });
     }
     return selected;
   }
@@ -2497,7 +2504,7 @@ class _ChatState extends State<Chat> {
                                     );
                                     final composerHintText = isDefaultEmail
                                         ? 'Send email message'
-                                        : 'Send ${state.chat?.encryptionProtocol.isNone ?? false ? 'plaintext' : 'encrypted'} message';
+                                        : 'Send message';
                                     Widget quoteSection;
                                     final quoting = state.quoting;
                                     if (quoting == null) {
@@ -2846,15 +2853,26 @@ class _ChatState extends State<Chat> {
                                                   Widget? selectionOverlay;
                                                   CutoutStyle? selectionStyle;
                                                   if (_multiSelectActive) {
-                                                    selectionOverlay =
+                                                    final indicator =
                                                         SelectionIndicator(
                                                       visible: true,
                                                       selected:
                                                           isMultiSelection,
                                                       onPressed: () =>
                                                           _toggleMultiSelectMessage(
-                                                        messageModel.stanzaID,
+                                                        messageModel,
                                                       ),
+                                                    );
+                                                    selectionOverlay = Padding(
+                                                      padding: EdgeInsets.only(
+                                                        left: self
+                                                            ? 0
+                                                            : _selectionIndicatorInteriorGap,
+                                                        right: self
+                                                            ? _selectionIndicatorInteriorGap
+                                                            : 0,
+                                                      ),
+                                                      child: indicator,
                                                     );
                                                     selectionStyle =
                                                         const CutoutStyle(
@@ -3085,8 +3103,16 @@ class _ChatState extends State<Chat> {
                                                     chainedNext: chainedNext,
                                                     isSelected: isSelected,
                                                   );
+                                                  final selectionAllowance =
+                                                      selectionOverlay != null
+                                                          ? _selectionOuterInset
+                                                          : 0.0;
                                                   final bubbleMaxWidth =
-                                                      clampedBubbleWidth;
+                                                      math.min(
+                                                    messageRowMaxWidth,
+                                                    clampedBubbleWidth +
+                                                        selectionAllowance,
+                                                  );
                                                   final bubbleConstraints =
                                                       BoxConstraints(
                                                     maxWidth: bubbleMaxWidth,
@@ -3344,8 +3370,7 @@ class _ChatState extends State<Chat> {
                                                         ? null
                                                         : () =>
                                                             _startMultiSelect(
-                                                              messageModel
-                                                                  .stanzaID,
+                                                              messageModel,
                                                             ),
                                                     onResend: canResend
                                                         ? () => context
@@ -3522,7 +3547,7 @@ class _ChatState extends State<Chat> {
                                                     onTap: () {
                                                       if (_multiSelectActive) {
                                                         _toggleMultiSelectMessage(
-                                                          messageModel.stanzaID,
+                                                          messageModel,
                                                         );
                                                       } else if (isSingleSelection) {
                                                         _clearMessageSelection();
@@ -3532,8 +3557,7 @@ class _ChatState extends State<Chat> {
                                                         ? null
                                                         : () =>
                                                             _toggleMessageSelection(
-                                                              messageModel
-                                                                  .stanzaID,
+                                                              messageModel,
                                                             ),
                                                     child: bubbleDisplay,
                                                   );
@@ -3611,7 +3635,6 @@ class _ChatState extends State<Chat> {
                                           )
                                         else
                                           _buildComposer(
-                                            emailCapable: supportsEmail,
                                             hintText: composerHintText,
                                             recipients: recipients,
                                             availableChats: availableChats,
@@ -4738,7 +4761,7 @@ class _MessageArrivalAnimator extends StatefulWidget {
 class _MessageArrivalAnimatorState extends State<_MessageArrivalAnimator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late final Animation<double> _size;
+  late final Animation<double> _opacity;
   late final Animation<Offset> _slide;
   late bool _completed;
 
@@ -4754,9 +4777,9 @@ class _MessageArrivalAnimatorState extends State<_MessageArrivalAnimator>
       parent: _controller,
       curve: _messageArrivalCurve,
     );
-    _size = curve;
+    _opacity = curve;
     _slide = Tween<Offset>(
-      begin: Offset(widget.isSelf ? 0.15 : -0.15, 0.1),
+      begin: Offset(widget.isSelf ? 0.22 : -0.22, 0.0),
       end: Offset.zero,
     ).animate(curve);
     _controller.addStatusListener(_handleStatus);
@@ -4801,15 +4824,11 @@ class _MessageArrivalAnimatorState extends State<_MessageArrivalAnimator>
     if (_completed) {
       return widget.child;
     }
-    return SizeTransition(
-      sizeFactor: _size,
-      axisAlignment: -1,
-      child: FadeTransition(
-        opacity: _size,
-        child: SlideTransition(
-          position: _slide,
-          child: widget.child,
-        ),
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
       ),
     );
   }
@@ -4866,10 +4885,11 @@ class _MessageSelectionToolbar extends StatelessWidget {
                       style: textTheme.muted,
                     ),
                   ),
-                  ShadButton.outline(
+                  AxiIconButton(
+                    iconData: LucideIcons.x,
+                    tooltip: 'Clear selection',
                     onPressed: onClear,
-                    child: const Text('Cancel'),
-                  ).withTapBounce(),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
