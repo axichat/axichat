@@ -40,7 +40,8 @@ class CalendarNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
-    final double horizontalPadding = spec.gridHorizontalPadding;
+    final double horizontalPadding =
+        sidebarVisible ? spec.gridHorizontalPadding : 0;
     final bool isCompact = ResponsiveHelper.isCompact(context);
     final CalendarView viewMode = state.viewMode;
     final bool showBackToWeek = !isCompact && viewMode == CalendarView.day;
@@ -111,19 +112,8 @@ class CalendarNavigation extends StatelessWidget {
           undoRedoGroup: undoRedoGroup,
         );
 
-        final bool showMobileChrome = isCompact;
-        final Border? border = showMobileChrome
-            ? Border(bottom: BorderSide(color: colors.border))
-            : null;
-        final List<BoxShadow> navShadows = showMobileChrome
-            ? const [
-                BoxShadow(
-                  color: Color(0x0F000000),
-                  blurRadius: 14,
-                  offset: Offset(0, 4),
-                ),
-              ]
-            : const [];
+        const Border? border = null;
+        const List<BoxShadow> navShadows = [];
         final brightness = Theme.of(context).brightness;
         final Color navBackground = brightness == Brightness.dark
             ? Theme.of(context).colorScheme.surface
