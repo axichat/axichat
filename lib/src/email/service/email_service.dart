@@ -213,10 +213,16 @@ class EmailService {
       await _credentialStore.write(key: provisionedKey, value: 'false');
     }
 
+    final needsProvisioning = !alreadyProvisioned;
+    final startedForProvisioning = needsProvisioning && !_running;
+    if (startedForProvisioning) {
+      await start();
+    }
+
     final normalizedAddress = address;
     final normalizedPassword = password;
 
-    if (!alreadyProvisioned) {
+    if (needsProvisioning) {
       _log.info('Configuring Chatmail account credentials');
       try {
         await _transport.configureAccount(
@@ -241,6 +247,9 @@ class EmailService {
             credentialsMutated && mapped.code != DeltaChatErrorCode.network;
         if (shouldClearCredentials) {
           await _clearCredentials(scope);
+        }
+        if (startedForProvisioning) {
+          await stop();
         }
         if (mapped.code == DeltaChatErrorCode.network) {
           throw const EmailProvisioningException(

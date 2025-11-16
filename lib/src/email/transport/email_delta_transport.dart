@@ -7,6 +7,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 
 import '../sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
@@ -655,9 +656,23 @@ class EmailDeltaTransport implements ChatTransport {
     if (parent.path != directory.path) {
       await parent.create(recursive: true);
     }
+    Future<void> _logAccountsDirState(String reason) async {
+      final entries = <String>[];
+      if (await directory.exists()) {
+        await for (final entity in directory.list()) {
+          entries.add(p.basename(entity.path));
+        }
+      }
+      _log.warning(
+        'Delta accounts initialization failed during $reason '
+        '(dirExists=${await directory.exists()}, contents=$entries)',
+      );
+    }
+
     try {
       return await _deltaSafe.createAccounts(directory: directory.path);
     } on DeltaSafeException catch (error, stackTrace) {
+      await _logAccountsDirState('initial create');
       _log.warning(
         'Failed to open Delta accounts at ${directory.path}, resetting storage',
         error,
