@@ -634,15 +634,14 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   double _actionBarBottomInset(BuildContext context) {
-    if (widget.isSheet) {
-      return calendarGutterLg;
-    }
     final mediaQuery = MediaQuery.of(context);
     final double keyboardInset = mediaQuery.viewInsets.bottom;
-    if (keyboardInset <= 0) {
-      return calendarGutterLg;
+    final double safePadding =
+        widget.isSheet ? mediaQuery.viewPadding.bottom : 0;
+    if (keyboardInset <= safePadding) {
+      return 0;
     }
-    return keyboardInset + calendarGutterSm;
+    return keyboardInset - safePadding;
   }
 
   void _showSnackBar(String message) {

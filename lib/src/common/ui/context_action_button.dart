@@ -24,22 +24,36 @@ class ContextActionButton extends StatelessWidget {
     final textStyle = destructive
         ? context.textTheme.small.copyWith(color: destructiveColor)
         : null;
-    return ShadButton.outline(
-      onPressed: onPressed,
-      child: IconTheme.merge(
-        data: IconThemeData(color: destructiveColor),
-        child: DefaultTextStyle.merge(
-          style: textStyle,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              icon,
-              const SizedBox(width: 6),
-              Text(label),
-            ],
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    return Semantics(
+      button: true,
+      enabled: onPressed != null,
+      label: label,
+      child: ShadButton.outline(
+        onPressed: onPressed,
+        child: IconTheme.merge(
+          data: IconThemeData(color: destructiveColor),
+          child: DefaultTextStyle.merge(
+            style: textStyle,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                icon,
+                SizedBox(width: scaled(6)),
+                Flexible(
+                  child: Text(
+                    label,
+                    softWrap: true,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    ).withTapBounce(enabled: onPressed != null);
+      ).withTapBounce(enabled: onPressed != null),
+    );
   }
 }

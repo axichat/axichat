@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -38,7 +40,8 @@ class CalendarNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
-    final double horizontalPadding = spec.gridHorizontalPadding;
+    final double horizontalPadding =
+        sidebarVisible ? spec.gridHorizontalPadding : 0;
     final bool isCompact = ResponsiveHelper.isCompact(context);
     final CalendarView viewMode = state.viewMode;
     final bool showBackToWeek = !isCompact && viewMode == CalendarView.day;
@@ -86,8 +89,6 @@ class CalendarNavigation extends StatelessWidget {
     const double verticalPadding = calendarInsetMd;
     final Widget undoRedoGroup = _buildUndoRedoGroup(context);
     final colors = context.colorScheme;
-
-    SystemMouseCursors.basic;
     return LayoutBuilder(
       builder: (context, constraints) {
         final double safeMaxWidth = constraints.maxWidth.isFinite
@@ -111,49 +112,51 @@ class CalendarNavigation extends StatelessWidget {
           undoRedoGroup: undoRedoGroup,
         );
 
-        return Container(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            verticalPadding,
-            horizontalPadding,
-            verticalPadding,
-          ),
-          decoration: BoxDecoration(
-            color: colors.background,
-            border: Border(
-              bottom: BorderSide(color: colors.border),
+        const Border? border = null;
+        const List<BoxShadow> navShadows = [];
+        final brightness = Theme.of(context).brightness;
+        final Color navBackground = brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.surface
+            : calendarSidebarBackgroundColor;
+        return ColoredBox(
+          color: navBackground,
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              verticalPadding,
+              horizontalPadding,
+              verticalPadding,
             ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0F000000),
-                blurRadius: 14,
-                offset: Offset(0, 4),
+            decoration: BoxDecoration(
+              color: navBackground,
+              border: border,
+              boxShadow: navShadows,
+            ),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.mutedForeground,
               ),
-            ],
-          ),
-          child: DefaultTextStyle.merge(
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.mutedForeground,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: navRow,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: navRow,
+                    ),
                   ),
-                ),
-                SizedBox(width: navSpacing),
-                Flexible(
-                  flex: 0,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: trailingRow,
+                  SizedBox(width: navSpacing),
+                  Flexible(
+                    flex: 0,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: trailingRow,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -245,14 +248,24 @@ class CalendarNavigation extends StatelessWidget {
             hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
           );
     if (!compact) {
-      return button;
+      return _wrapWithCursor(button, onPressed != null);
     }
-    return Tooltip(
-      message: tooltip ?? label,
-      child: SizedBox(
-        height: 40,
-        child: button,
+    return _wrapWithCursor(
+      Tooltip(
+        message: tooltip ?? label,
+        child: SizedBox(
+          height: 40,
+          child: button,
+        ),
       ),
+      onPressed != null,
+    );
+  }
+
+  Widget _wrapWithCursor(Widget child, bool enabled) {
+    return MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: child,
     );
   }
 
@@ -329,7 +342,7 @@ class CalendarNavigation extends StatelessWidget {
         child: control,
       );
     }
-    return control;
+    return _wrapWithCursor(control, enabled);
   }
 
   Widget _compactNavButton({
@@ -373,7 +386,7 @@ class CalendarNavigation extends StatelessWidget {
         child: control,
       );
     }
-    return control;
+    return _wrapWithCursor(control, enabled);
   }
 
   Widget _buildNavRow({
@@ -491,45 +504,48 @@ class _DateLabelState extends State<_DateLabel> {
       link: _link,
       child: SizedBox(
         height: 40,
-        child: ShadButton.outline(
-          size: ShadButtonSize.sm,
-          onPressed: _toggleOverlay,
-          foregroundColor: textColor,
-          hoverForegroundColor: calendarPrimaryColor,
-          hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 16,
-                color: iconColor,
-              ),
-              if (!hideText) ...[
-                const SizedBox(width: calendarGutterSm),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 260),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                      letterSpacing: 0.1,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: ShadButton.outline(
+            size: ShadButtonSize.sm,
+            onPressed: _toggleOverlay,
+            foregroundColor: textColor,
+            hoverForegroundColor: calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryColor.withValues(alpha: 0.08),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 16,
+                  color: iconColor,
+                ),
+                if (!hideText) ...[
+                  const SizedBox(width: calendarGutterSm),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 260),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                        letterSpacing: 0.1,
+                      ),
                     ),
                   ),
+                ],
+                const SizedBox(width: calendarInsetLg),
+                Icon(
+                  isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  size: 18,
+                  color: iconColor,
                 ),
               ],
-              const SizedBox(width: calendarInsetLg),
-              Icon(
-                isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                size: 18,
-                color: iconColor,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -636,6 +652,9 @@ class _DateLabelState extends State<_DateLabel> {
             final double keyboardInset = media.viewInsets.bottom;
             final double bottomInset =
                 keyboardInset > safeBottom ? keyboardInset : safeBottom;
+            final double fixedBottomPadding =
+                math.max(12.0, modalMargin.bottom * 0.6);
+            final double bottomPadding = fixedBottomPadding + bottomInset;
             return AnimatedPadding(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
@@ -643,7 +662,7 @@ class _DateLabelState extends State<_DateLabel> {
                 left: leftPadding,
                 right: rightPadding,
                 top: topPadding,
-                bottom: modalMargin.bottom + bottomInset,
+                bottom: bottomPadding,
               ),
               child: _CalendarDropdown(
                 margin: EdgeInsets.zero,
@@ -884,18 +903,22 @@ class _CalendarDropdown extends StatelessWidget {
     required IconData icon,
     required VoidCallback onPressed,
   }) {
-    return SizedBox(
-      width: 32,
-      height: 32,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          side: const BorderSide(color: calendarBorderColor),
-          foregroundColor: calendarSubtitleColor,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            padding: EdgeInsets.zero,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            side: const BorderSide(color: calendarBorderColor),
+            foregroundColor: calendarSubtitleColor,
+          ),
+          child: Icon(icon, size: 18),
         ),
-        child: Icon(icon, size: 18),
       ),
     );
   }

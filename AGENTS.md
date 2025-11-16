@@ -24,6 +24,7 @@
 ## Coding Style & Naming Conventions
 
 - Use 2-space indentation, trailing commas to aid `dart format`, and snake_case file names; classes/enums remain in PascalCase.
+- Reusable UI must be implemented as `StatelessWidget`/`StatefulWidget` classes—do not expose widgets as helper functions or builders.
 - Name BLoC layers consistently (`FeatureBloc`, `FeatureState`, `FeatureEvent`) inside their owning feature folders.
 - Prefer explicit types, exhaustive `switch` statements, cascade operators, and intent-revealing names (`checkOmemoSupport`, `startOmemoOperation`).
 - Keep logging consistent by reusing the existing `Logger` instances—never leave `print` in production paths—and avoid leaking sensitive data.

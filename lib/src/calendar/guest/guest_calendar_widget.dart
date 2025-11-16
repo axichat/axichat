@@ -1,5 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -91,60 +93,87 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
             isLandscapePhone && baseSizeClass == CalendarSizeClass.expanded
                 ? CalendarSizeClass.medium
                 : baseSizeClass;
-        final bool usesMobileLayout = layoutClass == CalendarSizeClass.compact;
-        _usesMobileLayout = usesMobileLayout;
-        final bool highlightTasksTab = usesMobileLayout &&
+        final bool usesDesktopLayout =
+            _shouldUseDesktopLayout(layoutClass, mediaQuery);
+        _usesMobileLayout = !usesDesktopLayout;
+        final bool highlightTasksTab = !usesDesktopLayout &&
             state.isSelectionMode &&
             _mobileTabController.index != 1;
-        final Widget activeLayout = switch (layoutClass) {
-          CalendarSizeClass.compact =>
-            _buildMobileLayout(state, highlightTasksTab),
-          CalendarSizeClass.medium => _buildTabletLayout(state),
-          CalendarSizeClass.expanded => _buildDesktopLayout(state),
-        };
+        final Widget activeLayout = usesDesktopLayout
+            ? _buildDesktopLayout(state)
+            : _buildMobileLayout(state, highlightTasksTab);
         _updateTasksTabPulse(highlightTasksTab);
-        return CalendarKeyboardScope(
-          autofocus: true,
-          canUndo: state.canUndo,
-          canRedo: state.canRedo,
-          onUndo: () {
-            context
-                .read<GuestCalendarBloc>()
-                .add(const CalendarEvent.undoRequested());
-          },
-          onRedo: () {
-            context
-                .read<GuestCalendarBloc>()
-                .add(const CalendarEvent.redoRequested());
-          },
-          child: CalendarTaskFeedbackObserver<GuestCalendarBloc>(
-            child: Scaffold(
-              backgroundColor: calendarBackgroundColor,
-              body: Stack(
-                children: [
-                  SafeArea(
-                    top: true,
-                    bottom: false,
-                    child: Column(
-                      children: [
-                        // Guest banner at very top
-                        _buildGuestBanner(),
-
-                        // New structure: Row with sidebar OUTSIDE of navigation column
-                        Expanded(child: activeLayout),
-                      ],
-                    ),
+        final Color surfaceColor = _calendarSurfaceColor(context);
+        return SizedBox.expand(
+          child: ColoredBox(
+            color: surfaceColor,
+            child: CalendarKeyboardScope(
+              autofocus: true,
+              canUndo: state.canUndo,
+              canRedo: state.canRedo,
+              onUndo: () {
+                context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.undoRequested());
+              },
+              onRedo: () {
+                context
+                    .read<GuestCalendarBloc>()
+                    .add(const CalendarEvent.redoRequested());
+              },
+              child: CalendarTaskFeedbackObserver<GuestCalendarBloc>(
+                child: Scaffold(
+                  backgroundColor: surfaceColor,
+                  body: Stack(
+                    children: [
+                      SafeArea(
+                        top: true,
+                        bottom: false,
+                        child: Column(
+                          children: [
+                            _buildGuestBanner(),
+                            Expanded(child: activeLayout),
+                          ],
+                        ),
+                      ),
+                      if (state.isLoading) _buildLoadingOverlay(),
+                    ],
                   ),
-
-                  // Loading overlay
-                  if (state.isLoading) _buildLoadingOverlay(),
-                ],
+                ),
               ),
             ),
           ),
         );
       },
     );
+  }
+
+  Color _calendarSurfaceColor(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.brightness == Brightness.dark
+        ? theme.colorScheme.surface
+        : calendarSidebarBackgroundColor;
+  }
+
+  bool _shouldUseDesktopLayout(
+    CalendarSizeClass sizeClass,
+    MediaQueryData mediaQuery,
+  ) {
+    final bool desktopPlatform = switch (defaultTargetPlatform) {
+      TargetPlatform.macOS => true,
+      TargetPlatform.windows => true,
+      TargetPlatform.linux => true,
+      TargetPlatform.fuchsia => true,
+      TargetPlatform.android => false,
+      TargetPlatform.iOS => false,
+    };
+    if (!desktopPlatform) {
+      return false;
+    }
+    if (sizeClass != CalendarSizeClass.expanded) {
+      return false;
+    }
+    return mediaQuery.size.width >= largeScreen;
   }
 
   Widget _buildGuestBanner() {
@@ -311,85 +340,6 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
         _buildMobileTabBar(
           context,
           highlightTasksTab: highlightTasksTab,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabletLayout(CalendarState state) {
-    final spec = ResponsiveHelper.spec(context);
-    final EdgeInsets contentPadding = spec.contentPadding;
-    final colors = context.colorScheme;
-    final sidebarDimensions = ResponsiveHelper.sidebarDimensions(context);
-    final double sidebarWidth = sidebarDimensions.defaultWidth;
-
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            contentPadding.left,
-            contentPadding.top,
-            contentPadding.right,
-            calendarGutterSm,
-          ),
-          child: CalendarNavigation(
-            state: state,
-            sidebarVisible: true,
-            onDateSelected: (date) => _calendarBloc?.add(
-              CalendarEvent.dateSelected(date: date),
-            ),
-            onViewChanged: (view) => _calendarBloc?.add(
-              CalendarEvent.viewChanged(view: view),
-            ),
-            onErrorCleared: () => _calendarBloc?.add(
-              const CalendarEvent.errorCleared(),
-            ),
-            onUndo: () => _calendarBloc?.add(
-              const CalendarEvent.undoRequested(),
-            ),
-            onRedo: () => _calendarBloc?.add(
-              const CalendarEvent.redoRequested(),
-            ),
-            canUndo: state.canUndo,
-            canRedo: state.canRedo,
-          ),
-        ),
-        if (state.error != null)
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: contentPadding.left,
-            ),
-            child: _buildErrorBanner(state),
-          ),
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              contentPadding.left,
-              calendarGutterSm,
-              contentPadding.right,
-              contentPadding.bottom,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildCalendarGridWithHandlers(state),
-                ),
-                const SizedBox(width: calendarGutterLg),
-                Container(
-                  width: 1,
-                  margin: const EdgeInsets.symmetric(
-                    vertical: calendarGutterLg,
-                  ),
-                  color: colors.border,
-                ),
-                const SizedBox(width: calendarGutterLg),
-                SizedBox(
-                  width: sidebarWidth,
-                  child: _buildSidebarWithProvider(),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     );

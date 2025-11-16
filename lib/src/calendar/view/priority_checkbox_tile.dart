@@ -32,67 +32,73 @@ class PriorityCheckboxTile extends StatelessWidget {
     final bool tristate = isIndeterminate;
     final bool? checkboxValue = isIndeterminate ? null : value;
 
-    return InkWell(
-      onTap: isEnabled ? () => onChanged!(!value) : null,
-      borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd, vertical: 10),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isEnabled ? borderColor : calendarBorderColor,
-            width: borderWidth,
+    return MouseRegion(
+      cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: isEnabled ? () => onChanged!(!value) : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd, vertical: 10),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isEnabled ? borderColor : calendarBorderColor,
+              width: borderWidth,
+            ),
+            boxShadow: showShadow
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.16),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : const [],
           ),
-          boxShadow: showShadow
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.16),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Checkbox(
+                    value: checkboxValue,
+                    tristate: tristate,
+                    activeColor: color,
+                    checkColor: Colors.white,
+                    mouseCursor: isEnabled
+                        ? SystemMouseCursors.click
+                        : SystemMouseCursors.basic,
+                    side: BorderSide(
+                      color: isEnabled ? borderColor : calendarBorderColor,
+                      width: borderWidth,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    onChanged: isEnabled
+                        ? (checked) => onChanged!(checked ?? false)
+                        : null,
                   ),
-                ]
-              : const [],
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 44,
-              height: 44,
-              child: Center(
-                child: Checkbox(
-                  value: checkboxValue,
-                  tristate: tristate,
-                  activeColor: color,
-                  checkColor: Colors.white,
-                  side: BorderSide(
-                    color: isEnabled ? borderColor : calendarBorderColor,
-                    width: borderWidth,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  onChanged: isEnabled
-                      ? (checked) => onChanged!(checked ?? false)
-                      : null,
                 ),
               ),
-            ),
-            const SizedBox(width: calendarFormGap),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                  color: isEnabled ? textColor : disabledColor,
+              const SizedBox(width: calendarFormGap),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    color: isEnabled ? textColor : disabledColor,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

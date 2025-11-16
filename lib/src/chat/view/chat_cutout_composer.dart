@@ -87,12 +87,16 @@ class ChatCutoutComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final headerAwareTopInset = header == null ? _kVerticalInset : 8.0;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final horizontalInset = scaled(_kHorizontalInset);
+    final verticalInset = scaled(_kVerticalInset);
+    final headerAwareTopInset = header == null ? verticalInset : scaled(8);
     final padding = EdgeInsetsDirectional.fromSTEB(
-      _kHorizontalInset,
+      horizontalInset,
       headerAwareTopInset,
-      _kHorizontalInset,
-      _kVerticalInset,
+      horizontalInset,
+      verticalInset,
     );
     final shortcuts = sendEnabled
         ? const <ShortcutActivator, Intent>{
@@ -114,13 +118,13 @@ class ChatCutoutComposer extends StatelessWidget {
     );
     final cursorHeight = textStyle.fontSize == null
         ? null
-        : textStyle.fontSize! * textStyle.height!;
+        : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
 
     return CutoutSurface(
       backgroundColor: colors.card,
       borderColor: colors.border,
       shape: SquircleBorder(
-        cornerRadius: 18,
+        cornerRadius: scaled(18),
         side: BorderSide(color: colors.border),
       ),
       cutouts: actions
@@ -143,15 +147,15 @@ class ChatCutoutComposer extends StatelessWidget {
           children: [
             if (header != null) ...[
               Padding(
-                padding: const EdgeInsets.only(bottom: 2),
+                padding: EdgeInsets.only(bottom: scaled(2)),
                 child: header!,
               ),
               Divider(
                 height: 1,
-                thickness: 1,
+                thickness: scaled(1),
                 color: colors.border.withValues(alpha: 0.5),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: scaled(8)),
             ],
             Shortcuts(
               shortcuts: shortcuts,
