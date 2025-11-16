@@ -7,7 +7,6 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
@@ -54,7 +53,6 @@ class _DraftFormState extends State<DraftForm> {
   late List<PendingAttachment> _pendingAttachments;
 
   late var id = widget.id;
-  late MessageTransport _transport;
   bool _loadingAttachments = false;
   bool _addingAttachment = false;
   int _pendingAttachmentSeed = 0;
@@ -71,7 +69,6 @@ class _DraftFormState extends State<DraftForm> {
     _subjectFocusNode = FocusNode();
     _recipients = _initialRecipients();
     _pendingAttachments = const [];
-    _transport = _defaultTransportFor(_recipients);
     if (widget.attachmentMetadataIds.isNotEmpty) {
       unawaited(_hydrateAttachments());
     }
@@ -95,6 +92,7 @@ class _DraftFormState extends State<DraftForm> {
   Widget build(BuildContext context) {
     final chats = context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[];
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 20),
       child: Form(
         child: BlocConsumer<DraftCubit, DraftState>(
           listener: (context, state) {
@@ -117,8 +115,6 @@ class _DraftFormState extends State<DraftForm> {
           },
           builder: (context, state) {
             final enabled = state is! DraftSending;
-            final hasRecipients =
-                _recipients.any((recipient) => recipient.included);
             final bodyText = _bodyTextController.text.trim();
             final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
@@ -127,51 +123,31 @@ class _DraftFormState extends State<DraftForm> {
               (attachment) =>
                   attachment.status == PendingAttachmentStatus.queued,
             );
-            final attachmentsBlocked =
-                _transport == MessageTransport.xmpp && hasAttachments;
+            final split = _splitRecipients(
+              forceEmailAll: hasAttachments,
+            );
+            final hasActiveRecipients = split.hasActiveRecipients;
             final canSave = enabled &&
-                (hasRecipients ||
+                (hasActiveRecipients ||
                     bodyText.isNotEmpty ||
-                    hasAttachments ||
-                    subjectText.isNotEmpty);
+                    subjectText.isNotEmpty ||
+                    hasAttachments);
             final canDiscard = enabled &&
-                (id != null || bodyText.isNotEmpty || hasAttachments);
+                (id != null ||
+                    bodyText.isNotEmpty ||
+                    subjectText.isNotEmpty ||
+                    hasAttachments);
             final canSend = enabled &&
-                hasRecipients &&
-                !attachmentsBlocked &&
-                ((_transport == MessageTransport.email &&
-                        (bodyText.isNotEmpty ||
-                            hasQueuedAttachments ||
-                            subjectText.isNotEmpty)) ||
-                    (_transport == MessageTransport.xmpp &&
-                        bodyText.isNotEmpty));
+                hasActiveRecipients &&
+                (bodyText.isNotEmpty ||
+                    subjectText.isNotEmpty ||
+                    hasAttachments ||
+                    hasQueuedAttachments);
 
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: MessageTransport.values.map((transport) {
-                    final selected = _transport == transport;
-                    final buttonChild = Text(transport.label);
-                    final handler = enabled
-                        ? () => setState(() => _transport = transport)
-                        : null;
-                    if (selected) {
-                      return ShadButton(
-                        onPressed: handler,
-                        child: buttonChild,
-                      ).withTapBounce(enabled: handler != null);
-                    }
-                    return ShadButton.outline(
-                      onPressed: handler,
-                      child: buttonChild,
-                    ).withTapBounce(enabled: handler != null);
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
                 RecipientChipsBar(
                   recipients: _recipients,
                   availableChats: chats,
@@ -179,21 +155,20 @@ class _DraftFormState extends State<DraftForm> {
                   onRecipientRemoved: _handleRecipientRemoved,
                   onRecipientToggled: _handleRecipientToggled,
                   latestStatuses: const {},
+                  collapsedByDefault: true,
                 ),
                 const SizedBox(height: 12),
-                if (_transport == MessageTransport.email) ...[
-                  AxiTextFormField(
-                    controller: _subjectTextController,
-                    focusNode: _subjectFocusNode,
-                    enabled: enabled,
-                    minLines: 1,
-                    maxLines: 1,
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-                    placeholder: const Text('Subject'),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                AxiTextFormField(
+                  controller: _subjectTextController,
+                  focusNode: _subjectFocusNode,
+                  enabled: enabled,
+                  minLines: 1,
+                  maxLines: 1,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+                  placeholder: const Text('Subject (optional)'),
+                ),
+                const SizedBox(height: 12),
                 _buildAttachmentsSection(enabled: enabled),
                 const SizedBox(height: 12),
                 AxiTextFormField(
@@ -210,14 +185,6 @@ class _DraftFormState extends State<DraftForm> {
                     state.message,
                     style: TextStyle(
                       color: context.colorScheme.destructive,
-                    ),
-                  ),
-                if (attachmentsBlocked)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'Attachments send only over email. Switch transports or discard.',
-                      style: context.textTheme.muted,
                     ),
                   ),
                 Row(
@@ -273,25 +240,6 @@ class _DraftFormState extends State<DraftForm> {
       }
     }
     return recipients;
-  }
-
-  MessageTransport _defaultTransportFor(List<ComposerRecipient> recipients) {
-    if (recipients.isEmpty) {
-      return MessageTransport.xmpp;
-    }
-    final hasForeign = recipients.any((recipient) {
-      final address = _recipientAddress(recipient);
-      return !_isAxiDestination(address);
-    });
-    return hasForeign ? MessageTransport.email : MessageTransport.xmpp;
-  }
-
-  String _recipientAddress(ComposerRecipient recipient) {
-    final chat = recipient.target.chat;
-    if (chat != null) {
-      return chat.jid;
-    }
-    return recipient.target.address ?? '';
   }
 
   bool _isAxiDestination(String value) =>
@@ -485,13 +433,25 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleSendDraft() async {
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit == null) return;
+    final hasAttachments = _pendingAttachments.isNotEmpty;
+    final split = _splitRecipients(forceEmailAll: hasAttachments);
+    final xmppJids = split.xmppTargets
+        .where((recipient) => recipient.target.chat != null)
+        .map((recipient) => recipient.target.chat!.jid)
+        .toList();
+    final emailTargets = split.emailTargets.map((recipient) {
+      final chat = recipient.target.chat;
+      if (chat != null) {
+        return FanOutTarget.chat(chat);
+      }
+      return recipient.target;
+    }).toList();
     final succeeded = await draftCubit.sendDraft(
       id: id,
-      xmppJids: _recipientStrings(),
-      emailTargets: _recipientTargets(),
+      xmppJids: xmppJids,
+      emailTargets: emailTargets,
       body: _bodyTextController.text,
       subject: _subjectTextController.text,
-      transport: _transport,
       attachments: _currentAttachments(),
     );
     if (!mounted) {
@@ -518,11 +478,37 @@ class _DraftFormState extends State<DraftForm> {
         .toList();
   }
 
-  List<FanOutTarget> _recipientTargets() {
-    return _recipients
-        .where((recipient) => recipient.included)
-        .map((recipient) => recipient.target)
-        .toList();
+  ({
+    List<ComposerRecipient> emailTargets,
+    List<ComposerRecipient> xmppTargets,
+    bool hasActiveRecipients
+  }) _splitRecipients({
+    required bool forceEmailAll,
+  }) {
+    final emailTargets = <ComposerRecipient>[];
+    final xmppTargets = <ComposerRecipient>[];
+    for (final recipient in _recipients) {
+      if (!recipient.included) continue;
+      if (forceEmailAll) {
+        emailTargets.add(recipient);
+        continue;
+      }
+      final chat = recipient.target.chat;
+      if (chat == null) {
+        emailTargets.add(recipient);
+        continue;
+      }
+      if (_isAxiDestination(chat.jid)) {
+        xmppTargets.add(recipient);
+      } else {
+        emailTargets.add(recipient);
+      }
+    }
+    return (
+      emailTargets: emailTargets,
+      xmppTargets: xmppTargets,
+      hasActiveRecipients: emailTargets.isNotEmpty || xmppTargets.isNotEmpty,
+    );
   }
 
   List<EmailAttachment> _currentAttachments() =>
@@ -545,11 +531,7 @@ class _DraftFormState extends State<DraftForm> {
   Widget _buildAttachmentsSection({required bool enabled}) {
     final attachments = _pendingAttachments;
     final canSelectAttachment = enabled && !_addingAttachment;
-    final addHandler = !enabled
-        ? null
-        : (_transport == MessageTransport.email
-            ? _handleAttachmentAdded
-            : _showAttachmentInfoDialog);
+    final addHandler = !enabled ? null : _handleAttachmentAdded;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -676,26 +658,6 @@ class _DraftFormState extends State<DraftForm> {
           ),
         );
       },
-    );
-  }
-
-  Future<void> _showAttachmentInfoDialog() async {
-    if (!mounted) return;
-    await showShadDialog<void>(
-      context: context,
-      builder: (dialogContext) => ShadDialog(
-        title: const Text('Email only'),
-        actions: [
-          ShadButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
-          ).withTapBounce(),
-        ],
-        child: const Text(
-          'Attachments are only available when sending via email. '
-          'Switch transports to add files.',
-        ),
-      ),
     );
   }
 }

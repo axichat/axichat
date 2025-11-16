@@ -106,7 +106,7 @@ class ComposeScreen extends StatelessWidget {
                     return MultiBlocProvider(
                       providers: providers,
                       child: Container(
-                        margin: EdgeInsets.all(16.0),
+                        margin: const EdgeInsets.symmetric(vertical: 16.0),
                         child: DraftForm(
                           id: id,
                           jids: jids,

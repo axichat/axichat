@@ -674,7 +674,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final chat = state.chat;
     final service = _emailService;
-    if (chat == null || service == null || !chat.supportsEmail) {
+    if (chat == null || service == null) {
+      return;
+    }
+    final recipients = _resolveComposerRecipients(chat);
+    if (!_hasEmailTarget(chat: chat, recipients: recipients)) {
+      emit(
+        _attachToast(
+          state.copyWith(
+            composerError: 'Add an email recipient to send attachments.',
+          ),
+          const ChatToast(
+            message: 'Add an email recipient to send attachments.',
+            variant: ChatToastVariant.warning,
+          ),
+        ),
+      );
       return;
     }
     final quotedDraft = state.quoting;
@@ -1165,6 +1180,28 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emailRecipients: emailRecipients,
       xmppRecipients: xmppRecipients,
     );
+  }
+
+  bool _hasEmailTarget({
+    required Chat chat,
+    required List<ComposerRecipient> recipients,
+  }) {
+    if (chat.supportsEmail || (chat.emailAddress?.isNotEmpty ?? false)) {
+      return true;
+    }
+    for (final recipient in recipients) {
+      final targetChat = recipient.target.chat;
+      if (targetChat != null) {
+        if (targetChat.supportsEmail ||
+            (targetChat.emailAddress?.isNotEmpty ?? false)) {
+          return true;
+        }
+      }
+      if (recipient.target.address?.isNotEmpty ?? false) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
