@@ -651,7 +651,10 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<DeltaAccountsHandle> _createAccounts(String prefix) async {
     final directory = await _accountsDirectory(prefix);
-    await directory.create(recursive: true);
+    final parent = directory.parent;
+    if (parent.path != directory.path) {
+      await parent.create(recursive: true);
+    }
     try {
       return await _deltaSafe.createAccounts(directory: directory.path);
     } on DeltaSafeException catch (error, stackTrace) {
@@ -661,7 +664,9 @@ class EmailDeltaTransport implements ChatTransport {
         stackTrace,
       );
       await _resetAccountsStorage(prefix);
-      await directory.create(recursive: true);
+      if (parent.path != directory.path) {
+        await parent.create(recursive: true);
+      }
       return _deltaSafe.createAccounts(directory: directory.path);
     }
   }
