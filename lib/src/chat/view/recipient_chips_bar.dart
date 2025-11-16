@@ -47,6 +47,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     with SingleTickerProviderStateMixin {
   static const _collapsedVisibleCount = 4;
 
+  final Object _autocompleteTapRegionGroup = Object();
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _expanded = false;
@@ -273,68 +274,72 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           final colors = Theme.of(context).colorScheme;
           final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
           final textStyle = Theme.of(context).textTheme.bodyMedium;
-          return SizedBox(
-            height: _chipHeight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: backgroundColor,
-                    borderRadius: BorderRadius.circular(_chipHeight / 2),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        inputDecorationTheme: const InputDecorationTheme(
-                          isDense: true,
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
+          return TapRegion(
+            groupId: _autocompleteTapRegionGroup,
+            onTapOutside: (_) => focusNode.unfocus(),
+            child: SizedBox(
+              height: _chipHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(_chipHeight / 2),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          inputDecorationTheme: const InputDecorationTheme(
+                            isDense: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
-                      child: TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        cursorColor: colors.primary,
-                        maxLines: 1,
-                        keyboardType: TextInputType.emailAddress,
-                        textCapitalization: TextCapitalization.none,
-                        autocorrect: false,
-                        smartDashesType: SmartDashesType.disabled,
-                        smartQuotesType: SmartQuotesType.disabled,
-                        enableSuggestions: false,
-                        autofillHints: const [AutofillHints.email],
-                        decoration: InputDecoration(
-                          hintText: 'Add...',
-                          hintStyle: textStyle?.copyWith(color: hintColor),
-                        ),
-                        style: textStyle,
-                        strutStyle: textStyle == null
-                            ? null
-                            : StrutStyle.fromTextStyle(textStyle),
-                        textInputAction: TextInputAction.done,
-                        onEditingComplete: () => focusNode.requestFocus(),
-                        textAlignVertical: TextAlignVertical.center,
-                        onSubmitted: (value) {
-                          final trimmed = value.trim();
-                          if (trimmed.isEmpty) {
+                        child: TextField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          cursorColor: colors.primary,
+                          maxLines: 1,
+                          keyboardType: TextInputType.emailAddress,
+                          textCapitalization: TextCapitalization.none,
+                          autocorrect: false,
+                          smartDashesType: SmartDashesType.disabled,
+                          smartQuotesType: SmartQuotesType.disabled,
+                          enableSuggestions: false,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: InputDecoration(
+                            hintText: 'Add...',
+                            hintStyle: textStyle?.copyWith(color: hintColor),
+                          ),
+                          style: textStyle,
+                          strutStyle: textStyle == null
+                              ? null
+                              : StrutStyle.fromTextStyle(textStyle),
+                          textInputAction: TextInputAction.done,
+                          onEditingComplete: () => focusNode.requestFocus(),
+                          textAlignVertical: TextAlignVertical.center,
+                          onSubmitted: (value) {
+                            final trimmed = value.trim();
+                            if (trimmed.isEmpty) {
+                              focusNode.requestFocus();
+                              return;
+                            }
+                            if (_handleManualEntry(trimmed)) {
+                              controller.clear();
+                            } else {
+                              onFieldSubmitted();
+                            }
                             focusNode.requestFocus();
-                            return;
-                          }
-                          if (_handleManualEntry(trimmed)) {
-                            controller.clear();
-                          } else {
-                            onFieldSubmitted();
-                          }
-                          focusNode.requestFocus();
-                        },
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -343,20 +348,54 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
             ),
           );
         },
-        optionsViewBuilder: (context, onSelected, options) => Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(8),
-            child: _AutocompleteOptionsList(
-              options: options.toList(growable: false),
-              onSelected: (option) {
-                onSelected(option);
-                _controller.clear();
-              },
+        optionsViewBuilder: (context, onSelected, options) {
+          if (options.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          final colors = Theme.of(context).colorScheme;
+          final surface = colors.surfaceContainerHigh;
+          final borderColor = colors.outlineVariant.withValues(alpha: 0.6);
+          final shadowColor = colors.shadow.withValues(alpha: 0.25);
+          return TapRegion(
+            groupId: _autocompleteTapRegionGroup,
+            onTapOutside: (_) => _focusNode.unfocus(),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: 260,
+                  maxWidth: 420,
+                  maxHeight: _suggestionMaxHeight,
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: borderColor, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: shadowColor,
+                        offset: const Offset(0, 12),
+                        blurRadius: 28,
+                        spreadRadius: -8,
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: _AutocompleteOptionsList(
+                      options: options.toList(growable: false),
+                      onSelected: (option) {
+                        onSelected(option);
+                        _controller.clear();
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
         onSelected: (option) {
           widget.onRecipientAdded(option);
           _controller.clear();
@@ -536,11 +575,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       'axi.im',
       ...knownDomains.where((domain) => domain != 'axi.im'),
     ];
-    if (query.isEmpty) {
-      return candidates
-          .take(_maxAutocompleteSuggestions)
-          .map(FanOutTarget.chat);
-    }
 
     final results = <FanOutTarget>[];
     final seen = <String>{};
@@ -553,13 +587,20 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return results.length >= _maxAutocompleteSuggestions;
     }
 
-    if (trimmed.isNotEmpty && !trimmed.contains('@')) {
-      for (final domain in prioritizedDomains) {
-        final done = addTarget(
-          FanOutTarget.address(address: '$trimmed@$domain'),
-        );
-        if (done) return results;
+    if (query.isEmpty) {
+      for (final chat in candidates) {
+        if (addTarget(FanOutTarget.chat(chat))) {
+          break;
+        }
       }
+      if (results.length < _maxAutocompleteSuggestions) {
+        for (final address in knownAddresses) {
+          if (addTarget(FanOutTarget.address(address: address))) {
+            break;
+          }
+        }
+      }
+      return results;
     }
 
     for (final chat in candidates) {
@@ -580,13 +621,15 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       }
     }
 
-    final atIndex = query.indexOf('@');
-    if (atIndex >= 0) {
-      final localPart = trimmed.substring(0, atIndex);
-      final typedDomain = query.substring(atIndex + 1);
+    final atIndex = trimmed.indexOf('@');
+    if (atIndex > 0) {
+      final localPart = trimmed.substring(0, atIndex).trim();
+      final typedDomain = trimmed.substring(atIndex + 1).toLowerCase();
       if (localPart.isNotEmpty) {
         for (final domain in prioritizedDomains) {
-          if (!domain.startsWith(typedDomain)) continue;
+          if (typedDomain.isNotEmpty && !domain.startsWith(typedDomain)) {
+            continue;
+          }
           final done = addTarget(
             FanOutTarget.address(address: '$localPart@$domain'),
           );

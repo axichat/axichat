@@ -58,81 +58,78 @@ class _LoginScreenState extends State<LoginScreen> {
                   primaryChild: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 480),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const ShorebirdChecker(),
-                              DecoratedBox(
-                                decoration: ShapeDecoration(
-                                  color: colors.card,
-                                  shape: SquircleBorder(
-                                    cornerRadius: 20,
-                                    side: BorderSide(color: colors.border),
-                                  ),
-                                ),
-                                child: AnimatedCrossFade(
-                                  crossFadeState: _login
-                                      ? CrossFadeState.showFirst
-                                      : CrossFadeState.showSecond,
-                                  duration: context
-                                      .read<SettingsCubit>()
-                                      .animationDuration,
-                                  firstChild: const Padding(
-                                    padding: EdgeInsets.all(24.0),
-                                    child: LoginForm(),
-                                  ),
-                                  secondChild: const Padding(
-                                    padding: EdgeInsets.all(24.0),
-                                    child: SignupForm(),
-                                  ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const ShorebirdChecker(),
+                            DecoratedBox(
+                              decoration: ShapeDecoration(
+                                color: colors.card,
+                                shape: SquircleBorder(
+                                  cornerRadius: 20,
+                                  side: BorderSide(color: colors.border),
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              // NOTE: Keep the morphing auth toggle below for later polish.
-                              /*
-                              _AuthModeToggle(
-                                loginSelected: _login,
-                                duration:
-                                    context.read<SettingsCubit>().animationDuration,
-                                onChanged: (isLogin) {
-                                  if (_login == isLogin) return;
-                                  setState(() {
-                                    _login = isLogin;
-                                  });
-                                },
+                              child: AnimatedCrossFade(
+                                crossFadeState: _login
+                                    ? CrossFadeState.showFirst
+                                    : CrossFadeState.showSecond,
+                                duration: context
+                                    .read<SettingsCubit>()
+                                    .animationDuration,
+                                firstChild: const Padding(
+                                  padding: EdgeInsets.all(24.0),
+                                  child: LoginForm(),
+                                ),
+                                secondChild: const Padding(
+                                  padding: EdgeInsets.all(24.0),
+                                  child: SignupForm(),
+                                ),
                               ),
-                              */
-                              ShadButton.ghost(
-                                onPressed: () {
-                                  setState(() {
-                                    _login = !_login;
-                                  });
-                                },
-                                child: Text(
-                                  _login
-                                      ? 'New? Sign up'
-                                      : 'Already registered? Log in',
-                                ),
-                              ).withTapBounce(),
-                              const SizedBox(height: 18),
-                              ShadButton.outline(
-                                onPressed: () => context.go('/guest-calendar'),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.calendar_today),
-                                    SizedBox(width: 8),
-                                    Text('Try Calendar (Guest Mode)'),
-                                  ],
-                                ),
-                              ).withTapBounce(),
-                              const SizedBox(height: 18),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 12),
+                            // NOTE: Keep the morphing auth toggle below for later polish.
+                            /*
+                            _AuthModeToggle(
+                              loginSelected: _login,
+                              duration:
+                                  context.read<SettingsCubit>().animationDuration,
+                              onChanged: (isLogin) {
+                                if (_login == isLogin) return;
+                                setState(() {
+                                  _login = isLogin;
+                                });
+                              },
+                            ),
+                            */
+                            ShadButton.ghost(
+                              onPressed: () {
+                                setState(() {
+                                  _login = !_login;
+                                });
+                              },
+                              child: Text(
+                                _login
+                                    ? 'New? Sign up'
+                                    : 'Already registered? Log in',
+                              ),
+                            ).withTapBounce(),
+                            const SizedBox(height: 18),
+                            ShadButton.outline(
+                              onPressed: () => context.go('/guest-calendar'),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.calendar_today),
+                                  SizedBox(width: 8),
+                                  Text('Try Calendar (Guest Mode)'),
+                                ],
+                              ),
+                            ).withTapBounce(),
+                            const SizedBox(height: 18),
+                          ],
                         ),
                       ),
                     ),
