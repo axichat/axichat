@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/authentication/models/signup_draft.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -88,6 +89,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         xmppService.connectivityStream.listen((connectionState) {
       if (connectionState == ConnectionState.connected) {
         unawaited(_emailService?.handleNetworkAvailable());
+        unawaited(_flushPendingAccountDeletions());
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
         unawaited(_emailService?.handleNetworkLost());
@@ -97,6 +99,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _foregroundListener = _updateEmailForegroundKeepalive;
       foregroundServiceActive.addListener(_foregroundListener!);
     }
+    unawaited(_flushPendingAccountDeletions());
   }
 
   final _log = Logger('AuthenticationCubit');
@@ -107,9 +110,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   static Uri changePasswordUrl =
       Uri.parse('$baseUrl/register/change_password/');
   static Uri deleteAccountUrl = Uri.parse('$baseUrl/register/delete/');
+  static const String signupCleanupInProgressMessage =
+      'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
 
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
+  final pendingSignupRollbacksKey =
+      CredentialStore.registerKey('pending_signup_rollbacks');
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
@@ -117,8 +124,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final http.Client _httpClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
+  SignupDraft? _signupDraft;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   VoidCallback? _foregroundListener;
+  Future<void>? _pendingAccountDeletionFlush;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -134,6 +143,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
     return super.close();
+  }
+
+  SignupDraft? get signupDraft => _signupDraft;
+
+  void saveSignupDraft(SignupDraft draft) {
+    _signupDraft = draft;
+  }
+
+  void clearSignupDraft() {
+    _signupDraft = null;
   }
 
   Future<void> login({
@@ -270,6 +289,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     emit(const AuthenticationComplete());
+    clearSignupDraft();
     _updateEmailForegroundKeepalive();
   }
 
@@ -282,12 +302,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool rememberMe,
   }) async {
     emit(const AuthenticationSignUpInProgress());
+    final host = state.server;
+    final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
+      username: username,
+      host: host,
+    );
+    if (!cleanupComplete) {
+      emit(const AuthenticationSignupFailure(
+        signupCleanupInProgressMessage,
+      ));
+      return;
+    }
     try {
       final response = await _httpClient.post(
         registrationUrl,
         body: {
           'username': username,
-          'host': state.server,
+          'host': host,
           'password': password,
           'password2': confirmPassword,
           'id': captchaID,
@@ -305,10 +336,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await login(username: username, password: password, rememberMe: rememberMe);
-    if (_lastEmailProvisioningError != null) {
+    final signupComplete = state is AuthenticationComplete;
+    if (!signupComplete || _lastEmailProvisioningError != null) {
       await _rollbackSignup(
         username: username,
-        host: state.server,
+        host: host,
         password: password,
       );
     }
@@ -319,21 +351,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String host,
     required String password,
   }) async {
-    try {
-      await _httpClient.post(
-        AuthenticationCubit.deleteAccountUrl,
-        body: {
-          'username': username,
-          'host': host,
-          'password': password,
-        },
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to roll back signup after email provisioning error',
-          error, stackTrace);
-    } finally {
-      _lastEmailProvisioningError = null;
+    final deletion = _PendingAccountDeletion(
+      username: username,
+      host: host,
+      password: password,
+    );
+    final succeeded = await _performAccountDeletion(deletion);
+    if (!succeeded) {
+      await _enqueuePendingAccountDeletion(deletion);
     }
+    _lastEmailProvisioningError = null;
   }
 
   Future<bool> checkNotPwned({required String password}) async {
@@ -461,4 +488,174 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     }
   }
+
+  Future<void> _enqueuePendingAccountDeletion(
+    _PendingAccountDeletion deletion,
+  ) async {
+    final pending = await _readPendingAccountDeletions();
+    if (pending.any((entry) => entry.matches(deletion))) {
+      return;
+    }
+    pending.add(deletion);
+    await _writePendingAccountDeletions(pending);
+  }
+
+  Future<void> _flushPendingAccountDeletions() {
+    final pendingFlush = _pendingAccountDeletionFlush;
+    if (pendingFlush != null) {
+      return pendingFlush;
+    }
+    final future = _processPendingAccountDeletions();
+    _pendingAccountDeletionFlush = future;
+    return future.whenComplete(() {
+      if (identical(_pendingAccountDeletionFlush, future)) {
+        _pendingAccountDeletionFlush = null;
+      }
+    });
+  }
+
+  Future<void> _processPendingAccountDeletions() async {
+    try {
+      final pending = await _readPendingAccountDeletions();
+      if (pending.isEmpty) {
+        return;
+      }
+      final remaining = <_PendingAccountDeletion>[];
+      for (final request in pending) {
+        final succeeded = await _performAccountDeletion(request);
+        if (!succeeded) {
+          remaining.add(request);
+        }
+      }
+      await _writePendingAccountDeletions(remaining);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to flush pending signup rollbacks',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<bool> _ensureAccountDeletionCleanupComplete({
+    required String username,
+    required String host,
+  }) async {
+    await _flushPendingAccountDeletions();
+    final pending = await _readPendingAccountDeletions();
+    final cleanupPending = pending.any(
+      (entry) => entry.matchesCredentials(username, host),
+    );
+    if (cleanupPending) {
+      _log.warning(
+        'Signup blocked for $username@$host because cleanup is still pending.',
+      );
+    }
+    return !cleanupPending;
+  }
+
+  Future<bool> _performAccountDeletion(
+    _PendingAccountDeletion deletion,
+  ) async {
+    try {
+      final response = await _httpClient.post(
+        AuthenticationCubit.deleteAccountUrl,
+        body: {
+          'username': deletion.username,
+          'host': deletion.host,
+          'password': deletion.password,
+        },
+      );
+      if (response.statusCode == 200) {
+        return true;
+      }
+      _log.warning(
+        'Signup rollback failed with status ${response.statusCode}',
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send signup rollback request',
+        error,
+        stackTrace,
+      );
+    }
+    return false;
+  }
+
+  Future<List<_PendingAccountDeletion>> _readPendingAccountDeletions() async {
+    final serialized =
+        await _credentialStore.read(key: pendingSignupRollbacksKey);
+    if (serialized == null || serialized.isEmpty) {
+      return [];
+    }
+    try {
+      final decoded = jsonDecode(serialized) as List<dynamic>;
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(_PendingAccountDeletion.fromJson)
+          .toList();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to decode pending signup rollbacks',
+        error,
+        stackTrace,
+      );
+      await _credentialStore.delete(key: pendingSignupRollbacksKey);
+      return [];
+    }
+  }
+
+  Future<void> _writePendingAccountDeletions(
+    List<_PendingAccountDeletion> entries,
+  ) async {
+    if (entries.isEmpty) {
+      await _credentialStore.delete(key: pendingSignupRollbacksKey);
+      return;
+    }
+    final serialized =
+        jsonEncode(entries.map((entry) => entry.toJson()).toList());
+    await _credentialStore.write(
+      key: pendingSignupRollbacksKey,
+      value: serialized,
+    );
+  }
+}
+
+class _PendingAccountDeletion {
+  _PendingAccountDeletion({
+    required String username,
+    required String host,
+    required this.password,
+    String? createdAt,
+  })  : username = username.trim().toLowerCase(),
+        host = host.trim().toLowerCase(),
+        createdAt = createdAt ?? DateTime.now().toIso8601String();
+
+  factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
+    return _PendingAccountDeletion(
+      username: (json['username'] as String? ?? '').trim(),
+      host: (json['host'] as String? ?? AuthenticationCubit.domain).trim(),
+      password: json['password'] as String? ?? '',
+      createdAt: json['createdAt'] as String?,
+    );
+  }
+
+  final String username;
+  final String host;
+  final String password;
+  final String createdAt;
+
+  Map<String, String> toJson() => {
+        'username': username,
+        'host': host,
+        'password': password,
+        'createdAt': createdAt,
+      };
+
+  bool matches(_PendingAccountDeletion other) =>
+      matchesCredentials(other.username, other.host);
+
+  bool matchesCredentials(String username, String host) =>
+      this.username == username.trim().toLowerCase() &&
+      this.host == host.trim().toLowerCase();
 }

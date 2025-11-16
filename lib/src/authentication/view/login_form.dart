@@ -11,7 +11,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class LoginForm extends StatefulWidget {
-  const LoginForm({super.key});
+  const LoginForm({super.key, this.onSubmitStart});
+
+  final VoidCallback? onSubmitStart;
 
   static const title = 'Log In';
 
@@ -47,6 +49,7 @@ class _LoginFormState extends State<LoginForm> {
 
   void _onPressed(BuildContext context) async {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
+    widget.onSubmitStart?.call();
     context.read<AuthenticationCubit>().login(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,

@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
@@ -28,6 +31,7 @@ void main() {
   });
 
   late Client mockHttpClient;
+  String? pendingSignupRollbacksPayload;
 
   setUp(() {
     mockXmppService = MockXmppService();
@@ -39,14 +43,40 @@ void main() {
 
     when(() => mockXmppService.omemoActivityStream)
         .thenAnswer((_) => const Stream.empty());
+    when(() => mockXmppService.connectivityStream)
+        .thenAnswer((_) => const Stream<ConnectionState>.empty());
+
+    pendingSignupRollbacksPayload = null;
 
     when(() => mockCredentialStore.read(key: any(named: 'key')))
-        .thenAnswer((_) async => null);
+        .thenAnswer((invocation) async {
+      final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+      if (key.value == 'pending_signup_rollbacks') {
+        return pendingSignupRollbacksPayload;
+      }
+      return null;
+    });
 
     when(() => mockCredentialStore.write(
           key: any(named: 'key'),
           value: any(named: 'value'),
-        )).thenAnswer((_) async => true);
+        )).thenAnswer((invocation) async {
+      final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+      final value = invocation.namedArguments[#value] as String?;
+      if (key.value == 'pending_signup_rollbacks') {
+        pendingSignupRollbacksPayload = value;
+      }
+      return true;
+    });
+
+    when(() => mockCredentialStore.delete(key: any(named: 'key')))
+        .thenAnswer((invocation) async {
+      final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+      if (key.value == 'pending_signup_rollbacks') {
+        pendingSignupRollbacksPayload = null;
+      }
+      return true;
+    });
 
     when(() => mockCredentialStore.close()).thenAnswer((_) async {});
 
@@ -291,6 +321,173 @@ void main() {
         const AuthenticationLogInInProgress(),
         const AuthenticationNone(),
       ],
+    );
+  });
+
+  group('signup', () {
+    const captchaId = 'captcha-id';
+    const captchaText = 'captcha';
+
+    setUp(() {
+      when(() => mockHttpClient.post(
+            AuthenticationCubit.registrationUrl,
+            body: any(named: 'body'),
+          )).thenAnswer((_) async => Response('', 200));
+      when(() => mockHttpClient.post(
+            AuthenticationCubit.deleteAccountUrl,
+            body: any(named: 'body'),
+          )).thenAnswer((_) async => Response('', 200));
+      when(() => mockXmppService.connect(
+            jid: any(named: 'jid'),
+            password: any(named: 'password'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+          )).thenThrow(XmppAuthenticationException());
+    });
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Rolls back the account if login fails after registration.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: true,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (bloc) {
+        verify(() => mockHttpClient.post(
+              AuthenticationCubit.deleteAccountUrl,
+              body: any(named: 'body'),
+            )).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Queues the rollback when delete request fails.',
+      setUp: () {
+        when(() => mockHttpClient.post(
+              AuthenticationCubit.deleteAccountUrl,
+              body: any(named: 'body'),
+            )).thenThrow(Exception('offline'));
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (bloc) {
+        verify(() => mockCredentialStore.write(
+              key: bloc.pendingSignupRollbacksKey,
+              value: any(named: 'value'),
+            )).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Prevents signup until pending cleanup for username completes.',
+      setUp: () {
+        pendingSignupRollbacksPayload = jsonEncode([
+          {
+            'username': validUsername,
+            'host': AuthenticationCubit.domain,
+            'password': 'stale',
+            'createdAt': '2024-01-01T00:00:00.000Z',
+          },
+        ]);
+        when(() => mockHttpClient.post(
+              AuthenticationCubit.deleteAccountUrl,
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => Response('fail', 500));
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationSignupFailure(
+          AuthenticationCubit.signupCleanupInProgressMessage,
+        ),
+      ],
+      verify: (bloc) {
+        verifyNever(() => mockHttpClient.post(
+              AuthenticationCubit.registrationUrl,
+              body: any(named: 'body'),
+            ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Flushes pending cleanup before retrying signup with the same username.',
+      setUp: () {
+        pendingSignupRollbacksPayload = jsonEncode([
+          {
+            'username': validUsername,
+            'host': AuthenticationCubit.domain,
+            'password': 'stale',
+            'createdAt': '2024-01-01T00:00:00.000Z',
+          },
+        ]);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (bloc) {
+        verify(() => mockHttpClient.post(
+              AuthenticationCubit.registrationUrl,
+              body: any(named: 'body'),
+            )).called(1);
+        expect(pendingSignupRollbacksPayload, isNull);
+      },
     );
   });
 

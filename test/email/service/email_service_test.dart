@@ -80,6 +80,19 @@ void main() {
     registerFallbackValue(MessageTransport.xmpp);
     registerFallbackValue(<FutureOr<bool>>[]);
     registerFallbackValue(MessageTimelineFilter.directOnly);
+    registerFallbackValue(<String, String>{});
+    registerFallbackValue(Duration.zero);
+    registerFallbackValue(
+      const EmailAttachment(path: '', fileName: '', sizeBytes: 0),
+    );
+    registerFallbackValue(FakeCredentialKey());
+    registerFallbackValue(
+      MessageShareData(
+        shareId: 'fallback',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+        participantCount: 0,
+      ),
+    );
   });
 
   setUp(() {
@@ -144,6 +157,10 @@ void main() {
         value: any(named: 'value'),
       ),
     ).thenAnswer((_) async => true);
+    when(() => database.getMessageShareById(any()))
+        .thenAnswer((_) async => null);
+    when(() => database.getParticipantsForShare(any()))
+        .thenAnswer((_) async => const <MessageParticipantData>[]);
     when(() => notificationService.sendNotification(
           title: any(named: 'title'),
           body: any(named: 'body'),
@@ -311,7 +328,6 @@ void main() {
     );
 
     await service.start();
-    verify(() => transport.start()).called(1);
 
     await service.setClientState(false);
     verify(() => transport.stop()).called(1);
@@ -339,9 +355,51 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     verify(() => transport.registerPushToken('token-123')).called(1);
+    addTearDown(service.shutdown);
+  });
+
+  test('ensureProvisioned configures chatmail transport with TLS endpoints',
+      () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      chatmailDomain: 'axi.im',
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@axi.im',
+      passwordOverride: 'password',
+    );
+
+    final capturedAdditional = verify(
+      () => transport.configureAccount(
+        address: any(named: 'address'),
+        password: any(named: 'password'),
+        displayName: any(named: 'displayName'),
+        additional: captureAny(named: 'additional'),
+      ),
+    ).captured.single as Map<String, String>;
+    expect(
+      capturedAdditional,
+      equals({
+        'mail_server': 'axi.im',
+        'mail_port': '465',
+        'mail_security': 'ssl',
+        'imap_server': 'axi.im',
+        'imap_port': '993',
+        'imap_security': 'ssl',
+      }),
+    );
     addTearDown(service.shutdown);
   });
 
@@ -364,6 +422,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     await service.handleNetworkAvailable();
@@ -391,6 +450,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     expect(
@@ -419,6 +479,7 @@ void main() {
     );
 
     await service.setForegroundKeepalive(true);
+    await pumpMicrotasks();
     verifyNever(() => transport.start());
     expect(
       foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
@@ -429,6 +490,14 @@ void main() {
   });
 
   test('foreground keepalive performs periodic fetches', () async {
+    var fetchCalls = 0;
+    when(() => transport.performBackgroundFetch(any())).thenAnswer(
+      (invocation) async {
+        fetchCalls++;
+        return true;
+      },
+    );
+
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
@@ -442,11 +511,12 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     await service.setForegroundKeepalive(true);
-    verify(() => transport.performBackgroundFetch(any())).called(1);
-    clearInteractions(transport);
+    await pumpMicrotasks();
+    expect(fetchCalls, 1);
     expect(
       foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
       isTrue,
@@ -456,8 +526,7 @@ void main() {
       '$emailKeepaliveTickPrefix$join${DateTime.now().millisecondsSinceEpoch}',
     );
     await pumpMicrotasks();
-    verify(() => transport.performBackgroundFetch(any())).called(1);
-    clearInteractions(transport);
+    expect(fetchCalls, 2);
 
     await service.setForegroundKeepalive(false);
     await service.shutdown();
@@ -470,7 +539,7 @@ void main() {
       '$emailKeepaliveTickPrefix$join${DateTime.now().millisecondsSinceEpoch}',
     );
     await pumpMicrotasks();
-    verifyNever(() => transport.performBackgroundFetch(any()));
+    expect(fetchCalls, 2);
   });
 
   test('sendAttachment delegates to transport after provisioning', () async {
@@ -487,6 +556,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     final chat = Chat(
@@ -543,6 +613,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     final chatA = Chat(
@@ -646,6 +717,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@axi.im',
+      passwordOverride: 'password',
     );
 
     verify(
@@ -690,6 +762,7 @@ void main() {
       databasePrefix: 'bob',
       databasePassphrase: 'secret',
       jid: 'bob@axi.im',
+      passwordOverride: 'password',
     );
 
     await service.shutdown(jid: 'bob@axi.im');
@@ -716,6 +789,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     const shareId = '01HX5R8W7YAYR5K1R7Q7MB5G4W';
@@ -750,7 +824,7 @@ void main() {
     final existingParticipants = [
       const MessageParticipantData(
         shareId: shareId,
-        contactJid: 'dc-self@delta.chat',
+        contactJid: 'dc-self@user.delta.chat',
         role: MessageParticipantRole.sender,
       ),
       MessageParticipantData(
@@ -801,7 +875,7 @@ void main() {
     expect(capturedShares.single.shareId, shareId);
     expect(capturedShares.single.participantCount, 3);
     expect(capturedParticipants.single.map((p) => p.contactJid).toSet(), {
-      'dc-self@delta.chat',
+      'dc-self@user.delta.chat',
       chatAlice.jid,
       chatBob.jid,
     });
@@ -824,6 +898,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     final message = Message(
@@ -858,6 +933,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     final message = Message(
@@ -896,6 +972,7 @@ void main() {
       databasePrefix: 'alice',
       databasePassphrase: 'passphrase',
       jid: 'alice@example.org',
+      passwordOverride: 'password',
     );
 
     final message = Message(

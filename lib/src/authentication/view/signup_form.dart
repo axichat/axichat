@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/models/signup_draft.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -19,7 +20,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:xml/xml.dart';
 
 class SignupForm extends StatefulWidget {
-  const SignupForm({super.key});
+  const SignupForm({super.key, this.onSubmitStart});
+
+  final VoidCallback? onSubmitStart;
 
   static const title = 'Sign Up';
 
@@ -82,6 +85,7 @@ class _SignupFormState extends State<SignupForm> {
       ..addListener(_handleFieldProgressChanged);
     _captchaTextController = TextEditingController()
       ..addListener(_handleFieldProgressChanged);
+    _restoreSignupDraft(context.read<AuthenticationCubit>().signupDraft);
   }
 
   @override
@@ -119,13 +123,42 @@ class _SignupFormState extends State<SignupForm> {
       _allowInsecureResetTick++;
     }
     setState(() {});
+    _persistSignupDraft();
   }
+
+  void _persistSignupDraft({int? currentStep}) {
+    if (!mounted) return;
+    context.read<AuthenticationCubit>().saveSignupDraft(
+          SignupDraft(
+            username: _jidTextController.text,
+            password: _passwordTextController.text,
+            confirmPassword: _password2TextController.text,
+            captcha: _captchaTextController.text,
+            rememberMe: rememberMe,
+            allowInsecurePassword: allowInsecurePassword,
+            currentStep: currentStep ?? _currentIndex,
+          ),
+        );
+  }
+
+  void _restoreSignupDraft(SignupDraft? draft) {
+    if (draft == null || draft.isEmpty) return;
+    _jidTextController.text = draft.username;
+    _passwordTextController.text = draft.password;
+    _password2TextController.text = draft.confirmPassword;
+    _captchaTextController.text = draft.captcha;
+    allowInsecurePassword = draft.allowInsecurePassword;
+    rememberMe = draft.rememberMe;
+    _currentIndex = draft.currentStep.clamp(0, _formKeys.length - 1);
+  }
+
 
   void _onPressed(BuildContext context) async {
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
       return;
     }
+    widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().signup(
           username: _jidTextController.value.text,
           password: _passwordTextController.value.text,
@@ -499,6 +532,7 @@ class _SignupFormState extends State<SignupForm> {
                         _showBreachedError = false;
                       }
                     });
+                    _persistSignupDraft();
                   },
                 ),
                 AnimatedOpacity(
@@ -588,6 +622,7 @@ class _SignupFormState extends State<SignupForm> {
       _showAllowInsecureError = false;
       _showBreachedError = false;
     });
+    _persistSignupDraft(currentStep: _currentIndex);
   }
 
   @override
@@ -896,9 +931,14 @@ class _SignupFormState extends State<SignupForm> {
                                 padding: const EdgeInsets.only(right: 8),
                                 child: ShadButton.secondary(
                                   enabled: !loading && !isCheckingPwned,
-                                  onPressed: () => setState(() {
-                                    _currentIndex--;
-                                  }),
+                                  onPressed: () {
+                                    setState(() {
+                                      _currentIndex--;
+                                    });
+                                    _persistSignupDraft(
+                                      currentStep: _currentIndex,
+                                    );
+                                  },
                                   child: const Text('Back'),
                                 ).withTapBounce(
                                   enabled: !loading && !isCheckingPwned,

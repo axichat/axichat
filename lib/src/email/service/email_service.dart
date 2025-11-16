@@ -28,6 +28,10 @@ const _notificationFlushDelay = Duration(milliseconds: 500);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
+const _chatmailImapPort = '993';
+const _chatmailSmtpPort = '465';
+const _chatmailSecurityMode = 'ssl';
+const _fallbackChatmailServer = 'axi.im';
 
 class EmailAccount {
   const EmailAccount({required this.address, required this.password});
@@ -209,13 +213,17 @@ class EmailService {
       await _credentialStore.write(key: provisionedKey, value: 'false');
     }
 
+    final normalizedAddress = address!;
+    final normalizedPassword = password!;
+
     if (!alreadyProvisioned) {
       _log.info('Configuring Chatmail account credentials');
       try {
         await _transport.configureAccount(
-          address: address,
-          password: password,
+          address: normalizedAddress,
+          password: normalizedPassword,
           displayName: displayName,
+          additional: _chatmailConnectionConfig(normalizedAddress),
         );
         await _credentialStore.write(key: provisionedKey, value: 'true');
       } on DeltaSafeException catch (error, stackTrace) {
@@ -249,11 +257,14 @@ class EmailService {
       );
     }
 
-    _transport.hydrateAccountAddress(address);
+    _transport.hydrateAccountAddress(normalizedAddress);
     await start();
     await _applyPendingPushToken();
 
-    final account = EmailAccount(address: address, password: password);
+    final account = EmailAccount(
+      address: normalizedAddress,
+      password: normalizedPassword,
+    );
     _activeAccount = account;
     return account;
   }
@@ -1269,6 +1280,35 @@ class EmailService {
     final resolvedDomain =
         _chatmailDomain.isEmpty ? domain : _chatmailDomain.toLowerCase();
     return '$local@$resolvedDomain';
+  }
+
+  Map<String, String> _chatmailConnectionConfig(String address) {
+    final host = _chatmailServerHostFor(address);
+    return {
+      'mail_server': host,
+      'mail_port': _chatmailSmtpPort,
+      'mail_security': _chatmailSecurityMode,
+      'imap_server': host,
+      'imap_port': _chatmailImapPort,
+      'imap_security': _chatmailSecurityMode,
+    };
+  }
+
+  String _chatmailServerHostFor(String address) {
+    final overridden = _chatmailDomain.trim();
+    if (overridden.isNotEmpty) {
+      return overridden.toLowerCase();
+    }
+    return _domainFromAddress(address) ?? _fallbackChatmailServer;
+  }
+
+  String? _domainFromAddress(String address) {
+    final parts = address.split('@');
+    if (parts.length != 2) {
+      return null;
+    }
+    final domain = parts[1].trim().toLowerCase();
+    return domain.isEmpty ? null : domain;
   }
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)
