@@ -25,6 +25,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -804,24 +805,28 @@ class _ChatState extends State<Chat> {
     );
     return SizedBox(
       height: 28,
-      child: TextField(
-        controller: _subjectController,
-        focusNode: _subjectFocusNode,
-        textInputAction: TextInputAction.next,
-        textCapitalization: TextCapitalization.sentences,
-        cursorColor: colors.primary,
-        onSubmitted: (_) => _focusNode.requestFocus(),
-        style: subjectStyle,
-        decoration: InputDecoration(
-          hintText: 'Subject',
-          hintStyle: context.textTheme.muted.copyWith(
-            color: colors.mutedForeground.withValues(alpha: 0.9),
+      child: Semantics(
+        label: 'Email subject',
+        textField: true,
+        child: TextField(
+          controller: _subjectController,
+          focusNode: _subjectFocusNode,
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.sentences,
+          cursorColor: colors.primary,
+          onSubmitted: (_) => _focusNode.requestFocus(),
+          style: subjectStyle,
+          decoration: InputDecoration(
+            hintText: 'Subject',
+            hintStyle: context.textTheme.muted.copyWith(
+              color: colors.mutedForeground.withValues(alpha: 0.9),
+            ),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            isCollapsed: true,
+            contentPadding: EdgeInsets.zero,
           ),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          isCollapsed: true,
-          contentPadding: EdgeInsets.zero,
         ),
       ),
     );
@@ -1165,6 +1170,7 @@ class _ChatState extends State<Chat> {
     required List<chat_models.Chat> availableChats,
     required Map<String, FanOutRecipientState> latestStatuses,
     required List<PendingAttachment> pendingAttachments,
+    required bool isEmailTransport,
     String? composerError,
     bool showAttachmentWarning = false,
     FanOutSendReport? retryReport,
@@ -1184,7 +1190,11 @@ class _ChatState extends State<Chat> {
         _composerHasText || hasQueuedAttachments || hasSubjectText;
     Widget? attachmentTray;
     final subjectHeader = _buildSubjectField(context);
-    final showAttachmentTray = pendingAttachments.isNotEmpty;
+    final showAttachmentTray =
+        isEmailTransport && pendingAttachments.isNotEmpty;
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final useDesktopMenu = commandSurface == CommandSurface.menu;
     if (showAttachmentTray) {
       attachmentTray = PendingAttachmentList(
         attachments: pendingAttachments,
@@ -1193,7 +1203,9 @@ class _ChatState extends State<Chat> {
         onRemove: (id) =>
             context.read<ChatBloc>().add(ChatPendingAttachmentRemoved(id)),
         onPressed: _handlePendingAttachmentPressed,
-        onLongPress: _handlePendingAttachmentLongPressed,
+        onLongPress:
+            useDesktopMenu ? null : _handlePendingAttachmentLongPressed,
+        contextMenuBuilder: useDesktopMenu ? _pendingAttachmentMenuItems : null,
       );
     }
     Widget composer = SafeArea(
@@ -1229,6 +1241,7 @@ class _ChatState extends State<Chat> {
                     controller: _textController,
                     focusNode: _focusNode,
                     hintText: hintText,
+                    semanticsLabel: 'Message input',
                     onSend: _handleSendMessage,
                     header: subjectHeader,
                     actions: _buildComposerAccessories(
@@ -1545,6 +1558,14 @@ class _ChatState extends State<Chat> {
 
   void _handlePendingAttachmentPressed(PendingAttachment pending) {
     if (!mounted) return;
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    if (commandSurface == CommandSurface.menu) {
+      if (pending.attachment.isImage) {
+        _showAttachmentPreview(pending);
+      }
+      return;
+    }
     if (pending.attachment.isImage) {
       _showAttachmentPreview(pending);
     } else {
@@ -1555,6 +1576,37 @@ class _ChatState extends State<Chat> {
   void _handlePendingAttachmentLongPressed(PendingAttachment pending) {
     if (!mounted) return;
     _showPendingAttachmentActions(pending);
+  }
+
+  List<Widget> _pendingAttachmentMenuItems(PendingAttachment pending) {
+    final bloc = context.read<ChatBloc>();
+    final items = <Widget>[];
+    if (pending.attachment.isImage) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(LucideIcons.eye),
+          onPressed: () => _showAttachmentPreview(pending),
+          child: const Text('View'),
+        ),
+      );
+    }
+    if (pending.status == PendingAttachmentStatus.failed) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(LucideIcons.refreshCw),
+          onPressed: () => bloc.add(ChatAttachmentRetryRequested(pending.id)),
+          child: const Text('Retry upload'),
+        ),
+      );
+    }
+    items.add(
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.trash),
+        onPressed: () => bloc.add(ChatPendingAttachmentRemoved(pending.id)),
+        child: const Text('Remove attachment'),
+      ),
+    );
+    return items;
   }
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
@@ -3951,6 +4003,7 @@ class _ChatState extends State<Chat> {
                                             latestStatuses: latestStatuses,
                                             pendingAttachments:
                                                 pendingAttachments,
+                                            isEmailTransport: isDefaultEmail,
                                             composerError: state.composerError,
                                             showAttachmentWarning:
                                                 showAttachmentWarning,

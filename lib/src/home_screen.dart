@@ -16,6 +16,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
@@ -31,12 +32,14 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -62,6 +65,7 @@ class HomeScreen extends StatelessWidget {
     final isPresence = getService() is PresenceService;
     final isOmemo = getService() is OmemoService;
     final isBlocking = getService() is BlockingService;
+    final navPlacement = EnvScope.of(context).navPlacement;
 
     final tabs = <HomeTabEntry>[
       if (isChat)
@@ -138,7 +142,10 @@ class HomeScreen extends StatelessWidget {
                       top: state is ConnectivityConnected,
                       child: AxiAdaptiveLayout(
                         invertPriority: openJid != null || openCalendar,
-                        primaryChild: Nexus(tabs: tabs),
+                        primaryChild: Nexus(
+                          tabs: tabs,
+                          navPlacement: navPlacement,
+                        ),
                         secondaryChild: openCalendar
                             ? const CalendarWidget()
                             : openJid == null ||
@@ -197,7 +204,7 @@ class HomeScreen extends StatelessWidget {
       },
     );
 
-    return Scaffold(
+    final scaffold = Scaffold(
       body: DefaultTabController(
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,
@@ -307,13 +314,48 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+
+    return Actions(
+      actions: {
+        ComposeIntent: CallbackAction<ComposeIntent>(
+          onInvoke: (_) {
+            context.push(
+              const ComposeRoute().location,
+              extra: {
+                'locate': context.read,
+                'attachments': const <String>[],
+              },
+            );
+            return null;
+          },
+        ),
+        ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
+          onInvoke: (_) {
+            context.read<HomeSearchCubit?>()?.toggleSearch();
+            return null;
+          },
+        ),
+        ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
+          onInvoke: (_) {
+            context.read<ChatsCubit?>()?.toggleCalendar();
+            return null;
+          },
+        ),
+      },
+      child: scaffold,
+    );
   }
 }
 
 class Nexus extends StatefulWidget {
-  const Nexus({super.key, required this.tabs});
+  const Nexus({
+    super.key,
+    required this.tabs,
+    required this.navPlacement,
+  });
 
   final List<HomeTabEntry> tabs;
+  final NavPlacement navPlacement;
 
   @override
   State<Nexus> createState() => _NexusState();
@@ -370,7 +412,8 @@ class _NexusState extends State<Nexus> {
           .toList();
     }
     final selectionActive = selectedChats.isNotEmpty && chatsCubit != null;
-    return Column(
+    final header = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         AxiAppBar(
           trailing: _SearchToggleButton(
@@ -381,85 +424,91 @@ class _NexusState extends State<Nexus> {
           ),
         ),
         _HomeSearchPanel(tabs: widget.tabs),
-        MultiBlocListener(
-          listeners: [
-            if (context.read<RosterCubit?>() != null)
-              BlocListener<RosterCubit, RosterState>(
-                listener: (context, state) {
-                  if (showToast == null) return;
-                  if (state is RosterFailure) {
-                    showToast(
-                      ShadToast.destructive(
-                        title: const Text('Whoops!'),
-                        description: Text(state.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  } else if (state is RosterSuccess) {
-                    showToast(
-                      ShadToast(
-                        title: const Text('Success!'),
-                        description: Text(state.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  }
-                },
-              ),
-            if (context.read<BlocklistCubit?>() != null)
-              BlocListener<BlocklistCubit, BlocklistState>(
-                listener: (context, state) {
-                  if (showToast == null) return;
-                  if (state is BlocklistFailure) {
-                    showToast(
-                      ShadToast.destructive(
-                        title: const Text('Whoops!'),
-                        description: Text(state.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  } else if (state is BlocklistSuccess) {
-                    showToast(
-                      ShadToast(
-                        title: const Text('Success!'),
-                        description: Text(state.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
-                      ),
-                    );
-                  }
-                },
-              ),
-          ],
-          child: Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: context.colorScheme.border),
-                ),
-              ),
-              child: TabBarView(
-                children: widget.tabs.map((tab) {
-                  return Scaffold(
-                    extendBodyBehindAppBar: true,
-                    body: tab.body,
-                    floatingActionButtonAnimator: const _ScaleOnlyFabAnimator(),
-                    floatingActionButton: selectionActive ? null : tab.fab,
-                  );
-                }).toList(),
-              ),
-            ),
+      ],
+    );
+
+    final tabViews = MultiBlocListener(
+      listeners: [
+        if (context.read<RosterCubit?>() != null)
+          BlocListener<RosterCubit, RosterState>(
+            listener: (context, state) {
+              if (showToast == null) return;
+              if (state is RosterFailure) {
+                showToast(
+                  ShadToast.destructive(
+                    title: const Text('Whoops!'),
+                    description: Text(state.message),
+                    alignment: Alignment.topRight,
+                    showCloseIconOnlyWhenHovered: false,
+                  ),
+                );
+              } else if (state is RosterSuccess) {
+                showToast(
+                  ShadToast(
+                    title: const Text('Success!'),
+                    description: Text(state.message),
+                    alignment: Alignment.topRight,
+                    showCloseIconOnlyWhenHovered: false,
+                  ),
+                );
+              }
+            },
+          ),
+        if (context.read<BlocklistCubit?>() != null)
+          BlocListener<BlocklistCubit, BlocklistState>(
+            listener: (context, state) {
+              if (showToast == null) return;
+              if (state is BlocklistFailure) {
+                showToast(
+                  ShadToast.destructive(
+                    title: const Text('Whoops!'),
+                    description: Text(state.message),
+                    alignment: Alignment.topRight,
+                    showCloseIconOnlyWhenHovered: false,
+                  ),
+                );
+              } else if (state is BlocklistSuccess) {
+                showToast(
+                  ShadToast(
+                    title: const Text('Success!'),
+                    description: Text(state.message),
+                    alignment: Alignment.topRight,
+                    showCloseIconOnlyWhenHovered: false,
+                  ),
+                );
+              }
+            },
+          ),
+      ],
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: context.colorScheme.border),
           ),
         ),
-        if (selectionActive)
-          ChatSelectionActionBar(
-            chatsCubit: chatsCubit,
-            selectedChats: selectedChats,
-          )
-        else ...[
+        child: TabBarView(
+          children: widget.tabs.map((tab) {
+            return Scaffold(
+              extendBodyBehindAppBar: true,
+              body: tab.body,
+              floatingActionButtonAnimator: const _ScaleOnlyFabAnimator(),
+              floatingActionButton: selectionActive ? null : tab.fab,
+            );
+          }).toList(),
+        ),
+      ),
+    );
+
+    late final Widget bottomArea;
+    if (selectionActive) {
+      bottomArea = ChatSelectionActionBar(
+        chatsCubit: chatsCubit,
+        selectedChats: selectedChats,
+      );
+    } else if (widget.navPlacement == NavPlacement.bottom) {
+      bottomArea = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           AxiTabBar(
             backgroundColor: context.colorScheme.background,
             tabs: widget.tabs.map((tab) {
@@ -477,8 +526,41 @@ class _NexusState extends State<Nexus> {
           ),
           const ProfileTile(),
         ],
+      );
+    } else {
+      bottomArea = const ProfileTile();
+    }
+
+    final column = Column(
+      children: [
+        header,
+        Expanded(child: tabViews),
+        bottomArea,
       ],
     );
+
+    if (widget.navPlacement == NavPlacement.rail) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _HomeNavigationRail(
+            tabs: widget.tabs,
+            selectedIndex: _tabController?.index ?? 0,
+            onDestinationSelected: _handleRailSelection,
+          ),
+          Expanded(child: column),
+        ],
+      );
+    }
+
+    return column;
+  }
+
+  void _handleRailSelection(int index) {
+    final controller = _tabController;
+    if (controller == null || index == controller.index) return;
+    if (index < 0 || index >= widget.tabs.length) return;
+    controller.animateTo(index);
   }
 }
 
@@ -543,6 +625,102 @@ class _ScaleOnlyFabAnimator extends FloatingActionButtonAnimator {
   @override
   double getAnimationRestart(double previousValue) =>
       FloatingActionButtonAnimator.scaling.getAnimationRestart(previousValue);
+}
+
+class _HomeNavigationRail extends StatelessWidget {
+  const _HomeNavigationRail({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+  });
+
+  final List<HomeTabEntry> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaWidth = MediaQuery.sizeOf(context).width;
+    final extendRail = mediaWidth >= largeScreen;
+    final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
+    if (tabs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final safeIndex = selectedIndex.clamp(0, tabs.length - 1).toInt();
+    return SafeArea(
+      child: NavigationRail(
+        selectedIndex: safeIndex,
+        groupAlignment: -1,
+        extended: extendRail,
+        labelType: extendRail
+            ? NavigationRailLabelType.none
+            : NavigationRailLabelType.all,
+        onDestinationSelected: onDestinationSelected,
+        destinations: [
+          for (final tab in tabs)
+            NavigationRailDestination(
+              icon: _RailTabIcon(
+                tab: tab.id,
+                inviteCount: inviteCount,
+                selected: false,
+              ),
+              selectedIcon: _RailTabIcon(
+                tab: tab.id,
+                inviteCount: inviteCount,
+                selected: true,
+              ),
+              label: Text(tab.label),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RailTabIcon extends StatelessWidget {
+  const _RailTabIcon({
+    required this.tab,
+    required this.inviteCount,
+    required this.selected,
+  });
+
+  final HomeTab tab;
+  final int inviteCount;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? Theme.of(context).colorScheme.primary : null;
+    Widget icon = Icon(
+      _tabIcon(tab),
+      color: color,
+    );
+    if (tab == HomeTab.invites && inviteCount > 0) {
+      icon = AxiBadge(
+        count: inviteCount,
+        offset: const Offset(8, -6),
+        child: icon,
+      );
+    }
+    return icon;
+  }
+}
+
+IconData _tabIcon(HomeTab tab) {
+  switch (tab) {
+    case HomeTab.chats:
+      return LucideIcons.messagesSquare;
+    case HomeTab.contacts:
+      return LucideIcons.users;
+    case HomeTab.invites:
+      return LucideIcons.userPlus;
+    case HomeTab.blocked:
+      return LucideIcons.userX;
+    case HomeTab.spam:
+      return LucideIcons.shieldAlert;
+    case HomeTab.drafts:
+      return LucideIcons.fileText;
+  }
 }
 
 class _HomeSearchPanel extends StatefulWidget {

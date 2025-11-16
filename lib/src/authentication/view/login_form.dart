@@ -108,25 +108,29 @@ class _LoginFormState extends State<LoginForm> {
                   const SizedBox.square(dimension: 16.0),
                   Padding(
                     padding: horizontalPadding,
-                    child: AxiTextFormField(
-                      key: loginUsernameKey,
-                      autocorrect: false,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp('[a-zA-Z0-9]'),
-                        ),
-                      ],
-                      keyboardType: TextInputType.emailAddress,
-                      placeholder: const Text('Username'),
-                      enabled: !loading,
-                      controller: _jidTextController,
-                      trailing: Text('@${state.server}'),
-                      validator: (text) {
-                        if (text.isEmpty) {
-                          return 'Enter a username';
-                        }
-                        return null;
-                      },
+                    child: Semantics(
+                      label: 'Username',
+                      textField: true,
+                      child: AxiTextFormField(
+                        key: loginUsernameKey,
+                        autocorrect: false,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp('[a-zA-Z0-9]'),
+                          ),
+                        ],
+                        keyboardType: TextInputType.emailAddress,
+                        placeholder: const Text('Username'),
+                        enabled: !loading,
+                        controller: _jidTextController,
+                        trailing: Text('@${state.server}'),
+                        validator: (text) {
+                          if (text.isEmpty) {
+                            return 'Enter a username';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),

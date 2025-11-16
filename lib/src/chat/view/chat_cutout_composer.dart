@@ -72,6 +72,7 @@ class ChatCutoutComposer extends StatelessWidget {
     this.minLines = 1,
     this.maxLines = 6,
     this.header,
+    this.semanticsLabel,
   });
 
   final TextEditingController controller;
@@ -83,6 +84,7 @@ class ChatCutoutComposer extends StatelessWidget {
   final int minLines;
   final int maxLines;
   final Widget? header;
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -161,33 +163,37 @@ class ChatCutoutComposer extends StatelessWidget {
               shortcuts: shortcuts,
               child: Actions(
                 actions: actionsMap,
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  minLines: minLines,
-                  maxLines: maxLines,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  style: textStyle,
-                  cursorColor: colors.primary,
-                  cursorHeight: cursorHeight,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    disabledBorder: InputBorder.none,
-                    errorBorder: InputBorder.none,
-                    focusedErrorBorder: InputBorder.none,
-                    isCollapsed: true,
-                    contentPadding: EdgeInsets.zero,
-                    hintText: hintText,
-                    hintStyle: context.textTheme.muted.copyWith(
-                      color: colors.mutedForeground,
+                child: Semantics(
+                  label: semanticsLabel ?? hintText,
+                  textField: true,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    minLines: minLines,
+                    maxLines: maxLines,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    style: textStyle,
+                    cursorColor: colors.primary,
+                    cursorHeight: cursorHeight,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      isCollapsed: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: hintText,
+                      hintStyle: context.textTheme.muted.copyWith(
+                        color: colors.mutedForeground,
+                      ),
                     ),
+                    onSubmitted: (_) {
+                      if (sendEnabled) onSend();
+                    },
                   ),
-                  onSubmitted: (_) {
-                    if (sendEnabled) onSend();
-                  },
                 ),
               ),
             ),
