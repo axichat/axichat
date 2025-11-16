@@ -124,6 +124,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
+    on<ChatMessageEditRequested>(_onChatMessageEditRequested);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
     on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
@@ -650,13 +651,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final message = event.message;
-    if (message.body?.isNotEmpty != true) return;
     final isEmailMessage = message.deltaChatId != null;
     try {
       if (isEmailMessage) {
-        await _rehydrateEmailDraft(message, emit);
+        await _resendEmailMessage(message, emit);
         return;
       } else {
+        final hasBody = message.body?.isNotEmpty == true;
+        if (!hasBody) return;
         await _messageService.resendMessage(message.stanzaID);
       }
     } on Exception catch (error, stackTrace) {
@@ -665,6 +667,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         error,
         stackTrace,
       );
+    }
+  }
+
+  Future<void> _onChatMessageEditRequested(
+    ChatMessageEditRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final message = event.message;
+    if (message.deltaChatId != null) {
+      await _rehydrateEmailDraft(message, emit);
+    } else {
+      _rehydrateXmppDraft(message, emit);
     }
   }
 
@@ -1348,22 +1362,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final recipients = _recipientsForHydration(
       chat: chat,
       shareContext: shareContext,
+      resetRecipients: true,
     );
-    var pendingAttachments = state.pendingAttachments;
+    final pendingAttachments = <PendingAttachment>[];
     if (message.fileMetadataID != null) {
       final attachment = await service.attachmentForMessage(message);
-      if (attachment != null &&
-          !_hasPendingAttachmentForPath(
-            pendingAttachments: pendingAttachments,
-            path: attachment.path,
-          )) {
-        pendingAttachments = [
-          ...pendingAttachments,
+      if (attachment != null) {
+        pendingAttachments.add(
           PendingAttachment(
             id: _nextPendingAttachmentId(),
             attachment: attachment,
           ),
-        ];
+        );
       }
     }
     final nextHydrationId = ++_composerHydrationSeed;
@@ -1392,8 +1402,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   List<ComposerRecipient> _recipientsForHydration({
     required Chat chat,
     ShareContext? shareContext,
+    bool resetRecipients = false,
   }) {
-    final recipients = _syncRecipientsForChat(chat);
+    final recipients = resetRecipients
+        ? [
+            ComposerRecipient(
+              target: FanOutTarget.chat(chat),
+              included: true,
+              pinned: true,
+            ),
+          ]
+        : _syncRecipientsForChat(chat);
     if (shareContext == null) {
       return recipients;
     }
@@ -1417,21 +1436,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return updated;
-  }
-
-  bool _hasPendingAttachmentForPath({
-    required List<PendingAttachment> pendingAttachments,
-    required String? path,
-  }) {
-    if (path == null || path.isEmpty) {
-      return false;
-    }
-    for (final pending in pendingAttachments) {
-      if (pending.attachment.path == path) {
-        return true;
-      }
-    }
-    return false;
   }
 
   ComposerRecipient? _recipientForChat(String jid) {
@@ -1531,6 +1535,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return recipients;
   }
 
+  void _rehydrateXmppDraft(
+    Message message,
+    Emitter<ChatState> emit,
+  ) {
+    final nextHydrationId = ++_composerHydrationSeed;
+    emit(
+      state.copyWith(
+        composerHydrationId: nextHydrationId,
+        composerHydrationText: message.body ?? '',
+        composerError: message.error.isNotNone
+            ? message.error.asString
+            : state.composerError,
+      ),
+    );
+  }
+
   Future<void> _hydrateShareContexts(
     List<Message> messages,
     Emitter<ChatState> emit,
@@ -1552,5 +1572,62 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final contexts = Map<String, ShareContext>.from(state.shareContexts)
       ..addAll(pending);
     emit(state.copyWith(shareContexts: contexts));
+  }
+
+  Future<void> _resendEmailMessage(
+    Message message,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    final service = _emailService;
+    if (chat == null || service == null) return;
+    final trimmedBody = (message.body ?? '').trim();
+    final hasBody = trimmedBody.isNotEmpty;
+    final hasAttachment = message.fileMetadataID != null;
+    if (!hasBody && !hasAttachment) {
+      return;
+    }
+    ShareContext? shareContext = state.shareContexts[message.stanzaID];
+    shareContext ??= await service.shareContextForMessage(message);
+    try {
+      if (hasBody) {
+        await service.sendMessage(
+          chat: chat,
+          body: trimmedBody,
+          subject: shareContext?.subject,
+        );
+      }
+      if (hasAttachment) {
+        final attachment = await service.attachmentForMessage(message);
+        if (attachment != null) {
+          await service.sendAttachment(
+            chat: chat,
+            attachment: attachment,
+          );
+        }
+      }
+    } on DeltaChatException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to resend email message ${message.stanzaID}',
+        error,
+        stackTrace,
+      );
+      final mappedError = DeltaErrorMapper.resolve(error.message);
+      emit(
+        _attachToast(
+          state.copyWith(composerError: mappedError.asString),
+          const ChatToast(
+            message: 'Email resend failed. Check the error bubble for details.',
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to resend email message ${message.stanzaID}',
+        error,
+        stackTrace,
+      );
+    }
   }
 }

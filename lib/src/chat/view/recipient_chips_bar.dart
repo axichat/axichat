@@ -367,29 +367,21 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   maxWidth: 420,
                   maxHeight: _suggestionMaxHeight,
                 ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: surface,
+                child: Material(
+                  color: surface,
+                  elevation: 12,
+                  shadowColor: shadowColor,
+                  shape: ContinuousRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: borderColor, width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: shadowColor,
-                        offset: const Offset(0, 12),
-                        blurRadius: 28,
-                        spreadRadius: -8,
-                      ),
-                    ],
+                    side: BorderSide(color: borderColor, width: 1),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: _AutocompleteOptionsList(
-                      options: options.toList(growable: false),
-                      onSelected: (option) {
-                        onSelected(option);
-                        _controller.clear();
-                      },
-                    ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _AutocompleteOptionsList(
+                    options: options.toList(growable: false),
+                    onSelected: (option) {
+                      onSelected(option);
+                      _controller.clear();
+                    },
                   ),
                 ),
               ),
