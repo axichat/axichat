@@ -27,28 +27,39 @@ class CalendarCompletionCheckbox extends StatelessWidget {
     final double effectiveBorderWidth = isIndeterminate ? 2 : borderWidth;
 
     const double tapPadding = 24;
-    return SizedBox(
-      width: size + tapPadding,
-      height: size + tapPadding,
-      child: Center(
+    return MouseRegion(
+      cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: isEnabled ? () => onChanged!(!value) : null,
         child: SizedBox(
-          width: size,
-          height: size,
-          child: Checkbox(
-            value: checkboxValue,
-            tristate: isIndeterminate,
-            onChanged:
-                isEnabled ? (checked) => onChanged!(checked ?? false) : null,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-            activeColor: activeColor,
-            checkColor: Colors.white,
-            side: BorderSide(
-              color: borderColor,
-              width: effectiveBorderWidth,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
+          width: size + tapPadding,
+          height: size + tapPadding,
+          child: Center(
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Checkbox(
+                value: checkboxValue,
+                tristate: isIndeterminate,
+                onChanged: isEnabled
+                    ? (checked) => onChanged!(checked ?? false)
+                    : null,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                activeColor: activeColor,
+                checkColor: Colors.white,
+                mouseCursor: isEnabled
+                    ? SystemMouseCursors.click
+                    : SystemMouseCursors.basic,
+                side: BorderSide(
+                  color: borderColor,
+                  width: effectiveBorderWidth,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
             ),
           ),
         ),
