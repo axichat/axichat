@@ -101,6 +101,7 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.1
   json_serializable: ^6.8.0
   build_runner: ^2.4.11
   go_router_builder: ^2.7.0
@@ -126,5 +127,31 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/icons/
     - assets/licenses/delta_chat_core_mpl.txt
     - shorebird.yaml
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path_ios: assets/icons/generated/app_icon_ios.png
+  image_path_macos: assets/icons/generated/app_icon_macos.png
+  image_path_android: assets/icons/generated/app_icon_android_legacy.png
+  adaptive_icon_foreground: assets/icons/generated/app_icon_android_foreground.png
+  adaptive_icon_background: assets/icons/generated/app_icon_android_background.png
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: assets/icons/generated/app_icon_web.png
+    background_color: "#1BA5FF"
+    theme_color: "#1BA5FF"
+  windows:
+    generate: true
+    image_path: assets/icons/generated/app_icon_windows.png
+  macos:
+    generate: true
+    image_path: assets/icons/generated/app_icon_macos.png
+  linux:
+    generate: true
+    image_path: assets/icons/generated/app_icon_linux.png
