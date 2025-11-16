@@ -79,6 +79,7 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
     this.recipientStyle,
     this.selectionOverlay,
     this.selectionStyle,
+    this.selectionFollowsSelfEdge = true,
   }) : super(
           children: [
             _ChatBubbleSlotWidget(
@@ -117,6 +118,7 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
   final CutoutStyle? recipientStyle;
   final Widget? selectionOverlay;
   final CutoutStyle? selectionStyle;
+  final bool selectionFollowsSelfEdge;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -132,6 +134,7 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
         reactionStyle: reactionStyle,
         recipientStyle: recipientStyle,
         selectionStyle: selectionStyle,
+        selectionFollowsSelfEdge: selectionFollowsSelfEdge,
       );
 
   @override
@@ -150,7 +153,8 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
       ..cornerClearance = cornerClearance
       ..reactionStyle = reactionStyle
       ..recipientStyle = recipientStyle
-      ..selectionStyle = selectionStyle;
+      ..selectionStyle = selectionStyle
+      ..selectionFollowsSelfEdge = selectionFollowsSelfEdge;
   }
 }
 
@@ -170,6 +174,7 @@ class RenderChatBubbleSurface extends RenderBox
     CutoutStyle? reactionStyle,
     CutoutStyle? recipientStyle,
     CutoutStyle? selectionStyle,
+    bool selectionFollowsSelfEdge = true,
   })  : _isSelf = isSelf,
         _backgroundColor = backgroundColor,
         _borderColor = borderColor,
@@ -180,7 +185,8 @@ class RenderChatBubbleSurface extends RenderBox
         _cornerClearance = cornerClearance,
         _reactionStyle = reactionStyle,
         _recipientStyle = recipientStyle,
-        _selectionStyle = selectionStyle;
+        _selectionStyle = selectionStyle,
+        _selectionFollowsSelfEdge = selectionFollowsSelfEdge;
 
   bool _isSelf;
   bool get isSelf => _isSelf;
@@ -276,6 +282,14 @@ class RenderChatBubbleSurface extends RenderBox
     markNeedsPaint();
   }
 
+  bool _selectionFollowsSelfEdge;
+  bool get selectionFollowsSelfEdge => _selectionFollowsSelfEdge;
+  set selectionFollowsSelfEdge(bool value) {
+    if (value == _selectionFollowsSelfEdge) return;
+    _selectionFollowsSelfEdge = value;
+    markNeedsLayout();
+  }
+
   RenderBox? get _bodyChild => _childForSlot(_ChatBubbleSlot.body);
   RenderBox? get _reactionChild => _childForSlot(_ChatBubbleSlot.reaction);
   RenderBox? get _recipientChild => _childForSlot(_ChatBubbleSlot.recipients);
@@ -332,11 +346,14 @@ class RenderChatBubbleSurface extends RenderBox
       type: _CutoutType.recipient,
       anchor: _CutoutAnchor.bottom,
     );
+    final selectionAnchor = selectionFollowsSelfEdge
+        ? (isSelf ? _CutoutAnchor.right : _CutoutAnchor.left)
+        : (isSelf ? _CutoutAnchor.left : _CutoutAnchor.right);
     _layoutCutoutChild(
       child: _selectionChild,
       style: selectionStyle,
       type: _CutoutType.selection,
-      anchor: isSelf ? _CutoutAnchor.right : _CutoutAnchor.left,
+      anchor: selectionAnchor,
     );
   }
 

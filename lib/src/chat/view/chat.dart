@@ -15,7 +15,7 @@ import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
 import 'package:axichat/src/chat/view/chat_cutout_composer.dart';
-import 'package:axichat/src/chat/view/chat_drawer.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/chat/view/chat_message_details.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
@@ -117,7 +117,7 @@ const _recipientCutoutOffset = Offset.zero;
 const _recipientAvatarSize = 28.0;
 const _recipientAvatarOverlap = 10.0;
 const _recipientCutoutMinThickness = 48.0;
-const _selectionCutoutDepth = 16.0;
+const _selectionCutoutDepth = 20.0;
 const _selectionCutoutRadius = 16.0;
 const _selectionCutoutPadding = EdgeInsets.fromLTRB(2, 6, 2, 6);
 const _selectionCutoutOffset = Offset.zero;
@@ -165,6 +165,7 @@ const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _messageListTailSpacer = 36.0;
+const _chatSettingsPanelHeight = 132.0;
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -613,6 +614,7 @@ class _ChatState extends State<Chat> {
   final _animatedMessageIds = <String>{};
 
   var _chatRoute = _ChatRoute.main;
+  var _settingsPanelExpanded = false;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
   final _selectedMessageSnapshots = <String, Message>{};
@@ -655,6 +657,118 @@ class _ChatState extends State<Chat> {
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     context.read<ChatBloc>().add(const ChatTypingStarted());
+  }
+
+  void _toggleSettingsPanel() {
+    setState(() {
+      _settingsPanelExpanded = !_settingsPanelExpanded;
+    });
+  }
+
+  void _setViewFilter(MessageTimelineFilter filter) {
+    context.read<ChatBloc>().add(ChatViewFilterChanged(filter: filter));
+  }
+
+  void _toggleNotifications(bool enable) {
+    context.read<ChatBloc>().add(ChatMuted(!enable));
+  }
+
+  Future<void> _handleSpamToggle({required bool sendToSpam}) async {
+    final chat = context.read<ChatBloc>().state.chat;
+    final jid = chat?.jid;
+    if (chat == null || jid == null) return;
+    final xmppService = context.read<XmppService?>();
+    final emailService = RepositoryProvider.of<EmailService?>(context);
+    try {
+      await xmppService?.toggleChatSpam(jid: jid, spam: sendToSpam);
+      final address = chat.emailAddress?.trim();
+      if (chat.transport.isEmail && address?.isNotEmpty == true) {
+        if (sendToSpam) {
+          await emailService?.spam.mark(address!);
+        } else {
+          await emailService?.spam.unmark(address!);
+        }
+      }
+    } on Exception {
+      if (mounted) {
+        _showSnackbar('Failed to update spam status.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    final toastMessage = sendToSpam
+        ? 'Sent ${chat.title} to spam.'
+        : 'Returned ${chat.title} to inbox.';
+    ShadToaster.maybeOf(context)?.show(
+      ShadToast(
+        title: Text(sendToSpam ? 'Reported' : 'Restored'),
+        description: Text(toastMessage),
+        alignment: Alignment.topRight,
+        showCloseIconOnlyWhenHovered: false,
+      ),
+    );
+  }
+
+  List<Widget> _buildSettingsButtons({required ChatState state}) {
+    final chat = state.chat;
+    if (chat == null) return const [];
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconSize = scaled(16);
+    final buttons = <Widget>[];
+    if (chat.supportsEmail) {
+      buttons.addAll([
+        ContextActionButton(
+          icon: Icon(LucideIcons.mail, size: iconSize),
+          label: 'Show all',
+          onPressed: state.viewFilter == MessageTimelineFilter.allWithContact
+              ? null
+              : () => _setViewFilter(MessageTimelineFilter.allWithContact),
+        ),
+        ContextActionButton(
+          icon: Icon(LucideIcons.userCheck, size: iconSize),
+          label: 'Direct only',
+          onPressed: state.viewFilter == MessageTimelineFilter.directOnly
+              ? null
+              : () => _setViewFilter(MessageTimelineFilter.directOnly),
+        ),
+      ]);
+    }
+    final notificationsEnabled = !chat.muted;
+    buttons.addAll([
+      ContextActionButton(
+        icon: Icon(LucideIcons.bell, size: iconSize),
+        label: 'Notifications on',
+        onPressed:
+            notificationsEnabled ? null : () => _toggleNotifications(true),
+      ),
+      ContextActionButton(
+        icon: Icon(LucideIcons.bellOff, size: iconSize),
+        label: 'Notifications off',
+        onPressed:
+            notificationsEnabled ? () => _toggleNotifications(false) : null,
+      ),
+    ]);
+    final isSpamChat = chat.spam;
+    buttons.add(
+      ContextActionButton(
+        icon: Icon(
+          isSpamChat ? LucideIcons.inbox : LucideIcons.flag,
+          size: iconSize,
+        ),
+        label: isSpamChat ? 'Move to inbox' : 'Report spam',
+        destructive: !isSpamChat,
+        onPressed: () => _handleSpamToggle(sendToSpam: !isSpamChat),
+      ),
+    );
+    buttons.add(
+      _BlockActionButton(
+        jid: chat.jid,
+        emailAddress: chat.emailAddress,
+        useEmailBlocking: chat.defaultTransport.isEmail,
+      ),
+    );
+    return buttons;
   }
 
   void _handleSubjectChanged() {
@@ -2056,6 +2170,10 @@ class _ChatState extends State<Chat> {
                   id: _selectionSpacerMessageId,
                   firstName: '',
                 );
+                final showSettingsPanel = _settingsPanelExpanded &&
+                    !readOnly &&
+                    jid != null &&
+                    _chatRoute == _ChatRoute.main;
                 return Container(
                   decoration: BoxDecoration(
                     color: context.colorScheme.background,
@@ -2065,12 +2183,6 @@ class _ChatState extends State<Chat> {
                   ),
                   child: Scaffold(
                     backgroundColor: context.colorScheme.background,
-                    endDrawerEnableOpenDragGesture: false,
-                    endDrawer: readOnly || jid == null
-                        ? null
-                        : ChatDrawer(
-                            state: state,
-                          ),
                     appBar: AppBar(
                       scrolledUnderElevation: 0,
                       forceMaterialTransparency: true,
@@ -2101,6 +2213,7 @@ class _ChatState extends State<Chat> {
                                             const ChatMessageFocused(null));
                                         return setState(() {
                                           _chatRoute = _ChatRoute.main;
+                                          _settingsPanelExpanded = false;
                                         });
                                       }
                                       if (_textController.text.isNotEmpty) {
@@ -2113,6 +2226,11 @@ class _ChatState extends State<Chat> {
                                                 body: _textController.text,
                                               );
                                         }
+                                      }
+                                      if (_settingsPanelExpanded) {
+                                        setState(() {
+                                          _settingsPanelExpanded = false;
+                                        });
                                       }
                                       context
                                           .read<ChatsCubit>()
@@ -2190,11 +2308,20 @@ class _ChatState extends State<Chat> {
                           const _ChatSearchToggleButton(),
                           if (!readOnly) ...[
                             const SizedBox(width: 4),
-                            Builder(
-                              builder: (context) => AxiIconButton(
-                                iconData: LucideIcons.settings,
-                                onPressed: Scaffold.of(context).openEndDrawer,
-                              ),
+                            AxiIconButton(
+                              iconData: showSettingsPanel
+                                  ? LucideIcons.x
+                                  : LucideIcons.settings,
+                              tooltip: showSettingsPanel
+                                  ? 'Close settings'
+                                  : 'Chat settings',
+                              color: showSettingsPanel
+                                  ? context.colorScheme.primary
+                                  : null,
+                              borderColor: showSettingsPanel
+                                  ? context.colorScheme.primary
+                                  : null,
+                              onPressed: _toggleSettingsPanel,
                             ),
                           ],
                         ] else
@@ -2203,12 +2330,29 @@ class _ChatState extends State<Chat> {
                       bottom: jid == null
                           ? null
                           : PreferredSize(
-                              preferredSize: const Size.fromHeight(44),
-                              child: _ChatFilterIndicator(
-                                filter: state.viewFilter,
-                                onFilterSelected: (filter) => context
-                                    .read<ChatBloc>()
-                                    .add(ChatViewFilterChanged(filter: filter)),
+                              preferredSize: Size.fromHeight(
+                                44 +
+                                    (showSettingsPanel
+                                        ? _chatSettingsPanelHeight
+                                        : 0),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _ChatFilterIndicator(
+                                    filter: state.viewFilter,
+                                    onFilterSelected: (filter) => context
+                                        .read<ChatBloc>()
+                                        .add(
+                                          ChatViewFilterChanged(filter: filter),
+                                        ),
+                                  ),
+                                  _ChatSettingsPanel(
+                                    visible: showSettingsPanel,
+                                    children:
+                                        _buildSettingsButtons(state: state),
+                                  ),
+                                ],
                               ),
                             ),
                     ),
@@ -2876,11 +3020,11 @@ class _ChatState extends State<Chat> {
                                                     selectionOverlay = Padding(
                                                       padding: EdgeInsets.only(
                                                         left: self
-                                                            ? 0
-                                                            : _selectionIndicatorInteriorGap,
-                                                        right: self
                                                             ? _selectionIndicatorInteriorGap
                                                             : 0,
+                                                        right: self
+                                                            ? 0
+                                                            : _selectionIndicatorInteriorGap,
                                                       ),
                                                       child: indicator,
                                                     );
@@ -3089,11 +3233,11 @@ class _ChatState extends State<Chat> {
                                                         bubblePadding.add(
                                                       EdgeInsets.only(
                                                         left: self
-                                                            ? 0
-                                                            : _selectionBubbleInteriorInset,
-                                                        right: self
                                                             ? _selectionBubbleInteriorInset
                                                             : 0,
+                                                        right: self
+                                                            ? 0
+                                                            : _selectionBubbleInteriorInset,
                                                       ),
                                                     );
                                                     bubblePadding =
@@ -3170,18 +3314,6 @@ class _ChatState extends State<Chat> {
                                                   }
                                                   double extraOuterLeft = 0;
                                                   double extraOuterRight = 0;
-                                                  if (selectionOverlay !=
-                                                      null) {
-                                                    const selectionInset =
-                                                        _selectionOuterInset;
-                                                    if (self) {
-                                                      extraOuterRight +=
-                                                          selectionInset;
-                                                    } else {
-                                                      extraOuterLeft +=
-                                                          selectionInset;
-                                                    }
-                                                  }
                                                   final outerPadding =
                                                       EdgeInsets.only(
                                                     top: 2,
@@ -3289,6 +3421,8 @@ class _ChatState extends State<Chat> {
                                                             selectionOverlay,
                                                         selectionStyle:
                                                             selectionStyle,
+                                                        selectionFollowsSelfEdge:
+                                                            false,
                                                       );
                                                       return _MessageBubbleRegion(
                                                         messageId: messageModel
@@ -3893,6 +4027,7 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatMessageFocused(detailId));
     setState(() {
       _chatRoute = _ChatRoute.details;
+      _settingsPanelExpanded = false;
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
       }
@@ -5031,6 +5166,105 @@ class _ChatFilterIndicator extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ChatSettingsPanel extends StatelessWidget {
+  const _ChatSettingsPanel({
+    required this.visible,
+    required this.children,
+  });
+
+  final bool visible;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return AnimatedCrossFade(
+      duration: const Duration(milliseconds: 220),
+      sizeCurve: Curves.easeInOutCubic,
+      crossFadeState:
+          visible ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      firstChild: const SizedBox.shrink(),
+      secondChild: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: colors.border,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlockActionButton extends StatelessWidget {
+  const _BlockActionButton({
+    required this.jid,
+    required this.useEmailBlocking,
+    this.emailAddress,
+  });
+
+  final String jid;
+  final bool useEmailBlocking;
+  final String? emailAddress;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconSize = scaled(16);
+    final icon = Icon(LucideIcons.userX, size: iconSize);
+    if (useEmailBlocking) {
+      final emailService = RepositoryProvider.of<EmailService?>(context);
+      final address = emailAddress?.trim();
+      if (emailService == null || address?.isNotEmpty != true) {
+        return ContextActionButton(
+          icon: icon,
+          label: 'Block',
+          destructive: true,
+          onPressed: null,
+        );
+      }
+      final EmailService service = emailService;
+      final target = address!;
+      return ContextActionButton(
+        icon: icon,
+        label: 'Block',
+        destructive: true,
+        onPressed: () async {
+          await service.blocking.block(target);
+        },
+      );
+    }
+    return BlocSelector<BlocklistCubit, BlocklistState, bool>(
+      selector: (state) =>
+          state is BlocklistLoading && (state.jid == null || state.jid == jid),
+      builder: (context, disabled) {
+        return ContextActionButton(
+          icon: icon,
+          label: 'Block',
+          destructive: true,
+          onPressed: disabled
+              ? null
+              : () {
+                  context.read<BlocklistCubit?>()?.block(jid: jid);
+                },
+        );
+      },
     );
   }
 }

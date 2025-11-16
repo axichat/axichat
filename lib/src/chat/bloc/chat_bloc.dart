@@ -407,7 +407,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           (recipient) {
             final targetChat = recipient.target.chat;
             if (targetChat != null) {
-              return !targetChat.supportsEmail;
+              return !_isEmailCapableChat(targetChat);
             }
             return recipient.target.address?.isNotEmpty != true;
           },
@@ -1186,22 +1186,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required List<ComposerRecipient> recipients,
   }) {
-    if (chat.supportsEmail || (chat.emailAddress?.isNotEmpty ?? false)) {
+    if (_isEmailCapableChat(chat)) {
       return true;
     }
     for (final recipient in recipients) {
       final targetChat = recipient.target.chat;
-      if (targetChat != null) {
-        if (targetChat.supportsEmail ||
-            (targetChat.emailAddress?.isNotEmpty ?? false)) {
-          return true;
-        }
+      if (targetChat != null && _isEmailCapableChat(targetChat)) {
+        return true;
       }
       if (recipient.target.address?.isNotEmpty ?? false) {
         return true;
       }
     }
     return false;
+  }
+
+  bool _isEmailCapableChat(Chat chat) {
+    if (chat.supportsEmail || (chat.emailAddress?.isNotEmpty ?? false)) {
+      return true;
+    }
+    return _axiDomainPattern.hasMatch(chat.jid.toLowerCase());
   }
 
   bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
