@@ -654,11 +654,16 @@ class TaskSidebarState extends State<TaskSidebar>
                     onPressed: enabled ? _handleClearFieldsPressed : null,
                     child: const Text('Clear fields'),
                   );
-                  return MouseRegion(
-                    cursor: enabled
-                        ? SystemMouseCursors.click
-                        : SystemMouseCursors.basic,
-                    child: button,
+                  final decorated = button.withTapBounce(enabled: enabled);
+                  return AnimatedOpacity(
+                    duration: baseAnimationDuration,
+                    opacity: enabled ? 1 : 0.5,
+                    child: MouseRegion(
+                      cursor: enabled
+                          ? SystemMouseCursors.click
+                          : SystemMouseCursors.basic,
+                      child: decorated,
+                    ),
                   );
                 },
               ),

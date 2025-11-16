@@ -247,6 +247,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
               .any((recipient) => recipient.target.chat?.jid == chat.jid),
         )
         .toList();
+    final knownDomains = _knownDomains();
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
@@ -254,15 +255,31 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         textEditingController: _controller,
         focusNode: _focusNode,
         optionsBuilder: (TextEditingValue value) {
-          final query = value.text.trim().toLowerCase();
-          final filtered = query.isEmpty
-              ? suggestions.take(8).toList()
-              : suggestions.where((chat) {
-                  final title = chat.title.toLowerCase();
-                  final address = chat.emailAddress?.toLowerCase() ?? '';
-                  return title.contains(query) || address.contains(query);
-                }).toList();
-          return filtered.map(FanOutTarget.chat);
+          final raw = value.text.trim();
+          final query = raw.toLowerCase();
+          if (query.isEmpty) {
+            return suggestions.take(8).map(FanOutTarget.chat);
+          }
+          final atIndex = query.indexOf('@');
+          if (atIndex >= 0) {
+            final localPart = raw.substring(0, atIndex);
+            final typedDomain = query.substring(atIndex + 1);
+            if (localPart.isEmpty) return const Iterable<FanOutTarget>.empty();
+            final domainMatches = knownDomains.where(
+              (domain) => domain.startsWith(typedDomain),
+            );
+            return domainMatches
+                .map((domain) => FanOutTarget.address(
+                      address: '$localPart@$domain',
+                    ))
+                .take(8);
+          }
+          final filtered = suggestions.where((chat) {
+            final title = chat.title.toLowerCase();
+            final address = chat.emailAddress?.toLowerCase() ?? '';
+            return title.startsWith(query) || address.startsWith(query);
+          }).toList();
+          return filtered.map(FanOutTarget.chat).take(8);
         },
         displayStringForOption: (option) =>
             option.chat?.title ?? option.address ?? '',
@@ -301,6 +318,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                         focusNode: focusNode,
                         cursorColor: colors.primary,
                         maxLines: 1,
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        autofillHints: const [AutofillHints.email],
                         decoration: InputDecoration(
                           hintText: 'Add...',
                           hintStyle: textStyle?.copyWith(color: hintColor),
@@ -472,6 +493,37 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         _renderedRecipients.removeWhere((recipient) => recipient.key == key);
       });
     });
+  }
+
+  Set<String> _knownDomains() {
+    final domains = <String>{'axi.im'};
+    void addFrom(String? address) {
+      final domain = _extractDomain(address);
+      if (domain != null) {
+        domains.add(domain);
+      }
+    }
+
+    for (final chat in widget.availableChats) {
+      addFrom(chat.emailAddress);
+    }
+    for (final recipient in widget.recipients) {
+      final target = recipient.target;
+      addFrom(target.chat?.emailAddress ?? target.address);
+    }
+    return domains;
+  }
+
+  String? _extractDomain(String? raw) {
+    final address = raw?.trim();
+    if (address == null || address.isEmpty || !address.contains('@')) {
+      return null;
+    }
+    final parts = address.split('@');
+    if (parts.length != 2) return null;
+    final domain = parts.last.trim().toLowerCase();
+    if (domain.isEmpty) return null;
+    return domain;
   }
 }
 
