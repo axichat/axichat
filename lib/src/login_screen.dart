@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/signup_form.dart';
+import 'package:axichat/src/authentication/view/widgets/operation_progress_bar.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -23,75 +26,202 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+enum _AuthFlow {
+  login,
+  signup,
+}
+
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   var _login = true;
+  late OperationProgressController _operationProgressController;
+  bool _showOperationProgress = false;
+  String _operationLabel = '';
+  _AuthFlow? _activeFlow;
+
+  @override
+  void initState() {
+    super.initState();
+    _operationProgressController = OperationProgressController(vsync: this);
+    final draft = context.read<AuthenticationCubit>().signupDraft;
+    if (draft != null && !draft.isEmpty) {
+      _login = false;
+    }
+  }
+
+  void _handleSubmissionRequested(
+    _AuthFlow flow, {
+    required String label,
+  }) {
+    setState(() {
+      _activeFlow = flow;
+      _operationLabel = label;
+      _showOperationProgress = true;
+    });
+    _operationProgressController.start();
+  }
+
+  void _ensureOperationVisible(String label) {
+    if (_activeFlow == null) {
+      return;
+    }
+    if (!_showOperationProgress) {
+      setState(() {
+        _operationLabel = label;
+        _showOperationProgress = true;
+      });
+      if (!_operationProgressController.isActive) {
+        _operationProgressController.start();
+      }
+      return;
+    }
+    if (_operationLabel != label) {
+      setState(() {
+        _operationLabel = label;
+      });
+    }
+  }
+
+  Future<void> _completeOperation() async {
+    await _operationProgressController.complete();
+    if (!mounted) return;
+    setState(() {
+      _showOperationProgress = false;
+      _activeFlow = null;
+    });
+    _operationProgressController.reset();
+  }
+
+  Future<void> _failOperation() async {
+    await _operationProgressController.fail();
+    if (!mounted) return;
+    setState(() {
+      _showOperationProgress = false;
+      _activeFlow = null;
+    });
+    _operationProgressController.reset();
+  }
+
+  void _handleAuthState(AuthenticationState state) {
+    final flow = _activeFlow;
+    if (flow == null) {
+      return;
+    }
+    if (state is AuthenticationSignUpInProgress && flow == _AuthFlow.signup) {
+      _ensureOperationVisible('Creating your account…');
+      return;
+    }
+    if (state is AuthenticationLogInInProgress) {
+      if (flow == _AuthFlow.signup) {
+        _ensureOperationVisible('Securing your login…');
+        unawaited(_operationProgressController.reach(0.75));
+        return;
+      }
+      if (flow == _AuthFlow.login) {
+        _ensureOperationVisible('Logging you in…');
+        unawaited(_operationProgressController.reach(
+          0.75,
+          duration: const Duration(milliseconds: 500),
+        ));
+        return;
+      }
+    }
+    if (state is AuthenticationComplete) {
+      unawaited(_completeOperation());
+      return;
+    }
+    if (state is AuthenticationFailure ||
+        state is AuthenticationSignupFailure) {
+      unawaited(_failOperation());
+    }
+  }
+
+  @override
+  void dispose() {
+    _operationProgressController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            AxiAppBar(
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const AxiVersion(),
-                  if (kDebugMode) ...[
-                    const SizedBox(width: 8),
-                    DeleteCredentialsButton(),
+    return BlocListener<AuthenticationCubit, AuthenticationState>(
+      listener: (context, state) => _handleAuthState(state),
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              AxiAppBar(
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AxiVersion(),
+                    if (kDebugMode) ...[
+                      const SizedBox(width: 8),
+                      DeleteCredentialsButton(),
+                    ],
                   ],
-                ],
-              ),
-            ),
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  border: Border(
-                    top: BorderSide(color: colors.border),
-                  ),
                 ),
-                child: AxiAdaptiveLayout(
-                  primaryChild: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 480),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const ShorebirdChecker(),
-                            DecoratedBox(
-                              decoration: ShapeDecoration(
-                                color: colors.card,
-                                shape: SquircleBorder(
-                                  cornerRadius: 20,
-                                  side: BorderSide(color: colors.border),
+              ),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    border: Border(
+                      top: BorderSide(color: colors.border),
+                    ),
+                  ),
+                  child: AxiAdaptiveLayout(
+                    primaryChild: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 480),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const ShorebirdChecker(),
+                              DecoratedBox(
+                                decoration: ShapeDecoration(
+                                  color: colors.card,
+                                  shape: SquircleBorder(
+                                    cornerRadius: 20,
+                                    side: BorderSide(color: colors.border),
+                                  ),
+                                ),
+                                child: AnimatedCrossFade(
+                                  crossFadeState: _login
+                                      ? CrossFadeState.showFirst
+                                      : CrossFadeState.showSecond,
+                                  duration: context
+                                      .read<SettingsCubit>()
+                                      .animationDuration,
+                                  firstChild: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: LoginForm(
+                                      onSubmitStart: () =>
+                                          _handleSubmissionRequested(
+                                        _AuthFlow.login,
+                                        label: 'Logging you in…',
+                                      ),
+                                    ),
+                                  ),
+                                  secondChild: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: SignupForm(
+                                      onSubmitStart: () =>
+                                          _handleSubmissionRequested(
+                                        _AuthFlow.signup,
+                                        label: 'Creating your account…',
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              child: AnimatedCrossFade(
-                                crossFadeState: _login
-                                    ? CrossFadeState.showFirst
-                                    : CrossFadeState.showSecond,
-                                duration: context
-                                    .read<SettingsCubit>()
-                                    .animationDuration,
-                                firstChild: const Padding(
-                                  padding: EdgeInsets.all(24.0),
-                                  child: LoginForm(),
-                                ),
-                                secondChild: const Padding(
-                                  padding: EdgeInsets.all(24.0),
-                                  child: SignupForm(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            // NOTE: Keep the morphing auth toggle below for later polish.
-                            /*
+                              const SizedBox(height: 12),
+                              // NOTE: Keep the morphing auth toggle below for later polish.
+                              /*
                             _AuthModeToggle(
                               loginSelected: _login,
                               duration:
@@ -104,41 +234,65 @@ class _LoginScreenState extends State<LoginScreen> {
                               },
                             ),
                             */
-                            ShadButton.ghost(
-                              onPressed: () {
-                                setState(() {
-                                  _login = !_login;
-                                });
-                              },
-                              child: Text(
-                                _login
-                                    ? 'New? Sign up'
-                                    : 'Already registered? Log in',
+                              AnimatedSwitcher(
+                                duration: context
+                                    .read<SettingsCubit>()
+                                    .animationDuration,
+                                child: _showOperationProgress
+                                    ? Padding(
+                                        key:
+                                            const ValueKey('auth-progress-bar'),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 24),
+                                        child: OperationProgressBar(
+                                          animation:
+                                              _operationProgressController
+                                                  .animation,
+                                          visible: true,
+                                          label: _operationLabel,
+                                        ),
+                                      )
+                                    : KeyedSubtree(
+                                        key: const ValueKey(
+                                            'auth-toggle-button'),
+                                        child: ShadButton.ghost(
+                                          onPressed: () {
+                                            setState(() {
+                                              _login = !_login;
+                                            });
+                                          },
+                                          child: Text(
+                                            _login
+                                                ? 'New? Sign up'
+                                                : 'Already registered? Log in',
+                                          ),
+                                        ).withTapBounce(),
+                                      ),
                               ),
-                            ).withTapBounce(),
-                            const SizedBox(height: 18),
-                            ShadButton.outline(
-                              onPressed: () => context.go('/guest-calendar'),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.calendar_today),
-                                  SizedBox(width: 8),
-                                  Text('Try Calendar (Guest Mode)'),
-                                ],
-                              ),
-                            ).withTapBounce(),
-                            const SizedBox(height: 18),
-                          ],
+                              const SizedBox(height: 18),
+                              ShadButton.outline(
+                                onPressed: () => context.go('/guest-calendar'),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.calendar_today),
+                                    SizedBox(width: 8),
+                                    Text('Try Calendar (Guest Mode)'),
+                                  ],
+                                ),
+                              ).withTapBounce(),
+                              const SizedBox(height: 18),
+                            ],
+                          ),
                         ),
                       ),
                     ),
+                    secondaryChild: const GuestChat(),
                   ),
-                  secondaryChild: const GuestChat(),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
