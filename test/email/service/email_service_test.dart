@@ -393,11 +393,11 @@ void main() {
       capturedAdditional,
       equals({
         'mail_server': 'axi.im',
-        'mail_port': '465',
+        'mail_port': '993',
         'mail_security': 'ssl',
-        'imap_server': 'axi.im',
-        'imap_port': '993',
-        'imap_security': 'ssl',
+        'send_server': 'axi.im',
+        'send_port': '465',
+        'send_security': 'ssl',
       }),
     );
     addTearDown(service.shutdown);

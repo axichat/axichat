@@ -152,7 +152,6 @@ class _SignupFormState extends State<SignupForm> {
     _currentIndex = draft.currentStep.clamp(0, _formKeys.length - 1);
   }
 
-
   void _onPressed(BuildContext context) async {
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
