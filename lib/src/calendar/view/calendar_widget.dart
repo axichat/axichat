@@ -63,6 +63,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
   late final AnimationController _tasksTabPulseController;
   late final Animation<double> _tasksTabPulse;
   bool _usesMobileLayout = false;
+  bool _mobileInitialScrollSynced = false;
   CalendarBloc? _calendarBloc;
   final GlobalKey<TaskSidebarState> _sidebarKey = GlobalKey<TaskSidebarState>();
   final ValueNotifier<bool> _cancelBucketHoverNotifier =
@@ -112,6 +113,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
         final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
         final bool usesDesktopLayout = _shouldUseDesktopLayout(spec);
         _usesMobileLayout = !usesDesktopLayout;
+        if (usesDesktopLayout && _mobileInitialScrollSynced) {
+          _mobileInitialScrollSynced = false;
+        }
+        _maybeSyncMobileInitialScroll(state);
         final bool highlightTasksTab = !usesDesktopLayout &&
             state.isSelectionMode &&
             _mobileTabController.index != 1;
@@ -158,6 +163,21 @@ class _CalendarWidgetState extends State<CalendarWidget>
         );
       },
     );
+  }
+
+  void _maybeSyncMobileInitialScroll(CalendarState state) {
+    if (!_usesMobileLayout || _mobileInitialScrollSynced) {
+      return;
+    }
+    _mobileInitialScrollSynced = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _calendarBloc?.add(
+        CalendarEvent.dateSelected(
+          date: DateTime.now(),
+        ),
+      );
+    });
   }
 
   void _handleStateChanges(BuildContext context, CalendarState state) {

@@ -127,7 +127,10 @@ const _selectionBubbleInteriorInset = _selectionCutoutDepth + 6.0;
 const _selectionBubbleVerticalInset = 4.0;
 const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
-const _selectionIndicatorInteriorGap = 6.0;
+const _selectionIndicatorInboundGap = 8.0;
+const _selectionIndicatorOutboundGap = 10.0;
+const _selectionBubbleInboundExtraGap = 2.0;
+const _selectionBubbleOutboundExtraGap = 4.0;
 const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
@@ -165,7 +168,6 @@ const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _messageListTailSpacer = 36.0;
-const _chatSettingsPanelHeight = 132.0;
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -715,40 +717,40 @@ class _ChatState extends State<Chat> {
     final textScaler = MediaQuery.of(context).textScaler;
     double scaled(double value) => textScaler.scale(value);
     final iconSize = scaled(16);
-    final buttons = <Widget>[];
-    if (chat.supportsEmail) {
-      buttons.addAll([
-        ContextActionButton(
-          icon: Icon(LucideIcons.mail, size: iconSize),
-          label: 'Show all',
-          onPressed: state.viewFilter == MessageTimelineFilter.allWithContact
-              ? null
-              : () => _setViewFilter(MessageTimelineFilter.allWithContact),
+    final buttons = <Widget>[
+      ContextActionButton(
+        icon: Icon(
+          state.viewFilter == MessageTimelineFilter.allWithContact
+              ? LucideIcons.mailCheck
+              : LucideIcons.mail,
+          size: iconSize,
         ),
-        ContextActionButton(
-          icon: Icon(LucideIcons.userCheck, size: iconSize),
-          label: 'Direct only',
-          onPressed: state.viewFilter == MessageTimelineFilter.directOnly
-              ? null
-              : () => _setViewFilter(MessageTimelineFilter.directOnly),
-        ),
-      ]);
-    }
+        label: 'Show all',
+        onPressed: state.viewFilter == MessageTimelineFilter.allWithContact
+            ? null
+            : () => _setViewFilter(MessageTimelineFilter.allWithContact),
+      ),
+      ContextActionButton(
+        icon: Icon(LucideIcons.userCheck, size: iconSize),
+        label: 'Direct only',
+        onPressed: state.viewFilter == MessageTimelineFilter.directOnly
+            ? null
+            : () => _setViewFilter(MessageTimelineFilter.directOnly),
+      ),
+    ];
     final notificationsEnabled = !chat.muted;
-    buttons.addAll([
+    buttons.add(
       ContextActionButton(
-        icon: Icon(LucideIcons.bell, size: iconSize),
-        label: 'Notifications on',
-        onPressed:
-            notificationsEnabled ? null : () => _toggleNotifications(true),
+        icon: Icon(
+          notificationsEnabled ? LucideIcons.bellOff : LucideIcons.bell,
+          size: iconSize,
+        ),
+        label: notificationsEnabled
+            ? 'Mute notifications'
+            : 'Enable notifications',
+        onPressed: () => _toggleNotifications(!notificationsEnabled),
       ),
-      ContextActionButton(
-        icon: Icon(LucideIcons.bellOff, size: iconSize),
-        label: 'Notifications off',
-        onPressed:
-            notificationsEnabled ? () => _toggleNotifications(false) : null,
-      ),
-    ]);
+    );
     final isSpamChat = chat.spam;
     buttons.add(
       ContextActionButton(
@@ -2327,37 +2329,14 @@ class _ChatState extends State<Chat> {
                         ] else
                           const SizedBox.shrink(),
                       ],
-                      bottom: jid == null
-                          ? null
-                          : PreferredSize(
-                              preferredSize: Size.fromHeight(
-                                44 +
-                                    (showSettingsPanel
-                                        ? _chatSettingsPanelHeight
-                                        : 0),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _ChatFilterIndicator(
-                                    filter: state.viewFilter,
-                                    onFilterSelected: (filter) => context
-                                        .read<ChatBloc>()
-                                        .add(
-                                          ChatViewFilterChanged(filter: filter),
-                                        ),
-                                  ),
-                                  _ChatSettingsPanel(
-                                    visible: showSettingsPanel,
-                                    children:
-                                        _buildSettingsButtons(state: state),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      bottom: null,
                     ),
                     body: Column(
                       children: [
+                        _ChatSettingsPanel(
+                          visible: showSettingsPanel,
+                          children: _buildSettingsButtons(state: state),
+                        ),
                         const ChatAlert(),
                         const _ChatSearchPanel(),
                         Expanded(
@@ -3020,11 +2999,11 @@ class _ChatState extends State<Chat> {
                                                     selectionOverlay = Padding(
                                                       padding: EdgeInsets.only(
                                                         left: self
-                                                            ? _selectionIndicatorInteriorGap
+                                                            ? _selectionIndicatorOutboundGap
                                                             : 0,
                                                         right: self
                                                             ? 0
-                                                            : _selectionIndicatorInteriorGap,
+                                                            : _selectionIndicatorInboundGap,
                                                       ),
                                                       child: indicator,
                                                     );
@@ -3233,11 +3212,13 @@ class _ChatState extends State<Chat> {
                                                         bubblePadding.add(
                                                       EdgeInsets.only(
                                                         left: self
-                                                            ? _selectionBubbleInteriorInset
+                                                            ? _selectionBubbleInteriorInset +
+                                                                _selectionBubbleOutboundExtraGap
                                                             : 0,
                                                         right: self
                                                             ? 0
-                                                            : _selectionBubbleInteriorInset,
+                                                            : _selectionBubbleInteriorInset +
+                                                                _selectionBubbleInboundExtraGap,
                                                       ),
                                                     );
                                                     bubblePadding =
@@ -3750,33 +3731,49 @@ class _ChatState extends State<Chat> {
                                         quoteSection,
                                         if (_multiSelectActive &&
                                             selectedMessages.isNotEmpty)
-                                          _MessageSelectionToolbar(
-                                            count: selectedMessages.length,
-                                            onClear: _clearMultiSelection,
-                                            onCopy: () => _copySelectedMessages(
-                                              List<Message>.of(
-                                                selectedMessages,
+                                          () {
+                                            final targets = List<Message>.of(
+                                              selectedMessages,
+                                              growable: false,
+                                            );
+                                            final canReact = !isEmailChat;
+                                            return _MessageSelectionToolbar(
+                                              count: targets.length,
+                                              onClear: _clearMultiSelection,
+                                              onCopy: () =>
+                                                  _copySelectedMessages(
+                                                List<Message>.of(targets),
                                               ),
-                                            ),
-                                            onShare: () =>
-                                                _shareSelectedMessages(
-                                              List<Message>.of(
-                                                selectedMessages,
+                                              onShare: () =>
+                                                  _shareSelectedMessages(
+                                                List<Message>.of(targets),
                                               ),
-                                            ),
-                                            onForward: () =>
-                                                _forwardSelectedMessages(
-                                              List<Message>.of(
-                                                selectedMessages,
+                                              onForward: () =>
+                                                  _forwardSelectedMessages(
+                                                List<Message>.of(targets),
                                               ),
-                                            ),
-                                            onAddToCalendar: () =>
-                                                _addSelectedToCalendar(
-                                              List<Message>.of(
-                                                selectedMessages,
+                                              onAddToCalendar: () =>
+                                                  _addSelectedToCalendar(
+                                                List<Message>.of(targets),
                                               ),
-                                            ),
-                                          )
+                                              showReactions: canReact,
+                                              onReactionSelected: canReact
+                                                  ? (emoji) =>
+                                                      _toggleQuickReactionForMessages(
+                                                        targets,
+                                                        emoji,
+                                                      )
+                                                  : null,
+                                              onReactionPicker: canReact
+                                                  ? () =>
+                                                      _handleMultiReactionSelection(
+                                                        List<Message>.of(
+                                                          targets,
+                                                        ),
+                                                      )
+                                                  : null,
+                                            );
+                                          }()
                                         else
                                           _buildComposer(
                                             hintText: composerHintText,
@@ -3812,9 +3809,9 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Future<void> _handleReactionSelection(Message message) async {
-    if (!mounted) return;
-    final selected = await showModalBottomSheet<String>(
+  Future<String?> _pickEmoji() async {
+    if (!mounted) return null;
+    return showModalBottomSheet<String>(
       context: context,
       builder: (context) => SizedBox(
         height: 320,
@@ -3828,13 +3825,28 @@ class _ChatState extends State<Chat> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleReactionSelection(Message message) async {
+    final selected = await _pickEmoji();
     if (!mounted || selected == null || selected.isEmpty) return;
-    context.read<ChatBloc>().add(
-          ChatMessageReactionToggled(
-            message: message,
-            emoji: selected,
-          ),
-        );
+    _toggleQuickReaction(message, selected);
+  }
+
+  void _toggleQuickReactionForMessages(
+    Iterable<Message> messages,
+    String emoji,
+  ) {
+    for (final message in messages) {
+      _toggleQuickReaction(message, emoji);
+    }
+  }
+
+  Future<void> _handleMultiReactionSelection(List<Message> messages) async {
+    if (messages.isEmpty) return;
+    final selected = await _pickEmoji();
+    if (!mounted || selected == null || selected.isEmpty) return;
+    _toggleQuickReactionForMessages(messages, selected);
   }
 
   Future<void> _handleForward(Message message) async {
@@ -4828,12 +4840,6 @@ class _MessageActionBar extends StatelessWidget {
     final actions = <Widget>[
       ContextActionButton(
         key: nextKey(),
-        icon: const Icon(LucideIcons.squareCheck, size: 16),
-        label: 'Select',
-        onPressed: onSelect,
-      ),
-      ContextActionButton(
-        key: nextKey(),
         icon: const Icon(LucideIcons.reply, size: 16),
         label: 'Reply',
         onPressed: onReply,
@@ -4879,6 +4885,16 @@ class _MessageActionBar extends StatelessWidget {
         onPressed: onDetails,
       ),
     ];
+    if (onSelect != null) {
+      actions.add(
+        ContextActionButton(
+          key: nextKey(),
+          icon: const Icon(LucideIcons.squareCheck, size: 16),
+          label: 'Select',
+          onPressed: onSelect,
+        ),
+      );
+    }
     return Wrap(
       spacing: scaled(8),
       runSpacing: scaled(8),
@@ -4989,6 +5005,9 @@ class _MessageSelectionToolbar extends StatelessWidget {
     required this.onShare,
     required this.onForward,
     required this.onAddToCalendar,
+    this.showReactions = false,
+    this.onReactionSelected,
+    this.onReactionPicker,
   });
 
   final int count;
@@ -4997,6 +5016,9 @@ class _MessageSelectionToolbar extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onForward;
   final VoidCallback onAddToCalendar;
+  final bool showReactions;
+  final ValueChanged<String>? onReactionSelected;
+  final VoidCallback? onReactionPicker;
 
   @override
   Widget build(BuildContext context) {
@@ -5069,6 +5091,11 @@ class _MessageSelectionToolbar extends StatelessWidget {
                   ),
                 ],
               ),
+              if (showReactions && onReactionSelected != null)
+                _MultiSelectReactionPanel(
+                  onEmojiSelected: onReactionSelected!,
+                  onCustomReaction: onReactionPicker,
+                ),
             ],
           ),
         ),
@@ -5077,95 +5104,42 @@ class _MessageSelectionToolbar extends StatelessWidget {
   }
 }
 
-class _ChatFilterIndicator extends StatelessWidget {
-  const _ChatFilterIndicator({
-    required this.filter,
-    required this.onFilterSelected,
+class _MultiSelectReactionPanel extends StatelessWidget {
+  const _MultiSelectReactionPanel({
+    required this.onEmojiSelected,
+    this.onCustomReaction,
   });
 
-  final MessageTimelineFilter filter;
-  final ValueChanged<MessageTimelineFilter> onFilterSelected;
+  final ValueChanged<String> onEmojiSelected;
+  final VoidCallback? onCustomReaction;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final option = _messageFilterOptions.firstWhere(
-      (option) => option.filter == filter,
-      orElse: () => _messageFilterOptions.first,
-    );
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(
-          top: BorderSide(color: colors.border),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 12),
+        Text(
+          'React',
+          style: context.textTheme.muted,
         ),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-      child: Row(
-        children: [
-          Icon(
-            LucideIcons.listFilter,
-            size: 16,
-            color: colors.mutedForeground,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Showing ${option.label.toLowerCase()}',
-              style: context.textTheme.small.copyWith(
-                fontWeight: FontWeight.w600,
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: _reactionManagerQuickSpacing,
+          runSpacing: _reactionManagerQuickSpacing,
+          alignment: WrapAlignment.start,
+          children: [
+            for (final emoji in _reactionQuickChoices)
+              _ReactionQuickButton(
+                emoji: emoji,
+                onPressed: () => onEmojiSelected(emoji),
               ),
-            ),
-          ),
-          PopupMenuButton<MessageTimelineFilter>(
-            tooltip: 'Change which messages are shown',
-            position: PopupMenuPosition.under,
-            onSelected: onFilterSelected,
-            itemBuilder: (context) => _messageFilterOptions
-                .map(
-                  (entry) => PopupMenuItem<MessageTimelineFilter>(
-                    value: entry.filter,
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(entry.label)),
-                        if (entry.filter == filter)
-                          Icon(
-                            LucideIcons.check,
-                            size: 16,
-                            color: colors.primary,
-                          ),
-                      ],
-                    ),
-                  ),
-                )
-                .toList(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: colors.border),
-                color: colors.card,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    option.label,
-                    style: context.textTheme.small,
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    LucideIcons.chevronDown,
-                    size: 14,
-                    color: colors.mutedForeground,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+            if (onCustomReaction != null)
+              _ReactionAddButton(onPressed: onCustomReaction!),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -5182,31 +5156,43 @@ class _ChatSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return AnimatedCrossFade(
-      duration: const Duration(milliseconds: 220),
-      sizeCurve: Curves.easeInOutCubic,
-      crossFadeState:
-          visible ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-      firstChild: const SizedBox.shrink(),
-      secondChild: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: colors.border,
+    final panel = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: colors.border,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: children,
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: children,
+        ),
+      ],
+    );
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, animation) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizeTransition(
+              sizeFactor: animation,
+              axisAlignment: -1,
+              child: FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
             ),
           ),
-        ],
-      ),
+        );
+      },
+      child: visible ? panel : const SizedBox.shrink(),
     );
   }
 }

@@ -91,8 +91,9 @@ class _DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final chats = context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[];
+    const horizontalPadding = EdgeInsets.symmetric(horizontal: 16);
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 20),
+      padding: const EdgeInsets.only(bottom: 20),
       child: Form(
         child: BlocConsumer<DraftCubit, DraftState>(
           listener: (context, state) {
@@ -146,7 +147,7 @@ class _DraftFormState extends State<DraftForm> {
 
             return Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 RecipientChipsBar(
                   recipients: _recipients,
@@ -158,55 +159,75 @@ class _DraftFormState extends State<DraftForm> {
                   collapsedByDefault: true,
                 ),
                 const SizedBox(height: 12),
-                AxiTextFormField(
-                  controller: _subjectTextController,
-                  focusNode: _subjectFocusNode,
-                  enabled: enabled,
-                  minLines: 1,
-                  maxLines: 1,
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-                  placeholder: const Text('Subject (optional)'),
-                ),
-                const SizedBox(height: 12),
-                _buildAttachmentsSection(enabled: enabled),
-                const SizedBox(height: 12),
-                AxiTextFormField(
-                  controller: _bodyTextController,
-                  focusNode: _bodyFocusNode,
-                  enabled: enabled,
-                  minLines: 7,
-                  maxLines: 7,
-                  placeholder: const Text('Message'),
-                ),
-                const SizedBox(height: 12),
-                if (state is DraftFailure)
-                  Text(
-                    state.message,
-                    style: TextStyle(
-                      color: context.colorScheme.destructive,
-                    ),
+                Padding(
+                  padding: horizontalPadding,
+                  child: AxiTextFormField(
+                    controller: _subjectTextController,
+                    focusNode: _subjectFocusNode,
+                    enabled: enabled,
+                    minLines: 1,
+                    maxLines: 1,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+                    placeholder: const Text('Subject (optional)'),
                   ),
-                Row(
-                  spacing: 8,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    ShadButton.destructive(
-                      enabled: canDiscard,
-                      onPressed: canDiscard ? _handleDiscard : null,
-                      child: const Text('Discard'),
-                    ).withTapBounce(enabled: canDiscard),
-                    ShadButton.outline(
-                      enabled: canSave,
-                      onPressed: canSave ? _handleSaveDraft : null,
-                      child: const Text('Save draft'),
-                    ).withTapBounce(enabled: canSave),
-                    ShadButton(
-                      enabled: canSend,
-                      onPressed: canSend ? _handleSendDraft : null,
-                      child: const Text('Send'),
-                    ).withTapBounce(enabled: canSend),
-                  ],
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: horizontalPadding,
+                  child: _buildAttachmentsSection(enabled: enabled),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: horizontalPadding,
+                  child: AxiTextFormField(
+                    controller: _bodyTextController,
+                    focusNode: _bodyFocusNode,
+                    enabled: enabled,
+                    minLines: 7,
+                    maxLines: 7,
+                    placeholder: const Text('Message'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: horizontalPadding,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (state is DraftFailure)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            state.message,
+                            style: TextStyle(
+                              color: context.colorScheme.destructive,
+                            ),
+                          ),
+                        ),
+                      Row(
+                        spacing: 8,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          ShadButton.destructive(
+                            enabled: canDiscard,
+                            onPressed: canDiscard ? _handleDiscard : null,
+                            child: const Text('Discard'),
+                          ).withTapBounce(enabled: canDiscard),
+                          ShadButton.outline(
+                            enabled: canSave,
+                            onPressed: canSave ? _handleSaveDraft : null,
+                            child: const Text('Save draft'),
+                          ).withTapBounce(enabled: canSave),
+                          ShadButton(
+                            enabled: canSend,
+                            onPressed: canSend ? _handleSendDraft : null,
+                            child: const Text('Send'),
+                          ).withTapBounce(enabled: canSend),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -539,10 +560,10 @@ class _DraftFormState extends State<DraftForm> {
           children: [
             const Text('Attachments'),
             const Spacer(),
-            IconButton(
+            _composerIconButton(
               tooltip: 'Add attachment',
+              icon: LucideIcons.paperclip,
               onPressed: canSelectAttachment ? addHandler : null,
-              icon: const Icon(LucideIcons.paperclip),
             ),
           ],
         ),
@@ -563,6 +584,59 @@ class _DraftFormState extends State<DraftForm> {
             onLongPress: _handlePendingAttachmentLongPressed,
           ),
       ],
+    );
+  }
+
+  Widget _composerIconButton({
+    required String tooltip,
+    required IconData icon,
+    VoidCallback? onPressed,
+  }) {
+    final colors = context.colorScheme;
+    final enabled = onPressed != null;
+    final iconColor = enabled ? colors.foreground : colors.mutedForeground;
+    final background = colors.card;
+    final decoration = ShapeDecoration(
+      color: background,
+      shadows: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ],
+      shape: SquircleBorder(
+        cornerRadius: 18,
+        side: BorderSide(color: colors.border),
+      ),
+    );
+    final child = Container(
+      width: 38,
+      height: 38,
+      decoration: decoration,
+      alignment: Alignment.center,
+      child: Icon(
+        icon,
+        size: 18,
+        color: iconColor,
+      ),
+    );
+    final tappable = Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(child: child),
+        ),
+      ),
+    ).withTapBounce(enabled: enabled);
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 400),
+      child: tappable,
     );
   }
 

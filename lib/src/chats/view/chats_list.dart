@@ -6,6 +6,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -213,15 +214,28 @@ class _ChatListTileState extends State<ChatListTile> {
   bool _exporting = false;
   bool _focused = false;
   late final FocusNode _focusNode;
+  late DateTime _timestampNow;
+  Timer? _timestampTicker;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode(debugLabel: 'chat-tile-${widget.item.jid}');
+    _timestampNow = DateTime.now();
+    _timestampTicker = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) {
+        if (!mounted) return;
+        setState(() {
+          _timestampNow = DateTime.now();
+        });
+      },
+    );
   }
 
   @override
   void dispose() {
+    _timestampTicker?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -254,9 +268,10 @@ class _ChatListTileState extends State<ChatListTile> {
                 _unreadBadgeCutoutDepthAdjustment,
           )
         : 0.0;
+    final subtitleText = _buildSubtitlePreview(item.lastMessage);
     final timestampLabel = item.lastMessage == null
         ? null
-        : formatTimeSinceLabel(DateTime.now(), item.lastChangeTimestamp);
+        : formatTimeSinceLabel(_timestampNow, item.lastChangeTimestamp);
     final timestampThickness = timestampLabel == null
         ? 0.0
         : math.max(
@@ -331,7 +346,7 @@ class _ChatListTileState extends State<ChatListTile> {
       tapBounce: false,
       leading: _TransportAwareAvatar(chat: item),
       title: item.title,
-      subtitle: item.lastMessage,
+      subtitle: subtitleText,
       subtitlePlaceholder: 'No messages',
     );
 
@@ -378,8 +393,8 @@ class _ChatListTileState extends State<ChatListTile> {
           cornerRadius: 18,
           child: Transform.translate(
             offset: Offset(0, -scaled(3)),
-            child: DisplayTimeSince(
-              timestamp: item.lastChangeTimestamp,
+            child: Text(
+              timestampLabel,
               style: context.textTheme.small.copyWith(
                 color: colors.mutedForeground,
               ),
@@ -465,6 +480,30 @@ class _ChatListTileState extends State<ChatListTile> {
         child: tileContent,
       ),
     );
+  }
+
+  String? _buildSubtitlePreview(String? rawMessage) {
+    final String? trimmed = rawMessage?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    final split = ChatSubjectCodec.splitXmppBody(trimmed);
+    final subject = _collapsePreviewText(split.subject);
+    final body = _collapsePreviewText(split.body);
+    if (subject.isEmpty) {
+      return body.isEmpty ? null : body;
+    }
+    if (body.isEmpty) {
+      return subject;
+    }
+    return '$subject — $body';
+  }
+
+  String _collapsePreviewText(String? value) {
+    if (value == null) {
+      return '';
+    }
+    return value.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   void _toggleActions() {

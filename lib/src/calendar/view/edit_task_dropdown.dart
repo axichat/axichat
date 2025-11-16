@@ -634,10 +634,12 @@ class _EditTaskDropdownState extends State<EditTaskDropdown> {
   }
 
   double _actionBarBottomInset(BuildContext context) {
+    if (widget.isSheet) {
+      return 0;
+    }
     final mediaQuery = MediaQuery.of(context);
     final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double safePadding =
-        widget.isSheet ? mediaQuery.viewPadding.bottom : 0;
+    final double safePadding = mediaQuery.viewPadding.bottom;
     if (keyboardInset <= safePadding) {
       return 0;
     }
