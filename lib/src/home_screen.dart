@@ -228,16 +228,17 @@ class HomeScreen extends StatelessWidget {
                   rosterService: context.read<XmppService>(),
                 ),
               ),
-            if (isPresence)
-              BlocProvider(
-                create: (context) => ProfileCubit(
-                  presenceService:
-                      context.read<XmppService>() as PresenceService,
-                  omemoService: isOmemo
-                      ? context.read<XmppService>() as OmemoService
-                      : null,
-                ),
+            BlocProvider(
+              create: (context) => ProfileCubit(
+                xmppService: context.read<XmppService>(),
+                presenceService: isPresence
+                    ? context.read<XmppService>() as PresenceService
+                    : null,
+                omemoService: isOmemo
+                    ? context.read<XmppService>() as OmemoService
+                    : null,
               ),
+            ),
             if (isBlocking)
               BlocProvider(
                 create: (context) => BlocklistCubit(

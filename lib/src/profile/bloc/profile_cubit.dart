@@ -6,29 +6,30 @@ import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'profile_cubit.freezed.dart';
-
 part 'profile_state.dart';
 
 class ProfileCubit extends Cubit<ProfileState> {
   ProfileCubit({
-    required PresenceService presenceService,
+    required XmppService xmppService,
+    PresenceService? presenceService,
     OmemoService? omemoService,
-  })  : _presenceService = presenceService,
+  })  : _xmppService = xmppService,
+        _presenceService = presenceService,
         _omemoService = omemoService,
         super(
           ProfileState(
-            jid: presenceService.myJid ?? '',
-            resource: presenceService.resource ?? '',
-            username: presenceService.username ?? '',
-            presence: presenceService.presence,
-            status: presenceService.status,
+            jid: xmppService.myJid ?? '',
+            resource: xmppService.resource ?? '',
+            username: xmppService.username ?? '',
+            presence: presenceService?.presence,
+            status: presenceService?.status,
           ),
         ) {
-    _presenceSubscription = _presenceService.presenceStream.listen(
+    _presenceSubscription = _presenceService?.presenceStream.listen(
       (presence) =>
           emit(state.copyWith(presence: presence ?? Presence.unknown)),
     );
-    _statusSubscription = _presenceService.statusStream.listen(
+    _statusSubscription = _presenceService?.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
     if (_omemoService != null) {
@@ -36,22 +37,23 @@ class ProfileCubit extends Cubit<ProfileState> {
     }
   }
 
-  final PresenceService _presenceService;
+  final XmppService _xmppService;
+  final PresenceService? _presenceService;
   final OmemoService? _omemoService;
 
-  late final StreamSubscription<Presence?> _presenceSubscription;
-  late final StreamSubscription<String?> _statusSubscription;
+  late final StreamSubscription<Presence?>? _presenceSubscription;
+  late final StreamSubscription<String?>? _statusSubscription;
 
   @override
   Future<void> close() async {
-    await _presenceSubscription.cancel();
-    await _statusSubscription.cancel();
+    await _presenceSubscription?.cancel();
+    await _statusSubscription?.cancel();
     return super.close();
   }
 
   Future<void> updatePresence({Presence? presence, String? status}) async {
     try {
-      await _presenceService.sendPresence(
+      await _presenceService?.sendPresence(
         presence: presence ?? state.presence,
         status: status ?? state.status,
       );

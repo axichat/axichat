@@ -23,6 +23,8 @@ import 'package:go_router/go_router.dart';
 import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const double _draftComposerControlExtent = 52;
+
 class DraftForm extends StatefulWidget {
   const DraftForm({
     super.key,
@@ -167,7 +169,7 @@ class _DraftFormState extends State<DraftForm> {
                     children: [
                       Expanded(
                         child: SizedBox(
-                          height: 56,
+                          height: _draftComposerControlExtent,
                           child: AxiTextFormField(
                             controller: _subjectTextController,
                             focusNode: _subjectFocusNode,
@@ -177,6 +179,14 @@ class _DraftFormState extends State<DraftForm> {
                             textInputAction: TextInputAction.next,
                             onSubmitted: (_) => _bodyFocusNode.requestFocus(),
                             placeholder: const Text('Subject (optional)'),
+                            constraints: const BoxConstraints(
+                              minHeight: _draftComposerControlExtent,
+                            ),
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            placeholderAlignment: Alignment.centerLeft,
+                            inputPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                            ),
                           ),
                         ),
                       ),
@@ -750,11 +760,11 @@ class _DraftComposerIconButton extends StatelessWidget {
       icon: Icon(icon, size: 24, color: iconColor),
       tooltip: tooltip,
       onPressed: onPressed,
-      splashRadius: 24,
+      splashRadius: _draftComposerControlExtent / 2,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(
-        minWidth: 52,
-        minHeight: 52,
+        minWidth: _draftComposerControlExtent,
+        minHeight: _draftComposerControlExtent,
       ),
       visualDensity: VisualDensity.compact,
     );
