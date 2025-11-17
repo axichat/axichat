@@ -98,7 +98,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         xmppService.connectivityStream.listen((connectionState) {
       if (connectionState == ConnectionState.connected) {
         unawaited(_emailService?.handleNetworkAvailable());
-        unawaited(_flushPendingAccountDeletions());
       } else if (connectionState == ConnectionState.notConnected ||
           connectionState == ConnectionState.error) {
         unawaited(_emailService?.handleNetworkLost());
@@ -764,9 +763,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final remaining = <_PendingAccountDeletion>[];
       for (final request in pending) {
         final activeKey = _activeSignupCredentialKey;
-        if (activeKey != null &&
-            state is AuthenticationSignUpInProgress &&
-            request.matchesKey(activeKey)) {
+        if (activeKey != null && request.matchesKey(activeKey)) {
           remaining.add(request);
           continue;
         }
