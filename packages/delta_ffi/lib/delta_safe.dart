@@ -93,6 +93,7 @@ class DeltaContextHandle {
   final DeltaAccountsHandle? _accountsOwner;
   final int? _accountId;
   final bool _ownsContext;
+  static const _lastSpecialContactId = 9;
 
   _DeltaEventLoop? _eventLoop;
 
@@ -256,10 +257,10 @@ class DeltaContextHandle {
         bindings: _bindings,
       );
       final type = _bindings.dc_chat_get_type(chatPtr);
-      final contactId = _bindings.dc_chat_get_contact_id(chatPtr);
+      final contactId = _primaryContactIdForChat(chatId);
       String? contactAddress;
       String? contactName;
-      if (contactId > 0) {
+      if (contactId != null) {
         final contactPtr = _bindings.dc_get_contact(_context, contactId);
         if (contactPtr != ffi.nullptr) {
           try {
@@ -284,7 +285,7 @@ class DeltaContextHandle {
         id: chatId,
         name: name ?? contactName,
         contactAddress: contactAddress ?? mailingListAddress,
-        contactId: contactId == 0 ? null : contactId,
+        contactId: contactId,
         contactName: contactName,
         type: type == 0 ? null : type,
       );
@@ -292,6 +293,36 @@ class DeltaContextHandle {
       _bindings.dc_chat_unref(chatPtr);
     }
   }
+
+  int? _primaryContactIdForChat(int chatId) {
+    final array = _bindings.dc_get_chat_contacts(_context, chatId);
+    if (array == ffi.nullptr) {
+      return null;
+    }
+    try {
+      final count = _bindings.dc_array_get_cnt(array);
+      for (var i = 0; i < count; i++) {
+        final id = _bindings.dc_array_get_id(array, i);
+        if (id > _lastSpecialContactId) {
+          return id;
+        }
+      }
+      return null;
+    } finally {
+      _bindings.dc_array_unref(array);
+    }
+  }
+
+  bool _isOutgoingState(int state) => _outgoingStates.contains(state);
+
+  static const _outgoingStates = <int>{
+    18, // OutPreparing
+    19, // OutDraft
+    20, // OutPending
+    24, // OutFailed
+    26, // OutDelivered
+    28, // OutMdnRcvd
+  };
 
   Future<DeltaMessage?> getMessage(int messageId) async {
     final msgPtr = _bindings.dc_get_msg(_context, messageId);
@@ -323,7 +354,7 @@ class DeltaContextHandle {
               timestampSeconds * 1000,
               isUtc: true,
             ).toLocal();
-      final isOutgoing = _bindings.dc_msg_is_outgoing(msgPtr) != 0;
+      final isOutgoing = _isOutgoingState(_bindings.dc_msg_get_state(msgPtr));
       return DeltaMessage(
         id: id,
         chatId: chatId,
