@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
-import 'package:axichat/src/authentication/models/signup_draft.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -54,13 +53,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       onResume: login,
       onShow: login,
       onRestart: login,
-      onDetach: () async {
-        await _recordSignupDraftClosedTimestamp();
-        await logout();
-      },
+      onDetach: logout,
       onExitRequested: () async {
         await logout();
-        await _recordSignupDraftClosedTimestamp();
         return AppExitResponse.exit;
       },
       onStateChange: (lifeCycleState) async {
@@ -87,11 +82,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _emailService?.setClientState(
           lifeCycleState != AppLifecycleState.detached,
         );
-        if (lifeCycleState == AppLifecycleState.detached) {
-          await _recordSignupDraftClosedTimestamp();
-        } else if (lifeCycleState == AppLifecycleState.resumed) {
-          await _clearSignupDraftClosureMarker();
-        }
       },
     );
     _connectivitySubscription =
@@ -108,7 +98,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       foregroundServiceActive.addListener(_foregroundListener!);
     }
     unawaited(_flushPendingAccountDeletions());
-    unawaited(_ensureSignupDraftHydrated());
+    unawaited(_purgeLegacySignupDraft());
   }
 
   final _log = Logger('AuthenticationCubit');
@@ -128,10 +118,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       CredentialStore.registerKey('pending_signup_rollbacks');
   final completedSignupAccountsKey =
       CredentialStore.registerKey('completed_signup_accounts_v1');
-  final signupDraftStorageKey = CredentialStore.registerKey('signup_draft_v1');
-  final signupDraftClosedAtStorageKey =
+  final _legacySignupDraftStorageKey =
+      CredentialStore.registerKey('signup_draft_v1');
+  final _legacySignupDraftClosedAtStorageKey =
       CredentialStore.registerKey('signup_draft_last_closed_at');
-  static const Duration _signupDraftClosureExpiry = Duration(minutes: 10);
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
@@ -139,24 +129,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final http.Client _httpClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
-  SignupDraft? _signupDraft;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   VoidCallback? _foregroundListener;
   Future<void>? _pendingAccountDeletionFlush;
-  Completer<void>? _signupDraftLoadCompleter;
-  bool _signupDraftHydrated = false;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
 
   late final AppLifecycleListener _lifecycleListener;
-
-  @override
-  void onChange(Change<AuthenticationState> change) {
-    super.onChange(change);
-    if (change.nextState is AuthenticationComplete) {
-      clearSignupDraft();
-    }
-  }
 
   @override
   Future<void> close() async {
@@ -170,33 +149,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.close();
     await _emailService?.shutdown(jid: _authenticatedJid);
     return super.close();
-  }
-
-  SignupDraft? get signupDraft => _signupDraft;
-
-  bool get hasPersistedSignupDraft =>
-      _signupDraft != null && !_signupDraft!.isEmpty;
-
-  void saveSignupDraft(SignupDraft draft) {
-    final normalized = draft.isEmpty ? null : draft;
-    if (_signupDraft == normalized) {
-      return;
-    }
-    _signupDraft = normalized;
-    unawaited(_persistSignupDraft());
-  }
-
-  void clearSignupDraft() {
-    if (_signupDraft != null) {
-      _signupDraft = null;
-    }
-    unawaited(_credentialStore.delete(key: signupDraftStorageKey));
-    unawaited(_clearSignupDraftClosureMarker());
-  }
-
-  Future<SignupDraft?> loadSignupDraft() async {
-    await _ensureSignupDraftHydrated();
-    return _signupDraft;
   }
 
   Future<void> login({
@@ -377,7 +329,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     emit(const AuthenticationComplete());
     await _recordAccountAuthenticated(resolvedJid);
-    clearSignupDraft();
     _updateEmailForegroundKeepalive();
   }
 
@@ -500,63 +451,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         host: host,
         password: password,
       );
-    }
-  }
-
-  Future<void> _ensureSignupDraftHydrated() async {
-    if (_signupDraftHydrated) {
-      return;
-    }
-    if (_signupDraftLoadCompleter != null) {
-      return _signupDraftLoadCompleter!.future;
-    }
-    final completer = Completer<void>();
-    _signupDraftLoadCompleter = completer;
-    try {
-      await _expireSignupDraftIfClosedTooLong();
-      final serialized =
-          await _credentialStore.read(key: signupDraftStorageKey);
-      if (serialized != null && serialized.isNotEmpty) {
-        try {
-          final json = jsonDecode(serialized);
-          if (json is Map<String, dynamic>) {
-            _signupDraft = SignupDraft.fromJson(json);
-          }
-        } on FormatException catch (error, stackTrace) {
-          _log.warning(
-            'Failed to parse signup draft payload',
-            error,
-            stackTrace,
-          );
-          await _credentialStore.delete(key: signupDraftStorageKey);
-        } on Exception catch (error, stackTrace) {
-          _log.warning(
-            'Unexpected signup draft parsing failure',
-            error,
-            stackTrace,
-          );
-          await _credentialStore.delete(key: signupDraftStorageKey);
-        }
-      }
-    } finally {
-      _signupDraftHydrated = true;
-      completer.complete();
-    }
-  }
-
-  Future<void> _persistSignupDraft() async {
-    final draft = _signupDraft;
-    if (draft == null || draft.isEmpty) {
-      await _credentialStore.delete(key: signupDraftStorageKey);
-      return;
-    }
-    try {
-      await _credentialStore.write(
-        key: signupDraftStorageKey,
-        value: jsonEncode(draft.toJson()),
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to persist signup draft', error, stackTrace);
     }
   }
 
@@ -1019,61 +913,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  Future<void> _recordSignupDraftClosedTimestamp() async {
+  Future<void> _purgeLegacySignupDraft() async {
     try {
-      await _credentialStore.write(
-        key: signupDraftClosedAtStorageKey,
-        value: DateTime.now().toUtc().toIso8601String(),
-      );
+      await _credentialStore.delete(key: _legacySignupDraftStorageKey);
+      await _credentialStore.delete(key: _legacySignupDraftClosedAtStorageKey);
     } on Exception catch (error, stackTrace) {
       _log.finer(
-        'Failed to store signup draft closure timestamp',
+        'Failed to clear legacy signup draft artifacts',
         error,
         stackTrace,
       );
-    }
-  }
-
-  Future<void> _clearSignupDraftClosureMarker() async {
-    try {
-      await _credentialStore.delete(key: signupDraftClosedAtStorageKey);
-    } on Exception catch (error, stackTrace) {
-      _log.finer(
-        'Failed to clear signup draft closure timestamp',
-        error,
-        stackTrace,
-      );
-    }
-  }
-
-  Future<void> _expireSignupDraftIfClosedTooLong() async {
-    final rawTimestamp =
-        await _credentialStore.read(key: signupDraftClosedAtStorageKey);
-    if (rawTimestamp == null || rawTimestamp.isEmpty) {
-      return;
-    }
-    await _clearSignupDraftClosureMarker();
-    DateTime? closedAt;
-    try {
-      closedAt = DateTime.parse(rawTimestamp).toUtc();
-    } on Exception catch (error, stackTrace) {
-      _log.finer(
-        'Failed to parse signup draft closure timestamp',
-        error,
-        stackTrace,
-      );
-    }
-    if (closedAt == null) {
-      return;
-    }
-    final now = DateTime.now().toUtc();
-    if (now.difference(closedAt) >= _signupDraftClosureExpiry) {
-      _log.info(
-        'Deleting signup draft after ${_signupDraftClosureExpiry.inMinutes} '
-        'minutes in a closed state.',
-      );
-      _signupDraft = null;
-      await _credentialStore.delete(key: signupDraftStorageKey);
     }
   }
 

@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/authentication/models/signup_draft.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -20,9 +19,14 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:xml/xml.dart';
 
 class SignupForm extends StatefulWidget {
-  const SignupForm({super.key, this.onSubmitStart});
+  const SignupForm({
+    super.key,
+    this.onSubmitStart,
+    this.onLoadingChanged,
+  });
 
   final VoidCallback? onSubmitStart;
+  final ValueChanged<bool>? onLoadingChanged;
 
   static const title = 'Sign Up';
 
@@ -71,10 +75,7 @@ class _SignupFormState extends State<SignupForm> {
 
   var _currentIndex = 0;
   String? _errorText;
-  bool _restoredPersistedDraft = false;
-  bool _suppressDraftPersistence = false;
-  bool _userEditedFields = false;
-
+  bool? _lastReportedLoading;
   late Future<String> _captchaSrc = _loadCaptchaSrc();
 
   @override
@@ -89,12 +90,6 @@ class _SignupFormState extends State<SignupForm> {
       ..addListener(_handleFieldProgressChanged);
     _captchaTextController = TextEditingController()
       ..addListener(_handleFieldProgressChanged);
-    final cubit = context.read<AuthenticationCubit>();
-    _restoreSignupDraft(cubit.signupDraft);
-    unawaited(cubit.loadSignupDraft().then((draft) {
-      if (!mounted) return;
-      _restoreSignupDraft(draft);
-    }));
   }
 
   @override
@@ -112,15 +107,13 @@ class _SignupFormState extends State<SignupForm> {
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
     _captchaRetryTimer?.cancel();
+    widget.onLoadingChanged?.call(false);
+    _lastReportedLoading = null;
     super.dispose();
   }
 
   void _handleFieldProgressChanged() {
     if (!mounted) return;
-    final shouldPersist = !_suppressDraftPersistence;
-    if (shouldPersist) {
-      _userEditedFields = true;
-    }
     final password = _passwordTextController.text;
     if (_lastPasswordValue != password) {
       _lastPasswordValue = password;
@@ -136,43 +129,14 @@ class _SignupFormState extends State<SignupForm> {
       _allowInsecureResetTick++;
     }
     setState(() {});
-    if (shouldPersist) {
-      _persistSignupDraft();
-    }
   }
 
-  void _persistSignupDraft({int? currentStep}) {
-    if (!mounted || _suppressDraftPersistence) return;
-    context.read<AuthenticationCubit>().saveSignupDraft(
-          SignupDraft(
-            username: _jidTextController.text,
-            password: _passwordTextController.text,
-            confirmPassword: _password2TextController.text,
-            captcha: _captchaTextController.text,
-            rememberMe: rememberMe,
-            allowInsecurePassword: allowInsecurePassword,
-            currentStep: currentStep ?? _currentIndex,
-          ),
-        );
-  }
-
-  void _restoreSignupDraft(SignupDraft? draft) {
-    if (draft == null || draft.isEmpty) return;
-    if (_restoredPersistedDraft || _userEditedFields) {
+  void _notifyLoadingChanged(bool loading) {
+    if (_lastReportedLoading == loading) {
       return;
     }
-    _restoredPersistedDraft = true;
-    _suppressDraftPersistence = true;
-    _jidTextController.text = draft.username;
-    _passwordTextController.text = draft.password;
-    _password2TextController.text = draft.confirmPassword;
-    _captchaTextController.text = draft.captcha;
-    allowInsecurePassword = draft.allowInsecurePassword;
-    rememberMe = draft.rememberMe;
-    _currentIndex = draft.currentStep.clamp(0, _formKeys.length - 1);
-    _suppressDraftPersistence = false;
-    if (!mounted) return;
-    setState(() {});
+    _lastReportedLoading = loading;
+    widget.onLoadingChanged?.call(loading);
   }
 
   void _onPressed(BuildContext context) async {
@@ -414,7 +378,6 @@ class _SignupFormState extends State<SignupForm> {
       _showAllowInsecureError = false;
       _showBreachedError = false;
     });
-    _persistSignupDraft(currentStep: _currentIndex);
   }
 
   @override
@@ -432,6 +395,7 @@ class _SignupFormState extends State<SignupForm> {
       builder: (context, state) {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
+        _notifyLoadingChanged(loading);
         final cleanupBlocked =
             state is AuthenticationSignupFailure && state.isCleanupBlocked;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
@@ -594,7 +558,6 @@ class _SignupFormState extends State<SignupForm> {
                                         _showBreachedError = false;
                                       }
                                     });
-                                    _persistSignupDraft();
                                   },
                                 ),
                               ),
@@ -756,9 +719,6 @@ class _SignupFormState extends State<SignupForm> {
                                     setState(() {
                                       _currentIndex--;
                                     });
-                                    _persistSignupDraft(
-                                      currentStep: _currentIndex,
-                                    );
                                   },
                                   child: const Text('Back'),
                                 ).withTapBounce(

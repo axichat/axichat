@@ -111,6 +111,7 @@ class OperationProgressBar extends StatelessWidget {
                   children: [
                     Text(
                       label,
+                      textAlign: TextAlign.center,
                       style: textTheme.muted,
                     ),
                     const SizedBox(height: 6),
