@@ -21,7 +21,6 @@ import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:dnsolve/dnsolve.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
@@ -84,38 +83,14 @@ final class ForegroundServiceUnavailableException extends XmppException {
 }
 
 final serverLookup = <String, IOEndpoint>{
-  'nz.axichat.com': IOEndpoint(
-    InternetAddress('167.160.14.12', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'axi.im': IOEndpoint(
-    InternetAddress('167.160.14.12', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'hookipa.net': IOEndpoint(
-    InternetAddress('31.172.31.205', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'xmpp.social': IOEndpoint(
-    InternetAddress('31.172.31.205', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'trashserver.net': IOEndpoint(
-    InternetAddress('5.1.72.136', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'conversations.im': IOEndpoint(
-    InternetAddress('78.47.177.120', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'draugr.de': IOEndpoint(
-    InternetAddress('23.88.8.69', type: InternetAddressType.IPv4),
-    5222,
-  ),
-  'jix.im': IOEndpoint(
-    InternetAddress('51.77.59.5', type: InternetAddressType.IPv4),
-    5222,
-  )
+  'nz.axichat.com': const IOEndpoint('167.160.14.12', 5222),
+  'axi.im': const IOEndpoint('167.160.14.12', 5222),
+  'hookipa.net': const IOEndpoint('31.172.31.205', 5222),
+  'xmpp.social': const IOEndpoint('31.172.31.205', 5222),
+  'trashserver.net': const IOEndpoint('5.1.72.136', 5222),
+  'conversations.im': const IOEndpoint('78.47.177.120', 5222),
+  'draugr.de': const IOEndpoint('23.88.8.69', 5222),
+  'jix.im': const IOEndpoint('51.77.59.5', 5222),
 };
 
 typedef ConnectionState = mox.XmppConnectionState;
@@ -139,8 +114,23 @@ abstract interface class XmppBase {
 
   bool get needsReset => false;
 
+  EventManager<mox.XmppEvent>? _eventManagerInstance;
+
   EventManager<mox.XmppEvent> get _eventManager =>
-      EventManager<mox.XmppEvent>();
+      _eventManagerInstance ??= _buildEventManager();
+
+  EventManager<mox.XmppEvent> _buildEventManager() {
+    final manager = EventManager<mox.XmppEvent>();
+    configureEventHandlers(manager);
+    return manager;
+  }
+
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {}
+
+  void resetEventHandlers() {
+    _eventManagerInstance?.unregisterAllHandlers();
+    _eventManagerInstance = null;
+  }
 
   List<mox.XmppManagerBase> get featureManagers => [];
 
@@ -261,53 +251,56 @@ class XmppService extends XmppBase
   mox.JID? _myJid;
 
   @override
-  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
-    ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
-      _connectionState = event.state;
-      _connectivityStream.add(event.state);
-      if (withForeground) {
-        _connection.updateConnectivityNotification(event.state);
-      }
-    })
-    ..registerHandler<mox.StanzaAckedEvent>((event) async {
-      if (event.stanza.id == null) return;
-      await _dbOp<XmppDatabase>((db) => db.markMessageAcked(event.stanza.id!));
-    })
-    ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-      if (_connection.carbonsEnabled != true) {
-        _xmppLogger.info('Enabling carbons...');
-        if (!await _connection.enableCarbons()) {
-          _xmppLogger.warning('Failed to enable carbons.');
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
+        _connectionState = event.state;
+        _connectivityStream.add(event.state);
+        if (withForeground) {
+          _connection.updateConnectivityNotification(event.state);
         }
-      }
-      // Device publishing is now handled internally by OmemoManager
-      // when it's initialized with the device
-      if (event.resumed) return;
-      // Connection handling is now automatic in moxxmpp v0.5.0
-    })
-    ..registerHandler<mox.ResourceBoundEvent>((event) async {
-      _xmppLogger.info('Bound resource: ${event.resource}...');
+      })
+      ..registerHandler<mox.StanzaAckedEvent>((event) async {
+        if (event.stanza.id == null) return;
+        await _dbOp<XmppDatabase>(
+            (db) => db.markMessageAcked(event.stanza.id!));
+      })
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (_connection.carbonsEnabled != true) {
+          _xmppLogger.info('Enabling carbons...');
+          if (!await _connection.enableCarbons()) {
+            _xmppLogger.warning('Failed to enable carbons.');
+          }
+        }
+        // Device publishing is now handled internally by OmemoManager.
+        if (event.resumed) return;
+        // Connection handling is automatic in moxxmpp v0.5.0.
+      })
+      ..registerHandler<mox.ResourceBoundEvent>((event) async {
+        _xmppLogger.info('Bound resource: ${event.resource}...');
 
-      await _dbOp<XmppStateStore>(
-          (ss) => ss.write(key: resourceStorageKey, value: event.resource));
-    })
-    ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
-      _xmppLogger.fine('Saving FAST token.');
-      await _dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: fastTokenStorageKey, value: event.token.token);
-        _xmppLogger.fine('FAST token persisted.');
-      });
-    })
-    ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
-      if (event.error is mox.StreamUndefinedConditionError) {
-        await _connection
-            .getManager<XmppStreamManagementManager>()
-            ?.resetState();
-        if (await _connection.reconnectionPolicy.canTriggerFailure()) {
-          await _connection.reconnectionPolicy.onFailure();
+        await _dbOp<XmppStateStore>(
+            (ss) => ss.write(key: resourceStorageKey, value: event.resource));
+      })
+      ..registerHandler<mox.NewFASTTokenReceivedEvent>((event) async {
+        _xmppLogger.fine('Saving FAST token.');
+        await _dbOp<XmppStateStore>((ss) async {
+          await ss.write(key: fastTokenStorageKey, value: event.token.token);
+          _xmppLogger.fine('FAST token persisted.');
+        });
+      })
+      ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
+        if (event.error is mox.StreamUndefinedConditionError) {
+          await _connection
+              .getManager<XmppStreamManagementManager>()
+              ?.resetState();
+          if (await _connection.reconnectionPolicy.canTriggerFailure()) {
+            await _connection.reconnectionPolicy.onFailure();
+          }
         }
-      }
-    });
+      });
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
@@ -530,16 +523,17 @@ class XmppService extends XmppBase
 
     await _connection.loadStreamState();
     await _dbOp<XmppStateStore>((ss) async {
+      final fastToken = ss.read(key: fastTokenStorageKey) as String?;
+      var userAgentId = ss.read(key: userAgentStorageKey) as String?;
+      if (userAgentId == null) {
+        userAgentId = uuid.v4();
+        await ss.write(key: userAgentStorageKey, value: userAgentId);
+      }
       _connection
-        ..setFastToken(ss.read(key: fastTokenStorageKey) as String?)
+        ..setFastToken(fastToken)
         ..setUserAgent(mox.UserAgent(
           software: appDisplayName,
-          id: ss.read(key: userAgentStorageKey) as String? ??
-              () {
-                final id = uuid.v4();
-                ss.write(key: userAgentStorageKey, value: id);
-                return id;
-              }(),
+          id: userAgentId,
         ));
     });
   }
@@ -621,7 +615,7 @@ class XmppService extends XmppBase
 
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
 
-    _eventManager.unregisterAllHandlers();
+    resetEventHandlers();
 
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -831,22 +825,28 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
 class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   XmppSocketWrapper() : super(false);
 
+  static final _log = Logger('XmppSocketWrapper');
+
   @override
   Future<List<mox_tcp.MoxSrvRecord>> srvQuery(
     String domain,
     bool dnssec,
   ) async {
-    final response = await DNSolve().lookup(
-      domain,
-      dnsSec: true,
-      type: RecordType.srv,
-    );
-
-    return response.answer?.srvs
-            ?.map((e) =>
-                mox_tcp.MoxSrvRecord(e.priority, e.weight, e.target!, e.port))
-            .toList() ??
-        [];
+    final endpoint = serverLookup[domain];
+    if (endpoint == null) {
+      final message =
+          'No static server mapping found for $domain. DNS queries are disabled.';
+      _log.severe(message);
+      throw StateError(message);
+    }
+    return [
+      mox_tcp.MoxSrvRecord(
+        0,
+        0,
+        endpoint.host,
+        endpoint.port,
+      ),
+    ];
   }
 }
 

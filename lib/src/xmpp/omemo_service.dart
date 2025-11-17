@@ -11,68 +11,70 @@ mixin OmemoService on XmppBase {
   bool get needsReset => super.needsReset || _omemoManager.isCompleted;
 
   @override
-  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
-    ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-      if (event.resumed) return;
-      _omemoLogger.info(
-          'Stream negotiation done, ensuring OMEMO device is published...');
-      // OMEMO manager should already be initialized and registered by now
-      // This handler focuses on post-connection setup like device publishing
-      if (_omemoManager.isCompleted) {
-        await _ensureOmemoDevicePublished();
-      } else {
-        _omemoLogger
-            .warning('OMEMO manager not ready during stream negotiation done');
-      }
-    })
-    ..registerHandler<mox.OmemoDeviceListUpdatedEvent>((event) async {
-      final isSelfUpdate =
-          myJid != null && event.jid.toBare().toString() == myJid;
-      _omemoLogger.fine(
-        'Received OMEMO device list update for '
-        '${isSelfUpdate ? 'self' : 'contact'}; '
-        'devices=${event.deviceList.length}.',
-      );
-      await _dbOp<XmppDatabase>(
-        (db) => db.updateChatAlert(
-          chatJid: event.jid.toBare().toString(),
-          alert: 'Contact added new devices to this chat',
-        ),
-      );
-    })
-    ..registerHandler<mox.StanzaSendingCancelledEvent>((event) async {
-      if (event.data.encryptionError == null || event.data.stanza.id == null) {
-        return;
-      }
-      late final Object? error;
-      if (event.data.cancelReason
-          case final mox.OmemoNotSupportedForContactException
-              notSupportedForContactException) {
-        error = notSupportedForContactException;
-      } else if (event.data.cancelReason is mox.UnknownOmemoError) {
-        final encryptionError =
-            event.data.encryptionError as mox.OmemoEncryptionError;
-        Object? extractedError;
-        for (final deviceErrors
-            in encryptionError.deviceEncryptionErrors.values) {
-          if (deviceErrors.isEmpty) continue;
-          extractedError = deviceErrors.first.error;
-          break;
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (event.resumed) return;
+        _omemoLogger.info(
+            'Stream negotiation done, ensuring OMEMO device is published...');
+        if (_omemoManager.isCompleted) {
+          await _ensureOmemoDevicePublished();
+        } else {
+          _omemoLogger.warning(
+              'OMEMO manager not ready during stream negotiation done');
         }
-        error = extractedError ?? omemo.NoKeyMaterialAvailableError();
-      }
-      var messageError = MessageError.fromOmemo(error);
-      if (messageError.isNone &&
-          event.data.cancelReason is mox.UnknownOmemoError) {
-        messageError = MessageError.noKeyMaterial;
-      }
-      await _dbOp<XmppDatabase>(
-        (db) => db.saveMessageError(
-          error: messageError,
-          stanzaID: event.data.stanza.id!,
-        ),
-      );
-    });
+      })
+      ..registerHandler<mox.OmemoDeviceListUpdatedEvent>((event) async {
+        final isSelfUpdate =
+            myJid != null && event.jid.toBare().toString() == myJid;
+        _omemoLogger.fine(
+          'Received OMEMO device list update for '
+          '${isSelfUpdate ? 'self' : 'contact'}; '
+          'devices=${event.deviceList.length}.',
+        );
+        await _dbOp<XmppDatabase>(
+          (db) => db.updateChatAlert(
+            chatJid: event.jid.toBare().toString(),
+            alert: 'Contact added new devices to this chat',
+          ),
+        );
+      })
+      ..registerHandler<mox.StanzaSendingCancelledEvent>((event) async {
+        if (event.data.encryptionError == null ||
+            event.data.stanza.id == null) {
+          return;
+        }
+        late final Object? error;
+        if (event.data.cancelReason
+            case final mox.OmemoNotSupportedForContactException
+                notSupportedForContactException) {
+          error = notSupportedForContactException;
+        } else if (event.data.cancelReason is mox.UnknownOmemoError) {
+          final encryptionError =
+              event.data.encryptionError as mox.OmemoEncryptionError;
+          Object? extractedError;
+          for (final deviceErrors
+              in encryptionError.deviceEncryptionErrors.values) {
+            if (deviceErrors.isEmpty) continue;
+            extractedError = deviceErrors.first.error;
+            break;
+          }
+          error = extractedError ?? omemo.NoKeyMaterialAvailableError();
+        }
+        var messageError = MessageError.fromOmemo(error);
+        if (messageError.isNone &&
+            event.data.cancelReason is mox.UnknownOmemoError) {
+          messageError = MessageError.noKeyMaterial;
+        }
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            error: messageError,
+            stanzaID: event.data.stanza.id!,
+          ),
+        );
+      });
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers {
