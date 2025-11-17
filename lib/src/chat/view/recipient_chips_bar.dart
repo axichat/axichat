@@ -933,10 +933,19 @@ class _RecipientAutocompleteField extends StatelessWidget {
           if (options.isEmpty) {
             return const SizedBox.shrink();
           }
-          final colors = Theme.of(context).colorScheme;
-          final surface = colors.surfaceContainerHigh;
-          final borderColor = colors.outlineVariant.withValues(alpha: 0.6);
-          final shadowColor = colors.shadow.withValues(alpha: 0.25);
+          final colors = context.colorScheme;
+          final theme = Theme.of(context).textTheme;
+          final overlayRadius = BorderRadius.circular(20);
+          final titleStyle = theme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: colors.foreground,
+          );
+          final subtitleStyle = theme.bodySmall?.copyWith(
+            color: colors.muted,
+          );
+          final dividerColor = colors.border.withValues(alpha: 0.55);
+          final hoverColor = colors.muted.withValues(alpha: 0.08);
+          final trailingIconColor = colors.muted.withValues(alpha: 0.9);
           return TapRegion(
             groupId: tapRegionGroup,
             onTapOutside: (_) => focusNode.unfocus(),
@@ -948,23 +957,46 @@ class _RecipientAutocompleteField extends StatelessWidget {
                   maxWidth: 420,
                   maxHeight: _suggestionMaxHeight,
                 ),
-                child: Material(
-                  color: surface,
-                  elevation: 12,
-                  shadowColor: shadowColor,
-                  shape: ContinuousRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(color: borderColor, width: 1),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.card,
+                    borderRadius: overlayRadius,
+                    border: Border.all(
+                      color: colors.border.withValues(alpha: 0.9),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 28,
+                        offset: const Offset(0, 18),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _AutocompleteOptionsList(
-                    options: options.toList(growable: false),
-                    onSelected: (option) {
-                      onSelected(option);
-                      controller.clear();
-                      focusNode.requestFocus();
-                      onRecipientAdded(option);
-                    },
+                  child: ClipRRect(
+                    borderRadius: overlayRadius,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: _AutocompleteOptionsList(
+                        options: options.toList(growable: false),
+                        onSelected: (option) {
+                          onSelected(option);
+                          controller.clear();
+                          focusNode.requestFocus();
+                          onRecipientAdded(option);
+                        },
+                        titleStyle: titleStyle,
+                        subtitleStyle: subtitleStyle,
+                        dividerColor: dividerColor,
+                        trailingIconColor: trailingIconColor,
+                        hoverColor: hoverColor,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -985,10 +1017,20 @@ class _AutocompleteOptionsList extends StatelessWidget {
   const _AutocompleteOptionsList({
     required this.options,
     required this.onSelected,
+    required this.titleStyle,
+    required this.subtitleStyle,
+    required this.dividerColor,
+    required this.trailingIconColor,
+    required this.hoverColor,
   });
 
   final List<FanOutTarget> options;
   final ValueChanged<FanOutTarget> onSelected;
+  final TextStyle? titleStyle;
+  final TextStyle? subtitleStyle;
+  final Color dividerColor;
+  final Color trailingIconColor;
+  final Color hoverColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1018,12 +1060,52 @@ class _AutocompleteOptionsList extends StatelessWidget {
             final subtitleSource =
                 chat?.emailAddress ?? chat?.jid ?? option.address ?? '';
             final subtitle = subtitleSource == title ? null : subtitleSource;
-            return ListTile(
-              dense: true,
-              leading: _SuggestionAvatar(option: option),
-              title: Text(title),
-              subtitle: subtitle == null ? null : Text(subtitle),
+            final border = index == options.length - 1
+                ? BorderSide.none
+                : BorderSide(color: dividerColor, width: 0.7);
+            return InkWell(
               onTap: () => onSelected(option),
+              hoverColor: hoverColor,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(bottom: border),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    _SuggestionAvatar(option: option),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: titleStyle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (subtitle != null)
+                            Text(
+                              subtitle,
+                              style: subtitleStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.north_east,
+                      size: 16,
+                      color: trailingIconColor,
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         ),
