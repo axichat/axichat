@@ -13,7 +13,8 @@ const _deltaDomain = 'delta.chat';
 const _deltaSelfJid = 'dc-self@$_deltaDomain';
 
 class DeltaEventType {
-  static const error = 400;
+  static const info = 100;
+  static const error = 300;
   static const errorSelfNotInGroup = 410;
   static const msgsChanged = 2000;
   static const incomingMsg = 2005;

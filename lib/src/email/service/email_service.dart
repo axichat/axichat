@@ -188,7 +188,9 @@ class EmailService {
     final resolvedAddress = (normalizedOverrideAddress != null &&
             normalizedOverrideAddress.isNotEmpty)
         ? normalizedOverrideAddress
-        : preferredAddress;
+        : ((address != null && address.isNotEmpty)
+            ? address
+            : preferredAddress);
     if (resolvedAddress == null || resolvedAddress.isEmpty) {
       throw StateError('Failed to resolve email address for $jid');
     }

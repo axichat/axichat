@@ -136,6 +136,7 @@ workflows:
       flutter: stable
       groups:
         - integration_test
+        - chatmail_provisioning # Provides CHATMAIL_PROVISIONING_TOKEN for dart-define builds/tests.
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
@@ -177,6 +178,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
         - github # TODO: Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
+        - chatmail_provisioning # CHATMAIL_PROVISIONING_TOKEN for provisioning glue service.
       android_signing:
         - AXICHAT_UPLOAD_KEY # TODO: Upload the release keystore/certs and link it as AXICHAT_UPLOAD_KEY.
     scripts:
@@ -185,7 +187,8 @@ workflows:
       - *build_runner
       - name: Shorebird Release
         script: |
-          shorebird release android --flavor production --artifact=apk
+          shorebird release android --flavor production --artifact=apk \
+          --dart-define=CHATMAIL_PROVISIONING_TOKEN=$CHATMAIL_PROVISIONING_TOKEN
       - *github_release_create_android
       - *github_release_upload_android
     artifacts:
@@ -200,6 +203,7 @@ workflows:
       flutter: stable
       groups:
         - shorebird # TODO: Codemagic must expose SHOREBIRD_TOKEN for patching builds.
+        - chatmail_provisioning # CHATMAIL_PROVISIONING_TOKEN for provisioning glue service.
     inputs:
       release_version:
         description: The release version to patch
@@ -210,7 +214,8 @@ workflows:
       - name: Shorebird Patch
         script: |
           shorebird patch android --flavor production \
-          --release-version=${{ inputs.release_version }}
+          --release-version=${{ inputs.release_version }} \
+          --dart-define=CHATMAIL_PROVISIONING_TOKEN=$CHATMAIL_PROVISIONING_TOKEN
   dev-release-android-workflow:
     name: Android Development Release Workflow
     triggering:
@@ -231,6 +236,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
         - github # TODO: Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
+        - chatmail_provisioning # CHATMAIL_PROVISIONING_TOKEN for provisioning glue service.
       android_signing:
         - AXICHAT_UPLOAD_KEY # TODO: Upload a dev keystore or reuse the production key via Codemagic secrets.
     scripts:
@@ -239,7 +245,8 @@ workflows:
       - *build_runner
       - name: Shorebird Release Development
         script: |
-          shorebird release android --flavor development --artifact=apk
+          shorebird release android --flavor development --artifact=apk \
+          --dart-define=CHATMAIL_PROVISIONING_TOKEN=$CHATMAIL_PROVISIONING_TOKEN
       - *github_release_create_android
       - *github_release_upload_android
     artifacts:
@@ -254,6 +261,7 @@ workflows:
       flutter: stable
       groups:
         - shorebird # TODO: Codemagic group must include SHOREBIRD_TOKEN for dev patching.
+        - chatmail_provisioning # CHATMAIL_PROVISIONING_TOKEN for provisioning glue service.
     inputs:
       release_version:
         description: The release version to patch
@@ -264,7 +272,8 @@ workflows:
       - name: Shorebird Patch Development
         script: |
           shorebird patch android --flavor development \
-          --release-version=${{ inputs.release_version }}
+          --release-version=${{ inputs.release_version }} \
+          --dart-define=CHATMAIL_PROVISIONING_TOKEN=$CHATMAIL_PROVISIONING_TOKEN
   release-windows-workflow:
     name: Windows Release Workflow
     triggering:
@@ -284,6 +293,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
         - github # TODO: Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
+        - chatmail_provisioning # CHATMAIL_PROVISIONING_TOKEN for provisioning glue service.
     scripts:
       - *shorebird_install_windows
       - *fetch_dependencies
@@ -295,7 +305,8 @@ workflows:
           flutter config --enable-windows-desktop
       - name: Shorebird Release
         script: |
-          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production
+          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production `
+            --dart-define=CHATMAIL_PROVISIONING_TOKEN=$env:CHATMAIL_PROVISIONING_TOKEN
       - name: Export bundle
         script: |
           Copy-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
@@ -327,6 +338,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN for Linux desktop releases.
         - github # TODO: Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
+        - chatmail_provisioning # CHATMAIL_PROVISIONING_TOKEN for provisioning glue service.
     scripts:
       - *shorebird_install
       - *fetch_dependencies
@@ -336,7 +348,8 @@ workflows:
           flutter config --enable-linux-desktop
       - name: Shorebird Release Linux
         script: |
-          shorebird release linux --flavor production
+          shorebird release linux --flavor production \
+          --dart-define=CHATMAIL_PROVISIONING_TOKEN=$CHATMAIL_PROVISIONING_TOKEN
       - name: Package Linux Bundle
         script: |
           mkdir -p dist
