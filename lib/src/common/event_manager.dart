@@ -39,11 +39,14 @@ class EventManager<E> {
   }
 
   Future<void> executeHandlers(E event) async {
-    for (final match in _registry.keys) {
+    final entries = _registry.entries.toList(growable: false);
+    for (final entry in entries) {
+      final match = entry.key;
       if (!match(event)) continue;
+      final handlers = List<Function>.from(entry.value, growable: false);
       try {
         await Future.wait(
-          _registry[match]!.map((e) async => await e(event)),
+          handlers.map((handler) async => await handler(event)),
           eagerError: true,
         );
       } on EventHandlerAbortedException catch (_) {
