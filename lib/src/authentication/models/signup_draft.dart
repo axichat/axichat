@@ -1,4 +1,6 @@
-class SignupDraft {
+import 'package:equatable/equatable.dart';
+
+class SignupDraft extends Equatable {
   const SignupDraft({
     this.username = '',
     this.password = '',
@@ -23,6 +25,30 @@ class SignupDraft {
       confirmPassword.isEmpty &&
       captcha.isEmpty;
 
+  Map<String, dynamic> toJson() {
+    return {
+      'username': username,
+      'password': password,
+      'confirmPassword': confirmPassword,
+      'captcha': captcha,
+      'rememberMe': rememberMe,
+      'allowInsecurePassword': allowInsecurePassword,
+      'currentStep': currentStep,
+    };
+  }
+
+  factory SignupDraft.fromJson(Map<String, dynamic> json) {
+    return SignupDraft(
+      username: json['username'] as String? ?? '',
+      password: json['password'] as String? ?? '',
+      confirmPassword: json['confirmPassword'] as String? ?? '',
+      captcha: json['captcha'] as String? ?? '',
+      rememberMe: json['rememberMe'] as bool? ?? true,
+      allowInsecurePassword: json['allowInsecurePassword'] as bool? ?? false,
+      currentStep: json['currentStep'] as int? ?? 0,
+    );
+  }
+
   SignupDraft copyWith({
     String? username,
     String? password,
@@ -43,4 +69,15 @@ class SignupDraft {
       currentStep: currentStep ?? this.currentStep,
     );
   }
+
+  @override
+  List<Object?> get props => [
+        username,
+        password,
+        confirmPassword,
+        captcha,
+        rememberMe,
+        allowInsecurePassword,
+        currentStep,
+      ];
 }

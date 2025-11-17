@@ -35,17 +35,29 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   var _login = true;
   late OperationProgressController _operationProgressController;
-  bool _showOperationProgress = false;
   String _operationLabel = '';
   _AuthFlow? _activeFlow;
+  bool _allowAutoSignup = true;
 
   @override
   void initState() {
     super.initState();
     _operationProgressController = OperationProgressController(vsync: this);
-    final draft = context.read<AuthenticationCubit>().signupDraft;
+    final cubit = context.read<AuthenticationCubit>();
+    final draft = cubit.signupDraft;
     if (draft != null && !draft.isEmpty) {
       _login = false;
+    } else {
+      unawaited(cubit.loadSignupDraft().then((persistedDraft) {
+        if (!mounted || !_allowAutoSignup) {
+          return;
+        }
+        if (persistedDraft != null && !persistedDraft.isEmpty) {
+          setState(() {
+            _login = false;
+          });
+        }
+      }));
     }
   }
 
@@ -53,10 +65,12 @@ class _LoginScreenState extends State<LoginScreen>
     _AuthFlow flow, {
     required String label,
   }) {
+    if (flow == _AuthFlow.login) {
+      _allowAutoSignup = false;
+    }
     setState(() {
       _activeFlow = flow;
       _operationLabel = label;
-      _showOperationProgress = true;
     });
     _operationProgressController.start();
   }
@@ -65,15 +79,8 @@ class _LoginScreenState extends State<LoginScreen>
     if (_activeFlow == null) {
       return;
     }
-    if (!_showOperationProgress) {
-      setState(() {
-        _operationLabel = label;
-        _showOperationProgress = true;
-      });
-      if (!_operationProgressController.isActive) {
-        _operationProgressController.start();
-      }
-      return;
+    if (!_operationProgressController.isActive) {
+      _operationProgressController.start();
     }
     if (_operationLabel != label) {
       setState(() {
@@ -86,7 +93,6 @@ class _LoginScreenState extends State<LoginScreen>
     await _operationProgressController.complete();
     if (!mounted) return;
     setState(() {
-      _showOperationProgress = false;
       _activeFlow = null;
     });
     _operationProgressController.reset();
@@ -96,7 +102,6 @@ class _LoginScreenState extends State<LoginScreen>
     await _operationProgressController.fail();
     if (!mounted) return;
     setState(() {
-      _showOperationProgress = false;
       _activeFlow = null;
     });
     _operationProgressController.reset();
@@ -238,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 duration: context
                                     .read<SettingsCubit>()
                                     .animationDuration,
-                                child: _showOperationProgress
+                                child: _activeFlow != null
                                     ? Padding(
                                         key:
                                             const ValueKey('auth-progress-bar'),
@@ -257,8 +262,17 @@ class _LoginScreenState extends State<LoginScreen>
                                             'auth-toggle-button'),
                                         child: ShadButton.ghost(
                                           onPressed: () {
+                                            final nextLogin = !_login;
+                                            if (nextLogin) {
+                                              _allowAutoSignup = false;
+                                              context
+                                                  .read<AuthenticationCubit>()
+                                                  .clearSignupDraft();
+                                            } else {
+                                              _allowAutoSignup = true;
+                                            }
                                             setState(() {
-                                              _login = !_login;
+                                              _login = nextLogin;
                                             });
                                           },
                                           child: Text(

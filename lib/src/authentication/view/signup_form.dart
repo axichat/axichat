@@ -70,6 +70,9 @@ class _SignupFormState extends State<SignupForm> {
 
   var _currentIndex = 0;
   String? _errorText;
+  bool _restoredPersistedDraft = false;
+  bool _suppressDraftPersistence = false;
+  bool _userEditedFields = false;
 
   late Future<String> _captchaSrc = _loadCaptchaSrc();
 
@@ -85,7 +88,12 @@ class _SignupFormState extends State<SignupForm> {
       ..addListener(_handleFieldProgressChanged);
     _captchaTextController = TextEditingController()
       ..addListener(_handleFieldProgressChanged);
-    _restoreSignupDraft(context.read<AuthenticationCubit>().signupDraft);
+    final cubit = context.read<AuthenticationCubit>();
+    _restoreSignupDraft(cubit.signupDraft);
+    unawaited(cubit.loadSignupDraft().then((draft) {
+      if (!mounted) return;
+      _restoreSignupDraft(draft);
+    }));
   }
 
   @override
@@ -108,6 +116,10 @@ class _SignupFormState extends State<SignupForm> {
 
   void _handleFieldProgressChanged() {
     if (!mounted) return;
+    final shouldPersist = !_suppressDraftPersistence;
+    if (shouldPersist) {
+      _userEditedFields = true;
+    }
     final password = _passwordTextController.text;
     if (_lastPasswordValue != password) {
       _lastPasswordValue = password;
@@ -123,11 +135,13 @@ class _SignupFormState extends State<SignupForm> {
       _allowInsecureResetTick++;
     }
     setState(() {});
-    _persistSignupDraft();
+    if (shouldPersist) {
+      _persistSignupDraft();
+    }
   }
 
   void _persistSignupDraft({int? currentStep}) {
-    if (!mounted) return;
+    if (!mounted || _suppressDraftPersistence) return;
     context.read<AuthenticationCubit>().saveSignupDraft(
           SignupDraft(
             username: _jidTextController.text,
@@ -143,6 +157,11 @@ class _SignupFormState extends State<SignupForm> {
 
   void _restoreSignupDraft(SignupDraft? draft) {
     if (draft == null || draft.isEmpty) return;
+    if (_restoredPersistedDraft || _userEditedFields) {
+      return;
+    }
+    _restoredPersistedDraft = true;
+    _suppressDraftPersistence = true;
     _jidTextController.text = draft.username;
     _passwordTextController.text = draft.password;
     _password2TextController.text = draft.confirmPassword;
@@ -150,6 +169,9 @@ class _SignupFormState extends State<SignupForm> {
     allowInsecurePassword = draft.allowInsecurePassword;
     rememberMe = draft.rememberMe;
     _currentIndex = draft.currentStep.clamp(0, _formKeys.length - 1);
+    _suppressDraftPersistence = false;
+    if (!mounted) return;
+    setState(() {});
   }
 
   void _onPressed(BuildContext context) async {
@@ -630,17 +652,17 @@ class _SignupFormState extends State<SignupForm> {
       // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
       listener: (context, state) {
         if (state is AuthenticationSignupFailure) {
-          if (state.errorText.contains('captcha')) {
-            setState(() {
-              _captchaSrc = _loadCaptchaSrc();
-            });
-          }
-          _errorText = state.errorText;
+          _reloadCaptcha(resetFirstLoad: true);
+          setState(() {
+            _errorText = state.errorText;
+          });
         }
       },
       builder: (context, state) {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
+        final cleanupBlocked =
+            state is AuthenticationSignupFailure && state.isCleanupBlocked;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
         const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
@@ -978,8 +1000,10 @@ class _SignupFormState extends State<SignupForm> {
 
                       final submitButton = showSubmitButton
                           ? ShadButton(
-                              enabled: !loading,
-                              onPressed: () => _onPressed(context),
+                              enabled: !loading && !cleanupBlocked,
+                              onPressed: cleanupBlocked
+                                  ? null
+                                  : () => _onPressed(context),
                               leading: AnimatedCrossFade(
                                 crossFadeState: loading
                                     ? CrossFadeState.showSecond
@@ -993,7 +1017,9 @@ class _SignupFormState extends State<SignupForm> {
                               ),
                               trailing: const SizedBox.shrink(),
                               child: const Text('Sign up'),
-                            ).withTapBounce(enabled: !loading)
+                            ).withTapBounce(
+                              enabled: !loading && !cleanupBlocked,
+                            )
                           : const SizedBox.shrink();
 
                       return Wrap(

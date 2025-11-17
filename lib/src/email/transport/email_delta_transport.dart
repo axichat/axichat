@@ -656,7 +656,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (parent.path != directory.path) {
       await parent.create(recursive: true);
     }
-    Future<void> _logAccountsDirState(String reason) async {
+    Future<void> logAccountsDirState(String reason) async {
       final entries = <String>[];
       if (await directory.exists()) {
         await for (final entity in directory.list()) {
@@ -672,7 +672,7 @@ class EmailDeltaTransport implements ChatTransport {
     try {
       return await _deltaSafe.createAccounts(directory: directory.path);
     } on DeltaSafeException catch (error, stackTrace) {
-      await _logAccountsDirState('initial create');
+      await logAccountsDirState('initial create');
       _log.warning(
         'Failed to open Delta accounts at ${directory.path}, resetting storage',
         error,

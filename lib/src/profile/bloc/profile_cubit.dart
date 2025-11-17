@@ -13,8 +13,7 @@ class ProfileCubit extends Cubit<ProfileState> {
     required XmppService xmppService,
     PresenceService? presenceService,
     OmemoService? omemoService,
-  })  : _xmppService = xmppService,
-        _presenceService = presenceService,
+  })  : _presenceService = presenceService,
         _omemoService = omemoService,
         super(
           ProfileState(
@@ -37,7 +36,6 @@ class ProfileCubit extends Cubit<ProfileState> {
     }
   }
 
-  final XmppService _xmppService;
   final PresenceService? _presenceService;
   final OmemoService? _omemoService;
 
@@ -59,8 +57,6 @@ class ProfileCubit extends Cubit<ProfileState> {
       );
     } on XmppPresenceException catch (_) {}
   }
-
-  // Future<void> disconnect() => _xmppService.disconnect();
 
   Future<void> loadFingerprints() async {
     if (_omemoService == null) return;
