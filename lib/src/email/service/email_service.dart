@@ -41,9 +41,13 @@ class EmailAccount {
 }
 
 class EmailProvisioningException implements Exception {
-  const EmailProvisioningException(this.message);
+  const EmailProvisioningException(
+    this.message, {
+    this.isRecoverable = false,
+  });
 
   final String message;
+  final bool isRecoverable;
 
   @override
   String toString() => 'EmailProvisioningException: $message';
@@ -234,6 +238,7 @@ class EmailService {
         await _credentialStore.write(key: provisionedKey, value: 'true');
       } on DeltaSafeException catch (error, stackTrace) {
         await _credentialStore.write(key: provisionedKey, value: 'false');
+        final isTimeout = error.message.toLowerCase().contains('timed out');
         final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
           error,
           operation: 'configure Chatmail account',
@@ -243,17 +248,26 @@ class EmailService {
           error,
           stackTrace,
         );
-        final shouldClearCredentials =
-            credentialsMutated && mapped.code != DeltaChatErrorCode.network;
+        final shouldClearCredentials = credentialsMutated &&
+            mapped.code != DeltaChatErrorCode.network &&
+            !isTimeout;
         if (shouldClearCredentials) {
           await _clearCredentials(scope);
         }
         if (startedForProvisioning) {
           await stop();
         }
+        if (isTimeout) {
+          throw const EmailProvisioningException(
+            'Setting up axi.im email is taking longer than expected. '
+            'Please leave Axichat open—we will keep retrying in the background.',
+            isRecoverable: true,
+          );
+        }
         if (mapped.code == DeltaChatErrorCode.network) {
           throw const EmailProvisioningException(
             'Unable to reach axi.im email services. Please try again.',
+            isRecoverable: true,
           );
         }
         throw EmailProvisioningException(

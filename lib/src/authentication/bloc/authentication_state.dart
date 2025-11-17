@@ -87,10 +87,14 @@ final class AuthenticationFailure extends AuthenticationState {
 }
 
 final class AuthenticationSignupFailure extends AuthenticationState {
-  const AuthenticationSignupFailure(this.errorText);
+  const AuthenticationSignupFailure(
+    this.errorText, {
+    this.isCleanupBlocked = false,
+  });
 
   final String errorText;
+  final bool isCleanupBlocked;
 
   @override
-  List<String> get props => [errorText];
+  List<Object?> get props => [errorText, isCleanupBlocked];
 }

@@ -54,9 +54,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       onResume: login,
       onShow: login,
       onRestart: login,
-      onDetach: logout,
+      onDetach: () async {
+        await _recordSignupDraftClosedTimestamp();
+        await logout();
+      },
       onExitRequested: () async {
         await logout();
+        await _recordSignupDraftClosedTimestamp();
         return AppExitResponse.exit;
       },
       onStateChange: (lifeCycleState) async {
@@ -83,6 +87,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _emailService?.setClientState(
           lifeCycleState != AppLifecycleState.detached,
         );
+        if (lifeCycleState == AppLifecycleState.detached) {
+          await _recordSignupDraftClosedTimestamp();
+        } else if (lifeCycleState == AppLifecycleState.resumed) {
+          await _clearSignupDraftClosureMarker();
+        }
       },
     );
     _connectivitySubscription =
@@ -100,6 +109,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       foregroundServiceActive.addListener(_foregroundListener!);
     }
     unawaited(_flushPendingAccountDeletions());
+    unawaited(_ensureSignupDraftHydrated());
   }
 
   final _log = Logger('AuthenticationCubit');
@@ -117,6 +127,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final passwordStorageKey = CredentialStore.registerKey('password');
   final pendingSignupRollbacksKey =
       CredentialStore.registerKey('pending_signup_rollbacks');
+  final signupDraftStorageKey = CredentialStore.registerKey('signup_draft_v1');
+  final signupDraftClosedAtStorageKey =
+      CredentialStore.registerKey('signup_draft_last_closed_at');
+  static const Duration _signupDraftClosureExpiry = Duration(minutes: 10);
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
@@ -128,8 +142,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   VoidCallback? _foregroundListener;
   Future<void>? _pendingAccountDeletionFlush;
+  Completer<void>? _signupDraftLoadCompleter;
+  bool _signupDraftHydrated = false;
+  String? _blockedSignupCredentialKey;
 
   late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void onChange(Change<AuthenticationState> change) {
+    super.onChange(change);
+    if (change.nextState is AuthenticationComplete) {
+      clearSignupDraft();
+    }
+  }
 
   @override
   Future<void> close() async {
@@ -147,12 +172,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   SignupDraft? get signupDraft => _signupDraft;
 
+  bool get hasPersistedSignupDraft =>
+      _signupDraft != null && !_signupDraft!.isEmpty;
+
   void saveSignupDraft(SignupDraft draft) {
-    _signupDraft = draft;
+    final normalized = draft.isEmpty ? null : draft;
+    if (_signupDraft == normalized) {
+      return;
+    }
+    _signupDraft = normalized;
+    unawaited(_persistSignupDraft());
   }
 
   void clearSignupDraft() {
-    _signupDraft = null;
+    if (_signupDraft != null) {
+      _signupDraft = null;
+    }
+    unawaited(_credentialStore.delete(key: signupDraftStorageKey));
+    unawaited(_clearSignupDraftClosureMarker());
+  }
+
+  Future<SignupDraft?> loadSignupDraft() async {
+    await _ensureSignupDraftHydrated();
+    return _signupDraft;
   }
 
   Future<void> login({
@@ -280,10 +322,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       _lastEmailProvisioningError = null;
     } on EmailProvisioningException catch (error) {
-      _lastEmailProvisioningError = error;
-      emit(AuthenticationFailure(error.message));
-      await _xmppService.disconnect();
-      return;
+      if (error.isRecoverable) {
+        _log.warning('Chatmail provisioning pending: ${error.message}');
+        _lastEmailProvisioningError = null;
+      } else {
+        _lastEmailProvisioningError = error;
+        emit(AuthenticationFailure(error.message));
+        await _xmppService.disconnect();
+        return;
+      }
     } on Exception catch (error, stackTrace) {
       _log.warning('Chatmail provisioning failed', error, stackTrace);
     }
@@ -310,6 +357,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!cleanupComplete) {
       emit(const AuthenticationSignupFailure(
         signupCleanupInProgressMessage,
+        isCleanupBlocked: true,
       ));
       return;
     }
@@ -332,7 +380,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     } on Exception catch (_) {
       emit(const AuthenticationSignupFailure(
-          'Failed to register, try again later.'));
+        'Failed to register, try again later.',
+      ));
       return;
     }
     await login(username: username, password: password, rememberMe: rememberMe);
@@ -343,6 +392,63 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         host: host,
         password: password,
       );
+    }
+  }
+
+  Future<void> _ensureSignupDraftHydrated() async {
+    if (_signupDraftHydrated) {
+      return;
+    }
+    if (_signupDraftLoadCompleter != null) {
+      return _signupDraftLoadCompleter!.future;
+    }
+    final completer = Completer<void>();
+    _signupDraftLoadCompleter = completer;
+    try {
+      await _expireSignupDraftIfClosedTooLong();
+      final serialized =
+          await _credentialStore.read(key: signupDraftStorageKey);
+      if (serialized != null && serialized.isNotEmpty) {
+        try {
+          final json = jsonDecode(serialized);
+          if (json is Map<String, dynamic>) {
+            _signupDraft = SignupDraft.fromJson(json);
+          }
+        } on FormatException catch (error, stackTrace) {
+          _log.warning(
+            'Failed to parse signup draft payload',
+            error,
+            stackTrace,
+          );
+          await _credentialStore.delete(key: signupDraftStorageKey);
+        } on Exception catch (error, stackTrace) {
+          _log.warning(
+            'Unexpected signup draft parsing failure',
+            error,
+            stackTrace,
+          );
+          await _credentialStore.delete(key: signupDraftStorageKey);
+        }
+      }
+    } finally {
+      _signupDraftHydrated = true;
+      completer.complete();
+    }
+  }
+
+  Future<void> _persistSignupDraft() async {
+    final draft = _signupDraft;
+    if (draft == null || draft.isEmpty) {
+      await _credentialStore.delete(key: signupDraftStorageKey);
+      return;
+    }
+    try {
+      await _credentialStore.write(
+        key: signupDraftStorageKey,
+        value: jsonEncode(draft.toJson()),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to persist signup draft', error, stackTrace);
     }
   }
 
@@ -528,6 +634,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       }
       await _writePendingAccountDeletions(remaining);
+      _handleSignupCleanupResolution(remaining);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to flush pending signup rollbacks',
@@ -546,10 +653,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final cleanupPending = pending.any(
       (entry) => entry.matchesCredentials(username, host),
     );
+    final normalizedKey = _normalizeSignupKey(username, host);
     if (cleanupPending) {
+      _blockedSignupCredentialKey = normalizedKey;
       _log.warning(
         'Signup blocked for $username@$host because cleanup is still pending.',
       );
+    } else if (_blockedSignupCredentialKey == normalizedKey) {
+      _blockedSignupCredentialKey = null;
     }
     return !cleanupPending;
   }
@@ -619,6 +730,88 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       value: serialized,
     );
   }
+
+  Future<void> _recordSignupDraftClosedTimestamp() async {
+    try {
+      await _credentialStore.write(
+        key: signupDraftClosedAtStorageKey,
+        value: DateTime.now().toUtc().toIso8601String(),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.finer(
+        'Failed to store signup draft closure timestamp',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _clearSignupDraftClosureMarker() async {
+    try {
+      await _credentialStore.delete(key: signupDraftClosedAtStorageKey);
+    } on Exception catch (error, stackTrace) {
+      _log.finer(
+        'Failed to clear signup draft closure timestamp',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _expireSignupDraftIfClosedTooLong() async {
+    final rawTimestamp =
+        await _credentialStore.read(key: signupDraftClosedAtStorageKey);
+    if (rawTimestamp == null || rawTimestamp.isEmpty) {
+      return;
+    }
+    await _clearSignupDraftClosureMarker();
+    DateTime? closedAt;
+    try {
+      closedAt = DateTime.parse(rawTimestamp).toUtc();
+    } on Exception catch (error, stackTrace) {
+      _log.finer(
+        'Failed to parse signup draft closure timestamp',
+        error,
+        stackTrace,
+      );
+    }
+    if (closedAt == null) {
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    if (now.difference(closedAt) >= _signupDraftClosureExpiry) {
+      _log.info(
+        'Deleting signup draft after ${_signupDraftClosureExpiry.inMinutes} '
+        'minutes in a closed state.',
+      );
+      _signupDraft = null;
+      await _credentialStore.delete(key: signupDraftStorageKey);
+    }
+  }
+
+  void _handleSignupCleanupResolution(
+    List<_PendingAccountDeletion> remaining,
+  ) {
+    final blockedKey = _blockedSignupCredentialKey;
+    if (blockedKey == null) {
+      return;
+    }
+    final stillPending = remaining.any(
+      (entry) => _normalizeSignupKey(entry.username, entry.host) == blockedKey,
+    );
+    if (stillPending) {
+      return;
+    }
+    _blockedSignupCredentialKey = null;
+    final stateSnapshot = state;
+    if (stateSnapshot is AuthenticationSignupFailure &&
+        stateSnapshot.isCleanupBlocked) {
+      emit(const AuthenticationNone());
+    }
+  }
+
+  String _normalizeSignupKey(String username, String host) =>
+      '${username.trim().toLowerCase()}@${host.trim().toLowerCase()}';
 }
 
 class _PendingAccountDeletion {

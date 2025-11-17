@@ -441,6 +441,7 @@ void main() {
         AuthenticationSignUpInProgress(),
         AuthenticationSignupFailure(
           AuthenticationCubit.signupCleanupInProgressMessage,
+          isCleanupBlocked: true,
         ),
       ],
       verify: (bloc) {
