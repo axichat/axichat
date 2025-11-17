@@ -1,14 +1,25 @@
-  name:
-  parts:
-    uet-lms:
-      source: .
-      plugin: flutter
-      flutter-target: lib/main.dart
-      build-packages:
-        - libsecret-devel
-        - jsoncpp-devel
-      stage-packages:
-        - libsecret
-        - jsoncpp
-    adopt-info:
-  build-base:
+name: axichat
+base: core22
+version: 0.3.2
+summary: TODO_SUMMARY # Short sentence shown in the Snap Store
+description: |
+  TODO_LONG_DESCRIPTION
+  Describe Axichat's XMPP/OMEMO focus, supported platforms, and privacy stance.
+confinement: strict
+license: TODO_LICENSE
+grade: devel # TODO: Change to "stable" when the snap passes manual review
+
+apps:
+  axichat:
+    command: bin/axichat
+    extensions: [flutter-stable]
+    plugs: [network, network-bind]
+    environment:
+      ENABLE_SHOREBIRD: "false" # TODO: Enable OTA only for channels that allow Shorebird.
+
+parts:
+  axichat:
+    source: .
+    plugin: flutter
+    flutter-target: lib/main.dart
+    # TODO: Add build-packages/stage-packages for extra system dependencies if needed.

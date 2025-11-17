@@ -1,0 +1,10 @@
+Axichat is a free and open-source XMPP (Jabber) chat client built with Flutter. Privacy and
+end-to-end encryption are first-class features, backed by OMEMO2 and SQLCipher storage.
+
+TODO:
+- Describe the flagship features (multi-account roster, OMEMO setup, calendar/tasks, etc.).
+- Explain how message storage works locally and how users can export/import history.
+- Link to the privacy policy and document what data (if any) leaves the device.
+- Add localized support information if you publish in additional languages.
+
+This text powers the Google Play Store listing—keep it human-friendly and updated for each release.

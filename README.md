@@ -1,27 +1,81 @@
-## Axichat
-
-### The Center of Decentralization
-
-Download the [latest version](https://github.com/axichat/axichat/releases/latest)
-
-<p float="left">
-  <img src="/metadata/en-US/images/phoneScreenshots/1-unread_chats_white.png" width="49%"  alt="Chats page"/>
-  <img src="/metadata/en-US/images/phoneScreenshots/4-open_chat_dark.png" width="49%"  alt="Message page"/>
+<p align="center">
+  <img src="assets/icons/generated/app_icon_android_foreground.png" width="120" alt="Axichat icon" />
 </p>
 
-Take control of your communication with the only XMPP-based instant messenger that:
+<h1 align="center">Axichat</h1>
 
-- Has 1st party custom push notifications. NO FIREBASE, NO GOOGLE seeing your message data/metadata
-- Works on android, windows and linux (iOS, macOS coming)
-- Doesn't require expertise in XMPP
-- Looks good
+<p align="center"><strong>Privacy-first, cross-platform XMPP chat built with Flutter.</strong></p>
 
-### Multi-recipient fan-out
+<p align="center">
+  <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
+    <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-windows.zip">
+    <img alt="Download the Windows build" src="https://img.shields.io/badge/Download%20Windows-4178D4?style=for-the-badge&logo=windows&logoColor=white" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux.tar.gz">
+    <img alt="Download the Linux build" src="https://img.shields.io/badge/Download%20Linux-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
+  </a>
+</p>
 
-- Composer chips let you opt-in any combination of 1:1 chats for a given send. Chips indicate encryption state (lock badge) and per-recipient delivery status.
-- A Direct/All toggle in every 1:1 filters the timeline (`Direct` hides multi-recipient threads, `All` shows them) and the choice is stored per chat.
-- Fan-out sends reuse a single `share_id` (ULID) for all copies, record share participants, and surface cross-recipient banners inside bubbles ("Also sent to …").
-- Subject tokens (e.g., `[s:01HX5R8W7YAYR5K1R7Q7MB5G4W]`) are injected automatically to improve reply correlation. Builders can disable tokens per send by passing `useSubjectToken: false` to `EmailService.fanOutSend`.
-- A soft cap of 20 recipients per fan-out (`_maxFanOutRecipients` in `email_service.dart`) prevents accidental blasts; exceeding the limit throws `FanOutValidationException`.
-- Current limitation: Delta Chat does not expose raw email headers, so replies can only be correlated via subject tokens. Clients that strip the token fall back to Direct view.
-- Dev note: schema v6 adds `message_shares`, `message_participants`, and `message_copies`; run `dart run build_runner build --delete-conflicting-outputs` after pulling and before running `flutter test`/`flutter analyze` to keep Drift output current.
+---
+
+## Why Axichat?
+
+- **Own your network** – Native XMPP + OMEMO2 encryption with no Firebase, Google Play Services, or proprietary push relays.
+- **First-party push + secure storage** – SQLCipher for the local database and Axichat-operated notification relays keep metadata private.
+- **Truly cross-platform** – Android, Windows, and Linux builds share the same polished UI with upcoming macOS/iOS support.
+- **Operations-ready UX** – Deadline-safe notifications, monitored overlays, and a consistent notification stack across the entire app.
+
+## Highlights
+
+### Rich multi-recipient fan-out
+- Compose once, send to a curated fan-out list with live encryption badges per recipient.
+- Automatically tracks delivery per recipient and displays cross-recipient banners ("Also sent to…").
+- Subject tokens (ULIDs) keep replies correlated even when external clients respond.
+
+### Unified messaging experience
+- Direct/All toggles inside every conversation let you declutter the timeline when focusing on 1:1 chats.
+- Message history, reactions, and participant data stay in sync through Drift migrations (`dart run build_runner build --delete-conflicting-outputs`).
+- Custom render objects power fluid chat bubbles without post-frame hacks.
+
+### Platform flavors
+- `production` flavor ships to users (default in `flutter run`).
+- `development` flavor uses `[DEV] Axichat` branding plus `.dev` app ID suffix, perfect for staging servers or Shorebird dev releases.
+
+## Screenshots
+
+<p float="left">
+  <img src="/metadata/en-US/images/phoneScreenshots/1-unread_chats_white.png" width="49%"  alt="Chats page" />
+  <img src="/metadata/en-US/images/phoneScreenshots/4-open_chat_dark.png" width="49%"  alt="Message page" />
+</p>
+
+## Downloading & Installing
+
+1. Pick the platform button above (APK, Windows `.zip`, or Linux `.tar.gz`).
+2. Verify the checksum/signature provided in the GitHub Release notes.
+3. Install:
+   - **Android** – Sideload the APK or deploy through your preferred device manager.
+   - **Windows** – Extract the archive and run `Axichat.exe`.
+   - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for desktop entry guidance).
+
+## Build From Source
+
+```bash
+flutter pub get
+flutter pub run flutter_launcher_icons # optional: regenerate launcher art
+dart run build_runner build --delete-conflicting-outputs
+flutter build apk --flavor production --release
+```
+
+Use the flavor that matches your deployment (`--flavor development` for staging). After any model changes under `lib/src/storage/models`, re-run the `build_runner` command above.
+
+## Contributing
+
+- Follow the architecture notes in `CLAUDE.md`, `AGENTS.md`, and the feature-specific guides scattered under `lib/src/*/CLAUDE.md`.
+- Keep commits small, run `dart format .` + `dart analyze`, and document any vendor edits inside `VENDOR_NOTES.md`.
+- Bug reports and feature requests live at [GitLab Issues](https://gitlab.com/axichat/axichat/-/issues).
+
+---
+
+Take control of your communication and help us build the most reliable, privacy-preserving XMPP messenger.

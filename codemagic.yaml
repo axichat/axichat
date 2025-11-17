@@ -35,7 +35,8 @@ definitions:
     - &build_runner
       name: Build Runner
       script: |
-        dart run build_runner build
+        flutter pub get
+        dart run build_runner build --delete-conflicting-outputs
     - &diagnose_git_remotes
       name: Diagnose Git Remotes
       script: |
@@ -101,6 +102,15 @@ definitions:
         echo $env:GITHUB_TOKEN | gh auth login --with-token
         
         gh release upload $env:CM_TAG 'build\windows\x64\runner\release.zip#axichat windows'
+    - &github_release_upload_linux
+      name: Upload to Linux GitHub Releases
+      script: |
+        git remote set-url origin https://github.com/axichat/axichat.git
+        git remote -v
+
+        echo $GITHUB_TOKEN | gh auth login --with-token
+
+        gh release upload $CM_TAG dist/axichat-linux-$CM_TAG.tar.gz#axichat-linux
 
 workflows:
   test-workflow:
@@ -165,14 +175,14 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird
-        - github
+        - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
+        - github # TODO: Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
       android_signing:
-        - AXICHAT_UPLOAD_KEY
+        - AXICHAT_UPLOAD_KEY # TODO: Upload the release keystore/certs and link it as AXICHAT_UPLOAD_KEY.
     scripts:
-      - *build_runner
       - *shorebird_install
       - *fetch_dependencies
+      - *build_runner
       - name: Shorebird Release
         script: |
           shorebird release android --flavor production --artifact=apk
@@ -189,18 +199,17 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird
+        - shorebird # TODO: Codemagic must expose SHOREBIRD_TOKEN for patching builds.
     inputs:
       release_version:
         description: The release version to patch
     scripts:
-      - *build_runner
       - *shorebird_install
       - *fetch_dependencies
+      - *build_runner
       - name: Shorebird Patch
         script: |
           shorebird patch android --flavor production \
-          --artifact=apk \
           --release-version=${{ inputs.release_version }}
   dev-release-android-workflow:
     name: Android Development Release Workflow
@@ -220,15 +229,14 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird
-        - github
+        - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
+        - github # TODO: Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
       android_signing:
-        - AXICHAT_UPLOAD_KEY
+        - AXICHAT_UPLOAD_KEY # TODO: Upload a dev keystore or reuse the production key via Codemagic secrets.
     scripts:
-      - *diagnose_git_remotes
-      - *build_runner
       - *shorebird_install
       - *fetch_dependencies
+      - *build_runner
       - name: Shorebird Release Development
         script: |
           shorebird release android --flavor development --artifact=apk
@@ -245,18 +253,17 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird
+        - shorebird # TODO: Codemagic group must include SHOREBIRD_TOKEN for dev patching.
     inputs:
       release_version:
         description: The release version to patch
     scripts:
-      - *build_runner
       - *shorebird_install
       - *fetch_dependencies
+      - *build_runner
       - name: Shorebird Patch Development
         script: |
           shorebird patch android --flavor development \
-          --artifact=apk \
           --release-version=${{ inputs.release_version }}
   release-windows-workflow:
     name: Windows Release Workflow
@@ -275,14 +282,14 @@ workflows:
     environment:
       flutter: stable
       groups:
-        - shorebird
-        - github
+        - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
+        - github # TODO: Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
     scripts:
-      - *build_runner
       - *shorebird_install_windows
+      - *fetch_dependencies
+      - *build_runner
       - *openssl_install_windows
       - *refresh_path_windows
-      - *fetch_dependencies
       - name: Configure for Windows
         script: |
           flutter config --enable-windows-desktop
@@ -291,13 +298,50 @@ workflows:
           & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production
       - name: Export bundle
         script: |
-          Move-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
-          Move-Item -Path C:\Windows\System32\vcruntime140.dll -Destination build/windows/x64/runner/Release 
-          Move-Item -Path C:\Windows\System32\vcruntime140_1.dll -Destination build/windows/x64/runner/Release 
+          Copy-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
+          Copy-Item -Path C:\Windows\System32\vcruntime140.dll -Destination build/windows/x64/runner/Release 
+          Copy-Item -Path C:\Windows\System32\vcruntime140_1.dll -Destination build/windows/x64/runner/Release 
           cd build/windows/x64/runner/Release
           7z a -r ../release.zip ./*
       - *github_release_create_windows
       - *github_release_upload_windows
     artifacts:
       - build\windows\x64\runner\release.zip
-
+  release-linux-workflow:
+    name: Linux Release Workflow
+    triggering:
+      events:
+        - tag
+      branch_patterns:
+        - pattern: 'master'
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: 'v+([0-9]).+([0-9]).+([0-9])'
+          include: true
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      ubuntu: 24.04
+      flutter: stable
+      groups:
+        - shorebird # TODO: Store SHOREBIRD_TOKEN for Linux desktop releases.
+        - github # TODO: Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
+    scripts:
+      - *shorebird_install
+      - *fetch_dependencies
+      - *build_runner
+      - name: Configure for Linux
+        script: |
+          flutter config --enable-linux-desktop
+      - name: Shorebird Release Linux
+        script: |
+          shorebird release linux --flavor production
+      - name: Package Linux Bundle
+        script: |
+          mkdir -p dist
+          tar -czf dist/axichat-linux-$CM_TAG.tar.gz -C build/linux/x64/release/bundle .
+      - *github_release_create_android
+      - *github_release_upload_linux
+    artifacts:
+      - dist/axichat-linux-*.tar.gz

@@ -3,7 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 
+/// F-Droid and other store builds pass `--dart-define=ENABLE_SHOREBIRD=false`
+/// to disable OTA updates entirely.
+const bool kEnableShorebird =
+    bool.fromEnvironment('ENABLE_SHOREBIRD', defaultValue: true);
+
 Future<bool> checkShorebird([ShorebirdUpdater? shorebird]) async {
+  if (!kEnableShorebird) {
+    return false;
+  }
   final updater = shorebird ?? ShorebirdUpdater();
 
   if (!updater.isAvailable) return false;
@@ -25,6 +33,9 @@ class ShorebirdChecker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!kEnableShorebird) {
+      return const SizedBox.shrink();
+    }
     return AnimatedSize(
       duration: context.watch<SettingsCubit>().animationDuration,
       curve: Curves.easeInOut,
