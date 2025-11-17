@@ -233,6 +233,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final String resolvedJid = jid;
     final String resolvedPassword = password;
+    final String displayName = resolvedJid.split('@').first;
 
     final databasePrefixStorageKey =
         CredentialStore.registerKey('${jid}_database_prefix');
@@ -248,6 +249,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? databasePassphrase =
         await _credentialStore.read(key: databasePassphraseStorageKey);
     databasePassphrase ??= generateRandomString();
+    final String ensuredDatabasePrefix = databasePrefix;
+    final String ensuredDatabasePassphrase = databasePassphrase;
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
     final bool usingStoredCredentials = username == null;
@@ -268,6 +271,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
+    Future<void>? emailProvisioningFuture;
+    if (emailService != null) {
+      final resolvedEmailPassword = emailPassword!;
+      emailProvisioningFuture = Future<EmailAccount>.sync(
+        () => emailService.ensureProvisioned(
+          displayName: displayName,
+          databasePrefix: ensuredDatabasePrefix,
+          databasePassphrase: ensuredDatabasePassphrase,
+          jid: resolvedJid,
+          passwordOverride: resolvedEmailPassword,
+          addressOverride: resolvedJid,
+        ),
+      ).then<void>((_) {});
+    }
+
     try {
       password = await _xmppService.connect(
         jid: resolvedJid,
@@ -277,14 +295,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         preHashed: preHashed,
       );
     } on XmppAuthenticationException catch (_) {
+      _cancelPendingEmailProvisioning(emailProvisioningFuture);
       emit(const AuthenticationFailure('Incorrect username or password'));
       await _xmppService.disconnect();
       return;
     } on XmppAlreadyConnectedException catch (_) {
+      _cancelPendingEmailProvisioning(emailProvisioningFuture);
       await _xmppService.disconnect();
       emit(const AuthenticationNone());
       return;
     } on Exception catch (e) {
+      _cancelPendingEmailProvisioning(emailProvisioningFuture);
       _log.severe(e);
       emit(const AuthenticationFailure('Error. Please try again later.'));
       await _xmppService.disconnect();
@@ -310,34 +331,47 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     _authenticatedJid = jid;
 
-    try {
-      final displayName = jid.split('@').first;
-      await _emailService?.ensureProvisioned(
-        displayName: displayName,
-        databasePrefix: databasePrefix,
-        databasePassphrase: databasePassphrase,
-        jid: jid,
-        passwordOverride: emailPassword,
-        addressOverride: jid,
-      );
-      _lastEmailProvisioningError = null;
-    } on EmailProvisioningException catch (error) {
-      if (error.isRecoverable) {
-        _log.warning('Chatmail provisioning pending: ${error.message}');
+    if (emailProvisioningFuture != null) {
+      try {
+        await emailProvisioningFuture;
         _lastEmailProvisioningError = null;
-      } else {
-        _lastEmailProvisioningError = error;
-        emit(AuthenticationFailure(error.message));
-        await _xmppService.disconnect();
-        return;
+      } on EmailProvisioningException catch (error) {
+        if (error.isRecoverable) {
+          _log.warning('Chatmail provisioning pending: ${error.message}');
+          _lastEmailProvisioningError = null;
+        } else {
+          _lastEmailProvisioningError = error;
+          emit(AuthenticationFailure(error.message));
+          await _xmppService.disconnect();
+          return;
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Chatmail provisioning failed', error, stackTrace);
       }
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Chatmail provisioning failed', error, stackTrace);
     }
 
     emit(const AuthenticationComplete());
     clearSignupDraft();
     _updateEmailForegroundKeepalive();
+  }
+
+  void _cancelPendingEmailProvisioning(
+    Future<void>? provisioningFuture,
+  ) {
+    if (provisioningFuture == null) {
+      return;
+    }
+    unawaited(
+      provisioningFuture.catchError(
+        (Object error, StackTrace stackTrace) {
+          _log.fine(
+            'Cancelled email provisioning after login failed',
+            error,
+            stackTrace,
+          );
+        },
+      ),
+    );
   }
 
   Future<void> signup({
