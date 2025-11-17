@@ -12,75 +12,61 @@ class RosterAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
-    return AxiTooltip(
-      builder: (_) => const Text('Add to roster'),
-      child: AxiFab(
-        iconData: LucideIcons.userPlus,
-        text: 'Contact',
-        onPressed: () => showShadDialog(
-          context: context,
-          builder: (context) {
-            String jid = '';
-            String? title;
-            return MultiBlocProvider(
-              providers: [
-                BlocProvider.value(
-                  value: locate<RosterCubit>(),
-                ),
-                BlocProvider.value(
-                  value: locate<AuthenticationCubit>(),
-                ),
-              ],
-              child: StatefulBuilder(
-                builder: (context, setState) {
-                  return AxiInputDialog(
-                    title: const Text('Add contact'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        BlocConsumer<RosterCubit, RosterState>(
-                          listener: (context, state) {
-                            if (state is RosterSuccess && context.canPop()) {
-                              context.pop();
-                            }
+    return AxiDialogFab(
+      tooltip: 'Add to roster',
+      iconData: LucideIcons.userPlus,
+      label: 'Contact',
+      dialogBuilder: (context) {
+        String jid = '';
+        String? title;
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider.value(
+              value: locate<RosterCubit>(),
+            ),
+            BlocProvider.value(
+              value: locate<AuthenticationCubit>(),
+            ),
+          ],
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return AxiInputDialog(
+                title: const Text('Add contact'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    BlocConsumer<RosterCubit, RosterState>(
+                      listener: (context, state) {
+                        if (state is RosterSuccess && context.canPop()) {
+                          context.pop();
+                        }
+                      },
+                      builder: (context, state) {
+                        return JidInput(
+                          enabled: state is! RosterLoading,
+                          error: state is! RosterFailure ? null : state.message,
+                          jidOptions: [
+                            '${jid.split('@').first}'
+                                '@${context.read<AuthenticationCubit>().state.server}'
+                          ],
+                          onChanged: (value) {
+                            setState(() => jid = value);
                           },
-                          builder: (context, state) {
-                            return JidInput(
-                              enabled: state is! RosterLoading,
-                              error: state is! RosterFailure
-                                  ? null
-                                  : state.message,
-                              jidOptions: [
-                                '${jid.split('@').first}'
-                                    '@${context.read<AuthenticationCubit>().state.server}'
-                              ],
-                              onChanged: (value) {
-                                setState(() => jid = value);
-                              },
-                            );
-                          },
-                        ),
-                        // const SizedBox(height: 12),
-                        // AxiTextFormField(
-                        //   placeholder: const Text('Nickname (optional)'),
-                        //   onChanged: (value) {
-                        //     setState(() => title = value);
-                        //   },
-                        // ),
-                      ],
+                        );
+                      },
                     ),
-                    callback: jid.isEmpty
-                        ? null
-                        : () => context
-                            .read<RosterCubit>()
-                            .addContact(jid: jid, title: title),
-                  );
-                },
-              ),
-            );
-          },
-        ),
-      ),
+                  ],
+                ),
+                callback: jid.isEmpty
+                    ? null
+                    : () => context
+                        .read<RosterCubit>()
+                        .addContact(jid: jid, title: title),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

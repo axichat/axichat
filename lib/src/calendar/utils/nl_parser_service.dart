@@ -33,7 +33,7 @@ class NlScheduleParserService {
     String input, {
     ParseContext? context,
   }) async {
-    final ctx = context ?? await _buildContext();
+    final ctx = context ?? await _parseContext();
     final parser = _adapter.buildParser(ctx);
     final ScheduleItem parsed = parser.parse(input);
     final result = _adapter.mapToAppTypes(parsed, ctx: ctx);
@@ -41,7 +41,7 @@ class NlScheduleParserService {
     return result;
   }
 
-  Future<ParseContext> _buildContext() async {
+  Future<ParseContext> _parseContext() async {
     await _ensureTimezonesInitialized();
     final tzName = await _resolveTimezone();
     return ParseContext(

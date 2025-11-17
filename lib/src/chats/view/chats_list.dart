@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -7,7 +6,9 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
+import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -20,8 +21,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart' as intl;
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -211,7 +210,6 @@ class ChatListTile extends StatefulWidget {
 
 class _ChatListTileState extends State<ChatListTile> {
   bool _showActions = false;
-  bool _exporting = false;
   bool _focused = false;
   late final FocusNode _focusNode;
   late DateTime _timestampNow;
@@ -268,7 +266,7 @@ class _ChatListTileState extends State<ChatListTile> {
                 _unreadBadgeCutoutDepthAdjustment,
           )
         : 0.0;
-    final subtitleText = _buildSubtitlePreview(item.lastMessage);
+    final subtitleText = _subtitlePreview(item.lastMessage);
     final timestampLabel = item.lastMessage == null
         ? null
         : formatTimeSinceLabel(_timestampNow, item.lastChangeTimestamp);
@@ -431,11 +429,11 @@ class _ChatListTileState extends State<ChatListTile> {
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: scaled(18)),
-                child: Wrap(
-                  spacing: scaled(8),
-                  runSpacing: scaled(8),
-                  alignment: WrapAlignment.center,
-                  children: _buildActionButtons(context, item),
+                child: _ChatActionPanel(
+                  chat: item,
+                  archivedContext: widget.archivedContext,
+                  onClose: _hideActions,
+                  onDelete: () => _confirmDelete(item),
                 ),
               ),
             ),
@@ -482,7 +480,7 @@ class _ChatListTileState extends State<ChatListTile> {
     );
   }
 
-  String? _buildSubtitlePreview(String? rawMessage) {
+  String? _subtitlePreview(String? rawMessage) {
     final String? trimmed = rawMessage?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return null;
@@ -512,6 +510,15 @@ class _ChatListTileState extends State<ChatListTile> {
     });
   }
 
+  void _hideActions() {
+    if (!_showActions || !mounted) {
+      return;
+    }
+    setState(() {
+      _showActions = false;
+    });
+  }
+
   Future<void> _handleTap(Chat chat) async {
     final chatsCubit = context.read<ChatsCubit?>();
     if (chatsCubit == null) return;
@@ -523,166 +530,6 @@ class _ChatListTileState extends State<ChatListTile> {
       }
     }
     unawaited(chatsCubit.toggleChat(jid: chat.jid));
-  }
-
-  List<Widget> _buildActionButtons(BuildContext context, Chat chat) {
-    final chatsCubit = context.read<ChatsCubit?>();
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
-    final iconSize = scaled(16);
-    final progressSize = scaled(16);
-    return [
-      ContextActionButton(
-        icon: Icon(LucideIcons.squareCheck, size: iconSize),
-        label: 'Select',
-        onPressed: chatsCubit == null
-            ? null
-            : () {
-                chatsCubit.ensureChatSelected(chat.jid);
-                if (!mounted) return;
-                setState(() => _showActions = false);
-              },
-      ),
-      ContextActionButton(
-        icon: Icon(
-          chat.favorited ? LucideIcons.starOff : LucideIcons.star,
-          size: iconSize,
-        ),
-        label: chat.favorited ? 'Unfavorite' : 'Favorite',
-        onPressed: chatsCubit == null
-            ? null
-            : () async {
-                await chatsCubit.toggleFavorited(
-                  jid: chat.jid,
-                  favorited: !chat.favorited,
-                );
-                if (!mounted) return;
-                setState(() => _showActions = false);
-              },
-      ),
-      ContextActionButton(
-        icon: _exporting
-            ? SizedBox(
-                width: progressSize,
-                height: progressSize,
-                child: CircularProgressIndicator(
-                  strokeWidth: math.max(2, progressSize * 0.12),
-                ),
-              )
-            : Icon(LucideIcons.share2, size: iconSize),
-        label: _exporting ? 'Exporting...' : 'Export',
-        onPressed: _exporting
-            ? null
-            : () async {
-                await _exportChat(chat);
-              },
-      ),
-      ContextActionButton(
-        icon: Icon(
-          chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
-          size: iconSize,
-        ),
-        label: chat.archived ? 'Unarchive' : 'Archive',
-        onPressed: chatsCubit == null
-            ? null
-            : () async {
-                await chatsCubit.toggleArchived(
-                  jid: chat.jid,
-                  archived: !chat.archived,
-                );
-                if (!mounted) return;
-                _showMessage(
-                  chat.archived
-                      ? 'Chat restored'
-                      : 'Chat archived (Profile → Archived chats)',
-                );
-                setState(() => _showActions = false);
-              },
-      ),
-      if (!widget.archivedContext)
-        ContextActionButton(
-          icon: Icon(
-            chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
-            size: iconSize,
-          ),
-          label: chat.hidden ? 'Show' : 'Hide',
-          onPressed: chatsCubit == null
-              ? null
-              : () async {
-                  await chatsCubit.toggleHidden(
-                    jid: chat.jid,
-                    hidden: !chat.hidden,
-                  );
-                  if (!mounted) return;
-                  _showMessage(
-                    chat.hidden
-                        ? 'Chat is visible again'
-                        : 'Chat hidden (use filter to reveal)',
-                  );
-                  setState(() => _showActions = false);
-                },
-        ),
-      ContextActionButton(
-        icon: Icon(LucideIcons.trash2, size: iconSize),
-        label: 'Delete',
-        destructive: true,
-        onPressed: () => _confirmDelete(chat),
-      ),
-    ];
-  }
-
-  Future<void> _exportChat(Chat chat) async {
-    final chatsCubit = context.read<ChatsCubit?>();
-    if (chatsCubit == null) return;
-    setState(() {
-      _exporting = true;
-    });
-    try {
-      final history = await chatsCubit.loadChatHistory(chat.jid);
-      if (!mounted) return;
-      if (history.isEmpty) {
-        _showMessage('No messages to export');
-        return;
-      }
-      final buffer = StringBuffer();
-      final formatter = intl.DateFormat('y-MM-dd HH:mm');
-      for (final message in history) {
-        final timestampValue =
-            message.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final timestamp = formatter.format(timestampValue);
-        final author = message.senderJid;
-        final content = message.body?.trim();
-        if (content == null || content.isEmpty) continue;
-        buffer.writeln('[$timestamp] $author: $content');
-      }
-      final exportText = buffer.toString().trim();
-      if (exportText.isEmpty) {
-        _showMessage('No text content to export');
-        return;
-      }
-      final tempDir = await getTemporaryDirectory();
-      final sanitizedTitle =
-          chat.title.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_').toLowerCase();
-      final fileName =
-          'chat-${sanitizedTitle.isEmpty ? 'thread' : sanitizedTitle}-${DateTime.now().millisecondsSinceEpoch}.txt';
-      final file = File('${tempDir.path}/$fileName');
-      await file.writeAsString(exportText);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Chat export from Axichat',
-        subject: 'Chat with ${chat.title}',
-      );
-      if (!mounted) return;
-      _showMessage('Chat exported');
-      setState(() => _showActions = false);
-    } catch (error) {
-      if (!mounted) return;
-      _showMessage('Unable to export chat');
-    } finally {
-      if (mounted) {
-        setState(() => _exporting = false);
-      }
-    }
   }
 
   Future<void> _confirmDelete(Chat chat) async {
@@ -775,6 +622,169 @@ class _ChatListTileState extends State<ChatListTile> {
   }
 
   void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _ChatActionPanel extends StatefulWidget {
+  const _ChatActionPanel({
+    required this.chat,
+    required this.archivedContext,
+    required this.onClose,
+    required this.onDelete,
+  });
+
+  final Chat chat;
+  final bool archivedContext;
+  final VoidCallback onClose;
+  final VoidCallback onDelete;
+
+  @override
+  State<_ChatActionPanel> createState() => _ChatActionPanelState();
+}
+
+class _ChatActionPanelState extends State<_ChatActionPanel> {
+  bool _exporting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconSize = scaled(16);
+    final spacing = scaled(8);
+    final chatsCubit = context.read<ChatsCubit?>();
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      alignment: WrapAlignment.center,
+      children: [
+        ContextActionButton(
+          icon: Icon(LucideIcons.squareCheck, size: iconSize),
+          label: 'Select',
+          onPressed: chatsCubit == null
+              ? null
+              : () {
+                  chatsCubit.ensureChatSelected(widget.chat.jid);
+                  widget.onClose();
+                },
+        ),
+        ContextActionButton(
+          icon: Icon(
+            widget.chat.favorited ? LucideIcons.starOff : LucideIcons.star,
+            size: iconSize,
+          ),
+          label: widget.chat.favorited ? 'Unfavorite' : 'Favorite',
+          onPressed: chatsCubit == null
+              ? null
+              : () async {
+                  await chatsCubit.toggleFavorited(
+                    jid: widget.chat.jid,
+                    favorited: !widget.chat.favorited,
+                  );
+                  if (!mounted) return;
+                  widget.onClose();
+                },
+        ),
+        ChatExportActionButton(
+          exporting: _exporting,
+          onPressed: _exportChat,
+          iconSize: iconSize,
+        ),
+        ContextActionButton(
+          icon: Icon(
+            widget.chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
+            size: iconSize,
+          ),
+          label: widget.chat.archived ? 'Unarchive' : 'Archive',
+          onPressed: chatsCubit == null
+              ? null
+              : () async {
+                  await chatsCubit.toggleArchived(
+                    jid: widget.chat.jid,
+                    archived: !widget.chat.archived,
+                  );
+                  _showSnack(
+                    widget.chat.archived
+                        ? 'Chat restored'
+                        : 'Chat archived (Profile → Archived chats)',
+                  );
+                  if (!mounted) return;
+                  widget.onClose();
+                },
+        ),
+        if (!widget.archivedContext)
+          ContextActionButton(
+            icon: Icon(
+              widget.chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
+              size: iconSize,
+            ),
+            label: widget.chat.hidden ? 'Show' : 'Hide',
+            onPressed: chatsCubit == null
+                ? null
+                : () async {
+                    await chatsCubit.toggleHidden(
+                      jid: widget.chat.jid,
+                      hidden: !widget.chat.hidden,
+                    );
+                    _showSnack(
+                      widget.chat.hidden
+                          ? 'Chat is visible again'
+                          : 'Chat hidden (use filter to reveal)',
+                    );
+                    if (!mounted) return;
+                    widget.onClose();
+                  },
+          ),
+        ContextActionButton(
+          icon: Icon(LucideIcons.trash2, size: iconSize),
+          label: 'Delete',
+          destructive: true,
+          onPressed: widget.onDelete,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _exportChat() async {
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit == null) return;
+    setState(() {
+      _exporting = true;
+    });
+    try {
+      final result = await ChatHistoryExporter.exportChats(
+        chats: [widget.chat],
+        loadHistory: chatsCubit.loadChatHistory,
+      );
+      if (!mounted) return;
+      final file = result.file;
+      if (file == null) {
+        _showSnack('No text content to export');
+        return;
+      }
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Chat export from Axichat',
+        subject: 'Chat with ${widget.chat.title}',
+      );
+      if (!mounted) return;
+      _showSnack('Chat exported');
+      widget.onClose();
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack('Unable to export chat');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exporting = false;
+        });
+      }
+    }
+  }
+
+  void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));

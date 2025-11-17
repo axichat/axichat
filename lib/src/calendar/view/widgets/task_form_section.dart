@@ -625,8 +625,13 @@ class TaskDateTimeToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[
-      ..._buildField(context, primaryField),
-      if (secondaryField != null) ..._buildField(context, secondaryField!),
+      Expanded(
+        child: _TaskDateTimeToolbarFields(
+          primaryField: primaryField,
+          secondaryField: secondaryField,
+          buttonGap: gap,
+        ),
+      ),
       if (onClear != null)
         TaskGhostIconButton(
           icon: clearIcon,
@@ -641,34 +646,86 @@ class TaskDateTimeToolbar extends StatelessWidget {
       children: children,
     );
   }
+}
 
-  List<Widget> _buildField(
-    BuildContext context,
-    TaskDateTimeToolbarField field,
-  ) {
+class _TaskDateTimeToolbarFields extends StatelessWidget {
+  const _TaskDateTimeToolbarFields({
+    required this.primaryField,
+    required this.buttonGap,
+    this.secondaryField,
+  });
+
+  final TaskDateTimeToolbarField primaryField;
+  final TaskDateTimeToolbarField? secondaryField;
+  final double buttonGap;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttons = <Widget>[
+      ..._buttonsForField(primaryField),
+      if (secondaryField != null) ..._buttonsForField(secondaryField!),
+    ];
+
+    return Row(children: _withGap(buttons));
+  }
+
+  List<Widget> _buttonsForField(TaskDateTimeToolbarField field) {
     final widgets = <Widget>[
-      Expanded(
-        child: TaskToolbarButton(
-          icon: field.dateIcon,
-          label: field.dateLabel(context),
-          onPressed: field.enabled ? field.onSelectDate : null,
-          enabled: field.enabled,
-        ),
-      ),
+      _TaskDateTimeToolbarButton(
+          field: field, type: _TaskDateTimeButtonType.date),
     ];
     if (field.showTimeButton) {
       widgets.add(
-        Expanded(
-          child: TaskToolbarButton(
-            icon: field.timeIcon,
-            label: field.timeLabel(context),
-            onPressed: field.enabled ? field.onSelectTime : null,
-            enabled: field.enabled,
-          ),
-        ),
+        _TaskDateTimeToolbarButton(
+            field: field, type: _TaskDateTimeButtonType.time),
       );
     }
     return widgets;
+  }
+
+  List<Widget> _withGap(List<Widget> source) {
+    if (source.length <= 1 || buttonGap <= 0) {
+      return source;
+    }
+    final spaced = <Widget>[];
+    for (var i = 0; i < source.length; i++) {
+      if (i != 0) {
+        spaced.add(SizedBox(width: buttonGap));
+      }
+      spaced.add(source[i]);
+    }
+    return spaced;
+  }
+}
+
+enum _TaskDateTimeButtonType { date, time }
+
+class _TaskDateTimeToolbarButton extends StatelessWidget {
+  const _TaskDateTimeToolbarButton({
+    required this.field,
+    required this.type,
+  });
+
+  final TaskDateTimeToolbarField field;
+  final _TaskDateTimeButtonType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isTime = type == _TaskDateTimeButtonType.time;
+    final String label =
+        isTime ? field.timeLabel(context) : field.dateLabel(context);
+    final IconData icon = isTime ? field.timeIcon : field.dateIcon;
+    final VoidCallback onPressed =
+        isTime ? field.onSelectTime : field.onSelectDate;
+
+    return Expanded(
+      child: TaskToolbarButton(
+        icon: icon,
+        label: label,
+        onPressed: field.enabled ? onPressed : null,
+        enabled: field.enabled,
+      ),
+    );
   }
 }
 
@@ -938,9 +995,18 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
   Widget build(BuildContext context) {
     final helper = widget.autocomplete;
     if (helper == null || !widget.enabled) {
-      return _buildField(
+      return _TaskLocationTextInput(
         controller: widget.controller,
-        focusNode: widget.focusNode,
+        focusNode: _effectiveFocusNode,
+        labelText: widget.labelText,
+        hintText: widget.hintText,
+        textCapitalization: widget.textCapitalization,
+        autofocus: widget.autofocus,
+        onChanged: widget.onChanged,
+        enabled: widget.enabled,
+        borderRadius: widget.borderRadius,
+        focusBorderColor: widget.focusBorderColor,
+        contentPadding: widget.contentPadding,
       );
     }
 
@@ -956,10 +1022,19 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
         return helper.search(query, limit: widget.autocompleteLimit);
       },
       fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-        return _buildField(
+        return _TaskLocationTextInput(
           controller: textController,
           focusNode: focusNode,
+          labelText: widget.labelText,
+          hintText: widget.hintText,
+          textCapitalization: widget.textCapitalization,
+          autofocus: widget.autofocus,
+          onChanged: widget.onChanged,
           onSubmitted: (_) => onFieldSubmitted(),
+          enabled: widget.enabled,
+          borderRadius: widget.borderRadius,
+          focusBorderColor: widget.focusBorderColor,
+          contentPadding: widget.contentPadding,
         );
       },
       optionsViewBuilder: (context, onSelected, options) {
@@ -1017,27 +1092,54 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
       },
     );
   }
+}
 
-  Widget _buildField({
-    required TextEditingController controller,
-    FocusNode? focusNode,
-    ValueChanged<String>? onSubmitted,
-  }) {
+class _TaskLocationTextInput extends StatelessWidget {
+  const _TaskLocationTextInput({
+    required this.controller,
+    required this.focusNode,
+    required this.labelText,
+    required this.hintText,
+    required this.textCapitalization,
+    required this.autofocus,
+    required this.onChanged,
+    required this.enabled,
+    required this.borderRadius,
+    required this.focusBorderColor,
+    required this.contentPadding,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String? labelText;
+  final String hintText;
+  final TextCapitalization textCapitalization;
+  final bool autofocus;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
+  final double? borderRadius;
+  final Color? focusBorderColor;
+  final EdgeInsetsGeometry? contentPadding;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
     return TaskTextField(
       controller: controller,
-      focusNode: focusNode ?? _effectiveFocusNode,
-      labelText: widget.labelText,
-      hintText: widget.hintText,
+      focusNode: focusNode,
+      labelText: labelText,
+      hintText: hintText,
       minLines: 1,
       maxLines: 1,
-      textCapitalization: widget.textCapitalization,
-      autofocus: widget.autofocus,
-      onChanged: widget.onChanged,
+      textCapitalization: textCapitalization,
+      autofocus: autofocus,
+      onChanged: onChanged,
       onSubmitted: onSubmitted,
-      enabled: widget.enabled,
-      borderRadius: widget.borderRadius,
-      focusBorderColor: widget.focusBorderColor,
-      contentPadding: widget.contentPadding ??
+      enabled: enabled,
+      borderRadius: borderRadius,
+      focusBorderColor: focusBorderColor,
+      contentPadding: contentPadding ??
           const EdgeInsets.symmetric(
             horizontal: calendarGutterLg,
             vertical: calendarGutterMd,

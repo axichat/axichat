@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -412,13 +413,13 @@ void _showToast(
   bool destructive = false,
 }) {
   final toast = destructive
-      ? ShadToast.destructive(
-          title: const Text('Whoops'),
-          description: Text(message),
+      ? FeedbackToast.error(
+          title: 'Whoops',
+          message: message,
         )
-      : ShadToast(
-          title: const Text('Heads up'),
-          description: Text(message),
+      : FeedbackToast.info(
+          title: 'Heads up',
+          message: message,
         );
   toaster?.show(toast);
 }

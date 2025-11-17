@@ -317,12 +317,13 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 onDragEnded: _callbacks.onDragEnded,
                 snapshotBuilder: () => task.copyWith(),
                 feedbackBuilder: (context, dragTask, dragGeometry) =>
-                    _buildDragFeedback(
-                  context: context,
+                    _CalendarTaskDragFeedback(
+                  interactionController: _interactionController,
                   task: dragTask,
                   geometry: dragGeometry,
                   bindings: bindings,
                   baseHeight: height,
+                  isDayView: widget.isDayView,
                 ),
                 enabled: enableInteractions,
                 childWhenDragging: const SizedBox.shrink(),
@@ -353,11 +354,13 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
               final bool useSideBySide = widthAllowsSplit &&
                   geometry.splitWidthFactor < _splitOverlayFallbackThreshold;
 
-              final Widget previewGhost = _buildPreviewGhost(
-                previewTaskCandidate: previewTaskCandidate,
+              final Widget previewGhost = _CalendarTaskPreviewGhost(
+                interactionController: _interactionController,
+                task: previewTaskCandidate,
                 bindings: bindings,
                 height: height,
                 width: useSideBySide ? ghostWidth : width,
+                isDayView: widget.isDayView,
                 keySuffix: '-preview',
               );
 
@@ -458,31 +461,6 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     return _previewIntersectsTask(preview, task) ? dragging : null;
   }
 
-  Widget _buildPreviewGhost({
-    required CalendarTask previewTaskCandidate,
-    required CalendarTaskEntryBindings bindings,
-    required double width,
-    required double height,
-    required String keySuffix,
-  }) {
-    return ResizableTaskWidget(
-      key: ValueKey('${previewTaskCandidate.id}$keySuffix'),
-      interactionController: _interactionController,
-      task: previewTaskCandidate,
-      onResizePreview: null,
-      onResizeEnd: null,
-      hourHeight: bindings.hourHeight,
-      stepHeight: bindings.stepHeight,
-      minutesPerStep: bindings.minutesPerStep,
-      width: width,
-      height: height,
-      isDayView: widget.isDayView,
-      enableInteractions: false,
-      isSelectionMode: false,
-      isSelected: false,
-    );
-  }
-
   bool _previewIntersectsTask(DragPreview preview, CalendarTask task) {
     final DateTime? taskStart = task.scheduledTime;
     if (taskStart == null) {
@@ -493,28 +471,81 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     final DateTime previewEnd = preview.start.add(preview.duration);
     return preview.start.isBefore(taskEnd) && previewEnd.isAfter(taskStart);
   }
+}
 
-  Widget _buildDragFeedback({
-    required BuildContext context,
-    required CalendarTask task,
-    required CalendarTaskGeometry geometry,
-    required CalendarTaskEntryBindings bindings,
-    required double baseHeight,
-  }) {
+class _CalendarTaskPreviewGhost extends StatelessWidget {
+  const _CalendarTaskPreviewGhost({
+    required this.interactionController,
+    required this.task,
+    required this.bindings,
+    required this.width,
+    required this.height,
+    required this.isDayView,
+    required this.keySuffix,
+  });
+
+  final TaskInteractionController interactionController;
+  final CalendarTask task;
+  final CalendarTaskEntryBindings bindings;
+  final double width;
+  final double height;
+  final bool isDayView;
+  final String keySuffix;
+
+  @override
+  Widget build(BuildContext context) {
+    return ResizableTaskWidget(
+      key: ValueKey('${task.id}$keySuffix'),
+      interactionController: interactionController,
+      task: task,
+      onResizePreview: null,
+      onResizeEnd: null,
+      hourHeight: bindings.hourHeight,
+      stepHeight: bindings.stepHeight,
+      minutesPerStep: bindings.minutesPerStep,
+      width: width,
+      height: height,
+      isDayView: isDayView,
+      enableInteractions: false,
+      isSelectionMode: false,
+      isSelected: false,
+    );
+  }
+}
+
+class _CalendarTaskDragFeedback extends StatelessWidget {
+  const _CalendarTaskDragFeedback({
+    required this.interactionController,
+    required this.task,
+    required this.geometry,
+    required this.bindings,
+    required this.baseHeight,
+    required this.isDayView,
+  });
+
+  final TaskInteractionController interactionController;
+  final CalendarTask task;
+  final CalendarTaskGeometry geometry;
+  final CalendarTaskEntryBindings bindings;
+  final double baseHeight;
+  final bool isDayView;
+
+  @override
+  Widget build(BuildContext context) {
     final double width = geometry.rect.width;
     final double height = geometry.rect.height;
     final Widget feedback = Material(
       color: Colors.transparent,
       child: ResizableTaskWidget(
         key: ValueKey('${task.id}-drag-feedback'),
-        interactionController: _interactionController,
+        interactionController: interactionController,
         task: task,
         hourHeight: bindings.hourHeight,
         stepHeight: bindings.stepHeight,
         minutesPerStep: bindings.minutesPerStep,
         width: width,
         height: height > 0 ? height : baseHeight,
-        isDayView: widget.isDayView,
+        isDayView: isDayView,
         enableInteractions: false,
         isSelectionMode: false,
         isSelected: false,

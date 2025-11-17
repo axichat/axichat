@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../common/ui/feedback_toast.dart';
 import '../../common/ui/ui.dart';
 
 class FeedbackMessage {
   final String? title;
   final String message;
-  final FeedbackType type;
+  final FeedbackTone tone;
   final Duration? duration;
   final VoidCallback? onTap;
   final String? actionLabel;
@@ -15,19 +16,12 @@ class FeedbackMessage {
   const FeedbackMessage({
     this.title,
     required this.message,
-    required this.type,
+    required this.tone,
     this.duration,
     this.onTap,
     this.actionLabel,
     this.onAction,
   });
-}
-
-enum FeedbackType {
-  success,
-  info,
-  warning,
-  error,
 }
 
 class FeedbackSystem {
@@ -45,7 +39,7 @@ class FeedbackSystem {
         FeedbackMessage(
           title: title,
           message: message,
-          type: FeedbackType.success,
+          tone: FeedbackTone.success,
           duration: duration ?? const Duration(seconds: 3),
           onTap: onTap,
           actionLabel: actionLabel,
@@ -67,7 +61,7 @@ class FeedbackSystem {
         FeedbackMessage(
           title: title,
           message: message,
-          type: FeedbackType.info,
+          tone: FeedbackTone.info,
           duration: duration ?? const Duration(seconds: 3),
           onTap: onTap,
           actionLabel: actionLabel,
@@ -89,7 +83,7 @@ class FeedbackSystem {
         FeedbackMessage(
           title: title,
           message: message,
-          type: FeedbackType.warning,
+          tone: FeedbackTone.warning,
           duration: duration ?? const Duration(seconds: 4),
           onTap: onTap,
           actionLabel: actionLabel,
@@ -111,7 +105,7 @@ class FeedbackSystem {
         FeedbackMessage(
           title: title,
           message: message,
-          type: FeedbackType.error,
+          tone: FeedbackTone.error,
           duration: duration ?? const Duration(seconds: 5),
           onTap: onTap,
           actionLabel: actionLabel,
@@ -122,71 +116,27 @@ class FeedbackSystem {
   static void _showFeedback(BuildContext context, FeedbackMessage feedback) {
     final toaster = ShadToaster.maybeOf(context);
     if (toaster != null) {
-      toaster.show(_buildToast(context, feedback));
+      toaster.show(
+        FeedbackToast(
+          tone: feedback.tone,
+          title: feedback.title,
+          message: feedback.message,
+          duration: feedback.duration,
+          onTap: feedback.onTap,
+          actionLabel: feedback.actionLabel,
+          onAction: feedback.onAction,
+        ),
+      );
       return;
     }
     _showSnackBar(context, feedback);
-  }
-
-  static ShadToast _buildToast(
-    BuildContext context,
-    FeedbackMessage feedback,
-  ) {
-    final toastTitle = feedback.title ?? _toastTitleFor(feedback.type);
-    final duration = feedback.duration ?? _defaultDurationFor(feedback.type);
-    final hasAction = feedback.actionLabel != null && feedback.onAction != null;
-    final action = hasAction
-        ? Builder(
-            builder: (actionContext) => ShadButton.link(
-              size: ShadButtonSize.sm,
-              child: Text(feedback.actionLabel!),
-              onPressed: () {
-                ShadToaster.of(actionContext).hide();
-                feedback.onAction?.call();
-              },
-            ),
-          )
-        : null;
-    final description = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: feedback.onTap,
-      child: Text(feedback.message),
-    );
-    final commonProps = (
-      title: toastTitle == null ? null : Text(toastTitle),
-      description: description,
-      action: action,
-      alignment: Alignment.topRight,
-      duration: duration,
-      showCloseIconOnlyWhenHovered: false,
-    );
-    return switch (_toastVariantForType(feedback.type)) {
-      ShadToastVariant.destructive => ShadToast.destructive(
-          title: commonProps.title,
-          description: commonProps.description,
-          action: commonProps.action,
-          alignment: commonProps.alignment,
-          duration: commonProps.duration,
-          showCloseIconOnlyWhenHovered:
-              commonProps.showCloseIconOnlyWhenHovered,
-        ),
-      ShadToastVariant.primary => ShadToast(
-          title: commonProps.title,
-          description: commonProps.description,
-          action: commonProps.action,
-          alignment: commonProps.alignment,
-          duration: commonProps.duration,
-          showCloseIconOnlyWhenHovered:
-              commonProps.showCloseIconOnlyWhenHovered,
-        ),
-    };
   }
 
   static void _showSnackBar(
     BuildContext context,
     FeedbackMessage feedback,
   ) {
-    final colors = _getColorsForType(context, feedback.type);
+    final colors = _getColorsForTone(context, feedback.tone);
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) {
@@ -203,7 +153,7 @@ class FeedbackSystem {
           child: Row(
             children: [
               Icon(
-                _getIconForType(feedback.type),
+                _getIconForTone(feedback.tone),
                 color: Colors.white,
                 size: 18,
               ),
@@ -235,57 +185,22 @@ class FeedbackSystem {
     );
   }
 
-  static ShadToastVariant _toastVariantForType(FeedbackType type) {
-    switch (type) {
-      case FeedbackType.warning:
-      case FeedbackType.error:
-        return ShadToastVariant.destructive;
-      case FeedbackType.success:
-      case FeedbackType.info:
-        return ShadToastVariant.primary;
-    }
-  }
-
-  static String? _toastTitleFor(FeedbackType type) {
-    switch (type) {
-      case FeedbackType.success:
-        return 'Success!';
-      case FeedbackType.info:
-        return 'Heads up';
-      case FeedbackType.warning:
-      case FeedbackType.error:
-        return 'Whoops!';
-    }
-  }
-
-  static Duration _defaultDurationFor(FeedbackType type) {
-    switch (type) {
-      case FeedbackType.success:
-      case FeedbackType.info:
-        return const Duration(seconds: 3);
-      case FeedbackType.warning:
-        return const Duration(seconds: 4);
-      case FeedbackType.error:
-        return const Duration(seconds: 5);
-    }
-  }
-
-  static ({Color background, Color foreground}) _getColorsForType(
+  static ({Color background, Color foreground}) _getColorsForTone(
     BuildContext context,
-    FeedbackType type,
+    FeedbackTone tone,
   ) {
     final scheme = ShadTheme.of(context).colorScheme;
-    switch (type) {
-      case FeedbackType.success:
+    switch (tone) {
+      case FeedbackTone.success:
         return (background: const Color(0xFF22C55E), foreground: Colors.white);
-      case FeedbackType.info:
+      case FeedbackTone.info:
         return (
           background: calendarPrimaryColor,
           foreground: scheme.primaryForeground,
         );
-      case FeedbackType.warning:
+      case FeedbackTone.warning:
         return (background: const Color(0xFFF97316), foreground: Colors.white);
-      case FeedbackType.error:
+      case FeedbackTone.error:
         return (
           background: scheme.destructive,
           foreground: scheme.destructiveForeground,
@@ -293,15 +208,15 @@ class FeedbackSystem {
     }
   }
 
-  static IconData _getIconForType(FeedbackType type) {
-    switch (type) {
-      case FeedbackType.success:
+  static IconData _getIconForTone(FeedbackTone tone) {
+    switch (tone) {
+      case FeedbackTone.success:
         return Icons.check_circle_outline;
-      case FeedbackType.info:
+      case FeedbackTone.info:
         return Icons.info_outline;
-      case FeedbackType.warning:
+      case FeedbackTone.warning:
         return Icons.warning_amber_outlined;
-      case FeedbackType.error:
+      case FeedbackTone.error:
         return Icons.error_outline;
     }
   }
@@ -311,17 +226,17 @@ class InlineFeedback extends StatelessWidget {
   const InlineFeedback({
     super.key,
     required this.message,
-    required this.type,
+    required this.tone,
     this.onDismiss,
   });
 
   final String message;
-  final FeedbackType type;
+  final FeedbackTone tone;
   final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
-    final colors = FeedbackSystem._getColorsForType(context, type);
+    final colors = FeedbackSystem._getColorsForTone(context, tone);
 
     return Container(
       padding: calendarPaddingLg,
@@ -337,7 +252,7 @@ class InlineFeedback extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            FeedbackSystem._getIconForType(type),
+            FeedbackSystem._getIconForTone(tone),
             color: colors.background,
             size: 18,
           ),

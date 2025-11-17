@@ -34,6 +34,9 @@ enum _PasswordStrengthLevel { empty, weak, medium, stronger }
 
 enum _InsecurePasswordReason { weak, breached }
 
+const _strengthMediumColor = Color(0xFFF97316);
+const _strengthStrongColor = Color(0xFF22C55E);
+
 class _SignupFormState extends State<SignupForm> {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
@@ -47,8 +50,6 @@ class _SignupFormState extends State<SignupForm> {
   static const double _maxEntropyBits = 120;
   static const double _weakEntropyThreshold = 50;
   static const double _strongEntropyThreshold = 80;
-  static const _strengthMediumColor = Color(0xFFF97316);
-  static const _strengthStrongColor = Color(0xFF22C55E);
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -346,236 +347,6 @@ class _SignupFormState extends State<SignupForm> {
 
   double get _progressValue => _completedStepCount / _progressSegmentCount;
 
-  Widget _buildProgressMeter(BuildContext context) {
-    final colors = context.colorScheme;
-    final duration = context.read<SettingsCubit>().animationDuration;
-    final targetPercent = (_progressValue * 100).clamp(0.0, 100.0);
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: targetPercent),
-      duration: duration,
-      curve: Curves.easeInOut,
-      builder: (context, animatedPercent, child) {
-        final clampedPercent = animatedPercent.clamp(0.0, 100.0);
-        final fillFraction = (clampedPercent / 100).clamp(0.0, 1.0);
-        final currentStepNumber =
-            (_currentIndex + 1).clamp(1, _formKeys.length);
-        final currentStepLabel = _currentStepLabel;
-        return Semantics(
-          label: 'Signup progress',
-          value:
-              'Step $currentStepNumber of ${_formKeys.length}: $currentStepLabel. ${clampedPercent.round()} percent complete.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Account setup',
-                    style: context.textTheme.muted,
-                  ),
-                  Text(
-                    '${clampedPercent.round()}%',
-                    style: context.textTheme.muted.copyWith(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Stack(
-                children: [
-                  Container(
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: colors.muted.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  FractionallySizedBox(
-                    widthFactor: fillFraction,
-                    child: Container(
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPasswordStrengthMeter(BuildContext context) {
-    final colors = context.colorScheme;
-    final duration = context.read<SettingsCubit>().animationDuration;
-    final targetBits = _passwordEntropyBits.clamp(0.0, _maxEntropyBits);
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: targetBits),
-      duration: duration,
-      curve: Curves.easeInOut,
-      builder: (context, animatedBits, child) {
-        final normalized = (animatedBits / _maxEntropyBits).clamp(0.0, 1.0);
-        final level = _passwordStrengthLevel;
-        final fillColor = _strengthColor(level, colors);
-        final showBreachWarning = _showBreachedError && _passwordBreached;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Password strength',
-                  style: context.textTheme.muted,
-                ),
-                Text(
-                  _strengthLabel(level),
-                  style: context.textTheme.muted.copyWith(
-                    color: fillColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Stack(
-              children: [
-                Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                FractionallySizedBox(
-                  widthFactor: normalized,
-                  child: Container(
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: fillColor,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            AnimatedSwitcher(
-              duration: duration,
-              child: showBreachWarning
-                  ? Padding(
-                      key: const ValueKey('breach-warning'),
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'This password has been found in a hacked database.',
-                        style: context.textTheme.muted.copyWith(
-                          color: colors.destructive,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _strengthLabel(_PasswordStrengthLevel level) {
-    switch (level) {
-      case _PasswordStrengthLevel.empty:
-        return 'None';
-      case _PasswordStrengthLevel.weak:
-        return 'Weak';
-      case _PasswordStrengthLevel.medium:
-        return 'Medium';
-      case _PasswordStrengthLevel.stronger:
-        return 'Stronger';
-    }
-  }
-
-  Color _strengthColor(
-    _PasswordStrengthLevel level,
-    ShadColorScheme colors,
-  ) {
-    switch (level) {
-      case _PasswordStrengthLevel.weak:
-      case _PasswordStrengthLevel.empty:
-        return colors.destructive;
-      case _PasswordStrengthLevel.medium:
-        return _strengthMediumColor;
-      case _PasswordStrengthLevel.stronger:
-        return _strengthStrongColor;
-    }
-  }
-
-  Widget _buildAllowInsecurePasswordNotice(
-    BuildContext context,
-    bool loading,
-  ) {
-    final duration = context.read<SettingsCubit>().animationDuration;
-    final reason = _visibleInsecurePasswordReason;
-    return AnimatedSwitcher(
-      duration: duration,
-      switchInCurve: Curves.easeIn,
-      switchOutCurve: Curves.easeOut,
-      child: reason == null
-          ? const SizedBox.shrink()
-          : Column(
-              key: ValueKey(reason),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AxiCheckboxFormField(
-                  key: ValueKey(
-                    '${reason.name}-$_allowInsecureResetTick',
-                  ),
-                  enabled: !loading && !_pwnedCheckInProgress,
-                  initialValue: allowInsecurePassword,
-                  inputLabel: const Text('I understand the risk'),
-                  inputSublabel: Text(
-                    reason == _InsecurePasswordReason.breached
-                        ? 'Allow this password even though it appeared in a breach.'
-                        : 'Allow this password even though it is considered weak.',
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      allowInsecurePassword = value;
-                      if (value) {
-                        _showAllowInsecureError = false;
-                        _showBreachedError = false;
-                      }
-                    });
-                    _persistSignupDraft();
-                  },
-                ),
-                AnimatedOpacity(
-                  opacity:
-                      _showAllowInsecureError && !allowInsecurePassword ? 1 : 0,
-                  duration: duration,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 4, top: 4),
-                    child: Text(
-                      'Check the box above to continue.',
-                      style: TextStyle(
-                        color: context.colorScheme.destructive,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-
   Future<void> _handleContinuePressed(BuildContext context) async {
     final formState = _formKeys[_currentIndex].currentState;
     if (formState?.validate() == false) {
@@ -680,7 +451,13 @@ class _SignupFormState extends State<SignupForm> {
               children: [
                 Padding(
                   padding: errorPadding,
-                  child: _buildProgressMeter(context),
+                  child: _SignupProgressMeter(
+                    progressValue: _progressValue,
+                    currentStepIndex: _currentIndex,
+                    totalSteps: _formKeys.length,
+                    currentStepLabel: _currentStepLabel,
+                    animationDuration: animationDuration,
+                  ),
                 ),
                 Padding(
                   padding: horizontalPadding,
@@ -789,13 +566,36 @@ class _SignupFormState extends State<SignupForm> {
                               ),
                               Padding(
                                 padding: fieldSpacing,
-                                child: _buildPasswordStrengthMeter(context),
+                                child: _SignupPasswordStrengthMeter(
+                                  entropyBits: _passwordEntropyBits,
+                                  maxEntropyBits: _maxEntropyBits,
+                                  strengthLevel: _passwordStrengthLevel,
+                                  showBreachWarning:
+                                      _showBreachedError && _passwordBreached,
+                                  animationDuration: animationDuration,
+                                ),
                               ),
                               Padding(
                                 padding: fieldSpacing,
-                                child: _buildAllowInsecurePasswordNotice(
-                                  context,
-                                  loading,
+                                child: _SignupInsecurePasswordNotice(
+                                  reason: _visibleInsecurePasswordReason,
+                                  allowInsecurePassword: allowInsecurePassword,
+                                  loading: loading,
+                                  pwnedCheckInProgress: _pwnedCheckInProgress,
+                                  showAllowInsecureError:
+                                      _showAllowInsecureError,
+                                  animationDuration: animationDuration,
+                                  resetTick: _allowInsecureResetTick,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      allowInsecurePassword = value;
+                                      if (value) {
+                                        _showAllowInsecureError = false;
+                                        _showBreachedError = false;
+                                      }
+                                    });
+                                    _persistSignupDraft();
+                                  },
                                 ),
                               ),
                             ],
@@ -1040,6 +840,275 @@ class _SignupFormState extends State<SignupForm> {
         );
       },
     );
+  }
+}
+
+class _SignupProgressMeter extends StatelessWidget {
+  const _SignupProgressMeter({
+    required this.progressValue,
+    required this.currentStepIndex,
+    required this.totalSteps,
+    required this.currentStepLabel,
+    required this.animationDuration,
+  });
+
+  final double progressValue;
+  final int currentStepIndex;
+  final int totalSteps;
+  final String currentStepLabel;
+  final Duration animationDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final targetPercent = (progressValue * 100).clamp(0.0, 100.0);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetPercent),
+      duration: animationDuration,
+      curve: Curves.easeInOut,
+      builder: (context, animatedPercent, child) {
+        final clampedPercent = animatedPercent.clamp(0.0, 100.0);
+        final fillFraction = (clampedPercent / 100).clamp(0.0, 1.0);
+        final currentStepNumber =
+            (currentStepIndex + 1).clamp(1, totalSteps).toInt();
+        return Semantics(
+          label: 'Signup progress',
+          value:
+              'Step $currentStepNumber of $totalSteps: $currentStepLabel. ${clampedPercent.round()} percent complete.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Account setup',
+                    style: context.textTheme.muted,
+                  ),
+                  Text(
+                    '${clampedPercent.round()}%',
+                    style: context.textTheme.muted.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Stack(
+                children: [
+                  Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: colors.muted.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: fillFraction,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SignupPasswordStrengthMeter extends StatelessWidget {
+  const _SignupPasswordStrengthMeter({
+    required this.entropyBits,
+    required this.maxEntropyBits,
+    required this.strengthLevel,
+    required this.showBreachWarning,
+    required this.animationDuration,
+  });
+
+  final double entropyBits;
+  final double maxEntropyBits;
+  final _PasswordStrengthLevel strengthLevel;
+  final bool showBreachWarning;
+  final Duration animationDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final targetBits = entropyBits.clamp(0.0, maxEntropyBits);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: targetBits),
+      duration: animationDuration,
+      curve: Curves.easeInOut,
+      builder: (context, animatedBits, child) {
+        final normalized = (animatedBits / maxEntropyBits).clamp(0.0, 1.0);
+        final fillColor = _colorForLevel(strengthLevel, colors);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Password strength',
+                  style: context.textTheme.muted,
+                ),
+                Text(
+                  _labelForLevel(strengthLevel),
+                  style: context.textTheme.muted.copyWith(
+                    color: fillColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Stack(
+              children: [
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: colors.muted.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                FractionallySizedBox(
+                  widthFactor: normalized,
+                  child: Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: fillColor,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            AnimatedSwitcher(
+              duration: animationDuration,
+              child: showBreachWarning
+                  ? Padding(
+                      key: const ValueKey('breach-warning'),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'This password has been found in a hacked database.',
+                        style: context.textTheme.muted.copyWith(
+                          color: colors.destructive,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static String _labelForLevel(_PasswordStrengthLevel level) {
+    switch (level) {
+      case _PasswordStrengthLevel.empty:
+        return 'None';
+      case _PasswordStrengthLevel.weak:
+        return 'Weak';
+      case _PasswordStrengthLevel.medium:
+        return 'Medium';
+      case _PasswordStrengthLevel.stronger:
+        return 'Stronger';
+    }
+  }
+
+  static Color _colorForLevel(
+    _PasswordStrengthLevel level,
+    ShadColorScheme colors,
+  ) {
+    switch (level) {
+      case _PasswordStrengthLevel.weak:
+      case _PasswordStrengthLevel.empty:
+        return colors.destructive;
+      case _PasswordStrengthLevel.medium:
+        return _strengthMediumColor;
+      case _PasswordStrengthLevel.stronger:
+        return _strengthStrongColor;
+    }
+  }
+}
+
+class _SignupInsecurePasswordNotice extends StatelessWidget {
+  const _SignupInsecurePasswordNotice({
+    required this.reason,
+    required this.allowInsecurePassword,
+    required this.loading,
+    required this.pwnedCheckInProgress,
+    required this.showAllowInsecureError,
+    required this.animationDuration,
+    required this.resetTick,
+    required this.onChanged,
+  });
+
+  final _InsecurePasswordReason? reason;
+  final bool allowInsecurePassword;
+  final bool loading;
+  final bool pwnedCheckInProgress;
+  final bool showAllowInsecureError;
+  final Duration animationDuration;
+  final int resetTick;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: animationDuration,
+      switchInCurve: Curves.easeIn,
+      switchOutCurve: Curves.easeOut,
+      child: reason == null
+          ? const SizedBox.shrink()
+          : Column(
+              key: ValueKey(reason),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AxiCheckboxFormField(
+                  key: ValueKey('${reason!.name}-$resetTick'),
+                  enabled: !loading && !pwnedCheckInProgress,
+                  initialValue: allowInsecurePassword,
+                  inputLabel: const Text('I understand the risk'),
+                  inputSublabel: Text(_reasonDescription(reason!)),
+                  onChanged: onChanged,
+                ),
+                AnimatedOpacity(
+                  opacity:
+                      showAllowInsecureError && !allowInsecurePassword ? 1 : 0,
+                  duration: animationDuration,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4, top: 4),
+                    child: Text(
+                      'Check the box above to continue.',
+                      style: TextStyle(
+                        color: context.colorScheme.destructive,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  static String _reasonDescription(_InsecurePasswordReason reason) {
+    if (reason == _InsecurePasswordReason.breached) {
+      return 'Allow this password even though it appeared in a breach.';
+    }
+    return 'Allow this password even though it is considered weak.';
   }
 }
 

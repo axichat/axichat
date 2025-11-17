@@ -8,6 +8,7 @@ import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
@@ -102,18 +103,14 @@ class _DraftFormState extends State<DraftForm> {
         child: BlocConsumer<DraftCubit, DraftState>(
           listener: (context, state) {
             if (state is DraftSaveComplete) {
-              ShadToaster.maybeOf(context)?.show(const ShadToast(
-                title: Text('Draft saved'),
-                alignment: Alignment.topRight,
-                showCloseIconOnlyWhenHovered: false,
-              ));
+              ShadToaster.maybeOf(context)?.show(
+                FeedbackToast.success(title: 'Draft saved'),
+              );
             } else if (state is DraftFailure) {
               ShadToaster.maybeOf(context)?.show(
-                ShadToast.destructive(
-                  title: const Text('Whoops'),
-                  description: Text(state.message),
-                  alignment: Alignment.topRight,
-                  showCloseIconOnlyWhenHovered: false,
+                FeedbackToast.error(
+                  title: 'Whoops',
+                  message: state.message,
                 ),
               );
             }
@@ -206,7 +203,19 @@ class _DraftFormState extends State<DraftForm> {
                 const SizedBox(height: 12),
                 Padding(
                   padding: horizontalPadding,
-                  child: _buildAttachmentsSection(enabled: enabled),
+                  child: _DraftAttachmentsSection(
+                    enabled: enabled,
+                    loading: _loadingAttachments,
+                    attachments: _pendingAttachments,
+                    addingAttachment: _addingAttachment,
+                    onAddAttachment: _handleAttachmentAdded,
+                    onRetry: _handlePendingAttachmentRetry,
+                    onRemove: _handlePendingAttachmentRemoved,
+                    onAttachmentPressed: _handlePendingAttachmentPressed,
+                    onAttachmentLongPressed:
+                        _handlePendingAttachmentLongPressed,
+                    onPreview: _showAttachmentPreview,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Padding(
@@ -567,61 +576,12 @@ class _DraftFormState extends State<DraftForm> {
 
   void _showToast(String message) {
     ShadToaster.maybeOf(context)?.show(
-      ShadToast(
-        title: const Text('Heads up'),
-        description: Text(message),
-        alignment: Alignment.topRight,
-        showCloseIconOnlyWhenHovered: false,
-      ),
+      FeedbackToast.info(message: message),
     );
   }
 
   String _nextPendingAttachmentId() =>
       'draft-pending-${_pendingAttachmentSeed++}';
-
-  Widget _buildAttachmentsSection({required bool enabled}) {
-    final attachments = _pendingAttachments;
-    final canSelectAttachment = enabled && !_addingAttachment;
-    final commandSurface =
-        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
-    final useDesktopMenu = commandSurface == CommandSurface.menu;
-    final addHandler = !enabled ? null : _handleAttachmentAdded;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text('Attachments'),
-            const Spacer(),
-            _DraftComposerIconButton(
-              tooltip: 'Add attachment',
-              icon: LucideIcons.paperclip,
-              onPressed: canSelectAttachment ? addHandler : null,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_loadingAttachments)
-          const Center(child: CircularProgressIndicator())
-        else if (attachments.isEmpty)
-          Text(
-            'No attachments yet',
-            style: context.textTheme.muted,
-          )
-        else
-          PendingAttachmentList(
-            attachments: attachments,
-            onRetry: _handlePendingAttachmentRetry,
-            onRemove: _handlePendingAttachmentRemoved,
-            onPressed: _handlePendingAttachmentPressed,
-            onLongPress:
-                useDesktopMenu ? null : _handlePendingAttachmentLongPressed,
-            contextMenuBuilder:
-                useDesktopMenu ? _buildAttachmentMenuItems : null,
-          ),
-      ],
-    );
-  }
 
   void _handlePendingAttachmentRetry(String id) {}
 
@@ -639,27 +599,6 @@ class _DraftFormState extends State<DraftForm> {
 
   void _handlePendingAttachmentLongPressed(PendingAttachment pending) {
     _showPendingAttachmentActions(pending);
-  }
-
-  List<Widget> _buildAttachmentMenuItems(PendingAttachment pending) {
-    final items = <Widget>[];
-    if (pending.attachment.isImage) {
-      items.add(
-        ShadContextMenuItem(
-          leading: const Icon(LucideIcons.image),
-          onPressed: () => _showAttachmentPreview(pending),
-          child: const Text('Preview'),
-        ),
-      );
-    }
-    items.add(
-      ShadContextMenuItem(
-        leading: const Icon(LucideIcons.trash2),
-        onPressed: () => _handlePendingAttachmentRemoved(pending.id),
-        child: const Text('Remove attachment'),
-      ),
-    );
-    return items;
   }
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
@@ -774,6 +713,99 @@ class _DraftSendIconButton extends StatelessWidget {
         iconColorOverride: iconColor,
         borderColorOverride: borderColor,
       ),
+    );
+  }
+}
+
+class _DraftAttachmentsSection extends StatelessWidget {
+  const _DraftAttachmentsSection({
+    required this.enabled,
+    required this.loading,
+    required this.attachments,
+    required this.addingAttachment,
+    required this.onAddAttachment,
+    required this.onRetry,
+    required this.onRemove,
+    required this.onAttachmentPressed,
+    required this.onAttachmentLongPressed,
+    required this.onPreview,
+  });
+
+  final bool enabled;
+  final bool loading;
+  final bool addingAttachment;
+  final List<PendingAttachment> attachments;
+  final Future<void> Function()? onAddAttachment;
+  final ValueChanged<String> onRetry;
+  final ValueChanged<String> onRemove;
+  final ValueChanged<PendingAttachment> onAttachmentPressed;
+  final ValueChanged<PendingAttachment> onAttachmentLongPressed;
+  final Future<void> Function(PendingAttachment) onPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    final canSelectAttachment = enabled && !addingAttachment;
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final useDesktopMenu = commandSurface == CommandSurface.menu;
+
+    List<Widget> menuItems(PendingAttachment pending) {
+      final items = <Widget>[];
+      if (pending.attachment.isImage) {
+        items.add(
+          ShadContextMenuItem(
+            leading: const Icon(LucideIcons.image),
+            onPressed: () => onPreview(pending),
+            child: const Text('Preview'),
+          ),
+        );
+      }
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(LucideIcons.trash2),
+          onPressed: () => onRemove(pending.id),
+          child: const Text('Remove attachment'),
+        ),
+      );
+      return items;
+    }
+
+    Widget body;
+    if (loading) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (attachments.isEmpty) {
+      body = Text(
+        'No attachments yet',
+        style: context.textTheme.muted,
+      );
+    } else {
+      body = PendingAttachmentList(
+        attachments: attachments,
+        onRetry: onRetry,
+        onRemove: onRemove,
+        onPressed: onAttachmentPressed,
+        onLongPress: useDesktopMenu ? null : onAttachmentLongPressed,
+        contextMenuBuilder: useDesktopMenu ? menuItems : null,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Attachments'),
+            const Spacer(),
+            _DraftComposerIconButton(
+              tooltip: 'Add attachment',
+              icon: LucideIcons.paperclip,
+              onPressed: canSelectAttachment ? onAddAttachment : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        body,
+      ],
     );
   }
 }

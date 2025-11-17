@@ -51,7 +51,7 @@ class CalendarReminderController {
     await _cancelTask(task.id);
 
     final now = _now();
-    final reminders = _buildReminderSchedule(task, now);
+    final reminders = _reminderSchedule(task, now);
     if (reminders.isEmpty) {
       return;
     }
@@ -90,7 +90,7 @@ class CalendarReminderController {
     }
   }
 
-  List<_ScheduledReminder> _buildReminderSchedule(
+  List<_ScheduledReminder> _reminderSchedule(
     CalendarTask task,
     DateTime now,
   ) {

@@ -111,7 +111,7 @@ class _CutoutPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final fillPath = _buildCutoutPath(size, shape, cutouts);
+    final fillPath = _cutoutPath(size, shape, cutouts);
 
     if (shadowOpacity > 0 && shadows.isNotEmpty) {
       for (final shadow in shadows) {
@@ -163,7 +163,7 @@ class _CutoutClipper extends CustomClipper<Path> {
   final List<CutoutSpec> cutouts;
 
   @override
-  Path getClip(Size size) => _buildCutoutPath(size, shape, cutouts);
+  Path getClip(Size size) => _cutoutPath(size, shape, cutouts);
 
   @override
   bool shouldReclip(covariant _CutoutClipper oldClipper) {
@@ -171,7 +171,7 @@ class _CutoutClipper extends CustomClipper<Path> {
   }
 }
 
-Path _buildCutoutPath(
+Path _cutoutPath(
   Size size,
   OutlinedBorder shape,
   List<CutoutSpec> cutouts,

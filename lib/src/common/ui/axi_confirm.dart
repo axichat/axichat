@@ -1,27 +1,52 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-Future<bool?> confirm(BuildContext context, {String text = 'Are you sure?'}) =>
-    showShadDialog<bool>(
-      context: context,
-      builder: (context) => ShadDialog(
-        title: const Text('Confirm'),
+Future<bool?> confirm(
+  BuildContext context, {
+  String title = 'Confirm',
+  String? message,
+  String? text,
+  String confirmLabel = 'Continue',
+  String cancelLabel = 'Cancel',
+  bool destructiveConfirm = true,
+  bool barrierDismissible = true,
+  TextAlign messageAlign = TextAlign.start,
+}) {
+  final resolvedMessage = message ?? text ?? 'Are you sure?';
+  final Widget? dialogBody = resolvedMessage.isEmpty
+      ? null
+      : Text(
+          resolvedMessage,
+          style: context.textTheme.small,
+          textAlign: messageAlign,
+        );
+  return showShadDialog<bool>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: (dialogContext) {
+      final pop = Navigator.of(dialogContext).pop;
+      final Widget confirmButton = destructiveConfirm
+          ? ShadButton.destructive(
+              onPressed: () => pop(true),
+              child: Text(confirmLabel),
+            )
+          : ShadButton(
+              onPressed: () => pop(true),
+              child: Text(confirmLabel),
+            );
+      return ShadDialog(
+        title: Text(title),
         actions: [
           ShadButton.outline(
-            onPressed: () => context.pop(false),
-            child: const Text('Cancel'),
+            onPressed: () => pop(false),
+            child: Text(cancelLabel),
           ).withTapBounce(),
-          ShadButton.destructive(
-            onPressed: () => context.pop(true),
-            child: const Text('Continue'),
-          ).withTapBounce(),
+          confirmButton.withTapBounce(),
         ],
-        child: Text(
-          text,
-          style: context.textTheme.small,
-        ),
-      ),
-    );
+        child: dialogBody,
+      );
+    },
+  );
+}

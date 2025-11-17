@@ -211,11 +211,21 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 resizeSession != null && resizeSession.taskId == task.id;
 
             Widget buildContent() {
-              final Widget taskBody = _buildTaskBody(
+              final taskBody = _ResizableTaskBody(
                 task: task,
                 isHovering: isHovering,
                 isDragging: isDragging,
                 isResizing: isResizing,
+                enableInteractions: widget.enableInteractions,
+                isPopoverOpen: widget.isPopoverOpen,
+                isSelectionMode: widget.isSelectionMode,
+                isSelected: widget.isSelected,
+                height: widget.height,
+                width: widget.width,
+                accentColor: _taskColor,
+                accentWidth: _accentWidth,
+                accentPadding: _accentPadding,
+                timeLabel: _formatTimeRange(),
               );
 
               final Widget sizedBody = SizedBox(
@@ -261,44 +271,96 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
     );
   }
 
-  Widget _buildTaskBody({
-    required CalendarTask task,
-    required bool isHovering,
-    required bool isDragging,
-    required bool isResizing,
-  }) {
-    final bool showHoverEffects = widget.enableInteractions &&
-        (widget.isPopoverOpen || isHovering || isResizing || isDragging);
-    final bool selectionMode = widget.isSelectionMode;
-    final bool highlightSelection = selectionMode && widget.isSelected;
-    final bool isCompleted = task.isCompleted;
-    final Color accentColor = _taskColor;
-    final double baseBlendAlpha = isCompleted ? 0.06 : 0.12;
-    final double activeBlendAlpha = isCompleted ? 0.1 : 0.18;
-    final double selectionBlendAlpha = highlightSelection
+  String _formatTimeRange() {
+    if (widget.task.scheduledTime == null) return '';
+
+    final startTime = widget.task.scheduledTime!;
+    final duration = widget.task.duration ?? const Duration(hours: 1);
+    final endTime = startTime.add(duration);
+
+    String formatTime(DateTime time) {
+      final hour = time.hour;
+      final min = time.minute;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final displayHour = hour == 0
+          ? 12
+          : hour > 12
+              ? hour - 12
+              : hour;
+      return '$displayHour:${min.toString().padLeft(2, '0')} $period';
+    }
+
+    return '${formatTime(startTime)} - ${formatTime(endTime)}';
+  }
+
+  Offset get debugContextMenuLocalPosition => _contextMenuLocalPosition;
+  Offset get debugContextMenuNormalizedPosition =>
+      _contextMenuNormalizedPosition;
+}
+
+class _ResizableTaskBody extends StatelessWidget {
+  const _ResizableTaskBody({
+    required this.task,
+    required this.isHovering,
+    required this.isDragging,
+    required this.isResizing,
+    required this.enableInteractions,
+    required this.isPopoverOpen,
+    required this.isSelectionMode,
+    required this.isSelected,
+    required this.height,
+    required this.width,
+    required this.accentColor,
+    required this.accentWidth,
+    required this.accentPadding,
+    required this.timeLabel,
+  });
+
+  final CalendarTask task;
+  final bool isHovering;
+  final bool isDragging;
+  final bool isResizing;
+  final bool enableInteractions;
+  final bool isPopoverOpen;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final double height;
+  final double width;
+  final Color accentColor;
+  final double accentWidth;
+  final double accentPadding;
+  final String timeLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final showHoverEffects = enableInteractions &&
+        (isPopoverOpen || isHovering || isResizing || isDragging);
+    final highlightSelection = isSelectionMode && isSelected;
+    final isCompleted = task.isCompleted;
+    final baseBlendAlpha = isCompleted ? 0.06 : 0.12;
+    final activeBlendAlpha = isCompleted ? 0.1 : 0.18;
+    final selectionBlendAlpha = highlightSelection
         ? (isCompleted ? 0.18 : 0.26)
         : (showHoverEffects ? activeBlendAlpha : baseBlendAlpha);
-    final Color backgroundColor = Color.alphaBlend(
+    final backgroundColor = Color.alphaBlend(
       accentColor.withValues(alpha: selectionBlendAlpha),
       calendarContainerColor,
     );
-    final Color borderColor = highlightSelection
+    final borderColor = highlightSelection
         ? accentColor
         : showHoverEffects
             ? accentColor.withValues(alpha: 0.45)
             : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
-    final List<BoxShadow> boxShadows = highlightSelection
+    final boxShadows = highlightSelection
         ? calendarMediumShadow
         : showHoverEffects
             ? calendarLightShadow
-            : const [];
-    final Color titleColor =
-        isCompleted ? calendarSubtitleColor : calendarTitleColor;
-    const Color secondaryColor = calendarSubtitleColor;
-    final Color stripeColor = highlightSelection
+            : const <BoxShadow>[];
+    final titleColor = isCompleted ? calendarSubtitleColor : calendarTitleColor;
+    const secondaryColor = calendarSubtitleColor;
+    final stripeColor = highlightSelection
         ? accentColor
         : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
-
     final decoration = BoxDecoration(
       color: backgroundColor,
       borderRadius: BorderRadius.circular(4),
@@ -312,17 +374,17 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       ),
       boxShadow: boxShadows,
     );
-
-    final double availableHeight =
-        (widget.height - 4).clamp(0.0, double.infinity);
-
+    final availableHeight = (height - 4).clamp(0.0, double.infinity);
     if (availableHeight <= 6) {
       return Container(
         margin: const EdgeInsets.all(2),
         decoration: decoration,
         child: Stack(
           children: [
-            _buildAccentStripe(stripeColor),
+            _TaskAccentStripe(
+              color: stripeColor,
+              accentWidth: accentWidth,
+            ),
           ],
         ),
       );
@@ -339,7 +401,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       padding = 2;
     }
 
-    final double innerHeight =
+    final innerHeight =
         (availableHeight - padding * 2).clamp(0.0, double.infinity);
 
     if (innerHeight <= 10) {
@@ -348,10 +410,13 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
         decoration: decoration,
         child: Stack(
           children: [
-            _buildAccentStripe(stripeColor),
+            _TaskAccentStripe(
+              color: stripeColor,
+              accentWidth: accentWidth,
+            ),
             Padding(
               padding: EdgeInsets.fromLTRB(
-                padding + _accentWidth + _accentPadding,
+                padding + accentWidth + accentPadding,
                 padding,
                 padding,
                 padding,
@@ -377,29 +442,28 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       );
     }
 
-    final bool stackedTime = innerHeight >= 36;
-    final bool inlineTime =
-        !stackedTime && innerHeight >= 16 && widget.width >= 140;
-    final bool showTime = stackedTime || inlineTime;
-    final bool showDescription =
+    final stackedTime = innerHeight >= 36;
+    final inlineTime = !stackedTime && innerHeight >= 16 && width >= 140;
+    final showTime = stackedTime || inlineTime;
+    final showDescription =
         task.description?.isNotEmpty == true && innerHeight >= 56;
 
     final double spacing = innerHeight >= 90
-        ? 6
+        ? calendarInsetLg
         : innerHeight >= 64
-            ? 4
+            ? calendarInsetMd
             : innerHeight >= 40
-                ? 2
-                : 0;
+                ? calendarInsetSm
+                : 0.0;
 
-    final int titleLines = innerHeight >= 48 ? 2 : 1;
-    final int descriptionLines = showDescription
+    final titleLines = innerHeight >= 48 ? 2 : 1;
+    final descriptionLines = showDescription
         ? math.max(1, (innerHeight / 18).floor() - (stackedTime ? 1 : 0))
         : 0;
-    final TextOverflow descriptionOverflow =
+    final descriptionOverflow =
         descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
 
-    Widget buildTitle() {
+    Widget titleSection() {
       final title = Text(
         task.title,
         maxLines: titleLines,
@@ -413,7 +477,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       );
 
       if (showTime && inlineTime) {
-        final timeText = _formatTimeRange();
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -421,7 +484,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             const SizedBox(width: calendarInsetLg),
             Flexible(
               child: Text(
-                timeText,
+                timeLabel,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
@@ -444,7 +507,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       );
     }
 
-    final List<Widget> children = <Widget>[buildTitle()];
+    final children = <Widget>[titleSection()];
 
     if (showTime && !inlineTime) {
       if (spacing > 0) {
@@ -452,7 +515,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       }
       children.add(
         Text(
-          _formatTimeRange(),
+          timeLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -488,11 +551,14 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       decoration: decoration,
       child: Stack(
         children: [
-          _buildAccentStripe(stripeColor),
+          _TaskAccentStripe(
+            color: stripeColor,
+            accentWidth: accentWidth,
+          ),
           ClipRect(
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                padding + _accentWidth + _accentPadding,
+                padding + accentWidth + accentPadding,
                 padding,
                 padding,
                 padding,
@@ -513,14 +579,25 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       ),
     );
   }
+}
 
-  Widget _buildAccentStripe(Color color) {
+class _TaskAccentStripe extends StatelessWidget {
+  const _TaskAccentStripe({
+    required this.color,
+    required this.accentWidth,
+  });
+
+  final Color color;
+  final double accentWidth;
+
+  @override
+  Widget build(BuildContext context) {
     return Positioned(
       left: 0,
       top: 0,
       bottom: 0,
       child: Container(
-        width: _accentWidth,
+        width: accentWidth,
         decoration: BoxDecoration(
           color: color,
           borderRadius: const BorderRadius.only(
@@ -531,30 +608,4 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       ),
     );
   }
-
-  String _formatTimeRange() {
-    if (widget.task.scheduledTime == null) return '';
-
-    final startTime = widget.task.scheduledTime!;
-    final duration = widget.task.duration ?? const Duration(hours: 1);
-    final endTime = startTime.add(duration);
-
-    String formatTime(DateTime time) {
-      final hour = time.hour;
-      final min = time.minute;
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour == 0
-          ? 12
-          : hour > 12
-              ? hour - 12
-              : hour;
-      return '$displayHour:${min.toString().padLeft(2, '0')} $period';
-    }
-
-    return '${formatTime(startTime)} - ${formatTime(endTime)}';
-  }
-
-  Offset get debugContextMenuLocalPosition => _contextMenuLocalPosition;
-  Offset get debugContextMenuNormalizedPosition =>
-      _contextMenuNormalizedPosition;
 }

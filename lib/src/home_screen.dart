@@ -18,6 +18,7 @@ import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -435,21 +436,11 @@ class _NexusState extends State<Nexus> {
               if (showToast == null) return;
               if (state is RosterFailure) {
                 showToast(
-                  ShadToast.destructive(
-                    title: const Text('Whoops!'),
-                    description: Text(state.message),
-                    alignment: Alignment.topRight,
-                    showCloseIconOnlyWhenHovered: false,
-                  ),
+                  FeedbackToast.error(message: state.message),
                 );
               } else if (state is RosterSuccess) {
                 showToast(
-                  ShadToast(
-                    title: const Text('Success!'),
-                    description: Text(state.message),
-                    alignment: Alignment.topRight,
-                    showCloseIconOnlyWhenHovered: false,
-                  ),
+                  FeedbackToast.success(message: state.message),
                 );
               }
             },
@@ -460,21 +451,11 @@ class _NexusState extends State<Nexus> {
               if (showToast == null) return;
               if (state is BlocklistFailure) {
                 showToast(
-                  ShadToast.destructive(
-                    title: const Text('Whoops!'),
-                    description: Text(state.message),
-                    alignment: Alignment.topRight,
-                    showCloseIconOnlyWhenHovered: false,
-                  ),
+                  FeedbackToast.error(message: state.message),
                 );
               } else if (state is BlocklistSuccess) {
                 showToast(
-                  ShadToast(
-                    title: const Text('Success!'),
-                    description: Text(state.message),
-                    alignment: Alignment.topRight,
-                    showCloseIconOnlyWhenHovered: false,
-                  ),
+                  FeedbackToast.success(message: state.message),
                 );
               }
             },

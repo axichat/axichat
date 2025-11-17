@@ -585,7 +585,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       _tempDuration = Duration(minutes: (_currentDurationHours * 60).round());
     }
 
-    final CalendarTask? preview = _buildResizePreview();
+    final CalendarTask? preview = _resizePreview();
     if (preview != null) {
       onResizePreview?.call(preview);
     }
@@ -596,7 +596,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _endResize() {
-    final CalendarTask? preview = _buildResizePreview();
+    final CalendarTask? preview = _resizePreview();
     interactionController.endResizeInteraction(task.id);
     _resizeActive = false;
     _activeHandle = null;
@@ -608,7 +608,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _tempDuration = null;
   }
 
-  CalendarTask? _buildResizePreview() {
+  CalendarTask? _resizePreview() {
     final DateTime? schedule = _tempScheduled ?? task.scheduledTime;
     final Duration? duration = _tempDuration ?? task.duration;
     if (schedule == task.scheduledTime && duration == task.duration) {
@@ -709,7 +709,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
               minutesPerStep.clamp(1, 60))
           .clamp(15, 1440),
     );
-    final CalendarTask? preview = _buildResizePreview();
+    final CalendarTask? preview = _resizePreview();
     if (preview != null) {
       onResizeEnd?.call(preview);
     }
@@ -725,7 +725,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     final int nextMinutes =
         math.max(minutesPerStep.clamp(1, 60), baseMinutes - minutesPerStep);
     _tempDuration = Duration(minutes: nextMinutes);
-    final CalendarTask? preview = _buildResizePreview();
+    final CalendarTask? preview = _resizePreview();
     if (preview != null) {
       onResizeEnd?.call(preview);
     }

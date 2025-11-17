@@ -22,6 +22,7 @@ import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
@@ -29,6 +30,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -707,69 +709,11 @@ class _ChatState extends State<Chat> {
         ? 'Sent ${chat.title} to spam.'
         : 'Returned ${chat.title} to inbox.';
     ShadToaster.maybeOf(context)?.show(
-      ShadToast(
-        title: Text(sendToSpam ? 'Reported' : 'Restored'),
-        description: Text(toastMessage),
-        alignment: Alignment.topRight,
-        showCloseIconOnlyWhenHovered: false,
+      FeedbackToast.info(
+        title: sendToSpam ? 'Reported' : 'Restored',
+        message: toastMessage,
       ),
     );
-  }
-
-  List<Widget> _buildSettingsButtons({required ChatState state}) {
-    final chat = state.chat;
-    if (chat == null) return const [];
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
-    final iconSize = scaled(16);
-    final showDirectOnly = state.viewFilter == MessageTimelineFilter.directOnly;
-    final buttons = <Widget>[
-      ContextActionButton(
-        icon: Icon(
-          showDirectOnly ? LucideIcons.user : LucideIcons.users,
-          size: iconSize,
-        ),
-        label: showDirectOnly ? 'Showing direct only' : 'Showing all',
-        onPressed: () => _setViewFilter(
-          showDirectOnly
-              ? MessageTimelineFilter.allWithContact
-              : MessageTimelineFilter.directOnly,
-        ),
-      ),
-    ];
-    final notificationsEnabled = !chat.muted;
-    buttons.add(
-      ContextActionButton(
-        icon: Icon(
-          notificationsEnabled ? LucideIcons.bellOff : LucideIcons.bell,
-          size: iconSize,
-        ),
-        label: notificationsEnabled
-            ? 'Mute notifications'
-            : 'Enable notifications',
-        onPressed: () => _toggleNotifications(!notificationsEnabled),
-      ),
-    );
-    final isSpamChat = chat.spam;
-    buttons.add(
-      ContextActionButton(
-        icon: Icon(
-          isSpamChat ? LucideIcons.inbox : LucideIcons.flag,
-          size: iconSize,
-        ),
-        label: isSpamChat ? 'Move to inbox' : 'Report spam',
-        destructive: !isSpamChat,
-        onPressed: () => _handleSpamToggle(sendToSpam: !isSpamChat),
-      ),
-    );
-    buttons.add(
-      _BlockActionButton(
-        jid: chat.jid,
-        emailAddress: chat.emailAddress,
-        useEmailBlocking: chat.defaultTransport.isEmail,
-      ),
-    );
-    return buttons;
   }
 
   void _handleSubjectChanged() {
@@ -793,43 +737,6 @@ class _ChatState extends State<Chat> {
     }
     _animatedMessageIds.add(messageId);
     return true;
-  }
-
-  Widget _buildSubjectField(BuildContext context) {
-    final colors = context.colorScheme;
-    final subjectStyle = context.textTheme.p.copyWith(
-      fontSize: 15,
-      height: 1.05,
-      fontWeight: FontWeight.w600,
-      color: colors.foreground,
-    );
-    return SizedBox(
-      height: 28,
-      child: Semantics(
-        label: 'Email subject',
-        textField: true,
-        child: TextField(
-          controller: _subjectController,
-          focusNode: _subjectFocusNode,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.sentences,
-          cursorColor: colors.primary,
-          onSubmitted: (_) => _focusNode.requestFocus(),
-          style: subjectStyle,
-          decoration: InputDecoration(
-            hintText: 'Subject',
-            hintStyle: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground.withValues(alpha: 0.9),
-            ),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            isCollapsed: true,
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-      ),
-    );
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -931,26 +838,13 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     final displaySender =
         senderEmail?.isNotEmpty == true ? senderEmail! : senderJid;
-    final confirmed = await showShadDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ShadDialog(
-        title: const Text('Load attachment?'),
-        actions: [
-          ShadButton.outline(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ).withTapBounce(),
-          ShadButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Load'),
-          ).withTapBounce(),
-        ],
-        child: Text(
-          'Only load attachments from contacts you trust.\n\n'
-          '$displaySender is not in your contacts yet. Continue?',
-          style: dialogContext.textTheme.small,
-        ),
-      ),
+    final confirmed = await confirm(
+      context,
+      title: 'Load attachment?',
+      message:
+          'Only load attachments from contacts you trust.\n\n$displaySender is not in your contacts yet. Continue?',
+      confirmLabel: 'Load',
+      destructiveConfirm: false,
     );
     if (confirmed == true && mounted) {
       setState(() {
@@ -964,26 +858,13 @@ class _ChatState extends State<Chat> {
     final trimmed = url.trim();
     final uri = Uri.tryParse(trimmed);
     final host = uri?.host.isNotEmpty == true ? uri!.host : trimmed;
-    final approved = await showShadDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ShadDialog(
-        title: const Text('Open external link?'),
-        actions: [
-          ShadButton.outline(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ).withTapBounce(),
-          ShadButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Open link'),
-          ).withTapBounce(),
-        ],
-        child: Text(
-          'You are about to open:\n$trimmed\n\n'
-          'Only tap OK if you trust the site (host: $host).',
-          style: dialogContext.textTheme.small,
-        ),
-      ),
+    final approved = await confirm(
+      context,
+      title: 'Open external link?',
+      message:
+          'You are about to open:\n$trimmed\n\nOnly tap OK if you trust the site (host: $host).',
+      confirmLabel: 'Open link',
+      destructiveConfirm: false,
     );
     if (approved != true) return;
     if (uri == null) {
@@ -1164,348 +1045,31 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatMessageEditRequested(message));
   }
 
-  Widget _buildComposer({
-    required String hintText,
-    required List<ComposerRecipient> recipients,
-    required List<chat_models.Chat> availableChats,
-    required Map<String, FanOutRecipientState> latestStatuses,
-    required List<PendingAttachment> pendingAttachments,
-    required bool isEmailTransport,
-    String? composerError,
-    bool showAttachmentWarning = false,
-    FanOutSendReport? retryReport,
-    String? retryShareId,
-  }) {
-    if (widget.readOnly) {
-      _ensureRecipientBarHeightCleared();
-      return _buildReadOnlyBanner();
-    }
-    final colors = context.colorScheme;
-    const horizontalPadding = _composerHorizontalInset;
-    final hasQueuedAttachments = pendingAttachments.any(
-      (attachment) => attachment.status == PendingAttachmentStatus.queued,
-    );
-    final hasSubjectText = _subjectController.text.trim().isNotEmpty;
-    final sendEnabled =
-        _composerHasText || hasQueuedAttachments || hasSubjectText;
-    Widget? attachmentTray;
-    final subjectHeader = _buildSubjectField(context);
-    final showAttachmentTray =
-        isEmailTransport && pendingAttachments.isNotEmpty;
-    final commandSurface =
-        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
-    final useDesktopMenu = commandSurface == CommandSurface.menu;
-    if (showAttachmentTray) {
-      attachmentTray = PendingAttachmentList(
-        attachments: pendingAttachments,
-        onRetry: (id) =>
-            context.read<ChatBloc>().add(ChatAttachmentRetryRequested(id)),
-        onRemove: (id) =>
-            context.read<ChatBloc>().add(ChatPendingAttachmentRemoved(id)),
-        onPressed: _handlePendingAttachmentPressed,
-        onLongPress:
-            useDesktopMenu ? null : _handlePendingAttachmentLongPressed,
-        contextMenuBuilder: useDesktopMenu ? _pendingAttachmentMenuItems : null,
-      );
-    }
-    Widget composer = SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      child: SizedBox(
-        width: double.infinity,
-        child: ColoredBox(
-          color: colors.background,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: colors.border, width: 1),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                horizontalPadding,
-                18,
-                horizontalPadding,
-                10,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (attachmentTray != null) ...[
-                    attachmentTray,
-                    const SizedBox(height: 12),
-                  ],
-                  ChatCutoutComposer(
-                    controller: _textController,
-                    focusNode: _focusNode,
-                    hintText: hintText,
-                    semanticsLabel: 'Message input',
-                    onSend: _handleSendMessage,
-                    header: subjectHeader,
-                    actions: _buildComposerAccessories(
-                      canSend: sendEnabled,
-                    ),
-                    sendEnabled: sendEnabled,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    final notices = <Widget>[];
-    if (composerError != null && composerError.isNotEmpty) {
-      notices.add(
-        _ComposerNotice(
-          type: _ComposerNoticeType.error,
-          message: composerError,
-        ),
-      );
-    }
-    if (showAttachmentWarning) {
-      notices.add(
-        const _ComposerNotice(
-          type: _ComposerNoticeType.warning,
-          message:
-              'Large attachments are sent separately to each recipient and may take longer to deliver.',
-        ),
-      );
-    }
-    if (retryReport != null && retryShareId != null) {
-      final failedCount = retryReport.statuses
-          .where((status) => status.state == FanOutRecipientState.failed)
-          .length;
-      if (failedCount > 0) {
-        final label = failedCount == 1 ? 'recipient' : 'recipients';
-        final subjectLabel = retryReport.subject?.trim();
-        final hasSubjectLabel = subjectLabel?.isNotEmpty == true;
-        final failureMessage = hasSubjectLabel
-            ? 'Subject "$subjectLabel" failed to send to $failedCount $label.'
-            : 'Failed to send to $failedCount $label.';
-        notices.add(
-          _ComposerNotice(
-            type: _ComposerNoticeType.info,
-            message: failureMessage,
-            actionLabel: 'Retry',
-            onAction: () => context
-                .read<ChatBloc>()
-                .add(ChatFanOutRetryRequested(retryShareId)),
-          ),
-        );
-      }
-    }
-    final children = <Widget>[];
-    if (notices.isNotEmpty) {
-      for (var i = 0; i < notices.length; i++) {
-        children.add(notices[i]);
-        if (i != notices.length - 1) {
-          children.add(const SizedBox(height: 8));
-        }
-      }
-      children.add(const SizedBox(height: 12));
-    }
-    children.add(
-      _SizeReportingWidget(
-        onSizeChanged: _handleRecipientBarSizeChanged,
-        child: RecipientChipsBar(
-          recipients: recipients,
-          availableChats: availableChats,
-          latestStatuses: latestStatuses,
-          collapsedByDefault: true,
-          onRecipientAdded: (target) =>
-              context.read<ChatBloc>().add(ChatComposerRecipientAdded(target)),
-          onRecipientRemoved: (key) =>
-              context.read<ChatBloc>().add(ChatComposerRecipientRemoved(key)),
-          onRecipientToggled: (key) =>
-              context.read<ChatBloc>().add(ChatComposerRecipientToggled(key)),
-        ),
-      ),
-    );
-    children.add(composer);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _buildReadOnlyBanner() {
-    final colors = context.colorScheme;
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      child: ColoredBox(
-        color: colors.background,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: colors.border, width: 1),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              _composerHorizontalInset,
-              18,
-              _composerHorizontalInset,
-              18,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  LucideIcons.archive,
-                  size: 18,
-                  color: colors.mutedForeground,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Read only',
-                        style: context.textTheme.small.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Unarchive to send new messages.',
-                        style: context.textTheme.small.copyWith(
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  List<ChatComposerAccessory> _buildComposerAccessories({
+  List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
   }) {
     final accessories = <ChatComposerAccessory>[
-      ChatComposerAccessory.leading(child: _buildEmojiButton()),
       ChatComposerAccessory.leading(
-        child: _buildAttachmentButton(),
+        child: _EmojiPickerAccessory(
+          controller: _emojiPopoverController,
+          textController: _textController,
+        ),
+      ),
+      ChatComposerAccessory.leading(
+        child: _AttachmentAccessoryButton(
+          enabled: !_sendingAttachment,
+          onPressed: _handleAttachmentPressed,
+        ),
       ),
       ChatComposerAccessory.trailing(
-        child: _buildSendButton(enabled: canSend),
+        child: _SendMessageAccessory(
+          enabled: canSend,
+          onPressed: _handleSendMessage,
+          onLongPress: widget.readOnly ? null : _handleSendButtonLongPress,
+        ),
       ),
     ];
     return accessories;
-  }
-
-  Widget _buildEmojiButton() {
-    return ShadPopover(
-      controller: _emojiPopoverController,
-      child: _cutoutIconButton(
-        icon: LucideIcons.smile,
-        tooltip: 'Emoji picker',
-        onPressed: _emojiPopoverController.toggle,
-      ),
-      popover: (context) => EmojiPicker(
-        textEditingController: _textController,
-        config: Config(
-          emojiViewConfig: EmojiViewConfig(
-            emojiSizeMax: context.read<Policy>().getMaxEmojiSize(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachmentButton() {
-    return _cutoutIconButton(
-      icon: LucideIcons.paperclip,
-      tooltip: 'Attachments',
-      onPressed: _sendingAttachment ? null : _handleAttachmentPressed,
-    );
-  }
-
-  Widget _buildSendButton({required bool enabled}) {
-    final colors = context.colorScheme;
-    final button = _cutoutIconButton(
-      tooltip: 'Send message',
-      activeColor: colors.primary,
-      onPressed: enabled ? _handleSendMessage : null,
-      onLongPress: widget.readOnly ? null : _handleSendButtonLongPress,
-      icon: LucideIcons.send,
-    );
-    return button;
-  }
-
-  Widget _cutoutIconButton({
-    IconData? icon,
-    Widget Function(Color iconColor)? iconBuilder,
-    required String tooltip,
-    Color? activeColor,
-    VoidCallback? onPressed,
-    VoidCallback? onLongPress,
-  }) {
-    assert(icon != null || iconBuilder != null, 'Provide an icon or builder.');
-    final colors = context.colorScheme;
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
-    final iconColor = onPressed == null
-        ? colors.mutedForeground
-        : (activeColor ?? colors.foreground);
-    final childIcon = iconBuilder != null
-        ? iconBuilder(iconColor)
-        : Icon(icon!, size: scaled(24), color: iconColor);
-    final minButtonExtent = scaled(50);
-    final splashRadius = scaled(24);
-    final button = IconButton(
-      icon: childIcon,
-      tooltip: tooltip,
-      onPressed: onPressed,
-      splashRadius: splashRadius,
-      padding: EdgeInsets.zero,
-      constraints: BoxConstraints(
-        minWidth: minButtonExtent,
-        minHeight: minButtonExtent,
-      ),
-      visualDensity: VisualDensity.compact,
-    );
-    final decorated = DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: SquircleBorder(
-          cornerRadius: scaled(14),
-          side: BorderSide(color: colors.border, width: scaled(1.4)),
-        ),
-      ),
-      child: button,
-    );
-    Widget interactiveChild =
-        decorated.withTapBounce(enabled: onPressed != null);
-    if (onLongPress != null) {
-      interactiveChild = GestureDetector(
-        behavior: HitTestBehavior.deferToChild,
-        onLongPress: onLongPress,
-        child: interactiveChild,
-      );
-    }
-    return Semantics(
-      button: true,
-      enabled: onPressed != null,
-      label: tooltip,
-      onTap: onPressed,
-      onLongPress: onLongPress,
-      child: interactiveChild,
-    );
   }
 
   Future<void> _handleAttachmentPressed() async {
@@ -2269,23 +1833,17 @@ class _ChatState extends State<Chat> {
                   final show = showToast;
                   if (toast == null || show == null) return;
                   final toastWidget = switch (toast.variant) {
-                    ChatToastVariant.destructive => ShadToast.destructive(
-                        title: const Text('Whoops'),
-                        description: Text(toast.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
+                    ChatToastVariant.destructive => FeedbackToast.error(
+                        title: 'Whoops',
+                        message: toast.message,
                       ),
-                    ChatToastVariant.warning => ShadToast(
-                        title: const Text('Heads up'),
-                        description: Text(toast.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
+                    ChatToastVariant.warning => FeedbackToast.warning(
+                        title: 'Heads up',
+                        message: toast.message,
                       ),
-                    ChatToastVariant.info => ShadToast(
-                        title: const Text('All set'),
-                        description: Text(toast.message),
-                        alignment: Alignment.topRight,
-                        showCloseIconOnlyWhenHovered: false,
+                    ChatToastVariant.info => FeedbackToast.success(
+                        title: 'All set',
+                        message: toast.message,
                       ),
                   };
                   show(toastWidget);
@@ -2537,7 +2095,13 @@ class _ChatState extends State<Chat> {
                       children: [
                         _ChatSettingsPanel(
                           visible: showSettingsPanel,
-                          children: _buildSettingsButtons(state: state),
+                          child: _ChatSettingsButtons(
+                            state: state,
+                            onViewFilterChanged: _setViewFilter,
+                            onToggleNotifications: _toggleNotifications,
+                            onSpamToggle: (sendToSpam) =>
+                                _handleSpamToggle(sendToSpam: sendToSpam),
+                          ),
                         ),
                         const ChatAlert(),
                         const _ChatSearchPanel(),
@@ -3996,20 +3560,77 @@ class _ChatState extends State<Chat> {
                                             );
                                           }()
                                         else
-                                          _buildComposer(
-                                            hintText: composerHintText,
-                                            recipients: recipients,
-                                            availableChats: availableChats,
-                                            latestStatuses: latestStatuses,
-                                            pendingAttachments:
-                                                pendingAttachments,
-                                            isEmailTransport: isDefaultEmail,
-                                            composerError: state.composerError,
-                                            showAttachmentWarning:
-                                                showAttachmentWarning,
-                                            retryReport: retryReport,
-                                            retryShareId: retryShareId,
-                                          ),
+                                          () {
+                                            if (widget.readOnly) {
+                                              _ensureRecipientBarHeightCleared();
+                                              return const _ReadOnlyComposerBanner();
+                                            }
+                                            return _ChatComposerSection(
+                                              hintText: composerHintText,
+                                              recipients: recipients,
+                                              availableChats: availableChats,
+                                              latestStatuses: latestStatuses,
+                                              pendingAttachments:
+                                                  pendingAttachments,
+                                              isEmailTransport: isDefaultEmail,
+                                              composerHasText: _composerHasText,
+                                              composerError:
+                                                  state.composerError,
+                                              showAttachmentWarning:
+                                                  showAttachmentWarning,
+                                              retryReport: retryReport,
+                                              retryShareId: retryShareId,
+                                              subjectController:
+                                                  _subjectController,
+                                              subjectFocusNode:
+                                                  _subjectFocusNode,
+                                              textController: _textController,
+                                              textFocusNode: _focusNode,
+                                              onSubjectSubmitted: () =>
+                                                  _focusNode.requestFocus(),
+                                              onRecipientBarSizeChanged:
+                                                  _handleRecipientBarSizeChanged,
+                                              onRecipientAdded: (target) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatComposerRecipientAdded(
+                                                          target,
+                                                        ),
+                                                      ),
+                                              onRecipientRemoved: (key) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatComposerRecipientRemoved(
+                                                          key,
+                                                        ),
+                                                      ),
+                                              onRecipientToggled: (key) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatComposerRecipientToggled(
+                                                          key,
+                                                        ),
+                                                      ),
+                                              onAttachmentRetry: (id) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatAttachmentRetryRequested(
+                                                          id,
+                                                        ),
+                                                      ),
+                                              onAttachmentRemove: (id) =>
+                                                  context.read<ChatBloc>().add(
+                                                        ChatPendingAttachmentRemoved(
+                                                          id,
+                                                        ),
+                                                      ),
+                                              onPendingAttachmentPressed:
+                                                  _handlePendingAttachmentPressed,
+                                              onPendingAttachmentLongPressed:
+                                                  _handlePendingAttachmentLongPressed,
+                                              pendingAttachmentMenuBuilder:
+                                                  _pendingAttachmentMenuItems,
+                                              buildComposerAccessories:
+                                                  _composerAccessories,
+                                              onSend: _handleSendMessage,
+                                            );
+                                          }(),
                                       ],
                                     );
                                   },
@@ -4939,6 +4560,475 @@ class _ComposerNotice extends StatelessWidget {
   }
 }
 
+class _ChatComposerSection extends StatelessWidget {
+  const _ChatComposerSection({
+    required this.hintText,
+    required this.recipients,
+    required this.availableChats,
+    required this.latestStatuses,
+    required this.pendingAttachments,
+    required this.isEmailTransport,
+    required this.composerHasText,
+    required this.subjectController,
+    required this.subjectFocusNode,
+    required this.textController,
+    required this.textFocusNode,
+    required this.onSubjectSubmitted,
+    required this.onRecipientBarSizeChanged,
+    required this.onRecipientAdded,
+    required this.onRecipientRemoved,
+    required this.onRecipientToggled,
+    required this.onAttachmentRetry,
+    required this.onAttachmentRemove,
+    required this.onPendingAttachmentPressed,
+    required this.onPendingAttachmentLongPressed,
+    required this.pendingAttachmentMenuBuilder,
+    required this.buildComposerAccessories,
+    required this.onSend,
+    this.composerError,
+    this.showAttachmentWarning = false,
+    this.retryReport,
+    this.retryShareId,
+  });
+
+  final String hintText;
+  final List<ComposerRecipient> recipients;
+  final List<chat_models.Chat> availableChats;
+  final Map<String, FanOutRecipientState> latestStatuses;
+  final List<PendingAttachment> pendingAttachments;
+  final bool isEmailTransport;
+  final bool composerHasText;
+  final TextEditingController subjectController;
+  final FocusNode subjectFocusNode;
+  final TextEditingController textController;
+  final FocusNode textFocusNode;
+  final VoidCallback onSubjectSubmitted;
+  final ValueChanged<Size> onRecipientBarSizeChanged;
+  final ValueChanged<FanOutTarget> onRecipientAdded;
+  final ValueChanged<String> onRecipientRemoved;
+  final ValueChanged<String> onRecipientToggled;
+  final ValueChanged<String> onAttachmentRetry;
+  final ValueChanged<String> onAttachmentRemove;
+  final ValueChanged<PendingAttachment> onPendingAttachmentPressed;
+  final ValueChanged<PendingAttachment>? onPendingAttachmentLongPressed;
+  final List<Widget> Function(PendingAttachment pending)?
+      pendingAttachmentMenuBuilder;
+  final List<ChatComposerAccessory> Function({required bool canSend})
+      buildComposerAccessories;
+  final VoidCallback onSend;
+  final String? composerError;
+  final bool showAttachmentWarning;
+  final FanOutSendReport? retryReport;
+  final String? retryShareId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    const horizontalPadding = _composerHorizontalInset;
+    final hasQueuedAttachments = pendingAttachments.any(
+      (attachment) => attachment.status == PendingAttachmentStatus.queued,
+    );
+    final hasSubjectText = subjectController.text.trim().isNotEmpty;
+    final sendEnabled =
+        composerHasText || hasQueuedAttachments || hasSubjectText;
+    final subjectHeader = _SubjectTextField(
+      controller: subjectController,
+      focusNode: subjectFocusNode,
+      onSubmitted: onSubjectSubmitted,
+    );
+    final showAttachmentTray =
+        isEmailTransport && pendingAttachments.isNotEmpty;
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final useDesktopMenu = commandSurface == CommandSurface.menu;
+    Widget? attachmentTray;
+    if (showAttachmentTray) {
+      attachmentTray = PendingAttachmentList(
+        attachments: pendingAttachments,
+        onRetry: onAttachmentRetry,
+        onRemove: onAttachmentRemove,
+        onPressed: onPendingAttachmentPressed,
+        onLongPress: useDesktopMenu ? null : onPendingAttachmentLongPressed,
+        contextMenuBuilder:
+            useDesktopMenu ? pendingAttachmentMenuBuilder : null,
+      );
+    }
+    final composer = SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: SizedBox(
+        width: double.infinity,
+        child: ColoredBox(
+          color: colors.background,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: colors.border, width: 1),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                horizontalPadding,
+                18,
+                horizontalPadding,
+                10,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (attachmentTray != null) ...[
+                    attachmentTray,
+                    const SizedBox(height: 12),
+                  ],
+                  ChatCutoutComposer(
+                    controller: textController,
+                    focusNode: textFocusNode,
+                    hintText: hintText,
+                    semanticsLabel: 'Message input',
+                    onSend: onSend,
+                    header: subjectHeader,
+                    actions: buildComposerAccessories(
+                      canSend: sendEnabled,
+                    ),
+                    sendEnabled: sendEnabled,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final notices = <Widget>[];
+    if (composerError != null && composerError!.isNotEmpty) {
+      notices.add(
+        _ComposerNotice(
+          type: _ComposerNoticeType.error,
+          message: composerError!,
+        ),
+      );
+    }
+    if (showAttachmentWarning) {
+      notices.add(
+        const _ComposerNotice(
+          type: _ComposerNoticeType.warning,
+          message:
+              'Large attachments are sent separately to each recipient and may take longer to deliver.',
+        ),
+      );
+    }
+    final report = retryReport;
+    final shareId = retryShareId;
+    if (report != null && shareId != null) {
+      final failedCount = report.statuses
+          .where((status) => status.state == FanOutRecipientState.failed)
+          .length;
+      if (failedCount > 0) {
+        final label = failedCount == 1 ? 'recipient' : 'recipients';
+        final subjectLabel = report.subject?.trim();
+        final hasSubjectLabel = subjectLabel?.isNotEmpty == true;
+        final failureMessage = hasSubjectLabel
+            ? 'Subject "$subjectLabel" failed to send to $failedCount $label.'
+            : 'Failed to send to $failedCount $label.';
+        notices.add(
+          _ComposerNotice(
+            type: _ComposerNoticeType.info,
+            message: failureMessage,
+            actionLabel: 'Retry',
+            onAction: () =>
+                context.read<ChatBloc>().add(ChatFanOutRetryRequested(shareId)),
+          ),
+        );
+      }
+    }
+    final children = <Widget>[];
+    if (notices.isNotEmpty) {
+      for (var i = 0; i < notices.length; i++) {
+        children.add(notices[i]);
+        if (i != notices.length - 1) {
+          children.add(const SizedBox(height: 8));
+        }
+      }
+      children.add(const SizedBox(height: 12));
+    }
+    children.add(
+      _SizeReportingWidget(
+        onSizeChanged: onRecipientBarSizeChanged,
+        child: RecipientChipsBar(
+          recipients: recipients,
+          availableChats: availableChats,
+          latestStatuses: latestStatuses,
+          collapsedByDefault: true,
+          onRecipientAdded: onRecipientAdded,
+          onRecipientRemoved: onRecipientRemoved,
+          onRecipientToggled: onRecipientToggled,
+        ),
+      ),
+    );
+    children.add(composer);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+}
+
+class _SubjectTextField extends StatelessWidget {
+  const _SubjectTextField({
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final subjectStyle = context.textTheme.p.copyWith(
+      fontSize: 15,
+      height: 1.05,
+      fontWeight: FontWeight.w600,
+      color: colors.foreground,
+    );
+    return SizedBox(
+      height: 28,
+      child: Semantics(
+        label: 'Email subject',
+        textField: true,
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.sentences,
+          cursorColor: colors.primary,
+          onSubmitted: (_) => onSubmitted(),
+          style: subjectStyle,
+          decoration: InputDecoration(
+            hintText: 'Subject',
+            hintStyle: context.textTheme.muted.copyWith(
+              color: colors.mutedForeground.withValues(alpha: 0.9),
+            ),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            isCollapsed: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyComposerBanner extends StatelessWidget {
+  const _ReadOnlyComposerBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: ColoredBox(
+        color: colors.background,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: colors.border, width: 1),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              _composerHorizontalInset,
+              18,
+              _composerHorizontalInset,
+              18,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  LucideIcons.archive,
+                  size: 18,
+                  color: colors.mutedForeground,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Read only',
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Unarchive to send new messages.',
+                        style: context.textTheme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmojiPickerAccessory extends StatelessWidget {
+  const _EmojiPickerAccessory({
+    required this.controller,
+    required this.textController,
+  });
+
+  final ShadPopoverController controller;
+  final TextEditingController textController;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadPopover(
+      controller: controller,
+      child: _ChatComposerIconButton(
+        icon: LucideIcons.smile,
+        tooltip: 'Emoji picker',
+        onPressed: controller.toggle,
+      ),
+      popover: (context) => EmojiPicker(
+        textEditingController: textController,
+        config: Config(
+          emojiViewConfig: EmojiViewConfig(
+            emojiSizeMax: context.read<Policy>().getMaxEmojiSize(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachmentAccessoryButton extends StatelessWidget {
+  const _AttachmentAccessoryButton({
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChatComposerIconButton(
+      icon: LucideIcons.paperclip,
+      tooltip: 'Attachments',
+      onPressed: enabled ? onPressed : null,
+    );
+  }
+}
+
+class _SendMessageAccessory extends StatelessWidget {
+  const _SendMessageAccessory({
+    required this.enabled,
+    required this.onPressed,
+    this.onLongPress,
+  });
+
+  final bool enabled;
+  final VoidCallback onPressed;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChatComposerIconButton(
+      icon: LucideIcons.send,
+      tooltip: 'Send message',
+      activeColor: context.colorScheme.primary,
+      onPressed: enabled ? onPressed : null,
+      onLongPress: onLongPress,
+    );
+  }
+}
+
+class _ChatComposerIconButton extends StatelessWidget {
+  const _ChatComposerIconButton({
+    required this.icon,
+    required this.tooltip,
+    this.activeColor,
+    this.onPressed,
+    this.onLongPress,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final Color? activeColor;
+  final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconColor = onPressed == null
+        ? colors.mutedForeground
+        : (activeColor ?? colors.foreground);
+    final minButtonExtent = scaled(50);
+    final splashRadius = scaled(24);
+    final button = IconButton(
+      icon: Icon(icon, size: scaled(24), color: iconColor),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      splashRadius: splashRadius,
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(
+        minWidth: minButtonExtent,
+        minHeight: minButtonExtent,
+      ),
+      visualDensity: VisualDensity.compact,
+    );
+    Widget interactiveChild = DecoratedBox(
+      decoration: ShapeDecoration(
+        color: colors.card,
+        shape: SquircleBorder(
+          cornerRadius: scaled(14),
+          side: BorderSide(color: colors.border, width: scaled(1.4)),
+        ),
+      ),
+      child: button,
+    ).withTapBounce(enabled: onPressed != null);
+    if (onLongPress != null) {
+      interactiveChild = GestureDetector(
+        behavior: HitTestBehavior.deferToChild,
+        onLongPress: onLongPress,
+        child: interactiveChild,
+      );
+    }
+    return Semantics(
+      button: true,
+      enabled: onPressed != null,
+      label: tooltip,
+      onTap: onPressed,
+      onLongPress: onLongPress,
+      child: interactiveChild,
+    );
+  }
+}
+
 class _ReactionChip extends StatelessWidget {
   const _ReactionChip({required this.data, this.onTap});
 
@@ -5260,83 +5350,58 @@ class _MessageSelectionToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
     final textScaler = MediaQuery.of(context).textScaler;
     double scaled(double value) => textScaler.scale(value);
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.background,
-          border: Border(
-            top: BorderSide(color: colors.border, width: 1),
+    return SelectionPanelShell(
+      includeHorizontalSafeArea: false,
+      padding: EdgeInsets.fromLTRB(
+        scaled(_composerHorizontalInset),
+        scaled(18),
+        scaled(_composerHorizontalInset),
+        scaled(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SelectionSummaryHeader(
+            count: count,
+            onClear: onClear,
           ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            scaled(_composerHorizontalInset),
-            scaled(18),
-            scaled(_composerHorizontalInset),
-            scaled(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
+          SizedBox(height: scaled(12)),
+          Wrap(
+            spacing: scaled(8),
+            runSpacing: scaled(8),
+            alignment: WrapAlignment.center,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '$count selected',
-                      style: textTheme.muted,
-                    ),
-                  ),
-                  AxiIconButton(
-                    iconData: LucideIcons.x,
-                    tooltip: 'Clear selection',
-                    onPressed: onClear,
-                  ),
-                ],
+              ContextActionButton(
+                icon: const Icon(LucideIcons.reply, size: 16),
+                label: 'Forward',
+                onPressed: onForward,
               ),
-              SizedBox(height: scaled(12)),
-              Wrap(
-                spacing: scaled(8),
-                runSpacing: scaled(8),
-                alignment: WrapAlignment.center,
-                children: [
-                  ContextActionButton(
-                    icon: const Icon(LucideIcons.reply, size: 16),
-                    label: 'Forward',
-                    onPressed: onForward,
-                  ),
-                  ContextActionButton(
-                    icon: const Icon(LucideIcons.copy, size: 16),
-                    label: 'Copy',
-                    onPressed: onCopy,
-                  ),
-                  ContextActionButton(
-                    icon: const Icon(LucideIcons.share2, size: 16),
-                    label: 'Share',
-                    onPressed: onShare,
-                  ),
-                  ContextActionButton(
-                    icon: const Icon(LucideIcons.calendarPlus, size: 16),
-                    label: 'Add to calendar',
-                    onPressed: onAddToCalendar,
-                  ),
-                ],
+              ContextActionButton(
+                icon: const Icon(LucideIcons.copy, size: 16),
+                label: 'Copy',
+                onPressed: onCopy,
               ),
-              if (showReactions && onReactionSelected != null)
-                _MultiSelectReactionPanel(
-                  onEmojiSelected: onReactionSelected!,
-                  onCustomReaction: onReactionPicker,
-                ),
+              ContextActionButton(
+                icon: const Icon(LucideIcons.share2, size: 16),
+                label: 'Share',
+                onPressed: onShare,
+              ),
+              ContextActionButton(
+                icon: const Icon(LucideIcons.calendarPlus, size: 16),
+                label: 'Add to calendar',
+                onPressed: onAddToCalendar,
+              ),
             ],
           ),
-        ),
+          if (showReactions && onReactionSelected != null)
+            _MultiSelectReactionPanel(
+              onEmojiSelected: onReactionSelected!,
+              onCustomReaction: onReactionPicker,
+            ),
+        ],
       ),
     );
   }
@@ -5385,11 +5450,11 @@ class _MultiSelectReactionPanel extends StatelessWidget {
 class _ChatSettingsPanel extends StatelessWidget {
   const _ChatSettingsPanel({
     required this.visible,
-    required this.children,
+    required this.child,
   });
 
   final bool visible;
-  final List<Widget> children;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -5404,12 +5469,7 @@ class _ChatSettingsPanel extends StatelessWidget {
           bottom: BorderSide(color: colors.border),
         ),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        alignment: WrapAlignment.center,
-        children: children,
-      ),
+      child: child,
     );
     return AnimatedCrossFade(
       duration: animationDuration,
@@ -5419,6 +5479,76 @@ class _ChatSettingsPanel extends StatelessWidget {
           visible ? CrossFadeState.showSecond : CrossFadeState.showFirst,
       firstChild: const SizedBox.shrink(),
       secondChild: panel,
+    );
+  }
+}
+
+class _ChatSettingsButtons extends StatelessWidget {
+  const _ChatSettingsButtons({
+    required this.state,
+    required this.onViewFilterChanged,
+    required this.onToggleNotifications,
+    required this.onSpamToggle,
+  });
+
+  final ChatState state;
+  final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
+  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<bool> onSpamToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final chat = state.chat;
+    if (chat == null) {
+      return const SizedBox.shrink();
+    }
+    final textScaler = MediaQuery.of(context).textScaler;
+    final iconSize = textScaler.scale(16);
+    final showDirectOnly = state.viewFilter == MessageTimelineFilter.directOnly;
+    final notificationsEnabled = !chat.muted;
+    final isSpamChat = chat.spam;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.center,
+      children: [
+        ContextActionButton(
+          icon: Icon(
+            showDirectOnly ? LucideIcons.user : LucideIcons.users,
+            size: iconSize,
+          ),
+          label: showDirectOnly ? 'Showing direct only' : 'Showing all',
+          onPressed: () => onViewFilterChanged(
+            showDirectOnly
+                ? MessageTimelineFilter.allWithContact
+                : MessageTimelineFilter.directOnly,
+          ),
+        ),
+        ContextActionButton(
+          icon: Icon(
+            notificationsEnabled ? LucideIcons.bellOff : LucideIcons.bell,
+            size: iconSize,
+          ),
+          label: notificationsEnabled
+              ? 'Mute notifications'
+              : 'Enable notifications',
+          onPressed: () => onToggleNotifications(!notificationsEnabled),
+        ),
+        ContextActionButton(
+          icon: Icon(
+            isSpamChat ? LucideIcons.inbox : LucideIcons.flag,
+            size: iconSize,
+          ),
+          label: isSpamChat ? 'Move to inbox' : 'Report spam',
+          destructive: !isSpamChat,
+          onPressed: () => onSpamToggle(!isSpamChat),
+        ),
+        _BlockActionButton(
+          jid: chat.jid,
+          emailAddress: chat.emailAddress,
+          useEmailBlocking: chat.defaultTransport.isEmail,
+        ),
+      ],
     );
   }
 }
