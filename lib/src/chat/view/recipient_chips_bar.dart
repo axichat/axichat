@@ -137,6 +137,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     ];
 
     final barBackground = _containerBackground(colors);
+    final availableAutocompleteChats = widget.availableChats
+        .where(
+          (chat) => !widget.recipients
+              .any((recipient) => recipient.target.chat?.jid == chat.jid),
+        )
+        .toList();
+    final knownDomains = _knownDomains();
+    final knownAddresses = _knownAddresses();
     final bodyPadding = EdgeInsets.fromLTRB(16, 8, 16, _barCollapsed ? 8 : 12);
     final headerStyle = theme.textTheme.labelSmall?.copyWith(
       fontSize: 12,
@@ -250,9 +258,19 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                       ...chips,
                       _AnimatedChipWrapper(
                         key: const ValueKey('autocomplete-field'),
-                        child: _buildAutocompleteField(
-                          context,
+                        child: _RecipientAutocompleteField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          tapRegionGroup: _autocompleteTapRegionGroup,
                           backgroundColor: barBackground,
+                          optionsBuilder: (raw) => _autocompleteOptions(
+                            raw,
+                            availableAutocompleteChats,
+                            knownDomains,
+                            knownAddresses,
+                          ),
+                          onManualEntry: _handleManualEntry,
+                          onRecipientAdded: widget.onRecipientAdded,
                         ),
                       ),
                     ],
@@ -281,158 +299,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
-  }
-
-  Widget _buildAutocompleteField(
-    BuildContext context, {
-    required Color backgroundColor,
-  }) {
-    final available = widget.availableChats
-        .where(
-          (chat) => !widget.recipients
-              .any((recipient) => recipient.target.chat?.jid == chat.jid),
-        )
-        .toList();
-    final knownDomains = _knownDomains();
-    final knownAddresses = _knownAddresses();
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
-      child: RawAutocomplete<FanOutTarget>(
-        textEditingController: _controller,
-        focusNode: _focusNode,
-        optionsBuilder: (TextEditingValue value) => _buildAutocompleteOptions(
-          value.text,
-          available,
-          knownDomains,
-          knownAddresses,
-        ),
-        displayStringForOption: (option) =>
-            option.chat?.title ?? option.address ?? '',
-        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-          final colors = Theme.of(context).colorScheme;
-          final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
-          final textStyle = Theme.of(context).textTheme.bodyMedium;
-          return TapRegion(
-            groupId: _autocompleteTapRegionGroup,
-            onTapOutside: (_) => focusNode.unfocus(),
-            child: SizedBox(
-              height: _chipHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: backgroundColor,
-                      borderRadius: BorderRadius.circular(_chipHeight / 2),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          inputDecorationTheme: const InputDecorationTheme(
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            focusedErrorBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        child: TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          cursorColor: colors.primary,
-                          maxLines: 1,
-                          keyboardType: TextInputType.emailAddress,
-                          textCapitalization: TextCapitalization.none,
-                          autocorrect: false,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled,
-                          enableSuggestions: false,
-                          autofillHints: const [AutofillHints.email],
-                          decoration: InputDecoration(
-                            hintText: 'Add...',
-                            hintStyle: textStyle?.copyWith(color: hintColor),
-                          ),
-                          style: textStyle,
-                          strutStyle: textStyle == null
-                              ? null
-                              : StrutStyle.fromTextStyle(textStyle),
-                          textInputAction: TextInputAction.done,
-                          onEditingComplete: () => focusNode.requestFocus(),
-                          textAlignVertical: TextAlignVertical.center,
-                          onSubmitted: (value) {
-                            final trimmed = value.trim();
-                            if (trimmed.isEmpty) {
-                              focusNode.requestFocus();
-                              return;
-                            }
-                            if (_handleManualEntry(trimmed)) {
-                              controller.clear();
-                            } else {
-                              onFieldSubmitted();
-                            }
-                            focusNode.requestFocus();
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-        optionsViewBuilder: (context, onSelected, options) {
-          if (options.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          final colors = Theme.of(context).colorScheme;
-          final surface = colors.surfaceContainerHigh;
-          final borderColor = colors.outlineVariant.withValues(alpha: 0.6);
-          final shadowColor = colors.shadow.withValues(alpha: 0.25);
-          return TapRegion(
-            groupId: _autocompleteTapRegionGroup,
-            onTapOutside: (_) => _focusNode.unfocus(),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: 260,
-                  maxWidth: 420,
-                  maxHeight: _suggestionMaxHeight,
-                ),
-                child: Material(
-                  color: surface,
-                  elevation: 12,
-                  shadowColor: shadowColor,
-                  shape: ContinuousRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(color: borderColor, width: 1),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _AutocompleteOptionsList(
-                    options: options.toList(growable: false),
-                    onSelected: (option) {
-                      onSelected(option);
-                      _controller.clear();
-                    },
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-        onSelected: (option) {
-          widget.onRecipientAdded(option);
-          _controller.clear();
-        },
-      ),
-    );
   }
 
   bool _handleManualEntry(String value) {
@@ -594,7 +460,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return domain;
   }
 
-  Iterable<FanOutTarget> _buildAutocompleteOptions(
+  Iterable<FanOutTarget> _autocompleteOptions(
     String raw,
     List<Chat> candidates,
     Set<String> knownDomains,
@@ -926,6 +792,167 @@ class _AnimatedChipWrapper extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _RecipientAutocompleteField extends StatelessWidget {
+  const _RecipientAutocompleteField({
+    required this.controller,
+    required this.focusNode,
+    required this.tapRegionGroup,
+    required this.backgroundColor,
+    required this.optionsBuilder,
+    required this.onManualEntry,
+    required this.onRecipientAdded,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final Object tapRegionGroup;
+  final Color backgroundColor;
+  final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
+  final bool Function(String value) onManualEntry;
+  final ValueChanged<FanOutTarget> onRecipientAdded;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
+      child: RawAutocomplete<FanOutTarget>(
+        textEditingController: controller,
+        focusNode: focusNode,
+        optionsBuilder: (value) => optionsBuilder(value.text),
+        displayStringForOption: (option) =>
+            option.chat?.title ?? option.address ?? '',
+        fieldViewBuilder:
+            (context, fieldController, fieldFocusNode, onFieldSubmitted) {
+          final colors = Theme.of(context).colorScheme;
+          final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
+          final textStyle = Theme.of(context).textTheme.bodyMedium;
+          return TapRegion(
+            groupId: tapRegionGroup,
+            onTapOutside: (_) => fieldFocusNode.unfocus(),
+            child: SizedBox(
+              height: _chipHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(_chipHeight / 2),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          inputDecorationTheme: const InputDecorationTheme(
+                            isDense: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        child: TextField(
+                          controller: fieldController,
+                          focusNode: fieldFocusNode,
+                          cursorColor: colors.primary,
+                          maxLines: 1,
+                          keyboardType: TextInputType.emailAddress,
+                          textCapitalization: TextCapitalization.none,
+                          autocorrect: false,
+                          smartDashesType: SmartDashesType.disabled,
+                          smartQuotesType: SmartQuotesType.disabled,
+                          enableSuggestions: false,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: InputDecoration(
+                            hintText: 'Add...',
+                            hintStyle: textStyle?.copyWith(color: hintColor),
+                          ),
+                          style: textStyle,
+                          strutStyle: textStyle == null
+                              ? null
+                              : StrutStyle.fromTextStyle(textStyle),
+                          textInputAction: TextInputAction.done,
+                          onEditingComplete: () =>
+                              fieldFocusNode.requestFocus(),
+                          textAlignVertical: TextAlignVertical.center,
+                          onSubmitted: (value) {
+                            final trimmed = value.trim();
+                            if (trimmed.isEmpty) {
+                              fieldFocusNode.requestFocus();
+                              return;
+                            }
+                            if (onManualEntry(trimmed)) {
+                              fieldController.clear();
+                            } else {
+                              onFieldSubmitted();
+                            }
+                            fieldFocusNode.requestFocus();
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        optionsViewBuilder: (context, onSelected, options) {
+          if (options.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          final colors = Theme.of(context).colorScheme;
+          final surface = colors.surfaceContainerHigh;
+          final borderColor = colors.outlineVariant.withValues(alpha: 0.6);
+          final shadowColor = colors.shadow.withValues(alpha: 0.25);
+          return TapRegion(
+            groupId: tapRegionGroup,
+            onTapOutside: (_) => focusNode.unfocus(),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minWidth: 260,
+                  maxWidth: 420,
+                  maxHeight: _suggestionMaxHeight,
+                ),
+                child: Material(
+                  color: surface,
+                  elevation: 12,
+                  shadowColor: shadowColor,
+                  shape: ContinuousRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(color: borderColor, width: 1),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _AutocompleteOptionsList(
+                    options: options.toList(growable: false),
+                    onSelected: (option) {
+                      onSelected(option);
+                      controller.clear();
+                      focusNode.requestFocus();
+                      onRecipientAdded(option);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        onSelected: (selection) {
+          onRecipientAdded(selection);
+          controller.clear();
+          focusNode.requestFocus();
+        },
+      ),
     );
   }
 }

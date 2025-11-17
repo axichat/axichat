@@ -9,24 +9,26 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/responsive_helper.dart';
-import 'calendar_grid.dart';
 import 'calendar_navigation.dart';
-import 'error_display.dart';
 import 'feedback_system.dart';
-import 'loading_indicator.dart';
 import 'models/calendar_drag_payload.dart';
 import 'quick_add_modal.dart';
 import 'sync_controls.dart';
 import 'task_sidebar.dart';
 import 'widgets/calendar_drag_tab_mixin.dart';
+import 'widgets/calendar_error_banner.dart';
+import 'widgets/calendar_grid_host.dart';
 import 'widgets/calendar_keyboard_scope.dart';
+import 'widgets/calendar_loading_overlay.dart';
+import 'widgets/calendar_mobile_tab_shell.dart';
+import 'widgets/calendar_scaffolds.dart';
+import 'widgets/calendar_sidebar_host.dart';
 
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({super.key});
@@ -111,6 +113,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
         final Color calendarBackground =
             CalendarNavSurface.backgroundColor(context);
         final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
+        final CalendarBloc? bloc = _calendarBloc;
         final bool usesDesktopLayout = _shouldUseDesktopLayout(spec);
         _usesMobileLayout = !usesDesktopLayout;
         if (usesDesktopLayout && _mobileInitialScrollSynced) {
@@ -120,11 +123,129 @@ class _CalendarWidgetState extends State<CalendarWidget>
         final bool highlightTasksTab = !usesDesktopLayout &&
             state.isSelectionMode &&
             _mobileTabController.index != 1;
-        final Widget tintedLayout = _wrapCalendarBackground(
-          usesDesktopLayout
-              ? _buildDesktopLayout(state)
-              : _buildMobileLayout(state, highlightTasksTab),
+        final Widget sidebar = CalendarSidebarHost<CalendarBloc>(
+          bloc: bloc,
+          sidebarKey: _sidebarKey,
+          onDragSessionStarted: handleGridDragSessionStarted,
+          onDragSessionEnded: handleGridDragSessionEnded,
+          onDragGlobalPositionChanged: handleGridDragPositionChanged,
         );
+        final Widget calendarGrid = CalendarGridHost<CalendarBloc>(
+          bloc: bloc,
+          state: state,
+          onEmptySlotTapped: _onEmptySlotTapped,
+          onTaskDragEnd: _onTaskDragEnd,
+          onDragSessionStarted: _handleCalendarGridDragSessionStarted,
+          onDragSessionEnded: _handleCalendarGridDragSessionEnded,
+          onDragGlobalPositionChanged: _handleCalendarGridDragPositionChanged,
+          cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
+        );
+        final MediaQueryData mediaQuery = MediaQuery.of(context);
+        final double keyboardInset = mediaQuery.viewInsets.bottom;
+        final double bottomInset =
+            keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
+        final Widget tabBar = buildDragAwareTabBar(
+          context: context,
+          bottomInset: bottomInset,
+          scheduleTabLabel: const Text('Schedule'),
+          tasksTabLabel: TasksTabLabel(
+            highlight: highlightTasksTab,
+            animation: _tasksTabPulse,
+          ),
+        );
+        final Widget cancelBucket = buildDragCancelBucket(
+          context: context,
+          bottomInset: bottomInset,
+        );
+        final Widget mobileTabBar = CalendarMobileTabShell(
+          tabBar: tabBar,
+          cancelBucket: cancelBucket,
+          backgroundColor: colors.background,
+          borderColor: colors.border,
+          dividerColor: colors.border,
+          showTopBorder: false,
+          showDivider: true,
+        );
+        final Widget dragEdgeTargets = buildDragEdgeTargets();
+        final Widget? errorBanner = state.error == null
+            ? null
+            : CalendarErrorBanner(
+                error: state.error!,
+                onRetry: () => bloc?.add(const CalendarEvent.errorCleared()),
+                onDismiss: () => bloc?.add(const CalendarEvent.errorCleared()),
+              );
+        final Widget navigation = CalendarNavigation(
+          state: state,
+          sidebarVisible: usesDesktopLayout,
+          onDateSelected: (date) => bloc?.add(
+            CalendarEvent.dateSelected(date: date),
+          ),
+          onViewChanged: (view) => bloc?.add(
+            CalendarEvent.viewChanged(view: view),
+          ),
+          onErrorCleared: () => bloc?.add(const CalendarEvent.errorCleared()),
+          onUndo: () => bloc?.add(const CalendarEvent.undoRequested()),
+          onRedo: () => bloc?.add(const CalendarEvent.redoRequested()),
+          canUndo: state.canUndo,
+          canRedo: state.canRedo,
+        );
+        final Widget layout = usesDesktopLayout
+            ? CalendarDesktopSplitScaffold(
+                topHeader: _CalendarSurfaceTint(
+                  child: CalendarNavSurface(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        navigation,
+                        const SizedBox(height: calendarGutterSm),
+                      ],
+                    ),
+                  ),
+                ),
+                bodyHeader: errorBanner,
+                sidebar: sidebar,
+                content: calendarGrid,
+              )
+            : CalendarMobileSplitScaffold(
+                tabController: _mobileTabController,
+                primaryPane: calendarGrid,
+                secondaryPane: sidebar,
+                dragOverlay: dragEdgeTargets,
+                tabBar: mobileTabBar,
+                safeAreaTop: false,
+                safeAreaBottom: false,
+                headerBuilder: (context, showingPrimary) {
+                  final headerChildren = <Widget>[];
+                  if (showingPrimary) {
+                    Widget navContent = navigation;
+                    navContent = CalendarNavSurface(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          navContent,
+                          if (errorBanner != null) errorBanner,
+                        ],
+                      ),
+                    );
+                    headerChildren.add(
+                      _CalendarSurfaceTint(child: navContent),
+                    );
+                  } else if (errorBanner != null) {
+                    headerChildren.add(errorBanner);
+                  }
+                  if (headerChildren.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: headerChildren,
+                  );
+                },
+              );
+        final Widget tintedLayout = _CalendarSurfaceTint(child: layout);
         _updateTasksTabPulse(highlightTasksTab);
         return SizedBox.expand(
           child: ColoredBox(
@@ -146,7 +267,10 @@ class _CalendarWidgetState extends State<CalendarWidget>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildCalendarAppBar(state),
+                        _CalendarAppBar(
+                          state: state,
+                          onBackPressed: _handleCalendarBackPressed,
+                        ),
                         Divider(
                           height: 1,
                           color: colors.border,
@@ -154,7 +278,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
                         Expanded(child: tintedLayout),
                       ],
                     ),
-                    if (state.isLoading) _buildLoadingOverlay(context),
+                    if (state.isLoading) const CalendarLoadingOverlay(),
                   ],
                 ),
               ),
@@ -187,42 +311,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
     }
   }
 
-  Widget _buildCalendarAppBar(CalendarState state) {
-    final colors = context.colorScheme;
-    final Color background = CalendarNavSurface.backgroundColor(context);
-    return Material(
-      color: background,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: calendarMarginLarge,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              AxiIconButton(
-                iconData: LucideIcons.arrowLeft,
-                tooltip: 'Back to chats',
-                color: colors.foreground,
-                borderColor: colors.border,
-                onPressed: _handleCalendarBackPressed,
-              ),
-              const SizedBox(width: calendarGutterMd),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: SyncControls(
-                    state: state,
-                    compact: true,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   void _handleCalendarBackPressed() {
     final chatsCubit = context.read<ChatsCubit?>();
     if (chatsCubit != null && chatsCubit.state.openCalendar) {
@@ -246,31 +334,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
     }
   }
 
-  Widget _buildErrorBanner(CalendarState state) {
-    return Container(
-      margin: calendarPaddingXl,
-      child: ErrorDisplay(
-        error: state.error!,
-        onRetry: () => _calendarBloc?.add(
-          const CalendarEvent.errorCleared(),
-        ),
-        onDismiss: () => _calendarBloc?.add(
-          const CalendarEvent.errorCleared(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingOverlay(BuildContext context) {
-    final colors = context.colorScheme;
-    return Container(
-      color: colors.background.withValues(alpha: 0.6),
-      child: const Center(
-        child: CalendarLoadingIndicator(),
-      ),
-    );
-  }
-
   void _updateTasksTabPulse(bool shouldPulse) {
     if (shouldPulse) {
       if (!_tasksTabPulseController.isAnimating) {
@@ -283,281 +346,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
         _tasksTabPulseController.reset();
       }
     }
-  }
-
-  Widget _buildMobileLayout(
-    CalendarState state,
-    bool highlightTasksTab,
-  ) {
-    return SafeArea(
-      top: false,
-      bottom: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AnimatedBuilder(
-            animation: _mobileTabController,
-            builder: (context, _) {
-              final bool showNavigation = _mobileTabController.index == 0;
-              Widget navContent = Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showNavigation)
-                    CalendarNavigation(
-                      state: state,
-                      onDateSelected: (date) => context
-                          .read<CalendarBloc>()
-                          .add(CalendarEvent.dateSelected(date: date)),
-                      onViewChanged: (view) => context
-                          .read<CalendarBloc>()
-                          .add(CalendarEvent.viewChanged(view: view)),
-                      onErrorCleared: () => context
-                          .read<CalendarBloc>()
-                          .add(const CalendarEvent.errorCleared()),
-                      onUndo: () => context
-                          .read<CalendarBloc>()
-                          .add(const CalendarEvent.undoRequested()),
-                      onRedo: () => context
-                          .read<CalendarBloc>()
-                          .add(const CalendarEvent.redoRequested()),
-                      canUndo: state.canUndo,
-                      canRedo: state.canRedo,
-                    ),
-                  if (state.error != null) _buildErrorBanner(state),
-                ],
-              );
-
-              if (showNavigation) {
-                navContent = CalendarNavSurface(child: navContent);
-                navContent = _wrapNavBackground(navContent);
-              }
-
-              return navContent;
-            },
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                TabBarView(
-                  controller: _mobileTabController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildCalendarGridWithHandlers(state),
-                    _buildSidebarWithProvider(),
-                  ],
-                ),
-                buildDragEdgeTargets(),
-              ],
-            ),
-          ),
-          _buildMobileTabBar(
-            context,
-            highlightTasksTab: highlightTasksTab,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileTabBar(
-    BuildContext context, {
-    required bool highlightTasksTab,
-  }) {
-    final mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double bottomInset =
-        keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
-    final colors = context.colorScheme;
-    final Widget tabBar = buildDragAwareTabBar(
-      context: context,
-      bottomInset: bottomInset,
-      scheduleTabLabel: const Text('Schedule'),
-      tasksTabLabel: _buildTasksTabLabel(highlightTasksTab),
-    );
-    final Widget cancelBucket = buildDragCancelBucket(
-      context: context,
-      bottomInset: bottomInset,
-    );
-    return Container(
-      color: colors.background,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: colors.border,
-          ),
-          tabBar,
-          cancelBucket,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTasksTabLabel(bool highlight) {
-    if (!highlight) {
-      return const Text('Tasks');
-    }
-    return AnimatedBuilder(
-      animation: _tasksTabPulse,
-      builder: (context, _) {
-        final colors = context.colorScheme;
-        final double t = _tasksTabPulse.value;
-        final double scale = 0.85 + (0.25 * t);
-        final Color badgeColor = Color.lerp(
-          colors.primary.withValues(alpha: 0.55),
-          colors.primary,
-          t,
-        )!;
-        final bool isRtl = Directionality.of(context) == TextDirection.rtl;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Text(
-                'Tasks',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            Positioned(
-              top: -6,
-              right: isRtl ? null : -14,
-              left: isRtl ? -14 : null,
-              child: Transform.scale(
-                scale: scale,
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        badgeColor.withValues(alpha: 0.9),
-                        badgeColor,
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: badgeColor.withValues(alpha: 0.45),
-                        blurRadius: 8 + (4 * t),
-                        spreadRadius: 1.5 + t,
-                      ),
-                    ],
-                  ),
-                  child: Container(
-                    margin: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.25 + (0.15 * t)),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDesktopLayout(CalendarState state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _wrapNavBackground(
-          CalendarNavSurface(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CalendarNavigation(
-                  state: state,
-                  sidebarVisible: true,
-                  onDateSelected: (date) => _calendarBloc?.add(
-                    CalendarEvent.dateSelected(date: date),
-                  ),
-                  onViewChanged: (view) => _calendarBloc?.add(
-                    CalendarEvent.viewChanged(view: view),
-                  ),
-                  onErrorCleared: () =>
-                      _calendarBloc?.add(const CalendarEvent.errorCleared()),
-                  onUndo: () =>
-                      _calendarBloc?.add(const CalendarEvent.undoRequested()),
-                  onRedo: () =>
-                      _calendarBloc?.add(const CalendarEvent.redoRequested()),
-                  canUndo: state.canUndo,
-                  canRedo: state.canRedo,
-                ),
-                const SizedBox(height: calendarGutterSm),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: [
-              _buildSidebarWithProvider(),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (state.error != null) _buildErrorBanner(state),
-                    Expanded(
-                      child: _buildCalendarGridWithHandlers(state),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSidebarWithProvider({double? height}) {
-    final CalendarBloc? bloc = _calendarBloc;
-    if (bloc == null) {
-      return const SizedBox.shrink();
-    }
-    final sidebar = BlocProvider<BaseCalendarBloc>.value(
-      value: bloc,
-      child: TaskSidebar(
-        key: _sidebarKey,
-        onDragSessionStarted: handleGridDragSessionStarted,
-        onDragSessionEnded: handleGridDragSessionEnded,
-        onDragGlobalPositionChanged: handleGridDragPositionChanged,
-      ),
-    );
-
-    if (height != null) {
-      return SizedBox(height: height, child: sidebar);
-    }
-
-    return sidebar;
-  }
-
-  Widget _buildCalendarGridWithHandlers(CalendarState state) {
-    final CalendarBloc? bloc = _calendarBloc;
-    return CalendarGrid<CalendarBloc>(
-      state: state,
-      onEmptySlotTapped: _onEmptySlotTapped,
-      onTaskDragEnd: _onTaskDragEnd,
-      onDateSelected: (date) => bloc?.add(
-        CalendarEvent.dateSelected(date: date),
-      ),
-      onViewChanged: (view) => bloc?.add(
-        CalendarEvent.viewChanged(view: view),
-      ),
-      focusRequest: state.pendingFocus,
-      onDragSessionStarted: _handleCalendarGridDragSessionStarted,
-      onDragGlobalPositionChanged: _handleCalendarGridDragPositionChanged,
-      onDragSessionEnded: _handleCalendarGridDragSessionEnded,
-      cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
-    );
   }
 
   void _handleCalendarGridDragSessionStarted() {
@@ -632,22 +420,6 @@ class _CalendarWidgetState extends State<CalendarWidget>
     }
   }
 
-  Widget _wrapCalendarBackground(Widget child) {
-    final color = CalendarNavSurface.backgroundColor(context);
-    return ColoredBox(
-      color: color,
-      child: SizedBox(width: double.infinity, child: child),
-    );
-  }
-
-  Widget _wrapNavBackground(Widget child) {
-    final color = CalendarNavSurface.backgroundColor(context);
-    return ColoredBox(
-      color: color,
-      child: SizedBox(width: double.infinity, child: child),
-    );
-  }
-
   @override
   TabController get mobileTabController => _mobileTabController;
 
@@ -673,5 +445,67 @@ class _CalendarWidgetState extends State<CalendarWidget>
       bloc.add(CalendarEvent.taskUpdated(task: restored));
       FeedbackSystem.showInfo(context, 'Drag canceled');
     }
+  }
+}
+
+class _CalendarAppBar extends StatelessWidget {
+  const _CalendarAppBar({
+    required this.state,
+    required this.onBackPressed,
+  });
+
+  final CalendarState state;
+  final VoidCallback onBackPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final Color background = CalendarNavSurface.backgroundColor(context);
+    return Material(
+      color: background,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: calendarMarginLarge,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              AxiIconButton(
+                iconData: LucideIcons.arrowLeft,
+                tooltip: 'Back to chats',
+                color: colors.foreground,
+                borderColor: colors.border,
+                onPressed: onBackPressed,
+              ),
+              const SizedBox(width: calendarGutterMd),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SyncControls(
+                    state: state,
+                    compact: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarSurfaceTint extends StatelessWidget {
+  const _CalendarSurfaceTint({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = CalendarNavSurface.backgroundColor(context);
+    return ColoredBox(
+      color: color,
+      child: SizedBox(width: double.infinity, child: child),
+    );
   }
 }

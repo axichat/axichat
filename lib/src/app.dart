@@ -556,114 +556,138 @@ class _DesktopMenuShell extends StatelessWidget {
 
     Widget scopedChild = child;
     if (env.platform == TargetPlatform.macOS) {
-      scopedChild = PlatformMenuBar(
-        menus: _buildPlatformMenus(
-          context: context,
-          compose: composeShortcut,
-          search: searchShortcut,
-          calendar: calendarShortcut,
-        ),
+      scopedChild = _DesktopPlatformMenuBar(
+        composeShortcut: composeShortcut,
+        searchShortcut: searchShortcut,
+        calendarShortcut: calendarShortcut,
         child: scopedChild,
       );
     } else {
-      final menuButtons = _buildMenuButtons(
-        context: context,
-        compose: composeShortcut,
-        search: searchShortcut,
-        calendar: calendarShortcut,
+      scopedChild = _DesktopMenuButtonShell(
+        composeShortcut: composeShortcut,
+        searchShortcut: searchShortcut,
+        calendarShortcut: calendarShortcut,
+        child: scopedChild,
       );
-      if (menuButtons.isNotEmpty) {
-        scopedChild = Column(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            Material(
-              color: Theme.of(context).colorScheme.surface,
-              elevation: 1,
-              child: MenuBar(
-                children: menuButtons,
-              ),
-            ),
-            Expanded(child: scopedChild),
-          ],
-        );
-      }
     }
     return scopedChild;
   }
 }
 
-List<PlatformMenuItem> _buildPlatformMenus({
-  required BuildContext context,
-  required MenuSerializableShortcut compose,
-  required MenuSerializableShortcut search,
-  MenuSerializableShortcut? calendar,
-}) {
-  return [
-    PlatformMenu(
-      label: 'File',
+class _DesktopPlatformMenuBar extends StatelessWidget {
+  const _DesktopPlatformMenuBar({
+    required this.composeShortcut,
+    required this.searchShortcut,
+    required this.child,
+    this.calendarShortcut,
+  });
+
+  final MenuSerializableShortcut composeShortcut;
+  final MenuSerializableShortcut searchShortcut;
+  final MenuSerializableShortcut? calendarShortcut;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PlatformMenuBar(
       menus: [
-        PlatformMenuItem(
-          label: 'New Message',
-          shortcut: compose,
-          onSelected: () => _invokeIntent(context, const ComposeIntent()),
+        PlatformMenu(
+          label: 'File',
+          menus: [
+            PlatformMenuItem(
+              label: 'New Message',
+              shortcut: composeShortcut,
+              onSelected: () => _invokeIntent(context, const ComposeIntent()),
+            ),
+          ],
+        ),
+        PlatformMenu(
+          label: 'View',
+          menus: [
+            PlatformMenuItem(
+              label: 'Toggle Search',
+              shortcut: searchShortcut,
+              onSelected: () =>
+                  _invokeIntent(context, const ToggleSearchIntent()),
+            ),
+            if (calendarShortcut != null)
+              PlatformMenuItem(
+                label: 'Toggle Calendar Panel',
+                shortcut: calendarShortcut!,
+                onSelected: () =>
+                    _invokeIntent(context, const ToggleCalendarIntent()),
+              ),
+          ],
         ),
       ],
-    ),
-    PlatformMenu(
-      label: 'View',
-      menus: [
-        PlatformMenuItem(
-          label: 'Toggle Search',
-          shortcut: search,
-          onSelected: () => _invokeIntent(context, const ToggleSearchIntent()),
-        ),
-        if (calendar != null)
-          PlatformMenuItem(
-            label: 'Toggle Calendar Panel',
-            shortcut: calendar,
-            onSelected: () =>
-                _invokeIntent(context, const ToggleCalendarIntent()),
-          ),
-      ],
-    ),
-  ];
+      child: child,
+    );
+  }
 }
 
-List<Widget> _buildMenuButtons({
-  required BuildContext context,
-  required MenuSerializableShortcut compose,
-  required MenuSerializableShortcut search,
-  MenuSerializableShortcut? calendar,
-}) {
-  return [
-    SubmenuButton(
-      menuChildren: [
-        MenuItemButton(
-          shortcut: compose,
-          onPressed: () => _invokeIntent(context, const ComposeIntent()),
-          child: const Text('New Message'),
+class _DesktopMenuButtonShell extends StatelessWidget {
+  const _DesktopMenuButtonShell({
+    required this.composeShortcut,
+    required this.searchShortcut,
+    required this.child,
+    this.calendarShortcut,
+  });
+
+  final MenuSerializableShortcut composeShortcut;
+  final MenuSerializableShortcut searchShortcut;
+  final MenuSerializableShortcut? calendarShortcut;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final menuButtons = _menuButtons(context);
+    if (menuButtons.isEmpty) {
+      return child;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.max,
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          elevation: 1,
+          child: MenuBar(children: menuButtons),
         ),
+        Expanded(child: child),
       ],
-      child: const Text('File'),
-    ),
-    SubmenuButton(
-      menuChildren: [
-        MenuItemButton(
-          shortcut: search,
-          onPressed: () => _invokeIntent(context, const ToggleSearchIntent()),
-          child: const Text('Toggle Search'),
-        ),
-        if (calendar != null)
+    );
+  }
+
+  List<Widget> _menuButtons(BuildContext context) {
+    return [
+      SubmenuButton(
+        menuChildren: [
           MenuItemButton(
-            shortcut: calendar,
-            onPressed: () =>
-                _invokeIntent(context, const ToggleCalendarIntent()),
-            child: const Text('Toggle Calendar Panel'),
+            shortcut: composeShortcut,
+            onPressed: () => _invokeIntent(context, const ComposeIntent()),
+            child: const Text('New Message'),
           ),
-      ],
-      child: const Text('View'),
-    ),
-  ];
+        ],
+        child: const Text('File'),
+      ),
+      SubmenuButton(
+        menuChildren: [
+          MenuItemButton(
+            shortcut: searchShortcut,
+            onPressed: () => _invokeIntent(context, const ToggleSearchIntent()),
+            child: const Text('Toggle Search'),
+          ),
+          if (calendarShortcut != null)
+            MenuItemButton(
+              shortcut: calendarShortcut!,
+              onPressed: () =>
+                  _invokeIntent(context, const ToggleCalendarIntent()),
+              child: const Text('Toggle Calendar Panel'),
+            ),
+        ],
+        child: const Text('View'),
+      ),
+    ];
+  }
 }
 
 void _invokeIntent(BuildContext context, Intent intent) {

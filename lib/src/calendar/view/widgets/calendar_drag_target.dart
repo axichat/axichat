@@ -48,7 +48,7 @@ class _CalendarDragTargetRegionState extends State<CalendarDragTargetRegion> {
 
   RenderBox? get _renderBox => context.findRenderObject() as RenderBox?;
 
-  CalendarDropDetails _buildDetails(
+  CalendarDropDetails _dropDetails(
     DragTargetDetails<CalendarDragPayload> details,
   ) {
     final RenderBox? box = _renderBox;
@@ -62,7 +62,7 @@ class _CalendarDragTargetRegionState extends State<CalendarDragTargetRegion> {
   }
 
   bool _handleWillAccept(DragTargetDetails<CalendarDragPayload> details) {
-    final CalendarDropDetails dropDetails = _buildDetails(details);
+    final CalendarDropDetails dropDetails = _dropDetails(details);
     setState(() {
       _isHovering = true;
       _lastDetails = dropDetails;
@@ -72,7 +72,7 @@ class _CalendarDragTargetRegionState extends State<CalendarDragTargetRegion> {
   }
 
   void _handleMove(DragTargetDetails<CalendarDragPayload> details) {
-    final CalendarDropDetails dropDetails = _buildDetails(details);
+    final CalendarDropDetails dropDetails = _dropDetails(details);
     _lastDetails = dropDetails;
     widget.onMove?.call(dropDetails);
   }
@@ -100,7 +100,7 @@ class _CalendarDragTargetRegionState extends State<CalendarDragTargetRegion> {
   }
 
   void _handleDrop(DragTargetDetails<CalendarDragPayload> details) {
-    final CalendarDropDetails dropDetails = _buildDetails(details);
+    final CalendarDropDetails dropDetails = _dropDetails(details);
     setState(() {
       _isHovering = false;
       _lastDetails = null;

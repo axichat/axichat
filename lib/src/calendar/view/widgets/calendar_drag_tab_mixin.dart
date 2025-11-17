@@ -115,7 +115,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     return Stack(
       children: [
         Positioned.fill(
-          child: _buildEdgeTarget(
+          child: _DragEdgeTarget(
             alignment: Alignment.centerLeft,
             width: _leftEdgeHotZoneWidth,
             showCue: _showLeftEdgeCue,
@@ -124,10 +124,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
               end: Alignment.centerRight,
               colors: <Color>[glow, fade],
             ),
+            dragActive: _isAnyDragActive,
+            onEvent: _handleEdgeDragEvent,
+            onLeave: _handleEdgeDragLeave,
           ),
         ),
         Positioned.fill(
-          child: _buildEdgeTarget(
+          child: _DragEdgeTarget(
             alignment: Alignment.centerRight,
             width: _rightEdgeHotZoneWidth,
             showCue: _showRightEdgeCue,
@@ -136,6 +139,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
               end: Alignment.centerLeft,
               colors: <Color>[glow, fade],
             ),
+            dragActive: _isAnyDragActive,
+            onEvent: _handleEdgeDragEvent,
+            onLeave: _handleEdgeDragLeave,
           ),
         ),
       ],
@@ -166,14 +172,14 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         indicatorSize: TabBarIndicatorSize.label,
         tabs: <Widget>[
           Tab(
-            child: _buildTabLabel(
+            child: _DragTabLabel(
               label: scheduleTabLabel,
               scheme: scheme,
               showCue: scheduleCueActive,
             ),
           ),
           Tab(
-            child: _buildTabLabel(
+            child: _DragTabLabel(
               label: tasksTabLabel,
               scheme: scheme,
               showCue: tasksCueActive,
@@ -284,72 +290,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   },
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildTabLabel({
-    required Widget label,
-    required ColorScheme scheme,
-    required bool showCue,
-  }) {
-    final Color cueColor =
-        showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: cueColor,
-            width: 2,
-          ),
-        ),
-      ),
-      child: DefaultTextStyle.merge(
-        style: TextStyle(
-          fontWeight: showCue ? FontWeight.w600 : FontWeight.w500,
-        ),
-        child: Align(
-          alignment: Alignment.center,
-          child: label,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEdgeTarget({
-    required Alignment alignment,
-    required double width,
-    required bool showCue,
-    required Gradient gradient,
-  }) {
-    return Align(
-      alignment: alignment,
-      child: SizedBox(
-        width: width,
-        child: IgnorePointer(
-          ignoring: !_isAnyDragActive,
-          child: DragTarget<CalendarDragPayload>(
-            hitTestBehavior: HitTestBehavior.translucent,
-            onWillAcceptWithDetails: (details) {
-              _handleEdgeDragEvent(details);
-              return true;
-            },
-            onMove: _handleEdgeDragEvent,
-            onLeave: (_) => _handleEdgeDragLeave(),
-            onAcceptWithDetails: (_) => _handleEdgeDragLeave(),
-            builder: (context, _, __) {
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                height: double.infinity,
-                decoration: showCue
-                    ? BoxDecoration(gradient: gradient)
-                    : const BoxDecoration(color: Colors.transparent),
-              );
-            },
-          ),
-        ),
       ),
     );
   }
@@ -624,4 +564,99 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   }
 
   void onDragCancelRequested(CalendarDragPayload payload);
+}
+
+class _DragTabLabel extends StatelessWidget {
+  const _DragTabLabel({
+    required this.label,
+    required this.scheme,
+    required this.showCue,
+  });
+
+  final Widget label;
+  final ColorScheme scheme;
+  final bool showCue;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color cueColor =
+        showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: cueColor,
+            width: 2,
+          ),
+        ),
+      ),
+      child: DefaultTextStyle.merge(
+        style: TextStyle(
+          fontWeight: showCue ? FontWeight.w600 : FontWeight.w500,
+        ),
+        child: Align(
+          alignment: Alignment.center,
+          child: label,
+        ),
+      ),
+    );
+  }
+}
+
+typedef _EdgeDragEventHandler = void Function(
+  DragTargetDetails<CalendarDragPayload> details,
+);
+
+class _DragEdgeTarget extends StatelessWidget {
+  const _DragEdgeTarget({
+    required this.alignment,
+    required this.width,
+    required this.showCue,
+    required this.gradient,
+    required this.dragActive,
+    required this.onEvent,
+    required this.onLeave,
+  });
+
+  final Alignment alignment;
+  final double width;
+  final bool showCue;
+  final Gradient gradient;
+  final bool dragActive;
+  final _EdgeDragEventHandler onEvent;
+  final VoidCallback onLeave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignment,
+      child: SizedBox(
+        width: width,
+        child: IgnorePointer(
+          ignoring: !dragActive,
+          child: DragTarget<CalendarDragPayload>(
+            hitTestBehavior: HitTestBehavior.translucent,
+            onWillAcceptWithDetails: (details) {
+              onEvent(details);
+              return true;
+            },
+            onMove: onEvent,
+            onLeave: (_) => onLeave(),
+            onAcceptWithDetails: (_) => onLeave(),
+            builder: (context, _, __) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                height: double.infinity,
+                decoration: showCue
+                    ? BoxDecoration(gradient: gradient)
+                    : const BoxDecoration(color: Colors.transparent),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
 }

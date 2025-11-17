@@ -88,281 +88,54 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
 
   @override
   Widget build(BuildContext context) {
+    final bool isEditing = widget.editingTask != null;
+    final Widget form = _UnifiedTaskForm(
+      formKey: _formKey,
+      titleController: _titleController,
+      descriptionController: _descriptionController,
+      selectedDate: _selectedDate,
+      selectedTime: _selectedTime,
+      selectedDuration: _selectedDuration,
+      durationOptions: _durationOptions,
+      onSelectDate: _selectDate,
+      onSelectTime: _selectTime,
+      onDurationChanged: (duration) {
+        setState(() => _selectedDuration = duration);
+      },
+      formatDate: _formatDate,
+      formatDuration: _formatDuration,
+    );
+    final Widget saveButton = _UnifiedTaskSaveButton<T>(
+      isSubmitting: _isSubmitting,
+      onSave: _saveTask,
+    );
+    final Widget dialogActions = _UnifiedTaskDialogActions<T>(
+      isSubmitting: _isSubmitting,
+      onSave: _saveTask,
+      onSubmissionReset: () => setState(() => _isSubmitting = false),
+      onClearError: () => context.read<T>().add(
+            const CalendarEvent.errorCleared(),
+          ),
+    );
     return ResponsiveHelper.layoutBuilder(
       context,
-      mobile: _buildMobileLayout(),
-      tablet: _buildTabletLayout(),
-      desktop: _buildDesktopLayout(),
-    );
-  }
-
-  Widget _buildMobileLayout() {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: context.colorScheme.background,
-        scrolledUnderElevation: 0,
-        forceMaterialTransparency: true,
-        shape: Border(
-          bottom: BorderSide(color: context.colorScheme.border),
-        ),
-        leadingWidth: AxiIconButton.kDefaultSize + 24,
-        leading: Navigator.canPop(context)
-            ? Padding(
-                padding: const EdgeInsets.only(left: 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    width: AxiIconButton.kDefaultSize,
-                    height: AxiIconButton.kDefaultSize,
-                    child: AxiIconButton(
-                      iconData: LucideIcons.arrowLeft,
-                      tooltip: 'Back',
-                      color: context.colorScheme.foreground,
-                      borderColor: context.colorScheme.border,
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    ),
-                  ),
-                ),
-              )
-            : null,
-        title: Text(widget.editingTask != null ? 'Edit Task' : 'New Task'),
-        actions: [_buildSaveButton()],
+      mobile: _UnifiedTaskMobileLayout(
+        isEditing: isEditing,
+        saveButton: saveButton,
+        form: form,
       ),
-      body: _buildForm(),
-    );
-  }
-
-  Widget _buildTabletLayout() {
-    return Dialog(
-      child: SizedBox(
+      tablet: _UnifiedTaskDialogLayout(
         width: 500,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDialogHeader(),
-            Flexible(child: _buildForm()),
-            _buildDialogActions(),
-          ],
-        ),
+        isEditing: isEditing,
+        form: form,
+        dialogActions: dialogActions,
       ),
-    );
-  }
-
-  Widget _buildDesktopLayout() {
-    return Dialog(
-      child: SizedBox(
+      desktop: _UnifiedTaskDialogLayout(
         width: 600,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDialogHeader(),
-            Flexible(child: _buildForm()),
-            _buildDialogActions(),
-          ],
-        ),
+        isEditing: isEditing,
+        form: form,
+        dialogActions: dialogActions,
       ),
-    );
-  }
-
-  Widget _buildDialogHeader() {
-    return Container(
-      padding: calendarPaddingXl,
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.editingTask != null ? 'Edit Task' : 'New Task',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.close),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForm() {
-    return SingleChildScrollView(
-      padding: calendarPaddingXl,
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTitleField(),
-            const SizedBox(height: calendarGutterLg),
-            _buildDescriptionField(),
-            const SizedBox(height: calendarGutterLg),
-            _buildDateTimeSection(),
-            const SizedBox(height: calendarGutterLg),
-            _buildDurationField(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTitleField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TaskTextFormField(
-          controller: _titleController,
-          hintText: 'Task title',
-          textCapitalization: TextCapitalization.sentences,
-          focusBorderColor: calendarPrimaryColor,
-          borderRadius: calendarBorderRadius,
-          validator: (value) => TaskTitleValidation.validate(value ?? ''),
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-        ),
-        TaskFieldCharacterHint(controller: _titleController),
-      ],
-    );
-  }
-
-  Widget _buildDescriptionField() {
-    return TaskDescriptionField(
-      controller: _descriptionController,
-      hintText: 'Description (optional)',
-      borderRadius: calendarBorderRadius,
-      focusBorderColor: calendarPrimaryColor,
-      minLines: 3,
-      maxLines: 3,
-      textCapitalization: TextCapitalization.sentences,
-    );
-  }
-
-  Widget _buildDateTimeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Date & Time',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-        const SizedBox(height: calendarGutterSm),
-        TaskDateTimeToolbar(
-          primaryField: TaskDateTimeToolbarField(
-            selectedDate: _selectedDate,
-            selectedTime: _selectedTime,
-            onSelectDate: _selectDate,
-            onSelectTime: _selectTime,
-            emptyDateLabel: 'Select date',
-            emptyTimeLabel: 'Select time',
-            dateLabelBuilder: (context, date) => _formatDate(date),
-            timeLabelBuilder: (context, time) =>
-                TimeFormatter.formatTimeOfDay(context, time),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDurationField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Duration',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-        const SizedBox(height: calendarGutterSm),
-        ShadSelect<Duration>(
-          placeholder: const Text('Select duration'),
-          options: _durationOptions
-              .map((duration) => ShadOption(
-                    value: duration,
-                    child: Text(_formatDuration(duration)),
-                  ))
-              .toList(),
-          selectedOptionBuilder: (context, value) =>
-              Text(_formatDuration(value)),
-          onChanged: (duration) => setState(() => _selectedDuration = duration),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return BlocBuilder<T, CalendarState>(
-      builder: (context, state) {
-        final bool disabled = state.isLoading || _isSubmitting;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
-          child: TaskPrimaryButton(
-            label: 'Save',
-            onPressed: disabled ? null : _saveTask,
-            isBusy: disabled,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDialogActions() {
-    return BlocConsumer<T, CalendarState>(
-      listener: (context, state) {
-        if (state.error != null && _isSubmitting) {
-          ErrorSnackBar.show(context, state.error!);
-          setState(() => _isSubmitting = false);
-        } else if (!state.isLoading && _isSubmitting) {
-          // Task saved successfully
-          Navigator.of(context).maybePop();
-        }
-      },
-      builder: (context, state) {
-        return Container(
-          padding: calendarPaddingXl,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: Theme.of(context).dividerColor),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (state.error != null && _isSubmitting)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: calendarGutterLg),
-                  child: ErrorDisplay(
-                    error: state.error!,
-                    onRetry: _saveTask,
-                    onDismiss: () => context.read<T>().add(
-                          const CalendarEvent.errorCleared(),
-                        ),
-                  ),
-                ),
-              TaskFormActionsRow(
-                padding: EdgeInsets.zero,
-                gap: calendarGutterMd,
-                children: [
-                  const Spacer(),
-                  TaskSecondaryButton(
-                    label: 'Cancel',
-                    onPressed: state.isLoading
-                        ? null
-                        : () => Navigator.of(context).maybePop(),
-                  ),
-                  TaskPrimaryButton(
-                    label: 'Save',
-                    onPressed:
-                        (state.isLoading || _isSubmitting) ? null : _saveTask,
-                    isBusy: state.isLoading || _isSubmitting,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -445,6 +218,412 @@ class _UnifiedTaskInputState<T extends BaseCalendarBloc>
 
   String _formatDuration(Duration duration) {
     return TimeFormatter.formatDuration(duration);
+  }
+}
+
+class _UnifiedTaskMobileLayout extends StatelessWidget {
+  const _UnifiedTaskMobileLayout({
+    required this.isEditing,
+    required this.saveButton,
+    required this.form,
+  });
+
+  final bool isEditing;
+  final Widget saveButton;
+  final Widget form;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: context.colorScheme.background,
+        scrolledUnderElevation: 0,
+        forceMaterialTransparency: true,
+        shape: Border(
+          bottom: BorderSide(color: context.colorScheme.border),
+        ),
+        leadingWidth: AxiIconButton.kDefaultSize + 24,
+        leading: Navigator.canPop(context)
+            ? Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: AxiIconButton.kDefaultSize,
+                    height: AxiIconButton.kDefaultSize,
+                    child: AxiIconButton(
+                      iconData: LucideIcons.arrowLeft,
+                      tooltip: 'Back',
+                      color: context.colorScheme.foreground,
+                      borderColor: context.colorScheme.border,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                ),
+              )
+            : null,
+        title: Text(isEditing ? 'Edit Task' : 'New Task'),
+        actions: [saveButton],
+      ),
+      body: form,
+    );
+  }
+}
+
+class _UnifiedTaskDialogLayout extends StatelessWidget {
+  const _UnifiedTaskDialogLayout({
+    required this.width,
+    required this.isEditing,
+    required this.form,
+    required this.dialogActions,
+  });
+
+  final double width;
+  final bool isEditing;
+  final Widget form;
+  final Widget dialogActions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: SizedBox(
+        width: width,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _UnifiedTaskDialogHeader(isEditing: isEditing),
+            Flexible(child: form),
+            dialogActions,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnifiedTaskDialogHeader extends StatelessWidget {
+  const _UnifiedTaskDialogHeader({required this.isEditing});
+
+  final bool isEditing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: calendarPaddingXl,
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              isEditing ? 'Edit Task' : 'New Task',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UnifiedTaskForm extends StatelessWidget {
+  const _UnifiedTaskForm({
+    required this.formKey,
+    required this.titleController,
+    required this.descriptionController,
+    required this.selectedDate,
+    required this.selectedTime,
+    required this.selectedDuration,
+    required this.durationOptions,
+    required this.onSelectDate,
+    required this.onSelectTime,
+    required this.onDurationChanged,
+    required this.formatDate,
+    required this.formatDuration,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController titleController;
+  final TextEditingController descriptionController;
+  final DateTime? selectedDate;
+  final TimeOfDay? selectedTime;
+  final Duration? selectedDuration;
+  final List<Duration> durationOptions;
+  final VoidCallback onSelectDate;
+  final VoidCallback onSelectTime;
+  final ValueChanged<Duration?> onDurationChanged;
+  final String Function(DateTime?) formatDate;
+  final String Function(Duration) formatDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: calendarPaddingXl,
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _UnifiedTaskTitleField(controller: titleController),
+            const SizedBox(height: calendarGutterLg),
+            _UnifiedTaskDescriptionField(
+              controller: descriptionController,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            _UnifiedTaskDateTimeSection(
+              selectedDate: selectedDate,
+              selectedTime: selectedTime,
+              onSelectDate: onSelectDate,
+              onSelectTime: onSelectTime,
+              formatDate: formatDate,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            _UnifiedTaskDurationField(
+              selectedDuration: selectedDuration,
+              durationOptions: durationOptions,
+              onDurationChanged: onDurationChanged,
+              formatDuration: formatDuration,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnifiedTaskTitleField extends StatelessWidget {
+  const _UnifiedTaskTitleField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TaskTextFormField(
+          controller: controller,
+          hintText: 'Task title',
+          textCapitalization: TextCapitalization.sentences,
+          focusBorderColor: calendarPrimaryColor,
+          borderRadius: calendarBorderRadius,
+          validator: (value) => TaskTitleValidation.validate(value ?? ''),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+        ),
+        TaskFieldCharacterHint(controller: controller),
+      ],
+    );
+  }
+}
+
+class _UnifiedTaskDescriptionField extends StatelessWidget {
+  const _UnifiedTaskDescriptionField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskDescriptionField(
+      controller: controller,
+      hintText: 'Description (optional)',
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
+      minLines: 3,
+      maxLines: 3,
+      textCapitalization: TextCapitalization.sentences,
+    );
+  }
+}
+
+class _UnifiedTaskDateTimeSection extends StatelessWidget {
+  const _UnifiedTaskDateTimeSection({
+    required this.selectedDate,
+    required this.selectedTime,
+    required this.onSelectDate,
+    required this.onSelectTime,
+    required this.formatDate,
+  });
+
+  final DateTime? selectedDate;
+  final TimeOfDay? selectedTime;
+  final VoidCallback onSelectDate;
+  final VoidCallback onSelectTime;
+  final String Function(DateTime?) formatDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Date & Time',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        const SizedBox(height: calendarGutterSm),
+        TaskDateTimeToolbar(
+          primaryField: TaskDateTimeToolbarField(
+            selectedDate: selectedDate,
+            selectedTime: selectedTime,
+            onSelectDate: onSelectDate,
+            onSelectTime: onSelectTime,
+            emptyDateLabel: 'Select date',
+            emptyTimeLabel: 'Select time',
+            dateLabelBuilder: (context, date) => formatDate(date),
+            timeLabelBuilder: (context, time) =>
+                TimeFormatter.formatTimeOfDay(context, time),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UnifiedTaskDurationField extends StatelessWidget {
+  const _UnifiedTaskDurationField({
+    required this.selectedDuration,
+    required this.durationOptions,
+    required this.onDurationChanged,
+    required this.formatDuration,
+  });
+
+  final Duration? selectedDuration;
+  final List<Duration> durationOptions;
+  final ValueChanged<Duration?> onDurationChanged;
+  final String Function(Duration) formatDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Duration',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        const SizedBox(height: calendarGutterSm),
+        ShadSelect<Duration>(
+          placeholder: const Text('Select duration'),
+          options: durationOptions
+              .map(
+                (duration) => ShadOption(
+                  value: duration,
+                  child: Text(formatDuration(duration)),
+                ),
+              )
+              .toList(),
+          selectedOptionBuilder: (context, value) =>
+              Text(formatDuration(value)),
+          onChanged: onDurationChanged,
+        ),
+      ],
+    );
+  }
+}
+
+class _UnifiedTaskSaveButton<T extends BaseCalendarBloc>
+    extends StatelessWidget {
+  const _UnifiedTaskSaveButton({
+    required this.isSubmitting,
+    required this.onSave,
+  });
+
+  final bool isSubmitting;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<T, CalendarState>(
+      builder: (context, state) {
+        final bool disabled = state.isLoading || isSubmitting;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
+          child: TaskPrimaryButton(
+            label: 'Save',
+            onPressed: disabled ? null : onSave,
+            isBusy: disabled,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
+    extends StatelessWidget {
+  const _UnifiedTaskDialogActions({
+    required this.isSubmitting,
+    required this.onSave,
+    required this.onSubmissionReset,
+    required this.onClearError,
+  });
+
+  final bool isSubmitting;
+  final VoidCallback onSave;
+  final VoidCallback onSubmissionReset;
+  final VoidCallback onClearError;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<T, CalendarState>(
+      listener: (context, state) {
+        if (state.error != null && isSubmitting) {
+          ErrorSnackBar.show(context, state.error!);
+          onSubmissionReset();
+        } else if (!state.isLoading && isSubmitting) {
+          Navigator.of(context).maybePop();
+        }
+      },
+      builder: (context, state) {
+        return Container(
+          padding: calendarPaddingXl,
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: Theme.of(context).dividerColor),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (state.error != null && isSubmitting)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: calendarGutterLg),
+                  child: ErrorDisplay(
+                    error: state.error!,
+                    onRetry: onSave,
+                    onDismiss: onClearError,
+                  ),
+                ),
+              TaskFormActionsRow(
+                padding: EdgeInsets.zero,
+                gap: calendarGutterMd,
+                children: [
+                  const Spacer(),
+                  TaskSecondaryButton(
+                    label: 'Cancel',
+                    onPressed: (state.isLoading || isSubmitting)
+                        ? null
+                        : () => Navigator.of(context).maybePop(),
+                  ),
+                  TaskPrimaryButton(
+                    label: 'Save',
+                    onPressed:
+                        (state.isLoading || isSubmitting) ? null : onSave,
+                    isBusy: state.isLoading || isSubmitting,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

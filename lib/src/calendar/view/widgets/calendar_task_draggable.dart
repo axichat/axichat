@@ -122,7 +122,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     }
 
     final bool canDrag = widget.enabled && !_suppressDrag && !_isResizing;
-    final CalendarDragPayload payload = _buildPayload();
+    final CalendarDragPayload payload = _dragPayload();
 
     final Widget interactiveChild = Listener(
       onPointerDown: _handlePointerDown,
@@ -323,7 +323,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     return null;
   }
 
-  CalendarDragPayload _buildPayload() {
+  CalendarDragPayload _dragPayload() {
     final Rect? bounds = _sourceBounds ?? _resolveGlobalBounds();
     final double pointerNormalized =
         (_pointerNormalized ?? 0.5).clamp(0.0, 1.0);

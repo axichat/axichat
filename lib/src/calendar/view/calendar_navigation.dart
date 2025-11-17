@@ -87,7 +87,13 @@ class CalendarNavigation extends StatelessWidget {
       );
     }
     const double verticalPadding = calendarInsetMd;
-    final Widget undoRedoGroup = _buildUndoRedoGroup(context);
+    final Widget undoRedoGroup = _UndoRedoGroup(
+      onUndo: onUndo,
+      onRedo: onRedo,
+      canUndo: canUndo,
+      canRedo: canRedo,
+      iconBuilder: _iconControl,
+    );
     final colors = context.colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -103,9 +109,13 @@ class CalendarNavigation extends StatelessWidget {
             isCompact || availableWidth < _compactDateLabelCollapseWidth;
         final double navSpacing =
             isCompact ? calendarGutterSm : calendarGutterMd;
-        final Widget navRow =
-            _buildNavRow(navButtons: navButtons, spacing: navSpacing);
-        final Widget trailingRow = _buildTrailingRow(
+        final Widget navRow = _NavigationButtonRow(
+          navButtons: navButtons,
+          spacing: navSpacing,
+        );
+        final Widget trailingRow = _TrailingControls(
+          state: state,
+          onDateSelected: onDateSelected,
           collapseDateText: collapseDateText,
           isCompact: isCompact,
           hasUndoRedo: hasUndoRedo,
@@ -269,46 +279,12 @@ class CalendarNavigation extends StatelessWidget {
     );
   }
 
-  Widget _buildUndoRedoGroup(BuildContext context) {
-    final bool isCompact = ResponsiveHelper.isCompact(context);
-    final controls = <Widget>[];
-    if (onUndo != null) {
-      controls.add(
-        _iconControl(
-          context: context,
-          icon: Icons.undo_rounded,
-          tooltip: 'Undo',
-          onPressed: canUndo ? onUndo : null,
-          compact: isCompact,
-        ),
-      );
-    }
-    if (onRedo != null) {
-      if (controls.isNotEmpty) {
-        controls.add(const SizedBox(width: calendarGutterSm));
-      }
-      controls.add(
-        _iconControl(
-          context: context,
-          icon: Icons.redo_rounded,
-          tooltip: 'Redo',
-          onPressed: canRedo ? onRedo : null,
-          compact: isCompact,
-        ),
-      );
-    }
-    if (controls.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Row(mainAxisSize: MainAxisSize.min, children: controls);
-  }
-
   Widget _iconControl({
     required BuildContext context,
     required IconData icon,
     required String tooltip,
     required VoidCallback? onPressed,
-    bool compact = false,
+    required bool compact,
   }) {
     final shortcut =
         icon == Icons.undo_rounded ? 'Ctrl/Cmd+Z' : 'Ctrl/Cmd+Shift+Z';
@@ -388,11 +364,78 @@ class CalendarNavigation extends StatelessWidget {
     }
     return _wrapWithCursor(control, enabled);
   }
+}
 
-  Widget _buildNavRow({
-    required List<Widget> navButtons,
-    required double spacing,
-  }) {
+typedef _IconControlBuilder = Widget Function({
+  required BuildContext context,
+  required IconData icon,
+  required String tooltip,
+  required VoidCallback? onPressed,
+  required bool compact,
+});
+
+class _UndoRedoGroup extends StatelessWidget {
+  const _UndoRedoGroup({
+    required this.onUndo,
+    required this.onRedo,
+    required this.canUndo,
+    required this.canRedo,
+    required this.iconBuilder,
+  });
+
+  final VoidCallback? onUndo;
+  final VoidCallback? onRedo;
+  final bool canUndo;
+  final bool canRedo;
+  final _IconControlBuilder iconBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isCompact = ResponsiveHelper.isCompact(context);
+    final controls = <Widget>[];
+    if (onUndo != null) {
+      controls.add(
+        iconBuilder(
+          context: context,
+          icon: Icons.undo_rounded,
+          tooltip: 'Undo',
+          onPressed: canUndo ? onUndo : null,
+          compact: isCompact,
+        ),
+      );
+    }
+    if (onRedo != null) {
+      if (controls.isNotEmpty) {
+        controls.add(const SizedBox(width: calendarGutterSm));
+      }
+      controls.add(
+        iconBuilder(
+          context: context,
+          icon: Icons.redo_rounded,
+          tooltip: 'Redo',
+          onPressed: canRedo ? onRedo : null,
+          compact: isCompact,
+        ),
+      );
+    }
+    if (controls.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: controls);
+  }
+}
+
+class _NavigationButtonRow extends StatelessWidget {
+  const _NavigationButtonRow({
+    required this.navButtons,
+    required this.spacing,
+  });
+
+  final List<Widget> navButtons;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
     if (navButtons.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -403,13 +446,27 @@ class CalendarNavigation extends StatelessWidget {
       children: navButtons,
     );
   }
+}
 
-  Widget _buildTrailingRow({
-    required bool collapseDateText,
-    required bool isCompact,
-    required bool hasUndoRedo,
-    required Widget undoRedoGroup,
-  }) {
+class _TrailingControls extends StatelessWidget {
+  const _TrailingControls({
+    required this.state,
+    required this.onDateSelected,
+    required this.collapseDateText,
+    required this.isCompact,
+    required this.hasUndoRedo,
+    required this.undoRedoGroup,
+  });
+
+  final CalendarState state;
+  final void Function(DateTime) onDateSelected;
+  final bool collapseDateText;
+  final bool isCompact;
+  final bool hasUndoRedo;
+  final Widget undoRedoGroup;
+
+  @override
+  Widget build(BuildContext context) {
     final double trailingGap = isCompact ? calendarGutterSm : calendarGutterMd;
     final double maxDateLabelWidth =
         isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
@@ -741,7 +798,7 @@ class _CalendarDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
-    final days = _buildDays(month);
+    final days = _monthDays(month);
     final now = DateTime.now();
     final bool fillWidth = ResponsiveHelper.isCompact(context);
     final double dropdownWidth =
@@ -871,7 +928,7 @@ class _CalendarDropdown extends StatelessWidget {
     );
   }
 
-  List<DateTime> _buildDays(DateTime month) {
+  List<DateTime> _monthDays(DateTime month) {
     final firstDay = DateTime(month.year, month.month, 1);
     final leading = firstDay.weekday % DateTime.daysPerWeek;
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;

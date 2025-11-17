@@ -98,7 +98,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     }
   }
 
-  CalendarDragPayload _buildPayload() {
+  CalendarDragPayload _dragPayload() {
     final Rect? bounds = _sourceBounds;
     final double pointerNormalized =
         (_pointerNormalized ?? 0.5).clamp(0.0, 1.0);
@@ -209,7 +209,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
 
     if (widget.requiresLongPress) {
       return LongPressDraggable<CalendarDragPayload>(
-        data: _buildPayload(),
+        data: _dragPayload(),
         dragAnchorStrategy: _centerDragAnchorStrategy,
         feedback: widget.feedback,
         childWhenDragging: widget.childWhenDragging,
@@ -223,7 +223,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     }
 
     return Draggable<CalendarDragPayload>(
-      data: _buildPayload(),
+      data: _dragPayload(),
       dragAnchorStrategy: _centerDragAnchorStrategy,
       feedback: widget.feedback,
       childWhenDragging: widget.childWhenDragging,

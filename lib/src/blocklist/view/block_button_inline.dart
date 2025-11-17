@@ -27,7 +27,12 @@ class BlockButtonInline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (useEmailBlocking) {
-      return _buildEmailButton(context);
+      return _EmailBlockButton(
+        emailAddress: emailAddress,
+        callback: callback,
+        showIcon: showIcon,
+        mainAxisAlignment: mainAxisAlignment,
+      );
     }
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
@@ -52,8 +57,23 @@ class BlockButtonInline extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _buildEmailButton(BuildContext context) {
+class _EmailBlockButton extends StatelessWidget {
+  const _EmailBlockButton({
+    required this.emailAddress,
+    this.callback,
+    this.showIcon = false,
+    this.mainAxisAlignment,
+  });
+
+  final String? emailAddress;
+  final void Function()? callback;
+  final bool showIcon;
+  final MainAxisAlignment? mainAxisAlignment;
+
+  @override
+  Widget build(BuildContext context) {
     final EmailService? emailService =
         RepositoryProvider.of<EmailService?>(context);
     final String? address = emailAddress?.trim();

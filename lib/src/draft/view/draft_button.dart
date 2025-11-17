@@ -10,19 +10,17 @@ class DraftButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AxiTooltip(
-      builder: (_) => const Text('Compose a message'),
-      child: AxiFab(
-        onPressed: () => context.push(
-          const ComposeRoute().location,
-          extra: {
-            'locate': context.read,
-            'attachments': const <String>[],
-          },
-        ),
-        iconData: LucideIcons.pencilLine,
-        text: 'Compose',
+    return AxiFab(
+      tooltip: 'Compose a message',
+      onPressed: () => context.push(
+        const ComposeRoute().location,
+        extra: {
+          'locate': context.read,
+          'attachments': const <String>[],
+        },
       ),
+      iconData: LucideIcons.pencilLine,
+      text: 'Compose',
     );
   }
 }

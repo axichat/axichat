@@ -187,9 +187,9 @@ class XmppService extends XmppBase
         ChatsService,
         BlockingService {
   XmppService._(
-    this._buildConnection,
-    this._buildStateStore,
-    this._buildDatabase,
+    this._connectionFactory,
+    this._stateStoreFactory,
+    this._databaseFactory,
     this._notificationService,
     this._capability,
   );
@@ -215,9 +215,9 @@ class XmppService extends XmppBase
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
 
-  final FutureOr<XmppConnection> Function() _buildConnection;
-  final FutureOr<XmppStateStore> Function(String, String) _buildStateStore;
-  final FutureOr<XmppDatabase> Function(String, String) _buildDatabase;
+  final FutureOr<XmppConnection> Function() _connectionFactory;
+  final FutureOr<XmppStateStore> Function(String, String) _stateStoreFactory;
+  final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
 
@@ -449,14 +449,14 @@ class XmppService extends XmppBase
           : 'Attempting login with direct socket...',
     );
 
-    _connection = await _buildConnection();
+    _connection = await _connectionFactory();
     _omemoActivitySubscription?.cancel();
     _omemoActivitySubscription =
         _connection.omemoActivityStream.listen(_omemoActivityController.add);
 
     if (!_stateStore.isCompleted) {
       _stateStore.complete(
-        await _buildStateStore(databasePrefix, databasePassphrase),
+        await _stateStoreFactory(databasePrefix, databasePassphrase),
       );
     }
 
@@ -551,10 +551,10 @@ class XmppService extends XmppBase
         try {
           _xmppLogger.info('Opening databases...');
           if (!_stateStore.isCompleted) {
-            _stateStore.complete(await _buildStateStore(prefix, passphrase));
+            _stateStore.complete(await _stateStoreFactory(prefix, passphrase));
           }
           if (!_database.isCompleted) {
-            _database.complete(await _buildDatabase(prefix, passphrase));
+            _database.complete(await _databaseFactory(prefix, passphrase));
           }
         } on Exception catch (e) {
           _xmppLogger.severe('Failed to create databases:', e);
@@ -645,7 +645,7 @@ class XmppService extends XmppBase
     if (withForeground) {
       await _connection.reset();
     }
-    _connection = await _buildConnection();
+    _connection = await _connectionFactory();
 
     if (!_stateStore.isCompleted) {
       _xmppLogger.warning('Cancelling state store initialization...');

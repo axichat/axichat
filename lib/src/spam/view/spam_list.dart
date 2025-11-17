@@ -3,6 +3,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
@@ -125,11 +126,9 @@ class SpamList extends StatelessWidget {
       await emailService?.spam.unmark(address!);
     }
     toaster?.show(
-      ShadToast(
-        title: const Text('Moved'),
-        description: Text('Returned ${chat.title} to inbox.'),
-        alignment: Alignment.topRight,
-        showCloseIconOnlyWhenHovered: false,
+      FeedbackToast.success(
+        title: 'Moved',
+        message: 'Returned ${chat.title} to inbox.',
       ),
     );
   }

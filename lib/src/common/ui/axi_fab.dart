@@ -8,18 +8,29 @@ class AxiFab extends StatelessWidget {
     required this.text,
     required this.iconData,
     this.onPressed,
+    this.tooltip,
   });
 
   final String text;
   final IconData iconData;
   final void Function()? onPressed;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton(
+    Widget button = ShadButton(
       onPressed: onPressed,
       leading: Icon(iconData),
       child: Text(text),
     ).withTapBounce(enabled: onPressed != null);
+
+    if (tooltip != null) {
+      button = AxiTooltip(
+        builder: (_) => Text(tooltip!),
+        child: button,
+      );
+    }
+
+    return button;
   }
 }

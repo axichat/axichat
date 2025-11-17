@@ -9,6 +9,7 @@ export 'axi_badge.dart';
 export 'axi_confirm.dart';
 export 'axi_checkbox_form_field.dart';
 export 'axi_cutout.dart';
+export 'axi_dialog_fab.dart';
 export 'axi_delete_menu_item.dart';
 export 'axi_fab.dart';
 export 'axi_icon_button.dart';

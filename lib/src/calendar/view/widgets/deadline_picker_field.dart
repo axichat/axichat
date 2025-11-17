@@ -150,6 +150,13 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     return true;
   }
 
+  void _updateVisibleMonth(DateTime month) {
+    setState(() {
+      _visibleMonth = _monthStart(month);
+    });
+    _markOverlayNeedsBuild();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -437,6 +444,16 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final borderColor = _borderColor(widget.value);
     final backgroundColor = _backgroundColor(widget.value);
     final iconColor = _iconColor(widget.value);
+    final DateTime? value = widget.value;
+    final String? displayDate = value != null
+        ? (widget.showTimeSelectors
+            ? TimeFormatter.formatFriendlyDateTime(value)
+            : TimeFormatter.formatFriendlyDate(value))
+        : null;
+    final String? statusLabel = value != null ? _deadlineLabel(value) : null;
+    final bool showStatusLabel = value != null &&
+        widget.showStatusColors &&
+        (widget.showTimeSelectors || statusLabel != displayDate);
 
     final trigger = InkWell(
       key: _triggerKey,
@@ -465,7 +482,13 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: _buildFieldContent(iconColor),
+                child: _DeadlineFieldContent(
+                  placeholder: widget.placeholder,
+                  valueText: displayDate,
+                  statusLabel: statusLabel,
+                  showStatusLabel: showStatusLabel,
+                  iconColor: iconColor,
+                ),
               ),
             ),
             const SizedBox(width: calendarGutterSm),
@@ -484,6 +507,46 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       overlayChildBuilder: (overlayContext) {
         if (!_isOpen) return const SizedBox.shrink();
         final geometry = _computeGeometry(overlayContext);
+        final previousMonth =
+            DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
+        final nextMonth =
+            DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
+        final VoidCallback? handlePrevious = _canNavigateToMonth(previousMonth)
+            ? () => _updateVisibleMonth(previousMonth)
+            : null;
+        final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
+            ? () => _updateVisibleMonth(nextMonth)
+            : null;
+        final header = _DeadlineMonthHeader(
+          label: _monthLabel(_visibleMonth),
+          onPrevious: handlePrevious,
+          onNext: handleNext,
+        );
+        final calendarGrid = _DeadlineCalendarGrid(
+          visibleMonth: _visibleMonth,
+          selectedDate: _currentValue,
+          isDateWithinBounds: _isDateWithinBounds,
+          onDaySelected: _onDaySelected,
+        );
+        final DateTime selectedTime = _currentValue ?? DateTime.now();
+        final timeSelectors = _DeadlineTimeSelectors(
+          showTimeSelectors: widget.showTimeSelectors,
+          selectedHour: selectedTime.hour,
+          selectedMinute: _roundToFive(selectedTime.minute),
+          hourValues: _hourValues,
+          minuteValues: _minuteValues,
+          hourController: _hourScrollController,
+          minuteController: _minuteScrollController,
+          onHourSelected: _onHourSelected,
+          onMinuteSelected: _onMinuteSelected,
+        );
+        final actions = _DeadlinePickerActions(
+          showTimeSelectors: widget.showTimeSelectors,
+          hasValue: _currentValue != null,
+          onCancel: _handleCancel,
+          onClear: _currentValue != null ? _clearDeadline : null,
+          onDone: _hideOverlay,
+        );
         return Stack(
           children: [
             Positioned.fill(
@@ -496,8 +559,16 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               link: _layerLink,
               showWhenUnlinked: false,
               offset: geometry.offset,
-              child: _buildAnchoredDropdown(
+              child: _DeadlineAnchoredDropdown(
+                overlayWidth: widget.overlayWidth,
                 maxHeight: geometry.maxHeight,
+                tapRegionGroupId: _tapRegionGroupId,
+                dropdownKey: _dropdownKey,
+                showTimeSelectors: widget.showTimeSelectors,
+                monthHeader: header,
+                calendarGrid: calendarGrid,
+                timeSelectors: timeSelectors,
+                actions: actions,
               ),
             ),
           ],
@@ -506,81 +577,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       child: CompositedTransformTarget(
         link: _layerLink,
         child: trigger,
-      ),
-    );
-  }
-
-  Widget _buildAnchoredDropdown({required double maxHeight}) {
-    Widget anchored = Align(
-      alignment: Alignment.topLeft,
-      child: SizedBox(
-        width: widget.overlayWidth,
-        child: _buildDropdownContent(maxHeight),
-      ),
-    );
-
-    final groupId = _tapRegionGroupId;
-    if (groupId != null) {
-      anchored = TapRegion(
-        groupId: groupId,
-        child: anchored,
-      );
-    }
-
-    return anchored;
-  }
-
-  Widget _buildFieldContent(Color iconColor) {
-    if (widget.value != null) {
-      final displayDate = widget.showTimeSelectors
-          ? TimeFormatter.formatFriendlyDateTime(widget.value!)
-          : TimeFormatter.formatFriendlyDate(widget.value!);
-      final label = _deadlineLabel(widget.value!);
-      final showLabel = widget.showStatusColors;
-
-      if (!showLabel || (!widget.showTimeSelectors && label == displayDate)) {
-        return Text(
-          displayDate,
-          style: const TextStyle(
-            fontSize: 14,
-            color: calendarTitleColor,
-            fontWeight: FontWeight.w500,
-          ),
-        );
-      }
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: iconColor,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: calendarInsetSm),
-          Text(
-            displayDate,
-            style: const TextStyle(
-              fontSize: 14,
-              color: calendarTitleColor,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Text(
-      widget.placeholder,
-      style: const TextStyle(
-        fontSize: 14,
-        color: calendarTimeLabelColor,
-        fontWeight: FontWeight.w400,
       ),
     );
   }
@@ -597,515 +593,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       return 'Due Tomorrow';
     }
     return TimeFormatter.formatFriendlyDate(deadlineDate);
-  }
-
-  Widget _buildDropdownContent(double maxHeight) {
-    Widget buildContent(BoxConstraints constraints) {
-      final desiredHeight = widget.showTimeSelectors
-          ? _timePickerDesiredHeight
-          : _datePickerExpandedHeight;
-      final needsScroll = constraints.maxHeight < desiredHeight;
-
-      if (widget.showTimeSelectors) {
-        final header = _buildMonthHeader();
-        final grid = _buildCalendarGrid();
-        final timeSelectors = _buildTimeSelectors();
-        final actions = _buildActions();
-
-        if (!needsScroll) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              header,
-              grid,
-              timeSelectors,
-              actions,
-            ],
-          );
-        }
-
-        return Column(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            header,
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.zero,
-                physics: const ClampingScrollPhysics(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    grid,
-                    timeSelectors,
-                  ],
-                ),
-              ),
-            ),
-            actions,
-          ],
-        );
-      }
-
-      final header = _buildMonthHeader();
-      final grid = _buildCalendarGrid();
-      final actions = _buildActions();
-
-      if (!needsScroll) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [header, grid, actions],
-        );
-      }
-
-      return Column(
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          header,
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.zero,
-              physics: const ClampingScrollPhysics(),
-              child: grid,
-            ),
-          ),
-          actions,
-        ],
-      );
-    }
-
-    return KeyedSubtree(
-      key: _dropdownKey,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: maxHeight,
-          minWidth: 320,
-        ),
-        child: Material(
-          borderRadius: BorderRadius.circular(12),
-          color: Colors.white,
-          elevation: 12,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: LayoutBuilder(builder: (context, constraints) {
-              return buildContent(constraints);
-            }),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMonthHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterMd, vertical: calendarGutterSm),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Builder(
-            builder: (context) {
-              final previousMonth =
-                  DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
-              final canGoPrev = _canNavigateToMonth(previousMonth);
-              final iconColor = canGoPrev
-                  ? calendarTitleColor
-                  : calendarSubtitleColor.withValues(alpha: 0.4);
-              return ShadButton.outline(
-                size: ShadButtonSize.sm,
-                foregroundColor: iconColor,
-                hoverForegroundColor:
-                    canGoPrev ? calendarPrimaryColor : iconColor,
-                onPressed: canGoPrev
-                    ? () {
-                        setState(() {
-                          _visibleMonth = _monthStart(previousMonth);
-                        });
-                        _markOverlayNeedsBuild();
-                      }
-                    : null,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: calendarGutterSm, vertical: calendarInsetLg),
-                child: Icon(
-                  Icons.chevron_left,
-                  size: 16,
-                  color: iconColor,
-                ),
-              );
-            },
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                _monthLabel(_visibleMonth),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: calendarTitleColor,
-                ),
-              ),
-            ),
-          ),
-          Builder(
-            builder: (context) {
-              final nextMonth =
-                  DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
-              final canGoNext = _canNavigateToMonth(nextMonth);
-              final iconColor = canGoNext
-                  ? calendarTitleColor
-                  : calendarSubtitleColor.withValues(alpha: 0.4);
-              return ShadButton.outline(
-                size: ShadButtonSize.sm,
-                foregroundColor: iconColor,
-                hoverForegroundColor:
-                    canGoNext ? calendarPrimaryColor : iconColor,
-                onPressed: canGoNext
-                    ? () {
-                        setState(() {
-                          _visibleMonth = _monthStart(nextMonth);
-                        });
-                        _markOverlayNeedsBuild();
-                      }
-                    : null,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: calendarGutterSm, vertical: calendarInsetLg),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 16,
-                  color: iconColor,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarGrid() {
-    final year = _visibleMonth.year;
-    final month = _visibleMonth.month;
-    final firstOfMonth = DateTime(year, month, 1);
-    final firstWeekday = firstOfMonth.weekday % 7; // Sunday = 0
-    final daysInMonth = DateTime(year, month + 1, 0).day;
-
-    final days = <DateTime?>[];
-    for (int i = 0; i < firstWeekday; i++) {
-      days.add(null);
-    }
-    for (int day = 1; day <= daysInMonth; day++) {
-      days.add(DateTime(year, month, day));
-    }
-    while (days.length % 7 != 0) {
-      days.add(null);
-    }
-
-    return Padding(
-      padding: calendarPaddingLg,
-      child: Column(
-        children: [
-          Row(
-            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-                .map(
-                  (label) => Expanded(
-                    child: Center(
-                      child: Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: calendarTimeLabelColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: days.map((date) {
-              if (date == null) {
-                return const SizedBox(width: 36, height: 36);
-              }
-              final isToday = _isSameDay(date, DateTime.now());
-              final isSelected =
-                  _currentValue != null && _isSameDay(date, _currentValue!);
-              final isDisabled = !_isDateWithinBounds(date);
-
-              return SizedBox(
-                width: 36,
-                height: 36,
-                child: ShadButton.raw(
-                  variant: isSelected
-                      ? ShadButtonVariant.primary
-                      : ShadButtonVariant.outline,
-                  size: ShadButtonSize.sm,
-                  onPressed: isDisabled ? null : () => _onDaySelected(date),
-                  backgroundColor: isSelected
-                      ? calendarPrimaryColor
-                      : isDisabled
-                          ? calendarBorderColor.withValues(alpha: 0.2)
-                          : Colors.white,
-                  hoverBackgroundColor: isSelected
-                      ? calendarPrimaryHoverColor
-                      : isDisabled
-                          ? calendarBorderColor.withValues(alpha: 0.2)
-                          : calendarPrimaryColor.withValues(alpha: 0.12),
-                  foregroundColor: isSelected
-                      ? Colors.white
-                      : isDisabled
-                          ? calendarSubtitleColor.withValues(alpha: 0.6)
-                          : calendarTitleColor,
-                  hoverForegroundColor: isSelected
-                      ? Colors.white
-                      : isDisabled
-                          ? calendarSubtitleColor.withValues(alpha: 0.6)
-                          : calendarPrimaryColor,
-                  padding: EdgeInsets.zero,
-                  child: Text(
-                    '${date.day}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : isDisabled
-                              ? FontWeight.w400
-                              : FontWeight.w500,
-                      color: isSelected
-                          ? Colors.white
-                          : isToday
-                              ? calendarPrimaryColor
-                              : isDisabled
-                                  ? calendarSubtitleColor.withValues(alpha: 0.6)
-                                  : calendarTitleColor,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeSelectors() {
-    if (!widget.showTimeSelectors) {
-      return const SizedBox.shrink();
-    }
-
-    final selected = _currentValue ?? DateTime.now();
-    final selectedHour = selected.hour;
-    final selectedMinute = _roundToFive(selected.minute);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterMd, vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Time',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: calendarSubtitleColor,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: calendarFormGap),
-          SizedBox(
-            height: 210,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildTimeColumn(
-                    label: 'Hour',
-                    values: _hourValues,
-                    selectedValue: selectedHour,
-                    controller: _hourScrollController,
-                    onSelected: _onHourSelected,
-                    formatter: (value) => value.toString().padLeft(2, '0'),
-                    showRightDivider: true,
-                  ),
-                ),
-                Expanded(
-                  child: _buildTimeColumn(
-                    label: 'Minute',
-                    values: _minuteValues,
-                    selectedValue: selectedMinute,
-                    controller: _minuteScrollController,
-                    onSelected: _onMinuteSelected,
-                    formatter: (value) => value.toString().padLeft(2, '0'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeColumn({
-    required String label,
-    required List<int> values,
-    required int selectedValue,
-    required ScrollController controller,
-    required void Function(int value) onSelected,
-    required String Function(int value) formatter,
-    bool showRightDivider = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.3,
-          ),
-        ),
-        const SizedBox(height: calendarInsetLg),
-        Expanded(
-          child: DecoratedBox(
-            decoration: showRightDivider
-                ? const BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: calendarBorderColor, width: 1),
-                    ),
-                  )
-                : const BoxDecoration(),
-            child: Scrollbar(
-              controller: controller,
-              child: ListView.separated(
-                controller: controller,
-                padding: EdgeInsets.zero,
-                physics: const ClampingScrollPhysics(),
-                itemCount: values.length,
-                separatorBuilder: (_, __) => const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: calendarBorderColor,
-                ),
-                itemBuilder: (_, index) {
-                  final value = values[index];
-                  final isSelected = value == selectedValue;
-                  return _buildTimeButton(
-                    label: formatter(value),
-                    selected: isSelected,
-                    onTap: () => onSelected(value),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimeButton({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      height: _timeItemHeight,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: onTap,
-          hoverColor: calendarPrimaryColor.withValues(alpha: 0.08),
-          splashColor: calendarPrimaryColor.withValues(alpha: 0.12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: selected
-                  ? calendarPrimaryColor.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: selected ? calendarPrimaryColor : calendarTitleColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActions() {
-    final verticalPadding = widget.showTimeSelectors ? 10.0 : 8.0;
-    final horizontalPadding = widget.showTimeSelectors ? 12.0 : 16.0;
-
-    final actionChildren = <Widget>[
-      ShadButton.outline(
-        size: ShadButtonSize.sm,
-        onPressed: _handleCancel,
-        child: const Text('Cancel'),
-      ),
-    ];
-
-    if (_currentValue != null) {
-      actionChildren.add(const SizedBox(width: calendarGutterSm));
-      actionChildren.add(
-        ShadButton.outline(
-          size: ShadButtonSize.sm,
-          onPressed: _clearDeadline,
-          child: const Text('Clear'),
-        ),
-      );
-    }
-
-    actionChildren.add(const Spacer());
-    actionChildren.add(
-      ShadButton(
-        size: ShadButtonSize.sm,
-        backgroundColor: calendarPrimaryColor,
-        hoverBackgroundColor: calendarPrimaryHoverColor,
-        foregroundColor: Colors.white,
-        hoverForegroundColor: Colors.white,
-        onPressed: _hideOverlay,
-        child: const Text('Done'),
-      ),
-    );
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: verticalPadding,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
-      child: Row(children: actionChildren),
-    );
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   String _monthLabel(DateTime date) {
@@ -1215,4 +702,705 @@ class _OverlayGeometry {
 
   final Offset offset;
   final double maxHeight;
+}
+
+class _DeadlineAnchoredDropdown extends StatelessWidget {
+  const _DeadlineAnchoredDropdown({
+    required this.overlayWidth,
+    required this.maxHeight,
+    required this.tapRegionGroupId,
+    required this.dropdownKey,
+    required this.showTimeSelectors,
+    required this.monthHeader,
+    required this.calendarGrid,
+    required this.timeSelectors,
+    required this.actions,
+  });
+
+  final double overlayWidth;
+  final double maxHeight;
+  final Object? tapRegionGroupId;
+  final GlobalKey dropdownKey;
+  final bool showTimeSelectors;
+  final Widget monthHeader;
+  final Widget calendarGrid;
+  final Widget timeSelectors;
+  final Widget actions;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget anchored = Align(
+      alignment: Alignment.topLeft,
+      child: SizedBox(
+        width: overlayWidth,
+        child: _DeadlineDropdownSurface(
+          maxHeight: maxHeight,
+          dropdownKey: dropdownKey,
+          showTimeSelectors: showTimeSelectors,
+          monthHeader: monthHeader,
+          calendarGrid: calendarGrid,
+          timeSelectors: timeSelectors,
+          actions: actions,
+        ),
+      ),
+    );
+
+    final groupId = tapRegionGroupId;
+    if (groupId != null) {
+      anchored = TapRegion(
+        groupId: groupId,
+        child: anchored,
+      );
+    }
+
+    return anchored;
+  }
+}
+
+class _DeadlineDropdownSurface extends StatelessWidget {
+  const _DeadlineDropdownSurface({
+    required this.maxHeight,
+    required this.dropdownKey,
+    required this.showTimeSelectors,
+    required this.monthHeader,
+    required this.calendarGrid,
+    required this.timeSelectors,
+    required this.actions,
+  });
+
+  final double maxHeight;
+  final GlobalKey dropdownKey;
+  final bool showTimeSelectors;
+  final Widget monthHeader;
+  final Widget calendarGrid;
+  final Widget timeSelectors;
+  final Widget actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(
+      key: dropdownKey,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: maxHeight,
+          minWidth: 320,
+        ),
+        child: Material(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+          elevation: 12,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final desiredHeight = showTimeSelectors
+                    ? _DeadlinePickerFieldState._timePickerDesiredHeight
+                    : _DeadlinePickerFieldState._datePickerExpandedHeight;
+                final needsScroll = constraints.maxHeight < desiredHeight;
+
+                if (showTimeSelectors) {
+                  if (!needsScroll) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        monthHeader,
+                        calendarGrid,
+                        timeSelectors,
+                        actions,
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      monthHeader,
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.zero,
+                          physics: const ClampingScrollPhysics(),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              calendarGrid,
+                              timeSelectors,
+                            ],
+                          ),
+                        ),
+                      ),
+                      actions,
+                    ],
+                  );
+                }
+
+                if (!needsScroll) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [monthHeader, calendarGrid, actions],
+                  );
+                }
+
+                return Column(
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    monthHeader,
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.zero,
+                        physics: const ClampingScrollPhysics(),
+                        child: calendarGrid,
+                      ),
+                    ),
+                    actions,
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeadlineFieldContent extends StatelessWidget {
+  const _DeadlineFieldContent({
+    required this.placeholder,
+    required this.valueText,
+    required this.statusLabel,
+    required this.showStatusLabel,
+    required this.iconColor,
+  });
+
+  final String placeholder;
+  final String? valueText;
+  final String? statusLabel;
+  final bool showStatusLabel;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? value = valueText;
+    if (value != null) {
+      if (!showStatusLabel) {
+        return Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            color: calendarTitleColor,
+            fontWeight: FontWeight.w500,
+          ),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            statusLabel ?? value,
+            style: TextStyle(
+              fontSize: 12,
+              color: iconColor,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: calendarInsetSm),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              color: calendarTitleColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Text(
+      placeholder,
+      style: const TextStyle(
+        fontSize: 14,
+        color: calendarTimeLabelColor,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+  }
+}
+
+class _DeadlineMonthHeader extends StatelessWidget {
+  const _DeadlineMonthHeader({
+    required this.label,
+    this.onPrevious,
+    this.onNext,
+  });
+
+  final String label;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterMd,
+        vertical: calendarGutterSm,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: calendarBorderColor, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          _DeadlineNavigationButton(
+            icon: Icons.chevron_left,
+            onPressed: onPrevious,
+          ),
+          Expanded(
+            child: Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: calendarTitleColor,
+                ),
+              ),
+            ),
+          ),
+          _DeadlineNavigationButton(
+            icon: Icons.chevron_right,
+            onPressed: onNext,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeadlineNavigationButton extends StatelessWidget {
+  const _DeadlineNavigationButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    final iconColor = enabled
+        ? calendarTitleColor
+        : calendarSubtitleColor.withValues(alpha: 0.4);
+
+    return ShadButton.outline(
+      size: ShadButtonSize.sm,
+      foregroundColor: iconColor,
+      hoverForegroundColor: enabled ? calendarPrimaryColor : iconColor,
+      onPressed: onPressed,
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterSm,
+        vertical: calendarInsetLg,
+      ),
+      child: Icon(icon, size: 16, color: iconColor),
+    );
+  }
+}
+
+class _DeadlineCalendarGrid extends StatelessWidget {
+  const _DeadlineCalendarGrid({
+    required this.visibleMonth,
+    required this.selectedDate,
+    required this.isDateWithinBounds,
+    required this.onDaySelected,
+  });
+
+  final DateTime visibleMonth;
+  final DateTime? selectedDate;
+  final bool Function(DateTime date) isDateWithinBounds;
+  final ValueChanged<DateTime> onDaySelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final year = visibleMonth.year;
+    final month = visibleMonth.month;
+    final firstOfMonth = DateTime(year, month, 1);
+    final firstWeekday = firstOfMonth.weekday % 7;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+
+    final days = <DateTime?>[];
+    for (var i = 0; i < firstWeekday; i++) {
+      days.add(null);
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      days.add(DateTime(year, month, day));
+    }
+    while (days.length % 7 != 0) {
+      days.add(null);
+    }
+
+    return Padding(
+      padding: calendarPaddingLg,
+      child: Column(
+        children: [
+          Row(
+            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                .map(
+                  (label) => Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: calendarTimeLabelColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: calendarGutterSm),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: days.map((date) {
+              if (date == null) {
+                return const SizedBox(width: 36, height: 36);
+              }
+
+              final isToday = _isSameDay(date, DateTime.now());
+              final isSelected =
+                  selectedDate != null && _isSameDay(date, selectedDate!);
+              final isDisabled = !isDateWithinBounds(date);
+
+              return SizedBox(
+                width: 36,
+                height: 36,
+                child: ShadButton.raw(
+                  variant: isSelected
+                      ? ShadButtonVariant.primary
+                      : ShadButtonVariant.outline,
+                  size: ShadButtonSize.sm,
+                  onPressed: isDisabled ? null : () => onDaySelected(date),
+                  backgroundColor: isSelected
+                      ? calendarPrimaryColor
+                      : isDisabled
+                          ? calendarBorderColor.withValues(alpha: 0.2)
+                          : Colors.white,
+                  hoverBackgroundColor: isSelected
+                      ? calendarPrimaryHoverColor
+                      : isDisabled
+                          ? calendarBorderColor.withValues(alpha: 0.2)
+                          : calendarPrimaryColor.withValues(alpha: 0.12),
+                  foregroundColor: isSelected
+                      ? Colors.white
+                      : isDisabled
+                          ? calendarSubtitleColor.withValues(alpha: 0.6)
+                          : calendarTitleColor,
+                  hoverForegroundColor: isSelected
+                      ? Colors.white
+                      : isDisabled
+                          ? calendarSubtitleColor.withValues(alpha: 0.6)
+                          : calendarPrimaryColor,
+                  padding: EdgeInsets.zero,
+                  child: Text(
+                    '${date.day}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : isDisabled
+                              ? FontWeight.w400
+                              : FontWeight.w500,
+                      color: isSelected
+                          ? Colors.white
+                          : isToday
+                              ? calendarPrimaryColor
+                              : isDisabled
+                                  ? calendarSubtitleColor.withValues(alpha: 0.6)
+                                  : calendarTitleColor,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _DeadlineTimeSelectors extends StatelessWidget {
+  const _DeadlineTimeSelectors({
+    required this.showTimeSelectors,
+    required this.selectedHour,
+    required this.selectedMinute,
+    required this.hourValues,
+    required this.minuteValues,
+    required this.hourController,
+    required this.minuteController,
+    required this.onHourSelected,
+    required this.onMinuteSelected,
+  });
+
+  final bool showTimeSelectors;
+  final int selectedHour;
+  final int selectedMinute;
+  final List<int> hourValues;
+  final List<int> minuteValues;
+  final ScrollController hourController;
+  final ScrollController minuteController;
+  final ValueChanged<int> onHourSelected;
+  final ValueChanged<int> onMinuteSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showTimeSelectors) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterMd,
+        vertical: 10,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: calendarBorderColor, width: 1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Time',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: calendarSubtitleColor,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: calendarFormGap),
+          SizedBox(
+            height: 210,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _DeadlineTimeColumn(
+                    label: 'Hour',
+                    values: hourValues,
+                    selectedValue: selectedHour,
+                    controller: hourController,
+                    onSelected: onHourSelected,
+                    formatter: (value) => value.toString().padLeft(2, '0'),
+                    showRightDivider: true,
+                  ),
+                ),
+                Expanded(
+                  child: _DeadlineTimeColumn(
+                    label: 'Minute',
+                    values: minuteValues,
+                    selectedValue: selectedMinute,
+                    controller: minuteController,
+                    onSelected: onMinuteSelected,
+                    formatter: (value) => value.toString().padLeft(2, '0'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeadlineTimeColumn extends StatelessWidget {
+  const _DeadlineTimeColumn({
+    required this.label,
+    required this.values,
+    required this.selectedValue,
+    required this.controller,
+    required this.onSelected,
+    required this.formatter,
+    this.showRightDivider = false,
+  });
+
+  final String label;
+  final List<int> values;
+  final int selectedValue;
+  final ScrollController controller;
+  final ValueChanged<int> onSelected;
+  final String Function(int value) formatter;
+  final bool showRightDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: calendarInsetLg),
+        Expanded(
+          child: DecoratedBox(
+            decoration: showRightDivider
+                ? const BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: calendarBorderColor, width: 1),
+                    ),
+                  )
+                : const BoxDecoration(),
+            child: Scrollbar(
+              controller: controller,
+              child: ListView.separated(
+                controller: controller,
+                padding: EdgeInsets.zero,
+                physics: const ClampingScrollPhysics(),
+                itemCount: values.length,
+                separatorBuilder: (_, __) => const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: calendarBorderColor,
+                ),
+                itemBuilder: (_, index) {
+                  final value = values[index];
+                  final isSelected = value == selectedValue;
+                  return _DeadlineTimeButton(
+                    label: formatter(value),
+                    selected: isSelected,
+                    onTap: () => onSelected(value),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeadlineTimeButton extends StatelessWidget {
+  const _DeadlineTimeButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _DeadlinePickerFieldState._timeItemHeight,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: onTap,
+          hoverColor: calendarPrimaryColor.withValues(alpha: 0.08),
+          splashColor: calendarPrimaryColor.withValues(alpha: 0.12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: selected
+                  ? calendarPrimaryColor.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected ? calendarPrimaryColor : calendarTitleColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeadlinePickerActions extends StatelessWidget {
+  const _DeadlinePickerActions({
+    required this.showTimeSelectors,
+    required this.hasValue,
+    required this.onCancel,
+    this.onClear,
+    required this.onDone,
+  });
+
+  final bool showTimeSelectors;
+  final bool hasValue;
+  final VoidCallback onCancel;
+  final VoidCallback? onClear;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final verticalPadding = showTimeSelectors ? 10.0 : 8.0;
+    final horizontalPadding = showTimeSelectors ? 12.0 : 16.0;
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: calendarBorderColor, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          ShadButton.outline(
+            size: ShadButtonSize.sm,
+            onPressed: onCancel,
+            child: const Text('Cancel'),
+          ),
+          if (hasValue && onClear != null) ...[
+            const SizedBox(width: calendarGutterSm),
+            ShadButton.outline(
+              size: ShadButtonSize.sm,
+              onPressed: onClear,
+              child: const Text('Clear'),
+            ),
+          ],
+          const Spacer(),
+          ShadButton(
+            size: ShadButtonSize.sm,
+            backgroundColor: calendarPrimaryColor,
+            hoverBackgroundColor: calendarPrimaryHoverColor,
+            foregroundColor: Colors.white,
+            hoverForegroundColor: Colors.white,
+            onPressed: onDone,
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
 }

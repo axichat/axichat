@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -49,214 +50,29 @@ class _SyncControlsState extends State<SyncControls> {
       listener: _handleSyncState,
       child: ResponsiveHelper.layoutBuilder(
         context,
-        mobile: _buildMobileControls(context, state),
-        tablet: _buildTabletControls(context, state),
-        desktop: _buildDesktopControls(context, state),
-      ),
-    );
-  }
-
-  Widget _buildMobileControls(BuildContext context, CalendarState state) {
-    final disabled = state.isSyncing;
-    final hasTasks = state.model.tasks.isNotEmpty;
-    return Wrap(
-      spacing: calendarGutterSm,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _buildSyncStatusIcon(context, state),
-        _CompactSyncButton(
-          label: 'Request',
-          icon: LucideIcons.cloudDownload,
-          onPressed: disabled ? null : () => _requestSync(context),
+        mobile: _MobileSyncControls(
+          state: state,
+          onRequestSync: () => _requestSync(context),
+          onPushSync: () => _pushSync(context),
+          onExportCalendar: _handleExportAll,
+          onImportCalendar: _handleImportCalendar,
         ),
-        _CompactSyncButton(
-          label: 'Push',
-          icon: LucideIcons.cloudUpload,
-          onPressed: disabled ? null : () => _pushSync(context),
+        tablet: _TabletSyncControls(
+          state: state,
+          onRequestSync: () => _requestSync(context),
+          onPushSync: () => _pushSync(context),
+          onExportCalendar: _handleExportAll,
+          onImportCalendar: _handleImportCalendar,
         ),
-        _buildTransferMenuButton(hasTasks),
-      ],
-    );
-  }
-
-  Widget _buildTabletControls(BuildContext context, CalendarState state) {
-    final spec = ResponsiveHelper.spec(context);
-    final hasTasks = state.model.tasks.isNotEmpty;
-    return Container(
-      padding: spec.contentPadding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSyncStatus(context, state),
-          const SizedBox(height: calendarGutterMd),
-          Row(
-            children: [
-              Expanded(
-                child: TaskSecondaryButton(
-                  label: 'Request',
-                  icon: LucideIcons.cloudDownload,
-                  onPressed:
-                      state.isSyncing ? null : () => _requestSync(context),
-                ),
-              ),
-              const SizedBox(width: calendarGutterSm),
-              Expanded(
-                child: TaskSecondaryButton(
-                  label: 'Push',
-                  icon: LucideIcons.cloudUpload,
-                  onPressed: state.isSyncing ? null : () => _pushSync(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _buildTransferMenuButton(hasTasks),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopControls(BuildContext context, CalendarState state) {
-    final spec = ResponsiveHelper.spec(context);
-    final hasTasks = state.model.tasks.isNotEmpty;
-    return Container(
-      padding: spec.contentPadding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Sync & Transfer',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: calendarGutterMd),
-          _buildSyncStatus(context, state),
-          const SizedBox(height: calendarGutterLg),
-          TaskPrimaryButton(
-            label: 'Request Update',
-            icon: LucideIcons.cloudDownload,
-            onPressed: state.isSyncing ? null : () => _requestSync(context),
-            isBusy: state.isSyncing,
-          ),
-          const SizedBox(height: calendarGutterSm),
-          TaskSecondaryButton(
-            label: 'Push Update',
-            icon: LucideIcons.cloudUpload,
-            onPressed: state.isSyncing ? null : () => _pushSync(context),
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _buildTransferMenuButton(hasTasks),
-          ),
-          if (state.syncError != null) ...[
-            const SizedBox(height: calendarGutterMd),
-            _buildErrorDisplay(context, state),
-            const SizedBox(height: calendarGutterSm),
-            TaskSecondaryButton(
-              label: 'Retry',
-              icon: LucideIcons.refreshCcw,
-              onPressed: () => _retrySync(context),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSyncStatusIcon(BuildContext context, CalendarState state) {
-    return SyncStatusIndicator(state: state);
-  }
-
-  Widget _buildSyncStatus(BuildContext context, CalendarState state) {
-    return Row(
-      children: [
-        _buildSyncStatusIcon(context, state),
-        const SizedBox(width: calendarGutterSm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _getSyncStatusText(state),
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: _getSyncStatusColor(context, state),
-                ),
-              ),
-              if (state.lastSyncTime != null && !state.isSyncing)
-                Text(
-                  'Last synced: ${_formatSyncTime(state.lastSyncTime!)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                ),
-            ],
-          ),
+        desktop: _DesktopSyncControls(
+          state: state,
+          onRequestSync: () => _requestSync(context),
+          onPushSync: () => _pushSync(context),
+          onExportCalendar: _handleExportAll,
+          onImportCalendar: _handleImportCalendar,
+          onRetrySync: () => _retrySync(context),
         ),
-      ],
-    );
-  }
-
-  Widget _buildErrorDisplay(BuildContext context, CalendarState state) {
-    return Container(
-      padding: calendarPaddingMd,
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(6),
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red),
-          const SizedBox(width: calendarGutterSm),
-          Expanded(
-            child: Text(
-              state.syncError ?? 'Unknown error',
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTransferMenuButton(bool hasTasks) {
-    return AxiMore(
-      options: [
-        (toggle) => _TransferMenuItem(
-              icon: LucideIcons.upload,
-              label: 'Export calendar',
-              enabled: hasTasks,
-              onTap: () {
-                toggle();
-                if (hasTasks) _exportAll();
-              },
-            ),
-        (toggle) => _TransferMenuItem(
-              icon: LucideIcons.download,
-              label: 'Import calendar',
-              onTap: () {
-                toggle();
-                _importCalendar();
-              },
-            ),
-      ],
     );
   }
 
@@ -294,6 +110,14 @@ class _SyncControlsState extends State<SyncControls> {
       bloc.add(const CalendarEvent.syncPushed());
     }
     _awaitingManualSync = true;
+  }
+
+  void _handleExportAll() {
+    unawaited(_exportAll());
+  }
+
+  void _handleImportCalendar() {
+    unawaited(_importCalendar());
   }
 
   Future<void> _exportAll() async {
@@ -374,23 +198,6 @@ class _SyncControlsState extends State<SyncControls> {
       );
     }
   }
-
-  String _getSyncStatusText(CalendarState state) {
-    if (state.isSyncing) return 'Syncing...';
-    if (state.syncError != null) return 'Sync failed';
-    if (state.lastSyncTime != null) return 'Synced';
-    return 'Idle';
-  }
-
-  Color _getSyncStatusColor(BuildContext context, CalendarState state) {
-    if (state.isSyncing) return Colors.orange;
-    if (state.syncError != null) return Colors.red;
-    if (state.lastSyncTime != null) return Colors.green;
-    return Theme.of(context).textTheme.bodyMedium?.color ??
-        Theme.of(context).colorScheme.onSurface;
-  }
-
-  String _formatSyncTime(DateTime time) => TimeFormatter.formatSyncTime(time);
 }
 
 class SyncStatusIndicator extends StatelessWidget {
@@ -453,6 +260,323 @@ class SyncStatusIndicator extends StatelessWidget {
         size: 16,
         color: fallbackColor,
       ),
+    );
+  }
+}
+
+class _MobileSyncControls extends StatelessWidget {
+  const _MobileSyncControls({
+    required this.state,
+    required this.onRequestSync,
+    required this.onPushSync,
+    required this.onExportCalendar,
+    required this.onImportCalendar,
+  });
+
+  final CalendarState state;
+  final VoidCallback onRequestSync;
+  final VoidCallback onPushSync;
+  final VoidCallback onExportCalendar;
+  final VoidCallback onImportCalendar;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = state.isSyncing;
+    final hasTasks = state.model.tasks.isNotEmpty;
+
+    return Wrap(
+      spacing: calendarGutterSm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SyncStatusIndicator(state: state),
+        _CompactSyncButton(
+          label: 'Request',
+          icon: LucideIcons.cloudDownload,
+          onPressed: disabled ? null : onRequestSync,
+        ),
+        _CompactSyncButton(
+          label: 'Push',
+          icon: LucideIcons.cloudUpload,
+          onPressed: disabled ? null : onPushSync,
+        ),
+        _TransferMenuButton(
+          hasTasks: hasTasks,
+          onExport: onExportCalendar,
+          onImport: onImportCalendar,
+        ),
+      ],
+    );
+  }
+}
+
+class _TabletSyncControls extends StatelessWidget {
+  const _TabletSyncControls({
+    required this.state,
+    required this.onRequestSync,
+    required this.onPushSync,
+    required this.onExportCalendar,
+    required this.onImportCalendar,
+  });
+
+  final CalendarState state;
+  final VoidCallback onRequestSync;
+  final VoidCallback onPushSync;
+  final VoidCallback onExportCalendar;
+  final VoidCallback onImportCalendar;
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
+    final hasTasks = state.model.tasks.isNotEmpty;
+
+    return Container(
+      padding: spec.contentPadding,
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SyncStatusSummary(state: state),
+          const SizedBox(height: calendarGutterMd),
+          Row(
+            children: [
+              Expanded(
+                child: TaskSecondaryButton(
+                  label: 'Request',
+                  icon: LucideIcons.cloudDownload,
+                  onPressed: state.isSyncing ? null : onRequestSync,
+                ),
+              ),
+              const SizedBox(width: calendarGutterSm),
+              Expanded(
+                child: TaskSecondaryButton(
+                  label: 'Push',
+                  icon: LucideIcons.cloudUpload,
+                  onPressed: state.isSyncing ? null : onPushSync,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: calendarGutterSm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _TransferMenuButton(
+              hasTasks: hasTasks,
+              onExport: onExportCalendar,
+              onImport: onImportCalendar,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopSyncControls extends StatelessWidget {
+  const _DesktopSyncControls({
+    required this.state,
+    required this.onRequestSync,
+    required this.onPushSync,
+    required this.onExportCalendar,
+    required this.onImportCalendar,
+    required this.onRetrySync,
+  });
+
+  final CalendarState state;
+  final VoidCallback onRequestSync;
+  final VoidCallback onPushSync;
+  final VoidCallback onExportCalendar;
+  final VoidCallback onImportCalendar;
+  final VoidCallback onRetrySync;
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = ResponsiveHelper.spec(context);
+    final hasTasks = state.model.tasks.isNotEmpty;
+
+    return Container(
+      padding: spec.contentPadding,
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sync & Transfer',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: calendarGutterMd),
+          _SyncStatusSummary(state: state),
+          const SizedBox(height: calendarGutterLg),
+          TaskPrimaryButton(
+            label: 'Request Update',
+            icon: LucideIcons.cloudDownload,
+            onPressed: state.isSyncing ? null : onRequestSync,
+            isBusy: state.isSyncing,
+          ),
+          const SizedBox(height: calendarGutterSm),
+          TaskSecondaryButton(
+            label: 'Push Update',
+            icon: LucideIcons.cloudUpload,
+            onPressed: state.isSyncing ? null : onPushSync,
+          ),
+          const SizedBox(height: calendarGutterSm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _TransferMenuButton(
+              hasTasks: hasTasks,
+              onExport: onExportCalendar,
+              onImport: onImportCalendar,
+            ),
+          ),
+          if (state.syncError != null) ...[
+            const SizedBox(height: calendarGutterMd),
+            _SyncErrorDisplay(message: state.syncError ?? 'Unknown error'),
+            const SizedBox(height: calendarGutterSm),
+            TaskSecondaryButton(
+              label: 'Retry',
+              icon: LucideIcons.refreshCcw,
+              onPressed: onRetrySync,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SyncStatusSummary extends StatelessWidget {
+  const _SyncStatusSummary({
+    required this.state,
+  });
+
+  final CalendarState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final lastSyncTime = state.lastSyncTime;
+
+    return Row(
+      children: [
+        SyncStatusIndicator(state: state),
+        const SizedBox(width: calendarGutterSm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _statusText,
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: _statusColor(context),
+                ),
+              ),
+              if (lastSyncTime != null && !state.isSyncing)
+                Text(
+                  'Last synced: ${TimeFormatter.formatSyncTime(lastSyncTime)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: textTheme.bodySmall?.color,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String get _statusText {
+    if (state.isSyncing) return 'Syncing...';
+    if (state.syncError != null) return 'Sync failed';
+    if (state.lastSyncTime != null) return 'Synced';
+    return 'Idle';
+  }
+
+  Color _statusColor(BuildContext context) {
+    if (state.isSyncing) return Colors.orange;
+    if (state.syncError != null) return Colors.red;
+    if (state.lastSyncTime != null) return Colors.green;
+    return Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
+  }
+}
+
+class _SyncErrorDisplay extends StatelessWidget {
+  const _SyncErrorDisplay({
+    required this.message,
+  });
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: calendarPaddingMd,
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.1),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red),
+          const SizedBox(width: calendarGutterSm),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransferMenuButton extends StatelessWidget {
+  const _TransferMenuButton({
+    required this.hasTasks,
+    required this.onExport,
+    required this.onImport,
+  });
+
+  final bool hasTasks;
+  final VoidCallback onExport;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiMore(
+      options: [
+        (toggle) => _TransferMenuItem(
+              icon: LucideIcons.upload,
+              label: 'Export calendar',
+              enabled: hasTasks,
+              onTap: () {
+                toggle();
+                if (hasTasks) {
+                  onExport();
+                }
+              },
+            ),
+        (toggle) => _TransferMenuItem(
+              icon: LucideIcons.download,
+              label: 'Import calendar',
+              onTap: () {
+                toggle();
+                onImport();
+              },
+            ),
+      ],
     );
   }
 }

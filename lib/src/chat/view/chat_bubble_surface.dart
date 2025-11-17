@@ -456,7 +456,7 @@ class RenderChatBubbleSurface extends RenderBox
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    final localPath = _buildBubblePath(
+    final localPath = _bubblePath(
       size,
       borderRadius,
       [
@@ -584,7 +584,7 @@ class _CutoutDescriptor {
   final double cornerRadius;
 }
 
-Path _buildBubblePath(
+Path _bubblePath(
   Size size,
   BorderRadius borderRadius,
   List<_CutoutDescriptor> cutouts,

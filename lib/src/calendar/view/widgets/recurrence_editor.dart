@@ -215,263 +215,93 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.enabled;
-    final frequency = value.frequency;
+    final selectedFrequency = value.frequency;
     final spacing = widget.spacing;
     final children = <Widget>[
       Wrap(
         spacing: spacing.chipSpacing,
         runSpacing: spacing.chipRunSpacing,
         children: RecurrenceFrequency.values
-            .map((freq) => _buildFrequencyChip(freq, enabled))
+            .map(
+              (freq) => _RecurrenceFrequencyChip(
+                isSelected: selectedFrequency == freq,
+                enabled: enabled,
+                padding: widget.chipPadding,
+                label: _frequencyLabel(freq),
+                onPressed: enabled
+                    ? () => widget.onChanged(
+                          _normalizedForFrequency(freq),
+                        )
+                    : null,
+              ),
+            )
             .toList(),
       ),
     ];
 
-    if (frequency == RecurrenceFrequency.weekly) {
+    if (selectedFrequency == RecurrenceFrequency.weekly) {
       children
         ..add(SizedBox(height: spacing.weekdaySpacing))
-        ..add(_buildWeekdaySelector(enabled));
+        ..add(
+          _RecurrenceWeekdaySelector(
+            enabled: enabled,
+            padding: widget.weekdayChipPadding,
+            selectedWeekdays: value.weekdays,
+            onWeekdayToggled: _toggleWeekday,
+          ),
+        );
     }
 
-    if (frequency != RecurrenceFrequency.none) {
+    if (selectedFrequency != RecurrenceFrequency.none) {
       children
         ..add(SizedBox(height: spacing.advancedSectionSpacing))
-        ..add(_buildIntervalRow(enabled))
+        ..add(
+          _RecurrenceIntervalRow(
+            enabled: enabled,
+            currentInterval: value.interval,
+            intervalWidth: widget.intervalSelectWidth,
+            fieldGap: spacing.fieldGap,
+            unitLabel: _intervalUnitLabel(value.frequency),
+            onIntervalChanged: (newValue) =>
+                widget.onChanged(value.copyWith(interval: newValue)),
+          ),
+        )
         ..add(SizedBox(height: spacing.endSpacing))
-        ..add(_buildEndControls(enabled));
+        ..add(
+          _RecurrenceEndControls(
+            enabled: enabled,
+            value: value,
+            countController: _countController,
+            onUntilChanged: (selected) {
+              widget.onChanged(
+                value.copyWith(
+                  until: selected == null
+                      ? null
+                      : DateTime(
+                          selected.year,
+                          selected.month,
+                          selected.day,
+                        ),
+                  clearCount: true,
+                ),
+              );
+            },
+            onCountChanged: (text) {
+              final parsed = int.tryParse(text);
+              widget.onChanged(
+                value.copyWith(
+                  count: parsed != null && parsed > 0 ? parsed : null,
+                  clearUntil: parsed != null && parsed > 0,
+                ),
+              );
+            },
+          ),
+        );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: children,
-    );
-  }
-
-  Widget _buildFrequencyChip(RecurrenceFrequency frequency, bool enabled) {
-    final isSelected = value.frequency == frequency;
-
-    return ShadButton.raw(
-      variant:
-          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
-      size: ShadButtonSize.sm,
-      padding: widget.chipPadding,
-      backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
-      hoverBackgroundColor: isSelected
-          ? calendarPrimaryHoverColor
-          : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
-      foregroundColor: isSelected
-          ? Colors.white
-          : enabled
-              ? calendarPrimaryColor
-              : calendarSubtitleColor,
-      hoverForegroundColor:
-          isSelected ? Colors.white : calendarPrimaryHoverColor,
-      onPressed: enabled
-          ? () {
-              final next = _normalizedForFrequency(frequency);
-              widget.onChanged(next);
-            }
-          : null,
-      child: Text(
-        _frequencyLabel(frequency),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeekdaySelector(bool enabled) {
-    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    const values = [
-      DateTime.monday,
-      DateTime.tuesday,
-      DateTime.wednesday,
-      DateTime.thursday,
-      DateTime.friday,
-      DateTime.saturday,
-      DateTime.sunday,
-    ];
-
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: List.generate(values.length, (index) {
-        final weekday = values[index];
-        final isSelected = value.weekdays.contains(weekday);
-        return ShadButton.raw(
-          variant: isSelected
-              ? ShadButtonVariant.primary
-              : ShadButtonVariant.outline,
-          size: ShadButtonSize.sm,
-          padding: widget.weekdayChipPadding,
-          backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
-          hoverBackgroundColor: isSelected
-              ? calendarPrimaryHoverColor
-              : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
-          foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
-          hoverForegroundColor:
-              isSelected ? Colors.white : calendarPrimaryHoverColor,
-          onPressed: enabled ? () => _toggleWeekday(weekday) : null,
-          child: Text(
-            labels[index],
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildIntervalRow(bool enabled) {
-    final spacing = widget.spacing.fieldGap;
-    final options = List.generate(12, (index) => index + 1)
-        .map(
-          (value) => ShadOption<int>(
-            value: value,
-            child: Text('$value'),
-          ),
-        )
-        .toList();
-
-    return Row(
-      children: [
-        const Text(
-          'Repeat every',
-          style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
-        ),
-        SizedBox(width: spacing),
-        SizedBox(
-          width: widget.intervalSelectWidth,
-          child: ShadSelect<int>(
-            enabled: enabled,
-            initialValue: value.interval.clamp(1, 12),
-            onChanged: (newValue) {
-              if (newValue == null) {
-                return;
-              }
-              widget.onChanged(value.copyWith(interval: newValue));
-            },
-            options: options,
-            selectedOptionBuilder: (context, selected) => Text('$selected'),
-            decoration: ShadDecoration(
-              color: Colors.white,
-              border: ShadBorder.all(
-                color: calendarBorderColor,
-                radius: BorderRadius.circular(10),
-                width: 1,
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterMd, vertical: calendarGutterSm),
-            trailing: const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: calendarSubtitleColor,
-            ),
-          ),
-        ),
-        SizedBox(width: spacing),
-        Text(
-          _intervalUnitLabel(value.frequency),
-          style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEndControls(bool enabled) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'END DATE',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: calendarInsetLg),
-        DeadlinePickerField(
-          value: value.until,
-          placeholder: 'End',
-          showStatusColors: false,
-          showTimeSelectors: false,
-          onChanged: enabled
-              ? (selected) {
-                  widget.onChanged(
-                    value.copyWith(
-                      until: selected == null
-                          ? null
-                          : DateTime(
-                              selected.year,
-                              selected.month,
-                              selected.day,
-                            ),
-                      clearCount: true,
-                    ),
-                  );
-                }
-              : (_) {},
-        ),
-        const SizedBox(height: calendarGutterLg),
-        const Text(
-          'COUNT',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: calendarSubtitleColor,
-            letterSpacing: 0.4,
-          ),
-        ),
-        const SizedBox(height: calendarInsetLg),
-        TextField(
-          controller: _countController,
-          enabled: enabled,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: 'Repeat times',
-            hintStyle: TextStyle(
-              color: calendarSubtitleColor.withValues(alpha: 0.55),
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterMd, vertical: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(calendarBorderRadius),
-              borderSide: const BorderSide(color: calendarBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(calendarBorderRadius),
-              borderSide: const BorderSide(color: calendarBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(calendarBorderRadius),
-              borderSide: BorderSide(color: calendarPrimaryColor, width: 2),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-          ],
-          onChanged: (text) {
-            final parsed = int.tryParse(text);
-            widget.onChanged(
-              value.copyWith(
-                count: parsed != null && parsed > 0 ? parsed : null,
-                clearUntil: parsed != null && parsed > 0,
-              ),
-            );
-          },
-        ),
-      ],
     );
   }
 
@@ -535,6 +365,273 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
       case RecurrenceFrequency.none:
         return 'time(s)';
     }
+  }
+}
+
+class _RecurrenceFrequencyChip extends StatelessWidget {
+  const _RecurrenceFrequencyChip({
+    required this.isSelected,
+    required this.enabled,
+    required this.padding,
+    required this.label,
+    this.onPressed,
+  });
+
+  final bool isSelected;
+  final bool enabled;
+  final EdgeInsets padding;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadButton.raw(
+      variant:
+          isSelected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
+      size: ShadButtonSize.sm,
+      padding: padding,
+      backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
+      hoverBackgroundColor: isSelected
+          ? calendarPrimaryHoverColor
+          : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
+      foregroundColor: isSelected
+          ? Colors.white
+          : enabled
+              ? calendarPrimaryColor
+              : calendarSubtitleColor,
+      hoverForegroundColor:
+          isSelected ? Colors.white : calendarPrimaryHoverColor,
+      onPressed: enabled ? onPressed : null,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _RecurrenceWeekdaySelector extends StatelessWidget {
+  const _RecurrenceWeekdaySelector({
+    required this.selectedWeekdays,
+    required this.padding,
+    required this.enabled,
+    required this.onWeekdayToggled,
+  });
+
+  final Set<int> selectedWeekdays;
+  final EdgeInsets padding;
+  final bool enabled;
+  final ValueChanged<int> onWeekdayToggled;
+
+  static const _labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  static const _values = [
+    DateTime.monday,
+    DateTime.tuesday,
+    DateTime.wednesday,
+    DateTime.thursday,
+    DateTime.friday,
+    DateTime.saturday,
+    DateTime.sunday,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: List.generate(_values.length, (index) {
+        final weekday = _values[index];
+        final isSelected = selectedWeekdays.contains(weekday);
+        return ShadButton.raw(
+          variant: isSelected
+              ? ShadButtonVariant.primary
+              : ShadButtonVariant.outline,
+          size: ShadButtonSize.sm,
+          padding: padding,
+          backgroundColor: isSelected ? calendarPrimaryColor : Colors.white,
+          hoverBackgroundColor: isSelected
+              ? calendarPrimaryHoverColor
+              : calendarPrimaryColor.withValues(alpha: enabled ? 0.08 : 0.04),
+          foregroundColor: isSelected ? Colors.white : calendarPrimaryColor,
+          hoverForegroundColor:
+              isSelected ? Colors.white : calendarPrimaryHoverColor,
+          onPressed: enabled ? () => onWeekdayToggled(weekday) : null,
+          child: Text(
+            _labels[index],
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _RecurrenceIntervalRow extends StatelessWidget {
+  const _RecurrenceIntervalRow({
+    required this.enabled,
+    required this.currentInterval,
+    required this.intervalWidth,
+    required this.fieldGap,
+    required this.unitLabel,
+    required this.onIntervalChanged,
+  });
+
+  final bool enabled;
+  final int currentInterval;
+  final double intervalWidth;
+  final double fieldGap;
+  final String unitLabel;
+  final ValueChanged<int> onIntervalChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = List.generate(12, (index) => index + 1)
+        .map(
+          (value) => ShadOption<int>(
+            value: value,
+            child: Text('$value'),
+          ),
+        )
+        .toList();
+
+    return Row(
+      children: [
+        const Text(
+          'Repeat every',
+          style: TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        ),
+        SizedBox(width: fieldGap),
+        SizedBox(
+          width: intervalWidth,
+          child: ShadSelect<int>(
+            enabled: enabled,
+            initialValue: currentInterval.clamp(1, 12),
+            onChanged: (newValue) {
+              if (newValue == null) return;
+              onIntervalChanged(newValue);
+            },
+            options: options,
+            selectedOptionBuilder: (context, selected) => Text('$selected'),
+            decoration: ShadDecoration(
+              color: Colors.white,
+              border: ShadBorder.all(
+                color: calendarBorderColor,
+                radius: BorderRadius.circular(10),
+                width: 1,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: calendarGutterSm,
+            ),
+            trailing: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: calendarSubtitleColor,
+            ),
+          ),
+        ),
+        SizedBox(width: fieldGap),
+        Text(
+          unitLabel,
+          style: const TextStyle(fontSize: 12, color: calendarSubtitleColor),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecurrenceEndControls extends StatelessWidget {
+  const _RecurrenceEndControls({
+    required this.enabled,
+    required this.value,
+    required this.countController,
+    required this.onUntilChanged,
+    required this.onCountChanged,
+  });
+
+  final bool enabled;
+  final RecurrenceFormValue value;
+  final TextEditingController countController;
+  final ValueChanged<DateTime?> onUntilChanged;
+  final ValueChanged<String> onCountChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'END DATE',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: calendarInsetLg),
+        DeadlinePickerField(
+          value: value.until,
+          placeholder: 'End',
+          showStatusColors: false,
+          showTimeSelectors: false,
+          onChanged: enabled ? onUntilChanged : (_) {},
+        ),
+        const SizedBox(height: calendarGutterLg),
+        const Text(
+          'COUNT',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: calendarSubtitleColor,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: calendarInsetLg),
+        TextField(
+          controller: countController,
+          enabled: enabled,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Repeat times',
+            hintStyle: TextStyle(
+              color: calendarSubtitleColor.withValues(alpha: 0.55),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterMd,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              borderSide: const BorderSide(color: calendarBorderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(calendarBorderRadius),
+              borderSide: BorderSide(color: calendarPrimaryColor, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+          ),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+          ],
+          onChanged: onCountChanged,
+        ),
+      ],
+    );
   }
 }
 

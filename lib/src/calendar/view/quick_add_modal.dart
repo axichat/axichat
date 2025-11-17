@@ -149,7 +149,29 @@ class _QuickAddModalState extends State<QuickAddModal>
         top: false,
         child: Padding(
           padding: EdgeInsets.only(bottom: bottomInset),
-          child: _buildModalContent(isSheet: true),
+          child: _QuickAddModalContent(
+            isSheet: true,
+            formController: _formController,
+            taskNameController: _taskNameController,
+            descriptionController: _descriptionController,
+            locationController: _locationController,
+            taskNameFocusNode: _taskNameFocusNode,
+            titleValidationMessage: _titleValidationMessage,
+            locationHelper: widget.locationHelper,
+            onTaskNameChanged: _handleTaskNameChanged,
+            onTaskSubmit: _submitTask,
+            onClose: _dismissModal,
+            onLocationChanged: _handleLocationEdited,
+            onStartChanged: _onUserStartChanged,
+            onEndChanged: _onUserEndChanged,
+            onScheduleCleared: _onUserScheduleCleared,
+            onDeadlineChanged: _onUserDeadlineChanged,
+            onRecurrenceChanged: _onUserRecurrenceChanged,
+            onImportantChanged: _onUserImportantChanged,
+            onUrgentChanged: _onUserUrgentChanged,
+            actionInsetBuilder: _quickAddActionInset,
+            fallbackDate: widget.prefilledDateTime,
+          ),
         ),
       );
     }
@@ -176,7 +198,29 @@ class _QuickAddModalState extends State<QuickAddModal>
                 builder: (context, child) {
                   return Transform.scale(
                     scale: _scaleAnimation.value,
-                    child: _buildModalContent(isSheet: false),
+                    child: _QuickAddModalContent(
+                      isSheet: false,
+                      formController: _formController,
+                      taskNameController: _taskNameController,
+                      descriptionController: _descriptionController,
+                      locationController: _locationController,
+                      taskNameFocusNode: _taskNameFocusNode,
+                      titleValidationMessage: _titleValidationMessage,
+                      locationHelper: widget.locationHelper,
+                      onTaskNameChanged: _handleTaskNameChanged,
+                      onTaskSubmit: _submitTask,
+                      onClose: _dismissModal,
+                      onLocationChanged: _handleLocationEdited,
+                      onStartChanged: _onUserStartChanged,
+                      onEndChanged: _onUserEndChanged,
+                      onScheduleCleared: _onUserScheduleCleared,
+                      onDeadlineChanged: _onUserDeadlineChanged,
+                      onRecurrenceChanged: _onUserRecurrenceChanged,
+                      onImportantChanged: _onUserImportantChanged,
+                      onUrgentChanged: _onUserUrgentChanged,
+                      actionInsetBuilder: _quickAddActionInset,
+                      fallbackDate: widget.prefilledDateTime,
+                    ),
                   );
                 },
               ),
@@ -185,95 +229,6 @@ class _QuickAddModalState extends State<QuickAddModal>
         );
       },
     );
-  }
-
-  Widget _buildModalContent({required bool isSheet}) {
-    final responsive = ResponsiveHelper.spec(context);
-    final double maxWidth =
-        responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
-    final double maxHeight = responsive.quickAddMaxHeight;
-    final LocationAutocompleteHelper locationHelper = widget.locationHelper;
-    final BorderRadius borderRadius = isSheet
-        ? const BorderRadius.vertical(top: Radius.circular(24))
-        : BorderRadius.circular(calendarBorderRadius);
-    final Color background = isSheet
-        ? Theme.of(context).colorScheme.surface
-        : calendarContainerColor;
-    final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
-    Widget shell = Container(
-      margin: isSheet ? EdgeInsets.zero : responsive.modalMargin,
-      constraints: BoxConstraints(
-        maxWidth: isSheet ? double.infinity : maxWidth,
-        maxHeight: maxHeight,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: borderRadius,
-        boxShadow: boxShadow,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: borderRadius,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            _buildHeader(),
-
-            // Form content
-            Flexible(
-              child: SingleChildScrollView(
-                padding: responsive.contentPadding,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.manual,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildTaskNameInput(locationHelper),
-                    const SizedBox(height: calendarGutterMd),
-                    _buildDescriptionInput(),
-                    const SizedBox(height: calendarGutterMd),
-                    _buildLocationField(locationHelper),
-                    const SizedBox(height: calendarGutterMd),
-                    _buildPriorityToggles(),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    _buildScheduleSection(),
-                    const SizedBox(height: calendarGutterMd),
-                    _buildDeadlineField(),
-                    const TaskSectionDivider(
-                      verticalPadding: calendarGutterMd,
-                    ),
-                    _buildRecurrenceSection(),
-                  ],
-                ),
-              ),
-            ),
-
-            // Actions
-            AnimatedPadding(
-              duration: baseAnimationDuration,
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.only(
-                bottom: _quickAddActionInset(context),
-              ),
-              child: SafeArea(
-                top: false,
-                child: _buildActions(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (isSheet) {
-      return ClipRRect(
-        borderRadius: borderRadius,
-        child: shell,
-      );
-    }
-    return shell;
   }
 
   double _quickAddActionInset(BuildContext context) {
@@ -314,50 +269,6 @@ class _QuickAddModalState extends State<QuickAddModal>
         _titleValidationMessage == TaskTitleValidation.requiredMessage) {
       _setTitleValidationMessage(null);
     }
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterLg,
-        vertical: calendarGutterMd,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.add_task,
-            color: calendarTitleColor,
-            size: 20,
-          ),
-          const SizedBox(width: calendarGutterSm),
-          Text(
-            'Add Task',
-            style: calendarTitleTextStyle.copyWith(fontSize: 18),
-          ),
-          const Spacer(),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _dismissModal,
-              borderRadius: BorderRadius.circular(4),
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(
-                  Icons.close,
-                  color: calendarSubtitleColor,
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _handleTaskNameChanged(String value) {
@@ -561,205 +472,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     _priorityLocked = false;
   }
 
-  Widget _buildTaskNameInput(LocationAutocompleteHelper helper) {
-    const padding = EdgeInsets.symmetric(
-      horizontal: calendarGutterMd,
-      vertical: calendarGutterMd,
-    );
-    final field = Focus(
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.enter) {
-          if (_taskNameController.text.trim().isNotEmpty) {
-            _submitTask();
-          }
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: TaskTextField(
-        controller: _taskNameController,
-        focusNode: _taskNameFocusNode,
-        autofocus: true,
-        labelText: 'Task name *',
-        hintText: 'Task name',
-        borderRadius: calendarBorderRadius,
-        focusBorderColor: calendarPrimaryColor,
-        textCapitalization: TextCapitalization.sentences,
-        contentPadding: padding,
-        onChanged: _handleTaskNameChanged,
-        errorText: _titleValidationMessage,
-      ),
-    );
-
-    final suggestionField = LocationInlineSuggestion(
-      controller: _taskNameController,
-      helper: helper,
-      contentPadding: padding,
-      textStyle: const TextStyle(
-        fontSize: 14,
-        color: calendarTitleColor,
-      ),
-      suggestionColor: calendarSubtitleColor,
-      child: field,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        suggestionField,
-        TaskFieldCharacterHint(controller: _taskNameController),
-      ],
-    );
-  }
-
-  Widget _buildDescriptionInput() {
-    return TaskDescriptionField(
-      controller: _descriptionController,
-      hintText: 'Description (optional)',
-      borderRadius: calendarBorderRadius,
-      focusBorderColor: calendarPrimaryColor,
-      textCapitalization: TextCapitalization.sentences,
-    );
-  }
-
-  Widget _buildPriorityToggles() {
-    return AnimatedBuilder(
-      animation: _formController,
-      builder: (context, _) {
-        return TaskPriorityToggles(
-          isImportant: _formController.isImportant,
-          isUrgent: _formController.isUrgent,
-          spacing: 10,
-          onImportantChanged: _onUserImportantChanged,
-          onUrgentChanged: _onUserUrgentChanged,
-        );
-      },
-    );
-  }
-
-  Widget _buildLocationField(LocationAutocompleteHelper helper) {
-    return TaskLocationField(
-      controller: _locationController,
-      hintText: 'Location (optional)',
-      borderRadius: calendarBorderRadius,
-      focusBorderColor: calendarPrimaryColor,
-      textCapitalization: TextCapitalization.words,
-      onChanged: _handleLocationEdited,
-      autocomplete: helper,
-    );
-  }
-
-  Widget _buildScheduleSection() {
-    return AnimatedBuilder(
-      animation: _formController,
-      builder: (context, _) {
-        return TaskScheduleSection(
-          title: 'Schedule',
-          headerStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          spacing: calendarGutterSm,
-          start: _formController.startTime,
-          end: _formController.endTime,
-          onStartChanged: _onUserStartChanged,
-          onEndChanged: _onUserEndChanged,
-          onClear: _onUserScheduleCleared,
-        );
-      },
-    );
-  }
-
-  Widget _buildDeadlineField() {
-    return AnimatedBuilder(
-      animation: _formController,
-      builder: (context, _) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TaskSectionHeader(
-              title: 'Deadline',
-              textStyle: calendarSubtitleTextStyle.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: calendarGutterSm),
-            DeadlinePickerField(
-              value: _formController.deadline,
-              onChanged: _onUserDeadlineChanged,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildRecurrenceSection() {
-    return AnimatedBuilder(
-      animation: _formController,
-      builder: (context, _) {
-        final fallbackWeekday = _formController.startTime?.weekday ??
-            widget.prefilledDateTime?.weekday ??
-            DateTime.now().weekday;
-        return TaskRecurrenceSection(
-          title: 'Repeat',
-          headerStyle: calendarSubtitleTextStyle.copyWith(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          spacing: calendarGutterSm,
-          value: _formController.recurrence,
-          fallbackWeekday: fallbackWeekday,
-          spacingConfig: calendarRecurrenceSpacingCompact,
-          onChanged: _onUserRecurrenceChanged,
-        );
-      },
-    );
-  }
-
-  Widget _buildActions() {
-    return AnimatedBuilder(
-      animation: _formController,
-      builder: (context, _) {
-        return ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _taskNameController,
-          builder: (context, value, __) {
-            final bool canSubmit = value.text.trim().isNotEmpty;
-            return TaskFormActionsRow(
-              includeTopBorder: true,
-              padding: calendarPaddingXl,
-              gap: calendarGutterMd,
-              children: [
-                Expanded(
-                  child: TaskSecondaryButton(
-                    label: 'Cancel',
-                    onPressed:
-                        _formController.isSubmitting ? null : _dismissModal,
-                    foregroundColor: calendarSubtitleColor,
-                    hoverForegroundColor: calendarPrimaryColor,
-                    hoverBackgroundColor:
-                        calendarPrimaryColor.withValues(alpha: 0.06),
-                  ),
-                ),
-                Expanded(
-                  child: TaskPrimaryButton(
-                    label: 'Add Task',
-                    onPressed: canSubmit && !_formController.isSubmitting
-                        ? _submitTask
-                        : null,
-                    isBusy: _formController.isSubmitting,
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   void _submitTask() {
     if (_formController.isSubmitting) {
       return;
@@ -840,6 +552,531 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
 
     await popSelfIfPossible();
+  }
+}
+
+class _QuickAddModalContent extends StatelessWidget {
+  const _QuickAddModalContent({
+    required this.isSheet,
+    required this.formController,
+    required this.taskNameController,
+    required this.descriptionController,
+    required this.locationController,
+    required this.taskNameFocusNode,
+    required this.titleValidationMessage,
+    required this.locationHelper,
+    required this.onTaskNameChanged,
+    required this.onTaskSubmit,
+    required this.onClose,
+    required this.onLocationChanged,
+    required this.onStartChanged,
+    required this.onEndChanged,
+    required this.onScheduleCleared,
+    required this.onDeadlineChanged,
+    required this.onRecurrenceChanged,
+    required this.onImportantChanged,
+    required this.onUrgentChanged,
+    required this.actionInsetBuilder,
+    required this.fallbackDate,
+  });
+
+  final bool isSheet;
+  final QuickAddController formController;
+  final TextEditingController taskNameController;
+  final TextEditingController descriptionController;
+  final TextEditingController locationController;
+  final FocusNode taskNameFocusNode;
+  final String? titleValidationMessage;
+  final LocationAutocompleteHelper locationHelper;
+  final ValueChanged<String> onTaskNameChanged;
+  final VoidCallback onTaskSubmit;
+  final VoidCallback onClose;
+  final ValueChanged<String> onLocationChanged;
+  final ValueChanged<DateTime?> onStartChanged;
+  final ValueChanged<DateTime?> onEndChanged;
+  final VoidCallback onScheduleCleared;
+  final ValueChanged<DateTime?> onDeadlineChanged;
+  final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
+  final ValueChanged<bool> onImportantChanged;
+  final ValueChanged<bool> onUrgentChanged;
+  final double Function(BuildContext context) actionInsetBuilder;
+  final DateTime? fallbackDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = ResponsiveHelper.spec(context);
+    final double maxWidth =
+        responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
+    final double maxHeight = responsive.quickAddMaxHeight;
+    final BorderRadius borderRadius = isSheet
+        ? const BorderRadius.vertical(top: Radius.circular(24))
+        : BorderRadius.circular(calendarBorderRadius);
+    final Color background = isSheet
+        ? Theme.of(context).colorScheme.surface
+        : calendarContainerColor;
+    final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
+    Widget shell = Container(
+      margin: isSheet ? EdgeInsets.zero : responsive.modalMargin,
+      constraints: BoxConstraints(
+        maxWidth: isSheet ? double.infinity : maxWidth,
+        maxHeight: maxHeight,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: borderRadius,
+        boxShadow: boxShadow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: borderRadius,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _QuickAddHeader(onClose: onClose),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: responsive.contentPadding,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.manual,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _QuickAddTaskNameField(
+                      controller: taskNameController,
+                      focusNode: taskNameFocusNode,
+                      helper: locationHelper,
+                      validationMessage: titleValidationMessage,
+                      onChanged: onTaskNameChanged,
+                      onSubmit: onTaskSubmit,
+                    ),
+                    const SizedBox(height: calendarGutterMd),
+                    _QuickAddDescriptionField(
+                      controller: descriptionController,
+                    ),
+                    const SizedBox(height: calendarGutterMd),
+                    _QuickAddLocationField(
+                      controller: locationController,
+                      helper: locationHelper,
+                      onChanged: onLocationChanged,
+                    ),
+                    const SizedBox(height: calendarGutterMd),
+                    _QuickAddPriorityToggles(
+                      formController: formController,
+                      onImportantChanged: onImportantChanged,
+                      onUrgentChanged: onUrgentChanged,
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    _QuickAddScheduleSection(
+                      formController: formController,
+                      onStartChanged: onStartChanged,
+                      onEndChanged: onEndChanged,
+                      onClear: onScheduleCleared,
+                    ),
+                    const SizedBox(height: calendarGutterMd),
+                    _QuickAddDeadlineSection(
+                      formController: formController,
+                      onChanged: onDeadlineChanged,
+                    ),
+                    const TaskSectionDivider(
+                      verticalPadding: calendarGutterMd,
+                    ),
+                    _QuickAddRecurrenceSection(
+                      formController: formController,
+                      onChanged: onRecurrenceChanged,
+                      fallbackDate: fallbackDate,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            AnimatedPadding(
+              duration: baseAnimationDuration,
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(
+                bottom: actionInsetBuilder(context),
+              ),
+              child: SafeArea(
+                top: false,
+                child: _QuickAddActions(
+                  formController: formController,
+                  taskNameController: taskNameController,
+                  onCancel: onClose,
+                  onSubmit: onTaskSubmit,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (isSheet) {
+      return ClipRRect(
+        borderRadius: borderRadius,
+        child: shell,
+      );
+    }
+    return shell;
+  }
+}
+
+class _QuickAddHeader extends StatelessWidget {
+  const _QuickAddHeader({
+    required this.onClose,
+  });
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterLg,
+        vertical: calendarGutterMd,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: calendarBorderColor, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.add_task,
+            color: calendarTitleColor,
+            size: 20,
+          ),
+          const SizedBox(width: calendarGutterSm),
+          Text(
+            'Add Task',
+            style: calendarTitleTextStyle.copyWith(fontSize: 18),
+          ),
+          const Spacer(),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onClose,
+              borderRadius: BorderRadius.circular(4),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(
+                  Icons.close,
+                  color: calendarSubtitleColor,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAddTaskNameField extends StatelessWidget {
+  const _QuickAddTaskNameField({
+    required this.controller,
+    required this.focusNode,
+    required this.helper,
+    required this.validationMessage,
+    required this.onChanged,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final LocationAutocompleteHelper helper;
+  final String? validationMessage;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    const padding = EdgeInsets.symmetric(
+      horizontal: calendarGutterMd,
+      vertical: calendarGutterMd,
+    );
+    final field = Focus(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.enter) {
+          if (controller.text.trim().isNotEmpty) {
+            onSubmit();
+          }
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: TaskTextField(
+        controller: controller,
+        focusNode: focusNode,
+        autofocus: true,
+        labelText: 'Task name *',
+        hintText: 'Task name',
+        borderRadius: calendarBorderRadius,
+        focusBorderColor: calendarPrimaryColor,
+        textCapitalization: TextCapitalization.sentences,
+        contentPadding: padding,
+        onChanged: onChanged,
+        errorText: validationMessage,
+      ),
+    );
+
+    final suggestionField = LocationInlineSuggestion(
+      controller: controller,
+      helper: helper,
+      contentPadding: padding,
+      textStyle: const TextStyle(
+        fontSize: 14,
+        color: calendarTitleColor,
+      ),
+      suggestionColor: calendarSubtitleColor,
+      child: field,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        suggestionField,
+        TaskFieldCharacterHint(controller: controller),
+      ],
+    );
+  }
+}
+
+class _QuickAddDescriptionField extends StatelessWidget {
+  const _QuickAddDescriptionField({
+    required this.controller,
+  });
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskDescriptionField(
+      controller: controller,
+      hintText: 'Description (optional)',
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
+      textCapitalization: TextCapitalization.sentences,
+    );
+  }
+}
+
+class _QuickAddLocationField extends StatelessWidget {
+  const _QuickAddLocationField({
+    required this.controller,
+    required this.helper,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final LocationAutocompleteHelper helper;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskLocationField(
+      controller: controller,
+      hintText: 'Location (optional)',
+      borderRadius: calendarBorderRadius,
+      focusBorderColor: calendarPrimaryColor,
+      textCapitalization: TextCapitalization.words,
+      onChanged: onChanged,
+      autocomplete: helper,
+    );
+  }
+}
+
+class _QuickAddPriorityToggles extends StatelessWidget {
+  const _QuickAddPriorityToggles({
+    required this.formController,
+    required this.onImportantChanged,
+    required this.onUrgentChanged,
+  });
+
+  final QuickAddController formController;
+  final ValueChanged<bool> onImportantChanged;
+  final ValueChanged<bool> onUrgentChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: formController,
+      builder: (context, _) {
+        return TaskPriorityToggles(
+          isImportant: formController.isImportant,
+          isUrgent: formController.isUrgent,
+          spacing: 10,
+          onImportantChanged: onImportantChanged,
+          onUrgentChanged: onUrgentChanged,
+        );
+      },
+    );
+  }
+}
+
+class _QuickAddScheduleSection extends StatelessWidget {
+  const _QuickAddScheduleSection({
+    required this.formController,
+    required this.onStartChanged,
+    required this.onEndChanged,
+    required this.onClear,
+  });
+
+  final QuickAddController formController;
+  final ValueChanged<DateTime?> onStartChanged;
+  final ValueChanged<DateTime?> onEndChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: formController,
+      builder: (context, _) {
+        return TaskScheduleSection(
+          title: 'Schedule',
+          headerStyle: calendarSubtitleTextStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          spacing: calendarGutterSm,
+          start: formController.startTime,
+          end: formController.endTime,
+          onStartChanged: onStartChanged,
+          onEndChanged: onEndChanged,
+          onClear: onClear,
+        );
+      },
+    );
+  }
+}
+
+class _QuickAddDeadlineSection extends StatelessWidget {
+  const _QuickAddDeadlineSection({
+    required this.formController,
+    required this.onChanged,
+  });
+
+  final QuickAddController formController;
+  final ValueChanged<DateTime?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: formController,
+      builder: (context, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TaskSectionHeader(
+              title: 'Deadline',
+              textStyle: calendarSubtitleTextStyle.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: calendarGutterSm),
+            DeadlinePickerField(
+              value: formController.deadline,
+              onChanged: onChanged,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _QuickAddRecurrenceSection extends StatelessWidget {
+  const _QuickAddRecurrenceSection({
+    required this.formController,
+    required this.onChanged,
+    required this.fallbackDate,
+  });
+
+  final QuickAddController formController;
+  final ValueChanged<RecurrenceFormValue> onChanged;
+  final DateTime? fallbackDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: formController,
+      builder: (context, _) {
+        final fallbackWeekday = formController.startTime?.weekday ??
+            fallbackDate?.weekday ??
+            DateTime.now().weekday;
+        return TaskRecurrenceSection(
+          title: 'Repeat',
+          headerStyle: calendarSubtitleTextStyle.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          spacing: calendarGutterSm,
+          value: formController.recurrence,
+          fallbackWeekday: fallbackWeekday,
+          spacingConfig: calendarRecurrenceSpacingCompact,
+          onChanged: onChanged,
+        );
+      },
+    );
+  }
+}
+
+class _QuickAddActions extends StatelessWidget {
+  const _QuickAddActions({
+    required this.formController,
+    required this.taskNameController,
+    required this.onCancel,
+    required this.onSubmit,
+  });
+
+  final QuickAddController formController;
+  final TextEditingController taskNameController;
+  final VoidCallback onCancel;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: formController,
+      builder: (context, _) {
+        return ValueListenableBuilder<TextEditingValue>(
+          valueListenable: taskNameController,
+          builder: (context, value, __) {
+            final bool canSubmit = value.text.trim().isNotEmpty;
+            return TaskFormActionsRow(
+              includeTopBorder: true,
+              padding: calendarPaddingXl,
+              gap: calendarGutterMd,
+              children: [
+                Expanded(
+                  child: TaskSecondaryButton(
+                    label: 'Cancel',
+                    onPressed: formController.isSubmitting ? null : onCancel,
+                    foregroundColor: calendarSubtitleColor,
+                    hoverForegroundColor: calendarPrimaryColor,
+                    hoverBackgroundColor:
+                        calendarPrimaryColor.withValues(alpha: 0.06),
+                  ),
+                ),
+                Expanded(
+                  child: TaskPrimaryButton(
+                    label: 'Add Task',
+                    onPressed: canSubmit && !formController.isSubmitting
+                        ? onSubmit
+                        : null,
+                    isBusy: formController.isSubmitting,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
 

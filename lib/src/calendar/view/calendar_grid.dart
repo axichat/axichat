@@ -589,7 +589,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _taskInteractionController.setDragPointerNormalized(normalizedPointer);
     }
     _setDragFeedbackHint(
-      _buildDragHint(
+      _dragFeedbackHint(
         width: width,
         pointerFraction: shouldCenter ? 0.5 : null,
         anchorDx:
@@ -608,7 +608,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.setActiveDragWidth(width);
   }
 
-  DragFeedbackHint _buildDragHint({
+  DragFeedbackHint _dragFeedbackHint({
     required double width,
     double? pointerFraction,
     double? anchorDx,
@@ -800,7 +800,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       );
     }
     _setDragFeedbackHint(
-      _buildDragHint(
+      _dragFeedbackHint(
         width: bounds.width,
         pointerFraction: 0.5,
         anchorDx: _taskInteractionController.dragAnchorDx,
@@ -1174,7 +1174,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
               final CalendarTask? latest = state.model.tasks[displayTask.id] ??
                   state.model.tasks[displayTask.baseId];
               final CalendarTask resolved = latest ?? displayTask;
-              return _buildTaskContextActions(
+              return _taskContextActions(
                 task: resolved,
                 state: state,
                 onTaskDeleted: () => Navigator.of(sheetContext).maybePop(),
@@ -1280,274 +1280,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _updateCompactState(context);
     return ResponsiveHelper.layoutBuilder(
       context,
-      mobile: _buildMobileGrid(),
-      tablet: _buildTabletGrid(),
-      desktop: _buildDesktopGrid(),
-    );
-  }
-
-  Widget _buildMobileGrid() {
-    return _buildWeekView(compact: true);
-  }
-
-  Widget _buildTabletGrid() {
-    return _buildWeekView(
-      compact: true,
-      allowWeekViewInCompact: true,
-    );
-  }
-
-  Widget _buildDesktopGrid() {
-    return _buildWeekView(compact: false);
-  }
-
-  Widget _buildWeekView({
-    required bool compact,
-    bool allowWeekViewInCompact = false,
-  }) {
-    return AnimatedBuilder(
-      animation: _taskPopoverController,
-      builder: (context, _) {
-        return AnimatedBuilder(
-          animation: _taskInteractionController,
-          builder: (context, __) {
-            final weekDates = _getWeekDates(widget.state.selectedDate);
-            final bool isWeekView =
-                widget.state.viewMode == CalendarView.week &&
-                    (!compact || allowWeekViewInCompact);
-            final headerDates =
-                isWeekView ? weekDates : [widget.state.selectedDate];
-            final responsive = ResponsiveHelper.spec(context);
-            final double horizontalPadding =
-                compact ? 0 : responsive.gridHorizontalPadding;
-
-            final gridBody = LayoutBuilder(
-              builder: (context, outerConstraints) {
-                final double viewportWidth = outerConstraints.maxWidth;
-                double? compactWeekDayWidth = (compact && isWeekView)
-                    ? ResponsiveHelper.dayColumnWidth(
-                        context,
-                        fallback: calendarCompactDayColumnWidth,
-                      )
-                    : null;
-                bool enableHorizontalScroll = false;
-
-                if (compactWeekDayWidth != null && isWeekView) {
-                  final double availableForColumns = math.max(
-                    0.0,
-                    viewportWidth - (horizontalPadding * 2) - _timeColumnWidth,
-                  );
-                  if (availableForColumns <= 0) {
-                    enableHorizontalScroll = true;
-                  }
-                  final double estimatedWidth = availableForColumns > 0
-                      ? availableForColumns / headerDates.length
-                      : compactWeekDayWidth;
-                  const double minColumnWidth = 48.0;
-                  final double clampedWidth =
-                      estimatedWidth.isFinite && estimatedWidth > 0
-                          ? estimatedWidth
-                              .clamp(minColumnWidth, compactWeekDayWidth)
-                              .toDouble()
-                          : compactWeekDayWidth;
-                  compactWeekDayWidth = clampedWidth;
-                  final bool needsScroll =
-                      estimatedWidth.isFinite && estimatedWidth > 0
-                          ? estimatedWidth < minColumnWidth
-                          : enableHorizontalScroll;
-                  enableHorizontalScroll =
-                      enableHorizontalScroll || needsScroll;
-                }
-
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: calendarBackgroundColor,
-                    borderRadius: BorderRadius.zero,
-                    border: Border(
-                      top: BorderSide(
-                        color: calendarBorderColor,
-                        width: calendarBorderStroke,
-                      ),
-                      left: BorderSide(
-                        color: calendarBorderColor,
-                        width: calendarBorderStroke,
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: horizontalPadding,
-                        ),
-                        child: _buildDayHeaders(
-                          headerDates,
-                          compact,
-                          isWeekView: isWeekView,
-                          compactWeekDayWidth: compactWeekDayWidth,
-                          horizontalScrollController: enableHorizontalScroll
-                              ? _horizontalHeaderController
-                              : null,
-                          enableHorizontalScroll: enableHorizontalScroll,
-                        ),
-                      ),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final availableHeight = constraints.maxHeight;
-                            final bool isDayView = compact ||
-                                widget.state.viewMode == CalendarView.day;
-                            _resolvedHourHeight = _resolveHourHeight(
-                              availableHeight,
-                              isDayView: isDayView,
-                            );
-                            _processViewportRequests();
-                            return Container(
-                              decoration: const BoxDecoration(
-                                color: calendarStripedSlotColor,
-                                borderRadius: BorderRadius.zero,
-                              ),
-                              child: SingleChildScrollView(
-                                key: _scrollableKey,
-                                controller: _verticalController,
-                                child: AnimatedBuilder(
-                                  animation: _viewTransitionAnimation,
-                                  builder: (context, child) {
-                                    return FadeTransition(
-                                      opacity: _viewTransitionAnimation,
-                                      child: _buildGridContent(
-                                        isWeekView,
-                                        weekDates,
-                                        compact,
-                                        compactWeekDayWidth,
-                                        enableHorizontalScroll:
-                                            enableHorizontalScroll,
-                                        horizontalScrollController:
-                                            enableHorizontalScroll
-                                                ? _horizontalGridController
-                                                : null,
-                                        hoveredSlot: _hoveredSlot,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-
-            return FocusableActionDetector(
-              focusNode: _focusNode,
-              autofocus: true,
-              shortcuts: _zoomShortcuts,
-              actions: {
-                _ZoomIntent: CallbackAction<_ZoomIntent>(
-                  onInvoke: (intent) {
-                    switch (intent.action) {
-                      case _ZoomAction.zoomIn:
-                        zoomIn();
-                        break;
-                      case _ZoomAction.zoomOut:
-                        zoomOut();
-                        break;
-                      case _ZoomAction.reset:
-                        zoomReset();
-                        break;
-                    }
-                    return null;
-                  },
-                ),
-              },
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTapDown: (_) => _focusNode.requestFocus(),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    SizedBox.expand(child: gridBody),
-                    Positioned(
-                      bottom: compact ? 12 : 24,
-                      right: compact ? 8 : 16,
-                      child: _buildZoomControls(),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildZoomControls() {
-    final theme = ShadTheme.of(context);
-    final colors = theme.colorScheme;
-    final labelStyle = calendarZoomLabelTextStyle.copyWith(
-      color: colors.foreground,
-      fontFamily: theme.textTheme.small.fontFamily,
-      letterSpacing: 0.2,
-    );
-    final bool canZoomOut = _isZoomEnabled && _canZoomOut;
-    final bool canZoomIn = _isZoomEnabled && _canZoomIn;
-
-    Widget buildButton({
-      required String tooltip,
-      required IconData icon,
-      required VoidCallback? onPressed,
-    }) {
-      final button = ShadIconButton.ghost(
-        icon: Icon(icon, size: _zoomControlsIconSize),
-        padding: const EdgeInsets.all(8),
-        onPressed: onPressed,
-        enabled: onPressed != null,
-      );
-      return Tooltip(message: tooltip, child: button);
-    }
-
-    return Material(
-      elevation: _zoomControlsElevation + 1,
-      color: colors.card,
-      shadowColor: Colors.black.withValues(alpha: 0.12),
-      shape: SquircleBorder(
-        cornerRadius: 26,
-        side: BorderSide(color: colors.border),
+      mobile: _CalendarWeekView(
+        gridState: this,
+        compact: true,
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: _zoomControlsPaddingHorizontal + 4,
-          vertical: _zoomControlsPaddingVertical + 2,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            buildButton(
-              tooltip: 'Zoom out (Ctrl/Cmd + -)',
-              icon: Icons.remove,
-              onPressed: canZoomOut ? zoomOut : null,
-            ),
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: _zoomControlsLabelPaddingHorizontal + 2,
-              ),
-              child: Text(
-                _zoomLabel,
-                style: labelStyle,
-              ),
-            ),
-            buildButton(
-              tooltip: 'Zoom in (Ctrl/Cmd + +)',
-              icon: Icons.add,
-              onPressed: canZoomIn ? zoomIn : null,
-            ),
-          ],
-        ),
+      tablet: _CalendarWeekView(
+        gridState: this,
+        compact: true,
+        allowWeekViewInCompact: true,
+      ),
+      desktop: _CalendarWeekView(
+        gridState: this,
+        compact: false,
       ),
     );
   }
@@ -1594,133 +1338,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     final double hourHeight = _effectiveHourHeight(metrics);
     return (hourHeight / 60.0) * _minutesPerStep.toDouble();
-  }
-
-  Widget _buildGridContent(
-    bool isWeekView,
-    List<DateTime> weekDates,
-    bool compact,
-    double? compactWeekDayWidth, {
-    ScrollController? horizontalScrollController,
-    bool enableHorizontalScroll = false,
-    DateTime? hoveredSlot,
-  }) {
-    final bool allowHorizontalScroll =
-        enableHorizontalScroll && compactWeekDayWidth != null;
-    final responsive = ResponsiveHelper.spec(context);
-    final List<DateTime> columns =
-        isWeekView ? weekDates : <DateTime>[widget.state.selectedDate];
-    final Set<String> visibleTaskIds = <String>{};
-    _visibleTasks.clear();
-    final List<Widget> taskEntries = _buildTaskEntries(
-      columns: columns,
-      visibleTaskIds: visibleTaskIds,
-      isDayView: !isWeekView,
-    );
-
-    _cleanupTaskPopovers(visibleTaskIds);
-    _validateActivePopoverTarget(visibleTaskIds);
-
-    final List<CalendarDayColumn> columnSpecs =
-        columns.map((date) => CalendarDayColumn(date: date)).toList();
-
-    final DateTime weekStartDate = DateTime(
-      widget.state.weekStart.year,
-      widget.state.weekStart.month,
-      widget.state.weekStart.day,
-    );
-    final DateTime weekEndDate = DateTime(
-      widget.state.weekEnd.year,
-      widget.state.weekEnd.month,
-      widget.state.weekEnd.day,
-    );
-
-    final Widget renderSurface = CalendarRenderSurface(
-      key: _surfaceKey,
-      columns: columnSpecs,
-      startHour: startHour,
-      endHour: endHour,
-      zoomIndex: _zoomIndex,
-      allowDayViewZoom: _shouldUseCompactZoom,
-      weekStartDate: weekStartDate,
-      weekEndDate: weekEndDate,
-      layoutCalculator: _layoutCalculator,
-      layoutTheme: _layoutTheme,
-      controller: _surfaceController,
-      verticalScrollController: _verticalController,
-      minutesPerStep: _minutesPerStep,
-      interactionController: _taskInteractionController,
-      hoveredSlot: hoveredSlot,
-      onTap: _handleSurfaceTap,
-      dragPreview: _taskInteractionController.preview.value,
-      onDragUpdate: _handleSurfaceDragUpdate,
-      onDragEnd: _handleSurfaceDragEnd,
-      onDragExit: _handleSurfaceDragExit,
-      onDragAutoScroll: _handleAutoScrollForGlobal,
-      onDragAutoScrollStop: _stopEdgeAutoScroll,
-      isTaskDragInProgress: () =>
-          _taskInteractionController.draggingTaskId != null ||
-          _taskInteractionController.draggingTaskBaseId != null,
-      onGeometryChanged: _handleSurfaceGeometryChanged,
-      children: taskEntries,
-    );
-
-    final Widget interactiveSurface = MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onHover: _handleSurfaceHover,
-      onExit: (_) => _clearSurfaceHover(),
-      child: renderSurface,
-    );
-
-    final Widget dragAwareSurface = CalendarSurfaceDragTarget(
-      controller: _surfaceController,
-      child: interactiveSurface,
-    );
-
-    Widget surface = dragAwareSurface;
-    if (allowHorizontalScroll) {
-      final double dayWidth = compactWeekDayWidth;
-      final double totalWidth =
-          _timeColumnWidth + (dayWidth * columnSpecs.length);
-      surface = SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        controller: horizontalScrollController ?? _horizontalGridController,
-        child: SizedBox(
-          width: totalWidth,
-          child: dragAwareSurface,
-        ),
-      );
-    }
-
-    final List<Widget> gridMenuItems = _buildGridContextMenuItems();
-    final Widget menuSurface = Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: _handleGridPointerDown,
-      child: ShadContextMenu(
-        controller: _gridContextMenuController,
-        groupId: _contextMenuGroupId,
-        anchor: _contextMenuAnchor != null
-            ? ShadGlobalAnchor(_contextMenuAnchor!)
-            : null,
-        onTapOutside: (_) => _hideGridContextMenu(),
-        items: gridMenuItems,
-        child: surface,
-      ),
-    );
-
-    final Widget touchAwareSurface = GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onLongPressStart:
-          _shouldEnableTouchGridMenu ? _handleGridLongPressStart : null,
-      child: menuSurface,
-    );
-
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 0 : responsive.gridHorizontalPadding,
-      ),
-      child: touchAwareSurface,
-    );
   }
 
   void _handleSurfaceTap(CalendarSurfaceTapDetails details) {
@@ -1792,11 +1409,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _contextMenuSlot = slot;
       _contextMenuAnchor = globalPosition;
     });
-    if (_buildGridContextMenuItems().isEmpty) {
+    if (!_hasGridContextMenuItems()) {
       _hideGridContextMenu();
       return;
     }
     _gridContextMenuController.show();
+  }
+
+  bool _hasGridContextMenuItems() {
+    return _taskInteractionController.clipboardTemplate != null ||
+        widget.onEmptySlotTapped != null;
   }
 
   void _handleSurfaceHover(PointerHoverEvent event) {
@@ -1861,45 +1483,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       });
     }
     _gridContextMenuController.hide();
-  }
-
-  List<Widget> _buildGridContextMenuItems() {
-    final DateTime? slot = _contextMenuSlot;
-    if (slot == null) {
-      return const <Widget>[];
-    }
-
-    final List<Widget> items = <Widget>[];
-    final CalendarTask? clipboardTemplate =
-        _taskInteractionController.clipboardTemplate;
-
-    if (clipboardTemplate != null) {
-      items.add(
-        ShadContextMenuItem(
-          leading: const Icon(Icons.content_paste_outlined),
-          onPressed: () {
-            _hideGridContextMenu();
-            _pasteTask(slot);
-          },
-          child: const Text('Paste Task Here'),
-        ),
-      );
-    }
-
-    if (widget.onEmptySlotTapped != null) {
-      items.add(
-        ShadContextMenuItem(
-          leading: const Icon(Icons.add_circle_outline),
-          onPressed: () {
-            _hideGridContextMenu();
-            widget.onEmptySlotTapped?.call(slot, Offset.zero);
-          },
-          child: const Text('Quick Add Task'),
-        ),
-      );
-    }
-
-    return items;
   }
 
   void _handleSurfaceDragUpdate(
@@ -1998,50 +1581,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
   }
 
-  List<Widget> _buildTaskEntries({
-    required List<DateTime> columns,
-    required Set<String> visibleTaskIds,
-    required bool isDayView,
-  }) {
-    final List<Widget> entries = <Widget>[];
-    final CalendarLayoutMetrics? resolvedMetrics =
-        _surfaceController.resolvedMetrics;
-    final double resolvedHourHeight = _effectiveHourHeight(resolvedMetrics);
-    final double stepHeight = _effectiveStepHeight(resolvedMetrics);
-
-    for (final DateTime date in columns) {
-      final List<CalendarTask> tasks = _getTasksForDay(date);
-      for (final CalendarTask task in tasks) {
-        _visibleTasks[task.id] = task;
-        visibleTaskIds.add(task.id);
-
-        final CalendarTaskEntryBindings bindings = _createTaskBindings(
-          task: task,
-          stepHeight: stepHeight,
-          hourHeight: resolvedHourHeight,
-        );
-
-        final DateTime columnDate = DateTime(date.year, date.month, date.day);
-        final String keyId =
-            'calendar-task-${task.id}-${columnDate.toIso8601String()}';
-        entries.add(
-          CalendarSurfaceTaskEntry(
-            key: ValueKey<String>(keyId),
-            task: task,
-            bindings: bindings,
-            child: CalendarTaskSurface(
-              task: task,
-              isDayView: isDayView,
-              bindings: bindings,
-            ),
-          ),
-        );
-      }
-    }
-
-    return entries;
-  }
-
   CalendarTaskEntryBindings _createTaskBindings({
     required CalendarTask task,
     required double stepHeight,
@@ -2056,7 +1595,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       splitPreviewAnimationDuration: _layoutTheme.splitPreviewAnimationDuration,
       contextMenuGroupId: _contextMenuGroupId,
       contextMenuBuilderFactory: enableContextMenus
-          ? (menuController) => _buildTaskContextMenuBuilder(
+          ? (menuController) => _taskContextMenuBuilder(
                 task: task,
                 menuController: menuController,
               )
@@ -2066,7 +1605,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       interactionController: _taskInteractionController,
       dragFeedbackHint: _taskInteractionController.feedbackHint,
       cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
-      callbacks: _buildTaskCallbacks(task),
+      callbacks: _taskCallbacks(task),
       geometryProvider: _surfaceController.geometryForTask,
       globalRectProvider: _surfaceController.globalRectForTask,
       stepHeight: stepHeight,
@@ -2080,7 +1619,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  CalendarTaskTileCallbacks _buildTaskCallbacks(CalendarTask task) {
+  CalendarTaskTileCallbacks _taskCallbacks(CalendarTask task) {
     return CalendarTaskTileCallbacks(
       onResizePreview: _handleResizePreview,
       onResizeEnd: _handleResizeCommit,
@@ -2402,126 +1941,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     overlayState.insert(_activePopoverEntry!);
     _armPopoverDismissQueue();
-  }
-
-  Widget _buildDayHeaders(
-    List<DateTime> weekDates,
-    bool compact, {
-    required bool isWeekView,
-    double? compactWeekDayWidth,
-    ScrollController? horizontalScrollController,
-    bool enableHorizontalScroll = false,
-  }) {
-    final bool useScrollableWeekHeader =
-        enableHorizontalScroll && compactWeekDayWidth != null;
-    final double devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-
-    return Container(
-      height: calendarWeekHeaderHeight,
-      decoration: const BoxDecoration(
-        color: calendarBackgroundColor,
-        border: Border(
-          bottom: BorderSide(
-              color: calendarBorderColor, width: calendarBorderStroke),
-        ),
-        borderRadius: BorderRadius.zero, // Remove rounded corners
-      ),
-      child: Row(
-        children: [
-          CustomPaint(
-            painter: _TimeHeaderPainter(
-              borderColor: calendarBorderDarkColor,
-              strokeWidth: calendarBorderStroke,
-              devicePixelRatio: devicePixelRatio,
-            ),
-            child: Container(
-              width: _timeColumnWidth,
-              color: calendarSidebarBackgroundColor,
-            ),
-          ),
-          if (useScrollableWeekHeader)
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                controller: horizontalScrollController,
-                child: Row(
-                  children: weekDates.asMap().entries.map((entry) {
-                    final date = entry.value;
-                    return SizedBox(
-                      width: compactWeekDayWidth,
-                      child: _buildDayHeader(
-                        date,
-                        compact,
-                        devicePixelRatio: devicePixelRatio,
-                        showRightDivider:
-                            entry.key != weekDates.length - 1 || !isWeekView,
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: Row(
-                children: weekDates.asMap().entries.map((entry) {
-                  final date = entry.value;
-                  return Expanded(
-                    child: _buildDayHeader(
-                      date,
-                      compact,
-                      devicePixelRatio: devicePixelRatio,
-                      showRightDivider:
-                          entry.key != weekDates.length - 1 || !isWeekView,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDayHeader(
-    DateTime date,
-    bool compact, {
-    required double devicePixelRatio,
-    required bool showRightDivider,
-  }) {
-    final isToday = _isToday(date);
-
-    return InkWell(
-      onTap: widget.state.viewMode == CalendarView.week
-          ? () => _selectDateAndSwitchToDay(date)
-          : null,
-      hoverColor: calendarSidebarBackgroundColor,
-      child: CustomPaint(
-        painter: _DayHeaderDividerPainter(
-          devicePixelRatio: devicePixelRatio,
-          strokeWidth: calendarBorderStroke,
-          color: calendarBorderDarkColor,
-          drawRightBorder: showRightDivider,
-        ),
-        child: Container(
-          color: isToday
-              ? calendarPrimaryColor.withValues(
-                  alpha: calendarDayHeaderHighlightOpacity)
-              : calendarBackgroundColor,
-          child: Center(
-            child: Text(
-              '${_getDayOfWeekShort(date).substring(0, 3)} ${date.day}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isToday ? calendarPrimaryColor : calendarTitleColor,
-                letterSpacing: calendarDayHeaderLetterSpacing,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   void _handleResizePreview(CalendarTask task) {
@@ -2893,7 +2312,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  List<TaskContextAction> _buildTaskContextActions({
+  List<TaskContextAction> _taskContextActions({
     required CalendarTask task,
     required CalendarState state,
     VoidCallback? onTaskDeleted,
@@ -3102,13 +2521,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     return stripped.isEmpty ? label : stripped;
   }
 
-  TaskContextMenuBuilder _buildTaskContextMenuBuilder({
+  TaskContextMenuBuilder _taskContextMenuBuilder({
     required CalendarTask task,
     required ShadPopoverController menuController,
   }) {
     return (context, request) {
       final ThemeData theme = Theme.of(context);
-      final List<TaskContextAction> actions = _buildTaskContextActions(
+      final List<TaskContextAction> actions = _taskContextActions(
         task: task,
         state: widget.state,
       );
@@ -3275,6 +2694,682 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _lastHandledFocusToken = request.token;
     _pendingFocusRequest = request;
     _fulfillFocusRequestIfReady();
+  }
+}
+
+class _CalendarWeekView extends StatelessWidget {
+  const _CalendarWeekView({
+    required this.gridState,
+    required this.compact,
+    this.allowWeekViewInCompact = false,
+  });
+
+  final _CalendarGridState gridState;
+  final bool compact;
+  final bool allowWeekViewInCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: gridState._taskPopoverController,
+      builder: (context, _) {
+        return AnimatedBuilder(
+          animation: gridState._taskInteractionController,
+          builder: (context, __) {
+            final weekDates =
+                gridState._getWeekDates(gridState.widget.state.selectedDate);
+            final bool isWeekView =
+                gridState.widget.state.viewMode == CalendarView.week &&
+                    (!compact || allowWeekViewInCompact);
+            final headerDates =
+                isWeekView ? weekDates : [gridState.widget.state.selectedDate];
+            final responsive = ResponsiveHelper.spec(context);
+            final double horizontalPadding =
+                compact ? 0 : responsive.gridHorizontalPadding;
+
+            final gridBody = LayoutBuilder(
+              builder: (context, outerConstraints) {
+                final double viewportWidth = outerConstraints.maxWidth;
+                double? compactWeekDayWidth = (compact && isWeekView)
+                    ? ResponsiveHelper.dayColumnWidth(
+                        context,
+                        fallback: calendarCompactDayColumnWidth,
+                      )
+                    : null;
+                bool enableHorizontalScroll = false;
+
+                if (compactWeekDayWidth != null && isWeekView) {
+                  final double availableForColumns = math.max(
+                    0.0,
+                    viewportWidth -
+                        (horizontalPadding * 2) -
+                        gridState._timeColumnWidth,
+                  );
+                  if (availableForColumns <= 0) {
+                    enableHorizontalScroll = true;
+                  }
+                  final double estimatedWidth = availableForColumns > 0
+                      ? availableForColumns / headerDates.length
+                      : compactWeekDayWidth;
+                  const double minColumnWidth = 48.0;
+                  final double clampedWidth =
+                      estimatedWidth.isFinite && estimatedWidth > 0
+                          ? estimatedWidth
+                              .clamp(minColumnWidth, compactWeekDayWidth)
+                              .toDouble()
+                          : compactWeekDayWidth;
+                  compactWeekDayWidth = clampedWidth;
+                  final bool needsScroll =
+                      estimatedWidth.isFinite && estimatedWidth > 0
+                          ? estimatedWidth < minColumnWidth
+                          : enableHorizontalScroll;
+                  enableHorizontalScroll =
+                      enableHorizontalScroll || needsScroll;
+                }
+
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: calendarBackgroundColor,
+                    borderRadius: BorderRadius.zero,
+                    border: Border(
+                      top: BorderSide(
+                        color: calendarBorderColor,
+                        width: calendarBorderStroke,
+                      ),
+                      left: BorderSide(
+                        color: calendarBorderColor,
+                        width: calendarBorderStroke,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                        ),
+                        child: _CalendarDayHeaderRow(
+                          gridState: gridState,
+                          weekDates: headerDates,
+                          compact: compact,
+                          isWeekView: isWeekView,
+                          compactWeekDayWidth: compactWeekDayWidth,
+                          enableHorizontalScroll: enableHorizontalScroll,
+                          horizontalScrollController: enableHorizontalScroll
+                              ? gridState._horizontalHeaderController
+                              : null,
+                        ),
+                      ),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final availableHeight = constraints.maxHeight;
+                            final bool isDayView = compact ||
+                                gridState.widget.state.viewMode ==
+                                    CalendarView.day;
+                            gridState._resolvedHourHeight =
+                                gridState._resolveHourHeight(
+                              availableHeight,
+                              isDayView: isDayView,
+                            );
+                            gridState._processViewportRequests();
+                            return Container(
+                              decoration: const BoxDecoration(
+                                color: calendarStripedSlotColor,
+                                borderRadius: BorderRadius.zero,
+                              ),
+                              child: SingleChildScrollView(
+                                key: gridState._scrollableKey,
+                                controller: gridState._verticalController,
+                                child: AnimatedBuilder(
+                                  animation: gridState._viewTransitionAnimation,
+                                  builder: (context, child) {
+                                    return FadeTransition(
+                                      opacity:
+                                          gridState._viewTransitionAnimation,
+                                      child: _CalendarGridContent(
+                                        gridState: gridState,
+                                        isWeekView: isWeekView,
+                                        weekDates: weekDates,
+                                        compact: compact,
+                                        compactWeekDayWidth:
+                                            compactWeekDayWidth,
+                                        enableHorizontalScroll:
+                                            enableHorizontalScroll,
+                                        horizontalScrollController:
+                                            enableHorizontalScroll
+                                                ? gridState
+                                                    ._horizontalGridController
+                                                : null,
+                                        hoveredSlot: gridState._hoveredSlot,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+
+            return FocusableActionDetector(
+              focusNode: gridState._focusNode,
+              autofocus: true,
+              shortcuts: gridState._zoomShortcuts,
+              actions: {
+                _ZoomIntent: CallbackAction<_ZoomIntent>(
+                  onInvoke: (intent) {
+                    switch (intent.action) {
+                      case _ZoomAction.zoomIn:
+                        gridState.zoomIn();
+                        break;
+                      case _ZoomAction.zoomOut:
+                        gridState.zoomOut();
+                        break;
+                      case _ZoomAction.reset:
+                        gridState.zoomReset();
+                        break;
+                    }
+                    return null;
+                  },
+                ),
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTapDown: (_) => gridState._focusNode.requestFocus(),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    SizedBox.expand(child: gridBody),
+                    Positioned(
+                      bottom: compact ? 12 : 24,
+                      right: compact ? 8 : 16,
+                      child: _CalendarZoomControls(gridState: gridState),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _CalendarGridContent extends StatelessWidget {
+  const _CalendarGridContent({
+    required this.gridState,
+    required this.isWeekView,
+    required this.weekDates,
+    required this.compact,
+    this.compactWeekDayWidth,
+    this.horizontalScrollController,
+    this.enableHorizontalScroll = false,
+    this.hoveredSlot,
+  });
+
+  final _CalendarGridState gridState;
+  final bool isWeekView;
+  final List<DateTime> weekDates;
+  final bool compact;
+  final double? compactWeekDayWidth;
+  final ScrollController? horizontalScrollController;
+  final bool enableHorizontalScroll;
+  final DateTime? hoveredSlot;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool allowHorizontalScroll =
+        enableHorizontalScroll && compactWeekDayWidth != null;
+    final responsive = ResponsiveHelper.spec(context);
+    final List<DateTime> columns = isWeekView
+        ? weekDates
+        : <DateTime>[gridState.widget.state.selectedDate];
+    final bool isDayView = !isWeekView;
+    final Set<String> visibleTaskIds = <String>{};
+    gridState._visibleTasks.clear();
+    final CalendarLayoutMetrics? resolvedMetrics =
+        gridState._surfaceController.resolvedMetrics;
+    final double resolvedHourHeight =
+        gridState._effectiveHourHeight(resolvedMetrics);
+    final double stepHeight = gridState._effectiveStepHeight(resolvedMetrics);
+    final List<Widget> taskEntries = <Widget>[];
+    for (final DateTime date in columns) {
+      final List<CalendarTask> tasks = gridState._getTasksForDay(date);
+      for (final CalendarTask task in tasks) {
+        gridState._visibleTasks[task.id] = task;
+        visibleTaskIds.add(task.id);
+
+        final CalendarTaskEntryBindings bindings =
+            gridState._createTaskBindings(
+          task: task,
+          stepHeight: stepHeight,
+          hourHeight: resolvedHourHeight,
+        );
+
+        final DateTime columnDate = DateTime(date.year, date.month, date.day);
+        final String keyId =
+            'calendar-task-${task.id}-${columnDate.toIso8601String()}';
+        taskEntries.add(
+          CalendarSurfaceTaskEntry(
+            key: ValueKey<String>(keyId),
+            task: task,
+            bindings: bindings,
+            child: CalendarTaskSurface(
+              task: task,
+              isDayView: isDayView,
+              bindings: bindings,
+            ),
+          ),
+        );
+      }
+    }
+
+    gridState._cleanupTaskPopovers(visibleTaskIds);
+    gridState._validateActivePopoverTarget(visibleTaskIds);
+
+    final List<CalendarDayColumn> columnSpecs =
+        columns.map((date) => CalendarDayColumn(date: date)).toList();
+
+    final DateTime weekStartDate = DateTime(
+      gridState.widget.state.weekStart.year,
+      gridState.widget.state.weekStart.month,
+      gridState.widget.state.weekStart.day,
+    );
+    final DateTime weekEndDate = DateTime(
+      gridState.widget.state.weekEnd.year,
+      gridState.widget.state.weekEnd.month,
+      gridState.widget.state.weekEnd.day,
+    );
+
+    final Widget renderSurface = CalendarRenderSurface(
+      key: gridState._surfaceKey,
+      columns: columnSpecs,
+      startHour: _CalendarGridState.startHour,
+      endHour: _CalendarGridState.endHour,
+      zoomIndex: gridState._zoomIndex,
+      allowDayViewZoom: gridState._shouldUseCompactZoom,
+      weekStartDate: weekStartDate,
+      weekEndDate: weekEndDate,
+      layoutCalculator: gridState._layoutCalculator,
+      layoutTheme: _CalendarGridState._layoutTheme,
+      controller: gridState._surfaceController,
+      verticalScrollController: gridState._verticalController,
+      minutesPerStep: gridState._minutesPerStep,
+      interactionController: gridState._taskInteractionController,
+      hoveredSlot: hoveredSlot,
+      onTap: gridState._handleSurfaceTap,
+      dragPreview: gridState._taskInteractionController.preview.value,
+      onDragUpdate: gridState._handleSurfaceDragUpdate,
+      onDragEnd: gridState._handleSurfaceDragEnd,
+      onDragExit: gridState._handleSurfaceDragExit,
+      onDragAutoScroll: gridState._handleAutoScrollForGlobal,
+      onDragAutoScrollStop: gridState._stopEdgeAutoScroll,
+      isTaskDragInProgress: () =>
+          gridState._taskInteractionController.draggingTaskId != null ||
+          gridState._taskInteractionController.draggingTaskBaseId != null,
+      onGeometryChanged: gridState._handleSurfaceGeometryChanged,
+      children: taskEntries,
+    );
+
+    final Widget interactiveSurface = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onHover: gridState._handleSurfaceHover,
+      onExit: (_) => gridState._clearSurfaceHover(),
+      child: renderSurface,
+    );
+
+    final Widget dragAwareSurface = CalendarSurfaceDragTarget(
+      controller: gridState._surfaceController,
+      child: interactiveSurface,
+    );
+
+    Widget surface = dragAwareSurface;
+    if (allowHorizontalScroll) {
+      final double dayWidth = compactWeekDayWidth!;
+      final double totalWidth =
+          gridState._timeColumnWidth + (dayWidth * columnSpecs.length);
+      surface = SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        controller:
+            horizontalScrollController ?? gridState._horizontalGridController,
+        child: SizedBox(
+          width: totalWidth,
+          child: dragAwareSurface,
+        ),
+      );
+    }
+
+    final Widget menuSurface = _CalendarGridContextMenu(
+      controller: gridState._gridContextMenuController,
+      groupId: _CalendarGridState._contextMenuGroupId,
+      anchor: gridState._contextMenuAnchor,
+      slot: gridState._contextMenuSlot,
+      clipboardTemplate: gridState._taskInteractionController.clipboardTemplate,
+      onPointerDown: gridState._handleGridPointerDown,
+      onHide: gridState._hideGridContextMenu,
+      onPasteTask: gridState._pasteTask,
+      onQuickAddTask: gridState.widget.onEmptySlotTapped == null
+          ? null
+          : (slot) => gridState.widget.onEmptySlotTapped!(slot, Offset.zero),
+      child: surface,
+    );
+
+    final Widget touchAwareSurface = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPressStart: gridState._shouldEnableTouchGridMenu
+          ? gridState._handleGridLongPressStart
+          : null,
+      child: menuSurface,
+    );
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 0 : responsive.gridHorizontalPadding,
+      ),
+      child: touchAwareSurface,
+    );
+  }
+}
+
+class _CalendarGridContextMenu extends StatelessWidget {
+  const _CalendarGridContextMenu({
+    required this.controller,
+    required this.groupId,
+    required this.anchor,
+    required this.slot,
+    required this.clipboardTemplate,
+    required this.onPointerDown,
+    required this.onHide,
+    required this.onPasteTask,
+    this.onQuickAddTask,
+    required this.child,
+  });
+
+  final ShadContextMenuController controller;
+  final Object groupId;
+  final Offset? anchor;
+  final DateTime? slot;
+  final CalendarTask? clipboardTemplate;
+  final ValueChanged<PointerDownEvent> onPointerDown;
+  final VoidCallback onHide;
+  final ValueChanged<DateTime> onPasteTask;
+  final ValueChanged<DateTime>? onQuickAddTask;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: onPointerDown,
+      child: ShadContextMenu(
+        controller: controller,
+        groupId: groupId,
+        anchor: anchor == null ? null : ShadGlobalAnchor(anchor!),
+        onTapOutside: (_) => onHide(),
+        items: _menuItems(),
+        child: child,
+      ),
+    );
+  }
+
+  List<Widget> _menuItems() {
+    final DateTime? targetSlot = slot;
+    if (targetSlot == null) {
+      return const <Widget>[];
+    }
+    final List<Widget> items = <Widget>[];
+    if (clipboardTemplate != null) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(Icons.content_paste_outlined),
+          onPressed: () {
+            onHide();
+            onPasteTask(targetSlot);
+          },
+          child: const Text('Paste Task Here'),
+        ),
+      );
+    }
+    if (onQuickAddTask != null) {
+      items.add(
+        ShadContextMenuItem(
+          leading: const Icon(Icons.add_circle_outline),
+          onPressed: () {
+            onHide();
+            onQuickAddTask!(targetSlot);
+          },
+          child: const Text('Quick Add Task'),
+        ),
+      );
+    }
+    return items;
+  }
+}
+
+class _CalendarDayHeaderRow extends StatelessWidget {
+  const _CalendarDayHeaderRow({
+    required this.gridState,
+    required this.weekDates,
+    required this.compact,
+    required this.isWeekView,
+    this.compactWeekDayWidth,
+    this.horizontalScrollController,
+    this.enableHorizontalScroll = false,
+  });
+
+  final _CalendarGridState gridState;
+  final List<DateTime> weekDates;
+  final bool compact;
+  final bool isWeekView;
+  final double? compactWeekDayWidth;
+  final ScrollController? horizontalScrollController;
+  final bool enableHorizontalScroll;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool useScrollableWeekHeader =
+        enableHorizontalScroll && compactWeekDayWidth != null;
+    final double devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+
+    return Container(
+      height: calendarWeekHeaderHeight,
+      decoration: const BoxDecoration(
+        color: calendarBackgroundColor,
+        border: Border(
+          bottom: BorderSide(
+            color: calendarBorderColor,
+            width: calendarBorderStroke,
+          ),
+        ),
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Row(
+        children: [
+          CustomPaint(
+            painter: _TimeHeaderPainter(
+              borderColor: calendarBorderDarkColor,
+              strokeWidth: calendarBorderStroke,
+              devicePixelRatio: devicePixelRatio,
+            ),
+            child: Container(
+              width: gridState._timeColumnWidth,
+              color: calendarSidebarBackgroundColor,
+            ),
+          ),
+          if (useScrollableWeekHeader)
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                controller: horizontalScrollController,
+                child: Row(
+                  children: weekDates.asMap().entries.map((entry) {
+                    final date = entry.value;
+                    return SizedBox(
+                      width: compactWeekDayWidth,
+                      child: _CalendarDayHeader(
+                        gridState: gridState,
+                        date: date,
+                        devicePixelRatio: devicePixelRatio,
+                        showRightDivider:
+                            entry.key != weekDates.length - 1 || !isWeekView,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: Row(
+                children: weekDates.asMap().entries.map((entry) {
+                  final date = entry.value;
+                  return Expanded(
+                    child: _CalendarDayHeader(
+                      gridState: gridState,
+                      date: date,
+                      devicePixelRatio: devicePixelRatio,
+                      showRightDivider:
+                          entry.key != weekDates.length - 1 || !isWeekView,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarDayHeader extends StatelessWidget {
+  const _CalendarDayHeader({
+    required this.gridState,
+    required this.date,
+    required this.devicePixelRatio,
+    required this.showRightDivider,
+  });
+
+  final _CalendarGridState gridState;
+  final DateTime date;
+  final double devicePixelRatio;
+  final bool showRightDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isToday = gridState._isToday(date);
+
+    return InkWell(
+      onTap: gridState.widget.state.viewMode == CalendarView.week
+          ? () => gridState._selectDateAndSwitchToDay(date)
+          : null,
+      hoverColor: calendarSidebarBackgroundColor,
+      child: CustomPaint(
+        painter: _DayHeaderDividerPainter(
+          devicePixelRatio: devicePixelRatio,
+          strokeWidth: calendarBorderStroke,
+          color: calendarBorderDarkColor,
+          drawRightBorder: showRightDivider,
+        ),
+        child: Container(
+          color: isToday
+              ? calendarPrimaryColor.withValues(
+                  alpha: calendarDayHeaderHighlightOpacity,
+                )
+              : calendarBackgroundColor,
+          child: Center(
+            child: Text(
+              '${gridState._getDayOfWeekShort(date).substring(0, 3)} ${date.day}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isToday ? calendarPrimaryColor : calendarTitleColor,
+                letterSpacing: calendarDayHeaderLetterSpacing,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarZoomControls extends StatelessWidget {
+  const _CalendarZoomControls({required this.gridState});
+
+  final _CalendarGridState gridState;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
+    final colors = theme.colorScheme;
+    final labelStyle = calendarZoomLabelTextStyle.copyWith(
+      color: colors.foreground,
+      fontFamily: theme.textTheme.small.fontFamily,
+      letterSpacing: 0.2,
+    );
+    final bool canZoomOut = gridState._isZoomEnabled && gridState._canZoomOut;
+    final bool canZoomIn = gridState._isZoomEnabled && gridState._canZoomIn;
+
+    Widget buildButton({
+      required String tooltip,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      final button = ShadIconButton.ghost(
+        icon: Icon(icon, size: gridState._zoomControlsIconSize),
+        padding: const EdgeInsets.all(8),
+        onPressed: onPressed,
+        enabled: onPressed != null,
+      );
+      return Tooltip(message: tooltip, child: button);
+    }
+
+    return Material(
+      elevation: gridState._zoomControlsElevation + 1,
+      color: colors.card,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      shape: SquircleBorder(
+        cornerRadius: 26,
+        side: BorderSide(color: colors.border),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: gridState._zoomControlsPaddingHorizontal + 4,
+          vertical: gridState._zoomControlsPaddingVertical + 2,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            buildButton(
+              tooltip: 'Zoom out (Ctrl/Cmd + -)',
+              icon: Icons.remove,
+              onPressed: canZoomOut ? gridState.zoomOut : null,
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: gridState._zoomControlsLabelPaddingHorizontal + 2,
+              ),
+              child: Text(
+                gridState._zoomLabel,
+                style: labelStyle,
+              ),
+            ),
+            buildButton(
+              tooltip: 'Zoom in (Ctrl/Cmd + +)',
+              icon: Icons.add,
+              onPressed: canZoomIn ? gridState.zoomIn : null,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -385,7 +385,7 @@ class EmailService {
       shareId = ShareTokenCodec.generateShareId();
       subjectToken = _shareTokenForShare(shareId);
       final db = await _databaseBuilder();
-      final participants = await _buildShareParticipants(
+      final participants = await _shareParticipants(
         shareId: shareId,
         chats: [deltaChat],
       );
@@ -513,7 +513,7 @@ class EmailService {
         : captionText;
     final sanitizedCaption = captionText ?? '';
 
-    final participants = await _buildShareParticipants(
+    final participants = await _shareParticipants(
       shareId: resolvedShareId,
       chats: resolvedTargets.values,
       existingParticipants: existingParticipants,
@@ -1232,7 +1232,7 @@ class EmailService {
     return resolved;
   }
 
-  Future<List<MessageParticipantData>> _buildShareParticipants({
+  Future<List<MessageParticipantData>> _shareParticipants({
     required String shareId,
     required Iterable<Chat> chats,
     Iterable<MessageParticipantData> existingParticipants = const [],

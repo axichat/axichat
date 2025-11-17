@@ -40,6 +40,12 @@ class CalendarEventWidget extends StatefulWidget {
   State<CalendarEventWidget> createState() => _CalendarEventWidgetState();
 }
 
+typedef _EventContainerBuilder = Widget Function({
+  bool isDragging,
+  bool isGhost,
+  bool interactive,
+});
+
 class _CalendarEventWidgetState extends State<CalendarEventWidget>
     with TickerProviderStateMixin {
   bool _isHovering = false;
@@ -119,262 +125,53 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
       child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) {
+          Widget containerBuilder({
+            bool isDragging = false,
+            bool isGhost = false,
+            bool interactive = true,
+          }) {
+            return _CalendarEventContainer(
+              task: widget.task,
+              eventColor: _eventColor,
+              isDragging: isDragging,
+              isGhost: isGhost,
+              interactive: interactive,
+              isHovering: _isHovering,
+              isDayView: widget.isDayView,
+              showDescription: _showDescription,
+              height: widget.height,
+              timeRange: _timeRange,
+              cursor: _getMouseCursor(interactive),
+              onHoverChanged: _onHoverChanged,
+              onTap: widget.onTap ?? _handleTap,
+              onResizeStart: _startResize,
+              onResizeUpdate: _updateResize,
+              onResizeEnd: _endResize,
+            );
+          }
+
           return Transform.scale(
             scale: _scaleAnimation.value,
-            child: _buildDraggableEvent(),
+            child: _CalendarEventDraggable(
+              task: widget.task,
+              canInteract: !widget.task.isOccurrence,
+              onDragStart: () {
+                setState(() => _isDragging = true);
+                HapticFeedback.selectionClick();
+                context.read<CalendarBloc>().add(
+                      CalendarEvent.taskDragStarted(
+                        taskId: widget.task.baseId,
+                      ),
+                    );
+              },
+              onDragEnd: (details) {
+                setState(() => _isDragging = false);
+              },
+              builder: containerBuilder,
+            ),
           );
         },
       ),
-    );
-  }
-
-  Widget _buildDraggableEvent() {
-    if (widget.task.isOccurrence) {
-      return _buildEventContainer(interactive: false);
-    }
-
-    return Draggable<CalendarTask>(
-      data: widget.task,
-      feedback: _buildEventContainer(isDragging: true),
-      childWhenDragging:
-          _buildEventContainer(isGhost: true, interactive: false),
-      onDragStarted: () {
-        setState(() => _isDragging = true);
-        HapticFeedback.selectionClick();
-        context.read<CalendarBloc>().add(
-              CalendarEvent.taskDragStarted(taskId: widget.task.baseId),
-            );
-      },
-      onDragEnd: (details) {
-        setState(() => _isDragging = false);
-      },
-      child: _buildEventContainer(),
-    );
-  }
-
-  Widget _buildEventContainer({
-    bool isDragging = false,
-    bool isGhost = false,
-    bool interactive = true,
-  }) {
-    return MouseRegion(
-      onEnter: (_) {
-        if (interactive) {
-          _onHoverChanged(true);
-        }
-      },
-      onExit: (_) {
-        if (interactive) {
-          _onHoverChanged(false);
-        }
-      },
-      cursor: _getMouseCursor(interactive),
-      child: GestureDetector(
-        onTap: widget.onTap ?? _handleTap,
-        child: AnimatedContainer(
-          duration: baseAnimationDuration,
-          curve: Curves.easeInOut,
-          decoration: BoxDecoration(
-            color: isGhost
-                ? _eventColor.withValues(alpha: 0.3)
-                : isDragging
-                    ? _eventColor.withValues(alpha: 0.9)
-                    : _eventColor,
-            borderRadius: BorderRadius.circular(6.0),
-            boxShadow: isDragging
-                ? calendarMediumShadow
-                : _isHovering
-                    ? calendarLightShadow
-                    : calendarCardShadow,
-            border: _isHovering && !isDragging
-                ? Border.all(
-                    color: Colors.white.withValues(alpha: 0.3), width: 1)
-                : null,
-          ),
-          child: Stack(
-            children: [
-              _buildEventContent(),
-              if (interactive && _isHovering && !isDragging && widget.isDayView)
-                _buildResizeHandles(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEventContent() {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: widget.height < 40 ? 6.0 : 8.0,
-        vertical: widget.height < 40 ? 4.0 : 6.0,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Priority indicator and title row
-          Row(
-            children: [
-              if (widget.task.effectivePriority != TaskPriority.none) ...[
-                Container(
-                  width: 3,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(1.5),
-                  ),
-                ),
-                const SizedBox(width: calendarInsetMd),
-              ],
-              Expanded(
-                child: Text(
-                  widget.task.title,
-                  style: TextStyle(
-                    fontSize: widget.height < 40 ? 11 : 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                    decoration: widget.task.isCompleted
-                        ? TextDecoration.lineThrough
-                        : null,
-                    letterSpacing: -0.1,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: widget.height < 40 ? 1 : 2,
-                ),
-              ),
-            ],
-          ),
-
-          // Time range
-          if (widget.height > 32 && _timeRange.isNotEmpty) ...[
-            const SizedBox(height: calendarInsetSm),
-            Text(
-              _timeRange,
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.white.withValues(alpha: 0.85),
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ],
-
-          // Description
-          if (_showDescription) ...[
-            const SizedBox(height: calendarTaskDetailGap),
-            Expanded(
-              child: Text(
-                widget.task.description!,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withValues(alpha: 0.75),
-                  fontWeight: FontWeight.w400,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 3,
-              ),
-            ),
-          ],
-
-          // Location indicator
-          if (widget.height > 45 &&
-              widget.task.location?.isNotEmpty == true) ...[
-            const SizedBox(height: calendarInsetSm),
-            Row(
-              children: [
-                Icon(
-                  Icons.location_on,
-                  size: 8,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
-                const SizedBox(width: calendarInsetSm),
-                Expanded(
-                  child: Text(
-                    widget.task.location!,
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Colors.white.withValues(alpha: 0.7),
-                      fontWeight: FontWeight.w400,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResizeHandles() {
-    if (widget.task.isOccurrence) {
-      return const SizedBox.shrink();
-    }
-
-    return Stack(
-      children: [
-        // Top resize handle - at the very edge
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 8,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeUpDown,
-            child: GestureDetector(
-              onVerticalDragStart: (_) => _startResize(ResizeDirection.top),
-              onVerticalDragUpdate: (details) =>
-                  _updateResize(details, ResizeDirection.top),
-              onVerticalDragEnd: (_) => _endResize(),
-              child: Container(
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(1.5),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // Bottom resize handle - at the very edge
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 8,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeUpDown,
-            child: GestureDetector(
-              onVerticalDragStart: (_) => _startResize(ResizeDirection.bottom),
-              onVerticalDragUpdate: (details) =>
-                  _updateResize(details, ResizeDirection.bottom),
-              onVerticalDragEnd: (_) => _endResize(),
-              child: Container(
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(1.5),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -593,6 +390,323 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
     _resizeStartTime = null;
     _resizeStartDuration = null;
     _resizeStartEnd = null;
+  }
+}
+
+class _CalendarEventDraggable extends StatelessWidget {
+  const _CalendarEventDraggable({
+    required this.task,
+    required this.canInteract,
+    required this.onDragStart,
+    required this.onDragEnd,
+    required this.builder,
+  });
+
+  final CalendarTask task;
+  final bool canInteract;
+  final VoidCallback onDragStart;
+  final void Function(DraggableDetails details) onDragEnd;
+  final _EventContainerBuilder builder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!canInteract) {
+      return builder(interactive: false);
+    }
+    return Draggable<CalendarTask>(
+      data: task,
+      feedback: builder(isDragging: true),
+      childWhenDragging: builder(isGhost: true, interactive: false),
+      onDragStarted: onDragStart,
+      onDragEnd: onDragEnd,
+      child: builder(),
+    );
+  }
+}
+
+class _CalendarEventContainer extends StatelessWidget {
+  const _CalendarEventContainer({
+    required this.task,
+    required this.eventColor,
+    required this.isDragging,
+    required this.isGhost,
+    required this.interactive,
+    required this.isHovering,
+    required this.isDayView,
+    required this.showDescription,
+    required this.height,
+    required this.timeRange,
+    required this.cursor,
+    required this.onTap,
+    required this.onHoverChanged,
+    required this.onResizeStart,
+    required this.onResizeUpdate,
+    required this.onResizeEnd,
+  });
+
+  final CalendarTask task;
+  final Color eventColor;
+  final bool isDragging;
+  final bool isGhost;
+  final bool interactive;
+  final bool isHovering;
+  final bool isDayView;
+  final bool showDescription;
+  final double height;
+  final String timeRange;
+  final MouseCursor cursor;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onHoverChanged;
+  final void Function(ResizeDirection direction) onResizeStart;
+  final void Function(DragUpdateDetails details, ResizeDirection direction)
+      onResizeUpdate;
+  final VoidCallback onResizeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        if (interactive) {
+          onHoverChanged(true);
+        }
+      },
+      onExit: (_) {
+        if (interactive) {
+          onHoverChanged(false);
+        }
+      },
+      cursor: cursor,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: baseAnimationDuration,
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            color: isGhost
+                ? eventColor.withValues(alpha: 0.3)
+                : isDragging
+                    ? eventColor.withValues(alpha: 0.9)
+                    : eventColor,
+            borderRadius: BorderRadius.circular(6.0),
+            boxShadow: isDragging
+                ? calendarMediumShadow
+                : isHovering
+                    ? calendarLightShadow
+                    : calendarCardShadow,
+            border: isHovering && !isDragging
+                ? Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
+                  )
+                : null,
+          ),
+          child: Stack(
+            children: [
+              _CalendarEventContent(
+                task: task,
+                height: height,
+                showDescription: showDescription,
+                timeRange: timeRange,
+              ),
+              if (interactive && isHovering && !isDragging && isDayView)
+                _CalendarEventResizeHandles(
+                  onResizeStart: onResizeStart,
+                  onResizeUpdate: onResizeUpdate,
+                  onResizeEnd: onResizeEnd,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarEventContent extends StatelessWidget {
+  const _CalendarEventContent({
+    required this.task,
+    required this.height,
+    required this.showDescription,
+    required this.timeRange,
+  });
+
+  final CalendarTask task;
+  final double height;
+  final bool showDescription;
+  final String timeRange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: height < 40 ? 6.0 : 8.0,
+        vertical: height < 40 ? 4.0 : 6.0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (task.effectivePriority != TaskPriority.none) ...[
+                Container(
+                  width: 3,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(1.5),
+                  ),
+                ),
+                const SizedBox(width: calendarInsetMd),
+              ],
+              Expanded(
+                child: Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: height < 40 ? 11 : 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                    decoration:
+                        task.isCompleted ? TextDecoration.lineThrough : null,
+                    letterSpacing: -0.1,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: height < 40 ? 1 : 2,
+                ),
+              ),
+            ],
+          ),
+          if (height > 32 && timeRange.isNotEmpty) ...[
+            const SizedBox(height: calendarInsetSm),
+            Text(
+              timeRange,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.85),
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+          if (showDescription && task.description != null) ...[
+            const SizedBox(height: calendarTaskDetailGap),
+            Expanded(
+              child: Text(
+                task.description!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withValues(alpha: 0.75),
+                  fontWeight: FontWeight.w400,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 3,
+              ),
+            ),
+          ],
+          if (height > 45 && task.location?.isNotEmpty == true) ...[
+            const SizedBox(height: calendarInsetSm),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on,
+                  size: 8,
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: calendarInsetSm),
+                Expanded(
+                  child: Text(
+                    task.location!,
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w400,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarEventResizeHandles extends StatelessWidget {
+  const _CalendarEventResizeHandles({
+    required this.onResizeStart,
+    required this.onResizeUpdate,
+    required this.onResizeEnd,
+  });
+
+  final void Function(ResizeDirection direction) onResizeStart;
+  final void Function(DragUpdateDetails details, ResizeDirection direction)
+      onResizeUpdate;
+  final VoidCallback onResizeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 8,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeUpDown,
+            child: GestureDetector(
+              onVerticalDragStart: (_) => onResizeStart(ResizeDirection.top),
+              onVerticalDragUpdate: (details) =>
+                  onResizeUpdate(details, ResizeDirection.top),
+              onVerticalDragEnd: (_) => onResizeEnd(),
+              child: Container(
+                color: Colors.transparent,
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 8,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeUpDown,
+            child: GestureDetector(
+              onVerticalDragStart: (_) => onResizeStart(ResizeDirection.bottom),
+              onVerticalDragUpdate: (details) =>
+                  onResizeUpdate(details, ResizeDirection.bottom),
+              onVerticalDragEnd: (_) => onResizeEnd(),
+              child: Container(
+                color: Colors.transparent,
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

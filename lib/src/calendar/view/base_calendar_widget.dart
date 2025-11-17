@@ -49,14 +49,38 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
         }
       },
       builder: (context, state) {
+        final tasks = _getTasksForSelectedDate(state);
+        final dateLabel = _formatDate(state.selectedDate, state.viewMode);
+        Future<void> handleRefresh() async {
+          context.read<T>().add(const CalendarEvent.dataChanged());
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+
         return Scaffold(
           backgroundColor: calendarBackgroundColor,
-          appBar: _buildAppBar(context, state),
+          appBar: _CalendarAppBar(
+            isGuestMode: widget.isGuestMode,
+            title: widget.isGuestMode ? 'Guest Calendar' : 'Calendar',
+            subtitle: dateLabel,
+            canPop: Navigator.canPop(context),
+            onBack:
+                Navigator.canPop(context) ? () => Navigator.pop(context) : null,
+            selectedView: state.viewMode,
+            onViewChanged: (view) {
+              context.read<T>().add(CalendarEvent.viewChanged(view: view));
+            },
+            syncButton: widget.isGuestMode
+                ? null
+                : _CalendarSyncButton(
+                    state: state,
+                    compact: true,
+                  ),
+          ),
           body: Container(
             color: calendarBackgroundColor,
             child: Column(
               children: [
-                if (widget.isGuestMode) _buildGuestBanner(),
+                if (widget.isGuestMode) const _CalendarGuestBanner(),
                 if (state.error != null)
                   Container(
                     margin: calendarPaddingXl,
@@ -79,384 +103,68 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                     margin: calendarPaddingXl,
                     child: ResponsiveHelper.layoutBuilder(
                       context,
-                      mobile: _buildMobileLayout(state),
-                      tablet: _buildTabletLayout(state),
-                      desktop: _buildDesktopLayout(state),
+                      mobile: _CalendarMobileLayout(
+                        dateLabel: dateLabel,
+                        onPrevious: () => _changeDate(-1),
+                        onNext: () => _changeDate(1),
+                        isLoading: state.isLoading,
+                        tasks: tasks,
+                        onRefresh: handleRefresh,
+                        taskBuilder: (task, isCompact) =>
+                            buildTaskTile(task, isCompact),
+                      ),
+                      tablet: _CalendarTabletLayout<T>(
+                        state: state,
+                        isLoading: state.isLoading,
+                        tasks: tasks,
+                        onRefresh: handleRefresh,
+                        taskBuilder: (task, isCompact) =>
+                            buildTaskTile(task, isCompact),
+                        onTaskDragEnd: (task, newTime) {
+                          final normalized =
+                              task.normalizedForInteraction(newTime);
+                          context.read<T>().commitTaskInteraction(normalized);
+                        },
+                        onDateSelected: (date) => context
+                            .read<T>()
+                            .add(CalendarEvent.dateSelected(date: date)),
+                        onViewChanged: (view) => context
+                            .read<T>()
+                            .add(CalendarEvent.viewChanged(view: view)),
+                      ),
+                      desktop: _CalendarDesktopLayout<T>(
+                        state: state,
+                        isLoading: state.isLoading,
+                        tasks: tasks,
+                        onRefresh: handleRefresh,
+                        taskBuilder: (task, isCompact) =>
+                            buildTaskTile(task, isCompact),
+                        onTaskDragEnd: (task, newTime) {
+                          final normalized =
+                              task.normalizedForInteraction(newTime);
+                          context.read<T>().commitTaskInteraction(normalized);
+                        },
+                        onDateSelected: (date) => context
+                            .read<T>()
+                            .add(CalendarEvent.dateSelected(date: date)),
+                        onViewChanged: (view) => context
+                            .read<T>()
+                            .add(CalendarEvent.viewChanged(view: view)),
+                        isGuestMode: widget.isGuestMode,
+                        dateLabel: dateLabel,
+                        onPrevious: () => _changeDate(-1),
+                        onNext: () => _changeDate(1),
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          floatingActionButton: _buildAddTaskFab(context),
-        );
-      },
-    );
-  }
-
-  Widget _buildGuestBanner() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: calendarSelectedDayColor,
-        border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
-        ),
-      ),
-      padding: calendarMarginMedium,
-      child: const Row(
-        children: [
-          Icon(
-            Icons.info_outline,
-            size: 20,
-            color: calendarSubtitleColor,
-          ),
-          SizedBox(width: 8),
-          Text(
-            'Guest Mode - No Sync',
-            style: calendarSubtitleTextStyle,
-          ),
-        ],
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(BuildContext context, CalendarState state) {
-    final colors = context.colorScheme;
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(80),
-      child: Container(
-        decoration: BoxDecoration(
-          color: colors.background,
-          border: Border(
-            bottom: BorderSide(color: colors.border),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0F000000),
-              blurRadius: 18,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: calendarMarginLarge,
-            child: Row(
-              children: [
-                if (Navigator.canPop(context))
-                  AxiIconButton(
-                    iconData: LucideIcons.arrowLeft,
-                    tooltip: 'Back',
-                    color: context.colorScheme.foreground,
-                    borderColor: context.colorScheme.border,
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                const SizedBox(width: calendarGutterSm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        widget.isGuestMode ? 'Guest Calendar' : 'Calendar',
-                        style: context.textTheme.h3.copyWith(
-                          color: colors.foreground,
-                        ),
-                      ),
-                      Text(
-                        _formatDate(state.selectedDate, state.viewMode),
-                        style: calendarSubtitleTextStyle.copyWith(
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildViewModeSelector(context, state),
-                const SizedBox(width: calendarGutterSm),
-                if (!widget.isGuestMode) _buildSyncButton(context, state),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildViewModeSelector(BuildContext context, CalendarState state) {
-    return Container(
-      decoration: BoxDecoration(
-        color: calendarSelectedDayColor,
-        borderRadius: BorderRadius.circular(calendarEventRadius),
-        border: Border.all(color: calendarBorderColor),
-      ),
-      child: ShadSelect<CalendarView>(
-        placeholder: const Text(
-          'View',
-          style: calendarCaptionTextStyle,
-        ),
-        options: CalendarView.values
-            .map((view) => ShadOption(
-                  value: view,
-                  child: Text(view.name.toUpperCase()),
-                ))
-            .toList(),
-        selectedOptionBuilder: (context, value) => Text(
-          value.name.toUpperCase(),
-          style: calendarCaptionTextStyle.copyWith(
-            color: calendarTitleColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        onChanged: (view) {
-          if (view != null) {
-            context.read<T>().add(CalendarEvent.viewChanged(view: view));
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildSyncButton(BuildContext context, CalendarState state) {
-    return SyncControls(
-      state: state,
-      compact: true,
-    );
-  }
-
-  Widget _buildMobileLayout(CalendarState state) {
-    return Column(
-      children: [
-        _buildDateHeader(state),
-        Expanded(child: _buildTaskList(state)),
-      ],
-    );
-  }
-
-  Widget _buildTabletLayout(CalendarState state) {
-    return Row(
-      children: [
-        Expanded(flex: 2, child: _buildCalendarGrid(state)),
-        const VerticalDivider(),
-        Expanded(flex: 1, child: _buildTaskList(state)),
-      ],
-    );
-  }
-
-  Widget _buildDesktopLayout(CalendarState state) {
-    return Row(
-      children: [
-        SizedBox(width: 320, child: _buildSidebar(state)),
-        const VerticalDivider(),
-        Expanded(flex: 3, child: _buildCalendarGrid(state)),
-        const VerticalDivider(),
-        Expanded(flex: 1, child: _buildTaskList(state)),
-      ],
-    );
-  }
-
-  Widget _buildDateHeader(CalendarState state) {
-    return Container(
-      padding: calendarPaddingXl,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: () => _changeDate(-1),
-            icon: const Icon(Icons.chevron_left),
-          ),
-          Text(
-            _formatDate(state.selectedDate, state.viewMode),
-            style: calendarTitleTextStyle,
-          ),
-          IconButton(
-            onPressed: () => _changeDate(1),
-            icon: const Icon(Icons.chevron_right),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarGrid(CalendarState state) {
-    return CalendarGrid<T>(
-      state: state,
-      onEmptySlotTapped: (time, position) {
-        // TODO: Handle empty slot tap in base implementation
-      },
-      onTaskDragEnd: (task, newTime) {
-        final bloc = context.read<T>();
-        final CalendarTask normalized = task.normalizedForInteraction(newTime);
-        bloc.commitTaskInteraction(normalized);
-      },
-      onDateSelected: (date) => context.read<T>().add(
-            CalendarEvent.dateSelected(date: date),
-          ),
-      onViewChanged: (view) => context.read<T>().add(
-            CalendarEvent.viewChanged(view: view),
-          ),
-    );
-  }
-
-  Widget _buildTaskList(CalendarState state) {
-    if (state.isLoading && state.model.tasks.isEmpty) {
-      return ListView.builder(
-        itemCount: 3,
-        itemBuilder: (context, index) => const TaskSkeletonTile(),
-      );
-    }
-
-    final tasks = _getTasksForSelectedDate(state);
-    if (tasks.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.task_alt,
-              size: 64,
-              color: calendarTimeLabelColor,
-            ),
-            const SizedBox(height: calendarGutterLg),
-            Text(
-              'No tasks for this date',
-              style: calendarTitleTextStyle.copyWith(
-                fontSize: 16,
-                color: calendarSubtitleColor,
-              ),
-            ),
-            const SizedBox(height: calendarGutterSm),
-            const Text(
-              'Tap + to create a new task',
-              style: calendarSubtitleTextStyle,
-            ),
-          ],
-        ),
-      );
-    }
-
-    final isMobile = ResponsiveHelper.isCompact(context);
-    return RefreshIndicator(
-      onRefresh: () async {
-        context.read<T>().add(const CalendarEvent.dataChanged());
-        await Future.delayed(const Duration(milliseconds: 500));
-      },
-      child: ListView.builder(
-        itemCount: tasks.length,
-        itemBuilder: (context, index) {
-          final task = tasks[index];
-          return buildTaskTile(task, isMobile);
-        },
-      ),
-    );
-  }
-
-  Widget _buildSidebar(CalendarState state) {
-    return Column(
-      children: [
-        _buildDateHeader(state),
-        const Divider(),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: calendarPaddingXl,
-                  child: Text('Quick Stats', style: calendarBodyTextStyle),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.today),
-                  title: const Text('Due Reminders'),
-                  trailing: Text('${state.dueReminders?.length ?? 0}'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.schedule),
-                  title: const Text('Next Task'),
-                  subtitle: Text(state.nextTask?.title ?? 'None'),
-                ),
-                const Divider(),
-                Padding(
-                  padding: calendarPaddingXl,
-                  child: widget.isGuestMode
-                      ? _buildGuestModeInfo()
-                      : SyncControls(state: state),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGuestModeInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Guest Mode', style: calendarBodyTextStyle),
-        const SizedBox(height: calendarGutterSm),
-        Text(
-          'Your tasks are saved locally on this device. Sign up to sync across devices.',
-          style: calendarSubtitleTextStyle.copyWith(
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAddTaskFab(BuildContext context) {
-    return BlocBuilder<T, CalendarState>(
-      builder: (context, state) {
-        final themeColors = context.colorScheme;
-        final accent = calendarPrimaryColor;
-        final onAccent = themeColors.primaryForeground;
-        return ActionFeedback(
-          onTap: () {
-            showTaskInput(context, state.selectedDate);
-          },
-          feedbackMessage: 'Opening task creator...',
-          child: AnimatedContainer(
-            duration: baseAnimationDuration,
-            curve: Curves.easeInOut,
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: accent,
-                shape: BoxShape.circle,
-                boxShadow: calendarMediumShadow,
-              ),
-              child: Material(
-                color: Colors.transparent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: state.isLoading
-                      ? null
-                      : () {
-                          showTaskInput(context, state.selectedDate);
-                        },
-                  borderRadius: BorderRadius.circular(28),
-                  child: Center(
-                    child: state.isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: onAccent,
-                            ),
-                          )
-                        : Icon(
-                            Icons.add,
-                            color: onAccent,
-                            size: 24,
-                          ),
-                  ),
-                ),
-              ),
-            ),
+          floatingActionButton: _CalendarAddTaskFab<T>(
+            onShowInput: (context, selectedDate) {
+              showTaskInput(context, selectedDate);
+            },
           ),
         );
       },
@@ -499,9 +207,10 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
     return months[month - 1];
   }
 
-  List<dynamic> _getTasksForSelectedDate(CalendarState state) {
+  List<CalendarTask> _getTasksForSelectedDate(CalendarState state) {
     final selectedDate = state.selectedDate;
-    final tasks = state.model.tasks.values.where((task) {
+    final tasks =
+        state.model.tasks.values.whereType<CalendarTask>().where((task) {
       if (task.scheduledTime == null) return false;
       final taskDate = task.scheduledTime!;
       return taskDate.year == selectedDate.year &&
@@ -517,5 +226,621 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
     });
 
     return tasks;
+  }
+}
+
+class _CalendarGuestBanner extends StatelessWidget {
+  const _CalendarGuestBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: calendarSelectedDayColor,
+        border: Border(
+          bottom: BorderSide(color: calendarBorderColor, width: 1),
+        ),
+      ),
+      padding: calendarMarginMedium,
+      child: const Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 20,
+            color: calendarSubtitleColor,
+          ),
+          SizedBox(width: 8),
+          Text(
+            'Guest Mode - No Sync',
+            style: calendarSubtitleTextStyle,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const _CalendarAppBar({
+    required this.isGuestMode,
+    required this.title,
+    required this.subtitle,
+    required this.canPop,
+    required this.selectedView,
+    required this.onViewChanged,
+    this.onBack,
+    this.syncButton,
+  });
+
+  final bool isGuestMode;
+  final String title;
+  final String subtitle;
+  final bool canPop;
+  final VoidCallback? onBack;
+  final CalendarView selectedView;
+  final ValueChanged<CalendarView> onViewChanged;
+  final Widget? syncButton;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(80);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(
+          bottom: BorderSide(color: colors.border),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: calendarMarginLarge,
+          child: Row(
+            children: [
+              if (canPop)
+                AxiIconButton(
+                  iconData: LucideIcons.arrowLeft,
+                  tooltip: 'Back',
+                  color: colors.foreground,
+                  borderColor: colors.border,
+                  onPressed: onBack,
+                ),
+              const SizedBox(width: calendarGutterSm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      isGuestMode ? 'Guest Calendar' : title,
+                      style: context.textTheme.h3.copyWith(
+                        color: colors.foreground,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: calendarSubtitleTextStyle.copyWith(
+                        color: colors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _CalendarViewModeSelector(
+                selectedView: selectedView,
+                onChanged: onViewChanged,
+              ),
+              const SizedBox(width: calendarGutterSm),
+              if (syncButton != null) syncButton!,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarViewModeSelector extends StatelessWidget {
+  const _CalendarViewModeSelector({
+    required this.selectedView,
+    required this.onChanged,
+  });
+
+  final CalendarView selectedView;
+  final ValueChanged<CalendarView> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: calendarSelectedDayColor,
+        borderRadius: BorderRadius.circular(calendarEventRadius),
+        border: Border.all(color: calendarBorderColor),
+      ),
+      child: ShadSelect<CalendarView>(
+        initialValue: selectedView,
+        placeholder: const Text(
+          'View',
+          style: calendarCaptionTextStyle,
+        ),
+        options: CalendarView.values
+            .map(
+              (view) => ShadOption(
+                value: view,
+                child: Text(view.name.toUpperCase()),
+              ),
+            )
+            .toList(),
+        selectedOptionBuilder: (context, value) => Text(
+          value.name.toUpperCase(),
+          style: calendarCaptionTextStyle.copyWith(
+            color: calendarTitleColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        onChanged: (view) {
+          if (view != null) {
+            onChanged(view);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _CalendarSyncButton extends StatelessWidget {
+  const _CalendarSyncButton({
+    required this.state,
+    this.compact = false,
+  });
+
+  final CalendarState state;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return SyncControls(
+      state: state,
+      compact: compact,
+    );
+  }
+}
+
+class _CalendarMobileLayout extends StatelessWidget {
+  const _CalendarMobileLayout({
+    required this.dateLabel,
+    required this.onPrevious,
+    required this.onNext,
+    required this.isLoading,
+    required this.tasks,
+    required this.onRefresh,
+    required this.taskBuilder,
+  });
+
+  final String dateLabel;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final bool isLoading;
+  final List<CalendarTask> tasks;
+  final Future<void> Function() onRefresh;
+  final Widget Function(CalendarTask task, bool isCompact) taskBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _CalendarDateHeader(
+          label: dateLabel,
+          onPrevious: onPrevious,
+          onNext: onNext,
+        ),
+        Expanded(
+          child: _CalendarTaskList(
+            isLoading: isLoading,
+            tasks: tasks,
+            onRefresh: onRefresh,
+            taskBuilder: taskBuilder,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarTabletLayout<T extends BaseCalendarBloc>
+    extends StatelessWidget {
+  const _CalendarTabletLayout({
+    required this.state,
+    required this.isLoading,
+    required this.tasks,
+    required this.onRefresh,
+    required this.taskBuilder,
+    required this.onTaskDragEnd,
+    required this.onDateSelected,
+    required this.onViewChanged,
+  });
+
+  final CalendarState state;
+  final bool isLoading;
+  final List<CalendarTask> tasks;
+  final Future<void> Function() onRefresh;
+  final Widget Function(CalendarTask task, bool isCompact) taskBuilder;
+  final void Function(CalendarTask task, DateTime newTime) onTaskDragEnd;
+  final ValueChanged<DateTime> onDateSelected;
+  final ValueChanged<CalendarView> onViewChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: _CalendarGridSection<T>(
+            state: state,
+            onTaskDragEnd: onTaskDragEnd,
+            onDateSelected: onDateSelected,
+            onViewChanged: onViewChanged,
+          ),
+        ),
+        const VerticalDivider(),
+        Expanded(
+          flex: 1,
+          child: _CalendarTaskList(
+            isLoading: isLoading,
+            tasks: tasks,
+            onRefresh: onRefresh,
+            taskBuilder: taskBuilder,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarDesktopLayout<T extends BaseCalendarBloc>
+    extends StatelessWidget {
+  const _CalendarDesktopLayout({
+    required this.state,
+    required this.isLoading,
+    required this.tasks,
+    required this.onRefresh,
+    required this.taskBuilder,
+    required this.onTaskDragEnd,
+    required this.onDateSelected,
+    required this.onViewChanged,
+    required this.isGuestMode,
+    required this.dateLabel,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final CalendarState state;
+  final bool isLoading;
+  final List<CalendarTask> tasks;
+  final Future<void> Function() onRefresh;
+  final Widget Function(CalendarTask task, bool isCompact) taskBuilder;
+  final void Function(CalendarTask task, DateTime newTime) onTaskDragEnd;
+  final ValueChanged<DateTime> onDateSelected;
+  final ValueChanged<CalendarView> onViewChanged;
+  final bool isGuestMode;
+  final String dateLabel;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 320,
+          child: _CalendarSidebar(
+            state: state,
+            isGuestMode: isGuestMode,
+            dateLabel: dateLabel,
+            onPrevious: onPrevious,
+            onNext: onNext,
+          ),
+        ),
+        const VerticalDivider(),
+        Expanded(
+          flex: 3,
+          child: _CalendarGridSection<T>(
+            state: state,
+            onTaskDragEnd: onTaskDragEnd,
+            onDateSelected: onDateSelected,
+            onViewChanged: onViewChanged,
+          ),
+        ),
+        const VerticalDivider(),
+        Expanded(
+          flex: 1,
+          child: _CalendarTaskList(
+            isLoading: isLoading,
+            tasks: tasks,
+            onRefresh: onRefresh,
+            taskBuilder: taskBuilder,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarDateHeader extends StatelessWidget {
+  const _CalendarDateHeader({
+    required this.label,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final String label;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: calendarPaddingXl,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            onPressed: onPrevious,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text(
+            label,
+            style: calendarTitleTextStyle,
+          ),
+          IconButton(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarGridSection<T extends BaseCalendarBloc> extends StatelessWidget {
+  const _CalendarGridSection({
+    required this.state,
+    required this.onTaskDragEnd,
+    required this.onDateSelected,
+    required this.onViewChanged,
+    this.onEmptySlotTapped,
+  });
+
+  final CalendarState state;
+  final void Function(CalendarTask task, DateTime newTime) onTaskDragEnd;
+  final ValueChanged<DateTime> onDateSelected;
+  final ValueChanged<CalendarView> onViewChanged;
+  final void Function(DateTime time, Offset position)? onEmptySlotTapped;
+
+  @override
+  Widget build(BuildContext context) {
+    return CalendarGrid<T>(
+      state: state,
+      onEmptySlotTapped: onEmptySlotTapped,
+      onTaskDragEnd: onTaskDragEnd,
+      onDateSelected: onDateSelected,
+      onViewChanged: onViewChanged,
+    );
+  }
+}
+
+class _CalendarTaskList extends StatelessWidget {
+  const _CalendarTaskList({
+    required this.isLoading,
+    required this.tasks,
+    required this.onRefresh,
+    required this.taskBuilder,
+  });
+
+  final bool isLoading;
+  final List<CalendarTask> tasks;
+  final Future<void> Function() onRefresh;
+  final Widget Function(CalendarTask task, bool isCompact) taskBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading && tasks.isEmpty) {
+      return ListView.builder(
+        itemCount: 3,
+        itemBuilder: (context, index) => const TaskSkeletonTile(),
+      );
+    }
+
+    if (tasks.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.task_alt,
+              size: 64,
+              color: calendarTimeLabelColor,
+            ),
+            const SizedBox(height: calendarGutterLg),
+            Text(
+              'No tasks for this date',
+              style: calendarTitleTextStyle.copyWith(
+                fontSize: 16,
+                color: calendarSubtitleColor,
+              ),
+            ),
+            const SizedBox(height: calendarGutterSm),
+            const Text(
+              'Tap + to create a new task',
+              style: calendarSubtitleTextStyle,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isMobile = ResponsiveHelper.isCompact(context);
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.builder(
+        itemCount: tasks.length,
+        itemBuilder: (context, index) {
+          final task = tasks[index];
+          return taskBuilder(task, isMobile);
+        },
+      ),
+    );
+  }
+}
+
+class _CalendarSidebar extends StatelessWidget {
+  const _CalendarSidebar({
+    required this.state,
+    required this.isGuestMode,
+    required this.dateLabel,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final CalendarState state;
+  final bool isGuestMode;
+  final String dateLabel;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _CalendarDateHeader(
+          label: dateLabel,
+          onPrevious: onPrevious,
+          onNext: onNext,
+        ),
+        const Divider(),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: calendarPaddingXl,
+                  child: Text('Quick Stats', style: calendarBodyTextStyle),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.today),
+                  title: const Text('Due Reminders'),
+                  trailing: Text('${state.dueReminders?.length ?? 0}'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.schedule),
+                  title: const Text('Next Task'),
+                  subtitle: Text(state.nextTask?.title ?? 'None'),
+                ),
+                const Divider(),
+                Padding(
+                  padding: calendarPaddingXl,
+                  child: isGuestMode
+                      ? const _CalendarGuestModeInfo()
+                      : SyncControls(state: state),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarGuestModeInfo extends StatelessWidget {
+  const _CalendarGuestModeInfo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Guest Mode', style: calendarBodyTextStyle),
+        const SizedBox(height: calendarGutterSm),
+        Text(
+          'Your tasks are saved locally on this device. Sign up to sync across devices.',
+          style: calendarSubtitleTextStyle.copyWith(fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarAddTaskFab<T extends BaseCalendarBloc> extends StatelessWidget {
+  const _CalendarAddTaskFab({required this.onShowInput});
+
+  final void Function(BuildContext context, DateTime initialDate) onShowInput;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<T, CalendarState>(
+      builder: (context, state) {
+        final themeColors = context.colorScheme;
+        final accent = calendarPrimaryColor;
+        final onAccent = themeColors.primaryForeground;
+        return ActionFeedback(
+          onTap: () {
+            onShowInput(context, state.selectedDate);
+          },
+          feedbackMessage: 'Opening task creator...',
+          child: AnimatedContainer(
+            duration: baseAnimationDuration,
+            curve: Curves.easeInOut,
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: accent,
+                shape: BoxShape.circle,
+                boxShadow: calendarMediumShadow,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: state.isLoading
+                      ? null
+                      : () {
+                          onShowInput(context, state.selectedDate);
+                        },
+                  borderRadius: BorderRadius.circular(28),
+                  child: Center(
+                    child: state.isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: onAccent,
+                            ),
+                          )
+                        : Icon(
+                            Icons.add,
+                            color: onAccent,
+                            size: 24,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
