@@ -37,42 +37,45 @@ class _LoginScreenState extends State<LoginScreen>
   late OperationProgressController _operationProgressController;
   String _operationLabel = '';
   _AuthFlow? _activeFlow;
-  bool _allowAutoSignup = true;
+  bool _operationAcknowledged = false;
+  bool _signupButtonLoading = false;
 
   @override
   void initState() {
     super.initState();
     _operationProgressController = OperationProgressController(vsync: this);
-    final cubit = context.read<AuthenticationCubit>();
-    final draft = cubit.signupDraft;
-    if (draft != null && !draft.isEmpty) {
-      _login = false;
-    } else {
-      unawaited(cubit.loadSignupDraft().then((persistedDraft) {
-        if (!mounted || !_allowAutoSignup) {
-          return;
-        }
-        if (persistedDraft != null && !persistedDraft.isEmpty) {
-          setState(() {
-            _login = false;
-          });
-        }
-      }));
-    }
   }
 
   void _handleSubmissionRequested(
     _AuthFlow flow, {
     required String label,
   }) {
-    if (flow == _AuthFlow.login) {
-      _allowAutoSignup = false;
-    }
     setState(() {
       _activeFlow = flow;
       _operationLabel = label;
+      _operationAcknowledged = false;
     });
     _operationProgressController.start();
+  }
+
+  void _handleSignupLoadingChanged(bool isLoading) {
+    if (!mounted) return;
+    if (_signupButtonLoading != isLoading ||
+        (isLoading && _operationLabel.isEmpty)) {
+      setState(() {
+        _signupButtonLoading = isLoading;
+        if (isLoading && _operationLabel.isEmpty) {
+          _operationLabel = 'Creating your account…';
+        }
+      });
+    }
+    if (isLoading) {
+      if (!_operationProgressController.isActive) {
+        _operationProgressController.start();
+      }
+    } else if (_activeFlow == null) {
+      _operationProgressController.reset();
+    }
   }
 
   void _ensureOperationVisible(String label) {
@@ -94,6 +97,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() {
       _activeFlow = null;
+      _operationAcknowledged = false;
     });
     _operationProgressController.reset();
   }
@@ -103,6 +107,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() {
       _activeFlow = null;
+      _operationAcknowledged = false;
     });
     _operationProgressController.reset();
   }
@@ -113,16 +118,19 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (state is AuthenticationSignUpInProgress && flow == _AuthFlow.signup) {
+      _operationAcknowledged = true;
       _ensureOperationVisible('Creating your account…');
       return;
     }
     if (state is AuthenticationLogInInProgress) {
       if (flow == _AuthFlow.signup) {
+        _operationAcknowledged = true;
         _ensureOperationVisible('Securing your login…');
         unawaited(_operationProgressController.reach(0.75));
         return;
       }
       if (flow == _AuthFlow.login) {
+        _operationAcknowledged = true;
         _ensureOperationVisible('Logging you in…');
         unawaited(_operationProgressController.reach(
           0.75,
@@ -130,6 +138,9 @@ class _LoginScreenState extends State<LoginScreen>
         ));
         return;
       }
+    }
+    if (!_operationAcknowledged) {
+      return;
     }
     if (state is AuthenticationComplete) {
       unawaited(_completeOperation());
@@ -150,6 +161,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final showProgressBar = _activeFlow != null || _signupButtonLoading;
     return BlocListener<AuthenticationCubit, AuthenticationState>(
       listener: (context, state) => _handleAuthState(state),
       child: Scaffold(
@@ -170,6 +182,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               Expanded(
                 child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: colors.background,
@@ -220,6 +233,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         _AuthFlow.signup,
                                         label: 'Creating your account…',
                                       ),
+                                      onLoadingChanged:
+                                          _handleSignupLoadingChanged,
                                     ),
                                   ),
                                 ),
@@ -243,18 +258,26 @@ class _LoginScreenState extends State<LoginScreen>
                                 duration: context
                                     .read<SettingsCubit>()
                                     .animationDuration,
-                                child: _activeFlow != null
-                                    ? Padding(
+                                child: showProgressBar
+                                    ? Center(
                                         key:
                                             const ValueKey('auth-progress-bar'),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 24),
-                                        child: OperationProgressBar(
-                                          animation:
-                                              _operationProgressController
-                                                  .animation,
-                                          visible: true,
-                                          label: _operationLabel,
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: 480,
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 24,
+                                            ),
+                                            child: OperationProgressBar(
+                                              animation:
+                                                  _operationProgressController
+                                                      .animation,
+                                              visible: showProgressBar,
+                                              label: _operationLabel,
+                                            ),
+                                          ),
                                         ),
                                       )
                                     : KeyedSubtree(
@@ -263,14 +286,6 @@ class _LoginScreenState extends State<LoginScreen>
                                         child: ShadButton.ghost(
                                           onPressed: () {
                                             final nextLogin = !_login;
-                                            if (nextLogin) {
-                                              _allowAutoSignup = false;
-                                              context
-                                                  .read<AuthenticationCubit>()
-                                                  .clearSignupDraft();
-                                            } else {
-                                              _allowAutoSignup = true;
-                                            }
                                             setState(() {
                                               _login = nextLogin;
                                             });
