@@ -440,7 +440,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       ChatmailCredentials? chatmailCredentials;
       if (_emailService != null) {
-        chatmailCredentials = await _chatmailProvisioningClient.createAccount();
+        chatmailCredentials = await _chatmailProvisioningClient.createAccount(
+          localpart: username,
+          password: password,
+        );
       }
       await login(
         username: username,

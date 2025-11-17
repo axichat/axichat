@@ -3,16 +3,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
-const _defaultProvisioningBaseUrl = 'http://axi.im:3691';
+const _defaultProvisioningBaseUrl = 'http://axi.im:8787';
 const _baseUrlDefineKey = 'CHATMAIL_PROVISIONING_BASE_URL';
-const _tokenDefineKey = 'CHATMAIL_PROVISIONING_TOKEN';
-const _tokenPlaceholder = 'set-chatmail-token';
+const _sharedSecretDefineKey = 'CHATMAIL_SHARED_SECRET';
+const _sharedSecretPlaceholder = 'set-chatmail-shared-secret';
 
 class ChatmailCredentials {
-  const ChatmailCredentials({required this.email, required this.password});
+  const ChatmailCredentials({
+    required this.email,
+    required this.password,
+    this.principalId,
+  });
 
   final String email;
   final String password;
+  final int? principalId;
 }
 
 enum ChatmailProvisioningErrorCode {
@@ -43,11 +48,11 @@ class ChatmailProvisioningException implements Exception {
 class ChatmailProvisioningClient {
   ChatmailProvisioningClient({
     required Uri baseUrl,
-    required String token,
+    required String sharedSecret,
     http.Client? httpClient,
     Logger? logger,
   })  : _baseUrl = _normalizeBase(baseUrl),
-        _token = _normalizeToken(token),
+        _sharedSecret = _normalizeSharedSecret(sharedSecret),
         _httpClient = httpClient ?? http.Client(),
         _log = logger ?? Logger('ChatmailProvisioningClient');
 
@@ -59,31 +64,59 @@ class ChatmailProvisioningClient {
       _baseUrlDefineKey,
       defaultValue: '',
     );
-    const envToken = String.fromEnvironment(
-      _tokenDefineKey,
-      defaultValue: _tokenPlaceholder,
+    const envSharedSecret = String.fromEnvironment(
+      _sharedSecretDefineKey,
+      defaultValue: _sharedSecretPlaceholder,
     );
     final baseUrl = envBaseUrl.isEmpty
         ? Uri.parse(_defaultProvisioningBaseUrl)
         : Uri.parse(envBaseUrl);
     return ChatmailProvisioningClient(
       baseUrl: baseUrl,
-      token: envToken,
+      sharedSecret: envSharedSecret,
       httpClient: httpClient,
       logger: logger,
     );
   }
 
   final Uri _baseUrl;
-  final String _token;
+  final String _sharedSecret;
   final http.Client _httpClient;
   final Logger _log;
 
-  Future<ChatmailCredentials> createAccount() async {
+  Future<ChatmailCredentials> createAccount({
+    required String localpart,
+    required String password,
+  }) async {
+    final normalizedLocalpart = localpart.trim();
+    if (normalizedLocalpart.isEmpty) {
+      throw const ChatmailProvisioningException(
+        'Signup is temporarily unavailable. Please try again later.',
+        code: ChatmailProvisioningErrorCode.invalidResponse,
+      );
+    }
+    if (password.trim().isEmpty) {
+      throw const ChatmailProvisioningException(
+        'Signup is temporarily unavailable. Please try again later.',
+        code: ChatmailProvisioningErrorCode.invalidResponse,
+      );
+    }
     final uri = _buildEndpoint();
+    final payload = jsonEncode({
+      'localpart': normalizedLocalpart,
+      'password': password,
+    });
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Auth-Token': _sharedSecret,
+    };
     http.Response response;
     try {
-      response = await _httpClient.post(uri);
+      response = await _httpClient.post(
+        uri,
+        headers: headers,
+        body: payload,
+      );
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach Chatmail provisioning service',
@@ -99,7 +132,7 @@ class ChatmailProvisioningClient {
     }
 
     if (response.statusCode == 200) {
-      return _parseCredentials(response.body);
+      return _parseCredentials(response.body, password);
     }
 
     if (response.statusCode == 401) {
@@ -124,6 +157,14 @@ class ChatmailProvisioningClient {
       );
     }
 
+    if (response.statusCode == 403) {
+      _log.severe('Chatmail provisioning forbidden: ${response.body}');
+      throw const ChatmailProvisioningException(
+        'Signup is temporarily unavailable. Please try again later.',
+        code: ChatmailProvisioningErrorCode.unauthorized,
+      );
+    }
+
     _log.warning('Chatmail provisioning failed: ${response.statusCode}');
     throw ChatmailProvisioningException(
       'Signup is temporarily unavailable. Please try again later.',
@@ -135,12 +176,9 @@ class ChatmailProvisioningClient {
   Uri _buildEndpoint() {
     final segments = [
       ..._baseUrl.pathSegments.where((segment) => segment.isNotEmpty),
-      'new_email',
+      'signup',
     ];
-    return _baseUrl.replace(
-      pathSegments: segments,
-      queryParameters: {'t': _token},
-    );
+    return _baseUrl.replace(pathSegments: segments);
   }
 
   static Uri _normalizeBase(Uri baseUrl) {
@@ -152,32 +190,33 @@ class ChatmailProvisioningClient {
     return baseUrl;
   }
 
-  static String _normalizeToken(String token) {
-    final normalized = token.trim();
-    if (normalized.isEmpty || normalized == _tokenPlaceholder) {
+  static String _normalizeSharedSecret(String sharedSecret) {
+    final normalized = sharedSecret.trim();
+    if (normalized.isEmpty || normalized == _sharedSecretPlaceholder) {
       throw StateError(
-        'Chatmail provisioning token missing. Set '
-        '--dart-define=$_tokenDefineKey=<token> before running.',
+        'Chatmail provisioning shared secret missing. Set '
+        '--dart-define=$_sharedSecretDefineKey=<secret> before running.',
       );
     }
     return normalized;
   }
 
-  ChatmailCredentials _parseCredentials(String payload) {
+  ChatmailCredentials _parseCredentials(String payload, String password) {
     try {
       final decoded = jsonDecode(payload);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Expected JSON object');
       }
       final email = decoded['email'];
-      final password = decoded['password'];
+      final principalId = decoded['principal_id'];
       if (email is! String || email.isEmpty) {
         throw const FormatException('Missing email field');
       }
-      if (password is! String || password.isEmpty) {
-        throw const FormatException('Missing password field');
-      }
-      return ChatmailCredentials(email: email, password: password);
+      return ChatmailCredentials(
+        email: email,
+        password: password,
+        principalId: principalId is int ? principalId : null,
+      );
     } on FormatException catch (error, stackTrace) {
       _log.warning('Invalid Chatmail provisioning response', error, stackTrace);
       throw const ChatmailProvisioningException(
