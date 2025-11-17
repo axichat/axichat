@@ -254,6 +254,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
     final bool usingStoredCredentials = username == null;
+    final bool shouldClearEmailCredentialsOnFailure = !usingStoredCredentials;
     final preHashed = usingStoredCredentials && savedPassword != null;
     final String xmppPassword = usingStoredCredentials
         ? (savedPassword ?? resolvedPassword)
@@ -295,17 +296,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         preHashed: preHashed,
       );
     } on XmppAuthenticationException catch (_) {
-      _cancelPendingEmailProvisioning(emailProvisioningFuture);
+      await _cancelPendingEmailProvisioning(
+        emailProvisioningFuture,
+        resolvedJid,
+        clearCredentials: shouldClearEmailCredentialsOnFailure,
+      );
       emit(const AuthenticationFailure('Incorrect username or password'));
       await _xmppService.disconnect();
       return;
     } on XmppAlreadyConnectedException catch (_) {
-      _cancelPendingEmailProvisioning(emailProvisioningFuture);
+      await _cancelPendingEmailProvisioning(
+        emailProvisioningFuture,
+        resolvedJid,
+        clearCredentials: shouldClearEmailCredentialsOnFailure,
+      );
       await _xmppService.disconnect();
       emit(const AuthenticationNone());
       return;
     } on Exception catch (e) {
-      _cancelPendingEmailProvisioning(emailProvisioningFuture);
+      await _cancelPendingEmailProvisioning(
+        emailProvisioningFuture,
+        resolvedJid,
+        clearCredentials: shouldClearEmailCredentialsOnFailure,
+      );
       _log.severe(e);
       emit(const AuthenticationFailure('Error. Please try again later.'));
       await _xmppService.disconnect();
@@ -342,6 +355,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         } else {
           _lastEmailProvisioningError = error;
           emit(AuthenticationFailure(error.message));
+          await _cancelPendingEmailProvisioning(
+            emailProvisioningFuture,
+            resolvedJid,
+            clearCredentials: shouldClearEmailCredentialsOnFailure,
+          );
           await _xmppService.disconnect();
           return;
         }
@@ -355,23 +373,40 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _updateEmailForegroundKeepalive();
   }
 
-  void _cancelPendingEmailProvisioning(
+  Future<void> _cancelPendingEmailProvisioning(
     Future<void>? provisioningFuture,
-  ) {
-    if (provisioningFuture == null) {
+    String jid, {
+    required bool clearCredentials,
+  }) async {
+    if (provisioningFuture != null) {
+      unawaited(
+        provisioningFuture.catchError(
+          (Object error, StackTrace stackTrace) {
+            _log.fine(
+              'Cancelled email provisioning after login failed',
+              error,
+              stackTrace,
+            );
+          },
+        ),
+      );
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
       return;
     }
-    unawaited(
-      provisioningFuture.catchError(
-        (Object error, StackTrace stackTrace) {
-          _log.fine(
-            'Cancelled email provisioning after login failed',
-            error,
-            stackTrace,
-          );
-        },
-      ),
-    );
+    try {
+      await emailService.shutdown(
+        jid: jid,
+        clearCredentials: clearCredentials,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to clean up Chatmail provisioning after aborted login',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future<void> signup({
@@ -714,6 +749,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (response.statusCode == 200) {
         return true;
       }
+      if (_isAccountDeletionNoop(response.statusCode, response.body)) {
+        _log.info(
+          'Signup rollback treated as success because account is already gone '
+          '(status ${response.statusCode}).',
+        );
+        return true;
+      }
       _log.warning(
         'Signup rollback failed with status ${response.statusCode}',
       );
@@ -725,6 +767,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     }
     return false;
+  }
+
+  bool _isAccountDeletionNoop(int statusCode, String? body) {
+    if (statusCode == 404 || statusCode == 410) {
+      return true;
+    }
+    final normalizedBody = body?.toLowerCase().trim();
+    if (normalizedBody == null || normalizedBody.isEmpty) {
+      return false;
+    }
+    return normalizedBody.contains('not found') ||
+        normalizedBody.contains('does not exist');
   }
 
   Future<List<_PendingAccountDeletion>> _readPendingAccountDeletions() async {
