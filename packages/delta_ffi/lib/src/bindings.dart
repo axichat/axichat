@@ -841,6 +841,23 @@ class DeltaChatBindings {
   late final _dc_chat_get_contact_id = _dc_chat_get_contact_idPtr
       .asFunction<int Function(ffi.Pointer<dc_chat_t>)>();
 
+  ffi.Pointer<dc_array_t> dc_get_chat_contacts(
+    ffi.Pointer<dc_context_t> ctx,
+    int chat_id,
+  ) {
+    return _dc_get_chat_contacts(
+      ctx,
+      chat_id,
+    );
+  }
+
+  late final _dc_get_chat_contactsPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<dc_array_t> Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_get_chat_contacts');
+  late final _dc_get_chat_contacts = _dc_get_chat_contactsPtr.asFunction<
+      ffi.Pointer<dc_array_t> Function(ffi.Pointer<dc_context_t>, int)>();
+
   ffi.Pointer<dc_contact_t> dc_get_contact(
     ffi.Pointer<dc_context_t> ctx,
     int contact_id,
@@ -989,6 +1006,20 @@ class DeltaChatBindings {
           'dc_msg_get_viewtype');
   late final _dc_msg_get_viewtype =
       _dc_msg_get_viewtypePtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
+  int dc_msg_get_state(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_state(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_statePtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_state');
+  late final _dc_msg_get_state =
+      _dc_msg_get_statePtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
 
   int dc_msg_get_timestamp(
     ffi.Pointer<dc_msg_t> msg,

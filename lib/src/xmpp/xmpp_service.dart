@@ -83,14 +83,14 @@ final class ForegroundServiceUnavailableException extends XmppException {
 }
 
 final serverLookup = <String, IOEndpoint>{
-  'nz.axichat.com': const IOEndpoint('167.160.14.12', 5222),
-  'axi.im': const IOEndpoint('167.160.14.12', 5222),
-  'hookipa.net': const IOEndpoint('31.172.31.205', 5222),
-  'xmpp.social': const IOEndpoint('31.172.31.205', 5222),
-  'trashserver.net': const IOEndpoint('5.1.72.136', 5222),
-  'conversations.im': const IOEndpoint('78.47.177.120', 5222),
-  'draugr.de': const IOEndpoint('23.88.8.69', 5222),
-  'jix.im': const IOEndpoint('51.77.59.5', 5222),
+  'nz.axichat.com': const IOEndpoint('nz.axichat.com', 5222),
+  'axi.im': const IOEndpoint('axi.im', 5222),
+  'hookipa.net': const IOEndpoint('hookipa.net', 5222),
+  'xmpp.social': const IOEndpoint('xmpp.social', 5222),
+  'trashserver.net': const IOEndpoint('trashserver.net', 5222),
+  'conversations.im': const IOEndpoint('conversations.im', 5222),
+  'draugr.de': const IOEndpoint('draugr.de', 5222),
+  'jix.im': const IOEndpoint('jix.im', 5222),
 };
 
 typedef ConnectionState = mox.XmppConnectionState;
@@ -826,6 +826,32 @@ class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
   XmppSocketWrapper() : super(false);
 
   static final _log = Logger('XmppSocketWrapper');
+
+  @override
+  Future<bool> connect(
+    String domain, {
+    String? host,
+    int? port,
+  }) {
+    final endpoint = serverLookup[domain];
+    final resolvedHost = host ?? endpoint?.host ?? domain;
+    final resolvedPort = port ?? endpoint?.port;
+    if (resolvedPort != null) {
+      _log.fine(
+        'Connecting to $domain via static endpoint $resolvedHost:$resolvedPort',
+      );
+      return super.connect(
+        domain,
+        host: resolvedHost,
+        port: resolvedPort,
+      );
+    }
+
+    _log.warning(
+      'No static port mapping for $domain. Falling back to SRV lookups.',
+    );
+    return super.connect(domain, host: resolvedHost, port: port);
+  }
 
   @override
   Future<List<mox_tcp.MoxSrvRecord>> srvQuery(

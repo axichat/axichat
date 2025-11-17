@@ -538,11 +538,8 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   }) {
     final override = serverLookup[domain];
     final resolvedHost =
-        (host != null && host.isNotEmpty) ? host : override?.host;
-    final resolvedPort = port ?? override?.port;
-    if (resolvedHost == null || resolvedPort == null) {
-      throw ArgumentError.value(domain, 'domain', 'No server mapping found');
-    }
+        (host != null && host.isNotEmpty) ? host : override?.host ?? domain;
+    final resolvedPort = port ?? override?.port ?? 5222;
     return _SocketTarget(resolvedHost, resolvedPort);
   }
 

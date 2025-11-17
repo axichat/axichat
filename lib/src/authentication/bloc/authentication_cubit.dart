@@ -204,6 +204,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? username,
     String? password,
     bool rememberMe = false,
+    bool requireEmailProvisioned = false,
   }) async {
     _lastEmailProvisioningError = null;
     if (state is AuthenticationComplete) {
@@ -274,6 +275,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           'Stored email password missing. Please log in manually.'));
       return;
     }
+
+    final enforceEmailProvisioning = requireEmailProvisioned ||
+        _activeSignupCredentialKey != null ||
+        emailService != null;
 
     Future<void>? emailProvisioningFuture;
     if (emailService != null) {
@@ -352,10 +357,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await emailProvisioningFuture;
         _lastEmailProvisioningError = null;
       } on EmailProvisioningException catch (error) {
-        if (error.isRecoverable) {
-          _log.warning('Chatmail provisioning pending: ${error.message}');
-          _lastEmailProvisioningError = null;
-        } else {
+        final shouldAbort = enforceEmailProvisioning || !error.isRecoverable;
+        if (shouldAbort) {
           _lastEmailProvisioningError = error;
           emit(AuthenticationFailure(error.message));
           await _cancelPendingEmailProvisioning(
@@ -366,6 +369,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           await _xmppService.disconnect();
           return;
         }
+        _log.warning('Chatmail provisioning pending: ${error.message}');
+        _lastEmailProvisioningError = null;
       } on Exception catch (error, stackTrace) {
         _log.warning('Chatmail provisioning failed', error, stackTrace);
       }
@@ -478,6 +483,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         username: username,
         password: password,
         rememberMe: rememberMe,
+        requireEmailProvisioned: true,
       );
     } finally {
       _activeSignupCredentialKey = null;
