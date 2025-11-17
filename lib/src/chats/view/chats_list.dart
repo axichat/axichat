@@ -243,7 +243,21 @@ class _ChatListTileState extends State<ChatListTile> {
     final item = widget.item;
     final colors = context.colorScheme;
     final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
+    double scaled(double value) {
+      if (!value.isFinite) {
+        return value;
+      }
+      try {
+        final scaledValue = textScaler.scale(value);
+        if (!scaledValue.isFinite || scaledValue <= 0) {
+          return value;
+        }
+        return scaledValue;
+      } on AssertionError {
+        return value;
+      }
+    }
+
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadThickness = showUnreadBadge
