@@ -92,15 +92,27 @@ class EmailDeltaTransport implements ChatTransport {
     final completer = Completer<void>();
     late final StreamSubscription<DeltaCoreEvent> subscription;
     subscription = context.events().listen((event) {
-      if (event.type != DeltaEventType.configureProgress) {
+      if (completer.isCompleted) {
         return;
       }
-      if (event.data1 == 1000 && !completer.isCompleted) {
-        completer.complete();
-      } else if (event.data1 == 0 && !completer.isCompleted) {
+      if (event.type == DeltaEventType.configureProgress) {
+        if (event.data1 == 1000) {
+          completer.complete();
+        } else if (event.data1 == 0) {
+          completer.completeError(
+            DeltaSafeException(
+              event.data2Text ?? 'Failed to configure Chatmail account',
+            ),
+          );
+        }
+        return;
+      }
+      if (event.type == DeltaEventType.error) {
         completer.completeError(
           DeltaSafeException(
-            event.data2Text ?? 'Failed to configure Chatmail account',
+            event.data2Text ??
+                event.data1Text ??
+                'Failed to configure Chatmail account',
           ),
         );
       }

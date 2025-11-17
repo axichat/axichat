@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/models/signup_draft.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/email/service/chatmail_provisioning_client.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -44,12 +45,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EmailService? emailService,
     NotificationService? notificationService,
     http.Client? httpClient,
+    ChatmailProvisioningClient? chatmailProvisioningClient,
     AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _emailService = emailService,
-        _httpClient = httpClient ?? http.Client(),
         super(initialState ?? const AuthenticationNone()) {
+    _httpClient = httpClient ?? http.Client();
+    _chatmailProvisioningClient = chatmailProvisioningClient ??
+        ChatmailProvisioningClient.fromEnvironment(
+          httpClient: _httpClient,
+        );
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
       onShow: login,
@@ -136,7 +142,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   final EmailService? _emailService;
-  final http.Client _httpClient;
+  late final http.Client _httpClient;
+  late final ChatmailProvisioningClient _chatmailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
   SignupDraft? _signupDraft;
@@ -204,6 +211,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? password,
     bool rememberMe = false,
     bool requireEmailProvisioned = false,
+    ChatmailCredentials? chatmailCredentials,
   }) async {
     _lastEmailProvisioningError = null;
     if (state is AuthenticationComplete) {
@@ -222,7 +230,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     late final String? jid;
-    var emailPassword = password;
+    var emailPassword = chatmailCredentials?.password ?? password;
     if (username == null || password == null) {
       jid = await _credentialStore.read(key: jidStorageKey);
       password = await _credentialStore.read(key: passwordStorageKey);
@@ -289,7 +297,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePassphrase: ensuredDatabasePassphrase,
           jid: resolvedJid,
           passwordOverride: resolvedEmailPassword,
-          addressOverride: resolvedJid,
+          addressOverride: chatmailCredentials?.email,
         ),
       ).then<void>((_) {});
     }
@@ -477,29 +485,42 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
+    var signupComplete = false;
     try {
+      ChatmailCredentials? chatmailCredentials;
+      if (_emailService != null) {
+        chatmailCredentials = await _chatmailProvisioningClient.createAccount();
+      }
       await login(
         username: username,
         password: password,
         rememberMe: rememberMe,
         requireEmailProvisioned: true,
+        chatmailCredentials: chatmailCredentials,
       );
+      signupComplete = state is AuthenticationComplete;
+    } on ChatmailProvisioningException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to auto-provision Chatmail account',
+        error,
+        stackTrace,
+      );
+      emit(AuthenticationSignupFailure(error.message));
     } finally {
       _activeSignupCredentialKey = null;
-    }
-    final signupComplete = state is AuthenticationComplete;
-    if (signupComplete) {
-      await _removePendingAccountDeletion(
-        username: username,
-        host: host,
-      );
-    }
-    if (!signupComplete || _lastEmailProvisioningError != null) {
-      await _rollbackSignup(
-        username: username,
-        host: host,
-        password: password,
-      );
+      if (signupComplete) {
+        await _removePendingAccountDeletion(
+          username: username,
+          host: host,
+        );
+      }
+      if (!signupComplete || _lastEmailProvisioningError != null) {
+        await _rollbackSignup(
+          username: username,
+          host: host,
+          password: password,
+        );
+      }
     }
   }
 
