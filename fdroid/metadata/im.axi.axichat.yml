@@ -1,0 +1,51 @@
+# F-Droid metadata template for Axichat.
+# Copy this file into fdroiddata/metadata/im.axi.axichat.yml when submitting to F-Droid.
+# Fill in TODO_ fields before submission and bump versions in lockstep with pubspec.yaml.
+
+Categories:
+  - Messaging
+  - Internet
+
+License: TODO_LICENSE # e.g. GPL-3.0-or-later
+AuthorName: Axichat Developers
+WebSite: https://TODO_WEBSITE
+SourceCode: https://gitlab.com/axichat/axichat
+IssueTracker: https://gitlab.com/axichat/axichat/-/issues
+
+RepoType: git
+Repo: https://gitlab.com/axichat/axichat.git
+
+Summary: TODO_SHORT_SUMMARY # e.g. "Free XMPP chat client"
+
+Description: |
+  TODO_LONG_DESCRIPTION
+  (Explain what Axichat is, main features, privacy stance, etc.)
+  End the description with a single '.' on its own line below.
+
+    .
+
+Builds:
+  - versionName: 0.3.2
+    versionCode: 32 # Match the build number from pubspec.yaml
+    commit: v0.3.2 # Tag or commit in the Axichat repo
+    subdir: .
+    output: build/app/outputs/flutter-apk/app-production-release.apk
+    prebuild:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter pub run build_runner build --delete-conflicting-outputs
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk \
+        --flavor production \
+        --release \
+        --dart-define=ENABLE_SHOREBIRD=false
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.3.2
+CurrentVersionCode: 32
+
+# TODO: When bumping versions, update versionName/versionCode/commit fields above
+# and keep --dart-define=ENABLE_SHOREBIRD=false so the F-Droid build ships without OTA updates.

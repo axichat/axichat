@@ -1,3 +1,6 @@
+# Rust/native assets for packages like delta_ffi are compiled via code_assets when
+# `dart run build_runner build --delete-conflicting-outputs` runs. Prebuilt
+# binaries are never checked into the repository.
 targets:
   $default:
     builders:

@@ -1,0 +1,1 @@
+Free, open-source XMPP chat client for Android, Linux, and Windows.

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "im.axi" "\0"
-            VALUE "FileDescription", "axichat" "\0"
+            VALUE "CompanyName", "Axichat" "\0"
+            VALUE "FileDescription", "Axichat" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "axichat" "\0"
+            VALUE "InternalName", "Axichat" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 im.axi. All rights reserved." "\0"
-            VALUE "OriginalFilename", "axichat.exe" "\0"
-            VALUE "ProductName", "axichat" "\0"
+            VALUE "OriginalFilename", "Axichat.exe" "\0"
+            VALUE "ProductName", "Axichat" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
