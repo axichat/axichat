@@ -32,6 +32,7 @@ void main() {
 
   late Client mockHttpClient;
   String? pendingSignupRollbacksPayload;
+  String? completedSignupAccountsPayload;
 
   setUp(() {
     mockXmppService = MockXmppService();
@@ -47,12 +48,16 @@ void main() {
         .thenAnswer((_) => const Stream<ConnectionState>.empty());
 
     pendingSignupRollbacksPayload = null;
+    completedSignupAccountsPayload = null;
 
     when(() => mockCredentialStore.read(key: any(named: 'key')))
         .thenAnswer((invocation) async {
       final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
       if (key.value == 'pending_signup_rollbacks') {
         return pendingSignupRollbacksPayload;
+      }
+      if (key.value == 'completed_signup_accounts_v1') {
+        return completedSignupAccountsPayload;
       }
       return null;
     });
@@ -66,6 +71,9 @@ void main() {
       if (key.value == 'pending_signup_rollbacks') {
         pendingSignupRollbacksPayload = value;
       }
+      if (key.value == 'completed_signup_accounts_v1') {
+        completedSignupAccountsPayload = value;
+      }
       return true;
     });
 
@@ -74,6 +82,9 @@ void main() {
       final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
       if (key.value == 'pending_signup_rollbacks') {
         pendingSignupRollbacksPayload = null;
+      }
+      if (key.value == 'completed_signup_accounts_v1') {
+        completedSignupAccountsPayload = null;
       }
       return true;
     });
@@ -222,6 +233,25 @@ void main() {
               key: bloc.passwordStorageKey,
               value: saltedPassword,
             ));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Records accounts that reach AuthenticationComplete.',
+      build: () => bloc,
+      act: (bloc) => bloc.login(
+        username: validUsername,
+        password: validPassword,
+      ),
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationComplete(),
+      ],
+      verify: (_) {
+        final payload = completedSignupAccountsPayload;
+        expect(payload, isNotNull);
+        final decoded = jsonDecode(payload!) as List<dynamic>;
+        expect(decoded, contains(validJid.toLowerCase()));
       },
     );
 
@@ -404,7 +434,50 @@ void main() {
         verify(() => mockCredentialStore.write(
               key: bloc.pendingSignupRollbacksKey,
               value: any(named: 'value'),
-            )).called(1);
+            )).called(2);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Never sends rollback for accounts that completed authentication.',
+      setUp: () {
+        completedSignupAccountsPayload = jsonEncode([validJid.toLowerCase()]);
+        when(() => mockHttpClient.post(
+              AuthenticationCubit.registrationUrl,
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => Response('', 200));
+        when(() => mockXmppService.connect(
+              jid: validJid,
+              password: validPassword,
+              databasePrefix: any(named: 'databasePrefix'),
+              databasePassphrase: any(named: 'databasePassphrase'),
+              preHashed: any(named: 'preHashed'),
+            )).thenThrow(XmppAuthenticationException());
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure('Incorrect username or password'),
+      ],
+      verify: (_) {
+        verifyNever(() => mockHttpClient.post(
+              AuthenticationCubit.deleteAccountUrl,
+              body: any(named: 'body'),
+            ));
+        expect(pendingSignupRollbacksPayload, isNull);
       },
     );
 
@@ -483,11 +556,13 @@ void main() {
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
-        verify(() => mockHttpClient.post(
-              AuthenticationCubit.registrationUrl,
-              body: any(named: 'body'),
-            )).called(1);
-        expect(pendingSignupRollbacksPayload, isNull);
+        final payload = pendingSignupRollbacksPayload;
+        expect(payload, isNotNull);
+        final decoded = jsonDecode(payload!) as List<dynamic>;
+        expect(decoded, hasLength(1));
+        final entry = decoded.first as Map<String, dynamic>;
+        expect(entry['username'], equals(validUsername.toLowerCase()));
+        expect(entry['password'], equals(validPassword));
       },
     );
   });

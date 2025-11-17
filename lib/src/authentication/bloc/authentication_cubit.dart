@@ -127,6 +127,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final passwordStorageKey = CredentialStore.registerKey('password');
   final pendingSignupRollbacksKey =
       CredentialStore.registerKey('pending_signup_rollbacks');
+  final completedSignupAccountsKey =
+      CredentialStore.registerKey('completed_signup_accounts_v1');
   final signupDraftStorageKey = CredentialStore.registerKey('signup_draft_v1');
   final signupDraftClosedAtStorageKey =
       CredentialStore.registerKey('signup_draft_last_closed_at');
@@ -145,6 +147,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Completer<void>? _signupDraftLoadCompleter;
   bool _signupDraftHydrated = false;
   String? _blockedSignupCredentialKey;
+  String? _activeSignupCredentialKey;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -369,6 +372,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     emit(const AuthenticationComplete());
+    await _recordAccountAuthenticated(resolvedJid);
     clearSignupDraft();
     _updateEmailForegroundKeepalive();
   }
@@ -430,6 +434,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       ));
       return;
     }
+    _activeSignupCredentialKey = _normalizeSignupKey(username, host);
+    await _stageSignupRollback(
+      username: username,
+      host: host,
+      password: password,
+    );
     try {
       final response = await _httpClient.post(
         registrationUrl,
@@ -445,16 +455,40 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
         emit(AuthenticationSignupFailure(response.body));
+        _activeSignupCredentialKey = null;
+        await _removePendingAccountDeletion(
+          username: username,
+          host: host,
+        );
         return;
       }
     } on Exception catch (_) {
       emit(const AuthenticationSignupFailure(
         'Failed to register, try again later.',
       ));
+      _activeSignupCredentialKey = null;
+      await _removePendingAccountDeletion(
+        username: username,
+        host: host,
+      );
       return;
     }
-    await login(username: username, password: password, rememberMe: rememberMe);
+    try {
+      await login(
+        username: username,
+        password: password,
+        rememberMe: rememberMe,
+      );
+    } finally {
+      _activeSignupCredentialKey = null;
+    }
     final signupComplete = state is AuthenticationComplete;
+    if (signupComplete) {
+      await _removePendingAccountDeletion(
+        username: username,
+        host: host,
+      );
+    }
     if (!signupComplete || _lastEmailProvisioningError != null) {
       await _rollbackSignup(
         username: username,
@@ -521,11 +555,40 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<void> _stageSignupRollback({
+    required String username,
+    required String host,
+    required String password,
+  }) async {
+    final normalizedKey = _normalizeSignupKey(username, host);
+    if (await _hasCompletedAuthentication(normalizedKey)) {
+      _log.info(
+        'Skipping rollback staging for previously authenticated account '
+        '$normalizedKey.',
+      );
+      return;
+    }
+    final entry = _PendingAccountDeletion(
+      username: username,
+      host: host,
+      password: password,
+    );
+    await _upsertPendingAccountDeletion(entry);
+  }
+
   Future<void> _rollbackSignup({
     required String username,
     required String host,
     required String password,
   }) async {
+    final normalizedKey = _normalizeSignupKey(username, host);
+    if (await _hasCompletedAuthentication(normalizedKey)) {
+      _log.info(
+        'Skipping rollback for previously authenticated account '
+        '$normalizedKey.',
+      );
+      return;
+    }
     final deletion = _PendingAccountDeletion(
       username: username,
       host: host,
@@ -635,6 +698,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
     if (response.statusCode == 200) {
       await logout(severity: LogoutSeverity.burn);
+      await _removeCompletedAccountRecord(username, host);
     } else {
       emit(AuthenticationUnregisterFailure(response.body));
     }
@@ -667,12 +731,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _enqueuePendingAccountDeletion(
     _PendingAccountDeletion deletion,
   ) async {
-    final pending = await _readPendingAccountDeletions();
-    if (pending.any((entry) => entry.matches(deletion))) {
-      return;
-    }
-    pending.add(deletion);
-    await _writePendingAccountDeletions(pending);
+    await _upsertPendingAccountDeletion(deletion);
   }
 
   Future<void> _flushPendingAccountDeletions() {
@@ -695,8 +754,25 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (pending.isEmpty) {
         return;
       }
+      final completedAccounts = await _readCompletedSignupAccounts();
       final remaining = <_PendingAccountDeletion>[];
       for (final request in pending) {
+        final activeKey = _activeSignupCredentialKey;
+        if (activeKey != null &&
+            state is AuthenticationSignUpInProgress &&
+            request.matchesKey(activeKey)) {
+          remaining.add(request);
+          continue;
+        }
+        final normalizedKey =
+            _normalizeSignupKey(request.username, request.host);
+        if (completedAccounts.contains(normalizedKey)) {
+          _log.fine(
+            'Skipping rollback for previously authenticated account '
+            '$normalizedKey.',
+          );
+          continue;
+        }
         final succeeded = await _performAccountDeletion(request);
         if (!succeeded) {
           remaining.add(request);
@@ -719,7 +795,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     await _flushPendingAccountDeletions();
     final pending = await _readPendingAccountDeletions();
-    final cleanupPending = pending.any(
+    final completedAccounts = await _readCompletedSignupAccounts();
+    final filtered = pending
+        .where((entry) => !completedAccounts.contains(
+              _normalizeSignupKey(entry.username, entry.host),
+            ))
+        .toList(growable: false);
+    if (filtered.length != pending.length) {
+      await _writePendingAccountDeletions(filtered);
+    }
+    final cleanupPending = filtered.any(
       (entry) => entry.matchesCredentials(username, host),
     );
     final normalizedKey = _normalizeSignupKey(username, host);
@@ -737,6 +822,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<bool> _performAccountDeletion(
     _PendingAccountDeletion deletion,
   ) async {
+    final normalizedKey = _normalizeSignupKey(deletion.username, deletion.host);
+    if (await _hasCompletedAuthentication(normalizedKey)) {
+      _log.fine(
+        'Skipping rollback request for previously authenticated account '
+        '$normalizedKey.',
+      );
+      return true;
+    }
     try {
       final response = await _httpClient.post(
         AuthenticationCubit.deleteAccountUrl,
@@ -815,6 +908,110 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jsonEncode(entries.map((entry) => entry.toJson()).toList());
     await _credentialStore.write(
       key: pendingSignupRollbacksKey,
+      value: serialized,
+    );
+  }
+
+  Future<void> _upsertPendingAccountDeletion(
+    _PendingAccountDeletion deletion,
+  ) async {
+    final pending = await _readPendingAccountDeletions();
+    final updated = pending
+        .where((entry) => !entry.matches(deletion))
+        .toList(growable: true)
+      ..add(deletion);
+    await _writePendingAccountDeletions(updated);
+  }
+
+  Future<void> _removePendingAccountDeletion({
+    required String username,
+    required String host,
+  }) async {
+    final pending = await _readPendingAccountDeletions();
+    if (pending.isEmpty) {
+      return;
+    }
+    final normalizedKey = _normalizeSignupKey(username, host);
+    final filtered = pending
+        .where((entry) => !entry.matchesKey(normalizedKey))
+        .toList(growable: false);
+    if (filtered.length == pending.length) {
+      return;
+    }
+    await _writePendingAccountDeletions(filtered);
+  }
+
+  Future<void> _recordAccountAuthenticated(String jid) async {
+    final normalized = _normalizeJid(jid);
+    try {
+      final accounts = await _readCompletedSignupAccounts();
+      if (accounts.add(normalized)) {
+        await _writeCompletedSignupAccounts(accounts);
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to record completed authentication for $normalized',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _removeCompletedAccountRecord(
+    String username,
+    String host,
+  ) async {
+    final normalized = _normalizeSignupKey(username, host);
+    try {
+      final accounts = await _readCompletedSignupAccounts();
+      if (accounts.remove(normalized)) {
+        await _writeCompletedSignupAccounts(accounts);
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to clear completed authentication record for $normalized',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<bool> _hasCompletedAuthentication(String normalizedKey) async {
+    final accounts = await _readCompletedSignupAccounts();
+    return accounts.contains(normalizedKey);
+  }
+
+  Future<Set<String>> _readCompletedSignupAccounts() async {
+    final serialized =
+        await _credentialStore.read(key: completedSignupAccountsKey);
+    if (serialized == null || serialized.isEmpty) {
+      return <String>{};
+    }
+    try {
+      final decoded = jsonDecode(serialized) as List<dynamic>;
+      return decoded
+          .whereType<String>()
+          .map((value) => value.trim().toLowerCase())
+          .toSet();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to decode completed signup accounts',
+        error,
+        stackTrace,
+      );
+      await _credentialStore.delete(key: completedSignupAccountsKey);
+      return <String>{};
+    }
+  }
+
+  Future<void> _writeCompletedSignupAccounts(Set<String> accounts) async {
+    if (accounts.isEmpty) {
+      await _credentialStore.delete(key: completedSignupAccountsKey);
+      return;
+    }
+    final serialized = jsonEncode(accounts.toList());
+    await _credentialStore.write(
+      key: completedSignupAccountsKey,
       value: serialized,
     );
   }
@@ -898,6 +1095,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  String _normalizeJid(String jid) {
+    final parts = jid.split('@');
+    if (parts.length == 2) {
+      return _normalizeSignupKey(parts.first, parts.last);
+    }
+    return jid.trim().toLowerCase();
+  }
+
   String _normalizeSignupKey(String username, String host) =>
       '${username.trim().toLowerCase()}@${host.trim().toLowerCase()}';
 }
@@ -939,4 +1144,6 @@ class _PendingAccountDeletion {
   bool matchesCredentials(String username, String host) =>
       this.username == username.trim().toLowerCase() &&
       this.host == host.trim().toLowerCase();
+
+  bool matchesKey(String key) => '$username@$host' == key.trim().toLowerCase();
 }
