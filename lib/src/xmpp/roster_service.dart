@@ -22,38 +22,41 @@ mixin RosterService on XmppBase, BaseStreamService {
   final _log = Logger('RosterService');
 
   @override
-  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
-    ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-      if (event.resumed) return;
-      _log.info('Fetching roster...');
-      await requestRoster();
-    })
-    ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
-      final requester = event.from.toBare().toString();
-      _log.info('Subscription request received from $requester');
-      await _dbOp<XmppDatabase>(
-        (db) async {
-          final item = await db.getRosterItem(requester);
-          if (item != null) {
-            _log.info('Accepting subscription request from $requester...');
-            try {
-              await _acceptSubscriptionRequest(item);
-            } on XmppRosterException catch (error, stackTrace) {
-              _log.severe(
-                'Failed to auto-accept subscription for $requester',
-                error,
-                stackTrace,
-              );
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (event.resumed) return;
+        _log.info('Fetching roster...');
+        await requestRoster();
+      })
+      ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
+        final requester = event.from.toBare().toString();
+        _log.info('Subscription request received from $requester');
+        await _dbOp<XmppDatabase>(
+          (db) async {
+            final item = await db.getRosterItem(requester);
+            if (item != null) {
+              _log.info('Accepting subscription request from $requester...');
+              try {
+                await _acceptSubscriptionRequest(item);
+              } on XmppRosterException catch (error, stackTrace) {
+                _log.severe(
+                  'Failed to auto-accept subscription for $requester',
+                  error,
+                  stackTrace,
+                );
+              }
+              return;
             }
-            return;
-          }
-          await db.saveInvite(Invite(
-            jid: requester,
-            title: event.from.local,
-          ));
-        },
-      );
-    });
+            await db.saveInvite(Invite(
+              jid: requester,
+              title: event.from.local,
+            ));
+          },
+        );
+      });
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers

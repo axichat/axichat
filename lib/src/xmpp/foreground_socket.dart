@@ -28,6 +28,7 @@ const emailKeepaliveStopCommand = 'Stop';
 const foregroundClientXmpp = 'xmpp_socket';
 const foregroundClientEmailKeepalive = 'email_keepalive';
 const _foregroundServiceId = 256;
+const notificationTapPrefix = 'NotificationTap';
 
 typedef ForegroundTaskMessageHandler = FutureOr<void> Function(String data);
 
@@ -224,11 +225,41 @@ ForegroundServiceConfig buildForegroundServiceConfig({
 
 bool launchedFromNotification = false;
 String? _launchedNotificationChatJid;
+var _notificationTapHandlerRegistered = false;
+
+void recordNotificationLaunch(String? chatJid) {
+  launchedFromNotification = true;
+  _launchedNotificationChatJid = chatJid;
+}
+
+void ensureNotificationTapPortInitialized() {
+  if (_notificationTapHandlerRegistered) {
+    return;
+  }
+  FlutterForegroundTask.initCommunicationPort();
+  FlutterForegroundTask.addTaskDataCallback(_handleNotificationTapMessage);
+  _notificationTapHandlerRegistered = true;
+}
+
+void _handleNotificationTapMessage(dynamic data) {
+  if (data is! String || !data.startsWith('$notificationTapPrefix$join')) {
+    return;
+  }
+  final payload = data.substring('$notificationTapPrefix$join'.length);
+  recordNotificationLaunch(payload.isEmpty ? null : payload);
+}
 
 @pragma("vm:entry-point")
 void notificationTapBackground(NotificationResponse notificationResponse) {
-  launchedFromNotification = true;
-  _launchedNotificationChatJid = notificationResponse.payload;
+  recordNotificationLaunch(
+    (notificationResponse.payload?.isEmpty ?? true)
+        ? null
+        : notificationResponse.payload,
+  );
+  FlutterForegroundTask.sendDataToMain([
+    notificationTapPrefix,
+    notificationResponse.payload ?? '',
+  ].join(join));
 }
 
 String? takeLaunchedNotificationChatJid() {
@@ -287,8 +318,14 @@ class ForegroundSocket extends TaskHandler {
     _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
       final split = data.split(join);
+      final host = split.length > 2 && split[2].isNotEmpty ? split[2] : null;
+      final port = split.length > 3 && split[3].isNotEmpty
+          ? int.tryParse(split[3])
+          : null;
       final result = await _socket!.connect(
         split[1],
+        host: host,
+        port: port,
       );
       return _sendToMain([connectPrefix, result]);
     } else if (data.startsWith('$securePrefix$join')) {
@@ -368,7 +405,6 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       : _bridge = bridge ?? foregroundTaskBridge;
 
   static final _log = Logger('ForegroundSocketWrapper');
-
   final ForegroundTaskBridge _bridge;
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
@@ -376,6 +412,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   var _connect = Completer<bool>();
   var _secure = Completer<bool>();
+  var _secureResult = false;
   var _listenerRegistered = false;
   var _serviceAcquired = false;
 
@@ -387,14 +424,30 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       _eventStream.add(mox.XmppSocketErrorEvent(''));
     } else if (data.startsWith('$socketClosurePrefix$join')) {
       _eventStream.add(
-        mox.XmppSocketClosureEvent(bool.parse(data.split(join)[1])),
+        mox.XmppSocketClosureEvent(_boolFromPayload(data)),
       );
     } else if (data.startsWith('$connectPrefix$join')) {
-      final connected = bool.parse(data.split(join)[1]);
-      _connect.complete(connected);
+      _completeConnect(_boolFromPayload(data));
     } else if (data.startsWith('$securePrefix$join')) {
-      _secure.complete(bool.parse(data.split(join)[1]));
+      _completeSecure(_boolFromPayload(data));
     }
+  }
+
+  bool _boolFromPayload(String data) {
+    final parts = data.split(join);
+    if (parts.length < 2) return false;
+    return parts[1].toLowerCase() == 'true';
+  }
+
+  void _completeConnect(bool connected) {
+    if (_connect.isCompleted) return;
+    _connect.complete(connected);
+  }
+
+  void _completeSecure(bool secure) {
+    _secureResult = secure;
+    if (_secure.isCompleted) return;
+    _secure.complete(secure);
   }
 
   void _sendToTask(List<Object> strings) {
@@ -404,7 +457,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   }
 
   @override
-  bool isSecure() => _secure.isCompleted;
+  bool isSecure() => _secureResult;
 
   @override
   bool managesKeepalives() => false;
@@ -463,13 +516,34 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       rethrow;
     }
 
+    final target = _resolveTarget(
+      domain,
+      host: host,
+      port: port,
+    );
+
     _sendToTask([
       connectPrefix,
       domain,
-      serverLookup[domain]!.host.address,
-      serverLookup[domain]!.port,
+      target.host,
+      target.port,
     ]);
     return _connect.future;
+  }
+
+  _SocketTarget _resolveTarget(
+    String domain, {
+    String? host,
+    int? port,
+  }) {
+    final override = serverLookup[domain];
+    final resolvedHost =
+        (host != null && host.isNotEmpty) ? host : override?.host;
+    final resolvedPort = port ?? override?.port;
+    if (resolvedHost == null || resolvedPort == null) {
+      throw ArgumentError.value(domain, 'domain', 'No server mapping found');
+    }
+    return _SocketTarget(resolvedHost, resolvedPort);
   }
 
   @override
@@ -499,6 +573,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   Future<void> reset() async {
     _connect = Completer<bool>();
     _secure = Completer<bool>();
+    _secureResult = false;
     await _releaseService();
     _detachListener();
   }
@@ -518,6 +593,13 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     _bridge.unregisterListener(foregroundClientXmpp);
     _listenerRegistered = false;
   }
+}
+
+class _SocketTarget {
+  const _SocketTarget(this.host, this.port);
+
+  final String host;
+  final int port;
 }
 
 var _foregroundLoggerConfigured = false;

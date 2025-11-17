@@ -32,6 +32,7 @@ class NotificationService {
 
   Future<void> init() async {
     FlutterForegroundTask.initCommunicationPort();
+    ensureNotificationTapPortInitialized();
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings(androidIconPath);
     const DarwinInitializationSettings initializationSettingsDarwin =
@@ -60,6 +61,12 @@ class NotificationService {
     );
 
     await _ensureTimeZones();
+
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp == true) {
+      final payload = launchDetails?.notificationResponse?.payload;
+      recordNotificationLaunch(payload);
+    }
   }
 
   Future<NotificationAppLaunchDetails?> getAppNotificationAppLaunchDetails() =>

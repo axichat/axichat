@@ -108,122 +108,121 @@ mixin MessageService on XmppBase, BaseStreamService {
 
   final _log = Logger('MessageService');
 
-  var _messageStream = StreamController<Message>.broadcast();
+  final _messageStream = StreamController<Message>.broadcast();
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   var _capabilityCacheLoaded = false;
 
   @override
-  bool get needsReset => super.needsReset || _messageStream.hasListener;
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<mox.MessageEvent>((event) async {
+        if (await _handleError(event)) return;
 
-  @override
-  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
-    ..registerHandler<mox.MessageEvent>((event) async {
-      if (await _handleError(event)) return;
+        final reactionOnly = await _handleReactions(event);
+        if (reactionOnly) return;
 
-      final reactionOnly = await _handleReactions(event);
-      if (reactionOnly) return;
+        var message = Message.fromMox(event);
 
-      var message = Message.fromMox(event);
+        await _handleChatState(event, message.chatJid);
 
-      await _handleChatState(event, message.chatJid);
+        if (await _handleCorrection(event, message.senderJid)) return;
+        if (await _handleRetraction(event, message.senderJid)) return;
 
-      if (await _handleCorrection(event, message.senderJid)) return;
-      if (await _handleRetraction(event, message.senderJid)) return;
+        if (await _handleCalendarSync(event)) return;
 
-      // Handle calendar sync messages
-      if (await _handleCalendarSync(event)) return;
-
-      if (!event.displayable && event.encryptionError == null) return;
-      if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
-        return;
-      }
-      if (event.extensions.get<mox.FileUploadNotificationData>()
-          case final data?) {
-        if (data.metadata.name == null) return;
-      }
-
-      unawaited(_acknowledgeMessage(event));
-
-      final metadata = _extractFileMetadata(event);
-
-      if (metadata != null) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.saveFileMetadata(metadata),
-        );
-        message = message.copyWith(fileMetadataID: metadata.id);
-      }
-
-      await _handleFile(event, message.senderJid);
-
-      if (event.get<mox.OmemoData>() case final data?) {
-        final newRatchets = data.newRatchets.values.map((e) => e.length);
-        final newCount = newRatchets.fold(0, (v, e) => v + e);
-        final replacedRatchets =
-            data.replacedRatchets.values.map((e) => e.length);
-        final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
-        final pseudoMessageData = {
-          'ratchetsAdded': newRatchets.toList(),
-          'ratchetsReplaced': replacedRatchets.toList(),
-        };
-
-        if (newCount > 0) {
-          await _dbOp<XmppDatabase>(
-            (db) => db.saveMessage(Message(
-              stanzaID: _connection.generateId(),
-              senderJid: myJid!.toString(),
-              chatJid: message.chatJid,
-              pseudoMessageType: PseudoMessageType.newDevice,
-              pseudoMessageData: pseudoMessageData,
-            )),
-          );
+        if (!event.displayable && event.encryptionError == null) return;
+        if (event.encryptionError is omemo.InvalidKeyExchangeSignatureError) {
+          return;
+        }
+        if (event.extensions.get<mox.FileUploadNotificationData>()
+            case final data?) {
+          if (data.metadata.name == null) return;
         }
 
-        if (replacedCount > 0) {
+        unawaited(_acknowledgeMessage(event));
+
+        final metadata = _extractFileMetadata(event);
+
+        if (metadata != null) {
           await _dbOp<XmppDatabase>(
-            (db) => db.saveMessage(Message(
-              stanzaID: _connection.generateId(),
-              senderJid: myJid!.toString(),
-              chatJid: message.chatJid,
-              pseudoMessageType: PseudoMessageType.changedDevice,
-              pseudoMessageData: pseudoMessageData,
-            )),
+            (db) => db.saveFileMetadata(metadata),
           );
+          message = message.copyWith(fileMetadataID: metadata.id);
         }
-      }
 
-      if (!message.noStore) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.saveMessage(message),
-        );
-      }
+        await _handleFile(event, message.senderJid);
 
-      _messageStream.add(message);
-    })
-    ..registerHandler<mox.ChatMarkerEvent>((event) async {
-      _log.info('Received chat marker from ${event.from}');
+        if (event.get<mox.OmemoData>() case final data?) {
+          final newRatchets = data.newRatchets.values.map((e) => e.length);
+          final newCount = newRatchets.fold(0, (v, e) => v + e);
+          final replacedRatchets =
+              data.replacedRatchets.values.map((e) => e.length);
+          final replacedCount = replacedRatchets.fold(0, (v, e) => v + e);
+          final pseudoMessageData = {
+            'ratchetsAdded': newRatchets.toList(),
+            'ratchetsReplaced': replacedRatchets.toList(),
+          };
 
-      await _dbOp<XmppDatabase>(
-        (db) async {
-          switch (event.type) {
-            case mox.ChatMarker.displayed:
-              db.markMessageDisplayed(event.id);
-              db.markMessageReceived(event.id);
-              db.markMessageAcked(event.id);
-            case mox.ChatMarker.received:
-              db.markMessageReceived(event.id);
-              db.markMessageAcked(event.id);
-            case mox.ChatMarker.acknowledged:
-              db.markMessageAcked(event.id);
+          if (newCount > 0) {
+            await _dbOp<XmppDatabase>(
+              (db) => db.saveMessage(Message(
+                stanzaID: _connection.generateId(),
+                senderJid: myJid!.toString(),
+                chatJid: message.chatJid,
+                pseudoMessageType: PseudoMessageType.newDevice,
+                pseudoMessageData: pseudoMessageData,
+              )),
+            );
           }
-        },
-      );
-    })
-    ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
-      await _dbOp<XmppDatabase>(
-        (db) => db.markMessageReceived(event.id),
-      );
-    });
+
+          if (replacedCount > 0) {
+            await _dbOp<XmppDatabase>(
+              (db) => db.saveMessage(Message(
+                stanzaID: _connection.generateId(),
+                senderJid: myJid!.toString(),
+                chatJid: message.chatJid,
+                pseudoMessageType: PseudoMessageType.changedDevice,
+                pseudoMessageData: pseudoMessageData,
+              )),
+            );
+          }
+        }
+
+        if (!message.noStore) {
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveMessage(message),
+          );
+        }
+
+        _messageStream.add(message);
+      })
+      ..registerHandler<mox.ChatMarkerEvent>((event) async {
+        _log.info('Received chat marker from ${event.from}');
+
+        await _dbOp<XmppDatabase>(
+          (db) async {
+            switch (event.type) {
+              case mox.ChatMarker.displayed:
+                db.markMessageDisplayed(event.id);
+                db.markMessageReceived(event.id);
+                db.markMessageAcked(event.id);
+              case mox.ChatMarker.received:
+                db.markMessageReceived(event.id);
+                db.markMessageAcked(event.id);
+              case mox.ChatMarker.acknowledged:
+                db.markMessageAcked(event.id);
+            }
+          },
+        );
+      })
+      ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
+        await _dbOp<XmppDatabase>(
+          (db) => db.markMessageReceived(event.id),
+        );
+      });
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
@@ -255,10 +254,15 @@ mixin MessageService on XmppBase, BaseStreamService {
     Message? quotedMessage,
     bool storeLocally = true,
   }) async {
+    final senderJid = myJid;
+    if (senderJid == null) {
+      _log.warning('Attempted to send a message before a JID was bound.');
+      throw XmppMessageException();
+    }
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: myJid.toString(),
+      senderJid: senderJid,
       chatJid: jid,
       body: text,
       encryptionProtocol: encryptionProtocol,
@@ -670,8 +674,6 @@ mixin MessageService on XmppBase, BaseStreamService {
   Future<void> _reset() async {
     await super._reset();
 
-    await _messageStream.close();
-    _messageStream = StreamController<Message>.broadcast();
     _capabilityCache.clear();
     _capabilityCacheLoaded = false;
   }

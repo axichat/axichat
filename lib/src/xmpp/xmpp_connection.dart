@@ -309,15 +309,16 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   @override
   Future<void> onFailure() async {
     if (!await canTriggerFailure()) return;
-
-    await Future.delayed(
-      strategy.delay(_reconnectionAttempts),
-      _reconnect,
-    );
+    _reconnectionInProgress = true;
+    try {
+      await Future.delayed(strategy.delay(_reconnectionAttempts));
+      await _reconnect();
+    } finally {
+      _reconnectionInProgress = false;
+    }
   }
 
   Future<void> _reconnect() async {
-    _reconnectionInProgress = true;
     _reconnectionAttempts++;
     if (performReconnect case final reconnect?) {
       await reconnect();
@@ -338,46 +339,56 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 class IOEndpoint {
   const IOEndpoint(this.host, this.port);
 
-  final InternetAddress host;
+  final String host;
   final int port;
 }
 
 class XmppConnectivityManager extends mox.ConnectivityManager {
-  XmppConnectivityManager._(this.endpoints);
+  XmppConnectivityManager._(
+    this.endpoints, {
+    Duration? pollInterval,
+    Duration? waitTimeout,
+  })  : _pollInterval = pollInterval ?? timeoutDuration,
+        _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
   final List<IOEndpoint> endpoints;
 
+  final Duration _pollInterval;
+  final Duration? _waitTimeout;
+
+  static final _log = Logger('XmppConnectivityManager');
+
   // fdns1.dismail.de, fdns2.dismail.de, 1.1.1.1
   XmppConnectivityManager.pingDns()
-      : this._([
-          IOEndpoint(
-            InternetAddress('116.203.32.217', type: InternetAddressType.IPv4),
-            853,
-          ),
-          IOEndpoint(
-            InternetAddress('159.69.114.157', type: InternetAddressType.IPv4),
-            853,
-          ),
-          IOEndpoint(
-            InternetAddress('1.1.1.1', type: InternetAddressType.IPv4),
-            853,
-          ),
+      : this._(const [
+          IOEndpoint('116.203.32.217', 853),
+          IOEndpoint('159.69.114.157', 853),
+          IOEndpoint('1.1.1.1', 853),
         ]);
 
   static const timeoutDuration = Duration(seconds: 5);
 
   @override
-  Future<bool> hasConnection() => compute(_pingEndpoints, endpoints);
+  Future<bool> hasConnection() => _pingEndpoints();
 
   @override
   Future<void> waitForConnection() async {
-    for (var connected = await hasConnection(); !connected;) {
-      // await Future.delayed(timeoutDuration);
+    final stopwatch = Stopwatch()..start();
+    var connected = await hasConnection();
+    while (!connected) {
+      final timeout = _waitTimeout;
+      if (timeout != null && stopwatch.elapsed >= timeout) {
+        _log.warning(
+          'Gave up waiting for connectivity after ${timeout.inSeconds} seconds.',
+        );
+        break;
+      }
+      await Future.delayed(_pollInterval);
       connected = await hasConnection();
     }
   }
 
-  Future<bool> _pingEndpoints(List<IOEndpoint> endpoints) async {
+  Future<bool> _pingEndpoints() async {
     for (final endpoint in endpoints) {
       Socket? socket;
       try {

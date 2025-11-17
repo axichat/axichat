@@ -13,26 +13,29 @@ mixin BlockingService on XmppBase, BaseStreamService {
   final Logger _blockingLogger = Logger('BlockingService');
 
   @override
-  EventManager<mox.XmppEvent> get _eventManager => super._eventManager
-    ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
-      _blockingLogger.info('Fetching blocklist...');
-      requestBlocklist();
-    })
-    ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
-      await _dbOp<XmppDatabase>(
-        (db) => db.blockJids(event.items),
-      );
-    })
-    ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
-      await _dbOp<XmppDatabase>(
-        (db) => db.unblockJids(event.items),
-      );
-    })
-    ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
-      await _dbOp<XmppDatabase>(
-        (db) => db.deleteBlocklist(),
-      );
-    });
+  void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+        _blockingLogger.info('Fetching blocklist...');
+        requestBlocklist();
+      })
+      ..registerHandler<mox.BlocklistBlockPushEvent>((event) async {
+        await _dbOp<XmppDatabase>(
+          (db) => db.blockJids(event.items),
+        );
+      })
+      ..registerHandler<mox.BlocklistUnblockPushEvent>((event) async {
+        await _dbOp<XmppDatabase>(
+          (db) => db.unblockJids(event.items),
+        );
+      })
+      ..registerHandler<mox.BlocklistUnblockAllPushEvent>((_) async {
+        await _dbOp<XmppDatabase>(
+          (db) => db.deleteBlocklist(),
+        );
+      });
+  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
