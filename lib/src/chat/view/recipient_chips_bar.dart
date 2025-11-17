@@ -407,7 +407,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   Set<String> _knownDomains() {
-    final domains = <String>{'axi.im'};
+    final domains = <String>{};
     void addFrom(String? address) {
       final domain = _extractDomain(address);
       if (domain != null) {
@@ -468,11 +468,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   ) {
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
-    final prioritizedDomains = <String>[
-      'axi.im',
-      ...knownDomains.where((domain) => domain != 'axi.im'),
-    ];
-
     final results = <FanOutTarget>[];
     final seen = <String>{};
 
@@ -523,14 +518,33 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       final localPart = trimmed.substring(0, atIndex).trim();
       final typedDomain = trimmed.substring(atIndex + 1).toLowerCase();
       if (localPart.isNotEmpty) {
-        for (final domain in prioritizedDomains) {
-          if (typedDomain.isNotEmpty && !domain.startsWith(typedDomain)) {
-            continue;
-          }
-          final done = addTarget(
-            FanOutTarget.address(address: '$localPart@$domain'),
+        final normalizedLocal = localPart.toLowerCase();
+        final domainEntries = knownDomains
+            .map(
+              (domain) => _DomainCompletion(
+                domain: domain,
+                hasExactAddress: knownAddresses.any(
+                  (address) =>
+                      address.toLowerCase() == '$normalizedLocal@$domain',
+                ),
+              ),
+            )
+            .where(
+              (entry) =>
+                  typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
+            )
+            .toList()
+          ..sort(
+            (a, b) {
+              if (a.hasExactAddress != b.hasExactAddress) {
+                return a.hasExactAddress ? -1 : 1;
+              }
+              return a.domain.compareTo(b.domain);
+            },
           );
-          if (done) {
+        for (final entry in domainEntries) {
+          final suggestion = '$localPart@${entry.domain}';
+          if (addTarget(FanOutTarget.address(address: suggestion))) {
             return results;
           }
         }
@@ -550,6 +564,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         (email.isNotEmpty && email.startsWith(query)) ||
         (display.isNotEmpty && display.startsWith(query));
   }
+}
+
+class _DomainCompletion {
+  const _DomainCompletion({
+    required this.domain,
+    required this.hasExactAddress,
+  });
+
+  final String domain;
+  final bool hasExactAddress;
 }
 
 class _RecipientChip extends StatelessWidget {

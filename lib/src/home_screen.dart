@@ -81,6 +81,13 @@ class HomeScreen extends StatelessWidget {
           ),
           searchFilters: chatsSearchFilters,
         ),
+      if (isMessage)
+        const HomeTabEntry(
+          id: HomeTab.drafts,
+          label: 'Drafts',
+          body: DraftsList(key: PageStorageKey('Drafts')),
+          searchFilters: _draftsSearchFilters,
+        ),
       if (isChat)
         const HomeTabEntry(
           id: HomeTab.spam,
@@ -95,13 +102,6 @@ class HomeScreen extends StatelessWidget {
           body: BlocklistList(key: PageStorageKey('Blocked')),
           fab: BlocklistAddButton(),
           searchFilters: _blocklistSearchFilters,
-        ),
-      if (isMessage)
-        const HomeTabEntry(
-          id: HomeTab.drafts,
-          label: 'Drafts',
-          body: DraftsList(key: PageStorageKey('Drafts')),
-          searchFilters: _draftsSearchFilters,
         ),
     ];
     if (tabs.isEmpty) {
