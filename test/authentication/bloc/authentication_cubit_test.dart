@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -32,6 +33,7 @@ void main() {
 
   late Client mockHttpClient;
   late MockChatmailProvisioningClient mockChatmailProvisioningClient;
+  late MockEmailService mockEmailService;
   String? pendingSignupRollbacksPayload;
   String? completedSignupAccountsPayload;
 
@@ -41,6 +43,7 @@ void main() {
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
+    mockEmailService = MockEmailService();
     mockHttpClient = MockHttpClient();
     mockChatmailProvisioningClient = MockChatmailProvisioningClient();
 
@@ -571,6 +574,62 @@ void main() {
         final entry = decoded.first as Map<String, dynamic>;
         expect(entry['username'], equals(validUsername.toLowerCase()));
         expect(entry['password'], equals(validPassword));
+      },
+    );
+  });
+
+  group('unregister', () {
+    setUp(() {
+      when(() => mockHttpClient.post(
+            AuthenticationCubit.deleteAccountUrl,
+            body: any(named: 'body'),
+          )).thenAnswer((_) async => Response('', 200));
+      when(() => mockCredentialStore.deleteAll(burn: any(named: 'burn')))
+          .thenAnswer((_) async => true);
+      when(() => mockXmppService.burn()).thenAnswer((_) async {});
+    });
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Deletes Chatmail account before unregister completes.',
+      setUp: () {
+        when(() => mockChatmailProvisioningClient.deleteAccount(
+              principalId: any(named: 'principalId'),
+              email: any(named: 'email'),
+              password: any(named: 'password'),
+            )).thenAnswer((_) async {});
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'chatmail@axi.im',
+            password: 'mailpw',
+            principalId: 42,
+          ),
+        );
+        when(() => mockEmailService.burn(jid: any(named: 'jid')))
+            .thenAnswer((_) async {});
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        initialState: const AuthenticationComplete(),
+        chatmailProvisioningClient: mockChatmailProvisioningClient,
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: AuthenticationCubit.domain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (_) {
+        verify(() => mockChatmailProvisioningClient.deleteAccount(
+              principalId: 42,
+              email: 'chatmail@axi.im',
+              password: validPassword,
+            )).called(1);
       },
     );
   });
