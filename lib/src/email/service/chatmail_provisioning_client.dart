@@ -12,12 +12,12 @@ class ChatmailCredentials {
   const ChatmailCredentials({
     required this.email,
     required this.password,
-    this.principalId,
+    required this.principalId,
   });
 
   final String email;
   final String password;
-  final int? principalId;
+  final int principalId;
 }
 
 enum ChatmailProvisioningErrorCode {
@@ -25,6 +25,7 @@ enum ChatmailProvisioningErrorCode {
   unavailable,
   invalidResponse,
   network,
+  authenticationFailed,
 }
 
 class ChatmailProvisioningException implements Exception {
@@ -101,15 +102,12 @@ class ChatmailProvisioningClient {
         code: ChatmailProvisioningErrorCode.invalidResponse,
       );
     }
-    final uri = _buildEndpoint();
+    final uri = _buildEndpoint('signup');
     final payload = jsonEncode({
       'localpart': normalizedLocalpart,
       'password': password,
     });
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'X-Auth-Token': _sharedSecret,
-    };
+    final headers = _headers();
     http.Response response;
     try {
       response = await _httpClient.post(
@@ -131,7 +129,7 @@ class ChatmailProvisioningClient {
       );
     }
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == 201 || response.statusCode == 200) {
       return _parseCredentials(response.body, password);
     }
 
@@ -190,13 +188,102 @@ class ChatmailProvisioningClient {
     );
   }
 
-  Uri _buildEndpoint() {
+  Future<void> deleteAccount({
+    required int principalId,
+    required String email,
+    required String password,
+  }) async {
+    final uri = _buildEndpoint('account');
+    final normalizedEmail = email.trim();
+    final headers = _headers();
+    final payload = jsonEncode({
+      'principal_id': principalId,
+      'email': normalizedEmail,
+      'password': password,
+    });
+    http.Response response;
+    try {
+      response = await _httpClient.delete(
+        uri,
+        headers: headers,
+        body: payload,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to reach Chatmail account deletion service',
+        error,
+        stackTrace,
+      );
+      throw const ChatmailProvisioningException(
+        'We could not delete your email account. Please check your '
+        'connection and try again.',
+        code: ChatmailProvisioningErrorCode.network,
+        isRecoverable: true,
+      );
+    }
+
+    if (response.statusCode == 200 || response.statusCode == 404) {
+      if (response.statusCode == 404) {
+        _log.info('Chatmail account already deleted for $normalizedEmail');
+      }
+      return;
+    }
+
+    if (response.statusCode == 401) {
+      throw const ChatmailProvisioningException(
+        'Incorrect password. Please try again.',
+        code: ChatmailProvisioningErrorCode.authenticationFailed,
+        isRecoverable: true,
+      );
+    }
+
+    if (response.statusCode == 403) {
+      _log.severe(
+        'Chatmail account deletion forbidden: ${response.body}',
+      );
+      throw const ChatmailProvisioningException(
+        'Unable to delete email account. Please try again later.',
+        code: ChatmailProvisioningErrorCode.unauthorized,
+      );
+    }
+
+    if (response.statusCode >= 500) {
+      final detail = _errorMessageFrom(response.body);
+      _log.warning(
+        'Chatmail account deletion unavailable: ${response.statusCode}'
+        '${detail == null ? '' : ' $detail'}',
+      );
+      throw const ChatmailProvisioningException(
+        'We could not delete your email account. Please try again later.',
+        code: ChatmailProvisioningErrorCode.unavailable,
+        isRecoverable: true,
+      );
+    }
+
+    final detail = _errorMessageFrom(response.body);
+    _log.warning(
+      'Chatmail account deletion failed (${response.statusCode})'
+      '${detail == null ? '' : ': $detail'}',
+    );
+    throw ChatmailProvisioningException(
+      detail ?? 'Unable to delete email account. Please try again later.',
+      code: ChatmailProvisioningErrorCode.invalidResponse,
+      statusCode: response.statusCode,
+    );
+  }
+
+  Uri _buildEndpoint(String resource) {
     final segments = [
       ..._baseUrl.pathSegments.where((segment) => segment.isNotEmpty),
-      'signup',
+      resource,
     ];
     return _baseUrl.replace(pathSegments: segments);
   }
+
+  Map<String, String> _headers() => {
+        'Content-Type': 'application/json',
+        'X-Auth-Token': _sharedSecret,
+      };
 
   static Uri _normalizeBase(Uri baseUrl) {
     if (baseUrl.scheme.isEmpty || baseUrl.host.isEmpty) {
@@ -229,10 +316,13 @@ class ChatmailProvisioningClient {
       if (email is! String || email.isEmpty) {
         throw const FormatException('Missing email field');
       }
+      if (principalId is! num) {
+        throw const FormatException('Missing principal_id field');
+      }
       return ChatmailCredentials(
         email: email,
         password: password,
-        principalId: principalId is int ? principalId : null,
+        principalId: principalId.toInt(),
       );
     } on FormatException catch (error, stackTrace) {
       _log.warning('Invalid Chatmail provisioning response', error, stackTrace);

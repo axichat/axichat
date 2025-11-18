@@ -34,10 +34,15 @@ const _chatmailSecurityMode = 'ssl';
 const _fallbackChatmailServer = 'axi.im';
 
 class EmailAccount {
-  const EmailAccount({required this.address, required this.password});
+  const EmailAccount({
+    required this.address,
+    required this.password,
+    this.principalId,
+  });
 
   final String address;
   final String password;
+  final int? principalId;
 }
 
 class EmailProvisioningException implements Exception {
@@ -109,6 +114,7 @@ class EmailService {
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
+  final Map<String, RegisteredCredentialKey> _principalKeys = {};
   bool _foregroundKeepaliveEnabled = false;
   bool _foregroundKeepaliveListenerAttached = false;
   bool _foregroundKeepaliveServiceAcquired = false;
@@ -141,7 +147,15 @@ class EmailService {
     if (address == null || password == null) {
       return null;
     }
-    return EmailAccount(address: address, password: password);
+    final principalRaw =
+        await _credentialStore.read(key: _principalKeyForScope(scope));
+    final principalId =
+        principalRaw == null ? null : int.tryParse(principalRaw);
+    return EmailAccount(
+      address: address,
+      password: password,
+      principalId: principalId,
+    );
   }
 
   Future<EmailAccount> ensureProvisioned({
@@ -151,6 +165,7 @@ class EmailService {
     required String jid,
     String? passwordOverride,
     String? addressOverride,
+    int? principalIdOverride,
   }) async {
     final scope = _scopeForJid(jid);
     final needsInit = _databasePrefix != databasePrefix ||
@@ -177,10 +192,14 @@ class EmailService {
 
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
+    final principalKey = _principalKeyForScope(scope);
     final provisionedKey = _provisionedKeyForScope(scope);
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
+    final principalRaw = await _credentialStore.read(key: principalKey);
+    int? principalId =
+        principalRaw == null ? null : int.tryParse(principalRaw);
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
@@ -210,6 +229,17 @@ class EmailService {
       }
     } else if (password == null) {
       throw StateError('Failed to resolve email password for $jid');
+    }
+
+    final resolvedPrincipalOverride = principalIdOverride;
+    if (resolvedPrincipalOverride != null && resolvedPrincipalOverride > 0) {
+      if (principalId != resolvedPrincipalOverride) {
+        principalId = resolvedPrincipalOverride;
+        await _credentialStore.write(
+          key: principalKey,
+          value: resolvedPrincipalOverride.toString(),
+        );
+      }
     }
 
     var alreadyProvisioned =
@@ -289,6 +319,7 @@ class EmailService {
     final account = EmailAccount(
       address: normalizedAddress,
       password: normalizedPassword,
+      principalId: principalId,
     );
     _activeAccount = account;
     return account;
@@ -1358,6 +1389,13 @@ class EmailService {
     );
   }
 
+  RegisteredCredentialKey _principalKeyForScope(String scope) {
+    return _principalKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey('chatmail_principal_$scope'),
+    );
+  }
+
   RegisteredCredentialKey _provisionedKeyForScope(String scope) {
     return _provisionedKeys.putIfAbsent(
       scope,
@@ -1375,6 +1413,7 @@ class EmailService {
   Future<void> _clearCredentials(String scope) async {
     await _credentialStore.delete(key: _addressKeyForScope(scope));
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
+    await _credentialStore.delete(key: _principalKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;

@@ -250,6 +250,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           jid: resolvedJid,
           passwordOverride: resolvedEmailPassword,
           addressOverride: chatmailCredentials?.email,
+          principalIdOverride: chatmailCredentials?.principalId,
         ),
       ).then<void>((_) {});
     }
@@ -444,6 +445,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           localpart: username,
           password: password,
         );
+        await _recordChatmailProvisioning(
+          username: username,
+          host: host,
+          password: password,
+          credentials: chatmailCredentials,
+        );
       }
       await login(
         username: username,
@@ -495,6 +502,27 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       username: username,
       host: host,
       password: password,
+    );
+    await _upsertPendingAccountDeletion(entry);
+  }
+
+  Future<void> _recordChatmailProvisioning({
+    required String username,
+    required String host,
+    required String password,
+    required ChatmailCredentials credentials,
+  }) async {
+    final normalizedEmail = credentials.email.trim();
+    if (normalizedEmail.isEmpty) {
+      _log.warning('Skipping Chatmail rollback staging due to blank email.');
+      return;
+    }
+    final entry = _PendingAccountDeletion(
+      username: username,
+      host: host,
+      password: password,
+      chatmailEmail: normalizedEmail,
+      chatmailPrincipalId: credentials.principalId,
     );
     await _upsertPendingAccountDeletion(entry);
   }
@@ -611,6 +639,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
   }) async {
     emit(const AuthenticationUnregisterInProgress());
+    try {
+      await _deleteProvisionedChatmailAccountForUser(
+        username: username,
+        host: host,
+        password: password,
+      );
+    } on ChatmailProvisioningException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete Chatmail account during unregister',
+        error,
+        stackTrace,
+      );
+      emit(AuthenticationUnregisterFailure(error.message));
+      return;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Unexpected Chatmail deletion failure during unregister',
+        error,
+        stackTrace,
+      );
+      emit(const AuthenticationUnregisterFailure(
+        'Unable to delete email account. Please try again later.',
+      ));
+      return;
+    }
     final response = await http.post(
       AuthenticationCubit.deleteAccountUrl,
       body: {
@@ -740,6 +793,38 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return !cleanupPending;
   }
 
+  Future<bool> _deleteChatmailAccountIfAvailable(
+    _PendingAccountDeletion deletion,
+  ) async {
+    final email = deletion.chatmailEmail;
+    final principalId = deletion.chatmailPrincipalId;
+    if (email == null || principalId == null) {
+      return true;
+    }
+    try {
+      await _chatmailProvisioningClient.deleteAccount(
+        principalId: principalId,
+        email: email,
+        password: deletion.password,
+      );
+      return true;
+    } on ChatmailProvisioningException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete Chatmail account for $email',
+        error,
+        stackTrace,
+      );
+      return !error.isRecoverable;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete Chatmail account for $email',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
   Future<bool> _performAccountDeletion(
     _PendingAccountDeletion deletion,
   ) async {
@@ -750,6 +835,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         '$normalizedKey.',
       );
       return true;
+    }
+    final chatmailDeleted = await _deleteChatmailAccountIfAvailable(deletion);
+    if (!chatmailDeleted) {
+      return false;
     }
     try {
       final response = await _httpClient.post(
@@ -781,6 +870,33 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     }
     return false;
+  }
+
+  Future<void> _deleteProvisionedChatmailAccountForUser({
+    required String username,
+    required String host,
+    required String password,
+  }) async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      _log.fine('Email service unavailable; skipping Chatmail deletion.');
+      return;
+    }
+    final jid = '$username@$host';
+    final account = await emailService.currentAccount(jid);
+    final principalId = account?.principalId;
+    final email = account?.address;
+    if (account == null || email == null || principalId == null) {
+      _log.warning(
+        'Missing Chatmail account details for $jid; skipping deletion.',
+      );
+      return;
+    }
+    await _chatmailProvisioningClient.deleteAccount(
+      principalId: principalId,
+      email: email,
+      password: password,
+    );
   }
 
   bool _isAccountDeletionNoop(int statusCode, String? body) {
@@ -837,11 +953,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _PendingAccountDeletion deletion,
   ) async {
     final pending = await _readPendingAccountDeletions();
-    final updated = pending
-        .where((entry) => !entry.matches(deletion))
-        .toList(growable: true)
-      ..add(deletion);
-    await _writePendingAccountDeletions(updated);
+    _PendingAccountDeletion? existing;
+    final filtered = <_PendingAccountDeletion>[];
+    for (final entry in pending) {
+      if (entry.matches(deletion) && existing == null) {
+        existing = entry;
+        continue;
+      }
+      if (!entry.matches(deletion)) {
+        filtered.add(entry);
+      }
+    }
+    final normalized = existing == null
+        ? deletion
+        : deletion.copyWith(createdAt: existing!.createdAt);
+    filtered.add(normalized);
+    await _writePendingAccountDeletions(filtered);
   }
 
   Future<void> _removePendingAccountDeletion({
@@ -988,16 +1115,27 @@ class _PendingAccountDeletion {
     required String username,
     required String host,
     required this.password,
+    this.chatmailEmail,
+    this.chatmailPrincipalId,
     String? createdAt,
   })  : username = username.trim().toLowerCase(),
         host = host.trim().toLowerCase(),
         createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
+    final rawPrincipal = json['chatmailPrincipalId'];
+    int? principalId;
+    if (rawPrincipal is num) {
+      principalId = rawPrincipal.toInt();
+    } else if (rawPrincipal is String) {
+      principalId = int.tryParse(rawPrincipal.trim());
+    }
     return _PendingAccountDeletion(
       username: (json['username'] as String? ?? '').trim(),
       host: (json['host'] as String? ?? AuthenticationCubit.domain).trim(),
       password: json['password'] as String? ?? '',
+      chatmailEmail: (json['chatmailEmail'] as String?)?.trim(),
+      chatmailPrincipalId: principalId,
       createdAt: json['createdAt'] as String?,
     );
   }
@@ -1005,14 +1143,35 @@ class _PendingAccountDeletion {
   final String username;
   final String host;
   final String password;
+  final String? chatmailEmail;
+  final int? chatmailPrincipalId;
   final String createdAt;
 
-  Map<String, String> toJson() => {
+  Map<String, dynamic> toJson() => {
         'username': username,
         'host': host,
         'password': password,
         'createdAt': createdAt,
+        if (chatmailEmail != null) 'chatmailEmail': chatmailEmail,
+        if (chatmailPrincipalId != null)
+          'chatmailPrincipalId': chatmailPrincipalId,
       };
+
+  _PendingAccountDeletion copyWith({
+    String? password,
+    String? chatmailEmail,
+    int? chatmailPrincipalId,
+    String? createdAt,
+  }) {
+    return _PendingAccountDeletion(
+      username: username,
+      host: host,
+      password: password ?? this.password,
+      chatmailEmail: chatmailEmail ?? this.chatmailEmail,
+      chatmailPrincipalId: chatmailPrincipalId ?? this.chatmailPrincipalId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 
   bool matches(_PendingAccountDeletion other) =>
       matchesCredentials(other.username, other.host);
