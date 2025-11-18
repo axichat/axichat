@@ -151,7 +151,9 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
           cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
         );
         final Widget dragTargets = buildDragEdgeTargets();
-        final double bottomInset = mediaQuery.viewPadding.bottom;
+        final double keyboardInset = mediaQuery.viewInsets.bottom;
+        final double bottomInset =
+            keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
         final Widget tasksTabLabel = TasksTabLabel(
           highlight: highlightTasksTab,
           animation: _tasksTabPulse,
