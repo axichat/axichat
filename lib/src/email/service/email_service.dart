@@ -1340,13 +1340,16 @@ class EmailService {
 
   Map<String, String> _chatmailConnectionConfig(String address) {
     final host = _chatmailServerHostFor(address);
+    final localPart = _localPartFromAddress(address) ?? address;
     return {
       'mail_server': host,
       'mail_port': _chatmailImapPort,
       'mail_security': _chatmailSecurityMode,
+      'mail_user': localPart,
       'send_server': host,
       'send_port': _chatmailSmtpPort,
       'send_security': _chatmailSecurityMode,
+      'send_user': localPart,
     };
   }
 
@@ -1365,6 +1368,19 @@ class EmailService {
     }
     final domain = parts[1].trim().toLowerCase();
     return domain.isEmpty ? null : domain;
+  }
+
+  String? _localPartFromAddress(String address) {
+    if (address.isEmpty) {
+      return null;
+    }
+    final index = address.indexOf('@');
+    final localPart =
+        index == -1 ? address.trim() : address.substring(0, index).trim();
+    if (localPart.isEmpty) {
+      return null;
+    }
+    return localPart;
   }
 
   List<Chat> _sortChats(List<Chat> chats) => List<Chat>.of(chats)

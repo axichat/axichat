@@ -395,9 +395,11 @@ void main() {
         'mail_server': 'axi.im',
         'mail_port': '993',
         'mail_security': 'ssl',
+        'mail_user': 'alice',
         'send_server': 'axi.im',
         'send_port': '465',
         'send_security': 'ssl',
+        'send_user': 'alice',
       }),
     );
     addTearDown(service.shutdown);
