@@ -165,6 +165,23 @@ class ChatmailProvisioningClient {
       );
     }
 
+    if (response.statusCode >= 400) {
+      final detail = _errorMessageFrom(response.body);
+      final message = detail ??
+          'That username is unavailable. Please choose a different one.';
+      final recoverable = response.statusCode != 451;
+      _log.info(
+        'Chatmail provisioning rejected request '
+        '(${response.statusCode}): $message',
+      );
+      throw ChatmailProvisioningException(
+        message,
+        code: ChatmailProvisioningErrorCode.invalidResponse,
+        isRecoverable: recoverable,
+        statusCode: response.statusCode,
+      );
+    }
+
     _log.warning('Chatmail provisioning failed: ${response.statusCode}');
     throw ChatmailProvisioningException(
       'Signup is temporarily unavailable. Please try again later.',
