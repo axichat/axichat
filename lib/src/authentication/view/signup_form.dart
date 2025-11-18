@@ -414,6 +414,7 @@ class _SignupFormState extends State<SignupForm> {
             state is AuthenticationSignupFailure && state.isCleanupBlocked;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
         const errorPadding = EdgeInsets.fromLTRB(8, 12, 8, 8);
+        const globalErrorPadding = EdgeInsets.fromLTRB(8, 10, 8, 20);
         const fieldSpacing = EdgeInsets.symmetric(vertical: 6.0);
         final animationDuration =
             context.read<SettingsCubit>().animationDuration;
@@ -445,7 +446,7 @@ class _SignupFormState extends State<SignupForm> {
                   ),
                 ),
                 Padding(
-                  padding: horizontalPadding,
+                  padding: globalErrorPadding,
                   child: AnimatedSwitcher(
                     duration: animationDuration,
                     child: showGlobalError
