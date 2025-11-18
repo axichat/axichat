@@ -3970,9 +3970,15 @@ class _ChatState extends State<Chat> {
       return const {};
     }
     final lastEntry = state.fanOutReports.entries.last.value;
-    return {
-      for (final status in lastEntry.statuses) status.chat.jid: status.state,
-    };
+    final statuses = <String, FanOutRecipientState>{};
+    for (final status in lastEntry.statuses) {
+      statuses[status.chat.jid] = status.state;
+      final emailKey = status.chat.emailAddress?.trim().toLowerCase();
+      if (emailKey != null && emailKey.isNotEmpty) {
+        statuses[emailKey] = status.state;
+      }
+    }
+    return statuses;
   }
 
   List<chat_models.Chat> _participantsForBanner(

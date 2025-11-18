@@ -22,6 +22,19 @@ void _mockEmailSync(MockEmailService service) {
   when(() => service.syncState).thenReturn(const EmailSyncState.ready());
   when(() => service.syncStateStream)
       .thenAnswer((_) => const Stream<EmailSyncState>.empty());
+  when(
+    () => service.sendMessage(
+      chat: any(named: 'chat'),
+      body: any(named: 'body'),
+      subject: any(named: 'subject'),
+    ),
+  ).thenAnswer((_) async => 1);
+  when(
+    () => service.sendAttachment(
+      chat: any(named: 'chat'),
+      attachment: any(named: 'attachment'),
+    ),
+  ).thenAnswer((_) async => 1);
 }
 
 void main() {
@@ -36,6 +49,22 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(<FanOutTarget>[]);
+    registerFallbackValue(MessageTimelineFilter.allWithContact);
+    registerFallbackValue(
+      Chat(
+        jid: 'fallback@axi.im',
+        title: 'fallback',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime(2023),
+      ),
+    );
+    registerFallbackValue(
+      EmailAttachment(
+        path: '/tmp/mock',
+        fileName: 'mock.txt',
+        sizeBytes: 0,
+      ),
+    );
   });
 
   setUp(() {
@@ -65,6 +94,13 @@ void main() {
 
     when(() => messageService.sendReadMarker(any(), any()))
         .thenAnswer((_) async {});
+
+    when(
+      () => chatsService.sendTyping(
+        jid: any(named: 'jid'),
+        typing: any(named: 'typing'),
+      ),
+    ).thenAnswer((_) async {});
 
     when(() => chatsService.loadChatViewFilter(any()))
         .thenAnswer((_) async => MessageTimelineFilter.directOnly);
@@ -179,6 +215,77 @@ void main() {
       bloc.state.fanOutDrafts[report.shareId]?.body,
       'Team status update',
     );
+
+    await bloc.close();
+  });
+
+  test('fan-out merges typed recipients regardless of casing', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 1,
+      emailAddress: 'peer@example.com',
+    );
+    final typedChat = Chat(
+      jid: 'dc-2@delta.chat',
+      title: 'Carol',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 2,
+      emailAddress: 'carol@example.com',
+    );
+    final report = FanOutSendReport(
+      shareId: 'share-456',
+      statuses: [
+        FanOutRecipientStatus(
+          chat: emailChat,
+          state: FanOutRecipientState.sent,
+          deltaMsgId: 201,
+        ),
+        FanOutRecipientStatus(
+          chat: typedChat,
+          state: FanOutRecipientState.sent,
+          deltaMsgId: 202,
+        ),
+      ],
+    );
+
+    when(
+      () => emailService.fanOutSend(
+        targets: any(named: 'targets'),
+        body: any(named: 'body'),
+        attachment: any(named: 'attachment'),
+        shareId: any(named: 'shareId'),
+        useSubjectToken: any(named: 'useSubjectToken'),
+      ),
+    ).thenAnswer((_) async => report);
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      notificationService: notificationService,
+      emailService: emailService,
+    );
+
+    messageStreamController.add(const <Message>[]);
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatComposerRecipientAdded(
+        FanOutTarget.address(address: 'Carol@Example.com'),
+      ),
+    );
+    await _pumpBloc();
+
+    bloc.add(const ChatMessageSent(text: 'Hello world'));
+    await _pumpBloc();
+
+    final mergedRecipient = bloc.state.recipients.firstWhere(
+      (recipient) => recipient.target.chat?.jid == typedChat.jid,
+    );
+    expect(mergedRecipient.target.chat, typedChat);
 
     await bloc.close();
   });

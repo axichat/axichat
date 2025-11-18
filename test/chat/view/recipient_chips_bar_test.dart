@@ -1,25 +1,27 @@
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
   testWidgets('submitting email adds recipient', (tester) async {
     FanOutTarget? added;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: RecipientChipsBar(
-            recipients: const [],
-            availableChats: const [],
-            latestStatuses: const {},
-            onRecipientAdded: (target) => added = target,
-            onRecipientRemoved: (_) {},
-            onRecipientToggled: (_) {},
-          ),
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: const [],
+          latestStatuses: const {},
+          onRecipientAdded: (target) => added = target,
+          onRecipientRemoved: (_) {},
+          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -39,16 +41,14 @@ void main() {
     final recipient = ComposerRecipient(target: FanOutTarget.chat(chat));
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: RecipientChipsBar(
-            recipients: [recipient],
-            availableChats: const [],
-            latestStatuses: const {},
-            onRecipientAdded: (_) {},
-            onRecipientRemoved: (_) {},
-            onRecipientToggled: (key) => toggledKey = key,
-          ),
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: [recipient],
+          availableChats: const [],
+          latestStatuses: const {},
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (_) {},
+          onRecipientToggled: (key) => toggledKey = key,
         ),
       ),
     );
@@ -84,16 +84,14 @@ void main() {
     ];
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: RecipientChipsBar(
-            recipients: recipients,
-            availableChats: const [],
-            latestStatuses: const {},
-            onRecipientAdded: (_) {},
-            onRecipientRemoved: (key) => removedKey = key,
-            onRecipientToggled: (_) {},
-          ),
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: recipients,
+          availableChats: const [],
+          latestStatuses: const {},
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (key) => removedKey = key,
+          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -102,4 +100,48 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     expect(removedKey, recipients.last.key);
   });
+
+  testWidgets('shows latest status for typed recipient via email key',
+      (tester) async {
+    final recipient = ComposerRecipient(
+      target: FanOutTarget.address(address: 'CaseSensitive@Example.com'),
+    );
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: [recipient],
+          availableChats: const [],
+          latestStatuses: const {
+            'casesensitive@example.com': FanOutRecipientState.failed,
+          },
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (_) {},
+          onRecipientToggled: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+  });
 }
+
+Widget _wrapWithTheme(Widget child) {
+  final settingsCubit = _MockSettingsCubit();
+  when(() => settingsCubit.state).thenReturn(const SettingsState());
+  when(() => settingsCubit.stream)
+      .thenAnswer((_) => const Stream<SettingsState>.empty());
+  return MaterialApp(
+    home: BlocProvider<SettingsCubit>.value(
+      value: settingsCubit,
+      child: ShadTheme(
+        data: ShadThemeData(
+          colorScheme: const ShadSlateColorScheme.light(),
+          brightness: Brightness.light,
+        ),
+        child: Scaffold(body: child),
+      ),
+    ),
+  );
+}
+
+class _MockSettingsCubit extends Mock implements SettingsCubit {}
