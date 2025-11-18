@@ -404,42 +404,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       host: host,
       password: password,
     );
-    try {
-      final response = await _httpClient.post(
-        registrationUrl,
-        body: {
-          'username': username,
-          'host': host,
-          'password': password,
-          'password2': confirmPassword,
-          'id': captchaID,
-          'key': captcha,
-          'register': 'Register',
-        },
-      );
-      if (!(response.statusCode == 200 || response.statusCode == 201)) {
-        emit(AuthenticationSignupFailure(response.body));
-        _activeSignupCredentialKey = null;
-        await _removePendingAccountDeletion(
-          username: username,
-          host: host,
-        );
-        return;
-      }
-    } on Exception catch (_) {
-      emit(const AuthenticationSignupFailure(
-        'Failed to register, try again later.',
-      ));
-      _activeSignupCredentialKey = null;
-      await _removePendingAccountDeletion(
-        username: username,
-        host: host,
-      );
-      return;
-    }
     var signupComplete = false;
+    ChatmailCredentials? chatmailCredentials;
     try {
-      ChatmailCredentials? chatmailCredentials;
       if (_emailService != null) {
         chatmailCredentials = await _chatmailProvisioningClient.createAccount(
           localpart: username,
@@ -451,6 +418,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           password: password,
           credentials: chatmailCredentials,
         );
+      }
+      try {
+        final response = await _httpClient.post(
+          registrationUrl,
+          body: {
+            'username': username,
+            'host': host,
+            'password': password,
+            'password2': confirmPassword,
+            'id': captchaID,
+            'key': captcha,
+            'register': 'Register',
+          },
+        );
+        if (!(response.statusCode == 200 || response.statusCode == 201)) {
+          emit(AuthenticationSignupFailure(response.body));
+          return;
+        }
+      } on Exception catch (_) {
+        emit(const AuthenticationSignupFailure(
+          'Failed to register, try again later.',
+        ));
+        return;
       }
       await login(
         username: username,
@@ -467,6 +457,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         stackTrace,
       );
       emit(AuthenticationSignupFailure(error.message));
+      return;
     } finally {
       _activeSignupCredentialKey = null;
       if (signupComplete) {
