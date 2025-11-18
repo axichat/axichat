@@ -60,18 +60,31 @@ class FanOutTarget extends Equatable {
   factory FanOutTarget.address({
     required String address,
     String? displayName,
-  }) =>
-      FanOutTarget._(
-        chat: null,
-        address: address,
-        displayName: displayName,
-      );
+  }) {
+    final trimmed = address.trim();
+    final resolvedDisplayName = displayName?.trim();
+    return FanOutTarget._(
+      chat: null,
+      address: trimmed,
+      displayName: resolvedDisplayName?.isNotEmpty == true
+          ? resolvedDisplayName
+          : trimmed,
+    );
+  }
 
   final Chat? chat;
   final String? address;
   final String? displayName;
 
-  String get key => chat?.jid ?? address!;
+  String get key => chat?.jid ?? normalizedAddress ?? address!;
+
+  String? get normalizedAddress {
+    final value = address?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return value.toLowerCase();
+  }
 
   @override
   List<Object?> get props => [chat?.jid, address, displayName];

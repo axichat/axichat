@@ -109,7 +109,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           isRemoving: _removingKeys.contains(recipient.key),
           child: _RecipientChip(
             recipient: recipient,
-            status: widget.latestStatuses[recipient.target.chat?.jid ?? ''],
+            status: _statusFor(recipient),
             onToggle: () => widget.onRecipientToggled(recipient.key),
             onRemove: recipient.pinned
                 ? null
@@ -448,6 +448,28 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return addresses;
   }
 
+  FanOutRecipientState? _statusFor(ComposerRecipient recipient) {
+    final targetChat = recipient.target.chat;
+    if (targetChat != null) {
+      final byJid = widget.latestStatuses[targetChat.jid];
+      if (byJid != null) {
+        return byJid;
+      }
+      final emailKey = targetChat.emailAddress?.trim().toLowerCase();
+      if (emailKey != null && emailKey.isNotEmpty) {
+        final byEmail = widget.latestStatuses[emailKey];
+        if (byEmail != null) {
+          return byEmail;
+        }
+      }
+    }
+    final addressKey = recipient.target.address?.trim().toLowerCase();
+    if (addressKey != null && addressKey.isNotEmpty) {
+      return widget.latestStatuses[addressKey];
+    }
+    return null;
+  }
+
   String? _extractDomain(String? raw) {
     final address = raw?.trim();
     if (address == null || address.isEmpty || !address.contains('@')) {
@@ -664,7 +686,9 @@ class _RecipientChip extends StatelessWidget {
     if (recipient.target.chat != null) {
       return recipient.target.chat!.title;
     }
-    return recipient.target.address ?? 'Recipient';
+    return recipient.target.displayName ??
+        recipient.target.address ??
+        'Recipient';
   }
 
   bool get _showLock =>
@@ -848,7 +872,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
         focusNode: focusNode,
         optionsBuilder: (value) => optionsBuilder(value.text),
         displayStringForOption: (option) =>
-            option.chat?.title ?? option.address ?? '',
+            option.chat?.title ?? option.displayName ?? option.address ?? '',
         fieldViewBuilder:
             (context, fieldController, fieldFocusNode, onFieldSubmitted) {
           final colors = Theme.of(context).colorScheme;
@@ -1056,10 +1080,16 @@ class _AutocompleteOptionsList extends StatelessWidget {
           itemBuilder: (context, index) {
             final option = options[index];
             final chat = option.chat;
-            final title = chat?.title ?? option.address ?? '';
-            final subtitleSource =
-                chat?.emailAddress ?? chat?.jid ?? option.address ?? '';
-            final subtitle = subtitleSource == title ? null : subtitleSource;
+            final title =
+                chat?.title ?? option.displayName ?? option.address ?? '';
+            final subtitleSource = chat?.emailAddress ??
+                chat?.jid ??
+                option.address ??
+                option.displayName ??
+                '';
+            final subtitle = subtitleSource.isEmpty || subtitleSource == title
+                ? null
+                : subtitleSource;
             final border = index == options.length - 1
                 ? BorderSide.none
                 : BorderSide(color: dividerColor, width: 0.7);

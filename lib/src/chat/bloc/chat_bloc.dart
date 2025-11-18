@@ -1333,12 +1333,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var changed = false;
     for (final status in report.statuses) {
       final jid = status.chat.jid;
-      final matchesIndex = recipients.indexWhere(
-        (recipient) =>
-            recipient.target.chat?.jid == jid ||
-            (recipient.target.address != null &&
-                recipient.target.address == status.chat.emailAddress),
-      );
+      final statusAddress = status.chat.emailAddress?.trim().toLowerCase();
+      final matchesIndex = recipients.indexWhere((recipient) {
+        final targetChat = recipient.target.chat;
+        if (targetChat != null && targetChat.jid == jid) {
+          return true;
+        }
+        final recipientAddress = recipient.target.normalizedAddress;
+        return statusAddress != null &&
+            recipientAddress != null &&
+            recipientAddress == statusAddress;
+      });
       if (matchesIndex >= 0 &&
           recipients[matchesIndex].target.chat?.jid != jid) {
         recipients[matchesIndex] = recipients[matchesIndex].copyWith(
