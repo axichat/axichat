@@ -136,7 +136,16 @@ class _SignupFormState extends State<SignupForm> {
       return;
     }
     _lastReportedLoading = loading;
-    widget.onLoadingChanged?.call(loading);
+    final callback = widget.onLoadingChanged;
+    if (callback == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      callback(loading);
+    });
   }
 
   void _onPressed(BuildContext context) async {
@@ -393,8 +402,13 @@ class _SignupFormState extends State<SignupForm> {
         }
       },
       builder: (context, state) {
-        final loading = state is AuthenticationInProgress ||
-            state is AuthenticationComplete;
+        final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
+        final bool signupFlowActive =
+            state is AuthenticationSignUpInProgress && onSubmitStep;
+        final bool latchActive = (_lastReportedLoading ?? false) &&
+            (state is AuthenticationLogInInProgress ||
+                state is AuthenticationComplete);
+        final loading = signupFlowActive || latchActive;
         _notifyLoadingChanged(loading);
         final cleanupBlocked =
             state is AuthenticationSignupFailure && state.isCleanupBlocked;
