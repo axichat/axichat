@@ -824,58 +824,207 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   }
 }
 
-class XmppSocketWrapper extends mox_tcp.TCPSocketWrapper {
-  XmppSocketWrapper() : super(false);
+class XmppSocketWrapper implements mox.BaseSocketWrapper {
+  XmppSocketWrapper({bool logTraffic = false})
+      : _logIncomingOutgoing = logTraffic;
 
   static final _log = Logger('XmppSocketWrapper');
+
+  final bool _logIncomingOutgoing;
+  final StreamController<String> _dataStream = StreamController.broadcast();
+  final StreamController<mox.XmppSocketEvent> _eventStream =
+      StreamController.broadcast();
+
+  Socket? _socket;
+  StreamSubscription<dynamic>? _socketSubscription;
+  bool _expectSocketClosure = false;
+  bool _secure = false;
+
+  @override
+  bool isSecure() => _secure;
+
+  @override
+  bool managesKeepalives() => false;
+
+  @override
+  bool whitespacePingAllowed() => true;
+
+  void destroy() {
+    _socketSubscription?.cancel();
+  }
+
+  bool onBadCertificate(dynamic certificate, String domain) => false;
+
+  Future<bool> _hostPortConnect(String host, int port) async {
+    try {
+      _log.finest('Attempting fallback connection to $host:$port...');
+      _socket = await Socket.connect(
+        host,
+        port,
+        timeout: const Duration(seconds: 5),
+      );
+      _log.finest('Success!');
+      return true;
+    } on Exception catch (error) {
+      _log.finest('Failure! $error');
+      return false;
+    }
+  }
 
   @override
   Future<bool> connect(
     String domain, {
     String? host,
     int? port,
-  }) {
+  }) async {
+    _expectSocketClosure = false;
+    _secure = false;
+
     final endpoint = serverLookup[domain];
-    final resolvedHost = host ?? endpoint?.host ?? domain;
-    final resolvedPort = port ?? endpoint?.port;
-    if (resolvedPort != null) {
-      _log.fine(
-        'Connecting to $domain via static endpoint $resolvedHost:$resolvedPort',
-      );
-      return super.connect(
-        domain,
-        host: resolvedHost,
-        port: resolvedPort,
-      );
+    final overrideHost = host;
+    final hasHostOverride = overrideHost != null && overrideHost.isNotEmpty;
+
+    late final String resolvedHost;
+    late final int resolvedPort;
+    if (hasHostOverride) {
+      resolvedHost = overrideHost;
+      resolvedPort = port ?? 5222;
+    } else {
+      final target = endpoint;
+      if (target == null) {
+        _log.severe(
+          'No static server mapping for $domain and no host override provided. DNS lookups are disabled.',
+        );
+        return false;
+      }
+      resolvedHost = target.host;
+      resolvedPort = port ?? target.port;
+    }
+
+    _log.fine(
+      'Connecting to $domain via direct endpoint $resolvedHost:$resolvedPort',
+    );
+
+    final connected = await _hostPortConnect(resolvedHost, resolvedPort);
+    if (connected) {
+      _setupStreams();
+      return true;
     }
 
     _log.warning(
-      'No static port mapping for $domain. Falling back to SRV lookups.',
+      'Failed to connect to $resolvedHost:$resolvedPort. DNS/SRV fallbacks are disabled.',
     );
-    return super.connect(domain, host: resolvedHost, port: port);
+    return false;
+  }
+
+  void _setupStreams() {
+    final socket = _socket;
+    if (socket == null) {
+      _log.severe('Failed to setup streams as _socket is null');
+      return;
+    }
+
+    _socketSubscription = socket.listen(
+      (List<int> event) {
+        final data = utf8.decode(event);
+        if (_logIncomingOutgoing) {
+          _log.finest('<== $data');
+        }
+        _dataStream.add(data);
+      },
+      onError: (Object error) {
+        _log.severe(error.toString());
+        _eventStream.add(mox.XmppSocketErrorEvent(error));
+      },
+    );
+
+    socket.done.then((_) {
+      _eventStream.add(mox.XmppSocketClosureEvent(_expectSocketClosure));
+      _expectSocketClosure = false;
+    });
   }
 
   @override
-  Future<List<mox_tcp.MoxSrvRecord>> srvQuery(
-    String domain,
-    bool dnssec,
-  ) async {
-    final endpoint = serverLookup[domain];
-    if (endpoint == null) {
-      final message =
-          'No static server mapping found for $domain. DNS queries are disabled.';
-      _log.severe(message);
-      throw StateError(message);
+  Future<bool> secure(String domain) async {
+    if (_secure) {
+      _log.warning('Connection is already marked as secure. Doing nothing');
+      return true;
     }
-    return [
-      mox_tcp.MoxSrvRecord(
-        0,
-        0,
-        endpoint.host,
-        endpoint.port,
-      ),
-    ];
+
+    final socket = _socket;
+    if (socket == null) {
+      _log.severe('Failed to secure socket since _socket is null');
+      return false;
+    }
+
+    try {
+      _expectSocketClosure = true;
+      _socket = await SecureSocket.secure(
+        socket,
+        host: domain,
+        supportedProtocols: const [mox.xmppClientALPNId],
+        onBadCertificate: (cert) => onBadCertificate(cert, domain),
+      );
+
+      _secure = true;
+      _setupStreams();
+      return true;
+    } on Exception catch (error) {
+      _log.severe('Failed to secure socket: $error');
+      if (error is HandshakeException) {
+        _eventStream.add(mox_tcp.XmppSocketTLSFailedEvent());
+      }
+      return false;
+    }
   }
+
+  @override
+  void close() {
+    _expectSocketClosure = true;
+    _socketSubscription?.cancel();
+
+    final socket = _socket;
+    if (socket == null) {
+      _log.warning('Failed to close socket since _socket is null');
+      return;
+    }
+
+    try {
+      socket.close();
+    } catch (error) {
+      _log.warning('Closing socket threw exception: $error');
+    }
+  }
+
+  @override
+  void write(String data) {
+    final socket = _socket;
+    if (socket == null) {
+      _log.severe('Failed to write to socket as _socket is null');
+      return;
+    }
+
+    if (_logIncomingOutgoing) {
+      _log.finest('==> $data');
+    }
+
+    try {
+      socket.write(data);
+    } on Exception catch (error) {
+      _log.severe(error);
+      _eventStream.add(mox.XmppSocketErrorEvent(error));
+    }
+  }
+
+  @override
+  Stream<String> getDataStream() => _dataStream.stream.asBroadcastStream();
+
+  @override
+  Stream<mox.XmppSocketEvent> getEventStream() =>
+      _eventStream.stream.asBroadcastStream();
+
+  @override
+  void prepareDisconnect() {}
 }
 
 /// Custom Stream Management manager that adds persistent state storage.
