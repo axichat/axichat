@@ -1,0 +1,6 @@
+Version x.y.z+NN:
+
+- TODO: List major changes for this release.
+- TODO: Highlight user-facing improvements, fixes, or regressions.
+
+Copy this file to fastlane/metadata/android/en-US/changelogs/<versionCode>.txt for each launch.
