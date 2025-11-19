@@ -400,7 +400,7 @@ void main() {
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
@@ -435,7 +435,7 @@ void main() {
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
@@ -478,7 +478,7 @@ void main() {
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (_) {
@@ -563,7 +563,7 @@ void main() {
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {

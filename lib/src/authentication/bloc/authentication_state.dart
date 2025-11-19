@@ -21,7 +21,12 @@ abstract final class AuthenticationInProgress extends AuthenticationState {
 }
 
 final class AuthenticationLogInInProgress extends AuthenticationInProgress {
-  const AuthenticationLogInInProgress();
+  const AuthenticationLogInInProgress({this.fromSignup = false});
+
+  final bool fromSignup;
+
+  @override
+  List<Object?> get props => [fromSignup];
 }
 
 final class AuthenticationSignUpInProgress extends AuthenticationInProgress {

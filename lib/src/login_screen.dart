@@ -34,6 +34,7 @@ enum _AuthFlow {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   var _login = true;
+  var _signupFlowLocked = false;
   late OperationProgressController _operationProgressController;
   String _operationLabel = '';
   _AuthFlow? _activeFlow;
@@ -44,6 +45,10 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     _operationProgressController = OperationProgressController(vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _handleAuthState(context.read<AuthenticationCubit>().state);
+    });
   }
 
   void _handleSubmissionRequested(
@@ -54,6 +59,12 @@ class _LoginScreenState extends State<LoginScreen>
       _activeFlow = flow;
       _operationLabel = label;
       _operationAcknowledged = false;
+      if (flow == _AuthFlow.signup) {
+        _signupFlowLocked = true;
+        _login = false;
+      } else if (_signupFlowLocked) {
+        _signupFlowLocked = false;
+      }
     });
     _operationProgressController.start();
   }
@@ -96,8 +107,13 @@ class _LoginScreenState extends State<LoginScreen>
     await _operationProgressController.complete();
     if (!mounted) return;
     setState(() {
+      final wasSignupFlow = _activeFlow == _AuthFlow.signup;
       _activeFlow = null;
       _operationAcknowledged = false;
+      if (wasSignupFlow && _signupFlowLocked) {
+        _signupFlowLocked = false;
+        _login = false;
+      }
     });
     _operationProgressController.reset();
   }
@@ -106,16 +122,43 @@ class _LoginScreenState extends State<LoginScreen>
     await _operationProgressController.fail();
     if (!mounted) return;
     setState(() {
+      final wasSignupFlow = _activeFlow == _AuthFlow.signup;
       _activeFlow = null;
       _operationAcknowledged = false;
+      if (wasSignupFlow && _signupFlowLocked) {
+        _signupFlowLocked = false;
+        _login = false;
+      }
     });
     _operationProgressController.reset();
   }
 
+  void _restoreSignupFlow(String label) {
+    if (!mounted) return;
+    setState(() {
+      _activeFlow = _AuthFlow.signup;
+      _operationLabel = label;
+      _operationAcknowledged = true;
+      _signupFlowLocked = true;
+      _login = false;
+    });
+    if (!_operationProgressController.isActive) {
+      _operationProgressController.start();
+    }
+  }
+
   void _handleAuthState(AuthenticationState state) {
-    final flow = _activeFlow;
+    var flow = _activeFlow;
     if (flow == null) {
-      return;
+      if (state is AuthenticationSignUpInProgress) {
+        _restoreSignupFlow('Creating your account…');
+        flow = _AuthFlow.signup;
+      } else if (state is AuthenticationLogInInProgress && state.fromSignup) {
+        _restoreSignupFlow('Securing your login…');
+        flow = _AuthFlow.signup;
+      } else {
+        return;
+      }
     }
     if (state is AuthenticationSignUpInProgress && flow == _AuthFlow.signup) {
       _operationAcknowledged = true;
@@ -209,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                                 child: AnimatedCrossFade(
-                                  crossFadeState: _login
+                                  crossFadeState: (!_signupFlowLocked && _login)
                                       ? CrossFadeState.showFirst
                                       : CrossFadeState.showSecond,
                                   duration: context
