@@ -48,6 +48,7 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   void _onPressed(BuildContext context) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     widget.onSubmitStart?.call();
     context.read<AuthenticationCubit>().login(

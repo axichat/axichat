@@ -205,7 +205,10 @@ class HomeScreen extends StatelessWidget {
       },
     );
 
+    final shouldResizeForKeyboard = navPlacement != NavPlacement.bottom;
+
     final scaffold = Scaffold(
+      resizeToAvoidBottomInset: shouldResizeForKeyboard,
       body: DefaultTabController(
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,

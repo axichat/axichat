@@ -2781,7 +2781,7 @@ class _AddTaskSection extends StatelessWidget {
                   final button = ShadButton.outline(
                     size: ShadButtonSize.sm,
                     onPressed: enabled ? onClearFieldsPressed : null,
-                    child: const Text('Clear fields'),
+                    child: const Text('Clear'),
                   );
                   final decorated = button.withTapBounce(enabled: enabled);
                   return AnimatedOpacity(

@@ -1425,33 +1425,60 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (event.kind != PointerDeviceKind.mouse) {
       return;
     }
+    final DateTime? slot = _slotForGlobalPosition(event.position);
+    _updateHoveredSlot(slot);
+  }
+
+  void _handleSurfacePointerDown(PointerDownEvent event) {
+    if (!_shouldTrackTouchHighlight(event.kind)) {
+      return;
+    }
+    final DateTime? slot = _slotForGlobalPosition(event.position);
+    _updateHoveredSlot(slot);
+  }
+
+  void _handleSurfacePointerUp(PointerUpEvent event) {
+    if (!_shouldTrackTouchHighlight(event.kind)) {
+      return;
+    }
+    _clearSurfaceHover();
+  }
+
+  void _handleSurfacePointerCancel(PointerCancelEvent event) {
+    if (!_shouldTrackTouchHighlight(event.kind)) {
+      return;
+    }
+    _clearSurfaceHover();
+  }
+
+  bool _shouldTrackTouchHighlight(PointerDeviceKind kind) {
+    return kind != PointerDeviceKind.mouse;
+  }
+
+  DateTime? _slotForGlobalPosition(Offset globalPosition) {
     final RenderObject? renderObject =
         _surfaceKey.currentContext?.findRenderObject();
     if (renderObject is! RenderCalendarSurface) {
-      _updateHoveredSlot(null);
-      return;
+      return null;
     }
-    final Offset localPosition = renderObject.globalToLocal(event.position);
+    final Offset localPosition = renderObject.globalToLocal(globalPosition);
     if (localPosition.dx <= _timeColumnWidth ||
         _surfaceController.containsTaskAt(localPosition)) {
-      _updateHoveredSlot(null);
-      return;
+      return null;
     }
     final DateTime? slot = _surfaceController.slotForOffset(localPosition);
     if (slot == null) {
-      _updateHoveredSlot(null);
-      return;
+      return null;
     }
     final int step = _minutesPerStep;
     final int snappedMinute = (slot.minute ~/ step) * step;
-    final DateTime snapped = DateTime(
+    return DateTime(
       slot.year,
       slot.month,
       slot.day,
       slot.hour,
       snappedMinute,
     );
-    _updateHoveredSlot(snapped);
   }
 
   void _updateHoveredSlot(DateTime? slot) {
@@ -3061,12 +3088,19 @@ class _CalendarGridContent extends StatelessWidget {
       child: surface,
     );
 
+    final Widget highlightSurface = Listener(
+      onPointerDown: gridState._handleSurfacePointerDown,
+      onPointerUp: gridState._handleSurfacePointerUp,
+      onPointerCancel: gridState._handleSurfacePointerCancel,
+      child: menuSurface,
+    );
+
     final Widget touchAwareSurface = GestureDetector(
       behavior: HitTestBehavior.translucent,
       onLongPressStart: gridState._shouldEnableTouchGridMenu
           ? gridState._handleGridLongPressStart
           : null,
-      child: menuSurface,
+      child: highlightSurface,
     );
 
     return Padding(

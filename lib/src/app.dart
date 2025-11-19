@@ -183,14 +183,20 @@ class MaterialAxichat extends StatelessWidget {
   final _router = GoRouter(
     restorationScopeId: 'app',
     redirect: (context, routerState) {
-      if (context.read<AuthenticationCubit>().state
-          is! AuthenticationComplete) {
+      final authState = context.read<AuthenticationCubit>().state;
+      if (authState is! AuthenticationComplete) {
         // Check if the current route allows guest access
         final location = routeLocations[routerState.matchedLocation];
         if (location?.authenticationRequired == false) {
           return null; // Allow access to guest routes
         }
-        return const LoginRoute().location;
+        final loginLocation = const LoginRoute().location;
+        if (authState is AuthenticationLogInInProgress &&
+            authState.fromSignup &&
+            routerState.matchedLocation == loginLocation) {
+          return null;
+        }
+        return loginLocation;
       }
       return null;
     },
