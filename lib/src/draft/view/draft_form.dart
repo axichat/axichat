@@ -166,28 +166,25 @@ class _DraftFormState extends State<DraftForm> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
-                        child: SizedBox(
-                          height: _draftComposerControlExtent,
-                          child: Semantics(
-                            label: 'Email subject',
-                            textField: true,
-                            child: AxiTextFormField(
-                              controller: _subjectTextController,
-                              focusNode: _subjectFocusNode,
-                              enabled: enabled,
-                              minLines: 1,
-                              maxLines: 1,
-                              textInputAction: TextInputAction.next,
-                              onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-                              placeholder: const Text('Subject (optional)'),
-                              constraints: const BoxConstraints(
-                                minHeight: _draftComposerControlExtent,
-                              ),
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              placeholderAlignment: Alignment.centerLeft,
-                              inputPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
+                        child: Semantics(
+                          label: 'Email subject',
+                          textField: true,
+                          child: AxiTextFormField(
+                            controller: _subjectTextController,
+                            focusNode: _subjectFocusNode,
+                            enabled: enabled,
+                            minLines: 1,
+                            maxLines: 1,
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) => _bodyFocusNode.requestFocus(),
+                            placeholder: const Text('Subject (optional)'),
+                            constraints: const BoxConstraints(
+                              minHeight: _draftComposerControlExtent,
+                            ),
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            placeholderAlignment: Alignment.centerLeft,
+                            inputPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
                             ),
                           ),
                         ),
