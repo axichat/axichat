@@ -82,15 +82,17 @@ final class ForegroundServiceUnavailableException extends XmppException {
   ForegroundServiceUnavailableException([super.wrapped]);
 }
 
+// Hardcode the socket endpoints so we never block on DNS when dialing the XMPP
+// server. The `domain` parameter is still passed through for TLS/SASL SNI.
 final serverLookup = <String, IOEndpoint>{
-  'nz.axichat.com': const IOEndpoint('nz.axichat.com', 5222),
-  'axi.im': const IOEndpoint('axi.im', 5222),
-  'hookipa.net': const IOEndpoint('hookipa.net', 5222),
-  'xmpp.social': const IOEndpoint('xmpp.social', 5222),
-  'trashserver.net': const IOEndpoint('trashserver.net', 5222),
-  'conversations.im': const IOEndpoint('conversations.im', 5222),
-  'draugr.de': const IOEndpoint('draugr.de', 5222),
-  'jix.im': const IOEndpoint('jix.im', 5222),
+  'nz.axichat.com': const IOEndpoint('167.160.14.12', 5222),
+  'axi.im': const IOEndpoint('167.160.14.12', 5222),
+  'hookipa.net': const IOEndpoint('31.172.31.205', 5222),
+  'xmpp.social': const IOEndpoint('31.172.31.205', 5222),
+  'trashserver.net': const IOEndpoint('5.1.72.136', 5222),
+  'conversations.im': const IOEndpoint('78.47.177.120', 5222),
+  'draugr.de': const IOEndpoint('23.88.8.69', 5222),
+  'jix.im': const IOEndpoint('51.77.59.5', 5222),
 };
 
 typedef ConnectionState = mox.XmppConnectionState;
