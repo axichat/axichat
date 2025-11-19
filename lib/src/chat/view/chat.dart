@@ -134,6 +134,12 @@ const _selectionIndicatorInboundGap = 10.0;
 const _selectionIndicatorOutboundGap = 14.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
+const _selectionBubbleOutboundSpacingBoost = 6.0;
+const _selectionBubbleInboundSpacing =
+    _selectionBubbleInteriorInset + _selectionBubbleInboundExtraGap;
+const _selectionBubbleOutboundSpacing = _selectionBubbleInteriorInset +
+    _selectionBubbleOutboundExtraGap +
+    _selectionBubbleOutboundSpacingBoost;
 const _recipientBubbleInset = _recipientCutoutDepth;
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
@@ -2978,13 +2984,11 @@ class _ChatState extends State<Chat> {
                                                         bubblePadding.add(
                                                       EdgeInsets.only(
                                                         left: self
-                                                            ? _selectionBubbleInteriorInset +
-                                                                _selectionBubbleOutboundExtraGap
+                                                            ? _selectionBubbleOutboundSpacing
                                                             : 0,
                                                         right: self
                                                             ? 0
-                                                            : _selectionBubbleInteriorInset +
-                                                                _selectionBubbleInboundExtraGap,
+                                                            : _selectionBubbleInboundSpacing,
                                                       ),
                                                     );
                                                     bubblePadding =
