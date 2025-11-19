@@ -149,6 +149,7 @@ class _SignupFormState extends State<SignupForm> {
   }
 
   void _onPressed(BuildContext context) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final splitSrc = (await _captchaSrc).split('/');
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
       return;
@@ -187,6 +188,7 @@ class _SignupFormState extends State<SignupForm> {
     if (resetFirstLoad) {
       _captchaHasLoadedOnce = false;
     }
+    _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
       _captchaSrc = _loadCaptchaSrc();

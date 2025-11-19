@@ -247,6 +247,8 @@ class _CalendarWidgetState extends State<CalendarWidget>
               );
         final Widget tintedLayout = _CalendarSurfaceTint(child: layout);
         _updateTasksTabPulse(highlightTasksTab);
+        final bool shouldResizeForKeyboard = usesDesktopLayout;
+
         return SizedBox.expand(
           child: ColoredBox(
             color: calendarBackground,
@@ -262,6 +264,7 @@ class _CalendarWidgetState extends State<CalendarWidget>
               },
               child: Scaffold(
                 backgroundColor: calendarBackground,
+                resizeToAvoidBottomInset: shouldResizeForKeyboard,
                 body: Stack(
                   children: [
                     Column(
