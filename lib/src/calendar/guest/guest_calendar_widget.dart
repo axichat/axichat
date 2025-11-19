@@ -216,6 +216,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
               );
         _updateTasksTabPulse(highlightTasksTab);
         final Color surfaceColor = _calendarSurfaceColor(context);
+        final bool shouldResizeForKeyboard = usesDesktopLayout;
         return SizedBox.expand(
           child: ColoredBox(
             color: surfaceColor,
@@ -236,6 +237,7 @@ class _GuestCalendarWidgetState extends State<GuestCalendarWidget>
               child: CalendarTaskFeedbackObserver<GuestCalendarBloc>(
                 child: Scaffold(
                   backgroundColor: surfaceColor,
+                  resizeToAvoidBottomInset: shouldResizeForKeyboard,
                   body: Stack(
                     children: [
                       SafeArea(
