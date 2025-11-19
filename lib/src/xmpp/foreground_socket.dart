@@ -10,7 +10,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
-import 'package:moxxmpp_socket_tcp/moxxmpp_socket_tcp.dart' as mox_tcp;
 
 const join = '::';
 const connectPrefix = 'Connect';
@@ -478,18 +477,20 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   }
 
   @override
-  Future<List<mox_tcp.MoxSrvRecord>> srvQuery(
-    String domain,
-    bool dnssec,
-  ) async =>
-      [];
-
-  @override
   bool whitespacePingAllowed() => true;
 
   @override
   Future<bool> connect(String domain, {String? host, int? port}) async {
     await reset();
+
+    final target = _resolveTarget(
+      domain,
+      host: host,
+      port: port,
+    );
+    if (target == null) {
+      return false;
+    }
 
     if (!_listenerRegistered) {
       _bridge.registerListener(
@@ -516,12 +517,6 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       rethrow;
     }
 
-    final target = _resolveTarget(
-      domain,
-      host: host,
-      port: port,
-    );
-
     _sendToTask([
       connectPrefix,
       domain,
@@ -531,16 +526,26 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     return _connect.future;
   }
 
-  _SocketTarget _resolveTarget(
+  _SocketTarget? _resolveTarget(
     String domain, {
     String? host,
     int? port,
   }) {
-    final override = serverLookup[domain];
-    final resolvedHost =
-        (host != null && host.isNotEmpty) ? host : override?.host ?? domain;
-    final resolvedPort = port ?? override?.port ?? 5222;
-    return _SocketTarget(resolvedHost, resolvedPort);
+    final overrideHost = host;
+    final hasOverride = overrideHost != null && overrideHost.isNotEmpty;
+    if (hasOverride) {
+      return _SocketTarget(overrideHost, port ?? 5222);
+    }
+
+    final mapping = serverLookup[domain];
+    if (mapping == null) {
+      _log.severe(
+        'No static server mapping for $domain and no host override provided. DNS lookups are disabled.',
+      );
+      return null;
+    }
+
+    return _SocketTarget(mapping.host, port ?? mapping.port);
   }
 
   @override
