@@ -173,7 +173,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.fine('Ignoring login request while another is in progress.');
       return;
     }
-    emit(const AuthenticationLogInInProgress());
+    final loginState = _activeSignupCredentialKey != null
+        ? const AuthenticationLogInInProgress(fromSignup: true)
+        : const AuthenticationLogInInProgress();
+    emit(loginState);
 
     if ((username == null) != (password == null)) {
       emit(const AuthenticationFailure(
