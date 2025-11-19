@@ -2154,8 +2154,14 @@ class _ChatState extends State<Chat> {
                                         ? searchResults
                                         : state.items;
                                     final filteredItems = activeItems
-                                        .where((e) =>
-                                            e.body != null || e.error.isNotNone)
+                                        .where(
+                                          (message) =>
+                                              message.body != null ||
+                                              message.error.isNotNone ||
+                                              message.fileMetadataID
+                                                      ?.isNotEmpty ==
+                                                  true,
+                                        )
                                         .toList();
                                     final selectedMessages =
                                         _collectSelectedMessages(filteredItems);
