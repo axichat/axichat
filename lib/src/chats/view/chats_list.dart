@@ -877,7 +877,7 @@ class _TransportAwareAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final jid = chat.jid;
+    final avatarIdentifier = chat.avatarIdentifier;
     final supportsEmail = chat.transport.isEmail;
     final isAxiCompatible = chat.isAxiContact;
     final shouldLabelAll = !supportsEmail && isAxiCompatible;
@@ -905,7 +905,7 @@ class _TransportAwareAvatar extends StatelessWidget {
         children: [
           Positioned.fill(
             child: AxiAvatar(
-              jid: jid,
+              jid: avatarIdentifier,
               shape: AxiAvatarShape.circle,
               size: avatarSize,
             ),

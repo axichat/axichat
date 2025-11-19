@@ -204,6 +204,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Chat?> getChat(String jid);
 
+  Future<Chat?> getChatByDeltaChatId(int deltaChatId);
+
+  Stream<Chat?> watchChatByDeltaChatId(int deltaChatId);
+
   Future<void> createChat(Chat chat);
 
   Future<void> updateChat(Chat chat);
@@ -928,8 +932,20 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   final File _file;
   String _normalizeEmail(String address) => address.trim().toLowerCase();
 
+  String _chatTitleForIdentifier(String identifier) {
+    final trimmed = identifier.trim();
+    if (trimmed.isEmpty) {
+      return identifier;
+    }
+    try {
+      return mox.JID.fromString(trimmed).local;
+    } catch (_) {
+      return trimmed;
+    }
+  }
+
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration {
@@ -1020,6 +1036,9 @@ WHERE subject_token IS NOT NULL
         if (from < 12) {
           await m.addColumn(chats, chats.spam);
           await m.createTable(emailSpamlist);
+        }
+        if (from < 13) {
+          await _mergeEmailChats();
         }
       },
       beforeOpen: (_) async {
@@ -1240,11 +1259,12 @@ WHERE subject_token IS NOT NULL
       fileMetadataId: message.fileMetadataID,
       hasAttachment: hasAttachment,
     );
+    final chatTitle = _chatTitleForIdentifier(message.chatJid);
     await transaction(() async {
       await into(chats).insert(
         ChatsCompanion.insert(
           jid: message.chatJid,
-          title: mox.JID.fromString(message.chatJid).local,
+          title: chatTitle,
           type: ChatType.chat,
           unreadCount: Value((hasBody || hasAttachment).toBinary),
           lastMessage: Value.absentIfNull(lastMessagePreview),
@@ -1663,6 +1683,18 @@ WHERE subject_token IS NOT NULL
   Future<Chat?> getChat(String jid) => chatsAccessor.selectOne(jid);
 
   @override
+  Future<Chat?> getChatByDeltaChatId(int deltaChatId) {
+    return (select(chats)..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
+        .getSingleOrNull();
+  }
+
+  @override
+  Stream<Chat?> watchChatByDeltaChatId(int deltaChatId) {
+    return (select(chats)..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
+        .watchSingleOrNull();
+  }
+
+  @override
   Future<void> createChat(Chat chat) async {
     final lastMessage = await getLastMessageForChat(chat.jid);
 
@@ -1689,7 +1721,7 @@ WHERE subject_token IS NOT NULL
       await into(chats).insert(
         ChatsCompanion.insert(
           jid: jid,
-          title: mox.JID.fromString(jid).local,
+          title: _chatTitleForIdentifier(jid),
           type: ChatType.chat,
           open: const Value(true),
           unreadCount: const Value(0),
@@ -2256,6 +2288,90 @@ ON CONFLICT(address) DO UPDATE SET
       await customStatement('DROP TABLE "$tempTableName"');
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
+    }
+  }
+
+  Future<void> _mergeEmailChats() async {
+    final emailChats = await (select(chats)
+          ..where((tbl) => tbl.emailAddress.isNotNull()))
+        .get();
+    final canonical = <String, Chat>{};
+    for (final chat in emailChats) {
+      final email = chat.emailAddress;
+      if (email == null || email.trim().isEmpty) {
+        continue;
+      }
+      final normalized = _normalizeEmail(email);
+      if (normalized.isEmpty) {
+        continue;
+      }
+      if (chat.jid == normalized && !canonical.containsKey(normalized)) {
+        canonical[normalized] = chat;
+      }
+    }
+    for (final chat in emailChats) {
+      final email = chat.emailAddress;
+      if (email == null || email.trim().isEmpty) {
+        continue;
+      }
+      final normalized = _normalizeEmail(email);
+      if (normalized.isEmpty || chat.jid == normalized) {
+        continue;
+      }
+      final target = canonical[normalized];
+      if (target != null) {
+        await (update(messages)..where((tbl) => tbl.chatJid.equals(chat.jid)))
+            .write(MessagesCompanion(chatJid: Value(normalized)));
+        await (update(messageParticipants)
+              ..where((tbl) => tbl.contactJid.equals(chat.jid)))
+            .write(
+          MessageParticipantsCompanion(contactJid: Value(normalized)),
+        );
+        await (update(notifications)
+              ..where((tbl) => tbl.chatJid.equals(chat.jid)))
+            .write(
+          NotificationsCompanion(chatJid: Value(normalized)),
+        );
+        final merged = target.copyWith(
+          deltaChatId: chat.deltaChatId ?? target.deltaChatId,
+          emailAddress: chat.emailAddress ?? target.emailAddress,
+          contactDisplayName:
+              target.contactDisplayName ?? chat.contactDisplayName,
+          contactID: target.contactID ?? chat.contactID,
+        );
+        await (update(chats)..where((tbl) => tbl.jid.equals(target.jid))).write(
+          ChatsCompanion(
+            deltaChatId: Value(merged.deltaChatId),
+            emailAddress: Value(merged.emailAddress),
+            contactDisplayName: Value(merged.contactDisplayName),
+            contactID: Value(merged.contactID),
+          ),
+        );
+        await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
+      } else {
+        await (update(messages)..where((tbl) => tbl.chatJid.equals(chat.jid)))
+            .write(MessagesCompanion(chatJid: Value(normalized)));
+        await (update(messageParticipants)
+              ..where((tbl) => tbl.contactJid.equals(chat.jid)))
+            .write(
+          MessageParticipantsCompanion(contactJid: Value(normalized)),
+        );
+        await (update(notifications)
+              ..where((tbl) => tbl.chatJid.equals(chat.jid)))
+            .write(
+          NotificationsCompanion(chatJid: Value(normalized)),
+        );
+        await (update(chats)..where((tbl) => tbl.jid.equals(chat.jid))).write(
+          ChatsCompanion(
+            jid: Value(normalized),
+            contactJid: Value(normalized),
+          ),
+        );
+        canonical[normalized] = chat.copyWith(
+          jid: normalized,
+          contactJid: normalized,
+        );
+      }
     }
   }
 

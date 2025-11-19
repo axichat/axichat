@@ -6,7 +6,7 @@ targets:
     builders:
       drift_dev:
         generate_for:
-          - lib/**
+          - lib/src/storage/**
         options:
           store_date_time_values_as_text: true
       source_gen|combining_builder:

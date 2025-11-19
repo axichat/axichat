@@ -123,6 +123,72 @@ void main() {
 
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
   });
+
+  testWidgets('autocomplete suggests chats by prefix', (tester) async {
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: [
+            Chat(
+              jid: 'opus@axi.im',
+              title: 'Opus',
+              type: ChatType.chat,
+              lastChangeTimestamp: DateTime(2024, 1, 1),
+              emailAddress: 'opus@axi.im',
+            ),
+            Chat(
+              jid: 'codex@axi.im',
+              title: 'Codex',
+              type: ChatType.chat,
+              lastChangeTimestamp: DateTime(2024, 1, 2),
+              emailAddress: 'codex@axi.im',
+            ),
+          ],
+          latestStatuses: const {},
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (_) {},
+          onRecipientToggled: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'c');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('Opus'), findsNothing);
+  });
+
+  testWidgets('autocomplete suggests known domains after @', (tester) async {
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: [
+            Chat(
+              jid: 'opus@axi.im',
+              title: 'Opus',
+              type: ChatType.chat,
+              lastChangeTimestamp: DateTime(2024, 1, 1),
+              emailAddress: 'opus@axi.im',
+            ),
+          ],
+          latestStatuses: const {},
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (_) {},
+          onRecipientToggled: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'ca@');
+    await tester.pumpAndSettle();
+
+    expect(find.text('ca@axi.im'), findsOneWidget);
+  });
 }
 
 Widget _wrapWithTheme(Widget child) {

@@ -418,11 +418,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     for (final chat in widget.availableChats) {
       addFrom(chat.emailAddress);
       addFrom(chat.jid);
+      addFrom(chat.remoteJid);
     }
     for (final recipient in widget.recipients) {
       final target = recipient.target;
       addFrom(target.chat?.emailAddress ?? target.address);
       addFrom(target.chat?.jid);
+      addFrom(target.chat?.remoteJid);
     }
     return domains;
   }
@@ -438,12 +440,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     for (final chat in widget.availableChats) {
       add(chat.emailAddress);
       add(chat.jid);
+      add(chat.remoteJid);
     }
     for (final recipient in widget.recipients) {
       final target = recipient.target;
       add(target.address);
       add(target.chat?.jid);
       add(target.chat?.emailAddress);
+      add(target.chat?.remoteJid);
     }
     return addresses;
   }
@@ -581,8 +585,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final jid = chat.jid.toLowerCase();
     final email = chat.emailAddress?.toLowerCase() ?? '';
     final display = chat.contactDisplayName?.toLowerCase() ?? '';
+    final remote = chat.remoteJid.toLowerCase();
     return title.startsWith(query) ||
         jid.startsWith(query) ||
+        remote.startsWith(query) ||
         (email.isNotEmpty && email.startsWith(query)) ||
         (display.isNotEmpty && display.startsWith(query));
   }

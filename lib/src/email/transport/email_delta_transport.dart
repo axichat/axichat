@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -12,7 +13,6 @@ import 'package:path/path.dart' as p;
 import '../sync/delta_event_consumer.dart';
 import 'chat_transport.dart';
 
-const _deltaDomain = 'delta.chat';
 const _selfDomain = 'user.delta.chat';
 
 class EmailDeltaTransport implements ChatTransport {
@@ -560,25 +560,36 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<Chat> _ensureChat(int chatId) async {
     final db = await _databaseBuilder();
-    final jid = _chatJid(chatId);
-    final existing = await db.getChat(jid);
+    final existing = await db.getChatByDeltaChatId(chatId);
     if (existing != null) {
       return existing;
     }
     final remote = await _context!.getChat(chatId);
-    final title = remote?.name ?? remote?.contactName ?? 'Chat $chatId';
-    final emailAddress = remote?.contactAddress;
+    final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
+    final title = remote?.name ?? remote?.contactName ?? emailAddress;
     final chat = Chat(
-      jid: jid,
+      jid: emailAddress,
       title: title,
       type: _mapChatType(remote?.type),
       lastChangeTimestamp: DateTime.timestamp(),
       encryptionProtocol: EncryptionProtocol.none,
       contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,
+      contactJid: emailAddress,
       emailAddress: emailAddress,
       deltaChatId: chatId,
     );
+    final existingByAddress = await db.getChat(emailAddress);
+    if (existingByAddress != null) {
+      final merged = existingByAddress.copyWith(
+        deltaChatId: chatId,
+        emailAddress: emailAddress,
+        contactDisplayName: chat.contactDisplayName,
+        contactID: chat.contactID,
+      );
+      await db.updateChat(merged);
+      return merged;
+    }
     await db.createChat(chat);
     return chat;
   }
@@ -729,6 +740,11 @@ class EmailDeltaTransport implements ChatTransport {
   }
 }
 
-String _chatJid(int chatId) => 'dc-$chatId@$_deltaDomain';
+String _normalizedAddress(String? raw, int chatId) {
+  if (raw == null || raw.trim().isEmpty) {
+    return fallbackEmailAddressForChat(chatId);
+  }
+  return normalizeEmailAddress(raw);
+}
 
 String _stanzaId(int msgId) => 'dc-msg-$msgId';

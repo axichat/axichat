@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -183,8 +184,7 @@ class DeltaEventConsumer {
 
   Future<Chat> _ensureChat(int chatId) async {
     final db = await _db();
-    final jid = _chatJid(chatId);
-    final existing = await db.getChat(jid);
+    final existing = await db.getChatByDeltaChatId(chatId);
     if (existing != null) {
       return existing;
     }
@@ -193,6 +193,17 @@ class DeltaEventConsumer {
       chatId: chatId,
       remote: remote,
     );
+    final existingByAddress = await db.getChat(chat.jid);
+    if (existingByAddress != null) {
+      final merged = existingByAddress.copyWith(
+        deltaChatId: chatId,
+        emailAddress: chat.emailAddress,
+        contactDisplayName: chat.contactDisplayName,
+        contactID: chat.contactID,
+      );
+      await db.updateChat(merged);
+      return merged;
+    }
     await db.createChat(chat);
     return chat;
   }
@@ -201,16 +212,20 @@ class DeltaEventConsumer {
     required int chatId,
     required DeltaChat? remote,
   }) {
-    final emailAddress = remote?.contactAddress;
-    final title = remote?.name ?? remote?.contactName ?? 'Chat $chatId';
+    final emailAddress = _normalizedAddress(
+      remote?.contactAddress,
+      chatId,
+    );
+    final title = remote?.name ?? remote?.contactName ?? emailAddress;
     return Chat(
-      jid: _chatJid(chatId),
+      jid: emailAddress,
       title: title,
       type: _mapChatType(remote?.type),
       lastChangeTimestamp: DateTime.timestamp(),
       encryptionProtocol: EncryptionProtocol.none,
       contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,
+      contactJid: emailAddress,
       emailAddress: emailAddress,
       deltaChatId: chatId,
     );
@@ -220,8 +235,7 @@ class DeltaEventConsumer {
     final db = await _db();
     final remote = await _context.getChat(chatId);
     if (remote == null) return;
-    final jid = _chatJid(chatId);
-    final existing = await db.getChat(jid);
+    final existing = await db.getChatByDeltaChatId(chatId);
     if (existing == null) {
       await db.createChat(_chatFromRemote(chatId: chatId, remote: remote));
       return;
@@ -244,7 +258,7 @@ class DeltaEventConsumer {
     required DateTime timestamp,
   }) async {
     final db = await _db();
-    final chat = await db.getChat(_chatJid(chatId));
+    final chat = await db.getChatByDeltaChatId(chatId);
     if (chat == null) return;
     if (!chat.lastChangeTimestamp.isBefore(timestamp)) return;
     await db.updateChat(chat.copyWith(lastChangeTimestamp: timestamp));
@@ -334,7 +348,12 @@ class DeltaEventConsumer {
   }
 }
 
-String _chatJid(int chatId) => 'dc-$chatId@$_deltaDomain';
+String _normalizedAddress(String? address, int chatId) {
+  if (address == null || address.trim().isEmpty) {
+    return fallbackEmailAddressForChat(chatId);
+  }
+  return normalizeEmailAddress(address);
+}
 
 String _stanzaId(int msgId) => 'dc-msg-$msgId';
 

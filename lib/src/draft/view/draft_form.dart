@@ -492,10 +492,8 @@ class _DraftFormState extends State<DraftForm> {
     if (draftCubit == null) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients(forceEmailAll: hasAttachments);
-    final xmppJids = split.xmppTargets
-        .where((recipient) => recipient.target.chat != null)
-        .map((recipient) => recipient.target.chat!.jid)
-        .toList();
+    final xmppJids =
+        split.xmppTargets.map(_resolveXmppJid).whereType<String>().toList();
     final emailTargets = split.emailTargets.map((recipient) {
       final chat = recipient.target.chat;
       if (chat != null) {
@@ -529,7 +527,13 @@ class _DraftFormState extends State<DraftForm> {
           if (chat != null) {
             return chat.jid;
           }
-          return recipient.target.address ?? '';
+          final xmppJid = _resolveXmppJid(recipient);
+          if (xmppJid != null) {
+            return xmppJid;
+          }
+          return recipient.target.normalizedAddress ??
+              recipient.target.address ??
+              '';
         })
         .where((value) => value.isNotEmpty)
         .toList();
@@ -550,22 +554,32 @@ class _DraftFormState extends State<DraftForm> {
         emailTargets.add(recipient);
         continue;
       }
-      final chat = recipient.target.chat;
-      if (chat == null) {
-        emailTargets.add(recipient);
+      final xmppJid = _resolveXmppJid(recipient);
+      if (xmppJid != null) {
+        xmppTargets.add(recipient);
         continue;
       }
-      if (_isAxiDestination(chat.jid)) {
-        xmppTargets.add(recipient);
-      } else {
-        emailTargets.add(recipient);
-      }
+      emailTargets.add(recipient);
     }
     return (
       emailTargets: emailTargets,
       xmppTargets: xmppTargets,
       hasActiveRecipients: emailTargets.isNotEmpty || xmppTargets.isNotEmpty,
     );
+  }
+
+  String? _resolveXmppJid(ComposerRecipient recipient) {
+    final chat = recipient.target.chat;
+    if (chat != null) {
+      return _isAxiDestination(chat.jid) ? chat.jid : null;
+    }
+    final normalizedAddress = recipient.target.normalizedAddress;
+    final rawAddress = recipient.target.address;
+    final candidate = normalizedAddress ?? rawAddress?.trim();
+    if (candidate == null || candidate.isEmpty) {
+      return null;
+    }
+    return _isAxiDestination(candidate) ? candidate : null;
   }
 
   List<EmailAttachment> _currentAttachments() =>
