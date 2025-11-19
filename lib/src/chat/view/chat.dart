@@ -1902,6 +1902,7 @@ class _ChatState extends State<Chat> {
                 final emailSelfJid = emailService.selfSenderJid;
                 final chatEntity = state.chat;
                 final jid = chatEntity?.jid;
+                final avatarIdentifier = chatEntity?.avatarIdentifier;
                 final supportsEmail = chatEntity?.supportsEmail ?? false;
                 final isEmailChat = chatEntity?.deltaChatId != null;
                 final isAxiCompatible = chatEntity?.isAxiContact ?? false;
@@ -2039,7 +2040,10 @@ class _ChatState extends State<Chat> {
                                         children: [
                                           Positioned.fill(
                                             child: (item == null)
-                                                ? AxiAvatar(jid: jid)
+                                                ? AxiAvatar(
+                                                    jid:
+                                                        avatarIdentifier ?? jid,
+                                                  )
                                                 : AxiAvatar(
                                                     jid: item.jid,
                                                     subscription:

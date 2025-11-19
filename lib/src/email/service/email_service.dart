@@ -198,8 +198,7 @@ class EmailService {
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
     final principalRaw = await _credentialStore.read(key: principalKey);
-    int? principalId =
-        principalRaw == null ? null : int.tryParse(principalRaw);
+    int? principalId = principalRaw == null ? null : int.tryParse(principalRaw);
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
@@ -1298,17 +1297,16 @@ class EmailService {
   String? _senderParticipantJid() => selfSenderJid ?? _defaultDeltaSelfJid;
 
   Future<Chat> _waitForChat(int chatId) async {
-    final jid = _chatJid(chatId);
     final db = await _databaseBuilder();
 
-    final existing = await db.getChat(jid);
+    final existing = await db.getChatByDeltaChatId(chatId);
     if (existing != null) {
       return existing;
     }
 
     try {
       final chat = await db
-          .watchChat(jid)
+          .watchChatByDeltaChatId(chatId)
           .where((chat) => chat != null)
           .cast<Chat>()
           .first
@@ -1454,8 +1452,6 @@ class EmailService {
 
 const _deltaDomain = 'delta.chat';
 const _defaultDeltaSelfJid = 'dc-self@$_deltaDomain';
-
-String _chatJid(int chatId) => 'dc-$chatId@$_deltaDomain';
 
 String _stanzaId(int msgId) => 'dc-msg-$msgId';
 

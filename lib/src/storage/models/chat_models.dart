@@ -448,6 +448,20 @@ extension ChatTransportExtension on Chat {
   MessageTransport get transport => defaultTransport;
 }
 
+extension ChatAvatarExtension on Chat {
+  String get avatarIdentifier {
+    final address = emailAddress?.trim();
+    if (address?.isNotEmpty == true) {
+      return address!;
+    }
+    final contact = contactJid?.trim();
+    if (contact?.isNotEmpty == true) {
+      return contact!;
+    }
+    return remoteJid;
+  }
+}
+
 @Freezed(toJson: false, fromJson: false)
 class BlocklistData with _$BlocklistData implements Insertable<BlocklistData> {
   const factory BlocklistData({
