@@ -14,27 +14,32 @@ void main() {
     expect(baseChat.transport, MessageTransport.xmpp);
   });
 
-  test('transport resolves to email when delta chat id is set', () {
+  test('transport resolves to email for non-axi contacts', () {
     final emailChat = Chat(
-      jid: 'dc-1@delta.chat',
+      jid: 'peer@example.com',
       title: 'Peer',
       type: ChatType.chat,
       lastChangeTimestamp: DateTime(2024, 1, 1),
-      deltaChatId: 1,
     );
 
     expect(emailChat.transport, MessageTransport.email);
+    expect(emailChat.supportsEmail, isTrue);
+    expect(emailChat.isEmailOnlyContact, isTrue);
+    expect(emailChat.isAxiContact, isFalse);
   });
 
-  test('transport resolves to email when email address metadata present', () {
-    final emailChat = Chat(
+  test('transport remains XMPP for axi.im contacts even with email metadata', () {
+    final chat = Chat(
       jid: 'peer@axi.im',
       title: 'Peer',
       type: ChatType.chat,
       lastChangeTimestamp: DateTime(2024, 1, 1),
-      emailAddress: 'peer@example.com',
+      emailAddress: 'friend@example.com',
     );
 
-    expect(emailChat.transport, MessageTransport.email);
+    expect(chat.transport, MessageTransport.xmpp);
+    expect(chat.supportsEmail, isFalse);
+    expect(chat.isEmailOnlyContact, isFalse);
+    expect(chat.isAxiContact, isTrue);
   });
 }

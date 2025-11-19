@@ -424,17 +424,28 @@ extension ChatThreadExtension on Chat {
 extension ChatTransportExtension on Chat {
   static final _axiDomainPattern = RegExp(r'@axi\.im$', caseSensitive: false);
 
-  bool get supportsEmail =>
-      deltaChatId != null || (emailAddress?.isNotEmpty ?? false);
+  bool get supportsEmail => isEmailOnlyContact;
 
-  bool get isAxiContact => _axiDomainPattern.hasMatch(remoteJid.toLowerCase());
+  bool get isAxiContact {
+    final remote = remoteJid.toLowerCase();
+    if (!remote.contains('@')) {
+      return false;
+    }
+    return _axiDomainPattern.hasMatch(remote);
+  }
 
-  MessageTransport get defaultTransport => supportsEmail && !isAxiContact
-      ? MessageTransport.email
-      : MessageTransport.xmpp;
+  bool get isEmailOnlyContact {
+    final remote = remoteJid.toLowerCase();
+    if (!remote.contains('@')) {
+      return false;
+    }
+    return !_axiDomainPattern.hasMatch(remote);
+  }
 
-  MessageTransport get transport =>
-      supportsEmail ? MessageTransport.email : MessageTransport.xmpp;
+  MessageTransport get defaultTransport =>
+      isEmailOnlyContact ? MessageTransport.email : MessageTransport.xmpp;
+
+  MessageTransport get transport => defaultTransport;
 }
 
 @Freezed(toJson: false, fromJson: false)

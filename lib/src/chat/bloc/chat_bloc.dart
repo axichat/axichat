@@ -157,6 +157,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static const messageBatchSize = 50;
   static final RegExp _axiDomainPattern =
       RegExp(r'@axi\.im$', caseSensitive: false);
+  bool _isEmailOnlyAddress(String? value) {
+    if (value == null) return false;
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (!normalized.contains('@')) {
+      return false;
+    }
+    return !_axiDomainPattern.hasMatch(normalized);
+  }
 
   final String? jid;
   final MessageService _messageService;
@@ -623,8 +634,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final body = event.message.body;
     if (body?.isNotEmpty != true) return;
     final target = event.target;
-    final isEmailTarget = target.deltaChatId != null ||
-        (target.emailAddress?.isNotEmpty ?? false);
+    final isEmailTarget = target.isEmailOnlyContact;
     try {
       if (isEmailTarget) {
         final emailService = _emailService;
@@ -1177,17 +1187,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         continue;
       }
       if (targetChat == null) {
-        emailRecipients.add(recipient);
+        if (_isEmailOnlyAddress(recipient.target.address)) {
+          emailRecipients.add(recipient);
+        } else {
+          xmppRecipients.add(recipient);
+        }
         continue;
       }
-      final identifier = targetChat.jid.toLowerCase();
-      final isAxiRecipient =
-          identifier.isNotEmpty && _axiDomainPattern.hasMatch(identifier);
-      final prefersXmpp = isAxiRecipient && !targetChat.transport.isEmail;
-      if (prefersXmpp) {
-        xmppRecipients.add(recipient);
-      } else {
+      if (targetChat.defaultTransport.isEmail) {
         emailRecipients.add(recipient);
+      } else {
+        xmppRecipients.add(recipient);
       }
     }
     return (
@@ -1208,7 +1218,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (targetChat != null && _isEmailCapableChat(targetChat)) {
         return true;
       }
-      if (recipient.target.address?.isNotEmpty ?? false) {
+      if (_isEmailOnlyAddress(recipient.target.address)) {
         return true;
       }
     }
@@ -1216,10 +1226,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _isEmailCapableChat(Chat chat) {
-    if (chat.supportsEmail || (chat.emailAddress?.isNotEmpty ?? false)) {
-      return true;
-    }
-    return _axiDomainPattern.hasMatch(chat.jid.toLowerCase());
+    return chat.supportsEmail;
   }
 
   bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
