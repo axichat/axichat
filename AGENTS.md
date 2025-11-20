@@ -1,14 +1,206 @@
-# Repository Guidelines
+# Axichat Development Guide
 
-## Project Structure & Module Organization
+## 🎯 PROJECT CONTEXT
 
-- `lib/` contains the Flutter app; feature folders under `lib/src/` (chat, calendar, notifications, storage, xmpp) own UI and services, and mirror the mixin architecture already used inside `XmppService`.
-- Tests mirror the source tree (`test/` for unit/widget, `integration_test/` for end-to-end, `test_driver/` legacy harness); keep new specs beside the features they exercise.
-- Platform shells (`android/`, `ios/`, `linux/`, `macos/`, `windows/`, `web/`) and shared assets (`assets/images/`) mirror lib features so design tokens stay consistent.
-- Database models and query accessors live in `lib/src/storage/models`; rerun `dart run build_runner build --delete-conflicting-outputs` whenever you touch these types to keep generated Drift/Freezed files in sync.
-- Calendar UI, storage, and sync helpers stay under `lib/src/calendar`; deadline/date picking should always reuse `DeadlinePickerField`.
-- UI elements that the team monitors globally (operation overlays, notifications) sit in `lib/src/notifications` and are surfaced through `lib/src/app.dart`.
-- Read every `CLAUDE.md` in the current directory and its parents before editing; they override defaults. Keep `analysis_options.yaml`, `l10n.yaml`, `shorebird.yaml`, and `build.yaml` aligned with tooling or release updates.
+**Modular XMPP + SMTP messenger with NO big tech dependencies**
+
+- XMPP for IM functionality, DeltaChat Core Rust for SMTP functionality
+- SQLCipher database + Flutter Secure Storage for credentials
+- No Firebase, Google Services, or tracking
+- Cross-platform: Android, iOS, Windows, Linux, macOS
+
+**Core Concepts:**
+
+- **JID == Email address**: Jabber ID format and Email format both -> `user@domain.com`
+
+## 🏗️ ARCHITECTURE
+
+### CRITICAL DECLARATIVE and REACTIVE FLOW used throughout ENTIRE APP
+
+- HIGHEST PRIORITY!: **Declarative NOT imperative**: User updates UI -> UI updates BLoCs -> BLoCs update storage -> storage updates BLoCs -> BLoCs update UI
+
+**Same sequence for chats, calendar, email, blocklist, drafts, etc.**
+
+1. **Widget Layer → BLoC Actions**
+   ```dart
+   // lib/src/chat/view/chat.dart:210-213
+   onSend: (message) {
+     context.read<ChatBloc>().add(ChatMessageSent(text: message.text));
+     _focusNode.requestFocus();
+   }
+   ```
+
+2. **BLoC Layer → Service Functions**
+   ```dart
+   // lib/src/chat/bloc/chat_bloc.dart:137-148
+   Future<void> _onChatMessageSent(ChatMessageSent event, Emitter<ChatState> emit) async {
+     _stopTyping();
+     emit(state.copyWith(typing: false));
+     await _messageService.sendMessage(
+       jid: jid!,
+       text: event.text,
+       encryptionProtocol: state.chat!.encryptionProtocol,
+     );
+   }
+   ```
+3. **Service Layer → moxxmpp Library**
+   ```dart
+   // lib/src/xmpp/message_service.dart:188-209
+   Future<void> sendMessage({required String jid, required String text}) async {
+     final message = Message(/*... create message object ...*/);
+     await db.saveMessage(message); // Save to database first
+     
+     if (!await _connection.sendMessage(message.toMox())) {
+       throw XmppMessageException();
+     }
+   }
+   
+   // lib/src/xmpp/xmpp_connection.dart:98-103  
+   Future<bool> sendMessage(mox.MessageEvent packet) async {
+     await getManager<mox.MessageManager>()?.sendMessage(packet.to, packet.extensions);
+   }
+   ```
+4. **moxxmpp Library → Events**
+   ```dart
+   // moxxmpp emits mox.MessageEvent when message sent/received/processed
+   // lib/src/xmpp/message_service.dart:50-51
+   EventManager<mox.XmppEvent> get _eventManager => super._eventManager
+     ..registerHandler<mox.MessageEvent>((event) async {
+       // Process incoming mox.MessageEvent from moxxmpp library
+     });
+   ```
+5. **Event Managers → Database Updates**
+   ```dart
+   // lib/src/xmpp/message_service.dart:51-129  
+   ..registerHandler<mox.MessageEvent>((event) async {
+     final message = Message.fromMox(event);
+     
+     if (!message.noStore) {
+       final db = await database;
+       await db.executeOperation(
+         operation: () => db.saveMessage(message), // _dbOp wrapper
+         operationName: 'save incoming message',
+       );
+     }
+   });
+   ```
+6. **Database → Service Streams**
+   ```dart
+   // lib/src/xmpp/message_service.dart:25-31
+   Stream<List<Message>> messageStreamForChat(String jid) =>
+     createSingleItemStream<List<Message>, XmppDatabase>(
+       watchFunction: (db) async {
+         final stream = db.watchChatMessages(jid); // Drift auto-emits on changes
+         final initial = await db.getChatMessages(jid);
+         return stream.startWith(initial); // BaseStreamService pattern
+       },
+     );
+   ```
+7. **Service Streams → BLoC Updates**
+   ```dart
+   // lib/src/chat/bloc/chat_bloc.dart:46-51
+   _chatSubscription = _chatsService
+       .chatStream(jid!)
+       .listen((chat) => add(_ChatUpdated(chat)));
+   _messageSubscription = _messageService
+       .messageStreamForChat(jid!, end: messageBatchSize)
+       .listen((items) => add(_ChatMessagesUpdated(items)));
+   ```
+8. **BLoC → Widget UI Updates**
+   ```dart
+   // lib/src/chat/view/chat.dart:78-86
+   return BlocBuilder<ChatBloc, ChatState>(
+     builder: (context, state) {
+       final user = ChatUser(id: profile?.jid ?? '', firstName: profile?.username ?? '');
+       return Chat(
+         messages: state.items, // UI rebuilds automatically on state.items change
+         user: user,
+         onSend: (message) => context.read<ChatBloc>().add(ChatMessageSent(text: message.text)),
+       );
+     },
+   );
+   ```
+
+### Separation of Concerns
+
+```dart
+// XMPP Service factory with dependency injection
+factory XmppService({
+  required FutureOr<XmppConnection> Function() buildConnection,
+  required FutureOr<XmppStateStore> Function(String, String) buildStateStore,
+  required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
+  NotificationService? notificationService,
+}) => XmppService._(buildConnection, buildStateStore, buildDatabase, notificationService);
+
+// BLoC layer dependency injection
+class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  ChatBloc({
+    required MessageService messageService,
+    required ChatsService chatsService,
+    required NotificationService notificationService,
+  });
+}
+
+// Provider-based injection at runtime
+BlocProvider
+(
+create: (context) => ChatsCubit(
+chatsService: context.read<XmppService>(),
+),
+)
+```
+
+### Code Style Requirements
+
+- **Always use cascade operators where possible** to reduce repetition
+- **Extract common functionality to extension methods**, especially for enums
+- **After every code change:** Run `dart format .` → `dart analyze` → `dart fix --apply` using MCP
+  tools
+
+```dart
+// DatabaseOperations extension eliminates repetitive error handling
+extension DatabaseOperations on XmppDatabase {
+  Future<T> executeQuery<T>({required operation, operationName}) async {}
+}
+
+// Use cascade operators for multiple operations
+final button = ShadButton()
+  ..onPressed = () => handlePress()
+  ..child = Text('Submit')
+  ..style = ButtonStyle();
+```
+
+### Take Advantage of Dart's Strong Typing to Write Fool-Proof Code
+
+- Create new types for specific uses. Prefer not to use typedefs.
+
+```dart
+// Compile-time safety - can't use unregistered keys
+final jidKey = CredentialStore.registerKey('jid');
+await
+credentialStore.read
+(
+key
+:
+jidKey
+); // ✅ Type-safe
+// await credentialStore.read(key: 'typo'); // ❌ Runtime error
+```
+
+### Models Organization
+
+```
+
+lib/src/storage/
+├── models.dart # Export barrel (DO NOT add logic here)
+├── models/
+│ ├── message_models.dart # Message, Reaction, Notification
+│ ├── chat_models.dart # Chat, RosterItem, Presence
+│ ├── file_models.dart # FileMetadata, Sticker, Draft
+│ └── database_converters.dart # JSON converters
+└── database_extensions.dart # Database operation helpers
+
+```
 
 ## Build, Test, and Development Commands
 
@@ -23,49 +215,93 @@
 
 ## Coding Style & Naming Conventions
 
+- NEVER use "magic values" or literals. ALWAYS create a named variable/constant if it's a one place use. 
 - Use 2-space indentation, trailing commas to aid `dart format`, and snake_case file names; classes/enums remain in PascalCase.
 - Reusable UI must be implemented as `StatelessWidget`/`StatefulWidget` classes—do not expose widgets as helper functions or builders.
 - Name BLoC layers consistently (`FeatureBloc`, `FeatureState`, `FeatureEvent`) inside their owning feature folders.
+- Use extensions to make common operations easier, especially when you have to keep chaining the same methods together.
+- Avoid using operators on enums, prefer using built-in getters. For example:
+```dart
+
+enum Subscription {
+none,
+to,
+from,
+both;
+
+static Subscription fromString(String value) => switch (value) {
+'to' => to,
+'from' => from,
+'both' => both,
+_ => none,
+};
+
+bool get isNone => this == none;
+
+bool get isTo => this == to;
+
+bool get isFrom => this == from;
+
+bool get isBoth => this == both;
+}
+```
 - Prefer explicit types, exhaustive `switch` statements, cascade operators, and intent-revealing names (`checkOmemoSupport`, `startOmemoOperation`).
 - Keep logging consistent by reusing the existing `Logger` instances—never leave `print` in production paths—and avoid leaking sensitive data.
 - Widgets should remain declarative/stateless whenever reasonable; move business logic into blocs/services per `BLOC_GUIDE.md`.
 - Follow the design tokens and UI helpers exported by `lib/src/common/ui/ui.dart` and `lib/src/app.dart`.
 
-### Shared UI Components
+## 🧱 Custom Render Objects Playbook
 
-- Apply DRY aggressively: build small, composable widgets and reuse them everywhere rather than branching inside “super widgets.”
-- For complex animated shells (calendar cards, tabbed panels, etc.) prefer extracting layout + painting into a custom `RenderObject` instead of layering `addPostFrameCallback`/`findRenderObject` hacks—use the render-object-driven pattern documented in `docs/tab_container_study.md`.
-- Treat `DeadlinePickerField` as the single source of truth for calendar/date picking. Update it once and only adjust parameters (e.g., `showTimeSelectors`) per use-case.
-- When a screen needs a unique tweak, factor that logic into reusable helpers or slots (header/body/footer builders) instead of forking the widget. Before creating a variant, diff against the original implementation (scheduled task editor) to confirm behaviour alignment.
-- When a widget’s layout must react to geometry that is only known during the same pass (e.g., chat bubble cutouts), graduate it to a `MultiChildRenderObjectWidget` so the render object can size the body first, then clamp overlays without relying on `GlobalKey` lookups or post-frame measurement.
-- Give render objects explicit slots via parent data (body/reactions/recipients, etc.) so layout, painting, and hit-testing stay deterministic; this avoids accidental sibling order bugs and keeps animation math centralized.
-- If other subsystems need live bounds (selection hit regions, autoscroll), prefer a small render-object registry that records `RenderBox` instances on attach/detach instead of scattering duplicate `GlobalKey`s—registries are cheaper and eliminate reparenting assertions.
-- Keep render-object parameters declarative (e.g., pass a `CutoutStyle` struct describing depth/radius/padding) so feature teams can change visuals without editing the render layer every time.
+- When a widget must react to geometry discovered in the same layout pass (chat bubble cutouts, overlap-aware paddings, etc.), promote it to a `MultiChildRenderObjectWidget` so the render object can lay out the body, compute limits, and then size overlays without juggling `GlobalKey`s or post-frame hacks.
+- Define parent-data slots (`body`, `reaction`, `recipients`, …) for each child so layout/paint/hit-test steps stay deterministic; this also keeps animation math centralized instead of replicated in widgets.
+- If other systems (selection hit regions, autoscroll) need bubble bounds, register the render boxes in a tiny registry on attach/detach rather than scattering duplicate global keys—registries avoid reparenting assertions and are cheaper to query.
+- Keep render-object configuration strictly declarative (e.g., `CutoutStyle` structs describing depth/radius/padding) so designers can tweak visuals from widget code without touching the render-layer implementation every time.
 
-## Testing Guidelines
+## 🔐 SECURITY REQUIREMENTS
 
-- Co-locate tests with their feature folders (`lib/src/chat` ↔ `test/chat`, calendar ↔ `test/calendar`, etc.).
-- Use `bloc_test` for deterministic bloc specs, `mocktail` for stubs, and prefer golden/widget tests for UI states.
-- Integration coverage should lock down sign-in, roster sync, messaging, and calendar interactions with visible assertions.
-- Exercise both encrypted and plaintext messaging flows: assert badge text, message persistence, OMEMO setup progress, and fallback behaviour in `test/xmpp` and `test/chat` suites.
-- Add coverage for storage fields by round-tripping through Drift DAO helpers, and ensure migrations run cleanly against existing database files.
-- After OMEMO or notification changes, perform manual smoke tests on a device/emulator to confirm overlays progress through their expected states.
+**NEVER log/expose:** JIDs, passwords, message content, keys
+**Credential access:** Only via RegisteredCredentialKey system
+**Database:** SQLCipher with user-derived passphrase
 
-## Commit & Pull Request Guidelines
+## 🎨 UI PATTERNS
 
-- Match the existing history: concise, present-tense subjects under 72 characters (e.g., `Add calendar sync`, `Fix OMEMO device migration handling`).
-- PRs should summarize user-facing impact, database or notification key migrations, screenshots/GIFs for UI tweaks, and a checklist of local `flutter analyze` / `flutter test` runs.
-- Call out follow-up work explicitly—especially items tracked in `.claude/plans`—so the next contributor knows what to tackle.
+### Design Tokens
 
-## State Management & Configuration Notes
+```dart
 
-- Hydrated BLoC persists critical state; when introducing new storage, update `lib/src/storage` helpers and migration enums.
-- XMPP protocol work belongs in `lib/src/xmpp`; consult `XMPP_STYLE_GUIDE.md` before altering stanza builders or parsers.
-- Keep secrets out of source control and rely on platform secure storage for environment values.
-- Database access must continue to use SQLCipher with the registered credential key system.
+const axiGreen = Color(0xff80ffa0); // Brand color
+const listItemPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+const baseAnimationDuration = Duration(milliseconds: 300);
+const messageBatchSize = 50; // Pagination size
+```
 
-## Agent Operating Notes
+### Extensions (from app.dart)
 
-- Document temporary vendor edits in `VENDOR_NOTES.md` (create it if absent) so upstream patches remain traceable.
-- If sandbox restrictions block a command, request approval or prefer the provided Dart MCP tooling helpers.
-- Record validation steps you could not run (e.g., emulator tests) in your hand-off so incident logs stay accurate.
+```dart
+context.colorScheme // ShadColorScheme
+context.textTheme // ShadTextTheme  
+context.decoration // ShadDecoration
+context.radius // BorderRadius
+
+// Mobile hover strategy for touch devices
+const mobileHoverStrategies = ShadHoverStrategies(
+  hover: {ShadHoverStrategy.onLongPressDown},
+  unhover: {ShadHoverStrategy.onLongPressUp, ShadHoverStrategy.onLongPressCancel},
+);
+```
+
+### Component Prefix: Axi
+
+**IMPORTANT:** The `Axi` prefix is ONLY for custom versions of existing widgets, not for entirely new widgets.
+
+Examples:
+- ✅ `AxiAppBar` - Custom version of standard AppBar
+- ✅ `AxiAvatar` - Custom version of Avatar widget
+- ✅ `AxiMessageTile` - Custom version of ListTile for messages
+- ❌ `AxiCalendarWidget` - Wrong! Calendar is a new widget, use `CalendarWidget`
+- ❌ `AxiTaskTile` - Wrong! TaskTile is a new widget, use `TaskTile`
+
+- Calendar screens stay declarative—wire interactions into bloc helpers (for example `commitTaskInteraction`) and never mutate calendar models from widgets or controllers.
+
+**After model changes:** `dart run build_runner build --delete-conflicting-outputs`
+- NEVER read from .pub-cache
