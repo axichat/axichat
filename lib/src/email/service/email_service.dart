@@ -28,10 +28,13 @@ const _notificationFlushDelay = Duration(milliseconds: 500);
 const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
-const _chatmailImapPort = '993';
-const _chatmailSmtpPort = '465';
-const _chatmailSecurityMode = 'ssl';
-const _fallbackChatmailServer = 'axi.im';
+const _defaultImapPort = '993';
+const _defaultSmtpPort = '465';
+const _defaultSecurityMode = 'ssl';
+
+typedef EmailConnectionConfigBuilder = Map<String, String> Function(
+  String address,
+);
 
 class EmailAccount {
   const EmailAccount({
@@ -72,7 +75,7 @@ class EmailService {
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
     EmailDeltaTransport? transport,
-    String chatmailDomain = 'axi.im',
+    EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
@@ -83,7 +86,8 @@ class EmailService {
               databaseBuilder: databaseBuilder,
               logger: logger,
             ),
-        _chatmailDomain = chatmailDomain,
+        _connectionConfigBuilder =
+            connectionConfigBuilder ?? _defaultConnectionConfig,
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
         _foregroundBridge = foregroundBridge ?? foregroundTaskBridge,
@@ -97,13 +101,14 @@ class EmailService {
   final CredentialStore _credentialStore;
   final Future<XmppDatabase> Function() _databaseBuilder;
   final EmailDeltaTransport _transport;
-  final String _chatmailDomain;
+  final EmailConnectionConfigBuilder _connectionConfigBuilder;
   final Logger _log;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
   final EmailBlockingService blocking;
   final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
+  final Map<String, RegisteredCredentialKey> _principalKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
@@ -114,7 +119,10 @@ class EmailService {
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
-  final Map<String, RegisteredCredentialKey> _principalKeys = {};
+  final Map<String, RegisteredCredentialKey> _legacyPrincipalKeys = {};
+  final Map<String, RegisteredCredentialKey> _legacyAddressKeys = {};
+  final Map<String, RegisteredCredentialKey> _legacyPasswordKeys = {};
+  final Map<String, RegisteredCredentialKey> _legacyProvisionedKeys = {};
   bool _foregroundKeepaliveEnabled = false;
   bool _foregroundKeepaliveListenerAttached = false;
   bool _foregroundKeepaliveServiceAcquired = false;
@@ -140,15 +148,21 @@ class EmailService {
 
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
-    final address =
-        await _credentialStore.read(key: _addressKeyForScope(scope));
-    final password =
-        await _credentialStore.read(key: _passwordKeyForScope(scope));
+    final address = await _readCredentialWithLegacy(
+      primary: _addressKeyForScope(scope),
+      legacy: _legacyAddressKeyForScope(scope),
+    );
+    final password = await _readCredentialWithLegacy(
+      primary: _passwordKeyForScope(scope),
+      legacy: _legacyPasswordKeyForScope(scope),
+    );
     if (address == null || password == null) {
       return null;
     }
-    final principalRaw =
-        await _credentialStore.read(key: _principalKeyForScope(scope));
+    final principalRaw = await _readCredentialWithLegacy(
+      primary: _principalKeyForScope(scope),
+      legacy: _legacyPrincipalKeyForScope(scope),
+    );
     final principalId =
         principalRaw == null ? null : int.tryParse(principalRaw);
     return EmailAccount(
@@ -194,10 +208,23 @@ class EmailService {
     final passwordKey = _passwordKeyForScope(scope);
     final principalKey = _principalKeyForScope(scope);
     final provisionedKey = _provisionedKeyForScope(scope);
+    final legacyAddressKey = _legacyAddressKeyForScope(scope);
+    final legacyPasswordKey = _legacyPasswordKeyForScope(scope);
+    final legacyPrincipalKey = _legacyPrincipalKeyForScope(scope);
+    final legacyProvisionedKey = _legacyProvisionedKeyForScope(scope);
 
-    var address = await _credentialStore.read(key: addressKey);
-    var password = await _credentialStore.read(key: passwordKey);
-    final principalRaw = await _credentialStore.read(key: principalKey);
+    var address = await _readCredentialWithLegacy(
+      primary: addressKey,
+      legacy: legacyAddressKey,
+    );
+    var password = await _readCredentialWithLegacy(
+      primary: passwordKey,
+      legacy: legacyPasswordKey,
+    );
+    final principalRaw = await _readCredentialWithLegacy(
+      primary: principalKey,
+      legacy: legacyPrincipalKey,
+    );
     int? principalId = principalRaw == null ? null : int.tryParse(principalRaw);
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
@@ -234,18 +261,27 @@ class EmailService {
     if (resolvedPrincipalOverride != null && resolvedPrincipalOverride > 0) {
       if (principalId != resolvedPrincipalOverride) {
         principalId = resolvedPrincipalOverride;
+        credentialsMutated = true;
         await _credentialStore.write(
           key: principalKey,
+          value: resolvedPrincipalOverride.toString(),
+        );
+        await _credentialStore.write(
+          key: legacyPrincipalKey,
           value: resolvedPrincipalOverride.toString(),
         );
       }
     }
 
-    var alreadyProvisioned =
-        (await _credentialStore.read(key: provisionedKey)) == 'true';
+    var alreadyProvisioned = (await _readCredentialWithLegacy(
+          primary: provisionedKey,
+          legacy: legacyProvisionedKey,
+        )) ==
+        'true';
     if (credentialsMutated) {
       alreadyProvisioned = false;
       await _credentialStore.write(key: provisionedKey, value: 'false');
+      await _credentialStore.write(key: legacyProvisionedKey, value: 'false');
     }
 
     final needsProvisioning = !alreadyProvisioned;
@@ -258,24 +294,29 @@ class EmailService {
     final normalizedPassword = password;
 
     if (needsProvisioning) {
-      _log.info('Configuring Chatmail account credentials');
+      _log.info('Configuring email account credentials');
       try {
         await _transport.configureAccount(
           address: normalizedAddress,
           password: normalizedPassword,
           displayName: displayName,
-          additional: _chatmailConnectionConfig(normalizedAddress),
+          additional: _connectionConfigBuilder(normalizedAddress),
         );
         await _credentialStore.write(key: provisionedKey, value: 'true');
+        await _credentialStore.write(key: legacyProvisionedKey, value: 'true');
       } on DeltaSafeException catch (error, stackTrace) {
         await _credentialStore.write(key: provisionedKey, value: 'false');
+        await _credentialStore.write(
+          key: legacyProvisionedKey,
+          value: 'false',
+        );
         final isTimeout = error.message.toLowerCase().contains('timed out');
         final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
           error,
-          operation: 'configure Chatmail account',
+          operation: 'configure email account',
         );
         _log.warning(
-          'Failed to configure Chatmail account',
+          'Failed to configure email account',
           error,
           stackTrace,
         );
@@ -290,24 +331,24 @@ class EmailService {
         }
         if (isTimeout) {
           throw const EmailProvisioningException(
-            'Setting up axi.im email is taking longer than expected. '
+            'Setting up email is taking longer than expected. '
             'Please leave Axichat open—we will keep retrying in the background.',
             isRecoverable: true,
           );
         }
         if (mapped.code == DeltaChatErrorCode.network) {
           throw const EmailProvisioningException(
-            'Unable to reach axi.im email services. Please try again.',
+            'Unable to reach the email service. Please try again.',
             isRecoverable: true,
           );
         }
         throw EmailProvisioningException(
-          'Email address $address is unavailable. Please choose a different username.',
+          'Unable to configure email for $address. Please check your credentials.',
         );
       }
     } else {
       _log.fine(
-        'Reusing existing Chatmail account credentials without reconfiguration.',
+        'Reusing existing email account credentials without reconfiguration.',
       );
     }
 
@@ -318,7 +359,6 @@ class EmailService {
     final account = EmailAccount(
       address: normalizedAddress,
       password: normalizedPassword,
-      principalId: principalId,
     );
     _activeAccount = account;
     return account;
@@ -1323,43 +1363,38 @@ class EmailService {
     if (parts.length != 2) {
       return null;
     }
-    final local = parts[0].toLowerCase();
-    final domain = parts[1].toLowerCase();
+    final local = parts[0].trim().toLowerCase();
+    final domain = parts[1].trim().toLowerCase();
     if (local.isEmpty || domain.isEmpty) {
       return null;
     }
-    if (_chatmailDomain.toLowerCase() == domain) {
-      return '$local@$domain';
-    }
-    final resolvedDomain =
-        _chatmailDomain.isEmpty ? domain : _chatmailDomain.toLowerCase();
-    return '$local@$resolvedDomain';
+    return '$local@$domain';
   }
 
-  Map<String, String> _chatmailConnectionConfig(String address) {
-    final host = _chatmailServerHostFor(address);
+  static Map<String, String> _defaultConnectionConfig(String address) {
+    final host = _connectionHostFor(address);
     final localPart = _localPartFromAddress(address) ?? address;
     return {
       'mail_server': host,
-      'mail_port': _chatmailImapPort,
-      'mail_security': _chatmailSecurityMode,
+      'mail_port': _defaultImapPort,
+      'mail_security': _defaultSecurityMode,
       'mail_user': localPart,
       'send_server': host,
-      'send_port': _chatmailSmtpPort,
-      'send_security': _chatmailSecurityMode,
+      'send_port': _defaultSmtpPort,
+      'send_security': _defaultSecurityMode,
       'send_user': localPart,
     };
   }
 
-  String _chatmailServerHostFor(String address) {
-    final overridden = _chatmailDomain.trim();
-    if (overridden.isNotEmpty) {
-      return overridden.toLowerCase();
+  static String _connectionHostFor(String address) {
+    final domain = _domainFromAddress(address);
+    if (domain == null || domain.isEmpty) {
+      throw StateError('Unable to resolve email server host for $address');
     }
-    return _domainFromAddress(address) ?? _fallbackChatmailServer;
+    return domain;
   }
 
-  String? _domainFromAddress(String address) {
+  static String? _domainFromAddress(String address) {
     final parts = address.split('@');
     if (parts.length != 2) {
       return null;
@@ -1368,7 +1403,7 @@ class EmailService {
     return domain.isEmpty ? null : domain;
   }
 
-  String? _localPartFromAddress(String address) {
+  static String? _localPartFromAddress(String address) {
     if (address.isEmpty) {
       return null;
     }
@@ -1392,12 +1427,26 @@ class EmailService {
   RegisteredCredentialKey _addressKeyForScope(String scope) {
     return _addressKeys.putIfAbsent(
       scope,
+      () => CredentialStore.registerKey('email_address_$scope'),
+    );
+  }
+
+  RegisteredCredentialKey _legacyAddressKeyForScope(String scope) {
+    return _legacyAddressKeys.putIfAbsent(
+      scope,
       () => CredentialStore.registerKey('chatmail_address_$scope'),
     );
   }
 
   RegisteredCredentialKey _passwordKeyForScope(String scope) {
     return _passwordKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey('email_password_$scope'),
+    );
+  }
+
+  RegisteredCredentialKey _legacyPasswordKeyForScope(String scope) {
+    return _legacyPasswordKeys.putIfAbsent(
       scope,
       () => CredentialStore.registerKey('chatmail_password_$scope'),
     );
@@ -1406,12 +1455,26 @@ class EmailService {
   RegisteredCredentialKey _principalKeyForScope(String scope) {
     return _principalKeys.putIfAbsent(
       scope,
+      () => CredentialStore.registerKey('email_principal_$scope'),
+    );
+  }
+
+  RegisteredCredentialKey _legacyPrincipalKeyForScope(String scope) {
+    return _legacyPrincipalKeys.putIfAbsent(
+      scope,
       () => CredentialStore.registerKey('chatmail_principal_$scope'),
     );
   }
 
   RegisteredCredentialKey _provisionedKeyForScope(String scope) {
     return _provisionedKeys.putIfAbsent(
+      scope,
+      () => CredentialStore.registerKey('email_provisioned_$scope'),
+    );
+  }
+
+  RegisteredCredentialKey _legacyProvisionedKeyForScope(String scope) {
+    return _legacyProvisionedKeys.putIfAbsent(
       scope,
       () => CredentialStore.registerKey('chatmail_provisioned_$scope'),
     );
@@ -1424,11 +1487,47 @@ class EmailService {
 
   String _normalizeJid(String jid) => jid.split('/').first;
 
+  Future<String?> _readCredentialWithLegacy({
+    required RegisteredCredentialKey primary,
+    required RegisteredCredentialKey legacy,
+  }) async {
+    final value = await _credentialStore.read(key: primary);
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+    final legacyValue = await _credentialStore.read(key: legacy);
+    if (legacyValue != null && legacyValue.isNotEmpty) {
+      await _credentialStore.write(key: primary, value: legacyValue);
+      return legacyValue;
+    }
+    return null;
+  }
+
+  Future<void> _deleteCredentialPair({
+    required RegisteredCredentialKey primary,
+    required RegisteredCredentialKey legacy,
+  }) async {
+    await _credentialStore.delete(key: primary);
+    await _credentialStore.delete(key: legacy);
+  }
+
   Future<void> _clearCredentials(String scope) async {
-    await _credentialStore.delete(key: _addressKeyForScope(scope));
-    await _credentialStore.delete(key: _passwordKeyForScope(scope));
-    await _credentialStore.delete(key: _principalKeyForScope(scope));
-    await _credentialStore.delete(key: _provisionedKeyForScope(scope));
+    await _deleteCredentialPair(
+      primary: _addressKeyForScope(scope),
+      legacy: _legacyAddressKeyForScope(scope),
+    );
+    await _deleteCredentialPair(
+      primary: _passwordKeyForScope(scope),
+      legacy: _legacyPasswordKeyForScope(scope),
+    );
+    await _deleteCredentialPair(
+      primary: _principalKeyForScope(scope),
+      legacy: _legacyPrincipalKeyForScope(scope),
+    );
+    await _deleteCredentialPair(
+      primary: _provisionedKeyForScope(scope),
+      legacy: _legacyProvisionedKeyForScope(scope),
+    );
     if (_activeCredentialScope == scope) {
       _activeCredentialScope = null;
       _activeAccount = null;

@@ -101,7 +101,7 @@ class EmailDeltaTransport implements ChatTransport {
         } else if (event.data1 == 0) {
           completer.completeError(
             DeltaSafeException(
-              event.data2Text ?? 'Failed to configure Chatmail account',
+              event.data2Text ?? 'Failed to configure email account',
             ),
           );
         }
@@ -112,7 +112,7 @@ class EmailDeltaTransport implements ChatTransport {
           DeltaSafeException(
             event.data2Text ??
                 event.data1Text ??
-                'Failed to configure Chatmail account',
+                'Failed to configure email account',
           ),
         );
       }
@@ -126,7 +126,7 @@ class EmailDeltaTransport implements ChatTransport {
       );
       await completer.future.timeout(const Duration(seconds: 60),
           onTimeout: () {
-        throw const DeltaSafeException('Chatmail configuration timed out');
+        throw const DeltaSafeException('Email configuration timed out');
       });
     } finally {
       await subscription.cancel();

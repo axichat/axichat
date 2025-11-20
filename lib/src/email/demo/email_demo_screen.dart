@@ -37,7 +37,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
       if (!mounted) return;
       setState(() {
         _account = null;
-        _status = 'Log in to provision Chatmail.';
+        _status = 'Log in to provision email.';
       });
       return;
     }
@@ -52,7 +52,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
   Future<void> _provision() async {
     setState(() {
       _busy = true;
-      _status = 'Provisioning Chatmail account…';
+      _status = 'Provisioning email account…';
     });
 
     try {
@@ -198,7 +198,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
               children: [
                 ElevatedButton(
                   onPressed: _busy ? null : _provision,
-                  child: const Text('Provision Chatmail'),
+                  child: const Text('Provision Email'),
                 ),
                 ElevatedButton(
                   onPressed: _busy ? null : _sendDemoMessage,

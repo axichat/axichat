@@ -13,13 +13,10 @@ void main() {
     return;
   }
 
-  final resourceDirs = sourceDir
-      .listSync()
-      .whereType<Directory>()
-      .where((dir) {
-        final name = dir.path.split(Platform.pathSeparator).last;
-        return name.startsWith('mipmap-') || name.startsWith('drawable-');
-      });
+  final resourceDirs = sourceDir.listSync().whereType<Directory>().where((dir) {
+    final name = dir.path.split(Platform.pathSeparator).last;
+    return name.startsWith('mipmap-') || name.startsWith('drawable-');
+  });
 
   for (final resDir in resourceDirs) {
     final launcherFiles = resDir
@@ -31,10 +28,12 @@ void main() {
       continue;
     }
     for (final flavorDir in _flavorResDirs) {
-      final targetDir = Directory('$flavorDir/${resDir.path.split(Platform.pathSeparator).last}')
+      final targetDir = Directory(
+          '$flavorDir/${resDir.path.split(Platform.pathSeparator).last}')
         ..createSync(recursive: true);
       for (final sourceFile in launcherFiles) {
-        final destPath = '${targetDir.path}/${sourceFile.uri.pathSegments.last}';
+        final destPath =
+            '${targetDir.path}/${sourceFile.uri.pathSegments.last}';
         File(destPath).writeAsBytesSync(sourceFile.readAsBytesSync());
         stdout.writeln('Synced ${sourceFile.path} -> $destPath');
       }

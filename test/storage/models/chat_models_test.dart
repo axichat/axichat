@@ -28,7 +28,8 @@ void main() {
     expect(emailChat.isAxiContact, isFalse);
   });
 
-  test('transport remains XMPP for axi.im contacts even with email metadata', () {
+  test('transport remains XMPP for axi.im contacts even with email metadata',
+      () {
     final chat = Chat(
       jid: 'peer@axi.im',
       title: 'Peer',

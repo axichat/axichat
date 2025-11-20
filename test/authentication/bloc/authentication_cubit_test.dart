@@ -4,6 +4,8 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
+    as provisioning;
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -32,7 +34,7 @@ void main() {
   });
 
   late Client mockHttpClient;
-  late MockChatmailProvisioningClient mockChatmailProvisioningClient;
+  late MockChatmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
   String? pendingSignupRollbacksPayload;
   String? completedSignupAccountsPayload;
@@ -45,7 +47,7 @@ void main() {
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
     mockHttpClient = MockHttpClient();
-    mockChatmailProvisioningClient = MockChatmailProvisioningClient();
+    mockProvisioningClient = MockChatmailProvisioningClient();
 
     when(() => mockXmppService.omemoActivityStream)
         .thenAnswer((_) => const Stream.empty());
@@ -97,6 +99,26 @@ void main() {
     when(() => mockCredentialStore.close()).thenAnswer((_) async {});
 
     when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
+
+    when(
+      () => mockProvisioningClient.createAccount(
+        localpart: any(named: 'localpart'),
+        password: any(named: 'password'),
+      ),
+    ).thenAnswer(
+      (_) async => const provisioning.EmailProvisioningCredentials(
+        email: 'prov@axi.im',
+        password: validPassword,
+        principalId: 1,
+      ),
+    );
+    when(
+      () => mockProvisioningClient.deleteAccount(
+        principalId: any(named: 'principalId'),
+        email: any(named: 'email'),
+        password: any(named: 'password'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   group('login', () {
@@ -107,7 +129,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       );
 
       when(() => mockXmppService.connect(
@@ -388,7 +410,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       ),
       act: (bloc) => bloc.signup(
         username: validUsername,
@@ -423,7 +445,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       ),
       act: (bloc) => bloc.signup(
         username: validUsername,
@@ -466,7 +488,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       ),
       act: (bloc) => bloc.signup(
         username: validUsername,
@@ -510,7 +532,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       ),
       act: (bloc) => bloc.signup(
         username: validUsername,
@@ -551,7 +573,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       ),
       act: (bloc) => bloc.signup(
         username: validUsername,
@@ -590,30 +612,32 @@ void main() {
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Deletes Chatmail account before unregister completes.',
+      'Burns credentials after successful unregister.',
       setUp: () {
-        when(() => mockChatmailProvisioningClient.deleteAccount(
-              principalId: any(named: 'principalId'),
-              email: any(named: 'email'),
-              password: any(named: 'password'),
-            )).thenAnswer((_) async {});
         when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
           (_) async => const EmailAccount(
-            address: 'chatmail@axi.im',
-            password: 'mailpw',
-            principalId: 42,
+            address: 'user@axi.im',
+            password: validPassword,
+            principalId: 99,
           ),
         );
         when(() => mockEmailService.burn(jid: any(named: 'jid')))
             .thenAnswer((_) async {});
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            principalId: 99,
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenAnswer((_) async {});
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
       ),
       act: (bloc) => bloc.unregister(
         username: validUsername,
@@ -625,11 +649,19 @@ void main() {
         AuthenticationNone(),
       ],
       verify: (_) {
-        verify(() => mockChatmailProvisioningClient.deleteAccount(
-              principalId: 42,
-              email: 'chatmail@axi.im',
-              password: validPassword,
+        verify(
+          () => mockProvisioningClient.deleteAccount(
+            principalId: 99,
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).called(1);
+        verify(() => mockHttpClient.post(
+              AuthenticationCubit.deleteAccountUrl,
+              body: any(named: 'body'),
             )).called(1);
+        verify(() => mockXmppService.burn()).called(1);
+        verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
       },
     );
   });
@@ -647,7 +679,6 @@ void main() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
       );
     });
 
@@ -678,7 +709,7 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
+        emailProvisioningClient: mockProvisioningClient,
       ),
       act: (bloc) => bloc.logout(),
       expect: () => [],
@@ -696,8 +727,8 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
       ),
       act: (bloc) => bloc.logout(),
       expect: () => [const AuthenticationNone()],
@@ -715,8 +746,8 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
       ),
       act: (bloc) => bloc.logout(severity: LogoutSeverity.normal),
       expect: () => [const AuthenticationNone()],
@@ -735,8 +766,8 @@ void main() {
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
-        chatmailProvisioningClient: mockChatmailProvisioningClient,
       ),
       act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
       expect: () => [const AuthenticationNone()],

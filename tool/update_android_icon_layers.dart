@@ -5,15 +5,20 @@ const _inputBackground = 'assets/icons/app_icon_background.png';
 const _inputForeground = 'assets/icons/app_icon_foreground.png';
 const _inputMonochrome = 'assets/icons/app_icon_monochrome.png';
 
-const _outputBackground = 'assets/icons/generated/app_icon_android_background.png';
-const _outputForeground = 'assets/icons/generated/app_icon_android_foreground.png';
-const _outputMonochrome = 'assets/icons/generated/app_icon_android_monochrome.png';
+const _outputBackground =
+    'assets/icons/generated/app_icon_android_background.png';
+const _outputForeground =
+    'assets/icons/generated/app_icon_android_foreground.png';
+const _outputMonochrome =
+    'assets/icons/generated/app_icon_android_monochrome.png';
 
 const _targetSize = 1024;
 
 void main(List<String> arguments) {
-  final background = _prepareLayer(_loadImage(_inputBackground), layer: 'background');
-  final foreground = _prepareLayer(_loadImage(_inputForeground), layer: 'foreground');
+  final background =
+      _prepareLayer(_loadImage(_inputBackground), layer: 'background');
+  final foreground =
+      _prepareLayer(_loadImage(_inputForeground), layer: 'foreground');
   final monochromeSource = _loadOptionalImage(_inputMonochrome);
   final monochrome = _prepareLayer(
     monochromeSource ?? _deriveMonochrome(foreground),
@@ -48,7 +53,8 @@ img.Image? _loadOptionalImage(String path) {
   final bytes = file.readAsBytesSync();
   final decoded = img.decodeImage(bytes);
   if (decoded == null) {
-    stderr.writeln('Optional icon asset at $path is invalid. Falling back to derived monochrome.');
+    stderr.writeln(
+        'Optional icon asset at $path is invalid. Falling back to derived monochrome.');
     return null;
   }
   return decoded;
@@ -56,7 +62,8 @@ img.Image? _loadOptionalImage(String path) {
 
 img.Image _prepareLayer(img.Image image, {required String layer}) {
   if (image.width != image.height) {
-    stderr.writeln('Warning: $layer layer is not square (${image.width}x${image.height}). It will be resized to ${_targetSize}x${_targetSize}.');
+    stderr.writeln(
+        'Warning: $layer layer is not square (${image.width}x${image.height}). It will be resized to ${_targetSize}x${_targetSize}.');
   }
   if (image.width == _targetSize && image.height == _targetSize) {
     return img.Image.from(image);

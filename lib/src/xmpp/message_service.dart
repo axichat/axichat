@@ -16,6 +16,31 @@ extension MessageEvent on mox.MessageEvent {
   }
 }
 
+class MamPageResult {
+  const MamPageResult({
+    required this.complete,
+    this.firstId,
+    this.lastId,
+    this.count,
+  });
+
+  final bool complete;
+  final String? firstId;
+  final String? lastId;
+  final int? count;
+}
+
+class _ServerOnlyConversation {
+  _ServerOnlyConversation(this.controller, this.window);
+
+  final StreamController<List<Message>> controller;
+  final List<Message> messages = <Message>[];
+  String? before;
+  int? totalCount;
+  bool complete = false;
+  int window;
+}
+
 final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
 
@@ -51,31 +76,253 @@ mixin MessageService on XmppBase, BaseStreamService {
     int start = 0,
     int end = 50,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
-  }) =>
-      createSingleItemStream<List<Message>, XmppDatabase>(
-        watchFunction: (db) async {
-          final messagesStream = db.watchChatMessages(
-            jid,
-            start: start,
-            end: end,
-            filter: filter,
-          );
-          final reactionsStream = db.watchReactionsForChat(jid);
-          final initialMessages = await db.getChatMessages(
-            jid,
-            start: start,
-            end: end,
-            filter: filter,
-          );
-          final initialReactions = await db.getReactionsForChat(jid);
-          return _combineMessageAndReactionStreams(
-            messageStream: messagesStream,
-            reactionStream: reactionsStream,
-            initialMessages: initialMessages,
-            initialReactions: initialReactions,
-          );
-        },
+  }) {
+    StreamSubscription<List<Message>>? backendSubscription;
+    StreamSubscription<MessageStorageMode>? modeSubscription;
+    final controller = StreamController<List<Message>>.broadcast();
+
+    Future<void> bindToMode(MessageStorageMode mode) async {
+      await backendSubscription?.cancel();
+      if (mode.isServerOnly) {
+        final conversation = _serverOnlyConversationFor(
+          jid,
+          desiredWindow: end,
+        );
+        controller.add(List<Message>.unmodifiable(conversation.messages));
+        backendSubscription = conversation.controller.stream.listen(
+          controller.add,
+          onError: controller.addError,
+        );
+        return;
+      }
+      backendSubscription = _localMessageStreamForChat(
+        jid: jid,
+        start: start,
+        end: end,
+        filter: filter,
+      ).listen(
+        controller.add,
+        onError: controller.addError,
       );
+    }
+
+    controller.onListen = () {
+      modeSubscription ??= _messageStorageModeChanges.stream.listen(bindToMode);
+      unawaited(bindToMode(_messageStorageMode));
+    };
+
+    controller.onCancel = () async {
+      await backendSubscription?.cancel();
+      if (!controller.hasListener) {
+        await modeSubscription?.cancel();
+        modeSubscription = null;
+      }
+    };
+
+    return controller.stream;
+  }
+
+  Stream<List<Message>> _localMessageStreamForChat({
+    required String jid,
+    required int start,
+    required int end,
+    required MessageTimelineFilter filter,
+  }) {
+    return createSingleItemStream<List<Message>, XmppDatabase>(
+      watchFunction: (db) async {
+        final messagesStream = db.watchChatMessages(
+          jid,
+          start: start,
+          end: end,
+          filter: filter,
+        );
+        final reactionsStream = db.watchReactionsForChat(jid);
+        final initialMessages = await db.getChatMessages(
+          jid,
+          start: start,
+          end: end,
+          filter: filter,
+        );
+        final initialReactions = await db.getReactionsForChat(jid);
+        return _combineMessageAndReactionStreams(
+          messageStream: messagesStream,
+          reactionStream: reactionsStream,
+          initialMessages: initialMessages,
+          initialReactions: initialReactions,
+        );
+      },
+    );
+  }
+
+  MessageStorageMode get messageStorageMode => _messageStorageMode;
+
+  void updateMessageStorageMode(MessageStorageMode mode) {
+    if (_messageStorageMode == mode) return;
+    _messageStorageMode = mode;
+    if (mode.isServerOnly) {
+      _resetServerOnlyConversations();
+    }
+    _messageStorageModeChanges.add(mode);
+  }
+
+  _ServerOnlyConversation _serverOnlyConversationFor(
+    String jid, {
+    int? desiredWindow,
+  }) {
+    final targetWindow = math.max(_serverOnlyWindow, desiredWindow ?? 0);
+    if (_serverOnlyConversations[jid]
+        case final _ServerOnlyConversation existing) {
+      existing.window = math.max(existing.window, targetWindow);
+      return existing;
+    }
+    final controller = StreamController<List<Message>>.broadcast();
+    final conversation = _ServerOnlyConversation(
+      controller,
+      targetWindow,
+    );
+    controller.onListen = () {
+      controller.add(List<Message>.unmodifiable(conversation.messages));
+    };
+    _serverOnlyConversations[jid] = conversation;
+    return conversation;
+  }
+
+  void _emitServerOnlyConversation(String jid) {
+    final conversation = _serverOnlyConversations[jid];
+    if (conversation == null) return;
+    if (!conversation.controller.hasListener) return;
+    conversation.controller.add(
+      List<Message>.unmodifiable(conversation.messages),
+    );
+  }
+
+  void _addServerOnlyMessage(
+    String jid,
+    Message message, {
+    int? desiredWindow,
+  }) {
+    final conversation = _serverOnlyConversationFor(
+      jid,
+      desiredWindow: desiredWindow,
+    );
+    conversation.messages.removeWhere(
+      (existing) =>
+          existing.stanzaID == message.stanzaID ||
+          (message.originID != null && message.originID == existing.originID),
+    );
+    conversation.messages.add(message);
+    conversation.messages.sort(
+      (a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)),
+    );
+    final window = desiredWindow == null
+        ? conversation.window
+        : (conversation.window = math.max(conversation.window, desiredWindow));
+    if (conversation.messages.length > window) {
+      conversation.messages.removeRange(
+        window,
+        conversation.messages.length,
+      );
+    }
+    _emitServerOnlyConversation(jid);
+  }
+
+  void _resetServerOnlyConversations() {
+    for (final conversation in _serverOnlyConversations.values) {
+      conversation.controller.close();
+    }
+    _serverOnlyConversations.clear();
+  }
+
+  String? _stableKeyForEvent(mox.MessageEvent event) {
+    final stableIdData = event.extensions.get<mox.StableIdData>();
+    final stanzaIds = stableIdData?.stanzaIds;
+    if (stanzaIds != null && stanzaIds.isNotEmpty) {
+      final stanza = stanzaIds.first;
+      return 'sid:${stanza.id}@${stanza.by.toBare()}';
+    }
+    if (stableIdData?.originId case final origin?) {
+      return 'oid:$origin';
+    }
+    if (event.id != null) {
+      return 'mid:${event.id}-${event.from.toBare()}';
+    }
+    return null;
+  }
+
+  bool _stableKeySeen(String chatJid, String key) =>
+      _seenStableKeys[chatJid]?.contains(key) ?? false;
+
+  void _rememberStableKey(String chatJid, String key) {
+    final seen = _seenStableKeys.putIfAbsent(chatJid, () => <String>{});
+    final order = _stableKeyOrder.putIfAbsent(chatJid, () => Queue<String>());
+    if (seen.contains(key)) return;
+    seen.add(key);
+    order.addLast(key);
+    if (order.length > _stableKeyLimit) {
+      final evicted = order.removeFirst();
+      seen.remove(evicted);
+    }
+  }
+
+  Future<bool> _isDuplicate(
+    Message message,
+    mox.MessageEvent event, {
+    String? stableKey,
+  }) async {
+    final chatJid = message.chatJid;
+    if (stableKey != null && _stableKeySeen(chatJid, stableKey)) {
+      return true;
+    }
+    if (_messageStorageMode.isServerOnly) {
+      final existing = _serverOnlyConversations[chatJid]?.messages.any(
+                (candidate) =>
+                    candidate.stanzaID == message.stanzaID ||
+                    (message.originID != null &&
+                        message.originID == candidate.originID),
+              ) ??
+          false;
+      return existing;
+    }
+    if (message.originID != null) {
+      final existing = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByOriginID(message.originID!),
+      );
+      if (existing != null) return true;
+    }
+    final existing = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(message.stanzaID),
+    );
+    return existing != null;
+  }
+
+  RegisteredStateKey _lastSeenKeyFor(String jid) => _lastSeenKeys.putIfAbsent(
+        jid,
+        () => XmppStateStore.registerKey('mam_last_seen_$jid'),
+      );
+
+  Future<void> _recordLastSeenTimestamp(
+    String chatJid,
+    DateTime? timestamp,
+  ) async {
+    if (timestamp == null) return;
+    await _dbOp<XmppStateStore>(
+      (ss) => ss.write(
+        key: _lastSeenKeyFor(chatJid),
+        value: timestamp.toIso8601String(),
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<DateTime?> loadLastSeenTimestamp(String chatJid) async {
+    return await _dbOpReturning<XmppStateStore, DateTime?>(
+      (ss) {
+        final raw = ss.read(key: _lastSeenKeyFor(chatJid)) as String?;
+        return raw == null ? null : DateTime.tryParse(raw);
+      },
+    );
+  }
 
   Future<List<Message>> searchChatMessages({
     required String jid,
@@ -109,6 +356,18 @@ mixin MessageService on XmppBase, BaseStreamService {
   final _log = Logger('MessageService');
 
   final _messageStream = StreamController<Message>.broadcast();
+  final _messageStorageModeChanges =
+      StreamController<MessageStorageMode>.broadcast();
+
+  static const _stableKeyLimit = 500;
+  static const _serverOnlyWindow = 200;
+  static const _mamDiscoChatLimit = 500;
+
+  final Map<String, Set<String>> _seenStableKeys = {};
+  final Map<String, Queue<String>> _stableKeyOrder = {};
+  final Map<String, _ServerOnlyConversation> _serverOnlyConversations = {};
+  final Map<String, RegisteredStateKey> _lastSeenKeys = {};
+  MessageStorageMode _messageStorageMode = MessageStorageMode.local;
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   var _capabilityCacheLoaded = false;
@@ -124,6 +383,22 @@ mixin MessageService on XmppBase, BaseStreamService {
         if (reactionOnly) return;
 
         var message = Message.fromMox(event);
+        final stableKey = _stableKeyForEvent(event);
+
+        message = message.copyWith(
+          timestamp: message.timestamp ?? DateTime.timestamp(),
+        );
+
+        if (await _isDuplicate(message, event, stableKey: stableKey)) {
+          _log.fine(
+            'Dropping duplicate message for ${message.chatJid} (${message.stanzaID})',
+          );
+          return;
+        }
+
+        if (stableKey != null) {
+          _rememberStableKey(message.chatJid, stableKey);
+        }
 
         await _handleChatState(event, message.chatJid);
 
@@ -190,16 +465,20 @@ mixin MessageService on XmppBase, BaseStreamService {
           }
         }
 
-        if (!message.noStore) {
+        if (!message.noStore && _messageStorageMode.isLocal) {
           await _dbOp<XmppDatabase>(
             (db) => db.saveMessage(message),
           );
+        } else if (_messageStorageMode.isServerOnly) {
+          _addServerOnlyMessage(message.chatJid, message);
         }
+
+        await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
 
         _messageStream.add(message);
       })
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
-        _log.info('Received chat marker from ${event.from}');
+        _log.info('Received chat marker');
 
         await _dbOp<XmppDatabase>(
           (db) async {
@@ -229,6 +508,7 @@ mixin MessageService on XmppBase, BaseStreamService {
     ..addAll([
       mox.MessageManager(),
       mox.CarbonsManager(),
+      mox.MAMManager(),
       mox.MessageDeliveryReceiptManager(),
       mox.ChatMarkerManager(),
       mox.MessageRepliesManager(),
@@ -239,6 +519,7 @@ mixin MessageService on XmppBase, BaseStreamService {
       mox.MessageReactionsManager(),
       mox.MessageProcessingHintManager(),
       mox.EmeManager(),
+      mox.MUCManager(),
       // mox.StickersManager(),
       // mox.MUCManager(),
       // mox.OOBManager(),
@@ -252,13 +533,14 @@ mixin MessageService on XmppBase, BaseStreamService {
     required String text,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     Message? quotedMessage,
-    bool storeLocally = true,
+    bool? storeLocally,
   }) async {
     final senderJid = myJid;
     if (senderJid == null) {
       _log.warning('Attempted to send a message before a JID was bound.');
       throw XmppMessageException();
     }
+    final shouldStore = _messageStorageMode.isLocal && (storeLocally ?? true);
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -267,14 +549,21 @@ mixin MessageService on XmppBase, BaseStreamService {
       body: text,
       encryptionProtocol: encryptionProtocol,
       quoting: quotedMessage?.stanzaID,
+      timestamp: DateTime.timestamp(),
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${text.length} chars)',
     );
-    if (storeLocally) {
+    if (shouldStore) {
       await _dbOp<XmppDatabase>(
         (db) => db.saveMessage(message),
       );
+    } else if (_messageStorageMode.isServerOnly) {
+      final stableKey = message.originID != null
+          ? 'oid:${message.originID}'
+          : 'mid:${message.stanzaID}-${_myJid?.toBare() ?? senderJid}';
+      _rememberStableKey(jid, stableKey);
+      _addServerOnlyMessage(jid, message);
     }
 
     try {
@@ -288,7 +577,7 @@ mixin MessageService on XmppBase, BaseStreamService {
         ),
       );
       if (!sent) {
-        if (storeLocally) {
+        if (shouldStore) {
           await _handleMessageSendFailure(message.stanzaID);
         }
         throw XmppMessageException();
@@ -299,11 +588,12 @@ mixin MessageService on XmppBase, BaseStreamService {
         error,
         stackTrace,
       );
-      if (storeLocally) {
+      if (shouldStore) {
         await _handleMessageSendFailure(message.stanzaID);
       }
       throw XmppMessageException();
     }
+    await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
   }
 
   Future<void> reactToMessage({
@@ -415,6 +705,80 @@ mixin MessageService on XmppBase, BaseStreamService {
         db.markMessageReceived(stanzaID);
         db.markMessageAcked(stanzaID);
       },
+    );
+  }
+
+  Future<MamPageResult> fetchLatestFromArchive({
+    required String jid,
+    int pageSize = 50,
+    bool isMuc = false,
+  }) async =>
+      _fetchMamPage(
+        jid: jid,
+        before: '',
+        pageSize: pageSize,
+        isMuc: isMuc,
+      );
+
+  Future<MamPageResult> fetchBeforeFromArchive({
+    required String jid,
+    required String before,
+    int pageSize = 50,
+    bool isMuc = false,
+  }) async =>
+      _fetchMamPage(
+        jid: jid,
+        before: before,
+        pageSize: pageSize,
+        isMuc: isMuc,
+      );
+
+  Future<MamPageResult> fetchSinceFromArchive({
+    required String jid,
+    required DateTime since,
+    int pageSize = 50,
+    bool isMuc = false,
+  }) async =>
+      _fetchMamPage(
+        jid: jid,
+        start: since,
+        pageSize: pageSize,
+        isMuc: isMuc,
+      );
+
+  Future<MamPageResult> _fetchMamPage({
+    required String jid,
+    String? before,
+    DateTime? start,
+    int pageSize = 50,
+    bool isMuc = false,
+  }) async {
+    final mamManager = _connection.getManager<mox.MAMManager>();
+    if (mamManager == null) {
+      _log.warning('MAM manager unavailable; ensure it is registered.');
+      throw XmppMessageException();
+    }
+    final peerJid = mox.JID.fromString(jid);
+    final options = mox.MAMQueryOptions(
+      withJid: isMuc ? null : peerJid,
+      start: start,
+      formType: mox.mamXmlns,
+      forceForm: true,
+    );
+    final result = await mamManager.queryArchive(
+      to: isMuc ? peerJid : null,
+      options: options,
+      rsm: mox.ResultSetManagement(
+        before: before,
+        max: pageSize,
+      ),
+    );
+    final rsm = result?.rsm;
+    return MamPageResult(
+      complete: result?.complete ?? false,
+      firstId: rsm?.first,
+      lastId: rsm?.last,
+      count: rsm?.count,
     );
   }
 
@@ -616,6 +980,58 @@ mixin MessageService on XmppBase, BaseStreamService {
     return capabilities;
   }
 
+  Future<bool> _supportsMam(String jid) async {
+    final result = await _connection.discoInfoQuery(jid);
+    if (result == null || result.isType<mox.StanzaError>()) {
+      return false;
+    }
+    final info = result.get<mox.DiscoInfo>();
+    return info.features.contains(mox.mamXmlns);
+  }
+
+  Future<void> _verifyMamSupportOnLogin() async {
+    if (connectionState != ConnectionState.connected) return;
+    final accountJid = myJid;
+    if (accountJid != null) {
+      final supportsMam = await _supportsMam(accountJid);
+      if (!supportsMam) {
+        _log.warning(
+          'Archive queries may be limited: server did not advertise MAM v2.',
+        );
+      }
+    }
+
+    List<Chat> chats;
+    try {
+      chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+        (db) => db.getChats(start: 0, end: _mamDiscoChatLimit),
+      );
+    } on XmppAbortedException {
+      return;
+    }
+
+    final mucChats =
+        chats.where((chat) => chat.type == ChatType.groupChat).toList();
+    if (mucChats.isEmpty) return;
+
+    var missingMam = false;
+    for (final chat in mucChats) {
+      try {
+        final hasMam = await _supportsMam(chat.jid);
+        if (!hasMam) {
+          missingMam = true;
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.fine('MAM disco for a group chat failed.', error, stackTrace);
+      }
+    }
+    if (missingMam) {
+      _log.warning(
+        'Archive backfill may be incomplete: one or more group chats did not advertise MAM v2.',
+      );
+    }
+  }
+
   Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
     if (event.isCarbon) return;
 
@@ -674,6 +1090,10 @@ mixin MessageService on XmppBase, BaseStreamService {
   Future<void> _reset() async {
     await super._reset();
 
+    _resetServerOnlyConversations();
+    _seenStableKeys.clear();
+    _stableKeyOrder.clear();
+    _lastSeenKeys.clear();
     _capabilityCache.clear();
     _capabilityCacheLoaded = false;
   }

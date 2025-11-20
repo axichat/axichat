@@ -4,7 +4,8 @@ import 'dart:ui';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/generate_random.dart';
-import 'package:axichat/src/email/service/chatmail_provisioning_client.dart';
+import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
+    as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -44,15 +45,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EmailService? emailService,
     NotificationService? notificationService,
     http.Client? httpClient,
-    ChatmailProvisioningClient? chatmailProvisioningClient,
+    provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _emailService = emailService,
         super(initialState ?? const AuthenticationNone()) {
     _httpClient = httpClient ?? http.Client();
-    _chatmailProvisioningClient = chatmailProvisioningClient ??
-        ChatmailProvisioningClient.fromEnvironment(
+    _emailProvisioningClient = emailProvisioningClient ??
+        provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
         );
     _lifecycleListener = AppLifecycleListener(
@@ -133,7 +134,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final XmppService _xmppService;
   final EmailService? _emailService;
   late final http.Client _httpClient;
-  late final ChatmailProvisioningClient _chatmailProvisioningClient;
+  late final provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
@@ -163,7 +164,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? password,
     bool rememberMe = false,
     bool requireEmailProvisioned = false,
-    ChatmailCredentials? chatmailCredentials,
+    provisioning.EmailProvisioningCredentials? emailCredentials,
   }) async {
     _lastEmailProvisioningError = null;
     if (state is AuthenticationComplete) {
@@ -185,7 +186,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     late final String? jid;
-    var emailPassword = chatmailCredentials?.password ?? password;
+    var emailPassword = emailCredentials?.password ?? password;
     if (username == null || password == null) {
       jid = await _credentialStore.read(key: jidStorageKey);
       password = await _credentialStore.read(key: passwordStorageKey);
@@ -252,8 +253,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePassphrase: ensuredDatabasePassphrase,
           jid: resolvedJid,
           passwordOverride: resolvedEmailPassword,
-          addressOverride: chatmailCredentials?.email,
-          principalIdOverride: chatmailCredentials?.principalId,
+          addressOverride: emailCredentials?.email,
+          principalIdOverride: emailCredentials?.principalId,
         ),
       ).then<void>((_) {});
     }
@@ -332,10 +333,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           await _xmppService.disconnect();
           return;
         }
-        _log.warning('Chatmail provisioning pending: ${error.message}');
+        _log.warning('Email provisioning pending: ${error.message}');
         _lastEmailProvisioningError = null;
       } on Exception catch (error, stackTrace) {
-        _log.warning('Chatmail provisioning failed', error, stackTrace);
+        _log.warning('Email provisioning failed', error, stackTrace);
       }
     }
 
@@ -373,7 +374,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to clean up Chatmail provisioning after aborted login',
+        'Failed to clean up email provisioning after aborted login',
         error,
         stackTrace,
       );
@@ -408,41 +409,35 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       password: password,
     );
     var signupComplete = false;
-    ChatmailCredentials? chatmailCredentials;
+    provisioning.EmailProvisioningCredentials? emailProvisioningCredentials;
     try {
       if (_emailService != null) {
-        chatmailCredentials = await _chatmailProvisioningClient.createAccount(
+        emailProvisioningCredentials =
+            await _emailProvisioningClient.createAccount(
           localpart: username,
           password: password,
         );
-        await _recordChatmailProvisioning(
+        await _recordEmailProvisioning(
           username: username,
           host: host,
           password: password,
-          credentials: chatmailCredentials,
+          credentials: emailProvisioningCredentials,
         );
       }
-      try {
-        final response = await _httpClient.post(
-          registrationUrl,
-          body: {
-            'username': username,
-            'host': host,
-            'password': password,
-            'password2': confirmPassword,
-            'id': captchaID,
-            'key': captcha,
-            'register': 'Register',
-          },
-        );
-        if (!(response.statusCode == 200 || response.statusCode == 201)) {
-          emit(AuthenticationSignupFailure(response.body));
-          return;
-        }
-      } on Exception catch (_) {
-        emit(const AuthenticationSignupFailure(
-          'Failed to register, try again later.',
-        ));
+      final response = await _httpClient.post(
+        registrationUrl,
+        body: {
+          'username': username,
+          'host': host,
+          'password': password,
+          'password2': confirmPassword,
+          'id': captchaID,
+          'key': captcha,
+          'register': 'Register',
+        },
+      );
+      if (!(response.statusCode == 200 || response.statusCode == 201)) {
+        emit(AuthenticationSignupFailure(response.body));
         return;
       }
       await login(
@@ -450,16 +445,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         password: password,
         rememberMe: rememberMe,
         requireEmailProvisioned: true,
-        chatmailCredentials: chatmailCredentials,
+        emailCredentials: emailProvisioningCredentials,
       );
       signupComplete = state is AuthenticationComplete;
-    } on ChatmailProvisioningException catch (error, stackTrace) {
+    } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
       _log.warning(
-        'Failed to auto-provision Chatmail account',
-        error,
-        stackTrace,
-      );
+          'Email provisioning failed before signup', error, stackTrace);
       emit(AuthenticationSignupFailure(error.message));
+      return;
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Signup failed', error, stackTrace);
+      emit(const AuthenticationSignupFailure(
+        'Failed to register, try again later.',
+      ));
       return;
     } finally {
       _activeSignupCredentialKey = null;
@@ -500,23 +498,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _upsertPendingAccountDeletion(entry);
   }
 
-  Future<void> _recordChatmailProvisioning({
+  Future<void> _recordEmailProvisioning({
     required String username,
     required String host,
     required String password,
-    required ChatmailCredentials credentials,
+    required provisioning.EmailProvisioningCredentials credentials,
   }) async {
     final normalizedEmail = credentials.email.trim();
     if (normalizedEmail.isEmpty) {
-      _log.warning('Skipping Chatmail rollback staging due to blank email.');
+      _log.warning('Skipping email rollback staging due to blank email.');
       return;
     }
     final entry = _PendingAccountDeletion(
       username: username,
       host: host,
       password: password,
-      chatmailEmail: normalizedEmail,
-      chatmailPrincipalId: credentials.principalId,
+      email: normalizedEmail,
+      principalId: credentials.principalId,
     );
     await _upsertPendingAccountDeletion(entry);
   }
@@ -634,43 +632,30 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     emit(const AuthenticationUnregisterInProgress());
     try {
-      await _deleteProvisionedChatmailAccountForUser(
+      await _deleteProvisionedEmailAccountForUser(
         username: username,
         host: host,
         password: password,
       );
-    } on ChatmailProvisioningException catch (error, stackTrace) {
-      _log.warning(
-        'Failed to delete Chatmail account during unregister',
-        error,
-        stackTrace,
+      final response = await http.post(
+        AuthenticationCubit.deleteAccountUrl,
+        body: {
+          'username': username,
+          'host': host,
+          'password': password,
+        },
       );
-      emit(AuthenticationUnregisterFailure(error.message));
-      return;
+      if (response.statusCode == 200) {
+        await logout(severity: LogoutSeverity.burn);
+        await _removeCompletedAccountRecord(username, host);
+      } else {
+        emit(AuthenticationUnregisterFailure(response.body));
+      }
     } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Unexpected Chatmail deletion failure during unregister',
-        error,
-        stackTrace,
-      );
+      _log.warning('Failed to delete account', error, stackTrace);
       emit(const AuthenticationUnregisterFailure(
-        'Unable to delete email account. Please try again later.',
+        'Unable to delete account. Please try again later.',
       ));
-      return;
-    }
-    final response = await http.post(
-      AuthenticationCubit.deleteAccountUrl,
-      body: {
-        'username': username,
-        'host': host,
-        'password': password,
-      },
-    );
-    if (response.statusCode == 200) {
-      await logout(severity: LogoutSeverity.burn);
-      await _removeCompletedAccountRecord(username, host);
-    } else {
-      emit(AuthenticationUnregisterFailure(response.body));
     }
   }
 
@@ -702,6 +687,62 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _PendingAccountDeletion deletion,
   ) async {
     await _upsertPendingAccountDeletion(deletion);
+  }
+
+  Future<bool> _deleteProvisionedEmailAccountIfAvailable(
+    _PendingAccountDeletion deletion,
+  ) async {
+    final email = deletion.email;
+    final principalId = deletion.principalId;
+    if (email == null || principalId == null) {
+      return true;
+    }
+    try {
+      await _emailProvisioningClient.deleteAccount(
+        principalId: principalId,
+        email: email,
+        password: deletion.password,
+      );
+      return true;
+    } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
+      _log.warning(
+        'Email account deletion failed during rollback',
+        error,
+        stackTrace,
+      );
+      return !error.isRecoverable;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Email account deletion failed during rollback',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  Future<void> _deleteProvisionedEmailAccountForUser({
+    required String username,
+    required String host,
+    required String password,
+  }) async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      return;
+    }
+    final jid = '$username@$host';
+    final account = await emailService.currentAccount(jid);
+    final principalId = account?.principalId;
+    final email = account?.address;
+    if (account == null || email == null || principalId == null) {
+      _log.fine('Email account details missing; skipping provisioning delete.');
+      return;
+    }
+    await _emailProvisioningClient.deleteAccount(
+      principalId: principalId,
+      email: email,
+      password: password,
+    );
   }
 
   Future<void> _flushPendingAccountDeletions() {
@@ -787,38 +828,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return !cleanupPending;
   }
 
-  Future<bool> _deleteChatmailAccountIfAvailable(
-    _PendingAccountDeletion deletion,
-  ) async {
-    final email = deletion.chatmailEmail;
-    final principalId = deletion.chatmailPrincipalId;
-    if (email == null || principalId == null) {
-      return true;
-    }
-    try {
-      await _chatmailProvisioningClient.deleteAccount(
-        principalId: principalId,
-        email: email,
-        password: deletion.password,
-      );
-      return true;
-    } on ChatmailProvisioningException catch (error, stackTrace) {
-      _log.warning(
-        'Failed to delete Chatmail account for $email',
-        error,
-        stackTrace,
-      );
-      return !error.isRecoverable;
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to delete Chatmail account for $email',
-        error,
-        stackTrace,
-      );
-      return false;
-    }
-  }
-
   Future<bool> _performAccountDeletion(
     _PendingAccountDeletion deletion,
   ) async {
@@ -830,8 +839,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return true;
     }
-    final chatmailDeleted = await _deleteChatmailAccountIfAvailable(deletion);
-    if (!chatmailDeleted) {
+    final emailDeleted = await _deleteProvisionedEmailAccountIfAvailable(
+      deletion,
+    );
+    if (!emailDeleted) {
       return false;
     }
     try {
@@ -864,33 +875,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     }
     return false;
-  }
-
-  Future<void> _deleteProvisionedChatmailAccountForUser({
-    required String username,
-    required String host,
-    required String password,
-  }) async {
-    final emailService = _emailService;
-    if (emailService == null) {
-      _log.fine('Email service unavailable; skipping Chatmail deletion.');
-      return;
-    }
-    final jid = '$username@$host';
-    final account = await emailService.currentAccount(jid);
-    final principalId = account?.principalId;
-    final email = account?.address;
-    if (account == null || email == null || principalId == null) {
-      _log.warning(
-        'Missing Chatmail account details for $jid; skipping deletion.',
-      );
-      return;
-    }
-    await _chatmailProvisioningClient.deleteAccount(
-      principalId: principalId,
-      email: email,
-      password: password,
-    );
   }
 
   bool _isAccountDeletionNoop(int statusCode, String? body) {
@@ -960,7 +944,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final normalized = existing == null
         ? deletion
-        : deletion.copyWith(createdAt: existing!.createdAt);
+        : deletion.copyWith(createdAt: existing.createdAt);
     filtered.add(normalized);
     await _writePendingAccountDeletions(filtered);
   }
@@ -1109,27 +1093,28 @@ class _PendingAccountDeletion {
     required String username,
     required String host,
     required this.password,
-    this.chatmailEmail,
-    this.chatmailPrincipalId,
+    this.email,
+    this.principalId,
     String? createdAt,
   })  : username = username.trim().toLowerCase(),
         host = host.trim().toLowerCase(),
         createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
-    final rawPrincipal = json['chatmailPrincipalId'];
+    final rawPrincipal = json['principalId'] ?? json['chatmailPrincipalId'];
     int? principalId;
     if (rawPrincipal is num) {
       principalId = rawPrincipal.toInt();
     } else if (rawPrincipal is String) {
       principalId = int.tryParse(rawPrincipal.trim());
     }
+    final rawEmail = (json['email'] ?? json['chatmailEmail']) as String? ?? '';
     return _PendingAccountDeletion(
       username: (json['username'] as String? ?? '').trim(),
       host: (json['host'] as String? ?? AuthenticationCubit.domain).trim(),
       password: json['password'] as String? ?? '',
-      chatmailEmail: (json['chatmailEmail'] as String?)?.trim(),
-      chatmailPrincipalId: principalId,
+      email: rawEmail.trim().isEmpty ? null : rawEmail.trim(),
+      principalId: principalId,
       createdAt: json['createdAt'] as String?,
     );
   }
@@ -1137,8 +1122,8 @@ class _PendingAccountDeletion {
   final String username;
   final String host;
   final String password;
-  final String? chatmailEmail;
-  final int? chatmailPrincipalId;
+  final String? email;
+  final int? principalId;
   final String createdAt;
 
   Map<String, dynamic> toJson() => {
@@ -1146,23 +1131,22 @@ class _PendingAccountDeletion {
         'host': host,
         'password': password,
         'createdAt': createdAt,
-        if (chatmailEmail != null) 'chatmailEmail': chatmailEmail,
-        if (chatmailPrincipalId != null)
-          'chatmailPrincipalId': chatmailPrincipalId,
+        if (email != null) 'email': email,
+        if (principalId != null) 'principalId': principalId,
       };
 
   _PendingAccountDeletion copyWith({
     String? password,
-    String? chatmailEmail,
-    int? chatmailPrincipalId,
+    String? email,
+    int? principalId,
     String? createdAt,
   }) {
     return _PendingAccountDeletion(
       username: username,
       host: host,
       password: password ?? this.password,
-      chatmailEmail: chatmailEmail ?? this.chatmailEmail,
-      chatmailPrincipalId: chatmailPrincipalId ?? this.chatmailPrincipalId,
+      email: email ?? this.email,
+      principalId: principalId ?? this.principalId,
       createdAt: createdAt ?? this.createdAt,
     );
   }

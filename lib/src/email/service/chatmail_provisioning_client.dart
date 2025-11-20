@@ -4,12 +4,12 @@ import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
 const _defaultProvisioningBaseUrl = 'http://axi.im:8787';
-const _baseUrlDefineKey = 'CHATMAIL_PROVISIONING_BASE_URL';
-const _sharedSecretDefineKey = 'CHATMAIL_SHARED_SECRET';
-const _sharedSecretPlaceholder = 'set-chatmail-shared-secret';
+const _baseUrlDefineKey = 'EMAIL_PROVISIONING_BASE_URL';
+const _sharedSecretDefineKey = 'EMAIL_PROVISIONING_SHARED_SECRET';
+const _sharedSecretPlaceholder = 'set-email-shared-secret';
 
-class ChatmailCredentials {
-  const ChatmailCredentials({
+class EmailProvisioningCredentials {
+  const EmailProvisioningCredentials({
     required this.email,
     required this.password,
     required this.principalId,
@@ -20,7 +20,7 @@ class ChatmailCredentials {
   final int principalId;
 }
 
-enum ChatmailProvisioningErrorCode {
+enum EmailProvisioningApiErrorCode {
   unauthorized,
   unavailable,
   invalidResponse,
@@ -28,8 +28,8 @@ enum ChatmailProvisioningErrorCode {
   authenticationFailed,
 }
 
-class ChatmailProvisioningException implements Exception {
-  const ChatmailProvisioningException(
+class EmailProvisioningApiException implements Exception {
+  const EmailProvisioningApiException(
     this.message, {
     required this.code,
     this.statusCode,
@@ -37,17 +37,17 @@ class ChatmailProvisioningException implements Exception {
   });
 
   final String message;
-  final ChatmailProvisioningErrorCode code;
+  final EmailProvisioningApiErrorCode code;
   final bool isRecoverable;
   final int? statusCode;
 
   @override
   String toString() =>
-      'ChatmailProvisioningException($code, status: $statusCode): $message';
+      'EmailProvisioningApiException($code, status: $statusCode): $message';
 }
 
-class ChatmailProvisioningClient {
-  ChatmailProvisioningClient({
+class EmailProvisioningClient {
+  EmailProvisioningClient({
     required Uri baseUrl,
     required String sharedSecret,
     http.Client? httpClient,
@@ -55,9 +55,9 @@ class ChatmailProvisioningClient {
   })  : _baseUrl = _normalizeBase(baseUrl),
         _sharedSecret = _normalizeSharedSecret(sharedSecret),
         _httpClient = httpClient ?? http.Client(),
-        _log = logger ?? Logger('ChatmailProvisioningClient');
+        _log = logger ?? Logger('EmailProvisioningClient');
 
-  factory ChatmailProvisioningClient.fromEnvironment({
+  factory EmailProvisioningClient.fromEnvironment({
     http.Client? httpClient,
     Logger? logger,
   }) {
@@ -72,7 +72,7 @@ class ChatmailProvisioningClient {
     final baseUrl = envBaseUrl.isEmpty
         ? Uri.parse(_defaultProvisioningBaseUrl)
         : Uri.parse(envBaseUrl);
-    return ChatmailProvisioningClient(
+    return EmailProvisioningClient(
       baseUrl: baseUrl,
       sharedSecret: envSharedSecret,
       httpClient: httpClient,
@@ -85,21 +85,21 @@ class ChatmailProvisioningClient {
   final http.Client _httpClient;
   final Logger _log;
 
-  Future<ChatmailCredentials> createAccount({
+  Future<EmailProvisioningCredentials> createAccount({
     required String localpart,
     required String password,
   }) async {
     final normalizedLocalpart = localpart.trim();
     if (normalizedLocalpart.isEmpty) {
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
-        code: ChatmailProvisioningErrorCode.invalidResponse,
+        code: EmailProvisioningApiErrorCode.invalidResponse,
       );
     }
     if (password.trim().isEmpty) {
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
-        code: ChatmailProvisioningErrorCode.invalidResponse,
+        code: EmailProvisioningApiErrorCode.invalidResponse,
       );
     }
     final uri = _buildEndpoint('signup');
@@ -117,14 +117,14 @@ class ChatmailProvisioningClient {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to reach Chatmail provisioning service',
+        'Failed to reach email provisioning service',
         error,
         stackTrace,
       );
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'We couldn\'t reach the email service. Please check your '
         'connection and try again.',
-        code: ChatmailProvisioningErrorCode.network,
+        code: EmailProvisioningApiErrorCode.network,
         isRecoverable: true,
       );
     }
@@ -134,32 +134,32 @@ class ChatmailProvisioningClient {
     }
 
     if (response.statusCode == 401) {
-      _log.severe('Chatmail provisioning unauthorized: ${response.body}');
-      throw const ChatmailProvisioningException(
+      _log.severe('Email provisioning unauthorized: ${response.body}');
+      throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
-        code: ChatmailProvisioningErrorCode.unauthorized,
+        code: EmailProvisioningApiErrorCode.unauthorized,
       );
     }
 
     if (response.statusCode >= 500) {
       final detail = _errorMessageFrom(response.body);
       _log.warning(
-        'Chatmail provisioning unavailable: ${response.statusCode}'
+        'Email provisioning unavailable: ${response.statusCode}'
         '${detail == null ? '' : ' $detail'}',
       );
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'We couldn\'t reach the email service. Please check your '
         'connection and try again.',
-        code: ChatmailProvisioningErrorCode.unavailable,
+        code: EmailProvisioningApiErrorCode.unavailable,
         isRecoverable: true,
       );
     }
 
     if (response.statusCode == 403) {
-      _log.severe('Chatmail provisioning forbidden: ${response.body}');
-      throw const ChatmailProvisioningException(
+      _log.severe('Email provisioning forbidden: ${response.body}');
+      throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
-        code: ChatmailProvisioningErrorCode.unauthorized,
+        code: EmailProvisioningApiErrorCode.unauthorized,
       );
     }
 
@@ -169,21 +169,21 @@ class ChatmailProvisioningClient {
           'That username is unavailable. Please choose a different one.';
       final recoverable = response.statusCode != 451;
       _log.info(
-        'Chatmail provisioning rejected request '
+        'Email provisioning rejected request '
         '(${response.statusCode}): $message',
       );
-      throw ChatmailProvisioningException(
+      throw EmailProvisioningApiException(
         message,
-        code: ChatmailProvisioningErrorCode.invalidResponse,
+        code: EmailProvisioningApiErrorCode.invalidResponse,
         isRecoverable: recoverable,
         statusCode: response.statusCode,
       );
     }
 
-    _log.warning('Chatmail provisioning failed: ${response.statusCode}');
-    throw ChatmailProvisioningException(
+    _log.warning('Email provisioning failed: ${response.statusCode}');
+    throw EmailProvisioningApiException(
       'Signup is temporarily unavailable. Please try again later.',
-      code: ChatmailProvisioningErrorCode.invalidResponse,
+      code: EmailProvisioningApiErrorCode.invalidResponse,
       statusCode: response.statusCode,
     );
   }
@@ -210,64 +210,64 @@ class ChatmailProvisioningClient {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to reach Chatmail account deletion service',
+        'Failed to reach email account deletion service',
         error,
         stackTrace,
       );
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'We could not delete your email account. Please check your '
         'connection and try again.',
-        code: ChatmailProvisioningErrorCode.network,
+        code: EmailProvisioningApiErrorCode.network,
         isRecoverable: true,
       );
     }
 
     if (response.statusCode == 200 || response.statusCode == 404) {
       if (response.statusCode == 404) {
-        _log.info('Chatmail account already deleted for $normalizedEmail');
+        _log.info('Email account already deleted for $normalizedEmail');
       }
       return;
     }
 
     if (response.statusCode == 401) {
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'Incorrect password. Please try again.',
-        code: ChatmailProvisioningErrorCode.authenticationFailed,
+        code: EmailProvisioningApiErrorCode.authenticationFailed,
         isRecoverable: true,
       );
     }
 
     if (response.statusCode == 403) {
       _log.severe(
-        'Chatmail account deletion forbidden: ${response.body}',
+        'Email account deletion forbidden: ${response.body}',
       );
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'Unable to delete email account. Please try again later.',
-        code: ChatmailProvisioningErrorCode.unauthorized,
+        code: EmailProvisioningApiErrorCode.unauthorized,
       );
     }
 
     if (response.statusCode >= 500) {
       final detail = _errorMessageFrom(response.body);
       _log.warning(
-        'Chatmail account deletion unavailable: ${response.statusCode}'
+        'Email account deletion unavailable: ${response.statusCode}'
         '${detail == null ? '' : ' $detail'}',
       );
-      throw const ChatmailProvisioningException(
+      throw const EmailProvisioningApiException(
         'We could not delete your email account. Please try again later.',
-        code: ChatmailProvisioningErrorCode.unavailable,
+        code: EmailProvisioningApiErrorCode.unavailable,
         isRecoverable: true,
       );
     }
 
     final detail = _errorMessageFrom(response.body);
     _log.warning(
-      'Chatmail account deletion failed (${response.statusCode})'
+      'Email account deletion failed (${response.statusCode})'
       '${detail == null ? '' : ': $detail'}',
     );
-    throw ChatmailProvisioningException(
+    throw EmailProvisioningApiException(
       detail ?? 'Unable to delete email account. Please try again later.',
-      code: ChatmailProvisioningErrorCode.invalidResponse,
+      code: EmailProvisioningApiErrorCode.invalidResponse,
       statusCode: response.statusCode,
     );
   }
@@ -288,7 +288,7 @@ class ChatmailProvisioningClient {
   static Uri _normalizeBase(Uri baseUrl) {
     if (baseUrl.scheme.isEmpty || baseUrl.host.isEmpty) {
       throw StateError(
-        'Chatmail provisioning base URL must include a scheme and host.',
+        'Email provisioning base URL must include a scheme and host.',
       );
     }
     return baseUrl;
@@ -298,14 +298,17 @@ class ChatmailProvisioningClient {
     final normalized = sharedSecret.trim();
     if (normalized.isEmpty || normalized == _sharedSecretPlaceholder) {
       throw StateError(
-        'Chatmail provisioning shared secret missing. Set '
+        'Email provisioning shared secret missing. Set '
         '--dart-define=$_sharedSecretDefineKey=<secret> before running.',
       );
     }
     return normalized;
   }
 
-  ChatmailCredentials _parseCredentials(String payload, String password) {
+  EmailProvisioningCredentials _parseCredentials(
+    String payload,
+    String password,
+  ) {
     try {
       final decoded = jsonDecode(payload);
       if (decoded is! Map<String, dynamic>) {
@@ -319,16 +322,16 @@ class ChatmailProvisioningClient {
       if (principalId is! num) {
         throw const FormatException('Missing principal_id field');
       }
-      return ChatmailCredentials(
+      return EmailProvisioningCredentials(
         email: email,
         password: password,
         principalId: principalId.toInt(),
       );
     } on FormatException catch (error, stackTrace) {
-      _log.warning('Invalid Chatmail provisioning response', error, stackTrace);
-      throw const ChatmailProvisioningException(
+      _log.warning('Invalid email provisioning response', error, stackTrace);
+      throw const EmailProvisioningApiException(
         'Signup is temporarily unavailable. Please try again later.',
-        code: ChatmailProvisioningErrorCode.invalidResponse,
+        code: EmailProvisioningApiErrorCode.invalidResponse,
       );
     }
   }
@@ -348,3 +351,9 @@ class ChatmailProvisioningClient {
     return null;
   }
 }
+
+// Backwards compatibility aliases for existing callers.
+typedef ChatmailCredentials = EmailProvisioningCredentials;
+typedef ChatmailProvisioningException = EmailProvisioningApiException;
+typedef ChatmailProvisioningErrorCode = EmailProvisioningApiErrorCode;
+typedef ChatmailProvisioningClient = EmailProvisioningClient;
