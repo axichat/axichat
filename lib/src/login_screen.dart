@@ -149,8 +149,10 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _handleAuthState(AuthenticationState state) {
     var flow = _activeFlow;
+    final signupState = state is AuthenticationSignUpInProgress ? state : null;
+    final isSubmissionSignup = signupState?.fromSubmission ?? false;
     if (flow == null) {
-      if (state is AuthenticationSignUpInProgress) {
+      if (isSubmissionSignup) {
         _restoreSignupFlow('Creating your account…');
         flow = _AuthFlow.signup;
       } else if (state is AuthenticationLogInInProgress && state.fromSignup) {
@@ -160,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
     }
-    if (state is AuthenticationSignUpInProgress && flow == _AuthFlow.signup) {
+    if (isSubmissionSignup && flow == _AuthFlow.signup) {
       _operationAcknowledged = true;
       _ensureOperationVisible('Creating your account…');
       return;
