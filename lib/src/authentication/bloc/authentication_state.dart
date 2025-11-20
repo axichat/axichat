@@ -30,7 +30,12 @@ final class AuthenticationLogInInProgress extends AuthenticationInProgress {
 }
 
 final class AuthenticationSignUpInProgress extends AuthenticationInProgress {
-  const AuthenticationSignUpInProgress();
+  const AuthenticationSignUpInProgress({this.fromSubmission = true});
+
+  final bool fromSubmission;
+
+  @override
+  List<Object?> get props => [fromSubmission];
 }
 
 final class AuthenticationComplete extends AuthenticationState {

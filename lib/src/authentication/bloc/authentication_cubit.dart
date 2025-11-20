@@ -547,7 +547,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> checkNotPwned({required String password}) async {
-    emit(const AuthenticationSignUpInProgress());
+    emit(const AuthenticationSignUpInProgress(fromSubmission: false));
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {
