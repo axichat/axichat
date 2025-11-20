@@ -136,7 +136,7 @@ workflows:
       flutter: stable
       groups:
         - integration_test
-        - chatmail_provisioning # Provides CHATMAIL_SHARED_SECRET for dart-define builds/tests.
+        - email_provisioning # Provides EMAIL_PROVISIONING_SHARED_SECRET for dart-define builds/tests.
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
@@ -146,7 +146,7 @@ workflows:
         script: |
           mkdir -p test-results
           flutter test \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET \
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET \
           --machine > test-results/flutter.json
         test_report: test-results/flutter.json
       - name: Integration Tests
@@ -155,7 +155,7 @@ workflows:
           flutter emulators --launch emulator-35 
           adb wait-for-device
           flutter test -d emulator-5554 integration_test \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET \
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET \
           --dart-define=USERNAME=$USERNAME \
           --dart-define=PASSWORD=$PASSWORD \
           --dart-define=CONTACT_JID=$CONTACT_JID \
@@ -181,7 +181,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
         - github # TODO: Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
-        - chatmail_provisioning # CHATMAIL_SHARED_SECRET for provisioning glue service.
+        - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
       android_signing:
         - AXICHAT_UPLOAD_KEY # TODO: Upload the release keystore/certs and link it as AXICHAT_UPLOAD_KEY.
     scripts:
@@ -191,7 +191,7 @@ workflows:
       - name: Shorebird Release
         script: |
           shorebird release android --flavor production --artifact=apk \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET
       - *github_release_create_android
       - *github_release_upload_android
     artifacts:
@@ -206,7 +206,7 @@ workflows:
       flutter: stable
       groups:
         - shorebird # TODO: Codemagic must expose SHOREBIRD_TOKEN for patching builds.
-        - chatmail_provisioning # CHATMAIL_SHARED_SECRET for provisioning glue service.
+        - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     inputs:
       release_version:
         description: The release version to patch
@@ -218,7 +218,7 @@ workflows:
         script: |
           shorebird patch android --flavor production \
           --release-version=${{ inputs.release_version }} \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET
   dev-release-android-workflow:
     name: Android Development Release Workflow
     triggering:
@@ -239,7 +239,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
         - github # TODO: Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
-        - chatmail_provisioning # CHATMAIL_SHARED_SECRET for provisioning glue service.
+        - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
       android_signing:
         - AXICHAT_UPLOAD_KEY # TODO: Upload a dev keystore or reuse the production key via Codemagic secrets.
     scripts:
@@ -249,7 +249,7 @@ workflows:
       - name: Shorebird Release Development
         script: |
           shorebird release android --flavor development --artifact=apk \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET
       - *github_release_create_android
       - *github_release_upload_android
     artifacts:
@@ -264,7 +264,7 @@ workflows:
       flutter: stable
       groups:
         - shorebird # TODO: Codemagic group must include SHOREBIRD_TOKEN for dev patching.
-        - chatmail_provisioning # CHATMAIL_SHARED_SECRET for provisioning glue service.
+        - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     inputs:
       release_version:
         description: The release version to patch
@@ -276,7 +276,7 @@ workflows:
         script: |
           shorebird patch android --flavor development \
           --release-version=${{ inputs.release_version }} \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET
   release-windows-workflow:
     name: Windows Release Workflow
     triggering:
@@ -296,7 +296,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
         - github # TODO: Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
-        - chatmail_provisioning # CHATMAIL_SHARED_SECRET for provisioning glue service.
+        - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     scripts:
       - *shorebird_install_windows
       - *fetch_dependencies
@@ -309,7 +309,7 @@ workflows:
       - name: Shorebird Release
         script: |
           & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production `
-            --dart-define=CHATMAIL_SHARED_SECRET=$env:CHATMAIL_SHARED_SECRET
+            --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$env:EMAIL_PROVISIONING_SHARED_SECRET
       - name: Export bundle
         script: |
           Copy-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
@@ -341,7 +341,7 @@ workflows:
       groups:
         - shorebird # TODO: Store SHOREBIRD_TOKEN for Linux desktop releases.
         - github # TODO: Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
-        - chatmail_provisioning # CHATMAIL_SHARED_SECRET for provisioning glue service.
+        - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     scripts:
       - *shorebird_install
       - *fetch_dependencies
@@ -352,7 +352,7 @@ workflows:
       - name: Shorebird Release Linux
         script: |
           shorebird release linux --flavor production \
-          --dart-define=CHATMAIL_SHARED_SECRET=$CHATMAIL_SHARED_SECRET
+          --dart-define=EMAIL_PROVISIONING_SHARED_SECRET=$EMAIL_PROVISIONING_SHARED_SECRET
       - name: Package Linux Bundle
         script: |
           mkdir -p dist

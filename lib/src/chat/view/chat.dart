@@ -692,10 +692,10 @@ class _ChatState extends State<Chat> {
     final chat = context.read<ChatBloc>().state.chat;
     final jid = chat?.jid;
     if (chat == null || jid == null) return;
-    final xmppService = context.read<XmppService?>();
+    final xmppService = context.read<XmppService>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     try {
-      await xmppService?.toggleChatSpam(jid: jid, spam: sendToSpam);
+      await xmppService.toggleChatSpam(jid: jid, spam: sendToSpam);
       final address = chat.emailAddress?.trim();
       if (chat.transport.isEmail && address?.isNotEmpty == true) {
         if (sendToSpam) {

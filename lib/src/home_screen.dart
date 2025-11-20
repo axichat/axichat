@@ -149,8 +149,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                         secondaryChild: openCalendar
                             ? const CalendarWidget()
-                            : openJid == null ||
-                                    context.read<XmppService?>() == null
+                            : openJid == null
                                 ? const chat_view.GuestChat()
                                 : MultiBlocProvider(
                                     providers: [

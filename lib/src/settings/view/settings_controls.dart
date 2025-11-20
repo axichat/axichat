@@ -3,6 +3,7 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
+import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -155,6 +156,41 @@ class SettingsControls extends StatelessWidget {
                 onChanged: (readReceipts) => context
                     .read<SettingsCubit>()
                     .toggleReadReceipts(readReceipts),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: AxiListTile(
+                title: 'Message storage',
+                subtitle:
+                    'Local keeps device copies; Server-only queries the archive.',
+                actions: [
+                  SizedBox(
+                    width: 220,
+                    child: ShadSelect<MessageStorageMode>(
+                      initialValue: state.messageStorageMode,
+                      onChanged: (mode) {
+                        if (mode == null) return;
+                        context
+                            .read<SettingsCubit>()
+                            .updateMessageStorageMode(mode);
+                      },
+                      options: MessageStorageMode.values
+                          .map(
+                            (mode) => ShadOption<MessageStorageMode>(
+                              value: mode,
+                              child: Text(
+                                mode.isLocal ? 'Local' : 'Server-only',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder: (context, mode) => Text(
+                        mode.isLocal ? 'Local' : 'Server-only',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(

@@ -1,4 +1,5 @@
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -41,6 +42,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void toggleIndicateTyping(bool indicateTyping) {
     emit(state.copyWith(indicateTyping: indicateTyping));
+  }
+
+  void updateMessageStorageMode(MessageStorageMode mode) {
+    emit(state.copyWith(messageStorageMode: mode));
   }
 
   @override

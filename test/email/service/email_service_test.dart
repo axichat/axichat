@@ -362,15 +362,13 @@ void main() {
     addTearDown(service.shutdown);
   });
 
-  test('ensureProvisioned configures chatmail transport with TLS endpoints',
-      () async {
+  test('ensureProvisioned configures transport with TLS endpoints', () async {
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
       foregroundBridge: foregroundBridge,
-      chatmailDomain: 'axi.im',
     );
 
     await service.ensureProvisioned(
@@ -704,14 +702,13 @@ void main() {
     addTearDown(service.shutdown);
   });
 
-  test('ensureProvisioned scopes credentials per jid and domain', () async {
+  test('ensureProvisioned uses the provided JID for account address', () async {
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
       foregroundBridge: foregroundBridge,
-      chatmailDomain: 'chatmail.example',
     );
 
     await service.ensureProvisioned(
@@ -725,13 +722,13 @@ void main() {
     verify(
       () => credentialStore.write(
         key: any(named: 'key'),
-        value: 'alice@chatmail.example',
+        value: 'alice@axi.im',
       ),
     ).called(1);
 
     verify(
       () => transport.configureAccount(
-        address: 'alice@chatmail.example',
+        address: 'alice@axi.im',
         password: any(named: 'password'),
         displayName: any(named: 'displayName'),
         additional: any(named: 'additional'),

@@ -152,6 +152,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (initialSyncState != null) {
       add(_EmailSyncStateChanged(initialSyncState));
     }
+    if (messageService case final XmppService xmppService) {
+      _connectivitySubscription = xmppService.connectivityStream.listen(
+        (connectionState) {
+          if (connectionState == ConnectionState.connected) {
+            unawaited(_catchUpFromMam());
+          }
+        },
+      );
+    }
   }
 
   static const messageBatchSize = 50;
@@ -183,8 +192,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
+  StreamSubscription<ConnectionState>? _connectivitySubscription;
   var _currentMessageLimit = messageBatchSize;
   String? _emailSyncComposerMessage;
+  String? _mamBeforeId;
+  int? _mamTotalCount;
+  bool _mamComplete = false;
+  bool _mamLoading = false;
 
   RestartableTimer? _typingTimer;
 
@@ -192,6 +206,59 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
+
+  Future<void> _loadEarlierFromMam() async {
+    final chat = state.chat;
+    if (chat == null || _mamLoading || _mamComplete) return;
+    final beforeId = _mamBeforeId ??
+        (state.items.isEmpty ? null : state.items.last.stanzaID);
+    if (beforeId == null) return;
+    _mamLoading = true;
+    try {
+      final result = await _messageService.fetchBeforeFromArchive(
+        jid: chat.remoteJid,
+        before: beforeId,
+        pageSize: messageBatchSize,
+        isMuc: chat.type == ChatType.groupChat,
+      );
+      _mamBeforeId = result.lastId ?? result.firstId ?? _mamBeforeId;
+      _mamTotalCount = result.count ?? _mamTotalCount;
+      _mamComplete = result.complete || _reachedMamTotal();
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to load older MAM page for ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    }
+    _mamLoading = false;
+  }
+
+  Future<void> _catchUpFromMam() async {
+    final chat = state.chat;
+    if (chat == null) return;
+    final lastSeen = await _messageService.loadLastSeenTimestamp(
+      chat.remoteJid,
+    );
+    if (lastSeen == null) return;
+    try {
+      final result = await _messageService.fetchSinceFromArchive(
+        jid: chat.remoteJid,
+        since: lastSeen,
+        pageSize: messageBatchSize,
+        isMuc: chat.type == ChatType.groupChat,
+      );
+      _mamBeforeId = result.lastId ?? _mamBeforeId;
+      _mamTotalCount = result.count ?? _mamTotalCount;
+      _mamComplete = result.complete || _reachedMamTotal();
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to catch up via MAM for ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    }
+  }
 
   Future<void> _initializeViewFilter() async {
     if (jid == null) return;
@@ -201,6 +268,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to load view filter for $jid', error, stackTrace);
     }
+  }
+
+  void _resetMamCursors(bool resetContext) {
+    if (!resetContext) return;
+    _mamBeforeId = null;
+    _mamTotalCount = null;
+    _mamComplete = false;
+    _mamLoading = false;
+  }
+
+  bool _reachedMamTotal() =>
+      _mamTotalCount != null && state.items.length >= _mamTotalCount!;
+
+  Future<void> _hydrateLatestFromMam(Chat chat) async {
+    if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
+    _mamLoading = true;
+    try {
+      final result = await _messageService.fetchLatestFromArchive(
+        jid: chat.remoteJid,
+        pageSize: messageBatchSize,
+        isMuc: chat.type == ChatType.groupChat,
+      );
+      _mamBeforeId = result.lastId ?? result.firstId ?? _mamBeforeId;
+      _mamTotalCount = result.count ?? _mamTotalCount;
+      _mamComplete = result.complete || _reachedMamTotal();
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to hydrate MAM for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    }
+    _mamLoading = false;
   }
 
   void _subscribeToMessages({
@@ -224,6 +324,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
+    await _connectivitySubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     return super.close();
@@ -246,6 +347,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
     ));
+    _resetMamCursors(resetContext);
+    unawaited(_hydrateLatestFromMam(event.chat));
   }
 
   Future<void> _onChatMessagesUpdated(
@@ -579,6 +682,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final nextLimit = state.items.length + messageBatchSize;
     _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
+    await _loadEarlierFromMam();
   }
 
   Future<void> _onChatAlertHidden(
