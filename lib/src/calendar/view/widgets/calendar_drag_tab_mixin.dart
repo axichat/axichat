@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/axi_tab_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/calendar_task.dart';
 import '../models/calendar_drag_payload.dart';
@@ -30,10 +31,15 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   bool _cancelBucketHovering = false;
   final GlobalKey _cancelBucketKey =
       GlobalKey(debugLabel: 'calendarDragCancelBucket');
+  final FocusNode _cancelBucketFocusNode =
+      FocusNode(debugLabel: 'calendarCancelBucketFocus');
+  CalendarDragPayload? _activeCancelPayload;
 
   TabController get mobileTabController;
 
   bool get isDragSwitcherEnabled;
+
+  bool get isAnyDragActive => _isAnyDragActive;
 
   bool get _isAnyDragActive => _gridDragActive || _edgeDragActive;
 
@@ -70,6 +76,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   void disposeCalendarDragTabMixin() {
     mobileTabController.removeListener(_handleTabControllerChanged);
     _cancelSwitchTimer();
+    _cancelBucketFocusNode.dispose();
   }
 
   void handleGridDragSessionStarted() {
@@ -200,6 +207,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       return const SizedBox.shrink();
     }
     final bool visible = _isAnyDragActive;
+    if (!visible && _activeCancelPayload != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _setActiveCancelPayload(null);
+        }
+      });
+    }
     const duration = Duration(milliseconds: 200);
     const curve = Curves.easeInOutCubic;
     final double safeBottomPadding = math.max(bottomInset, 0.0);
@@ -229,65 +243,100 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         },
         child: !visible
             ? const SizedBox.shrink()
-            : SizedBox(
-                key: const ValueKey('calendar.drag.cancel-bucket'),
-                width: double.infinity,
-                height: totalHeight,
-                child: DragTarget<CalendarDragPayload>(
-                  key: _cancelBucketKey,
-                  hitTestBehavior: HitTestBehavior.translucent,
-                  onWillAcceptWithDetails: (details) {
-                    final bool inside = _isPointerInsideCancelBucket(details);
-                    _setCancelBucketHovering(inside);
-                    return inside;
-                  },
-                  onMove: (details) {
-                    final bool inside = _isPointerInsideCancelBucket(details);
-                    _setCancelBucketHovering(inside);
-                  },
-                  onLeave: (_) => _setCancelBucketHovering(false),
-                  onAcceptWithDetails: (details) {
-                    _setCancelBucketHovering(false);
-                    _handleCancelBucketDrop(details.data);
-                  },
-                  builder: (context, candidate, __) {
-                    final ColorScheme scheme = Theme.of(context).colorScheme;
-                    final bool hovering =
-                        _cancelBucketHovering || candidate.isNotEmpty;
-                    final Color fillColor = scheme.error.withValues(
-                      alpha: hovering ? 0.18 : 0.09,
-                    );
-                    final Color iconColor = scheme.error.withValues(
-                      alpha: hovering ? 0.95 : 0.78,
-                    );
-                    return Container(
-                      width: double.infinity,
-                      height: totalHeight,
-                      padding: EdgeInsets.only(bottom: safeBottomPadding),
-                      color: fillColor,
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.close_rounded,
-                              color: iconColor,
-                              size: 16,
+            : FocusableActionDetector(
+                focusNode: _cancelBucketFocusNode,
+                enabled: visible,
+                shortcuts: _cancelShortcuts,
+                actions: {
+                  _CancelDragIntent: CallbackAction<_CancelDragIntent>(
+                    onInvoke: (_) {
+                      _triggerCancelBucketAction();
+                      return null;
+                    },
+                  ),
+                },
+                child: Semantics(
+                  key: const ValueKey('calendar.drag.cancel-bucket'),
+                  button: true,
+                  enabled: _activeCancelPayload != null,
+                  label: 'Cancel drag',
+                  hint: _activeCancelPayload != null
+                      ? 'Press Enter, Space, or Escape to cancel the current drag.'
+                      : 'Move a dragged task here to cancel it.',
+                  onTap: _activeCancelPayload == null
+                      ? null
+                      : _triggerCancelBucketAction,
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: totalHeight,
+                    child: DragTarget<CalendarDragPayload>(
+                      key: _cancelBucketKey,
+                      hitTestBehavior: HitTestBehavior.translucent,
+                      onWillAcceptWithDetails: (details) {
+                        final bool inside =
+                            _isPointerInsideCancelBucket(details);
+                        _setActiveCancelPayload(details.data);
+                        _setCancelBucketHovering(inside);
+                        return inside;
+                      },
+                      onMove: (details) {
+                        final bool inside =
+                            _isPointerInsideCancelBucket(details);
+                        _setCancelBucketHovering(inside);
+                      },
+                      onLeave: (_) {
+                        _setCancelBucketHovering(false);
+                        _setActiveCancelPayload(null);
+                      },
+                      onAcceptWithDetails: (details) {
+                        _setCancelBucketHovering(false);
+                        _handleCancelBucketDrop(details.data);
+                        _setActiveCancelPayload(null);
+                      },
+                      builder: (context, candidate, __) {
+                        if (candidate.isNotEmpty) {
+                          _setActiveCancelPayload(candidate.first);
+                        }
+                        final ColorScheme scheme =
+                            Theme.of(context).colorScheme;
+                        final bool hovering =
+                            _cancelBucketHovering || candidate.isNotEmpty;
+                        final Color fillColor = scheme.error.withValues(
+                          alpha: hovering ? 0.18 : 0.09,
+                        );
+                        final Color iconColor = scheme.error.withValues(
+                          alpha: hovering ? 0.95 : 0.78,
+                        );
+                        return Container(
+                          width: double.infinity,
+                          height: totalHeight,
+                          padding: EdgeInsets.only(bottom: safeBottomPadding),
+                          color: fillColor,
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.close_rounded,
+                                  color: iconColor,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Cancel drag',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.2,
+                                    color: iconColor,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Cancel drag',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
-                                color: iconColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
       ),
@@ -303,6 +352,47 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     });
     onCancelBucketHoverChanged(value);
   }
+
+  void _setActiveCancelPayload(CalendarDragPayload? payload) {
+    if (_activeCancelPayload == payload) {
+      return;
+    }
+    if (!mounted) {
+      _activeCancelPayload = payload;
+      return;
+    }
+    setState(() {
+      _activeCancelPayload = payload;
+    });
+    if (payload != null) {
+      _cancelBucketFocusNode.requestFocus();
+    }
+  }
+
+  void _triggerCancelBucketAction() {
+    final CalendarDragPayload? payload = _activeCancelPayload;
+    if (payload == null) {
+      return;
+    }
+    _setCancelBucketHovering(false);
+    _handleCancelBucketDrop(payload);
+  }
+
+  bool handleKeyboardCancelBucket() {
+    final CalendarDragPayload? payload = _activeCancelPayload;
+    if (payload == null) {
+      return false;
+    }
+    _triggerCancelBucketAction();
+    return true;
+  }
+
+  Map<ShortcutActivator, Intent> get _cancelShortcuts =>
+      const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.space): _CancelDragIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): _CancelDragIntent(),
+        SingleActivator(LogicalKeyboardKey.escape): _CancelDragIntent(),
+      };
 
   void _handleCancelBucketDrop(CalendarDragPayload payload) {
     _setCancelBucketHovering(false);
@@ -564,6 +654,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   }
 
   void onDragCancelRequested(CalendarDragPayload payload);
+}
+
+class _CancelDragIntent extends Intent {
+  const _CancelDragIntent();
 }
 
 class _DragTabLabel extends StatelessWidget {

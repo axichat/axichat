@@ -1,8 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -193,7 +191,7 @@ class _CalendarWidgetState
     CalendarSizeClass sizeClass,
     MediaQueryData mediaQuery,
   ) {
-    return _isDesktopPlatform && sizeClass == CalendarSizeClass.expanded;
+    return sizeClass == CalendarSizeClass.expanded;
   }
 
   void _handleCalendarBackPressed() {
@@ -216,19 +214,6 @@ class _CalendarWidgetState
     final navigator = Navigator.maybeOf(context);
     if (navigator?.canPop() ?? false) {
       navigator?.pop();
-    }
-  }
-
-  bool get _isDesktopPlatform {
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.macOS:
-      case TargetPlatform.windows:
-      case TargetPlatform.linux:
-      case TargetPlatform.fuchsia:
-        return true;
-      case TargetPlatform.android:
-      case TargetPlatform.iOS:
-        return false;
     }
   }
 }
