@@ -28,11 +28,16 @@ Future<void> main(List<String> args) async {
       if (isRelease) '--release',
     ];
 
+    final tripleKeyCargo = targetTriple.toUpperCase().replaceAll('-', '_');
     final environment = Map<String, String>.from(Platform.environment)
       ..addAll(_cargoEnvForTarget(
         triple: targetTriple,
         codeConfig: codeConfig,
       ));
+
+    final linkerEnvKey = 'CARGO_TARGET_${tripleKeyCargo}_LINKER';
+    stdout.writeln(
+        '[delta_ffi][warning] Using linker: ${environment[linkerEnvKey] ?? 'default'}');
 
     final result = await Process.run(
       'cargo',
@@ -157,6 +162,27 @@ Map<String, String> _cargoEnvForTarget({
       File(compilerPath).parent.path,
       Platform.environment['PATH'] ?? '',
     ].where((element) => element.isNotEmpty).join(':');
+  }
+
+  if (codeConfig.targetOS == OS.linux) {
+    const fallbackCc = '/usr/bin/gcc';
+    const fallbackCxx = '/usr/bin/g++';
+    const fallbackLinker = '/usr/bin/gcc';
+    const fallbackArchiver = '/usr/bin/ar';
+
+    if (File(fallbackLinker).existsSync()) {
+      env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = fallbackLinker;
+    }
+    if (File(fallbackArchiver).existsSync()) {
+      env['CARGO_TARGET_${tripleKeyCargo}_AR'] = fallbackArchiver;
+      env['AR_$tripleKeyCc'] = fallbackArchiver;
+    }
+    if (File(fallbackCc).existsSync()) {
+      env['CC_$tripleKeyCc'] = fallbackCc;
+    }
+    if (File(fallbackCxx).existsSync()) {
+      env['CXX_$tripleKeyCc'] = fallbackCxx;
+    }
   }
 
   // For macOS targets (e.g. aarch64-apple-darwin), ensure the SDK is visible
