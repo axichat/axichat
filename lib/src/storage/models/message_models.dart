@@ -320,6 +320,7 @@ class Message with _$Message implements Insertable<Message> {
   mox.MessageEvent toMox({
     String? quotedBody,
     mox.JID? quotedJid,
+    List<mox.StanzaHandlerExtension> extraExtensions = const [],
   }) {
     final extensions = <mox.StanzaHandlerExtension>[
       const mox.MarkableData(true),
@@ -362,6 +363,8 @@ class Message with _$Message implements Insertable<Message> {
       // But we should ensure the message is properly flagged
       extensions.add(mox.StableIdData(originID ?? stanzaID, null));
     }
+
+    extensions.addAll(extraExtensions);
 
     return mox.MessageEvent(
       mox.JID.fromString(senderJid),
