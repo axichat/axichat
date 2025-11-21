@@ -110,8 +110,22 @@ class ChatsCubit extends Cubit<ChatsState> {
       return;
     }
     emit(state.copyWith(creationStatus: RequestStatus.loading));
-    // final uniqueTitle = '${_chatsService.username}+$title';
-    // final jid = '$uniqueTitle@conference.${AuthenticationCubit.baseUrl}/${nickname??_chatsService.username}';
+    final mucService =
+        _chatsService is MucService ? _chatsService as MucService : null;
+    if (mucService == null) {
+      emit(state.copyWith(creationStatus: RequestStatus.failure));
+      return;
+    }
+    try {
+      final roomJid = await mucService.createRoom(
+        name: title,
+        nickname: nickname,
+      );
+      await _chatsService.openChat(roomJid);
+      emit(state.copyWith(creationStatus: RequestStatus.success));
+    } on Exception {
+      emit(state.copyWith(creationStatus: RequestStatus.failure));
+    }
   }
 
   Future<void> deleteChat({required String jid}) async {

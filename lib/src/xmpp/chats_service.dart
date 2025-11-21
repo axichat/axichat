@@ -322,22 +322,65 @@ mixin ChatsService on XmppBase, BaseStreamService {
 }
 
 class MUCManager extends mox.MUCManager {
-  Future<void> createGroupChat({
+  Future<void> joinRoomWithStrings({
     required String jid,
+    required String nickname,
     int? maxHistoryStanzas,
+  }) async {
+    await super.joinRoom(
+      mox.JID.fromString(jid),
+      nickname,
+      maxHistoryStanzas: maxHistoryStanzas,
+    );
+  }
+
+  Future<void> sendMediatedInvite({
+    required String roomJid,
+    required String inviteeJid,
+    String? reason,
   }) async {
     await getAttributes().sendStanza(
       mox.StanzaDetails(
-        mox.Stanza.presence(
-          to: jid,
+        mox.Stanza.message(
+          to: roomJid,
           children: [
             mox.XMLNode.xmlns(
               tag: 'x',
-              xmlns: mox.mucXmlns,
+              xmlns: _mucUserXmlns,
+              children: [
+                mox.XMLNode(
+                  tag: 'invite',
+                  attributes: {'to': inviteeJid},
+                  children: reason?.isNotEmpty == true
+                      ? [mox.XMLNode(tag: 'reason', text: reason)]
+                      : const [],
+                ),
+              ],
             ),
           ],
         ),
         awaitable: false,
+      ),
+    );
+  }
+
+  Future<void> sendAdminIq({
+    required String roomJid,
+    required List<mox.XMLNode> items,
+  }) async {
+    await getAttributes().sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          type: 'set',
+          to: roomJid,
+          children: [
+            mox.XMLNode.xmlns(
+              tag: 'query',
+              xmlns: _mucAdminXmlns,
+              children: items,
+            ),
+          ],
+        ),
       ),
     );
   }

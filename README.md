@@ -22,7 +22,7 @@
 
 ## Why Axichat?
 
-- **Own your network** – Native XMPP + OMEMO2 encryption with no Firebase, Google Play Services, or proprietary push relays.
+- **Own your network** – Native with no Firebase, Google Play Services, or proprietary push relays.
 - **First-party push + secure storage** – SQLCipher for the local database and Axichat-operated notification relays keep metadata private.
 - **Truly cross-platform** – Android, Windows, and Linux builds share the same polished UI with upcoming macOS/iOS support.
 - **Operations-ready UX** – Deadline-safe notifications, monitored overlays, and a consistent notification stack across the entire app.
@@ -69,13 +69,3 @@ flutter build apk --flavor production --release
 ```
 
 Use the flavor that matches your deployment (`--flavor development` for staging). After any model changes under `lib/src/storage/models`, re-run the `build_runner` command above.
-
-## Contributing
-
-- Follow the architecture notes in `CLAUDE.md`, `AGENTS.md`, and the feature-specific guides scattered under `lib/src/*/CLAUDE.md`.
-- Keep commits small, run `dart format .` + `dart analyze`, and document any vendor edits inside `VENDOR_NOTES.md`.
-- Bug reports and feature requests live at [GitLab Issues](https://gitlab.com/axichat/axichat/-/issues).
-
----
-
-Take control of your communication and help us build the most reliable, privacy-preserving XMPP messenger.

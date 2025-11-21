@@ -161,6 +161,8 @@ class HomeScreen extends StatelessWidget {
                                               context.read<XmppService>(),
                                           chatsService:
                                               context.read<XmppService>(),
+                                          mucService:
+                                              context.read<XmppService>(),
                                           notificationService: context
                                               .read<NotificationService>(),
                                           emailService:

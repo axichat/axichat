@@ -149,9 +149,11 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                     child: AxiAvatar(
                                       jid: profileState.jid,
                                       subscription: Subscription.both,
-                                      presence: profileState.presence,
-                                      status: profileState.status,
-                                      active: true,
+                                      // Presence is ingested for MUC features
+                                      // but we hide presence UI for contacts.
+                                      presence: null,
+                                      status: null,
+                                      active: false,
                                     ),
                                   ),
                                   title: Row(

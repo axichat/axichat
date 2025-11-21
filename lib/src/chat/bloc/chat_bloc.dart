@@ -14,6 +14,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -22,6 +23,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
@@ -95,6 +97,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required MessageService messageService,
     required ChatsService chatsService,
     required NotificationService notificationService,
+    required MucService mucService,
     EmailService? emailService,
     OmemoService? omemoService,
   })  : _messageService = messageService,
@@ -102,6 +105,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _notificationService = notificationService,
         _emailService = emailService,
         _omemoService = omemoService,
+        _mucService = mucService,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -124,6 +128,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
+    on<ChatInviteRequested>(_onChatInviteRequested);
+    on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
@@ -137,6 +143,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatSubjectChanged,
       transformer: blocDebounce(const Duration(milliseconds: 200)),
     );
+    on<ChatInviteRevocationRequested>(_onInviteRevocationRequested);
+    on<ChatInviteJoinRequested>(_onInviteJoinRequested);
+    on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
+    on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
     if (jid != null) {
       _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
@@ -184,6 +194,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final NotificationService _notificationService;
   final EmailService? _emailService;
   final OmemoService? _omemoService;
+  final MucService _mucService;
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
@@ -191,6 +202,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
+  StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   var _currentMessageLimit = messageBatchSize;
@@ -323,6 +335,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> close() async {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
+    await _roomSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     _typingTimer?.cancel();
@@ -346,9 +359,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emailSubjectHydrationText:
           resetContext ? null : state.emailSubjectHydrationText,
       emailSubjectHydrationId: resetContext ? 0 : state.emailSubjectHydrationId,
+      roomState: resetContext ? null : state.roomState,
     ));
     _resetMamCursors(resetContext);
     unawaited(_hydrateLatestFromMam(event.chat));
+    unawaited(_roomSubscription?.cancel());
+    if (event.chat.type == ChatType.groupChat) {
+      _roomSubscription = _mucService
+          .roomStateStream(event.chat.jid)
+          .listen((room) => emit(state.copyWith(roomState: room)));
+      unawaited(_mucService.warmRoomFromHistory(roomJid: event.chat.jid));
+      if (!resetContext && state.items.isNotEmpty) {
+        _mucService.trackOccupantsFromMessages(event.chat.jid, state.items);
+      }
+    } else {
+      emit(state.copyWith(roomState: null));
+    }
   }
 
   Future<void> _onChatMessagesUpdated(
@@ -356,6 +382,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     emit(state.copyWith(items: event.items));
+    if (state.chat?.type == ChatType.groupChat) {
+      _mucService.trackOccupantsFromMessages(state.chat!.jid, event.items);
+    }
     if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(event.items, emit);
     }
@@ -369,6 +398,304 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           _messageService.sendReadMarker(jid!, item.stanzaID);
         }
       }
+    }
+  }
+
+  Future<void> _onChatInviteRequested(
+    ChatInviteRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || chat.type != ChatType.groupChat) {
+      return;
+    }
+    final myDomain = _chatsService.myJid;
+    if (myDomain == null) return;
+    String? inviteeDomain;
+    String? inviteeBare;
+    try {
+      final jid = mox.JID.fromString(event.jid);
+      inviteeDomain = jid.domain;
+      inviteeBare = jid.toBare().toString();
+    } catch (_) {
+      inviteeDomain = null;
+    }
+    if (inviteeDomain == null ||
+        inviteeDomain != mox.JID.fromString(myDomain).domain) {
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'Invites are limited to the default domain.',
+            variant: ChatToastVariant.warning,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      return;
+    }
+    final roomState = state.roomState;
+    final inviteeBareLower = inviteeBare?.toLowerCase();
+    if (roomState != null && inviteeBareLower != null) {
+      final alreadyMember = roomState.occupants.values.any(
+        (occupant) =>
+            occupant.realJid != null &&
+            mox.JID
+                    .fromString(occupant.realJid!)
+                    .toBare()
+                    .toString()
+                    .toLowerCase() ==
+                inviteeBareLower,
+      );
+      if (alreadyMember) {
+        emit(
+          state.copyWith(
+            toast: const ChatToast(message: 'User is already a member'),
+            toastId: state.toastId + 1,
+          ),
+        );
+        return;
+      }
+    }
+    try {
+      await _mucService.inviteUserToRoom(
+        roomJid: chat.jid,
+        inviteeJid: event.jid,
+        reason: event.reason,
+      );
+      emit(
+        state.copyWith(
+          toast: ChatToast(message: 'Invited ${event.jid}'),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Failed to invite ${event.jid} to ${chat.jid}',
+        error,
+        stackTrace,
+      );
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'Failed to send invite.',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onInviteRevocationRequested(
+    ChatInviteRevocationRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final data = event.message.pseudoMessageData ?? const {};
+    final roomJid = data['roomJid'] as String?;
+    final invitee = data['invitee'] as String? ?? state.chat?.jid;
+    final token = data['token'] as String?;
+    if (roomJid == null || invitee == null || token == null) {
+      return;
+    }
+    try {
+      await _mucService.revokeInvite(
+        roomJid: roomJid,
+        inviteeJid: invitee,
+        token: token,
+      );
+      emit(
+        state.copyWith(
+          toast: const ChatToast(message: 'Invite revoked'),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } catch (error, stackTrace) {
+      _log.warning('Failed to revoke invite $token', error, stackTrace);
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'Failed to revoke invite',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onInviteJoinRequested(
+    ChatInviteJoinRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final data = event.message.pseudoMessageData ?? const {};
+    final roomJid = data['roomJid'] as String?;
+    final roomName = data['roomName'] as String?;
+    final invitee = data['invitee'] as String?;
+    if (roomJid == null) return;
+    if (invitee != null &&
+        _chatsService.myJid != null &&
+        mox.JID.fromString(invitee).toBare().toString() !=
+            mox.JID.fromString(_chatsService.myJid!).toBare().toString()) {
+      return;
+    }
+    try {
+      await _mucService.acceptRoomInvite(
+        roomJid: roomJid,
+        roomName: roomName,
+      );
+      emit(
+        state.copyWith(
+          toast: ChatToast(message: 'Joined $roomJid'),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } catch (error, stackTrace) {
+      _log.warning('Failed to join invited room $roomJid', error, stackTrace);
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'Could not join room',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onLeaveRoomRequested(
+    ChatLeaveRoomRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chatJid = state.chat?.jid;
+    if (chatJid == null || state.chat?.type != ChatType.groupChat) return;
+    try {
+      await _mucService.leaveRoom(chatJid);
+      emit(state.copyWith(roomState: null));
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to leave room $chatJid', error, stackTrace);
+    }
+  }
+
+  Future<void> _onNicknameChangeRequested(
+    ChatNicknameChangeRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chatJid = state.chat?.jid;
+    if (chatJid == null || state.chat?.type != ChatType.groupChat) return;
+    if (event.nickname.trim().isEmpty) return;
+    try {
+      await _mucService.changeNickname(
+        roomJid: chatJid,
+        nickname: event.nickname.trim(),
+      );
+      emit(
+        state.copyWith(
+          toast: const ChatToast(message: 'Nickname updated'),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to change nickname for $chatJid', error, stackTrace);
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: 'Could not change nickname',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onChatModerationActionRequested(
+    ChatModerationActionRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null ||
+        chat.type != ChatType.groupChat ||
+        state.roomState == null) {
+      return;
+    }
+    final occupant = state.roomState!.occupants[event.occupantId];
+    if (occupant == null) return;
+    try {
+      switch (event.action) {
+        case MucModerationAction.kick:
+          await _mucService.kickOccupant(
+            roomJid: chat.jid,
+            nick: occupant.nick,
+            reason: event.reason,
+          );
+          break;
+        case MucModerationAction.ban:
+          final realJid = occupant.realJid;
+          if (realJid == null || realJid.isEmpty) {
+            throw XmppMessageException();
+          }
+          await _mucService.banOccupant(
+            roomJid: chat.jid,
+            jid: realJid,
+            reason: event.reason,
+          );
+          break;
+        case MucModerationAction.member:
+        case MucModerationAction.admin:
+        case MucModerationAction.owner:
+          final realJid = occupant.realJid;
+          if (realJid == null || realJid.isEmpty) {
+            throw XmppMessageException();
+          }
+          final nextAffiliation = switch (event.action) {
+            MucModerationAction.owner => OccupantAffiliation.owner,
+            MucModerationAction.admin => OccupantAffiliation.admin,
+            MucModerationAction.member => OccupantAffiliation.member,
+            _ => OccupantAffiliation.none,
+          };
+          await _mucService.changeAffiliation(
+            roomJid: chat.jid,
+            jid: realJid,
+            affiliation: nextAffiliation,
+          );
+          break;
+        case MucModerationAction.moderator:
+        case MucModerationAction.participant:
+          final nextRole = event.action == MucModerationAction.moderator
+              ? OccupantRole.moderator
+              : OccupantRole.participant;
+          await _mucService.changeRole(
+            roomJid: chat.jid,
+            nick: occupant.nick,
+            role: nextRole,
+          );
+          break;
+      }
+      emit(
+        state.copyWith(
+          toast: ChatToast(
+            message: 'Requested ${event.action.name} for ${occupant.nick}',
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Moderation action ${event.action.name} failed for ${occupant.nick}',
+        error,
+        stackTrace,
+      );
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message:
+                'Could not complete that action. Check permissions or connectivity.',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
     }
   }
 
@@ -604,6 +931,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           text: trimmedText,
           encryptionProtocol: chat.encryptionProtocol,
           quotedMessage: sameChatQuote,
+          chatType: chat.type,
         );
         xmppSendSucceeded = true;
       }
@@ -749,6 +1077,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           jid: target.jid,
           text: body!,
           encryptionProtocol: target.encryptionProtocol,
+          chatType: target.type,
         );
       }
     } on Exception catch (error, stackTrace) {
@@ -1374,6 +1703,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         text: body,
         encryptionProtocol: targetChat.encryptionProtocol,
         quotedMessage: quote,
+        chatType: targetChat.type,
       );
     }
   }

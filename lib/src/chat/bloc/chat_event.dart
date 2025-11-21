@@ -200,6 +200,31 @@ final class ChatPendingAttachmentRemoved extends ChatEvent {
   List<Object?> get props => [attachmentId];
 }
 
+final class ChatInviteRequested extends ChatEvent {
+  const ChatInviteRequested(this.jid, {this.reason});
+
+  final String jid;
+  final String? reason;
+
+  @override
+  List<Object?> get props => [jid, reason];
+}
+
+final class ChatModerationActionRequested extends ChatEvent {
+  const ChatModerationActionRequested({
+    required this.occupantId,
+    required this.action,
+    this.reason,
+  });
+
+  final String occupantId;
+  final MucModerationAction action;
+  final String? reason;
+
+  @override
+  List<Object?> get props => [occupantId, action, reason];
+}
+
 final class ChatViewFilterChanged extends ChatEvent {
   const ChatViewFilterChanged({
     required this.filter,
@@ -257,4 +282,38 @@ final class ChatSubjectChanged extends ChatEvent {
 
   @override
   List<Object?> get props => [subject];
+}
+
+final class ChatInviteRevocationRequested extends ChatEvent {
+  const ChatInviteRevocationRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+final class ChatInviteJoinRequested extends ChatEvent {
+  const ChatInviteJoinRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+final class ChatLeaveRoomRequested extends ChatEvent {
+  const ChatLeaveRoomRequested();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatNicknameChangeRequested extends ChatEvent {
+  const ChatNicknameChangeRequested(this.nickname);
+
+  final String nickname;
+
+  @override
+  List<Object?> get props => [nickname];
 }

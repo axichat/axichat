@@ -70,7 +70,7 @@ class _PeerCapabilities {
   );
 }
 
-mixin MessageService on XmppBase, BaseStreamService {
+mixin MessageService on XmppBase, BaseStreamService, MucService {
   Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
@@ -383,6 +383,7 @@ mixin MessageService on XmppBase, BaseStreamService {
         if (reactionOnly) return;
 
         var message = Message.fromMox(event);
+        final isGroupChat = event.type == 'groupchat';
         final stableKey = _stableKeyForEvent(event);
 
         message = message.copyWith(
@@ -442,32 +443,45 @@ mixin MessageService on XmppBase, BaseStreamService {
 
           if (newCount > 0) {
             await _dbOp<XmppDatabase>(
-              (db) => db.saveMessage(Message(
-                stanzaID: _connection.generateId(),
-                senderJid: myJid!.toString(),
-                chatJid: message.chatJid,
-                pseudoMessageType: PseudoMessageType.newDevice,
-                pseudoMessageData: pseudoMessageData,
-              )),
+              (db) => db.saveMessage(
+                Message(
+                  stanzaID: _connection.generateId(),
+                  senderJid: myJid!.toString(),
+                  chatJid: message.chatJid,
+                  pseudoMessageType: PseudoMessageType.newDevice,
+                  pseudoMessageData: pseudoMessageData,
+                ),
+                chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+              ),
             );
           }
 
           if (replacedCount > 0) {
             await _dbOp<XmppDatabase>(
-              (db) => db.saveMessage(Message(
-                stanzaID: _connection.generateId(),
-                senderJid: myJid!.toString(),
-                chatJid: message.chatJid,
-                pseudoMessageType: PseudoMessageType.changedDevice,
-                pseudoMessageData: pseudoMessageData,
-              )),
+              (db) => db.saveMessage(
+                Message(
+                  stanzaID: _connection.generateId(),
+                  senderJid: myJid!.toString(),
+                  chatJid: message.chatJid,
+                  pseudoMessageType: PseudoMessageType.changedDevice,
+                  pseudoMessageData: pseudoMessageData,
+                ),
+                chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+              ),
             );
           }
         }
 
+        if (isGroupChat) {
+          handleMucIdentifiersFromMessage(event, message);
+        }
+
         if (!message.noStore && _messageStorageMode.isLocal) {
           await _dbOp<XmppDatabase>(
-            (db) => db.saveMessage(message),
+            (db) => db.saveMessage(
+              message,
+              chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+            ),
           );
         } else if (_messageStorageMode.isServerOnly) {
           _addServerOnlyMessage(message.chatJid, message);
@@ -519,7 +533,7 @@ mixin MessageService on XmppBase, BaseStreamService {
       mox.MessageReactionsManager(),
       mox.MessageProcessingHintManager(),
       mox.EmeManager(),
-      mox.MUCManager(),
+      MUCManager(),
       // mox.StickersManager(),
       // mox.MUCManager(),
       // mox.OOBManager(),
@@ -534,6 +548,7 @@ mixin MessageService on XmppBase, BaseStreamService {
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     Message? quotedMessage,
     bool? storeLocally,
+    ChatType chatType = ChatType.chat,
   }) async {
     final senderJid = myJid;
     if (senderJid == null) {
@@ -556,7 +571,10 @@ mixin MessageService on XmppBase, BaseStreamService {
     );
     if (shouldStore) {
       await _dbOp<XmppDatabase>(
-        (db) => db.saveMessage(message),
+        (db) => db.saveMessage(
+          message,
+          chatType: chatType,
+        ),
       );
     } else if (_messageStorageMode.isServerOnly) {
       final stableKey = message.originID != null
@@ -675,6 +693,7 @@ mixin MessageService on XmppBase, BaseStreamService {
       text: message.body!,
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
+      chatType: message.occupantID == null ? ChatType.chat : ChatType.groupChat,
     );
   }
 

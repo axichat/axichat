@@ -5,6 +5,7 @@ class ChatState with _$ChatState {
   const factory ChatState({
     required List<Message> items,
     Chat? chat,
+    RoomState? roomState,
     Message? focused,
     Message? quoting,
     @Default(false) bool typing,

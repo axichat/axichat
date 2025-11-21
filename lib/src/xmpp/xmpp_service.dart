@@ -19,6 +19,7 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
+import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -41,6 +42,7 @@ import 'package:uuid/uuid.dart';
 part 'base_stream_service.dart';
 part 'blocking_service.dart';
 part 'chats_service.dart';
+part 'muc_service.dart';
 part 'message_service.dart';
 part 'omemo_service.dart';
 part 'presence_service.dart';
@@ -175,10 +177,11 @@ abstract interface class XmppBase {
 class XmppService extends XmppBase
     with
         BaseStreamService,
+        MucService,
         MessageService,
         // OmemoService,
         RosterService,
-        // PresenceService,
+        PresenceService,
         ChatsService,
         BlockingService {
   XmppService._(

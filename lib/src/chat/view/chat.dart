@@ -39,6 +39,8 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/muc/view/room_members_sheet.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -51,6 +53,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mime/mime.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -670,6 +673,15 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
+  String? _nickFromSender(String senderJid) {
+    final slashIndex = senderJid.indexOf('/');
+    if (slashIndex == -1 || slashIndex + 1 >= senderJid.length) {
+      return null;
+    }
+    final nick = senderJid.substring(slashIndex + 1).trim();
+    return nick.isEmpty ? null : nick;
+  }
+
   void _toggleSettingsPanel() {
     final nextExpanded = !_settingsPanelExpanded;
     if (nextExpanded) {
@@ -686,6 +698,30 @@ class _ChatState extends State<Chat> {
 
   void _toggleNotifications(bool enable) {
     context.read<ChatBloc>().add(ChatMuted(!enable));
+  }
+
+  void _showMembers(RoomState roomState) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => RoomMembersSheet(
+        roomState: roomState,
+        canInvite: true,
+        onInvite: (jid) =>
+            context.read<ChatBloc>().add(ChatInviteRequested(jid)),
+        onAction: (occupantId, action) => context.read<ChatBloc>().add(
+              ChatModerationActionRequested(
+                occupantId: occupantId,
+                action: action,
+              ),
+            ),
+        onChangeNickname: (nick) =>
+            context.read<ChatBloc>().add(ChatNicknameChangeRequested(nick)),
+        onLeaveRoom: () =>
+            context.read<ChatBloc>().add(const ChatLeaveRoomRequested()),
+        currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
+      ),
+    );
   }
 
   Future<void> _handleSpamToggle({required bool sendToSpam}) async {
@@ -1937,8 +1973,13 @@ class _ChatState extends State<Chat> {
                             const <chat_models.Chat>[])
                         .where((chat) => chat.jid != chatEntity?.jid)
                         .toList();
+                final isGroupChat = chatEntity?.type == ChatType.groupChat;
+                final selfUserId =
+                    isGroupChat && state.roomState?.myOccupantId != null
+                        ? state.roomState!.myOccupantId!
+                        : currentUserId;
                 final user = ChatUser(
-                  id: currentUserId,
+                  id: selfUserId,
                   firstName: profile?.username ?? '',
                 );
                 final spacerUser = ChatUser(
@@ -2048,8 +2089,12 @@ class _ChatState extends State<Chat> {
                                                     jid: item.jid,
                                                     subscription:
                                                         item.subscription,
-                                                    presence: item.presence,
-                                                    status: item.status,
+                                                    // Presence for contacts is
+                                                    // intentionally hidden in
+                                                    // the UI to avoid showing
+                                                    // unreliable server data.
+                                                    presence: null,
+                                                    status: null,
                                                   ),
                                           ),
                                           if (avatarBadge != null)
@@ -2083,6 +2128,19 @@ class _ChatState extends State<Chat> {
                             ),
                       actions: [
                         if (jid != null && _chatRoute == _ChatRoute.main) ...[
+                          if (isGroupChat)
+                            AxiIconButton(
+                              iconData: LucideIcons.users,
+                              tooltip: 'Room members',
+                              onPressed: () {
+                                final room = state.roomState;
+                                if (room == null) {
+                                  _showSnackbar('Loading members…');
+                                  return;
+                                }
+                                _showMembers(room);
+                              },
+                            ),
                           const _ChatSearchToggleButton(),
                           if (!readOnly) ...[
                             const SizedBox(width: 4),
@@ -2192,6 +2250,19 @@ class _ChatState extends State<Chat> {
                                     );
                                     final dashMessages = <ChatMessage>[];
                                     final shownSubjectShares = <String>{};
+                                    final revokedInviteTokens = <String>{
+                                      for (final invite in filteredItems.where(
+                                        (m) =>
+                                            m.pseudoMessageType ==
+                                            PseudoMessageType
+                                                .mucInviteRevocation,
+                                      ))
+                                        if (invite.pseudoMessageData
+                                                ?.containsKey('token') ==
+                                            true)
+                                          invite.pseudoMessageData?['token']
+                                              as String
+                                    };
                                     for (var index = 0;
                                         index < filteredItems.length;
                                         index++) {
@@ -2201,15 +2272,32 @@ class _ChatState extends State<Chat> {
                                       final isSelfEmail =
                                           emailSelfJid != null &&
                                               e.senderJid == emailSelfJid;
-                                      final isSelf = isSelfXmpp || isSelfEmail;
+                                      final occupantId = e.occupantID;
+                                      final occupant = occupantId == null
+                                          ? null
+                                          : state
+                                              .roomState?.occupants[occupantId];
+                                      final isMucSelf = isGroupChat &&
+                                          occupantId != null &&
+                                          occupantId ==
+                                              state.roomState?.myOccupantId;
+                                      final isSelf = isSelfXmpp ||
+                                          isSelfEmail ||
+                                          isMucSelf;
                                       final isEmailMessage =
                                           e.deltaMsgId != null;
-                                      final author = isSelf
-                                          ? user
-                                          : ChatUser(
-                                              id: e.senderJid,
-                                              firstName: state.chat?.title,
-                                            );
+                                      final fallbackNick =
+                                          _nickFromSender(e.senderJid) ??
+                                              state.chat?.title ??
+                                              '';
+                                      final author = ChatUser(
+                                        id: isGroupChat && occupantId != null
+                                            ? occupantId
+                                            : (isSelf ? user.id : e.senderJid),
+                                        firstName: isSelf
+                                            ? user.firstName
+                                            : occupant?.nick ?? fallbackNick,
+                                      );
                                       final quotedMessage = e.quoting == null
                                           ? null
                                           : messageById[e.quoting!];
@@ -2226,6 +2314,24 @@ class _ChatState extends State<Chat> {
                                       bool showSubjectHeader = false;
                                       String? subjectLabel;
                                       String bodyText = e.body ?? '';
+                                      final inviteToken =
+                                          e.pseudoMessageData?['token']
+                                              as String?;
+                                      final inviteRoom =
+                                          e.pseudoMessageData?['roomJid']
+                                              as String?;
+                                      final invitee =
+                                          e.pseudoMessageData?['invitee']
+                                              as String?;
+                                      final isInvite = e.pseudoMessageType ==
+                                          PseudoMessageType.mucInvite;
+                                      final isInviteRevocation = e
+                                              .pseudoMessageType ==
+                                          PseudoMessageType.mucInviteRevocation;
+                                      final inviteRevoked =
+                                          inviteToken != null &&
+                                              revokedInviteTokens
+                                                  .contains(inviteToken);
                                       if (shareContext?.subject
                                               ?.trim()
                                               .isNotEmpty ==
@@ -2288,6 +2394,13 @@ class _ChatState extends State<Chat> {
                                             'showSubject': showSubjectHeader,
                                             'subjectLabel': subjectLabel,
                                             'isEmailMessage': isEmailMessage,
+                                            'inviteRoom': inviteRoom,
+                                            'inviteToken': inviteToken,
+                                            'inviteRevoked': inviteRevoked,
+                                            'invitee': invitee,
+                                            'isInvite': isInvite,
+                                            'isInviteRevocation':
+                                                isInviteRevocation,
                                           },
                                         ),
                                       );
@@ -2760,11 +2873,79 @@ class _ChatState extends State<Chat> {
                                                   final showCompactReactions =
                                                       reactions.isNotEmpty &&
                                                           !showReactionManager;
+                                                  final isInviteMessage =
+                                                      (message.customProperties?[
+                                                                  'isInvite']
+                                                              as bool?) ??
+                                                          (messageModel
+                                                                  .pseudoMessageType ==
+                                                              PseudoMessageType
+                                                                  .mucInvite);
+                                                  final isInviteRevocationMessage =
+                                                      (message.customProperties?[
+                                                                  'isInviteRevocation']
+                                                              as bool?) ??
+                                                          (messageModel
+                                                                  .pseudoMessageType ==
+                                                              PseudoMessageType
+                                                                  .mucInviteRevocation);
+                                                  final inviteRevoked =
+                                                      (message.customProperties?[
+                                                                  'inviteRevoked']
+                                                              as bool?) ??
+                                                          false;
+                                                  final hasInviteBadge =
+                                                      isInviteMessage ||
+                                                          isInviteRevocationMessage;
                                                   final showRecipientCutout =
                                                       !showCompactReactions &&
                                                           isEmailChat &&
                                                           recipientCutoutParticipants
                                                               .isNotEmpty;
+                                                  Widget? recipientOverlay;
+                                                  CutoutStyle? recipientStyle;
+                                                  if (hasInviteBadge &&
+                                                      !showCompactReactions) {
+                                                    recipientOverlay =
+                                                        _InviteBadge(
+                                                      text: inviteRevoked ||
+                                                              isInviteRevocationMessage
+                                                          ? 'Invite revoked'
+                                                          : 'Invite',
+                                                    );
+                                                    recipientStyle =
+                                                        const CutoutStyle(
+                                                      depth:
+                                                          _recipientCutoutDepth,
+                                                      cornerRadius:
+                                                          _recipientCutoutRadius,
+                                                      padding:
+                                                          _recipientCutoutPadding,
+                                                      offset:
+                                                          _recipientCutoutOffset,
+                                                      minThickness:
+                                                          _recipientCutoutMinThickness,
+                                                    );
+                                                  } else if (showRecipientCutout) {
+                                                    recipientOverlay =
+                                                        _RecipientCutoutStrip(
+                                                      recipients:
+                                                          recipientCutoutParticipants,
+                                                    );
+                                                    recipientStyle =
+                                                        const CutoutStyle(
+                                                      depth:
+                                                          _recipientCutoutDepth,
+                                                      cornerRadius:
+                                                          _recipientCutoutRadius,
+                                                      padding:
+                                                          _recipientCutoutPadding,
+                                                      offset:
+                                                          _recipientCutoutOffset,
+                                                      minThickness:
+                                                          _recipientCutoutMinThickness,
+                                                    );
+                                                  }
                                                   Widget? selectionOverlay;
                                                   CutoutStyle? selectionStyle;
                                                   if (_multiSelectActive) {
@@ -3157,27 +3338,9 @@ class _ChatState extends State<Chat> {
                                                                   )
                                                                 : null,
                                                         recipientOverlay:
-                                                            showRecipientCutout
-                                                                ? _RecipientCutoutStrip(
-                                                                    recipients:
-                                                                        recipientCutoutParticipants,
-                                                                  )
-                                                                : null,
+                                                            recipientOverlay,
                                                         recipientStyle:
-                                                            showRecipientCutout
-                                                                ? const CutoutStyle(
-                                                                    depth:
-                                                                        _recipientCutoutDepth,
-                                                                    cornerRadius:
-                                                                        _recipientCutoutRadius,
-                                                                    padding:
-                                                                        _recipientCutoutPadding,
-                                                                    offset:
-                                                                        _recipientCutoutOffset,
-                                                                    minThickness:
-                                                                        _recipientCutoutMinThickness,
-                                                                  )
-                                                                : null,
+                                                            recipientStyle,
                                                         selectionOverlay:
                                                             selectionOverlay,
                                                         selectionStyle:
@@ -3262,8 +3425,11 @@ class _ChatState extends State<Chat> {
                                                       _focusNode.requestFocus();
                                                       _clearAllSelections();
                                                     },
-                                                    onForward: () =>
-                                                        _handleForward(
+                                                    onForward: isInviteMessage ||
+                                                            inviteRevoked ||
+                                                            isInviteRevocationMessage
+                                                        ? null
+                                                        : () => _handleForward(
                                                             messageModel),
                                                     onCopy: () => _copyMessage(
                                                       dashMessage: message,
@@ -3307,6 +3473,17 @@ class _ChatState extends State<Chat> {
                                                         : null,
                                                     hitRegionKeys:
                                                         actionButtonKeys,
+                                                    onRevokeInvite:
+                                                        isInviteMessage && self
+                                                            ? () => context
+                                                                .read<
+                                                                    ChatBloc>()
+                                                                .add(
+                                                                  ChatInviteRevocationRequested(
+                                                                    messageModel,
+                                                                  ),
+                                                                )
+                                                            : null,
                                                   );
                                                   if (isSingleSelection) {
                                                     _activeSelectionExtrasKey ??=
@@ -3471,6 +3648,11 @@ class _ChatState extends State<Chat> {
                                                     onTap: () {
                                                       if (_multiSelectActive) {
                                                         _toggleMultiSelectMessage(
+                                                          messageModel,
+                                                        );
+                                                      } else if (isInviteMessage &&
+                                                          !inviteRevoked) {
+                                                        _handleInviteTap(
                                                           messageModel,
                                                         );
                                                       } else if (isSingleSelection) {
@@ -3718,6 +3900,31 @@ class _ChatState extends State<Chat> {
         );
   }
 
+  Future<void> _handleInviteTap(Message message) async {
+    final data = message.pseudoMessageData ?? const {};
+    final roomJid = data['roomJid'] as String?;
+    final invitee = data['invitee'] as String?;
+    if (roomJid == null) return;
+    final myJid = context.read<XmppService>().myJid;
+    final roomState = context.read<XmppService>().roomStateFor(roomJid);
+    if (roomState?.myOccupantId != null) {
+      _showSnackbar('Already in this room.');
+      return;
+    }
+    if (invitee != null &&
+        myJid != null &&
+        mox.JID.fromString(invitee).toBare().toString() !=
+            mox.JID.fromString(myJid).toBare().toString()) {
+      _showSnackbar('Invite is not for this account.');
+      return;
+    }
+    context.read<ChatBloc>().add(ChatInviteJoinRequested(message));
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit != null) {
+      await chatsCubit.toggleChat(jid: roomJid);
+    }
+  }
+
   Future<void> _shareMessage({
     required ChatMessage dashMessage,
     required Message model,
@@ -3839,9 +4046,19 @@ class _ChatState extends State<Chat> {
 
   Future<void> _forwardSelectedMessages(List<Message> messages) async {
     if (messages.isEmpty) return;
+    final forwardable = messages.where(
+      (message) =>
+          message.pseudoMessageType != PseudoMessageType.mucInvite &&
+          message.pseudoMessageType != PseudoMessageType.mucInviteRevocation,
+    );
+    if (forwardable.isEmpty) {
+      _showSnackbar('Invites cannot be forwarded.');
+      return;
+    }
+    final candidates = forwardable.toList();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
-    for (final message in messages) {
+    for (final message in candidates) {
       context.read<ChatBloc>().add(
             ChatMessageForwardRequested(
               message: message,
@@ -4404,6 +4621,32 @@ class _RecipientOverflowAvatar extends StatelessWidget {
                 height: 1,
               )
               .apply(leadingDistribution: TextLeadingDistribution.even),
+        ),
+      ),
+    );
+  }
+}
+
+class _InviteBadge extends StatelessWidget {
+  const _InviteBadge({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: context.textTheme.small.copyWith(
+          color: colors.primaryForeground,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
         ),
       ),
     );
@@ -5145,19 +5388,20 @@ enum _SelectionShiftOutcome {
 class _MessageActionBar extends StatelessWidget {
   const _MessageActionBar({
     required this.onReply,
-    required this.onForward,
+    this.onForward,
     required this.onCopy,
     required this.onShare,
     required this.onAddToCalendar,
     required this.onDetails,
-    required this.onSelect,
+    this.onSelect,
     this.onResend,
     this.onEdit,
     this.hitRegionKeys,
+    this.onRevokeInvite,
   });
 
   final VoidCallback onReply;
-  final VoidCallback onForward;
+  final VoidCallback? onForward;
   final VoidCallback onCopy;
   final VoidCallback onShare;
   final VoidCallback onAddToCalendar;
@@ -5166,6 +5410,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onResend;
   final VoidCallback? onEdit;
   final List<GlobalKey>? hitRegionKeys;
+  final VoidCallback? onRevokeInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -5207,6 +5452,13 @@ class _MessageActionBar extends StatelessWidget {
           icon: const Icon(LucideIcons.pencilLine, size: 16),
           label: 'Edit',
           onPressed: onEdit!,
+        ),
+      if (onRevokeInvite != null)
+        ContextActionButton(
+          key: nextKey(),
+          icon: const Icon(LucideIcons.ban, size: 16),
+          label: 'Revoke',
+          onPressed: onRevokeInvite!,
         ),
       ContextActionButton(
         key: nextKey(),

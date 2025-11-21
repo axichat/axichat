@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -151,6 +153,8 @@ enum PseudoMessageType {
   newDevice,
   changedDevice,
   unknown,
+  mucInvite,
+  mucInviteRevocation,
 }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
@@ -274,12 +278,13 @@ class Message with _$Message implements Insertable<Message> {
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
     final chatJid = event.isCarbon ? to : from;
+    final invite = _ParsedInvite.fromBody(event.text, to: to);
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
       senderJid: from,
       chatJid: chatJid,
-      body: event.text,
+      body: invite?.displayBody ?? event.text,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
       noStore: get<mox.MessageProcessingHintData>()?.hints.contains(
                 mox.MessageProcessingHint.noStore,
@@ -292,6 +297,8 @@ class Message with _$Message implements Insertable<Message> {
           event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
       deviceID: get<OmemoDeviceData>()?.id,
       error: MessageError.fromOmemo(event.encryptionError),
+      pseudoMessageType: invite?.type,
+      pseudoMessageData: invite?.data,
     );
   }
 
@@ -399,6 +406,52 @@ class Message with _$Message implements Insertable<Message> {
         deltaChatId: Value.absentIfNull(deltaChatId),
         deltaMsgId: Value.absentIfNull(deltaMsgId),
       ).toColumns(nullToAbsent);
+}
+
+class _ParsedInvite {
+  _ParsedInvite({
+    required this.type,
+    required this.data,
+    required this.displayBody,
+  });
+
+  final PseudoMessageType type;
+  final Map<String, dynamic> data;
+  final String displayBody;
+
+  static const _invitePrefix = 'axc-invite:';
+  static const _inviteRevokePrefix = 'axc-invite-revoke:';
+
+  static _ParsedInvite? fromBody(String body, {required String to}) {
+    if (body.isEmpty) return null;
+    final lines = body.split('\n');
+    final metaLine = lines.lastWhere(
+      (line) =>
+          line.trim().startsWith(_invitePrefix) ||
+          line.trim().startsWith(_inviteRevokePrefix),
+      orElse: () => '',
+    );
+    if (metaLine.isEmpty) return null;
+    final isRevoke = metaLine.startsWith(_inviteRevokePrefix);
+    final jsonString = metaLine.substring(
+      isRevoke ? _inviteRevokePrefix.length : _invitePrefix.length,
+    );
+    Map<String, dynamic> payload = {};
+    try {
+      payload = jsonDecode(jsonString) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+    payload['invitee'] ??= to;
+    final cleanedBody = (lines..remove(metaLine)).join('\n').trim();
+    return _ParsedInvite(
+      type: isRevoke
+          ? PseudoMessageType.mucInviteRevocation
+          : PseudoMessageType.mucInvite,
+      data: payload,
+      displayBody: cleanedBody.isEmpty ? 'Group invite' : cleanedBody,
+    );
+  }
 }
 
 @UseRowClass(Message)
