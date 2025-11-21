@@ -1,1 +1,1 @@
-Free, open-source XMPP chat client for Android, Linux, and Windows.
+The best of instant messaging, email, and calendar in one app.

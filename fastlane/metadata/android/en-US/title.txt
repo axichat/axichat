@@ -1,1 +1,1 @@
-Axichat - XMPP Chat Client
+Axichat - IM + Email + Calendar
