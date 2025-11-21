@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -166,6 +167,10 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
                   calendarBloc?.add(const CalendarEvent.undoRequested()),
               onRedo: () =>
                   calendarBloc?.add(const CalendarEvent.redoRequested()),
+              onNavigatePrevious: () => _handleKeyboardNavigate(state, -1),
+              onNavigateNext: () => _handleKeyboardNavigate(state, 1),
+              onJumpToToday: () => _handleKeyboardJumpToToday(state),
+              onCancelDrag: isAnyDragActive ? _handleKeyboardCancelDrag : null,
               child: wrapWithTaskFeedback(
                 context,
                 Scaffold(
@@ -276,6 +281,10 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   void _handleCalendarGridDragSessionEnded() {
     handleGridDragSessionEnded();
     _sidebarKey.currentState?.handleExternalGridDragEnded();
+  }
+
+  void _handleKeyboardCancelDrag() {
+    handleKeyboardCancelBucket();
   }
 
   void _updateTasksTabPulse(bool shouldPulse) {
@@ -468,5 +477,46 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     CalendarResponsiveSpec spec,
     MediaQueryData mediaQuery,
   ) =>
-      spec.sizeClass;
+      _resolveSizeClass(spec, mediaQuery);
+
+  CalendarSizeClass _resolveSizeClass(
+    CalendarResponsiveSpec spec,
+    MediaQueryData mediaQuery,
+  ) {
+    final CalendarSizeClass base = spec.sizeClass;
+    final bool landscapeCompactDevice =
+        mediaQuery.orientation == Orientation.landscape &&
+            mediaQuery.size.shortestSide < compactDeviceBreakpoint;
+    if (landscapeCompactDevice && base == CalendarSizeClass.expanded) {
+      return CalendarSizeClass.medium;
+    }
+    return base;
+  }
+
+  void _handleKeyboardNavigate(CalendarState state, int steps) {
+    final DateTime nextDate = _shiftedDate(state, steps);
+    calendarBloc?.add(CalendarEvent.dateSelected(date: nextDate));
+  }
+
+  void _handleKeyboardJumpToToday(CalendarState state) {
+    calendarBloc?.add(
+      CalendarEvent.dateSelected(date: DateTime.now()),
+    );
+  }
+
+  DateTime _shiftedDate(CalendarState state, int steps) {
+    final DateTime base = state.selectedDate;
+    switch (state.viewMode) {
+      case CalendarView.day:
+        return base.add(Duration(days: steps));
+      case CalendarView.week:
+        return base.add(Duration(days: 7 * steps));
+      case CalendarView.month:
+        final DateTime targetMonth = DateTime(base.year, base.month + steps, 1);
+        final int maxDay =
+            DateTime(targetMonth.year, targetMonth.month + 1, 0).day;
+        final int clampedDay = base.day.clamp(1, maxDay).toInt();
+        return DateTime(targetMonth.year, targetMonth.month, clampedDay);
+    }
+  }
 }

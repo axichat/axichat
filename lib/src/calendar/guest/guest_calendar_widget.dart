@@ -1,6 +1,4 @@
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -146,40 +144,11 @@ class _GuestCalendarWidgetState
       _calendarSurfaceColor(context);
 
   @override
-  CalendarSizeClass resolveLayoutSizeClass(
-    CalendarResponsiveSpec spec,
-    MediaQueryData mediaQuery,
-  ) {
-    final bool isLandscapePhone =
-        mediaQuery.orientation == Orientation.landscape &&
-            mediaQuery.size.shortestSide < compactDeviceBreakpoint;
-    final CalendarSizeClass base = spec.sizeClass;
-    if (isLandscapePhone && base == CalendarSizeClass.expanded) {
-      return CalendarSizeClass.medium;
-    }
-    return base;
-  }
-
-  @override
   bool shouldUseDesktopLayout(
     CalendarSizeClass sizeClass,
     MediaQueryData mediaQuery,
   ) {
-    final bool desktopPlatform = switch (defaultTargetPlatform) {
-      TargetPlatform.macOS => true,
-      TargetPlatform.windows => true,
-      TargetPlatform.linux => true,
-      TargetPlatform.fuchsia => true,
-      TargetPlatform.android => false,
-      TargetPlatform.iOS => false,
-    };
-    if (!desktopPlatform) {
-      return false;
-    }
-    if (sizeClass != CalendarSizeClass.expanded) {
-      return false;
-    }
-    return mediaQuery.size.width >= largeScreen;
+    return sizeClass == CalendarSizeClass.expanded;
   }
 
   @override
