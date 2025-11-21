@@ -3768,7 +3768,6 @@ class _ChatState extends State<Chat> {
                                               latestStatuses: latestStatuses,
                                               pendingAttachments:
                                                   pendingAttachments,
-                                              isEmailTransport: isDefaultEmail,
                                               composerHasText: _composerHasText,
                                               composerError:
                                                   state.composerError,
@@ -4830,7 +4829,6 @@ class _ChatComposerSection extends StatelessWidget {
     required this.availableChats,
     required this.latestStatuses,
     required this.pendingAttachments,
-    required this.isEmailTransport,
     required this.composerHasText,
     required this.subjectController,
     required this.subjectFocusNode,
@@ -4859,7 +4857,6 @@ class _ChatComposerSection extends StatelessWidget {
   final List<chat_models.Chat> availableChats;
   final Map<String, FanOutRecipientState> latestStatuses;
   final List<PendingAttachment> pendingAttachments;
-  final bool isEmailTransport;
   final bool composerHasText;
   final TextEditingController subjectController;
   final FocusNode subjectFocusNode;
@@ -4899,8 +4896,7 @@ class _ChatComposerSection extends StatelessWidget {
       focusNode: subjectFocusNode,
       onSubmitted: onSubjectSubmitted,
     );
-    final showAttachmentTray =
-        isEmailTransport && pendingAttachments.isNotEmpty;
+    final showAttachmentTray = pendingAttachments.isNotEmpty;
     final commandSurface =
         EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
     final useDesktopMenu = commandSurface == CommandSurface.menu;

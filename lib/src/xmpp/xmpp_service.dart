@@ -35,6 +35,7 @@ import 'package:omemo_dart/omemo_dart.dart'
     show RatchetMapKey, OmemoDataPackage; // For persistence types only
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
+import 'package:http/http.dart' as http;
 import 'package:retry/retry.dart' show RetryOptions;
 import 'package:stream_transform/stream_transform.dart';
 import 'package:uuid/uuid.dart';
@@ -85,6 +86,12 @@ final class XmppBlockUnsupportedException extends XmppException {}
 
 final class ForegroundServiceUnavailableException extends XmppException {
   ForegroundServiceUnavailableException([super.wrapped]);
+}
+
+final class XmppFileTooBigException extends XmppMessageException {
+  XmppFileTooBigException(this.maxBytes);
+
+  final int? maxBytes;
 }
 
 // Hardcode the socket endpoints so we never block on DNS when dialing the XMPP
@@ -283,6 +290,9 @@ class XmppService extends XmppBase
         }
         // Device publishing is now handled internally by OmemoManager.
         if (event.resumed) return;
+        unawaited(
+          _connection.getManager<mox.HttpFileUploadManager>()?.isSupported(),
+        );
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {

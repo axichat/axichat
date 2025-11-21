@@ -55,7 +55,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }) async {
     emit(DraftSending());
     try {
-      if (emailTargets.isNotEmpty || attachments.isNotEmpty) {
+      if (emailTargets.isNotEmpty) {
         await _sendEmailDraft(
           targets: emailTargets,
           body: body,
@@ -67,6 +67,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         await _sendXmppDraft(
           jids: xmppJids,
           body: body,
+          attachments: attachments,
         );
       }
     } on FanOutValidationException catch (error) {
@@ -158,16 +159,38 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   Future<void> _sendXmppDraft({
     required List<String> jids,
     required String body,
+    required List<EmailAttachment> attachments,
   }) async {
     final trimmedBody = body.trim();
-    if (trimmedBody.isEmpty) {
+    final hasBody = trimmedBody.isNotEmpty;
+    final hasAttachments = attachments.isNotEmpty;
+    if (!hasBody && !hasAttachments) {
       throw const FanOutValidationException('Message cannot be empty.');
     }
     if (jids.isEmpty) {
       throw const FanOutValidationException('Select at least one recipient.');
     }
+    final db = await _messageService.database;
     for (final jid in jids) {
-      await _messageService.sendMessage(jid: jid, text: trimmedBody);
+      final chat = await db.getChat(jid);
+      final encryption = chat?.encryptionProtocol ?? EncryptionProtocol.omemo;
+      final chatType = chat?.type ?? ChatType.chat;
+      if (hasBody) {
+        await _messageService.sendMessage(
+          jid: jid,
+          text: trimmedBody,
+          encryptionProtocol: encryption,
+          chatType: chatType,
+        );
+      }
+      for (final attachment in attachments) {
+        await _messageService.sendAttachment(
+          jid: jid,
+          attachment: attachment,
+          encryptionProtocol: encryption,
+          chatType: chatType,
+        );
+      }
     }
   }
 

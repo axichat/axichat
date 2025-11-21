@@ -18,14 +18,80 @@
   </a>
 </p>
 
+<p align="center"><strong>If you're proactive, if you're busy, you'll love Axichat both because of what it has and what it doesn't have.</strong></p>
+
+<table>
+  <tr>
+    <th>What Axichat Offers</th>
+    <th>What We Avoid</th>
+  </tr>
+  <tr>
+    <td>
+      <ul>
+        <li>Chat and email unified, providing the best of both worlds</li>
+        <li>World's best calendar, for free</li>
+        <li>Encryption on device and in transit</li>
+        <li>Unique, state-of-the-art UI</li>
+        <li>Native performance on every platform</li>
+        <li>1st party push notifications</li>
+        <li>Offline functionality</li>
+      </ul>
+    </td>
+    <td>
+      <ul>
+        <li>Proprietary dependencies</li>
+        <li>Trackers</li>
+        <li>Vendor lock-in</li>
+        <li>Sharing/selling ANY data</li>
+        <li>Centralized servers</li>
+        <li>3rd party push notifications</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
 ---
 
-## Why Axichat?
+## Why?
 
-- **Own your network** – Native with no Firebase, Google Play Services, or proprietary push relays.
-- **First-party push + secure storage** – SQLCipher for the local database and Axichat-operated notification relays keep metadata private.
-- **Truly cross-platform** – Android, Windows, and Linux builds share the same polished UI with upcoming macOS/iOS support.
-- **Operations-ready UX** – Deadline-safe notifications, monitored overlays, and a consistent notification stack across the entire app.
+- **Tools matter** - Would you rather write a letter while sitting at your desk or while standing up outside? Using the right software makes the same difference. Axichat is a desk for your digital letters.
+- **Time matters** - You can always make more money, but not more time. My calendar is designed to help you seize the day, and our chat-like email formatting helps you to avoid spending it reading what you don't want to, retyping information, opening the wrong emails, and spamming alt+tab.
+- **Privacy matters** - “Arguing that you don't care about the right to privacy because you have nothing to hide is no different than saying you don't care about free speech because you have nothing to say.” ― Edward Snowden
+
+## What?
+
+### Best calendar in the world:
+- Natural language parsing (without any AI) so you can just type in what, when, how long, how often, due by, and more any way you want and the calendar will automatically schedule it for you.
+- If you don't know when it needs to get done, that's completely fine. Axichat will just put it in the unscheduled list so you can quickly and easily dump your stream-of-consciousness.
+- If it has a deadline then Axichat will notify you when it is getting close.
+- Excellent for planning your entire personal routine, featuring a built-in Eisenhower Matrix so you can put first things first.
+- Intuitive UI/UX that works seamlessly on all your devices: drag+drop to reschedule, drag to resize, copy+paste, batch edit, and much more.
+- Available in Guest Mode so you don't even need an account or internet to use it.
+- Scheduling, task management, and reminders all in one place with natural language processing (no AI) for frictionless use.
+
+### Best chat interface:
+- Get our (Groupchats, Reactions, Delivery Receipts)
+- (Gmail, Outlook, etc.)
+
+## When?
+
+- Built in 2025
+
+## Where?
+
+- Built in New Zealand
+
+## Who?
+
+- For people with a lot to get done
+- For people who want to take control of their communications and time
+
+## How?
+
+- Written in Dart + Flutter
+- With Moxxmpp
+- With DeltaChat Core Rust
+- With Drift
 
 ## Highlights
 

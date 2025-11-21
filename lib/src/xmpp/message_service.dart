@@ -9,10 +9,11 @@ extension MessageEvent on mox.MessageEvent {
   bool get isCarbon => get<mox.CarbonsData>()?.isCarbon ?? false;
 
   bool get displayable {
-    return get<mox.MessageBodyData>()?.body?.isNotEmpty ??
-        false ||
-            get<mox.StatelessFileSharingData>() != null ||
-            get<mox.FileUploadNotificationData>() != null;
+    final hasBody = get<mox.MessageBodyData>()?.body?.isNotEmpty ?? false;
+    final hasSfs = get<mox.StatelessFileSharingData>() != null;
+    final hasFun = get<mox.FileUploadNotificationData>() != null;
+    final hasOob = get<mox.OOBData>() != null;
+    return hasBody || hasSfs || hasFun || hasOob;
   }
 }
 
@@ -534,12 +535,12 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       mox.MessageProcessingHintManager(),
       mox.EmeManager(),
       MUCManager(),
+      mox.OOBManager(),
+      mox.HttpFileUploadManager(),
+      mox.FileUploadNotificationManager(),
       // mox.StickersManager(),
       // mox.MUCManager(),
-      // mox.OOBManager(),
       // mox.SFSManager(),
-      // mox.HttpFileUploadManager(),
-      // mox.FileUploadNotificationManager(),
     ]);
 
   Future<void> sendMessage({
@@ -612,6 +613,236 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       throw XmppMessageException();
     }
     await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+  }
+
+  Future<void> sendAttachment({
+    required String jid,
+    required EmailAttachment attachment,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
+    Message? quotedMessage,
+    ChatType chatType = ChatType.chat,
+  }) async {
+    final senderJid = myJid;
+    if (senderJid == null) {
+      _log.warning('Attempted to send an attachment before a JID was bound.');
+      throw XmppMessageException();
+    }
+    final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
+    if (uploadManager == null) {
+      _log.warning('HTTP upload manager unavailable; ensure it is registered.');
+      throw XmppMessageException();
+    }
+    if (!await uploadManager.isSupported()) {
+      _log.warning('Server does not advertise HTTP file upload support.');
+      throw XmppMessageException();
+    }
+    final file = File(attachment.path);
+    if (!await file.exists()) {
+      _log.warning('Attachment missing on disk: ${attachment.path}');
+      throw XmppMessageException();
+    }
+    final size =
+        attachment.sizeBytes > 0 ? attachment.sizeBytes : await file.length();
+    final filename = attachment.fileName.isEmpty
+        ? p.basename(file.path)
+        : p.normalize(attachment.fileName);
+    final contentType = attachment.mimeType?.isNotEmpty == true
+        ? attachment.mimeType!
+        : 'application/octet-stream';
+    mox.HttpFileUploadSlot slot;
+    try {
+      final slotResult = await uploadManager.requestUploadSlot(
+        filename,
+        size,
+        contentType: contentType,
+      );
+      if (slotResult.isType<mox.HttpFileUploadError>()) {
+        final error = slotResult.get<mox.HttpFileUploadError>();
+        if (error is mox.FileTooBigError) {
+          throw XmppFileTooBigException(_maxUploadSize(error));
+        }
+        throw XmppMessageException();
+      }
+      slot = slotResult.get<mox.HttpFileUploadSlot>();
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to request upload slot for $filename',
+        error,
+        stackTrace,
+      );
+      throw XmppMessageException();
+    }
+    final getUrl = slot.getUrl.toString();
+    final putUrl = slot.putUrl.toString();
+    final metadata = FileMetadataData(
+      id: attachment.metadataId ?? uuid.v4(),
+      filename: filename,
+      path: file.path,
+      mimeType: contentType,
+      sizeBytes: size,
+      width: attachment.width,
+      height: attachment.height,
+      sourceUrls: [getUrl],
+    );
+    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+    final body = attachment.caption?.trim().isNotEmpty == true
+        ? attachment.caption!.trim()
+        : _attachmentLabel(filename, size);
+    final message = Message(
+      stanzaID: _connection.generateId(),
+      originID: _connection.generateId(),
+      senderJid: senderJid,
+      chatJid: jid,
+      body: body,
+      encryptionProtocol: encryptionProtocol,
+      timestamp: DateTime.timestamp(),
+      fileMetadataID: metadata.id,
+      quoting: quotedMessage?.stanzaID,
+    );
+    final shouldStore = _messageStorageMode.isLocal;
+    if (shouldStore) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveMessage(
+          message,
+          chatType: chatType,
+        ),
+      );
+    } else if (_messageStorageMode.isServerOnly) {
+      final stableKey = message.originID != null
+          ? 'oid:${message.originID}'
+          : 'mid:${message.stanzaID}-${_myJid?.toBare() ?? senderJid}';
+      _rememberStableKey(jid, stableKey);
+      _addServerOnlyMessage(jid, message);
+    }
+    try {
+      await _uploadFileToSlot(
+        slot,
+        file,
+        sizeBytes: size,
+        putUrl: putUrl,
+      );
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to upload attachment $filename',
+        error,
+        stackTrace,
+      );
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: message.stanzaID,
+            error: MessageError.fileUploadFailure,
+          ),
+        );
+      }
+      throw XmppMessageException();
+    }
+
+    try {
+      final quotedJid = quotedMessage == null
+          ? null
+          : mox.JID.fromString(quotedMessage.senderJid);
+      final extraExtensions = [
+        const mox.MessageProcessingHintData(
+          [mox.MessageProcessingHint.store],
+        ),
+        mox.OOBData(getUrl, filename),
+      ];
+      final sent = await _connection.sendMessage(
+        message.toMox(
+          quotedBody: quotedMessage?.body,
+          quotedJid: quotedJid,
+          extraExtensions: extraExtensions,
+        ),
+      );
+      if (!sent) {
+        if (shouldStore) {
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveMessageError(
+              stanzaID: message.stanzaID,
+              error: MessageError.fileUploadFailure,
+            ),
+          );
+        }
+        throw XmppMessageException();
+      }
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to send attachment message ${message.stanzaID}',
+        error,
+        stackTrace,
+      );
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: message.stanzaID,
+            error: MessageError.fileUploadFailure,
+          ),
+        );
+      }
+      throw XmppMessageException();
+    }
+    await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+  }
+
+  Future<void> _uploadFileToSlot(
+    mox.HttpFileUploadSlot slot,
+    File file, {
+    int? sizeBytes,
+    required String putUrl,
+  }) async {
+    final client = http.Client();
+    try {
+      final request = http.StreamedRequest(
+        'PUT',
+        Uri.parse(putUrl),
+      )..headers.addAll(slot.headers);
+      request.contentLength = sizeBytes ?? await file.length();
+      await file.openRead().pipe(request.sink);
+      final response = await client.send(request);
+      await response.stream.drain();
+      final success = response.statusCode >= 200 && response.statusCode < 300;
+      if (!success) {
+        throw XmppMessageException();
+      }
+    } finally {
+      client.close();
+    }
+  }
+
+  String _attachmentLabel(String filename, int sizeBytes) {
+    final prettySize = _formatBytes(sizeBytes);
+    return '📎 $filename ($prettySize)';
+  }
+
+  String _formatBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) return 'Unknown size';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
+  }
+
+  int? _maxUploadSize(mox.FileTooBigError error) {
+    final dynamic dynamicError = error;
+    try {
+      return dynamicError.maxSize as int?;
+    } catch (_) {
+      try {
+        return dynamicError.maxFileSize as int?;
+      } catch (_) {
+        try {
+          return dynamicError.max as int?;
+        } catch (_) {
+          return null;
+        }
+      }
+    }
   }
 
   Future<void> reactToMessage({

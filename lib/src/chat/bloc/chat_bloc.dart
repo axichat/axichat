@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
@@ -819,11 +820,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final recipients = _resolveComposerRecipients(chat);
     final split = _splitRecipientsForSend(
       recipients: recipients,
-      forceEmail: hasQueuedAttachments,
+      forceEmail: false,
     );
     final emailRecipients = split.emailRecipients;
     final xmppRecipients = split.xmppRecipients;
-    final requiresEmail = emailRecipients.isNotEmpty || hasQueuedAttachments;
+    final attachmentsViaEmail =
+        hasQueuedAttachments && emailRecipients.isNotEmpty;
+    final attachmentsViaXmpp =
+        hasQueuedAttachments && xmppRecipients.isNotEmpty;
+    final requiresEmail = emailRecipients.isNotEmpty || attachmentsViaEmail;
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
@@ -897,13 +902,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           }
           emailSendSucceeded = true;
         }
-        if (hasQueuedAttachments) {
+        if (attachmentsViaEmail) {
           await _sendQueuedAttachments(
             attachments: queuedAttachments,
             chat: chat,
             service: service!,
             recipients: emailRecipients,
             emit: emit,
+            retainOnSuccess: attachmentsViaXmpp,
           );
           emailSendSucceeded = true;
         }
@@ -935,6 +941,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
         xmppSendSucceeded = true;
       }
+      if (attachmentsViaXmpp) {
+        await _sendXmppAttachments(
+          attachments: queuedAttachments,
+          chat: chat,
+          recipients: xmppRecipients,
+          emit: emit,
+          quotedDraft: quotedDraft,
+        );
+        xmppSendSucceeded = true;
+      }
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
         'Failed to send email message for chat ${chat.jid}',
@@ -953,12 +969,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
       }
     } on XmppMessageException catch (_) {
-      // Don't panic. User will see a visual difference in the message bubble.
+      await _saveXmppDraft(
+        chat: chat,
+        recipients: xmppRecipients,
+        body: trimmedText,
+        attachments: queuedAttachments,
+        emit: emit,
+      );
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to send message for chat ${chat.jid}',
         error,
         stackTrace,
+      );
+      await _saveXmppDraft(
+        chat: chat,
+        recipients: xmppRecipients,
+        body: trimmedText,
+        attachments: queuedAttachments,
+        emit: emit,
       );
     } finally {
       if (state.quoting != null) {
@@ -1099,11 +1128,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (isEmailMessage) {
         await _resendEmailMessage(message, emit);
         return;
-      } else {
-        final hasBody = message.body?.isNotEmpty == true;
-        if (!hasBody) return;
-        await _messageService.resendMessage(message.stanzaID);
       }
+      if (message.fileMetadataID != null) {
+        final attachment = await _attachmentForMessage(message);
+        if (attachment != null) {
+          Message? quoted;
+          if (message.quoting != null) {
+            quoted = await _messageService.loadMessageByStanzaId(
+              message.quoting!,
+            );
+          }
+          await _messageService.sendAttachment(
+            jid: message.chatJid,
+            attachment: attachment,
+            encryptionProtocol: message.encryptionProtocol,
+            quotedMessage: quoted,
+            chatType:
+                message.occupantID == null ? ChatType.chat : ChatType.groupChat,
+          );
+        }
+        return;
+      }
+      final hasBody = message.body?.isNotEmpty == true;
+      if (!hasBody) return;
+      await _messageService.resendMessage(message.stanzaID);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to resend message ${message.stanzaID}',
@@ -1121,7 +1169,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (message.deltaChatId != null) {
       await _rehydrateEmailDraft(message, emit);
     } else {
-      _rehydrateXmppDraft(message, emit);
+      await _rehydrateXmppDraft(message, emit);
     }
   }
 
@@ -1130,12 +1178,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chat = state.chat;
-    final service = _emailService;
-    if (chat == null || service == null) {
-      return;
-    }
+    if (chat == null) return;
     final recipients = _resolveComposerRecipients(chat);
-    if (!_hasEmailTarget(chat: chat, recipients: recipients)) {
+    final shouldUseEmail =
+        _shouldSendAttachmentsViaEmail(chat: chat, recipients: recipients);
+    final service = _emailService;
+    if (shouldUseEmail && service == null) return;
+    if (shouldUseEmail &&
+        !_hasEmailTarget(chat: chat, recipients: recipients)) {
       emit(
         _attachToast(
           state.copyWith(
@@ -1171,7 +1221,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAttachmentRetryRequested event,
     Emitter<ChatState> emit,
   ) async {
-    if (state.emailSyncState.requiresAttention) {
+    final pending = _pendingAttachmentById(event.attachmentId);
+    final chat = state.chat;
+    if (pending == null ||
+        pending.status != PendingAttachmentStatus.failed ||
+        chat == null) {
+      return;
+    }
+    final recipients = _resolveComposerRecipients(chat);
+    final split = _splitRecipientsForSend(
+      recipients: recipients,
+      forceEmail: false,
+    );
+    final emailRecipients = split.emailRecipients;
+    final xmppRecipients = split.xmppRecipients;
+    final requiresEmail = emailRecipients.isNotEmpty;
+    final requiresXmpp = xmppRecipients.isNotEmpty;
+    if (requiresEmail && state.emailSyncState.requiresAttention) {
       emit(
         _attachToast(
           state,
@@ -1183,26 +1249,38 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final pending = _pendingAttachmentById(event.attachmentId);
-    final chat = state.chat;
     final service = _emailService;
-    if (pending == null ||
-        pending.status != PendingAttachmentStatus.failed ||
-        chat == null ||
-        service == null) {
-      return;
-    }
+    if (requiresEmail && service == null) return;
     final updated = pending.copyWith(
       status: PendingAttachmentStatus.queued,
       clearErrorMessage: true,
     );
     _replacePendingAttachment(updated, emit);
-    await _sendPendingAttachment(
-      pending: updated,
+    if (requiresEmail) {
+      await _sendPendingAttachment(
+        pending: updated,
+        chat: chat,
+        service: service!,
+        recipients: emailRecipients,
+        emit: emit,
+        retainOnSuccess: requiresXmpp,
+      );
+      if (!requiresXmpp) {
+        return;
+      }
+    }
+    final latest = _pendingAttachmentById(updated.id);
+    if (latest == null ||
+        latest.status == PendingAttachmentStatus.failed ||
+        !requiresXmpp) {
+      return;
+    }
+    await _sendXmppAttachments(
+      attachments: [latest],
       chat: chat,
-      service: service,
-      recipients: _includedRecipients(),
+      recipients: xmppRecipients,
       emit: emit,
+      quotedDraft: state.quoting,
     );
   }
 
@@ -1344,6 +1422,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required EmailService service,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    bool retainOnSuccess = false,
   }) async {
     var current = pending;
     if (current.status != PendingAttachmentStatus.uploading) {
@@ -1361,7 +1440,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emit: emit,
       );
       if (succeeded) {
-        _removePendingAttachment(current.id, emit);
+        _handlePendingAttachmentSuccess(
+          current,
+          emit,
+          retainOnSuccess: retainOnSuccess,
+        );
       } else {
         _markPendingAttachmentFailed(
           current.id,
@@ -1377,7 +1460,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chat: chat,
         attachment: current.attachment,
       );
-      _removePendingAttachment(current.id, emit);
+      _handlePendingAttachmentSuccess(
+        current,
+        emit,
+        retainOnSuccess: retainOnSuccess,
+      );
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment for chat ${chat.jid}',
@@ -1413,6 +1500,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required EmailService service,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    bool retainOnSuccess = false,
   }) async {
     for (final attachment in attachments) {
       final latest = _pendingAttachmentById(attachment.id);
@@ -1425,7 +1513,119 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         service: service,
         recipients: recipients,
         emit: emit,
+        retainOnSuccess: retainOnSuccess,
       );
+    }
+  }
+
+  void _handlePendingAttachmentSuccess(
+    PendingAttachment pending,
+    Emitter<ChatState> emit, {
+    required bool retainOnSuccess,
+  }) {
+    if (retainOnSuccess) {
+      _replacePendingAttachment(
+        pending.copyWith(
+          status: PendingAttachmentStatus.queued,
+          clearErrorMessage: true,
+        ),
+        emit,
+      );
+      return;
+    }
+    _removePendingAttachment(pending.id, emit);
+  }
+
+  Future<void> _sendXmppAttachments({
+    required Iterable<PendingAttachment> attachments,
+    required Chat chat,
+    required List<ComposerRecipient> recipients,
+    required Emitter<ChatState> emit,
+    Message? quotedDraft,
+  }) async {
+    final targets = <String, Chat>{};
+    if (recipients.isEmpty) {
+      targets[chat.jid] = chat;
+    } else {
+      for (final recipient in recipients) {
+        final targetChat = recipient.target.chat;
+        if (targetChat == null) continue;
+        targets[targetChat.jid] = targetChat;
+      }
+      if (targets.isEmpty) {
+        targets[chat.jid] = chat;
+      }
+    }
+    for (final attachment in attachments) {
+      var current = attachment;
+      if (current.status != PendingAttachmentStatus.uploading) {
+        current = current.copyWith(
+          status: PendingAttachmentStatus.uploading,
+          clearErrorMessage: true,
+        );
+        _replacePendingAttachment(current, emit);
+      }
+      try {
+        for (final target in targets.values) {
+          final quote = quotedDraft != null && quotedDraft.chatJid == target.jid
+              ? quotedDraft
+              : null;
+          await _messageService.sendAttachment(
+            jid: target.jid,
+            attachment: current.attachment,
+            encryptionProtocol: target.encryptionProtocol,
+            chatType: target.type,
+            quotedMessage: quote,
+          );
+        }
+        _removePendingAttachment(current.id, emit);
+      } on XmppFileTooBigException catch (error) {
+        final limit = error.maxBytes;
+        final readableLimit = limit == null ? null : _formatBytes(limit);
+        final message = readableLimit == null
+            ? 'Attachment exceeds the server limit.'
+            : 'Attachment exceeds the server limit ($readableLimit).';
+        _markPendingAttachmentFailed(
+          current.id,
+          emit,
+          message: message,
+        );
+        emit(state.copyWith(composerError: message));
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: recipients,
+          body: '',
+          attachments: [current],
+          emit: emit,
+        );
+      } on XmppMessageException catch (_) {
+        _markPendingAttachmentFailed(
+          current.id,
+          emit,
+          message: 'Unable to send attachment. Please try again.',
+        );
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: recipients,
+          body: '',
+          attachments: [current],
+          emit: emit,
+        );
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+          'Failed to send XMPP attachment for chat ${chat.jid}',
+          error,
+          stackTrace,
+        );
+        _markPendingAttachmentFailed(current.id, emit);
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: recipients,
+          body: '',
+          attachments: [current],
+          emit: emit,
+        );
+      }
     }
   }
 
@@ -1658,6 +1858,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
+  bool _shouldSendAttachmentsViaEmail({
+    required Chat chat,
+    required List<ComposerRecipient> recipients,
+  }) {
+    if (chat.defaultTransport.isEmail) {
+      return true;
+    }
+    for (final recipient in recipients) {
+      final targetChat = recipient.target.chat;
+      if (targetChat != null && targetChat.defaultTransport.isEmail) {
+        return true;
+      }
+      if (_isEmailOnlyAddress(recipient.target.address)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool _isEmailCapableChat(Chat chat) {
     return chat.supportsEmail;
   }
@@ -1671,6 +1890,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return true;
+  }
+
+  String _formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var index = 0;
+    while (value >= 1024 && index < units.length - 1) {
+      value /= 1024;
+      index++;
+    }
+    final precision = value >= 10 || index == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(precision)} ${units[index]}';
   }
 
   String _composeXmppBody({
@@ -1981,10 +2212,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return recipients;
   }
 
-  void _rehydrateXmppDraft(
+  Future<void> _rehydrateXmppDraft(
     Message message,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
+    final pendingAttachments = <PendingAttachment>[];
+    final attachment = await _attachmentForMessage(message);
+    if (attachment != null) {
+      pendingAttachments.add(
+        PendingAttachment(
+          id: _nextPendingAttachmentId(),
+          attachment: attachment,
+        ),
+      );
+    }
     final nextHydrationId = ++_composerHydrationSeed;
     emit(
       state.copyWith(
@@ -1993,7 +2234,73 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerError: message.error.isNotNone
             ? message.error.asString
             : state.composerError,
+        pendingAttachments: pendingAttachments,
       ),
+    );
+  }
+
+  Future<void> _saveXmppDraft({
+    required Chat chat,
+    required List<ComposerRecipient> recipients,
+    required String body,
+    required Iterable<PendingAttachment> attachments,
+    required Emitter<ChatState> emit,
+  }) async {
+    final hasAttachments = attachments.isNotEmpty;
+    final trimmedBody = body.trim();
+    if (trimmedBody.isEmpty && !hasAttachments) return;
+    final resolvedRecipients =
+        _draftRecipientJids(chat: chat, recipients: recipients);
+    if (resolvedRecipients.isEmpty) return;
+    final attachmentPayload =
+        attachments.map((pending) => pending.attachment).toList();
+    try {
+      await _messageService.saveDraft(
+        id: null,
+        jids: resolvedRecipients,
+        body: trimmedBody,
+        subject: state.emailSubject,
+        attachments: attachmentPayload,
+      );
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: 'Saved to Drafts because sending failed.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Failed to save XMPP draft for chat ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<EmailAttachment?> _attachmentForMessage(Message message) async {
+    final metadataId = message.fileMetadataID;
+    if (metadataId == null) return null;
+    final db = await _messageService.database;
+    final metadata = await db.getFileMetadata(metadataId);
+    final path = metadata?.path;
+    if (metadata == null || path == null || path.isEmpty) {
+      return null;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      return null;
+    }
+    final size = metadata.sizeBytes ?? await file.length();
+    return EmailAttachment(
+      path: path,
+      fileName: metadata.filename,
+      sizeBytes: size,
+      mimeType: metadata.mimeType,
+      width: metadata.width,
+      height: metadata.height,
+      caption: message.body,
     );
   }
 
