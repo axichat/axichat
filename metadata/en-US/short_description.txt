@@ -1,1 +1,1 @@
-Modern instant messenger based on XMPP.
+The best of instant messaging, email, and calendar in one app.
