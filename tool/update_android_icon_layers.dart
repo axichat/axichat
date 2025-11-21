@@ -63,7 +63,7 @@ img.Image? _loadOptionalImage(String path) {
 img.Image _prepareLayer(img.Image image, {required String layer}) {
   if (image.width != image.height) {
     stderr.writeln(
-        'Warning: $layer layer is not square (${image.width}x${image.height}). It will be resized to ${_targetSize}x${_targetSize}.');
+        'Warning: $layer layer is not square (${image.width}x${image.height}). It will be resized to $_targetSize x $_targetSize.');
   }
   if (image.width == _targetSize && image.height == _targetSize) {
     return img.Image.from(image);

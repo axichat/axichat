@@ -34,9 +34,10 @@ class ProfileTile extends StatelessWidget {
               child: AxiAvatar(
                 jid: state.jid,
                 subscription: Subscription.both,
-                presence: state.presence,
-                status: state.status,
-                active: true,
+                // Presence is parsed for backend features but hidden in UI.
+                presence: null,
+                status: null,
+                active: false,
               ),
             ),
             title: Hero(

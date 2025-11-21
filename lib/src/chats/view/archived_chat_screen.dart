@@ -59,6 +59,7 @@ class ArchivedChatScreen extends StatelessWidget {
             jid: jid,
             messageService: xmppService,
             chatsService: xmppService,
+            mucService: xmppService,
             notificationService: notificationService,
             emailService: emailService,
             omemoService: omemoService,

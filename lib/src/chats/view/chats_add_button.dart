@@ -14,12 +14,11 @@ class ChatsAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final locate = context.read;
     return AxiDialogFab(
-      tooltip: 'Create chat room',
+      tooltip: 'Create group chat',
       iconData: LucideIcons.userPlus,
       label: 'Room',
       dialogBuilder: (context) {
         String title = '';
-        String? nickname;
         return MultiBlocProvider(
           providers: [
             BlocProvider.value(
@@ -46,22 +45,11 @@ class ChatsAddButton extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: AxiTextFormField(
-                            placeholder: const Text('Title'),
+                            placeholder: const Text('Name'),
                             enabled:
-                                state.creationStatus == RequestStatus.loading,
+                                state.creationStatus != RequestStatus.loading,
                             onChanged: (value) {
                               setState(() => title = value);
-                            },
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: AxiTextFormField(
-                            placeholder: const Text('Nickname'),
-                            enabled:
-                                state.creationStatus == RequestStatus.loading,
-                            onChanged: (value) {
-                              setState(() => nickname = value);
                             },
                           ),
                         ),
@@ -71,9 +59,8 @@ class ChatsAddButton extends StatelessWidget {
                 ),
                 callback: title.isEmpty
                     ? null
-                    : () => context
-                        .read<ChatsCubit>()
-                        .createChatRoom(title: title, nickname: nickname),
+                    : () =>
+                        context.read<ChatsCubit>().createChatRoom(title: title),
               );
             },
           ),

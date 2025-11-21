@@ -253,6 +253,11 @@ class XmppPresenceManager extends mox.PresenceManager {
               return state;
             }
 
+            if (_handleMucPresence(stanza)) {
+              state.done = true;
+              return state;
+            }
+
             final from = mox.JID.fromString(stanza.from!).toBare();
             final stanzaType = stanza.type;
             _log.info('Incoming presence from: ${from.toString()} '
@@ -397,6 +402,41 @@ class XmppPresenceManager extends mox.PresenceManager {
     await sendPresence(show: presence?.name, status: status);
   }
 
+  bool _handleMucPresence(mox.Stanza stanza) {
+    final fromAttr = stanza.from;
+    if (fromAttr == null) return false;
+    final jid = mox.JID.fromString(fromAttr);
+    if (jid.resource.isEmpty) return false;
+    final mucUser = _findChildWithXmlns(
+      stanza.children,
+      xmlns: _mucUserXmlns,
+      tag: 'x',
+    );
+    if (mucUser == null) return false;
+    final occupantId = _extractMucOccupantId(stanza);
+    if (occupantId == null || occupantId.isEmpty) return false;
+    final item = _mucItemNode(mucUser);
+    final affiliation = OccupantAffiliation.fromString(
+      item?.attributes['affiliation'] as String?,
+    );
+    final role = OccupantRole.fromString(item?.attributes['role'] as String?);
+    final realJid = item?.attributes['jid'] as String?;
+    final isUnavailable = stanza.type == Presence.unavailable.name;
+    if (owner is MucService) {
+      final muc = owner as MucService;
+      muc.updateOccupantFromPresence(
+        roomJid: jid.toBare().toString(),
+        occupantId: occupantId,
+        nick: jid.resource,
+        realJid: realJid,
+        affiliation: affiliation,
+        role: role,
+        isPresent: !isUnavailable,
+      );
+    }
+    return true;
+  }
+
   Map<String, String> _extractStatuses(mox.Stanza stanza) {
     final map = <String, String>{};
     for (final child in stanza.children.where((node) => node.tag == 'status')) {
@@ -406,6 +446,35 @@ class XmppPresenceManager extends mox.PresenceManager {
       map[lang] = text;
     }
     return map;
+  }
+
+  mox.XMLNode? _findChildWithXmlns(
+    List<mox.XMLNode> nodes, {
+    required String xmlns,
+    String? tag,
+  }) {
+    for (final child in nodes) {
+      if (tag != null && child.tag != tag) continue;
+      if (child.attributes['xmlns'] == xmlns) return child;
+    }
+    return null;
+  }
+
+  mox.XMLNode? _mucItemNode(mox.XMLNode mucUser) {
+    for (final child in mucUser.children) {
+      if (child.tag == 'item') return child;
+    }
+    return null;
+  }
+
+  String? _extractMucOccupantId(mox.Stanza stanza) {
+    final node = _findChildWithXmlns(
+      stanza.children,
+      xmlns: _occupantIdXmlns,
+      tag: 'occupant-id',
+    );
+    final id = node?.attributes['id'];
+    return id is String ? id : null;
   }
 
   Future<void> _acknowledgeUnsubscribe(mox.JID jid) async {

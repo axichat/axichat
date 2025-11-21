@@ -120,10 +120,10 @@ class RosterList extends StatelessWidget {
                   leading: AxiAvatar(
                     jid: item.jid,
                     subscription: item.subscription,
-                    presence: item.subscription.isTo || item.subscription.isBoth
-                        ? item.presence
-                        : null,
-                    status: item.status,
+                    // Presence is parsed for MUC/identity purposes but not shown
+                    // in the contacts UI because it is unreliable across servers.
+                    presence: null,
+                    status: null,
                   ),
                   title: item.title,
                   subtitle: item.jid,

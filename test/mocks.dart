@@ -37,6 +37,8 @@ class MockMessageService extends Mock implements MessageService {}
 
 class MockChatsService extends Mock implements ChatsService {}
 
+class MockMucService extends Mock implements MucService {}
+
 class MockEmailService extends Mock implements EmailService {}
 
 class MockChatmailProvisioningClient extends Mock

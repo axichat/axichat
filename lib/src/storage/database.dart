@@ -71,7 +71,10 @@ abstract interface class XmppDatabase implements Database {
     required List<String> emojis,
   });
 
-  Future<void> saveMessage(Message message);
+  Future<void> saveMessage(
+    Message message, {
+    ChatType chatType = ChatType.chat,
+  });
 
   Future<void> saveMessageError({
     required String stanzaID,
@@ -1247,7 +1250,10 @@ WHERE subject_token IS NOT NULL
   }
 
   @override
-  Future<void> saveMessage(Message message) async {
+  Future<void> saveMessage(
+    Message message, {
+    ChatType chatType = ChatType.chat,
+  }) async {
     final bodyPreview =
         message.body == null ? 'no body' : '${message.body!.length} chars';
     _log.fine('Persisting message ${message.stanzaID}; body=$bodyPreview');
@@ -1265,15 +1271,17 @@ WHERE subject_token IS NOT NULL
         ChatsCompanion.insert(
           jid: message.chatJid,
           title: chatTitle,
-          type: ChatType.chat,
+          type: chatType,
           unreadCount: Value((hasBody || hasAttachment).toBinary),
           lastMessage: Value.absentIfNull(lastMessagePreview),
           lastChangeTimestamp: DateTime.timestamp(),
           encryptionProtocol: Value(message.encryptionProtocol),
-          contactJid: Value(message.chatJid),
+          contactJid:
+              Value(chatType == ChatType.groupChat ? null : message.chatJid),
         ),
         onConflict: DoUpdate.withExcluded(
           (old, excluded) => ChatsCompanion.custom(
+            type: excluded.type,
             unreadCount: const Constant(0).iif(
               old.open.isValue(true),
               old.unreadCount + Constant((hasBody || hasAttachment).toBinary),

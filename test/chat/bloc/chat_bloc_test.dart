@@ -8,6 +8,7 @@ import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -43,6 +44,7 @@ void main() {
   late MockMessageService messageService;
   late MockChatsService chatsService;
   late MockNotificationService notificationService;
+  late MockMucService mucService;
 
   late StreamController<List<Message>> messageStreamController;
   late StreamController<Chat?> chatStreamController;
@@ -59,7 +61,7 @@ void main() {
       ),
     );
     registerFallbackValue(
-      EmailAttachment(
+      const EmailAttachment(
         path: '/tmp/mock',
         fileName: 'mock.txt',
         sizeBytes: 0,
@@ -71,12 +73,62 @@ void main() {
     messageService = MockMessageService();
     chatsService = MockChatsService();
     notificationService = MockNotificationService();
+    mucService = MockMucService();
 
     messageStreamController = StreamController<List<Message>>.broadcast();
     chatStreamController = StreamController<Chat?>.broadcast();
 
     when(() => notificationService.dismissNotifications())
         .thenAnswer((_) async {});
+    when(() => mucService.roomStateStream(any()))
+        .thenAnswer((_) => const Stream<RoomState>.empty());
+    when(
+      () => mucService.warmRoomFromHistory(
+        roomJid: any(named: 'roomJid'),
+      ),
+    ).thenAnswer(
+      (invocation) async => RoomState(
+        roomJid: invocation.namedArguments[#roomJid] as String,
+      ),
+    );
+    when(
+      () => mucService.trackOccupantsFromMessages(any(), any()),
+    ).thenAnswer((_) {});
+    when(
+      () => mucService.inviteUserToRoom(
+        roomJid: any(named: 'roomJid'),
+        inviteeJid: any(named: 'inviteeJid'),
+        reason: any(named: 'reason'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mucService.kickOccupant(
+        roomJid: any(named: 'roomJid'),
+        nick: any(named: 'nick'),
+        reason: any(named: 'reason'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mucService.banOccupant(
+        roomJid: any(named: 'roomJid'),
+        jid: any(named: 'jid'),
+        reason: any(named: 'reason'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mucService.changeAffiliation(
+        roomJid: any(named: 'roomJid'),
+        jid: any(named: 'jid'),
+        affiliation: any(named: 'affiliation'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mucService.changeRole(
+        roomJid: any(named: 'roomJid'),
+        nick: any(named: 'nick'),
+        role: any(named: 'role'),
+      ),
+    ).thenAnswer((_) async {});
 
     when(
       () => messageService.messageStreamForChat(
@@ -182,6 +234,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -264,6 +317,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -302,6 +356,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -359,6 +414,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -442,6 +498,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -495,6 +552,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -562,6 +620,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -607,6 +666,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
@@ -642,6 +702,7 @@ void main() {
       jid: emailChat.jid,
       messageService: messageService,
       chatsService: chatsService,
+      mucService: mucService,
       notificationService: notificationService,
       emailService: emailService,
     );
