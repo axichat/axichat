@@ -5,7 +5,7 @@ description: "Free and open-source XMPP chat client."
 publish_to: 'none'
 
 # TODO: Bump the version + build number together before every store submission.
-version: 0.3.2+32
+version: 0.4.0
 
 # TODO: Update homepage/repository URLs if the canonical Git remote changes.
 homepage: https://gitlab.com/axichat/axichat

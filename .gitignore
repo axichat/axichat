@@ -49,3 +49,8 @@ app.*.map.json
 /temporaryPath/.axichat.state_store.hive
 /packages/delta_ffi/rust/target/
 /docs/
+
+# Vendored chatmail core (Rust)
+chatmail/core/.git/
+chatmail/core/build/
+chatmail/core/target/
