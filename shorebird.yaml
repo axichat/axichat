@@ -16,5 +16,5 @@ flavors:
 # Uncomment the following line to disable automatic updates.
 # auto_update: false
 
-# TODO: Decide whether F-Droid/artifact-only builds should set auto_update: false.
+# Decide whether F-Droid/artifact-only builds should set auto_update: false.
 # See fdroid/metadata/im.axi.axichat.yml for the flag used during those builds.

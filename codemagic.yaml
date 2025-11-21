@@ -179,11 +179,11 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
-        - github # TODO: Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
+        - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
+        - github # Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
       android_signing:
-        - AXICHAT_UPLOAD_KEY # TODO: Upload the release keystore/certs and link it as AXICHAT_UPLOAD_KEY.
+        - AXICHAT_UPLOAD_KEY # Upload the release keystore/certs and link it as AXICHAT_UPLOAD_KEY.
     scripts:
       - *shorebird_install
       - *fetch_dependencies
@@ -205,7 +205,7 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird # TODO: Codemagic must expose SHOREBIRD_TOKEN for patching builds.
+        - shorebird # Codemagic must expose SHOREBIRD_TOKEN for patching builds.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     inputs:
       release_version:
@@ -237,11 +237,11 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` in this group.
-        - github # TODO: Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
+        - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
+        - github # Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
       android_signing:
-        - AXICHAT_UPLOAD_KEY # TODO: Upload a dev keystore or reuse the production key via Codemagic secrets.
+        - AXICHAT_UPLOAD_KEY # Upload a dev keystore or reuse the production key via Codemagic secrets.
     scripts:
       - *shorebird_install
       - *fetch_dependencies
@@ -263,7 +263,7 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird # TODO: Codemagic group must include SHOREBIRD_TOKEN for dev patching.
+        - shorebird # Codemagic group must include SHOREBIRD_TOKEN for dev patching.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     inputs:
       release_version:
@@ -294,8 +294,8 @@ workflows:
     environment:
       flutter: stable
       groups:
-        - shorebird # TODO: Store SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
-        - github # TODO: Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
+        - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
+        - github # Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     scripts:
       - *shorebird_install_windows
@@ -339,8 +339,8 @@ workflows:
       ubuntu: 24.04
       flutter: stable
       groups:
-        - shorebird # TODO: Store SHOREBIRD_TOKEN for Linux desktop releases.
-        - github # TODO: Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
+        - shorebird # Requires SHOREBIRD_TOKEN for Linux desktop releases.
+        - github # Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
     scripts:
       - *shorebird_install
