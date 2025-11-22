@@ -6204,8 +6204,7 @@ class _GuestChatState extends State<GuestChat> {
       status: MessageStatus.read,
     ),
     _GuestScriptEntry(
-      text:
-          'Toggle OMEMO when you start a chat. Messages stay synced across devices.',
+      text: 'Start a chat to keep messages synced across devices.',
       offset: Duration(minutes: 6),
       isSelf: false,
       status: MessageStatus.read,
@@ -6341,6 +6340,7 @@ class _GuestChatState extends State<GuestChat> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: context.colorScheme.background,
         border: Border(
@@ -6386,19 +6386,30 @@ class _GuestChatState extends State<GuestChat> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              _chatHorizontalPadding,
-              12,
-              _chatHorizontalPadding,
-              16,
-            ),
-            child: ChatCutoutComposer(
-              controller: _textController,
-              focusNode: _focusNode,
-              hintText: 'Send a message',
-              onSend: _handleSend,
-              actions: _composerAccessories(canSend: _composerHasText),
-              sendEnabled: _composerHasText,
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.colorScheme.background,
+                border: Border(
+                  top: BorderSide(color: context.colorScheme.border),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  _chatHorizontalPadding,
+                  12,
+                  _chatHorizontalPadding,
+                  0,
+                ),
+                child: ChatCutoutComposer(
+                  controller: _textController,
+                  focusNode: _focusNode,
+                  hintText: 'Send a message',
+                  onSend: _handleSend,
+                  actions: _composerAccessories(canSend: _composerHasText),
+                  sendEnabled: _composerHasText,
+                ),
+              ),
             ),
           ),
         ],
@@ -6419,9 +6430,8 @@ class _GuestChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final title = contact.firstName?.isNotEmpty == true
-        ? contact.firstName!
-        : contact.id;
+    final title =
+        contact.firstName?.isNotEmpty == true ? contact.firstName! : contact.id;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: _chatHorizontalPadding,
@@ -6450,18 +6460,13 @@ class _GuestChatHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Guest preview • Encrypted storage',
+                  'Guest preview • Stored locally',
                   style: context.textTheme.small.copyWith(
                     color: colors.mutedForeground,
                   ),
                 ),
               ],
             ),
-          ),
-          Icon(
-            LucideIcons.lock,
-            color: colors.mutedForeground,
-            size: 18,
           ),
         ],
       ),

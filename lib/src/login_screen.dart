@@ -33,7 +33,6 @@ enum _AuthFlow {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  static const double _authSplitGap = 24;
   var _login = true;
   var _signupFlowLocked = false;
   late OperationProgressController _operationProgressController;
@@ -237,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   child: AxiAdaptiveLayout(
-                    horizontalGap: _authSplitGap,
+                    panePadding: const EdgeInsets.symmetric(horizontal: 12.0),
                     primaryChild: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 480),

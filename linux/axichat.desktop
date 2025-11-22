@@ -4,6 +4,7 @@
 Type=Application
 Name=Axichat
 Comment=Free XMPP chat client
-Exec=Axichat
-Icon=axichat
+Exec=axichat
+Icon=im.axi.axichat
 Categories=Network;Chat;InstantMessaging;
+StartupWMClass=axichat

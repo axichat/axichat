@@ -10,13 +10,13 @@ class AxiAdaptiveLayout extends StatelessWidget {
     required this.primaryChild,
     required this.secondaryChild,
     this.invertPriority = false,
-    this.horizontalGap = 0,
+    this.panePadding = EdgeInsets.zero,
   });
 
   final Widget primaryChild;
   final Widget secondaryChild;
   final bool invertPriority;
-  final double horizontalGap;
+  final EdgeInsets panePadding;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +65,10 @@ class AxiAdaptiveLayout extends StatelessWidget {
           _ => 3,
         };
         final secondaryFlex = 10 - primaryFlex;
+        Widget wrap(Widget child) => Padding(
+              padding: panePadding,
+              child: Center(child: child),
+            );
         return ConstrainedBox(
           constraints: constraints,
           child: Row(
@@ -72,19 +76,11 @@ class AxiAdaptiveLayout extends StatelessWidget {
             children: [
               Flexible(
                 flex: primaryFlex,
-                child: Center(
-                  child: primaryChild,
-                ),
+                child: wrap(primaryChild),
               ),
-              if (horizontalGap > 0)
-                SizedBox(
-                  width: horizontalGap,
-                ),
               Flexible(
                 flex: secondaryFlex,
-                child: Center(
-                  child: secondaryChild,
-                ),
+                child: wrap(secondaryChild),
               ),
             ],
           ),

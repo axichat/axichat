@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:share_handler/share_handler.dart';
 
 class SharePayload {
@@ -30,11 +32,18 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   StreamSubscription<SharedMedia>? _subscription;
 
   Future<void> initialize() async {
-    final initial = await _handler.getInitialSharedMedia();
-    if (initial != null) {
-      _handleMedia(initial);
+    if (!_isSupportedPlatform) {
+      return;
     }
-    _subscription = _handler.sharedMediaStream.listen(_handleMedia);
+    try {
+      final initial = await _handler.getInitialSharedMedia();
+      if (initial != null) {
+        _handleMedia(initial);
+      }
+      _subscription = _handler.sharedMediaStream.listen(_handleMedia);
+    } on PlatformException {
+      // Share handler not available on this platform; ignore.
+    }
   }
 
   void consume() {
@@ -50,6 +59,11 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
     }
     emit(ShareIntentState.ready(SharePayload(text: text)));
   }
+
+  bool get _isSupportedPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   @override
   Future<void> close() async {

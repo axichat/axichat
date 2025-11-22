@@ -26,25 +26,25 @@ class AxiIconButton extends StatelessWidget {
     final colors = context.colorScheme;
     final Color resolvedForeground = color ?? colors.foreground;
     final Color resolvedBorder = borderColor ?? colors.border;
-
-    final decoration = ShapeDecoration(
-      color: colors.card,
-      shape: SquircleBorder(
-        cornerRadius: 18,
-        side: BorderSide(color: resolvedBorder),
-      ),
+    final shape = SquircleBorder(
+      cornerRadius: 18,
+      side: BorderSide(color: resolvedBorder),
     );
 
-    Widget visual = Container(
+    final icon = Icon(
+      iconData,
+      size: context.iconTheme.size,
+      color: resolvedForeground,
+    );
+
+    Widget visual = Ink(
       width: kDefaultSize,
       height: kDefaultSize,
-      decoration: decoration,
-      alignment: Alignment.center,
-      child: Icon(
-        iconData,
-        size: context.iconTheme.size,
-        color: resolvedForeground,
+      decoration: ShapeDecoration(
+        color: colors.card,
+        shape: shape,
       ),
+      child: Center(child: icon),
     );
 
     visual = SizedBox(
@@ -54,10 +54,12 @@ class AxiIconButton extends StatelessWidget {
     );
 
     Widget tappable = Material(
-      type: MaterialType.transparency,
+      color: Colors.transparent,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onPressed,
-        customBorder: SquircleBorder(cornerRadius: 24),
+        customBorder: shape,
         child: visual,
       ),
     ).withTapBounce(enabled: onPressed != null);
