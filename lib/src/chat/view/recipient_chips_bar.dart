@@ -651,15 +651,6 @@ class _RecipientChip extends StatelessWidget {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_showLock)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(
-                  Icons.lock,
-                  size: 14,
-                  color: foreground,
-                ),
-              ),
             Flexible(child: Text(_label)),
           ],
         ),
@@ -696,9 +687,6 @@ class _RecipientChip extends StatelessWidget {
         recipient.target.address ??
         'Recipient';
   }
-
-  bool get _showLock =>
-      recipient.target.chat?.encryptionProtocol.isNotNone ?? false;
 
   Color _chipColor(BuildContext context, bool colorfulAvatars) {
     if (!colorfulAvatars) {

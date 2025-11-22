@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../common/ui/ui.dart';
+import 'widgets/calendar_checkbox.dart';
 
 class PriorityCheckboxTile extends StatelessWidget {
   const PriorityCheckboxTile({
@@ -29,75 +30,78 @@ class PriorityCheckboxTile extends StatelessWidget {
     const Color disabledColor = calendarSubtitleColor;
     final bool showShadow = isActive && isEnabled;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1);
-    final bool tristate = isIndeterminate;
     final bool? checkboxValue = isIndeterminate ? null : value;
 
     return MouseRegion(
       cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: Semantics(
+        container: true,
+        label: label,
+        checked: checkboxValue ?? false,
+        mixed: isIndeterminate,
+        enabled: isEnabled,
         onTap: isEnabled ? () => onChanged!(!value) : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd, vertical: 10),
-          decoration: BoxDecoration(
-            color: backgroundColor,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: isEnabled ? () => onChanged!(!value) : null,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isEnabled ? borderColor : calendarBorderColor,
-              width: borderWidth,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(
+                horizontal: calendarGutterMd,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isEnabled ? borderColor : calendarBorderColor,
+                  width: borderWidth,
+                ),
+                boxShadow: showShadow
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.16),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: kMinInteractiveDimension,
+                    height: kMinInteractiveDimension,
+                    child: Center(
+                      child: CalendarCheckbox(
+                        value: value,
+                        isIndeterminate: isIndeterminate,
+                        onChanged: onChanged,
+                        activeColor: color,
+                        borderColor:
+                            isEnabled ? borderColor : calendarBorderColor,
+                        visualSize: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: calendarFormGap),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight:
+                            isActive ? FontWeight.w600 : FontWeight.w500,
+                        color: isEnabled ? textColor : disabledColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            boxShadow: showShadow
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.16),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 44,
-                height: 44,
-                child: Center(
-                  child: Checkbox(
-                    value: checkboxValue,
-                    tristate: tristate,
-                    activeColor: color,
-                    checkColor: Colors.white,
-                    mouseCursor: isEnabled
-                        ? SystemMouseCursors.click
-                        : SystemMouseCursors.basic,
-                    side: BorderSide(
-                      color: isEnabled ? borderColor : calendarBorderColor,
-                      width: borderWidth,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    onChanged: isEnabled
-                        ? (checked) => onChanged!(checked ?? false)
-                        : null,
-                  ),
-                ),
-              ),
-              const SizedBox(width: calendarFormGap),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                    color: isEnabled ? textColor : disabledColor,
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),

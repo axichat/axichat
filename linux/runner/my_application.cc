@@ -4,6 +4,7 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#include <glib.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -13,6 +14,31 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static gchar* build_icon_path() {
+  g_autofree gchar* executable_path = g_file_read_link("/proc/self/exe", nullptr);
+  if (executable_path == nullptr) {
+    return nullptr;
+  }
+
+  g_autofree gchar* executable_dir = g_path_get_dirname(executable_path);
+  const gchar* relative_candidates[] = {
+      "data/app_icon.png",
+      "data/flutter_assets/assets/icons/generated/app_icon_linux.png",
+      "share/icons/hicolor/256x256/apps/im.axi.axichat.png",
+      "share/icons/hicolor/512x512/apps/im.axi.axichat.png",
+  };
+
+  for (guint i = 0; i < G_N_ELEMENTS(relative_candidates); ++i) {
+    g_autofree gchar* candidate =
+        g_build_filename(executable_dir, relative_candidates[i], nullptr);
+    if (g_file_test(candidate, G_FILE_TEST_IS_REGULAR)) {
+      return g_strdup(candidate);
+    }
+  }
+
+  return nullptr;
+}
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -45,6 +71,17 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
     gtk_window_set_title(window, "axichat");
+  }
+
+  g_autofree gchar* icon_path = build_icon_path();
+  if (icon_path != nullptr) {
+    g_autoptr(GError) error = nullptr;
+    gtk_window_set_icon_from_file(window, icon_path, &error);
+    if (error != nullptr) {
+      g_warning("Failed to set window icon from %s: %s", icon_path, error->message);
+    }
+  } else {
+    g_warning("Failed to resolve application icon path.");
   }
 
   gtk_window_set_default_size(window, 1280, 720);

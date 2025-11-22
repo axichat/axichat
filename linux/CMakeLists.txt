@@ -126,3 +126,22 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# Install Linux application icon alongside the bundle and into the icon theme
+# so desktops can pick it up automatically.
+set(LINUX_APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icons/generated/app_icon_linux.png")
+if(EXISTS "${LINUX_APP_ICON}")
+  install(FILES "${LINUX_APP_ICON}"
+    DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+    RENAME "app_icon.png"
+    COMPONENT Runtime)
+
+  install(FILES "${LINUX_APP_ICON}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/256x256/apps"
+    RENAME "im.axi.axichat.png"
+    COMPONENT Runtime)
+endif()
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/axichat.desktop"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications"
+  COMPONENT Runtime)
