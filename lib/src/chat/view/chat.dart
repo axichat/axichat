@@ -498,22 +498,6 @@ List<BoxShadow> _selectedBubbleShadows(Color color) => [
       ),
     ];
 
-ShapeDecoration _bubbleDecoration({
-  required Color background,
-  Color? borderColor,
-}) {
-  final side = borderColor == null || borderColor.a == 0
-      ? BorderSide.none
-      : BorderSide(color: borderColor, width: 1);
-  return ShapeDecoration(
-    color: background,
-    shape: ContinuousRectangleBorder(
-      borderRadius: const BorderRadius.all(Radius.circular(_bubbleRadius)),
-      side: side,
-    ),
-  );
-}
-
 BorderRadius _bubbleBorderRadius({
   required bool isSelf,
   required bool chainedPrevious,
@@ -560,49 +544,6 @@ bool _chatMessagesShouldChain(
     current.createdAt.day,
   );
   return neighborDate == currentDate;
-}
-
-InputDecoration _chatInputDecoration(
-  BuildContext context, {
-  required String hintText,
-}) {
-  final colors = context.colorScheme;
-  final brightness = Theme.of(context).brightness;
-  final border = OutlineInputBorder(
-    borderRadius: context.radius,
-    borderSide: BorderSide(color: colors.border),
-  );
-  final focusedBorder = border.copyWith(
-    borderSide: BorderSide(
-      color: colors.primary,
-      width: 1.5,
-    ),
-  );
-  final errorBorder = border.copyWith(
-    borderSide: BorderSide(color: colors.destructive),
-  );
-  return defaultInputDecoration().copyWith(
-    hintText: hintText,
-    hintStyle: context.textTheme.muted.copyWith(
-      color: colors.mutedForeground,
-    ),
-    filled: true,
-    fillColor: colors.card,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    border: border,
-    enabledBorder: border,
-    disabledBorder: border.copyWith(
-      borderSide: BorderSide(
-        color: colors.border.withValues(alpha: 0.6),
-      ),
-    ),
-    focusedBorder: focusedBorder,
-    errorBorder: errorBorder,
-    focusedErrorBorder: errorBorder,
-    hoverColor: colors.primary.withValues(
-      alpha: brightness == Brightness.dark ? 0.08 : 0.04,
-    ),
-  );
 }
 
 class Chat extends StatefulWidget {
@@ -6215,37 +6156,187 @@ class GuestChat extends StatefulWidget {
   State<GuestChat> createState() => _GuestChatState();
 }
 
+class _GuestScriptEntry {
+  const _GuestScriptEntry({
+    required this.text,
+    required this.offset,
+    required this.isSelf,
+    this.status = MessageStatus.read,
+  });
+
+  final String text;
+  final Duration offset;
+  final bool isSelf;
+  final MessageStatus status;
+}
+
 class _GuestChatState extends State<GuestChat> {
+  static const double _guestHeaderSpacing = 12;
+  static const double _guestStatusIconSize = 13;
+  static const double _guestListBottomPadding = 12;
+  static const double _guestBubbleTopSpacing = 8;
+  static const double _guestBubbleBottomSpacing = 12;
+
+  static const List<_GuestScriptEntry> _previewScript = [
+    _GuestScriptEntry(
+      text: 'Welcome to Axichat. This is how your chats look and feel.',
+      offset: Duration(minutes: 12),
+      isSelf: false,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text: 'Looks clean. Does it work without Google or Firebase?',
+      offset: Duration(minutes: 10),
+      isSelf: true,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text:
+          'Yep. We ship XMPP + SMTP with SQLCipher storage, no trackers or big tech dependencies.',
+      offset: Duration(minutes: 9),
+      isSelf: false,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text: 'Nice. I want end-to-end encryption too.',
+      offset: Duration(minutes: 7),
+      isSelf: true,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text:
+          'Toggle OMEMO when you start a chat. Messages stay synced across devices.',
+      offset: Duration(minutes: 6),
+      isSelf: false,
+      status: MessageStatus.read,
+    ),
+  ];
+
   final _emojiPopoverController = ShadPopoverController();
-  final _encryptionPopoverController = ShadPopoverController();
-  late FocusNode _focusNode;
-  late TextEditingController _textController;
+  late final FocusNode _focusNode;
+  late final TextEditingController _textController;
+  late final ScrollController _scrollController;
+  late final ChatUser _selfUser;
+  late final ChatUser _axiUser;
+  late List<ChatMessage> _messages;
+  var _composerHasText = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
     _textController = TextEditingController();
+    _scrollController = ScrollController();
+    _selfUser = ChatUser(id: 'me', firstName: 'You');
+    _axiUser = ChatUser(id: 'axichat', firstName: appDisplayName);
+    _messages = _buildScriptMessages();
+    _textController.addListener(_handleComposerChanged);
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
-    _textController.dispose();
+    _textController
+      ..removeListener(_handleComposerChanged)
+      ..dispose();
+    _scrollController.dispose();
     _emojiPopoverController.dispose();
-    _encryptionPopoverController.dispose();
     super.dispose();
   }
 
-  final user = ChatUser(id: 'me', firstName: 'You');
+  List<ChatMessage> _buildScriptMessages() {
+    final now = DateTime.now();
+    return _previewScript
+        .map(
+          (entry) => ChatMessage(
+            user: entry.isSelf ? _selfUser : _axiUser,
+            createdAt: now.subtract(entry.offset),
+            text: entry.text,
+            status: entry.status,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
 
-  final messages = <ChatMessage>[
-    ChatMessage(
-      user: ChatUser(id: 'axichat', firstName: appDisplayName),
+  void _handleComposerChanged() {
+    final hasText = _textController.text.trim().isNotEmpty;
+    if (hasText == _composerHasText) return;
+    setState(() {
+      _composerHasText = hasText;
+    });
+  }
+
+  double _bubbleMaxWidth(double maxWidth) {
+    final isCompact = maxWidth < smallScreen;
+    final fraction = isCompact ? 0.8 : 0.7;
+    return math.min(maxWidth * fraction, maxWidth);
+  }
+
+  void _handleSend() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    final message = ChatMessage(
+      user: _selfUser,
       createdAt: DateTime.now(),
-      text: 'Open a chat! Unless you just want to talk to yourself.',
-    ),
-  ];
+      text: text,
+      status: MessageStatus.sent,
+    );
+    setState(() {
+      _messages.insert(0, message);
+      _composerHasText = false;
+    });
+    _textController.clear();
+    _focusNode.requestFocus();
+    _scrollToLatest();
+  }
+
+  Future<void> _scrollToLatest() async {
+    if (!_scrollController.hasClients) return;
+    await _scrollController.animateTo(
+      0,
+      duration: baseAnimationDuration,
+      curve: Curves.easeOut,
+    );
+  }
+
+  List<ChatComposerAccessory> _composerAccessories({
+    required bool canSend,
+  }) {
+    return [
+      ChatComposerAccessory.leading(
+        child: _EmojiPickerAccessory(
+          controller: _emojiPopoverController,
+          textController: _textController,
+        ),
+      ),
+      ChatComposerAccessory.leading(
+        child: _AttachmentAccessoryButton(
+          enabled: false,
+          onPressed: _showPreviewAttachmentNotice,
+        ),
+      ),
+      ChatComposerAccessory.trailing(
+        child: _SendMessageAccessory(
+          enabled: canSend,
+          onPressed: _handleSend,
+        ),
+      ),
+    ];
+  }
+
+  void _showPreviewAttachmentNotice() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Attachments are disabled in preview.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -6256,143 +6347,226 @@ class _GuestChatState extends State<GuestChat> {
           left: BorderSide(color: context.colorScheme.border),
         ),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < smallScreen;
-          return DashChat(
-            currentUser: user,
-            onSend: (message) {
-              setState(() => messages.insert(0, message));
-              _focusNode.requestFocus();
-            },
-            messages: messages
-                .map(
-                  (e) => ChatMessage(
-                    user: e.user,
-                    createdAt: e.createdAt,
-                    text: e.text,
-                    status: MessageStatus.sent,
-                  ),
-                )
-                .toList(),
-            messageOptions: MessageOptions(
-              showOtherUsersAvatar: false,
-              borderRadius: 0,
-              maxWidth: constraints.maxWidth * (isCompact ? 0.8 : 0.7),
-              messagePadding: EdgeInsets.zero,
-              currentUserContainerColor: Colors.transparent,
-              containerColor: Colors.transparent,
-              userNameBuilder: (user) {
-                return Padding(
-                  padding: const EdgeInsets.only(left: 2.0, bottom: 2.0),
-                  child: Text(
-                    user.getFullName(),
-                    style: context.textTheme.muted.copyWith(fontSize: 12.0),
-                  ),
-                );
-              },
-              messageTextBuilder: (message, _, __) {
-                final colors = context.colorScheme;
-                final chatTokens = context.chatTheme;
-                final self = message.user.id == user.id;
-                final textColor =
-                    self ? colors.primaryForeground : colors.foreground;
-                final timestampColor = chatTokens.timestamp;
-                final iconFamily = message.status!.icon.fontFamily;
-                final iconPackage = message.status!.icon.fontPackage;
-                const iconSize = 12.0;
-                return DecoratedBox(
-                  decoration: _bubbleDecoration(
-                    background: self ? colors.primary : colors.card,
-                    borderColor:
-                        self ? Colors.transparent : chatTokens.recvEdge,
-                  ),
-                  child: Padding(
-                    padding: _bubblePadding,
-                    child: DynamicInlineText(
-                      key: ValueKey(message.createdAt.microsecondsSinceEpoch),
-                      text: TextSpan(
-                        text: message.text,
-                        style: context.textTheme.small.copyWith(
-                          color: textColor,
-                        ),
-                      ),
-                      details: [
-                        TextSpan(
-                          text:
-                              '${message.createdAt.hour.toString().padLeft(2, '0')}:'
-                              '${message.createdAt.minute.toString().padLeft(2, '0')}',
-                          style: context.textTheme.muted.copyWith(
-                            color: self
-                                ? colors.primaryForeground
-                                : timestampColor,
-                            fontSize: iconSize,
-                          ),
-                        ),
-                        if (self)
-                          TextSpan(
-                            text: String.fromCharCode(
-                              message.status!.icon.codePoint,
-                            ),
-                            style: TextStyle(
-                              color: colors.primaryForeground,
-                              fontSize: iconSize,
-                              fontFamily: iconFamily,
-                              package: iconPackage,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _GuestChatHeader(
+            contact: _axiUser,
+            spacing: _guestHeaderSpacing,
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final maxBubbleWidth = _bubbleMaxWidth(constraints.maxWidth);
+                return ListView.builder(
+                  controller: _scrollController,
+                  reverse: true,
+                  padding:
+                      const EdgeInsets.only(bottom: _guestListBottomPadding),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final message = _messages[index];
+                    final previous = index + 1 < _messages.length
+                        ? _messages[index + 1]
+                        : null;
+                    final next = index == 0 ? null : _messages[index - 1];
+                    return _GuestMessageBubble(
+                      message: message,
+                      previous: previous,
+                      next: next,
+                      selfUserId: _selfUser.id,
+                      maxWidth: maxBubbleWidth,
+                      topSpacing: _guestBubbleTopSpacing,
+                      bottomSpacing: _guestBubbleBottomSpacing,
+                      statusIconSize: _guestStatusIconSize,
+                    );
+                  },
                 );
               },
             ),
-            inputOptions: InputOptions(
-              sendOnEnter: true,
-              alwaysShowSend: true,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              _chatHorizontalPadding,
+              12,
+              _chatHorizontalPadding,
+              16,
+            ),
+            child: ChatCutoutComposer(
+              controller: _textController,
               focusNode: _focusNode,
-              textController: _textController,
-              sendButtonBuilder: (send) => ShadIconButton.ghost(
-                onPressed: send,
-                icon: const Icon(
-                  Icons.send,
-                  size: 24,
+              hintText: 'Send a message',
+              onSend: _handleSend,
+              actions: _composerAccessories(canSend: _composerHasText),
+              sendEnabled: _composerHasText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestChatHeader extends StatelessWidget {
+  const _GuestChatHeader({
+    required this.contact,
+    required this.spacing,
+  });
+
+  final ChatUser contact;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final title = contact.firstName?.isNotEmpty == true
+        ? contact.firstName!
+        : contact.id;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _chatHorizontalPadding,
+        vertical: 14,
+      ),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(
+          bottom: BorderSide(color: colors.border),
+        ),
+      ),
+      child: Row(
+        children: [
+          AxiAvatar(jid: contact.id),
+          SizedBox(width: spacing),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: context.textTheme.h4.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ).withTapBounce(),
-              inputDecoration: _chatInputDecoration(
-                context,
-                hintText: 'Send a message',
-              ),
-              inputToolbarStyle: BoxDecoration(
-                color: context.colorScheme.background,
-                border: Border(
-                  top: BorderSide(color: context.colorScheme.border),
-                ),
-              ),
-              inputToolbarMargin: EdgeInsets.zero,
-              leading: [
-                ShadPopover(
-                  controller: _emojiPopoverController,
-                  child: ShadIconButton.ghost(
-                    onPressed: _emojiPopoverController.toggle,
-                    icon: const Icon(
-                      LucideIcons.smile,
-                      size: 24,
-                    ),
-                  ).withTapBounce(),
-                  popover: (context) => EmojiPicker(
-                    textEditingController: _textController,
-                    config: Config(
-                      emojiViewConfig: EmojiViewConfig(
-                        emojiSizeMax: context.read<Policy>().getMaxEmojiSize(),
-                      ),
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  'Guest preview • Encrypted storage',
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
                   ),
                 ),
               ],
             ),
-          );
-        },
+          ),
+          Icon(
+            LucideIcons.lock,
+            color: colors.mutedForeground,
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestMessageBubble extends StatelessWidget {
+  const _GuestMessageBubble({
+    required this.message,
+    required this.previous,
+    required this.next,
+    required this.selfUserId,
+    required this.maxWidth,
+    required this.topSpacing,
+    required this.bottomSpacing,
+    required this.statusIconSize,
+  });
+
+  final ChatMessage message;
+  final ChatMessage? previous;
+  final ChatMessage? next;
+  final String selfUserId;
+  final double maxWidth;
+  final double topSpacing;
+  final double bottomSpacing;
+  final double statusIconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final chatTokens = context.chatTheme;
+    final isSelf = message.user.id == selfUserId;
+    final chainedPrev = _chatMessagesShouldChain(message, previous);
+    final chainedNext = _chatMessagesShouldChain(message, next);
+    final backgroundColor = isSelf ? colors.primary : colors.card;
+    final borderColor = isSelf ? Colors.transparent : chatTokens.recvEdge;
+    final textColor = isSelf ? colors.primaryForeground : colors.foreground;
+    final timestampColor =
+        isSelf ? colors.primaryForeground : chatTokens.timestamp;
+    final statusIcon = message.status?.icon;
+    final timeLabel =
+        '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
+    final inlineText = DynamicInlineText(
+      key: ValueKey(message.createdAt.microsecondsSinceEpoch),
+      text: TextSpan(
+        text: message.text,
+        style: context.textTheme.small.copyWith(
+          color: textColor,
+          height: 1.3,
+        ),
+      ),
+      details: [
+        TextSpan(
+          text: timeLabel,
+          style: context.textTheme.muted.copyWith(
+            color: timestampColor,
+            fontSize: statusIconSize,
+          ),
+        ),
+        if (isSelf && statusIcon != null)
+          TextSpan(
+            text: String.fromCharCode(statusIcon.codePoint),
+            style: TextStyle(
+              color: timestampColor,
+              fontSize: statusIconSize,
+              fontFamily: statusIcon.fontFamily,
+              package: statusIcon.fontPackage,
+            ),
+          ),
+      ],
+    );
+
+    final bubble = ChatBubbleSurface(
+      isSelf: isSelf,
+      backgroundColor: backgroundColor,
+      borderColor: borderColor,
+      borderRadius: _bubbleBorderRadius(
+        isSelf: isSelf,
+        chainedPrevious: chainedPrev,
+        chainedNext: chainedNext,
+      ),
+      shadowOpacity: 0,
+      shadows: _selectedBubbleShadows(colors.primary),
+      bubbleWidthFraction: _cutoutMaxWidthFraction,
+      cornerClearance: _bubbleRadius,
+      body: Padding(
+        padding: _bubblePadding,
+        child: inlineText,
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(
+        top: chainedPrev ? 2 : topSpacing,
+        bottom: chainedNext ? 4 : bottomSpacing,
+        left: _chatHorizontalPadding,
+        right: _chatHorizontalPadding,
+      ),
+      child: Align(
+        alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: bubble,
+        ),
       ),
     );
   }

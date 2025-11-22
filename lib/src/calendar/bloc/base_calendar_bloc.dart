@@ -415,9 +415,10 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     try {
+      final DateTime now = _now();
       final CalendarTask? directTaskEntry = state.model.tasks[event.taskId];
       if (directTaskEntry != null && event.taskId.contains('::')) {
-        final CalendarTask task = directTaskEntry;
+        final CalendarTask task = directTaskEntry.copyWith(modifiedAt: now);
         emit(state.copyWith(isLoading: true, error: null));
         _recordUndoSnapshot();
 
@@ -465,7 +466,7 @@ abstract class BaseCalendarBloc
 
         final updatedTask = taskToDelete.copyWith(
           occurrenceOverrides: overrides,
-          modifiedAt: _now(),
+          modifiedAt: now,
         );
         final updatedModel = state.model.updateTask(updatedTask);
         emitModel(updatedModel, emit, isLoading: false);
@@ -478,6 +479,7 @@ abstract class BaseCalendarBloc
 
       _recordUndoSnapshot();
 
+      final CalendarTask deletedTask = taskToDelete.copyWith(modifiedAt: now);
       final CalendarModel updatedModel = state.model.deleteTask(targetTaskId);
       final remainingSelection =
           state.selectedTaskIds.where((id) => id != targetTaskId).toSet();
@@ -492,7 +494,7 @@ abstract class BaseCalendarBloc
         selectedTaskIds: remainingSelection,
       );
 
-      await onTaskDeleted(taskToDelete);
+      await onTaskDeleted(deletedTask);
     } catch (error) {
       await _handleError(error, 'Failed to delete task', emit);
     }

@@ -20,6 +20,8 @@ class CalendarSyncManager {
   final CalendarModel Function() _readModel;
   final Future<void> Function(CalendarModel) _applyModel;
   final Future<void> Function(String) _sendCalendarMessage;
+  final List<String> _pendingEnvelopes = <String>[];
+  Future<void>? _pendingFlush;
 
   Future<void> onCalendarMessage(CalendarSyncMessage message) async {
     try {
@@ -48,6 +50,7 @@ class CalendarSyncManager {
 
   Future<void> _handleRequestMessage(CalendarSyncMessage message) async {
     try {
+      await _flushPendingEnvelopes();
       final model = _readModel();
       await _sendFullCalendar(model);
     } catch (e) {
@@ -103,16 +106,21 @@ class CalendarSyncManager {
     final messageJson = jsonEncode({
       'calendar_sync': syncMessage.toJson(),
     });
-    await _sendCalendarMessage(messageJson);
+    await _sendEnvelope(
+      messageJson,
+      clearQueueUntil: _pendingEnvelopes.length,
+    );
   }
 
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
+    await _flushPendingEnvelopes();
     await _sendTaskUpdate(task, operation);
   }
 
   /// Request full calendar sync from other devices
   Future<void> requestFullSync() async {
+    await _flushPendingEnvelopes();
     final syncMessage = CalendarSyncMessage.request();
 
     final messageJson = jsonEncode({
@@ -123,6 +131,7 @@ class CalendarSyncManager {
 
   /// Push full calendar to other devices
   Future<void> pushFullSync() async {
+    await _flushPendingEnvelopes();
     final model = _readModel();
     await _sendFullCalendar(model);
   }
@@ -137,7 +146,7 @@ class CalendarSyncManager {
     final messageJson = jsonEncode({
       'calendar_sync': syncMessage.toJson(),
     });
-    await _sendCalendarMessage(messageJson);
+    await _sendEnvelope(messageJson);
   }
 
   String _calculateChecksum(Map<String, dynamic> data) {
@@ -148,19 +157,41 @@ class CalendarSyncManager {
   }
 
   CalendarModel _mergeModels(CalendarModel local, CalendarModel remote) {
-    final mergedTasks = <String, CalendarTask>{...local.tasks};
+    final mergedTasks = <String, CalendarTask>{};
+    final allIds = <String>{
+      ...local.tasks.keys,
+      ...remote.tasks.keys,
+    };
 
-    for (final task in remote.tasks.values) {
-      final localTask = mergedTasks[task.id];
-      if (localTask == null || task.modifiedAt.isAfter(localTask.modifiedAt)) {
-        mergedTasks[task.id] = task;
+    for (final id in allIds) {
+      final localTask = local.tasks[id];
+      final remoteTask = remote.tasks[id];
+
+      if (localTask == null && remoteTask != null) {
+        mergedTasks[id] = remoteTask;
+        continue;
+      }
+
+      if (localTask != null && remoteTask == null) {
+        // Preserve local-only tasks; deletion must be explicit via update ops,
+        // not inferred from wall-clock skew between devices.
+        mergedTasks[id] = localTask;
+        continue;
+      }
+
+      if (localTask != null && remoteTask != null) {
+        mergedTasks[id] = remoteTask.modifiedAt.isAfter(localTask.modifiedAt)
+            ? remoteTask
+            : localTask;
       }
     }
 
-    return local.copyWith(
+    final merged = CalendarModel(
       tasks: mergedTasks,
       lastModified: DateTime.now(),
+      checksum: '',
     );
+    return merged.copyWith(checksum: merged.calculateChecksum());
   }
 
   Future<void> _mergeTask(CalendarTask remoteTask, String operation) async {
@@ -177,13 +208,76 @@ class CalendarSyncManager {
         } else {
           return;
         }
+        break;
       case 'delete':
+        final existing = currentModel.tasks[remoteTask.id];
+        if (existing != null &&
+            existing.modifiedAt.isAfter(remoteTask.modifiedAt)) {
+          return;
+        }
         updatedModel = currentModel.deleteTask(remoteTask.id);
+        break;
       default:
         developer.log('Unknown task operation: $operation');
         return;
     }
 
     await _applyModel(updatedModel);
+  }
+
+  Future<void> _sendEnvelope(
+    String envelope, {
+    int clearQueueUntil = 0,
+  }) async {
+    try {
+      await _flushPendingEnvelopes();
+      await _sendCalendarMessage(envelope);
+      _clearPendingUpTo(clearQueueUntil);
+      if (_pendingEnvelopes.isNotEmpty) {
+        await _flushPendingEnvelopes();
+      }
+    } catch (_) {
+      _pendingEnvelopes.add(envelope);
+      rethrow;
+    }
+  }
+
+  void _clearPendingUpTo(int clearQueueUntil) {
+    if (clearQueueUntil <= 0 || _pendingEnvelopes.isEmpty) {
+      return;
+    }
+    final toClear = clearQueueUntil > _pendingEnvelopes.length
+        ? _pendingEnvelopes.length
+        : clearQueueUntil;
+    if (toClear > 0) {
+      _pendingEnvelopes.removeRange(0, toClear);
+    }
+  }
+
+  Future<void> _flushPendingEnvelopes() async {
+    if (_pendingEnvelopes.isEmpty && _pendingFlush == null) {
+      return;
+    }
+    if (_pendingFlush != null) {
+      await _pendingFlush;
+      if (_pendingEnvelopes.isEmpty) {
+        return;
+      }
+    }
+
+    _pendingFlush = _drainPendingEnvelopes();
+    await _pendingFlush;
+  }
+
+  Future<void> _drainPendingEnvelopes() async {
+    try {
+      while (_pendingEnvelopes.isNotEmpty) {
+        final envelope = _pendingEnvelopes.first;
+        await _sendCalendarMessage(envelope);
+        _pendingEnvelopes.removeAt(0);
+      }
+    } finally {
+      _pendingFlush = null;
+    }
   }
 }

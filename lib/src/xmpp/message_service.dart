@@ -549,6 +549,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
     Message? quotedMessage,
     bool? storeLocally,
+    bool noStore = false,
+    List<mox.StanzaHandlerExtension> extraExtensions = const [],
     ChatType chatType = ChatType.chat,
   }) async {
     final senderJid = myJid;
@@ -564,6 +566,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       chatJid: jid,
       body: text,
       encryptionProtocol: encryptionProtocol,
+      noStore: noStore,
       quoting: quotedMessage?.stanzaID,
       timestamp: DateTime.timestamp(),
     );
@@ -593,6 +596,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         message.toMox(
           quotedBody: quotedMessage?.body,
           quotedJid: quotedJid,
+          extraExtensions: extraExtensions,
         ),
       );
       if (!sent) {
@@ -1529,6 +1533,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
           (owner as XmppService)._calendarSyncCallback != null) {
         try {
           await (owner as XmppService)._calendarSyncCallback!(syncMessage);
+          unawaited(_acknowledgeMessage(event));
         } catch (e) {
           _log.warning('Calendar sync callback failed: $e');
         }
