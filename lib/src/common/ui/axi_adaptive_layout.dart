@@ -10,11 +10,13 @@ class AxiAdaptiveLayout extends StatelessWidget {
     required this.primaryChild,
     required this.secondaryChild,
     this.invertPriority = false,
+    this.horizontalGap = 0,
   });
 
   final Widget primaryChild;
   final Widget secondaryChild;
   final bool invertPriority;
+  final double horizontalGap;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +76,10 @@ class AxiAdaptiveLayout extends StatelessWidget {
                   child: primaryChild,
                 ),
               ),
+              if (horizontalGap > 0)
+                SizedBox(
+                  width: horizontalGap,
+                ),
               Flexible(
                 flex: secondaryFlex,
                 child: Center(

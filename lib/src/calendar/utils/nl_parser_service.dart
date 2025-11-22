@@ -13,16 +13,22 @@ import 'schedule_parser.dart';
 /// initialization and provides a convenient async entry point for UI
 /// and bloc layers.
 class NlScheduleParserService {
-  NlScheduleParserService({NlAdapterConfig config = const NlAdapterConfig()})
-      : _config = config {
+  NlScheduleParserService({
+    NlAdapterConfig config = const NlAdapterConfig(),
+    FutureOr<void> Function()? initializeTimezones,
+  })  : _config = config,
+        _initializeTimezones =
+            initializeTimezones ?? tzdata.initializeTimeZones {
     _adapter = NlScheduleAdapter(config: config);
   }
 
   final NlAdapterConfig _config;
   late final NlScheduleAdapter _adapter;
+  final FutureOr<void> Function() _initializeTimezones;
 
   static Completer<void>? _timezoneInit;
   static const String _fallbackTz = 'UTC';
+  static final tz.Location _fallbackLocation = tz.UTC;
 
   NlAdapterConfig get config => _config;
 
@@ -44,9 +50,11 @@ class NlScheduleParserService {
   Future<ParseContext> _parseContext() async {
     await _ensureTimezonesInitialized();
     final tzName = await _resolveTimezone();
+    final location = _lookupLocation(tzName);
+    tz.setLocalLocation(location);
     return ParseContext(
-      location: _lookupLocation(tzName),
-      timezoneId: tzName,
+      location: location,
+      timezoneId: location.name,
     );
   }
 
@@ -61,13 +69,18 @@ class NlScheduleParserService {
     final completer = Completer<void>();
     _timezoneInit = completer;
     try {
-      tzdata.initializeTimeZones();
+      _initializeTimezones();
       completer.complete();
     } catch (error, stackTrace) {
+      debugPrint(
+        'Timezone initialization failed, falling back to $_fallbackTz: $error',
+      );
+      _timezoneInit = null;
       completer.completeError(error, stackTrace);
-      rethrow;
     }
-    return completer.future;
+    return completer.future.catchError((_) {
+      // Swallow init errors so parsing can proceed with the fallback timezone.
+    });
   }
 
   Future<String> _resolveTimezone() async {
@@ -81,8 +94,10 @@ class NlScheduleParserService {
   tz.Location _lookupLocation(String tzName) {
     try {
       return tz.getLocation(tzName);
-    } catch (_) {
-      return tz.getLocation(_fallbackTz);
+    } catch (error) {
+      debugPrint(
+          'Timezone lookup failed, falling back to $_fallbackTz: $error');
+      return _fallbackLocation;
     }
   }
 }
