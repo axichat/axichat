@@ -13,21 +13,17 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../models/calendar_task.dart';
 import '../utils/calendar_transfer_service.dart';
-import '../utils/responsive_helper.dart';
 import '../utils/time_formatter.dart';
 import 'calendar_transfer_sheet.dart';
 import 'feedback_system.dart';
-import 'widgets/task_form_section.dart';
 
 class SyncControls extends StatefulWidget {
   const SyncControls({
     super.key,
     required this.state,
-    this.compact = false,
   });
 
   final CalendarState state;
-  final bool compact;
 
   @override
   State<SyncControls> createState() => _SyncControlsState();
@@ -48,30 +44,13 @@ class _SyncControlsState extends State<SyncControls> {
           previous.syncError != current.syncError ||
           previous.lastSyncTime != current.lastSyncTime,
       listener: _handleSyncState,
-      child: ResponsiveHelper.layoutBuilder(
-        context,
-        mobile: _MobileSyncControls(
-          state: state,
-          onRequestSync: () => _requestSync(context),
-          onPushSync: () => _pushSync(context),
-          onExportCalendar: _handleExportAll,
-          onImportCalendar: _handleImportCalendar,
-        ),
-        tablet: _TabletSyncControls(
-          state: state,
-          onRequestSync: () => _requestSync(context),
-          onPushSync: () => _pushSync(context),
-          onExportCalendar: _handleExportAll,
-          onImportCalendar: _handleImportCalendar,
-        ),
-        desktop: _DesktopSyncControls(
-          state: state,
-          onRequestSync: () => _requestSync(context),
-          onPushSync: () => _pushSync(context),
-          onExportCalendar: _handleExportAll,
-          onImportCalendar: _handleImportCalendar,
-          onRetrySync: () => _retrySync(context),
-        ),
+      child: _InlineSyncControls(
+        state: state,
+        onRequestSync: () => _requestSync(context),
+        onPushSync: () => _pushSync(context),
+        onExportCalendar: _handleExportAll,
+        onImportCalendar: _handleImportCalendar,
+        onRetrySync: () => _retrySync(context),
       ),
     );
   }
@@ -264,119 +243,8 @@ class SyncStatusIndicator extends StatelessWidget {
   }
 }
 
-class _MobileSyncControls extends StatelessWidget {
-  const _MobileSyncControls({
-    required this.state,
-    required this.onRequestSync,
-    required this.onPushSync,
-    required this.onExportCalendar,
-    required this.onImportCalendar,
-  });
-
-  final CalendarState state;
-  final VoidCallback onRequestSync;
-  final VoidCallback onPushSync;
-  final VoidCallback onExportCalendar;
-  final VoidCallback onImportCalendar;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = state.isSyncing;
-    final hasTasks = state.model.tasks.isNotEmpty;
-
-    return Wrap(
-      spacing: calendarGutterSm,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SyncStatusIndicator(state: state),
-        _CompactSyncButton(
-          label: 'Request',
-          icon: LucideIcons.cloudDownload,
-          onPressed: disabled ? null : onRequestSync,
-        ),
-        _CompactSyncButton(
-          label: 'Push',
-          icon: LucideIcons.cloudUpload,
-          onPressed: disabled ? null : onPushSync,
-        ),
-        _TransferMenuButton(
-          hasTasks: hasTasks,
-          onExport: onExportCalendar,
-          onImport: onImportCalendar,
-        ),
-      ],
-    );
-  }
-}
-
-class _TabletSyncControls extends StatelessWidget {
-  const _TabletSyncControls({
-    required this.state,
-    required this.onRequestSync,
-    required this.onPushSync,
-    required this.onExportCalendar,
-    required this.onImportCalendar,
-  });
-
-  final CalendarState state;
-  final VoidCallback onRequestSync;
-  final VoidCallback onPushSync;
-  final VoidCallback onExportCalendar;
-  final VoidCallback onImportCalendar;
-
-  @override
-  Widget build(BuildContext context) {
-    final spec = ResponsiveHelper.spec(context);
-    final hasTasks = state.model.tasks.isNotEmpty;
-
-    return Container(
-      padding: spec.contentPadding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SyncStatusSummary(state: state),
-          const SizedBox(height: calendarGutterMd),
-          Row(
-            children: [
-              Expanded(
-                child: TaskSecondaryButton(
-                  label: 'Request',
-                  icon: LucideIcons.cloudDownload,
-                  onPressed: state.isSyncing ? null : onRequestSync,
-                ),
-              ),
-              const SizedBox(width: calendarGutterSm),
-              Expanded(
-                child: TaskSecondaryButton(
-                  label: 'Push',
-                  icon: LucideIcons.cloudUpload,
-                  onPressed: state.isSyncing ? null : onPushSync,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _TransferMenuButton(
-              hasTasks: hasTasks,
-              onExport: onExportCalendar,
-              onImport: onImportCalendar,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DesktopSyncControls extends StatelessWidget {
-  const _DesktopSyncControls({
+class _InlineSyncControls extends StatelessWidget {
+  const _InlineSyncControls({
     required this.state,
     required this.onRequestSync,
     required this.onPushSync,
@@ -394,152 +262,79 @@ class _DesktopSyncControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spec = ResponsiveHelper.spec(context);
+    final disabled = state.isSyncing;
     final hasTasks = state.model.tasks.isNotEmpty;
-
-    return Container(
-      padding: spec.contentPadding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Sync & Transfer',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: calendarGutterMd),
-          _SyncStatusSummary(state: state),
-          const SizedBox(height: calendarGutterLg),
-          TaskPrimaryButton(
-            label: 'Request Update',
-            icon: LucideIcons.cloudDownload,
-            onPressed: state.isSyncing ? null : onRequestSync,
-            isBusy: state.isSyncing,
-          ),
-          const SizedBox(height: calendarGutterSm),
-          TaskSecondaryButton(
-            label: 'Push Update',
-            icon: LucideIcons.cloudUpload,
-            onPressed: state.isSyncing ? null : onPushSync,
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _TransferMenuButton(
-              hasTasks: hasTasks,
-              onExport: onExportCalendar,
-              onImport: onImportCalendar,
-            ),
-          ),
-          if (state.syncError != null) ...[
-            const SizedBox(height: calendarGutterMd),
-            _SyncErrorDisplay(message: state.syncError ?? 'Unknown error'),
-            const SizedBox(height: calendarGutterSm),
-            TaskSecondaryButton(
-              label: 'Retry',
-              icon: LucideIcons.refreshCcw,
-              onPressed: onRetrySync,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SyncStatusSummary extends StatelessWidget {
-  const _SyncStatusSummary({
-    required this.state,
-  });
-
-  final CalendarState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final statusText = _statusTextFor(state);
     final lastSyncTime = state.lastSyncTime;
+    final statusColor = _statusColorFor(context, state);
 
-    return Row(
+    return Wrap(
+      spacing: calendarGutterSm,
+      runSpacing: calendarInsetMd,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SyncStatusIndicator(state: state),
-        const SizedBox(width: calendarGutterSm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _statusText,
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: _statusColor(context),
-                ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SyncStatusIndicator(state: state),
+            const SizedBox(width: 6),
+            Text(
+              statusText,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: statusColor,
               ),
-              if (lastSyncTime != null && !state.isSyncing)
-                Text(
-                  'Last synced: ${TimeFormatter.formatSyncTime(lastSyncTime)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: textTheme.bodySmall?.color,
-                  ),
-                ),
+            ),
+            if (lastSyncTime != null && !state.isSyncing) ...[
+              const SizedBox(width: 6),
+              Text(
+                TimeFormatter.formatSyncTime(lastSyncTime),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).hintColor),
+              ),
             ],
-          ),
+          ],
         ),
+        _CompactSyncButton(
+          label: 'Request',
+          icon: LucideIcons.cloudDownload,
+          onPressed: disabled ? null : onRequestSync,
+        ),
+        _CompactSyncButton(
+          label: 'Push',
+          icon: LucideIcons.cloudUpload,
+          onPressed: disabled ? null : onPushSync,
+        ),
+        _TransferMenuButton(
+          hasTasks: hasTasks,
+          onExport: onExportCalendar,
+          onImport: onImportCalendar,
+        ),
+        if (state.syncError != null)
+          _CompactSyncButton(
+            label: 'Retry',
+            icon: LucideIcons.refreshCcw,
+            onPressed: onRetrySync,
+          ),
       ],
     );
   }
-
-  String get _statusText {
-    if (state.isSyncing) return 'Syncing...';
-    if (state.syncError != null) return 'Sync failed';
-    if (state.lastSyncTime != null) return 'Synced';
-    return 'Idle';
-  }
-
-  Color _statusColor(BuildContext context) {
-    if (state.isSyncing) return Colors.orange;
-    if (state.syncError != null) return Colors.red;
-    if (state.lastSyncTime != null) return Colors.green;
-    return Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
-  }
 }
 
-class _SyncErrorDisplay extends StatelessWidget {
-  const _SyncErrorDisplay({
-    required this.message,
-  });
+String _statusTextFor(CalendarState state) {
+  if (state.isSyncing) return 'Syncing...';
+  if (state.syncError != null) return 'Sync failed';
+  if (state.lastSyncTime != null) return 'Synced';
+  return 'Idle';
+}
 
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: calendarPaddingMd,
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red),
-          const SizedBox(width: calendarGutterSm),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+Color _statusColorFor(BuildContext context, CalendarState state) {
+  if (state.isSyncing) return Colors.orange;
+  if (state.syncError != null) return Colors.red;
+  if (state.lastSyncTime != null) return Colors.green;
+  return Theme.of(context).textTheme.bodyMedium?.color ?? Colors.grey;
 }
 
 class _TransferMenuButton extends StatelessWidget {

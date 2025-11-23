@@ -9,7 +9,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class ChatsFilterButton extends StatefulWidget {
   const ChatsFilterButton({
     super.key,
+    this.compact = false,
   });
+
+  final bool compact;
 
   @override
   State<ChatsFilterButton> createState() => _ChatsFilterButtonState();
@@ -43,6 +46,33 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
       (filter) => filter.id == selectedFilterId,
       orElse: () => chatsSearchFilters.first,
     );
+    Widget trigger;
+    if (widget.compact) {
+      trigger = ShadButton.secondary(
+        size: ShadButtonSize.sm,
+        onPressed: popoverController.toggle,
+        child: const Icon(LucideIcons.listFilter, size: 16),
+      ).withTapBounce();
+      trigger = AxiTooltip(
+        builder: (_) => Text('Filter • ${selectedFilter.label}'),
+        child: trigger,
+      );
+    } else {
+      trigger = AxiTooltip(
+        builder: (_) => Text('Filter • ${selectedFilter.label}'),
+        child: ShadButton.secondary(
+          onPressed: popoverController.toggle,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(LucideIcons.listFilter, size: 16),
+              const SizedBox(width: 8),
+              Text(selectedFilter.label),
+            ],
+          ),
+        ).withTapBounce(),
+      );
+    }
     return ShadPopover(
       controller: popoverController,
       popover: (context) {
@@ -91,21 +121,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
           ),
         );
       },
-      child: AxiTooltip(
-        builder: (_) => Text('Filter • ${selectedFilter.label}'),
-        child: ShadButton.secondary(
-          size: ShadButtonSize.sm,
-          onPressed: popoverController.toggle,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(LucideIcons.listFilter, size: 16),
-              const SizedBox(width: 8),
-              Text(selectedFilter.label),
-            ],
-          ),
-        ).withTapBounce(),
-      ),
+      child: trigger,
     );
   }
 }

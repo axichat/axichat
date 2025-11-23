@@ -40,8 +40,8 @@ class CalendarNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
-    final double horizontalPadding =
-        sidebarVisible ? spec.gridHorizontalPadding : 0;
+    final double basePadding = sidebarVisible ? spec.gridHorizontalPadding : 0;
+    final double horizontalPadding = math.max(16, basePadding);
     final bool isCompact = ResponsiveHelper.isCompact(context);
     final CalendarView viewMode = state.viewMode;
     final bool showBackToWeek = !isCompact && viewMode == CalendarView.day;

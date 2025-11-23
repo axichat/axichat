@@ -81,6 +81,10 @@ class DeltaEventConsumer {
       _log.warning('Incoming event for missing msgId=$msgId');
       return;
     }
+    if (_isDeltaStockMessage(msg)) {
+      _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
+      return;
+    }
     final chat = await _ensureChat(chatId);
     final stanzaId = _stanzaId(msg.id);
     final db = await _db();
@@ -132,6 +136,10 @@ class DeltaEventConsumer {
   Future<void> _hydrateMessage(int chatId, int msgId) async {
     final msg = await _context.getMessage(msgId);
     if (msg == null) return;
+    if (_isDeltaStockMessage(msg)) {
+      _log.finer('Dropping Delta stock message msgId=$msgId chatId=$chatId');
+      return;
+    }
     final chat = await _ensureChat(chatId);
     final stanzaId = _stanzaId(msg.id);
     final db = await _db();
@@ -346,6 +354,44 @@ class DeltaEventConsumer {
     }
     return sanitized;
   }
+
+  Future<void> purgeDeltaStockMessages() async {
+    final db = await _db();
+    final chats = await db.getChats(start: 0, end: 0);
+    for (final chat in chats) {
+      if (chat.deltaChatId == null) continue;
+      final messages = await db.getAllMessagesForChat(chat.jid);
+      for (final message in messages) {
+        if (await _isDeltaStockStoredMessage(db, message)) {
+          _log.finer(
+            'Removing stored Delta stock message ${message.stanzaID}'
+            ' for chat ${chat.jid}',
+          );
+          await db.deleteMessage(message.stanzaID);
+        }
+      }
+    }
+  }
+
+  bool _isDeltaStockMessage(DeltaMessage msg) =>
+      _matchesDeltaWelcomeText(msg.text) ||
+      _matchesDeltaWelcomeAttachment(msg.fileName) ||
+      _matchesDeltaWelcomeAttachment(msg.filePath);
+
+  Future<bool> _isDeltaStockStoredMessage(
+    XmppDatabase db,
+    Message message,
+  ) async {
+    if (message.deltaChatId == null) return false;
+    if (_matchesDeltaWelcomeText(message.body)) {
+      return true;
+    }
+    final metadataId = message.fileMetadataID;
+    if (metadataId == null) return false;
+    final metadata = await db.getFileMetadata(metadataId);
+    return _matchesDeltaWelcomeAttachment(metadata?.filename) ||
+        _matchesDeltaWelcomeAttachment(metadata?.path);
+  }
 }
 
 String _normalizedAddress(String? address, int chatId) {
@@ -365,4 +411,20 @@ String _stripSubjectHeader(String body, String subject) {
   var remainder = trimmedBody.substring(subject.length);
   remainder = remainder.replaceFirst(RegExp(r'^\s+'), '');
   return remainder;
+}
+
+bool _matchesDeltaWelcomeText(String? text) {
+  if (text == null) return false;
+  final normalized = text.toLowerCase();
+  return normalized.contains('welcome to delta chat') ||
+      normalized.contains('welcome to deltachat') ||
+      normalized.contains('generated locally by your delta chat app');
+}
+
+bool _matchesDeltaWelcomeAttachment(String? value) {
+  if (value == null) return false;
+  final normalized = value.toLowerCase();
+  return normalized.contains('welcome-image') ||
+      normalized.endsWith('welcome.jpg') ||
+      normalized.contains('core-welcome');
 }

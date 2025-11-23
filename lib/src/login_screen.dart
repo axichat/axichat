@@ -31,6 +31,11 @@ enum _AuthFlow {
   signup,
 }
 
+const double _primaryPanePadding = 12.0;
+const double _secondaryPaneGutter = 0.0;
+const double _unsplitHorizontalMargin = 16.0;
+const double _guestPaneMaxWidth = 720.0;
+
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   var _login = true;
@@ -207,6 +212,12 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final showProgressBar = _activeFlow != null || _signupButtonLoading;
+    final size = MediaQuery.sizeOf(context);
+    final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
+        size.width >= smallScreen;
+    final containerMargin = allowSplitView
+        ? EdgeInsets.zero
+        : const EdgeInsets.symmetric(horizontal: _unsplitHorizontalMargin);
     return BlocListener<AuthenticationCubit, AuthenticationState>(
       listener: (context, state) => _handleAuthState(state),
       child: Scaffold(
@@ -227,7 +238,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               Expanded(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                  margin: containerMargin,
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: colors.background,
@@ -236,7 +247,15 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   child: AxiAdaptiveLayout(
-                    panePadding: const EdgeInsets.symmetric(horizontal: 12.0),
+                    primaryFlex: 4,
+                    secondaryFlex: 6,
+                    primaryPadding: const EdgeInsets.symmetric(
+                      horizontal: _primaryPanePadding,
+                    ),
+                    secondaryPadding:
+                        const EdgeInsets.only(left: _secondaryPaneGutter),
+                    centerSecondary: false,
+                    secondaryAlignment: Alignment.topLeft,
                     primaryChild: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 480),
@@ -286,20 +305,6 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              // NOTE: Keep the morphing auth toggle below for later polish.
-                              /*
-                            _AuthModeToggle(
-                              loginSelected: _login,
-                              duration:
-                                  context.read<SettingsCubit>().animationDuration,
-                              onChanged: (isLogin) {
-                                if (_login == isLogin) return;
-                                setState(() {
-                                  _login = isLogin;
-                                });
-                              },
-                            ),
-                            */
                               AnimatedSwitcher(
                                 duration: context
                                     .read<SettingsCubit>()

@@ -9,6 +9,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/generate_random.dart';
@@ -57,6 +58,10 @@ sealed class XmppException implements Exception {
 }
 
 final class XmppAuthenticationException extends XmppException {}
+
+final class XmppNetworkException extends XmppException {
+  XmppNetworkException([super.wrapped]);
+}
 
 final class XmppUserNotFoundException extends XmppException {
   XmppUserNotFoundException([super.wrapped]);
@@ -155,6 +160,14 @@ abstract interface class XmppBase {
   Future<String?> connect({
     required String jid,
     required String password,
+    required String databasePrefix,
+    required String databasePassphrase,
+    bool preHashed = false,
+    bool reuseExistingSession = false,
+  });
+
+  Future<void> resumeOfflineSession({
+    required String jid,
     required String databasePrefix,
     required String databasePassphrase,
   });
@@ -388,12 +401,16 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
     bool preHashed = false,
+    bool reuseExistingSession = false,
+    EndpointOverride? endpoint,
   }) async {
-    if (_synchronousConnection.isCompleted) {
+    if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
     }
-    if (needsReset) await _reset();
-    _synchronousConnection.complete();
+    if (needsReset && !reuseExistingSession) await _reset();
+    if (!_synchronousConnection.isCompleted) {
+      _synchronousConnection.complete();
+    }
 
     return await deferToError(
       defer: _reset,
@@ -407,6 +424,7 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
+            endpoint: endpoint,
           );
         } on ForegroundServiceUnavailableException catch (error, stackTrace) {
           if (!attemptForeground) {
@@ -441,10 +459,44 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
+            endpoint: endpoint,
           );
         }
       },
     );
+  }
+
+  @override
+  Future<void> resumeOfflineSession({
+    required String jid,
+    required String databasePrefix,
+    required String databasePassphrase,
+  }) async {
+    final targetJid = mox.JID.fromString(jid);
+    final activeJid = _myJid?.toBare().toString();
+    if (activeJid != null && activeJid != targetJid.toBare().toString()) {
+      await _reset();
+    }
+    if (_eventSubscription != null || _messageSubscription != null) {
+      await _reset();
+    }
+    if (!_synchronousConnection.isCompleted) {
+      _synchronousConnection.complete();
+    }
+    _connection = await _connectionFactory();
+    _myJid = targetJid;
+    if (!_stateStore.isCompleted) {
+      _stateStore.complete(
+        await _stateStoreFactory(databasePrefix, databasePassphrase),
+      );
+    }
+    if (!_database.isCompleted) {
+      _database.complete(
+        await _databaseFactory(databasePrefix, databasePassphrase),
+      );
+    }
+    _connectionState = ConnectionState.notConnected;
+    _connectivityStream.add(_connectionState);
   }
 
   Future<String?> _establishConnection({
@@ -453,6 +505,7 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
     required bool preHashed,
+    EndpointOverride? endpoint,
   }) async {
     _xmppLogger.info(
       foregroundServiceActive.value
@@ -472,6 +525,10 @@ class XmppService extends XmppBase
     }
 
     _myJid = mox.JID.fromString(jid);
+    final bareDomain = _myJid?.toBare().toString().split('@').last;
+    if (bareDomain != null && endpoint != null) {
+      serverLookup[bareDomain] = IOEndpoint(endpoint.host, endpoint.port);
+    }
 
     await _initConnection(preHashed: preHashed);
 
@@ -490,7 +547,12 @@ class XmppService extends XmppBase
       waitUntilLogin: true,
     );
 
-    if (result.isType<mox.XmppError>() || !result.get<bool>()) {
+    if (result.isType<mox.XmppError>()) {
+      final error = result.get<mox.XmppError>();
+      _xmppLogger.info('Login failed with network error: $error');
+      throw XmppNetworkException();
+    }
+    if (!result.get<bool>()) {
       _xmppLogger.info('Login rejected by server.');
       throw XmppAuthenticationException();
     }

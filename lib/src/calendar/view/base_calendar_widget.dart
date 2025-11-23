@@ -73,7 +73,6 @@ abstract class BaseCalendarWidgetState<W extends BaseCalendarWidget<T>,
                 ? null
                 : _CalendarSyncButton(
                     state: state,
-                    compact: true,
                   ),
           ),
           body: Container(
@@ -400,18 +399,13 @@ class _CalendarViewModeSelector extends StatelessWidget {
 class _CalendarSyncButton extends StatelessWidget {
   const _CalendarSyncButton({
     required this.state,
-    this.compact = false,
   });
 
   final CalendarState state;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return SyncControls(
-      state: state,
-      compact: compact,
-    );
+    return SyncControls(state: state);
   }
 }
 

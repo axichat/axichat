@@ -100,6 +100,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageDisplayed(String stanzaID);
 
+  Future<void> deleteMessage(String stanzaID);
+
   Future<void> createMessageShare({
     required MessageShareData share,
     required List<MessageParticipantData> participants,
@@ -560,6 +562,10 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
                   table.senderJid.equals(senderJid),
             ))
           .get();
+
+  Future<void> deleteByMessage(String messageId) =>
+      (delete(reactions)..where((table) => table.messageID.equals(messageId)))
+          .go();
 
   Future<void> deleteByMessageAndSender({
     required String messageId,
@@ -1299,10 +1305,18 @@ WHERE subject_token IS NOT NULL
         trust = trustData?.state;
         trusted = trustData?.trusted;
       }
-      await messagesAccessor.insertOne(message.copyWith(
+      final messageToSave = message.copyWith(
         trust: trust,
         trusted: trusted,
-      ));
+      );
+      await messagesAccessor.insertOne(messageToSave);
+      final persisted = await messagesAccessor.selectOne(message.stanzaID);
+      if (persisted == null) {
+        _log.warning(
+          'Message insert ignored for ${message.stanzaID}; retrying with upsert',
+        );
+        await into(messages).insertOnConflictUpdate(messageToSave);
+      }
     });
   }
 
@@ -1415,6 +1429,35 @@ WHERE subject_token IS NOT NULL
       stanzaID: Value(stanzaID),
       displayed: const Value(true),
     ));
+  }
+
+  @override
+  Future<void> deleteMessage(String stanzaID) async {
+    _log.info('Deleting message: $stanzaID...');
+    final existing = await messagesAccessor.selectOne(stanzaID);
+    if (existing == null) return;
+    await transaction(() async {
+      await reactionsAccessor.deleteByMessage(stanzaID);
+      await messagesAccessor.deleteOne(stanzaID);
+      final chat = await getChat(existing.chatJid);
+      if (chat == null) return;
+      final lastMessage = await getLastMessageForChat(chat.jid);
+      final String? trimmedBody = existing.body?.trim();
+      final bool hasBody = trimmedBody?.isNotEmpty == true;
+      final bool hasAttachment = existing.fileMetadataID?.isNotEmpty == true;
+      final bool shouldDecrementUnread =
+          (hasBody || hasAttachment) && !existing.displayed;
+      final int nextUnreadCount = lastMessage == null
+          ? 0
+          : shouldDecrementUnread && chat.unreadCount > 0
+              ? chat.unreadCount - 1
+              : chat.unreadCount;
+      await chatsAccessor.updateOne(chat.copyWith(
+        lastMessage: lastMessage?.body,
+        lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
+        unreadCount: nextUnreadCount,
+      ));
+    });
   }
 
   @override
