@@ -136,6 +136,7 @@ class EmailDeltaTransport implements ChatTransport {
   @override
   Future<void> start() async {
     await _ensureContextReady();
+    await _eventConsumer?.purgeDeltaStockMessages();
     if (_accounts != null) {
       await _accounts!.startIo();
     } else {

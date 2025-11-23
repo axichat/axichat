@@ -15,6 +15,7 @@ import 'package:axichat/src/chat/view/chat.dart' as chat_view;
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
+import 'package:axichat/src/chats/view/chats_add_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -53,6 +54,8 @@ const _draftsSearchFilters = [
   HomeSearchFilter(id: 'attachments', label: 'With attachments'),
 ];
 
+const double _secondaryPaneGutter = 0.0;
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -70,14 +73,21 @@ class HomeScreen extends StatelessWidget {
 
     final tabs = <HomeTabEntry>[
       if (isChat)
-        const HomeTabEntry(
+        HomeTabEntry(
           id: HomeTab.chats,
           label: 'Chats',
-          body: ChatsList(key: PageStorageKey('Chats')),
-          fab: Row(
+          body: ChatsList(
+            key: const PageStorageKey('Chats'),
+            showCalendarShortcut: navPlacement != NavPlacement.rail,
+          ),
+          fab: const Wrap(
             spacing: 8,
-            mainAxisSize: MainAxisSize.min,
-            children: [ChatsFilterButton(), DraftButton()],
+            runSpacing: 8,
+            children: [
+              ChatsFilterButton(),
+              DraftButton(),
+              ChatsAddButton(),
+            ],
           ),
           searchFilters: chatsSearchFilters,
         ),
@@ -122,6 +132,10 @@ class HomeScreen extends StatelessWidget {
         final openJid = context.watch<ChatsCubit?>()?.state.openJid;
         final openCalendar =
             context.watch<ChatsCubit?>()?.state.openCalendar ?? false;
+        Widget constrainSecondary(Widget child) => Align(
+              alignment: Alignment.topLeft,
+              child: child,
+            );
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (_, __) {
@@ -139,63 +153,118 @@ class HomeScreen extends StatelessWidget {
               Expanded(
                 child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                   builder: (context, state) {
+                    final navRail = navPlacement == NavPlacement.rail
+                        ? _HomeNavigationRail(
+                            tabs: tabs,
+                            selectedIndex:
+                                DefaultTabController.maybeOf(context)?.index ??
+                                    0,
+                            onDestinationSelected: (index) {
+                              final controller =
+                                  DefaultTabController.maybeOf(context);
+                              if (controller == null) return;
+                              controller.animateTo(index);
+                            },
+                            calendarAvailable: hasCalendarBloc,
+                            calendarActive: openCalendar,
+                            onCalendarSelected: () {
+                              final chatsCubit = context.read<ChatsCubit?>();
+                              chatsCubit?.toggleCalendar();
+                            },
+                          )
+                        : null;
+
+                    Widget chatLayout() => Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (navRail != null) navRail,
+                            Expanded(
+                              child: AxiAdaptiveLayout(
+                                invertPriority: openJid != null,
+                                centerSecondary: false,
+                                centerPrimary: false,
+                                primaryAlignment: Alignment.topLeft,
+                                secondaryAlignment: Alignment.topLeft,
+                                secondaryPadding: const EdgeInsets.only(
+                                  left: _secondaryPaneGutter,
+                                ),
+                                primaryChild: Nexus(
+                                  tabs: tabs,
+                                  navPlacement: navPlacement,
+                                  showNavigationRail:
+                                      navPlacement != NavPlacement.rail,
+                                ),
+                                secondaryChild: openJid == null
+                                    ? constrainSecondary(
+                                        const chat_view.GuestChat(),
+                                      )
+                                    : constrainSecondary(
+                                        MultiBlocProvider(
+                                          providers: [
+                                            BlocProvider(
+                                              key: Key(openJid),
+                                              create: (context) => ChatBloc(
+                                                jid: openJid,
+                                                messageService:
+                                                    context.read<XmppService>(),
+                                                chatsService:
+                                                    context.read<XmppService>(),
+                                                mucService:
+                                                    context.read<XmppService>(),
+                                                notificationService:
+                                                    context.read<
+                                                        NotificationService>(),
+                                                emailService: context
+                                                    .read<EmailService>(),
+                                                omemoService: isOmemo
+                                                    ? context
+                                                            .read<XmppService>()
+                                                        as OmemoService
+                                                    : null,
+                                              ),
+                                            ),
+                                            BlocProvider(
+                                              create: (context) =>
+                                                  ChatSearchCubit(
+                                                jid: openJid,
+                                                messageService:
+                                                    context.read<XmppService>(),
+                                              ),
+                                            ),
+                                            /* Verification flow temporarily disabled
+                                            if (isOmemo)
+                                              BlocProvider(
+                                                create: (context) =>
+                                                    VerificationCubit(
+                                                  jid: openJid,
+                                                  omemoService:
+                                                      context.read<XmppService>()
+                                                          as OmemoService,
+                                                ),
+                                              ),
+                                            */
+                                          ],
+                                          child: const chat_view.Chat(),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        );
+
+                    Widget calendarLayout() => Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (navRail != null) navRail,
+                            const Expanded(
+                              child: CalendarWidget(),
+                            ),
+                          ],
+                        );
+
                     return SafeArea(
                       top: state is ConnectivityConnected,
-                      child: AxiAdaptiveLayout(
-                        invertPriority: openJid != null || openCalendar,
-                        primaryChild: Nexus(
-                          tabs: tabs,
-                          navPlacement: navPlacement,
-                        ),
-                        secondaryChild: openCalendar
-                            ? const CalendarWidget()
-                            : openJid == null
-                                ? const chat_view.GuestChat()
-                                : MultiBlocProvider(
-                                    providers: [
-                                      BlocProvider(
-                                        key: Key(openJid),
-                                        create: (context) => ChatBloc(
-                                          jid: openJid,
-                                          messageService:
-                                              context.read<XmppService>(),
-                                          chatsService:
-                                              context.read<XmppService>(),
-                                          mucService:
-                                              context.read<XmppService>(),
-                                          notificationService: context
-                                              .read<NotificationService>(),
-                                          emailService:
-                                              context.read<EmailService>(),
-                                          omemoService: isOmemo
-                                              ? context.read<XmppService>()
-                                                  as OmemoService
-                                              : null,
-                                        ),
-                                      ),
-                                      BlocProvider(
-                                        create: (context) => ChatSearchCubit(
-                                          jid: openJid,
-                                          messageService:
-                                              context.read<XmppService>(),
-                                        ),
-                                      ),
-                                      /* Verification flow temporarily disabled
-                                      if (isOmemo)
-                                        BlocProvider(
-                                          create: (context) =>
-                                              VerificationCubit(
-                                            jid: openJid,
-                                            omemoService:
-                                                context.read<XmppService>()
-                                                    as OmemoService,
-                                          ),
-                                        ),
-                                      */
-                                    ],
-                                    child: const chat_view.Chat(),
-                                  ),
-                      ),
+                      child: openCalendar ? calendarLayout() : chatLayout(),
                     );
                   },
                 ),
@@ -357,10 +426,12 @@ class Nexus extends StatefulWidget {
     super.key,
     required this.tabs,
     required this.navPlacement,
+    this.showNavigationRail = true,
   });
 
   final List<HomeTabEntry> tabs;
   final NavPlacement navPlacement;
+  final bool showNavigationRail;
 
   @override
   State<Nexus> createState() => _NexusState();
@@ -421,6 +492,7 @@ class _NexusState extends State<Nexus> {
       mainAxisSize: MainAxisSize.min,
       children: [
         AxiAppBar(
+          showTitle: widget.navPlacement != NavPlacement.rail,
           trailing: _SearchToggleButton(
             active: searchActive,
             onPressed: searchState == null
@@ -524,7 +596,7 @@ class _NexusState extends State<Nexus> {
       ],
     );
 
-    if (widget.navPlacement == NavPlacement.rail) {
+    if (widget.navPlacement == NavPlacement.rail && widget.showNavigationRail) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -532,6 +604,9 @@ class _NexusState extends State<Nexus> {
             tabs: widget.tabs,
             selectedIndex: _tabController?.index ?? 0,
             onDestinationSelected: _handleRailSelection,
+            calendarAvailable: false,
+            calendarActive: false,
+            onCalendarSelected: () {},
           ),
           Expanded(child: column),
         ],
@@ -617,77 +692,61 @@ class _HomeNavigationRail extends StatelessWidget {
     required this.tabs,
     required this.selectedIndex,
     required this.onDestinationSelected,
+    required this.calendarAvailable,
+    required this.calendarActive,
+    required this.onCalendarSelected,
   });
 
   final List<HomeTabEntry> tabs;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final bool calendarAvailable;
+  final bool calendarActive;
+  final VoidCallback onCalendarSelected;
 
   @override
   Widget build(BuildContext context) {
-    final mediaWidth = MediaQuery.sizeOf(context).width;
-    final extendRail = mediaWidth >= largeScreen;
     final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
     if (tabs.isEmpty) {
       return const SizedBox.shrink();
     }
-    final safeIndex = selectedIndex.clamp(0, tabs.length - 1).toInt();
-    return SafeArea(
-      child: NavigationRail(
-        selectedIndex: safeIndex,
-        groupAlignment: -1,
-        extended: extendRail,
-        labelType: extendRail
-            ? NavigationRailLabelType.none
-            : NavigationRailLabelType.all,
-        onDestinationSelected: onDestinationSelected,
-        destinations: [
-          for (final tab in tabs)
-            NavigationRailDestination(
-              icon: _RailTabIcon(
-                tab: tab.id,
-                inviteCount: inviteCount,
-                selected: false,
-              ),
-              selectedIcon: _RailTabIcon(
-                tab: tab.id,
-                inviteCount: inviteCount,
-                selected: true,
-              ),
-              label: Text(tab.label),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RailTabIcon extends StatelessWidget {
-  const _RailTabIcon({
-    required this.tab,
-    required this.inviteCount,
-    required this.selected,
-  });
-
-  final HomeTab tab;
-  final int inviteCount;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? Theme.of(context).colorScheme.primary : null;
-    Widget icon = Icon(
-      _tabIcon(tab),
-      color: color,
-    );
-    if (tab == HomeTab.invites && inviteCount > 0) {
-      icon = AxiBadge(
-        count: inviteCount,
-        offset: const Offset(8, -6),
-        child: icon,
+    final baseDestinations = tabs
+        .map(
+          (tab) => AxiRailDestination(
+            icon: _tabIcon(tab.id),
+            label: tab.label,
+            badgeCount: tab.id == HomeTab.invites ? inviteCount : 0,
+          ),
+        )
+        .toList();
+    if (calendarAvailable) {
+      baseDestinations.add(
+        const AxiRailDestination(
+          icon: LucideIcons.calendarClock,
+          label: 'Calendar',
+        ),
       );
     }
-    return icon;
+    final safeIndex = selectedIndex.clamp(0, tabs.length - 1).toInt();
+    final selectedRailIndex =
+        calendarActive ? baseDestinations.length - 1 : safeIndex;
+    return SafeArea(
+      left: false,
+      right: false,
+      child: AxiNavigationRail(
+        destinations: baseDestinations,
+        selectedIndex: selectedRailIndex,
+        onDestinationSelected: (index) {
+          final calendarIndex =
+              calendarAvailable ? baseDestinations.length - 1 : null;
+          if (calendarIndex != null && index == calendarIndex) {
+            onCalendarSelected();
+            return;
+          }
+          onDestinationSelected(index);
+        },
+      ),
+    );
   }
 }
 

@@ -23,6 +23,7 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chat/view/message_text_parser.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
@@ -179,6 +180,8 @@ const _reactionQuickChoices = [
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
+const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
+const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
 const _messageListTailSpacer = 36.0;
 
 class _MessageFilterOption {
@@ -1879,10 +1882,7 @@ class _ChatState extends State<Chat> {
                 final emailSelfJid = emailService.selfSenderJid;
                 final chatEntity = state.chat;
                 final jid = chatEntity?.jid;
-                final avatarIdentifier = chatEntity?.avatarIdentifier;
-                final supportsEmail = chatEntity?.supportsEmail ?? false;
                 final isEmailChat = chatEntity?.deltaChatId != null;
-                final isAxiCompatible = chatEntity?.isAxiContact ?? false;
                 final rosterContacts = context.watch<RosterCubit>().contacts;
                 final isDefaultEmail =
                     chatEntity?.defaultTransport.isEmail ?? false;
@@ -1905,10 +1905,6 @@ class _ChatState extends State<Chat> {
                 );
                 final retryReport = retryEntry?.value;
                 final retryShareId = retryEntry?.key;
-                final showCompatibilityBadge = supportsEmail && isAxiCompatible;
-                final Widget? avatarBadge = showCompatibilityBadge
-                    ? const AxiCompatibilityBadge(compact: true)
-                    : null;
                 final availableChats =
                     (context.watch<ChatsCubit?>()?.state.items ??
                             const <chat_models.Chat>[])
@@ -2012,40 +2008,10 @@ class _ChatState extends State<Chat> {
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 40.0,
-                                        maxHeight: 40.0,
-                                      ),
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          Positioned.fill(
-                                            child: (item == null)
-                                                ? AxiAvatar(
-                                                    jid:
-                                                        avatarIdentifier ?? jid,
-                                                  )
-                                                : AxiAvatar(
-                                                    jid: item.jid,
-                                                    subscription:
-                                                        item.subscription,
-                                                    // Presence for contacts is
-                                                    // intentionally hidden in
-                                                    // the UI to avoid showing
-                                                    // unreliable server data.
-                                                    presence: null,
-                                                    status: null,
-                                                  ),
-                                          ),
-                                          if (avatarBadge != null)
-                                            Positioned(
-                                              right: -6,
-                                              bottom: -4,
-                                              child: avatarBadge,
-                                            ),
-                                        ],
-                                      ),
+                                    TransportAwareAvatar(
+                                      chat: chatEntity!,
+                                      size: 40,
+                                      badgeOffset: const Offset(-6, -4),
                                     ),
                                     Padding(
                                       padding: const EdgeInsets.symmetric(
@@ -4825,7 +4791,10 @@ class _ChatComposerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    const horizontalPadding = _composerHorizontalInset;
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontalPadding = width >= smallScreen
+        ? _desktopComposerHorizontalInset
+        : _composerHorizontalInset;
     final hasQueuedAttachments = pendingAttachments.any(
       (attachment) => attachment.status == PendingAttachmentStatus.queued,
     );
@@ -4868,7 +4837,7 @@ class _ChatComposerSection extends StatelessWidget {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 horizontalPadding,
                 18,
                 horizontalPadding,
@@ -6173,39 +6142,52 @@ class _GuestScriptEntry {
 class _GuestChatState extends State<GuestChat> {
   static const double _guestHeaderSpacing = 12;
   static const double _guestStatusIconSize = 13;
-  static const double _guestListBottomPadding = 12;
   static const double _guestBubbleTopSpacing = 8;
   static const double _guestBubbleBottomSpacing = 12;
 
   static const List<_GuestScriptEntry> _previewScript = [
     _GuestScriptEntry(
-      text: 'Welcome to Axichat. This is how your chats look and feel.',
-      offset: Duration(minutes: 12),
+      text: 'Welcome to Axichat—chat, email, and calendar in one place.',
+      offset: Duration(minutes: 15),
       isSelf: false,
       status: MessageStatus.read,
     ),
     _GuestScriptEntry(
-      text: 'Looks clean. Does it work without Google or Firebase?',
-      offset: Duration(minutes: 10),
+      text: 'Looks clean. Can I message people who aren\'t on Axichat?',
+      offset: Duration(minutes: 12),
       isSelf: true,
       status: MessageStatus.read,
     ),
     _GuestScriptEntry(
       text:
-          'Yep. We ship XMPP + SMTP with SQLCipher storage, no trackers or big tech dependencies.',
-      offset: Duration(minutes: 9),
+          'Yep—send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.',
+      offset: Duration(minutes: 10),
       isSelf: false,
       status: MessageStatus.read,
     ),
     _GuestScriptEntry(
-      text: 'Nice. I want end-to-end encryption too.',
-      offset: Duration(minutes: 7),
+      text: 'Does it work offline or in guest mode?',
+      offset: Duration(minutes: 8),
       isSelf: true,
       status: MessageStatus.read,
     ),
     _GuestScriptEntry(
-      text: 'Start a chat to keep messages synced across devices.',
-      offset: Duration(minutes: 6),
+      text:
+          'Yes—offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.',
+      offset: Duration(minutes: 7),
+      isSelf: false,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text: 'How does it help me keep up with everything?',
+      offset: Duration(minutes: 5),
+      isSelf: true,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text:
+          'Our calendar does natural language scheduling, Eisenhower Matrix triage, drag-and-drop, and reminders so you can focus on what matters.',
+      offset: Duration(minutes: 4),
       isSelf: false,
       status: MessageStatus.read,
     ),
@@ -6339,6 +6321,11 @@ class _GuestChatState extends State<GuestChat> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isDesktopWidth = size.width >= smallScreen;
+    final guestHorizontalPadding = isDesktopWidth
+        ? _guestDesktopHorizontalPadding
+        : _chatHorizontalPadding;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -6353,6 +6340,7 @@ class _GuestChatState extends State<GuestChat> {
           _GuestChatHeader(
             contact: _axiUser,
             spacing: _guestHeaderSpacing,
+            horizontalPadding: guestHorizontalPadding,
           ),
           Expanded(
             child: LayoutBuilder(
@@ -6361,8 +6349,7 @@ class _GuestChatState extends State<GuestChat> {
                 return ListView.builder(
                   controller: _scrollController,
                   reverse: true,
-                  padding:
-                      const EdgeInsets.only(bottom: _guestListBottomPadding),
+                  padding: EdgeInsets.zero,
                   itemCount: _messages.length,
                   itemBuilder: (context, index) {
                     final message = _messages[index];
@@ -6379,6 +6366,7 @@ class _GuestChatState extends State<GuestChat> {
                       topSpacing: _guestBubbleTopSpacing,
                       bottomSpacing: _guestBubbleBottomSpacing,
                       statusIconSize: _guestStatusIconSize,
+                      horizontalPadding: guestHorizontalPadding,
                     );
                   },
                 );
@@ -6395,10 +6383,10 @@ class _GuestChatState extends State<GuestChat> {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  _chatHorizontalPadding,
+                padding: EdgeInsets.fromLTRB(
+                  guestHorizontalPadding,
                   12,
-                  _chatHorizontalPadding,
+                  guestHorizontalPadding,
                   0,
                 ),
                 child: ChatCutoutComposer(
@@ -6422,10 +6410,12 @@ class _GuestChatHeader extends StatelessWidget {
   const _GuestChatHeader({
     required this.contact,
     required this.spacing,
+    required this.horizontalPadding,
   });
 
   final ChatUser contact;
   final double spacing;
+  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -6433,8 +6423,8 @@ class _GuestChatHeader extends StatelessWidget {
     final title =
         contact.firstName?.isNotEmpty == true ? contact.firstName! : contact.id;
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: _chatHorizontalPadding,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
         vertical: 14,
       ),
       decoration: BoxDecoration(
@@ -6484,6 +6474,7 @@ class _GuestMessageBubble extends StatelessWidget {
     required this.topSpacing,
     required this.bottomSpacing,
     required this.statusIconSize,
+    required this.horizontalPadding,
   });
 
   final ChatMessage message;
@@ -6494,6 +6485,7 @@ class _GuestMessageBubble extends StatelessWidget {
   final double topSpacing;
   final double bottomSpacing;
   final double statusIconSize;
+  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -6563,8 +6555,8 @@ class _GuestMessageBubble extends StatelessWidget {
       padding: EdgeInsets.only(
         top: chainedPrev ? 2 : topSpacing,
         bottom: chainedNext ? 4 : bottomSpacing,
-        left: _chatHorizontalPadding,
-        right: _chatHorizontalPadding,
+        left: horizontalPadding,
+        right: horizontalPadding,
       ),
       child: Align(
         alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,

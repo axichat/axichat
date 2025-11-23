@@ -9,6 +9,7 @@ import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -25,7 +26,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatsList extends StatelessWidget {
-  const ChatsList({super.key});
+  const ChatsList({
+    super.key,
+    this.showCalendarShortcut = true,
+  });
+
+  final bool showCalendarShortcut;
 
   @override
   Widget build(BuildContext context) {
@@ -92,9 +98,9 @@ class ChatsList extends StatelessWidget {
             body = ColoredBox(
               color: context.colorScheme.background,
               child: ListView.builder(
-                itemCount: visibleItems.length + 1,
+                itemCount: visibleItems.length + (showCalendarShortcut ? 1 : 0),
                 itemBuilder: (context, index) {
-                  if (index == 0) {
+                  if (showCalendarShortcut && index == 0) {
                     final calendarBloc = context.read<CalendarBloc?>();
                     final tile = calendarBloc == null
                         ? CalendarTile(
@@ -119,7 +125,8 @@ class ChatsList extends StatelessWidget {
                     return ListItemPadding(child: tile);
                   }
 
-                  final item = visibleItems[index - 1];
+                  final offset = showCalendarShortcut ? 1 : 0;
+                  final item = visibleItems[index - offset];
                   return ListItemPadding(
                     child: ChatListTile(item: item),
                   );
@@ -356,7 +363,7 @@ class _ChatListTileState extends State<ChatListTile> {
       paintSurface: false,
       contentPadding: tilePadding,
       tapBounce: false,
-      leading: _TransportAwareAvatar(chat: item),
+      leading: TransportAwareAvatar(chat: item),
       title: item.title,
       subtitle: subtitleText,
       subtitlePlaceholder: 'No messages',
@@ -868,57 +875,6 @@ double _measureUnreadBadgeHeight(BuildContext context, int count) {
   return textPainter.height +
       (scaled(_unreadBadgeVerticalPadding) * 2) +
       (scaled(_unreadBadgeBorderWidth) * 2);
-}
-
-class _TransportAwareAvatar extends StatelessWidget {
-  const _TransportAwareAvatar({required this.chat});
-
-  final Chat chat;
-
-  @override
-  Widget build(BuildContext context) {
-    final avatarIdentifier = chat.avatarIdentifier;
-    final supportsEmail = chat.transport.isEmail;
-    final isAxiCompatible = chat.isAxiContact;
-    final shouldLabelAll = !supportsEmail && isAxiCompatible;
-    Widget badge;
-    if (supportsEmail && isAxiCompatible) {
-      badge = const AxiCompatibilityBadge(compact: true);
-    } else if (supportsEmail) {
-      badge = const AxiTransportChip(
-        transport: MessageTransport.email,
-        compact: true,
-      );
-    } else {
-      badge = AxiTransportChip(
-        transport: MessageTransport.xmpp,
-        compact: true,
-        label: shouldLabelAll ? 'All' : null,
-      );
-    }
-    const avatarSize = 46.0;
-    return SizedBox(
-      width: avatarSize + 6,
-      height: avatarSize + 12,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: AxiAvatar(
-              jid: avatarIdentifier,
-              shape: AxiAvatarShape.circle,
-              size: avatarSize,
-            ),
-          ),
-          Positioned(
-            right: -6,
-            bottom: -4,
-            child: badge,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _UnreadBadge extends StatelessWidget {

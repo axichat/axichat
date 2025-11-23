@@ -23,6 +23,14 @@ const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 
+Uri _registrationMatcher() => any<Uri>(
+      that: predicate((Uri uri) => uri.path.contains('/register/new/')),
+    );
+
+Uri _deleteMatcher() => any<Uri>(
+      that: predicate((Uri uri) => uri.path.contains('/register/delete/')),
+    );
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -53,6 +61,10 @@ void main() {
         .thenAnswer((_) => const Stream.empty());
     when(() => mockXmppService.connectivityStream)
         .thenAnswer((_) => const Stream<ConnectionState>.empty());
+    when(() => mockXmppService.connected).thenReturn(false);
+    when(() => mockXmppService.databasesInitialized).thenReturn(false);
+    when(() => mockXmppService.myJid).thenReturn(null);
+    when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
 
     pendingSignupRollbacksPayload = null;
     completedSignupAccountsPayload = null;
@@ -99,6 +111,9 @@ void main() {
     when(() => mockCredentialStore.close()).thenAnswer((_) async {});
 
     when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
+    when(() => mockEmailService.setForegroundKeepalive(any()))
+        .thenAnswer((_) async {});
+    when(() => mockEmailService.setClientState(any())).thenAnswer((_) async {});
 
     when(
       () => mockProvisioningClient.createAccount(
@@ -149,12 +164,11 @@ void main() {
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given valid credentials with "remember me", saves them and emits [AuthenticationComplete].',
+      'Given valid credentials, saves them and emits [AuthenticationComplete].',
       build: () => bloc,
       act: (bloc) => bloc.login(
         username: validUsername,
         password: validPassword,
-        rememberMe: true,
       ),
       expect: () => [
         const AuthenticationLogInInProgress(),
@@ -168,12 +182,16 @@ void main() {
         verify(() => mockCredentialStore.write(
               key: bloc.passwordStorageKey,
               value: saltedPassword,
+            )).called(1);
+        verify(() => mockCredentialStore.write(
+              key: bloc.passwordPreHashedStorageKey,
+              value: true.toString(),
             )).called(1);
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given valid credentials without "remember me", doesn\'t save them and emits [AuthenticationComplete].',
+      'Given valid credentials with rememberMe false, still saves them and emits [AuthenticationComplete].',
       build: () => bloc,
       act: (bloc) => bloc.login(
         username: validUsername,
@@ -184,14 +202,18 @@ void main() {
         const AuthenticationComplete(),
       ],
       verify: (bloc) {
-        verifyNever(() => mockCredentialStore.write(
+        verify(() => mockCredentialStore.write(
               key: bloc.jidStorageKey,
               value: validJid,
-            ));
-        verifyNever(() => mockCredentialStore.write(
+            )).called(1);
+        verify(() => mockCredentialStore.write(
               key: bloc.passwordStorageKey,
               value: saltedPassword,
-            ));
+            )).called(1);
+        verify(() => mockCredentialStore.write(
+              key: bloc.passwordPreHashedStorageKey,
+              value: true.toString(),
+            )).called(1);
       },
     );
 
@@ -388,11 +410,7 @@ void main() {
 
     setUp(() {
       when(() => mockHttpClient.post(
-            AuthenticationCubit.registrationUrl,
-            body: any(named: 'body'),
-          )).thenAnswer((_) async => Response('', 200));
-      when(() => mockHttpClient.post(
-            AuthenticationCubit.deleteAccountUrl,
+            any(that: isA<Uri>()),
             body: any(named: 'body'),
           )).thenAnswer((_) async => Response('', 200));
       when(() => mockXmppService.connect(
@@ -427,7 +445,7 @@ void main() {
       ],
       verify: (bloc) {
         verify(() => mockHttpClient.post(
-              AuthenticationCubit.deleteAccountUrl,
+              _deleteMatcher(),
               body: any(named: 'body'),
             )).called(1);
       },
@@ -437,7 +455,7 @@ void main() {
       'Queues the rollback when delete request fails.',
       setUp: () {
         when(() => mockHttpClient.post(
-              AuthenticationCubit.deleteAccountUrl,
+              _deleteMatcher(),
               body: any(named: 'body'),
             )).thenThrow(Exception('offline'));
       },
@@ -473,7 +491,7 @@ void main() {
       setUp: () {
         completedSignupAccountsPayload = jsonEncode([validJid.toLowerCase()]);
         when(() => mockHttpClient.post(
-              AuthenticationCubit.registrationUrl,
+              _registrationMatcher(),
               body: any(named: 'body'),
             )).thenAnswer((_) async => Response('', 200));
         when(() => mockXmppService.connect(
@@ -505,7 +523,7 @@ void main() {
       ],
       verify: (_) {
         verifyNever(() => mockHttpClient.post(
-              AuthenticationCubit.deleteAccountUrl,
+              _deleteMatcher(),
               body: any(named: 'body'),
             ));
         expect(pendingSignupRollbacksPayload, isNull);
@@ -524,7 +542,7 @@ void main() {
           },
         ]);
         when(() => mockHttpClient.post(
-              AuthenticationCubit.deleteAccountUrl,
+              _deleteMatcher(),
               body: any(named: 'body'),
             )).thenAnswer((_) async => Response('fail', 500));
       },
@@ -551,7 +569,7 @@ void main() {
       ],
       verify: (bloc) {
         verifyNever(() => mockHttpClient.post(
-              AuthenticationCubit.registrationUrl,
+              _registrationMatcher(),
               body: any(named: 'body'),
             ));
       },
@@ -603,7 +621,7 @@ void main() {
   group('unregister', () {
     setUp(() {
       when(() => mockHttpClient.post(
-            AuthenticationCubit.deleteAccountUrl,
+            _deleteMatcher(),
             body: any(named: 'body'),
           )).thenAnswer((_) async => Response('', 200));
       when(() => mockCredentialStore.deleteAll(burn: any(named: 'burn')))
@@ -657,7 +675,7 @@ void main() {
           ),
         ).called(1);
         verify(() => mockHttpClient.post(
-              AuthenticationCubit.deleteAccountUrl,
+              _deleteMatcher(),
               body: any(named: 'body'),
             )).called(1);
         verify(() => mockXmppService.burn()).called(1);

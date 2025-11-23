@@ -1,110 +1,201 @@
 part of 'authentication_cubit.dart';
 
 sealed class AuthenticationState extends Equatable {
-  const AuthenticationState({this.server = 'axi.im'});
+  const AuthenticationState({this.config = const EndpointConfig()});
 
-  final String server;
+  final EndpointConfig config;
+
+  String get server => config.domain;
+
+  AuthenticationState copyWithConfig(EndpointConfig config);
+
+  @override
+  List<Object?> get props => [config];
 }
 
 final class AuthenticationNone extends AuthenticationState {
-  const AuthenticationNone();
+  const AuthenticationNone({super.config});
 
   @override
-  List<Object?> get props => [];
+  AuthenticationNone copyWithConfig(EndpointConfig config) =>
+      AuthenticationNone(config: config);
+
+  @override
+  List<Object?> get props => [config];
 }
 
 abstract final class AuthenticationInProgress extends AuthenticationState {
-  const AuthenticationInProgress();
+  const AuthenticationInProgress({super.config});
 
   @override
-  List<Object?> get props => [];
+  AuthenticationInProgress copyWithConfig(EndpointConfig config);
 }
 
 final class AuthenticationLogInInProgress extends AuthenticationInProgress {
-  const AuthenticationLogInInProgress({this.fromSignup = false});
+  const AuthenticationLogInInProgress({
+    this.fromSignup = false,
+    super.config,
+  });
 
   final bool fromSignup;
 
   @override
-  List<Object?> get props => [fromSignup];
+  AuthenticationLogInInProgress copyWithConfig(EndpointConfig config) =>
+      AuthenticationLogInInProgress(fromSignup: fromSignup, config: config);
+
+  @override
+  List<Object?> get props => [config, fromSignup];
 }
 
 final class AuthenticationSignUpInProgress extends AuthenticationInProgress {
-  const AuthenticationSignUpInProgress({this.fromSubmission = true});
+  const AuthenticationSignUpInProgress({
+    this.fromSubmission = true,
+    super.config,
+  });
 
   final bool fromSubmission;
 
   @override
-  List<Object?> get props => [fromSubmission];
+  AuthenticationSignUpInProgress copyWithConfig(EndpointConfig config) =>
+      AuthenticationSignUpInProgress(
+        fromSubmission: fromSubmission,
+        config: config,
+      );
+
+  @override
+  List<Object?> get props => [config, fromSubmission];
 }
 
 final class AuthenticationComplete extends AuthenticationState {
-  const AuthenticationComplete();
+  const AuthenticationComplete({super.config});
 
   @override
-  List<Object?> get props => [];
+  AuthenticationComplete copyWithConfig(EndpointConfig config) =>
+      AuthenticationComplete(config: config);
+
+  @override
+  List<Object?> get props => [config];
 }
 
 final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {
-  const AuthenticationPasswordChangeSuccess(this.successText);
+  const AuthenticationPasswordChangeSuccess(
+    this.successText, {
+    super.config,
+  });
 
   final String successText;
 
   @override
-  List<Object?> get props => [successText];
+  AuthenticationPasswordChangeSuccess copyWithConfig(EndpointConfig config) =>
+      AuthenticationPasswordChangeSuccess(
+        successText,
+        config: config,
+      );
+
+  @override
+  List<Object?> get props => [config, successText];
 }
 
 final class AuthenticationPasswordChangeInProgress
     extends AuthenticationComplete {
-  const AuthenticationPasswordChangeInProgress();
+  const AuthenticationPasswordChangeInProgress({super.config});
 
   @override
-  List<Object?> get props => [];
+  AuthenticationPasswordChangeInProgress copyWithConfig(
+    EndpointConfig config,
+  ) =>
+      AuthenticationPasswordChangeInProgress(config: config);
+
+  @override
+  List<Object?> get props => [config];
 }
 
 final class AuthenticationPasswordChangeFailure extends AuthenticationComplete {
-  const AuthenticationPasswordChangeFailure(this.errorText);
+  const AuthenticationPasswordChangeFailure(
+    this.errorText, {
+    super.config,
+  });
 
   final String errorText;
 
   @override
-  List<Object?> get props => [errorText];
+  AuthenticationPasswordChangeFailure copyWithConfig(EndpointConfig config) =>
+      AuthenticationPasswordChangeFailure(
+        errorText,
+        config: config,
+      );
+
+  @override
+  List<Object?> get props => [config, errorText];
 }
 
 final class AuthenticationUnregisterInProgress extends AuthenticationComplete {
-  const AuthenticationUnregisterInProgress();
+  const AuthenticationUnregisterInProgress({super.config});
 
   @override
-  List<Object?> get props => [];
+  AuthenticationUnregisterInProgress copyWithConfig(EndpointConfig config) =>
+      AuthenticationUnregisterInProgress(config: config);
+
+  @override
+  List<Object?> get props => [config];
 }
 
 final class AuthenticationUnregisterFailure extends AuthenticationComplete {
-  const AuthenticationUnregisterFailure(this.errorText);
+  const AuthenticationUnregisterFailure(
+    this.errorText, {
+    super.config,
+  });
 
   final String errorText;
 
   @override
-  List<Object?> get props => [errorText];
+  AuthenticationUnregisterFailure copyWithConfig(EndpointConfig config) =>
+      AuthenticationUnregisterFailure(
+        errorText,
+        config: config,
+      );
+
+  @override
+  List<Object?> get props => [config, errorText];
 }
 
 final class AuthenticationFailure extends AuthenticationState {
-  const AuthenticationFailure(this.errorText);
+  const AuthenticationFailure(
+    this.errorText, {
+    super.config,
+  });
 
   final String errorText;
 
   @override
-  List<String> get props => [errorText];
+  AuthenticationFailure copyWithConfig(EndpointConfig config) =>
+      AuthenticationFailure(
+        errorText,
+        config: config,
+      );
+
+  @override
+  List<Object?> get props => [config, errorText];
 }
 
 final class AuthenticationSignupFailure extends AuthenticationState {
   const AuthenticationSignupFailure(
     this.errorText, {
     this.isCleanupBlocked = false,
+    super.config,
   });
 
   final String errorText;
   final bool isCleanupBlocked;
 
   @override
-  List<Object?> get props => [errorText, isCleanupBlocked];
+  AuthenticationSignupFailure copyWithConfig(EndpointConfig config) =>
+      AuthenticationSignupFailure(
+        errorText,
+        isCleanupBlocked: isCleanupBlocked,
+        config: config,
+      );
+
+  @override
+  List<Object?> get props => [config, errorText, isCleanupBlocked];
 }

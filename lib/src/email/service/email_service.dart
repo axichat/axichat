@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:logging/logging.dart';
 import 'package:delta_ffi/delta_safe.dart';
 
@@ -29,11 +30,11 @@ const _connectivityConnectedMin = 4000;
 const _connectivityWorkingMin = 3000;
 const _connectivityConnectingMin = 2000;
 const _defaultImapPort = '993';
-const _defaultSmtpPort = '465';
 const _defaultSecurityMode = 'ssl';
 
 typedef EmailConnectionConfigBuilder = Map<String, String> Function(
   String address,
+  EndpointConfig config,
 );
 
 class EmailAccount {
@@ -79,8 +80,10 @@ class EmailService {
     NotificationService? notificationService,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
+    EndpointConfig endpointConfig = const EndpointConfig(),
   })  : _credentialStore = credentialStore,
         _databaseBuilder = databaseBuilder,
+        _endpointConfig = endpointConfig,
         _transport = transport ??
             EmailDeltaTransport(
               databaseBuilder: databaseBuilder,
@@ -103,6 +106,7 @@ class EmailService {
   final EmailDeltaTransport _transport;
   final EmailConnectionConfigBuilder _connectionConfigBuilder;
   final Logger _log;
+  EndpointConfig _endpointConfig;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
   final EmailBlockingService blocking;
@@ -135,6 +139,13 @@ class EmailService {
       StreamController<EmailSyncState>.broadcast(sync: true);
   EmailSyncState _syncState = const EmailSyncState.ready();
   bool _channelOverflowRecoveryInProgress = false;
+
+  void updateEndpointConfig(EndpointConfig config) {
+    _endpointConfig = config;
+  }
+
+  Map<String, String> _buildConnectionConfig(String address) =>
+      _connectionConfigBuilder(address, _endpointConfig);
 
   EmailAccount? get activeAccount => _activeAccount;
 
@@ -300,7 +311,7 @@ class EmailService {
           address: normalizedAddress,
           password: normalizedPassword,
           displayName: displayName,
-          additional: _connectionConfigBuilder(normalizedAddress),
+          additional: _buildConnectionConfig(normalizedAddress),
         );
         await _credentialStore.write(key: provisionedKey, value: 'true');
         await _credentialStore.write(key: legacyProvisionedKey, value: 'true');
@@ -1371,8 +1382,11 @@ class EmailService {
     return '$local@$domain';
   }
 
-  static Map<String, String> _defaultConnectionConfig(String address) {
-    final host = _connectionHostFor(address);
+  static Map<String, String> _defaultConnectionConfig(
+    String address,
+    EndpointConfig config,
+  ) {
+    final host = _connectionHostFor(address, config);
     final localPart = _localPartFromAddress(address) ?? address;
     return {
       'mail_server': host,
@@ -1380,15 +1394,22 @@ class EmailService {
       'mail_security': _defaultSecurityMode,
       'mail_user': localPart,
       'send_server': host,
-      'send_port': _defaultSmtpPort,
+      'send_port': (config.smtpPort > 0
+              ? config.smtpPort
+              : EndpointConfig.defaultSmtpPort)
+          .toString(),
       'send_security': _defaultSecurityMode,
       'send_user': localPart,
     };
   }
 
-  static String _connectionHostFor(String address) {
-    final domain = _domainFromAddress(address);
-    if (domain == null || domain.isEmpty) {
+  static String _connectionHostFor(String address, EndpointConfig config) {
+    final customHost = config.smtpHost?.trim();
+    if (customHost != null && customHost.isNotEmpty) {
+      return customHost;
+    }
+    final domain = _domainFromAddress(address) ?? config.domain;
+    if (domain.isEmpty) {
       throw StateError('Unable to resolve email server host for $address');
     }
     return domain;

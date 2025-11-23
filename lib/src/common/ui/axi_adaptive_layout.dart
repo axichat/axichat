@@ -11,12 +11,31 @@ class AxiAdaptiveLayout extends StatelessWidget {
     required this.secondaryChild,
     this.invertPriority = false,
     this.panePadding = EdgeInsets.zero,
-  });
+    this.centerPrimary = true,
+    this.centerSecondary = true,
+    this.primaryAlignment,
+    this.secondaryAlignment,
+    int primaryFlex = 4,
+    int secondaryFlex = 6,
+    EdgeInsets? primaryPadding,
+    EdgeInsets? secondaryPadding,
+  })  : primaryFlex = primaryFlex,
+        secondaryFlex = secondaryFlex,
+        primaryPadding = primaryPadding ?? panePadding,
+        secondaryPadding = secondaryPadding ?? panePadding;
 
   final Widget primaryChild;
   final Widget secondaryChild;
   final bool invertPriority;
   final EdgeInsets panePadding;
+  final EdgeInsets primaryPadding;
+  final EdgeInsets secondaryPadding;
+  final bool centerPrimary;
+  final bool centerSecondary;
+  final Alignment? primaryAlignment;
+  final Alignment? secondaryAlignment;
+  final int primaryFlex;
+  final int secondaryFlex;
 
   @override
   Widget build(BuildContext context) {
@@ -58,29 +77,34 @@ class AxiAdaptiveLayout extends StatelessWidget {
           );
         }
 
-        final primaryFlex = switch (constraints.maxWidth) {
-          < smallScreen => 10,
-          < mediumScreen => 5,
-          < largeScreen => 4,
-          _ => 3,
-        };
-        final secondaryFlex = 10 - primaryFlex;
-        Widget wrap(Widget child) => Padding(
-              padding: panePadding,
-              child: Center(child: child),
-            );
+        final primaryAlign = primaryAlignment ??
+            (centerPrimary ? Alignment.center : Alignment.topLeft);
+        final secondaryAlign = secondaryAlignment ??
+            (centerSecondary ? Alignment.center : Alignment.topLeft);
         return ConstrainedBox(
           constraints: constraints,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Flexible(
+              Expanded(
                 flex: primaryFlex,
-                child: wrap(primaryChild),
+                child: Padding(
+                  padding: primaryPadding,
+                  child: Align(
+                    alignment: primaryAlign,
+                    child: primaryChild,
+                  ),
+                ),
               ),
-              Flexible(
+              Expanded(
                 flex: secondaryFlex,
-                child: wrap(secondaryChild),
+                child: Padding(
+                  padding: secondaryPadding,
+                  child: Align(
+                    alignment: secondaryAlign,
+                    child: secondaryChild,
+                  ),
+                ),
               ),
             ],
           ),

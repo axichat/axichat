@@ -450,6 +450,14 @@ extension ChatTransportExtension on Chat {
 
 extension ChatAvatarExtension on Chat {
   String get avatarIdentifier {
+    final displayName = contactDisplayName?.trim();
+    if (displayName?.isNotEmpty == true) {
+      return displayName!;
+    }
+    final titleText = title.trim();
+    if (titleText.isNotEmpty) {
+      return titleText;
+    }
     final address = emailAddress?.trim();
     if (address?.isNotEmpty == true) {
       return address!;

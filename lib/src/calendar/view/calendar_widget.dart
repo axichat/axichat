@@ -102,14 +102,7 @@ class _CalendarWidgetState
   Widget? buildDesktopTopHeader(Widget navigation, Widget? errorBanner) {
     return _CalendarSurfaceTint(
       child: CalendarNavSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            navigation,
-            const SizedBox(height: calendarGutterSm),
-          ],
-        ),
+        child: navigation,
       ),
     );
   }
@@ -249,12 +242,8 @@ class _CalendarAppBar extends StatelessWidget {
               ),
               const SizedBox(width: calendarGutterMd),
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: SyncControls(
-                    state: state,
-                    compact: true,
-                  ),
+                child: SyncControls(
+                  state: state,
                 ),
               ),
             ],

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/chatmail_provisioning_client.dart'
     as provisioning;
@@ -47,15 +49,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
+    EndpointConfig? initialEndpointConfig,
+    EndpointResolver endpointResolver = const EndpointResolver(),
   })  : _credentialStore = credentialStore,
         _xmppService = xmppService,
         _emailService = emailService,
+        _endpointResolver = endpointResolver,
+        _endpointConfig = initialState?.config ??
+            initialEndpointConfig ??
+            const EndpointConfig(),
         super(initialState ?? const AuthenticationNone()) {
     _httpClient = httpClient ?? http.Client();
     _emailProvisioningClient = emailProvisioningClient ??
         provisioning.EmailProvisioningClient.fromEnvironment(
           httpClient: _httpClient,
         );
+    _emailService?.updateEndpointConfig(_endpointConfig);
+    unawaited(_restoreEndpointConfig());
     _lifecycleListener = AppLifecycleListener(
       onResume: login,
       onShow: login,
@@ -110,17 +120,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final _log = Logger('AuthenticationCubit');
 
-  static const String domain = 'axi.im';
-  static Uri baseUrl = Uri.parse('https://$domain:5443');
-  static Uri registrationUrl = Uri.parse('$baseUrl/register/new/');
-  static Uri changePasswordUrl =
-      Uri.parse('$baseUrl/register/change_password/');
-  static Uri deleteAccountUrl = Uri.parse('$baseUrl/register/delete/');
+  static const String domain = EndpointConfig.defaultDomain;
   static const String signupCleanupInProgressMessage =
       'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online—try again once it finishes.';
 
+  Uri get registrationUrl => _buildRegistrationUrl();
+  Uri get changePasswordUrl => _buildChangePasswordUrl();
+  Uri get deleteAccountUrl => _buildDeleteAccountUrl();
+
   final jidStorageKey = CredentialStore.registerKey('jid');
   final passwordStorageKey = CredentialStore.registerKey('password');
+  final passwordPreHashedStorageKey =
+      CredentialStore.registerKey('password_prehashed_v1');
   final pendingSignupRollbacksKey =
       CredentialStore.registerKey('pending_signup_rollbacks');
   final completedSignupAccountsKey =
@@ -129,10 +140,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       CredentialStore.registerKey('signup_draft_v1');
   final _legacySignupDraftClosedAtStorageKey =
       CredentialStore.registerKey('signup_draft_last_closed_at');
+  final endpointConfigStorageKey =
+      CredentialStore.registerKey('endpoint_config_v1');
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   final EmailService? _emailService;
+  final EndpointResolver _endpointResolver;
+  EndpointConfig _endpointConfig;
   late final http.Client _httpClient;
   late final provisioning.EmailProvisioningClient _emailProvisioningClient;
   String? _authenticatedJid;
@@ -142,8 +157,71 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void>? _pendingAccountDeletionFlush;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
+  bool get _stickyAuthActive => state is AuthenticationComplete;
 
   late final AppLifecycleListener _lifecycleListener;
+
+  EndpointConfig get endpointConfig => _endpointConfig;
+
+  Future<void> updateEndpointConfig(EndpointConfig config) async {
+    _endpointConfig = config;
+    _emailService?.updateEndpointConfig(config);
+    await _credentialStore.write(
+      key: endpointConfigStorageKey,
+      value: jsonEncode(config.toJson()),
+    );
+    _emit(state);
+    _updateEmailForegroundKeepalive();
+  }
+
+  Future<void> resetEndpointConfig() => updateEndpointConfig(
+        const EndpointConfig(),
+      );
+
+  Future<void> _restoreEndpointConfig() async {
+    try {
+      final stored =
+          await _credentialStore.read(key: endpointConfigStorageKey) ?? '';
+      if (stored.isEmpty) {
+        return;
+      }
+      final decoded = jsonDecode(stored) as Map<String, dynamic>;
+      final restored = EndpointConfig.fromJson(decoded);
+      _endpointConfig = restored;
+      _emailService?.updateEndpointConfig(restored);
+      _emit(state);
+      _updateEmailForegroundKeepalive();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to restore endpoint config', error, stackTrace);
+    }
+  }
+
+  Uri _buildBaseUrl() => Uri(
+        scheme: _endpointConfig.apiUseTls ? 'https' : 'http',
+        host: _endpointConfig.domain,
+        port: _endpointConfig.apiPort,
+      );
+
+  Uri _buildRegistrationUrl() =>
+      _buildBaseUrl().replace(path: '/register/new/');
+
+  Uri _buildChangePasswordUrl() =>
+      _buildBaseUrl().replace(path: '/register/change_password/');
+
+  Uri _buildDeleteAccountUrl() =>
+      _buildBaseUrl().replace(path: '/register/delete/');
+
+  void _emit(AuthenticationState state) {
+    // Always allow transitions away from an authenticated session (e.g. logout).
+    emit(state.copyWithConfig(_endpointConfig));
+  }
+
+  EndpointOverride? _overrideFrom(IOEndpoint? endpoint) {
+    if (endpoint == null) {
+      return null;
+    }
+    return EndpointOverride(host: endpoint.host, port: endpoint.port);
+  }
 
   @override
   Future<void> close() async {
@@ -162,51 +240,77 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> login({
     String? username,
     String? password,
-    bool rememberMe = false,
+    bool rememberMe = true,
     bool requireEmailProvisioned = false,
     provisioning.EmailProvisioningCredentials? emailCredentials,
   }) async {
     _lastEmailProvisioningError = null;
-    if (state is AuthenticationComplete) {
+    if (state is AuthenticationComplete && _xmppService.connected) {
       return;
     }
     if (state is AuthenticationLogInInProgress) {
       _log.fine('Ignoring login request while another is in progress.');
       return;
     }
+    final config = _endpointConfig;
+    final xmppEnabled = config.enableXmpp;
+    final smtpEnabled = config.enableSmtp;
+    if (!xmppEnabled && !smtpEnabled) {
+      _emit(const AuthenticationFailure(
+        'Enable XMPP or SMTP to continue.',
+      ));
+      return;
+    }
     final loginState = _activeSignupCredentialKey != null
-        ? const AuthenticationLogInInProgress(fromSignup: true)
-        : const AuthenticationLogInInProgress();
-    emit(loginState);
+        ? AuthenticationLogInInProgress(fromSignup: true, config: config)
+        : AuthenticationLogInInProgress(config: config);
 
     if ((username == null) != (password == null)) {
-      emit(const AuthenticationFailure(
+      _emit(const AuthenticationFailure(
           'Username and password have different nullness.'));
       return;
     }
+    if (!rememberMe) {
+      _log.fine('rememberMe flag ignored; credentials are always persisted.');
+    }
 
+    final bool usingStoredCredentials = username == null;
     late final String? jid;
     var emailPassword = emailCredentials?.password ?? password;
     if (username == null || password == null) {
       jid = await _credentialStore.read(key: jidStorageKey);
       password = await _credentialStore.read(key: passwordStorageKey);
     } else {
-      jid = '$username@${state.server}';
+      jid = '$username@${config.domain}';
     }
 
     if (jid == null || password == null) {
-      emit(const AuthenticationNone());
+      _emit(const AuthenticationNone());
       return;
     }
     final String resolvedJid = jid;
     final String resolvedPassword = password;
     final String displayName = resolvedJid.split('@').first;
+    final hasCompletedAuthentication =
+        await _hasCompletedAuthentication(_normalizeJid(resolvedJid));
+    final bool stickySession = hasCompletedAuthentication ||
+        _stickyAuthActive ||
+        _authenticatedJid != null;
+    final bool stickyAuthActive = _stickyAuthActive;
+    final bool isAutoReauth = stickySession && usingStoredCredentials;
+    if (isAutoReauth) {
+      _log.fine('Attempting silent session re-authentication.');
+    } else {
+      _emit(loginState);
+    }
+    _authenticatedJid ??= resolvedJid;
 
     final databasePrefixStorageKey =
         CredentialStore.registerKey('${jid}_database_prefix');
 
     String? databasePrefix =
         await _credentialStore.read(key: databasePrefixStorageKey);
+    final bool hadStoredDatabasePrefix = databasePrefix != null;
     databasePrefix ??= generateRandomString(length: 8);
 
     final databasePassphraseStorageKey = CredentialStore.registerKey(
@@ -215,26 +319,50 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     String? databasePassphrase =
         await _credentialStore.read(key: databasePassphraseStorageKey);
+    final bool hadStoredDatabasePassphrase = databasePassphrase != null;
     databasePassphrase ??= generateRandomString();
+    final hasStoredDatabaseSecrets =
+        hadStoredDatabasePassphrase && hadStoredDatabasePrefix;
     final String ensuredDatabasePrefix = databasePrefix;
     final String ensuredDatabasePassphrase = databasePassphrase;
 
     final savedPassword = await _credentialStore.read(key: passwordStorageKey);
-    final bool usingStoredCredentials = username == null;
+    final savedPasswordPreHashedValue =
+        await _credentialStore.read(key: passwordPreHashedStorageKey);
+    final bool? savedPasswordPreHashed = savedPasswordPreHashedValue == null
+        ? null
+        : savedPasswordPreHashedValue == true.toString();
     final bool shouldClearEmailCredentialsOnFailure = !usingStoredCredentials;
-    final preHashed = usingStoredCredentials && savedPassword != null;
+    const bool shouldPersistCredentials = true;
+    bool passwordPreHashed =
+        usingStoredCredentials ? (savedPasswordPreHashed ?? false) : false;
+    if (usingStoredCredentials &&
+        savedPassword != null &&
+        savedPasswordPreHashed == null) {
+      _emit(const AuthenticationFailure(
+        'Stored credentials are outdated. Please log in manually.',
+      ));
+      await _xmppService.disconnect();
+      _authenticatedJid = null;
+      return;
+    }
     final String xmppPassword = usingStoredCredentials
         ? (savedPassword ?? resolvedPassword)
         : resolvedPassword;
 
-    final emailService = _emailService;
+    final emailService = smtpEnabled ? _emailService : null;
     if (emailPassword == null && emailService != null) {
       final existing = await emailService.currentAccount(resolvedJid);
       emailPassword = existing?.password;
     }
 
     if (emailService != null && emailPassword == null) {
-      emit(const AuthenticationFailure(
+      if (stickyAuthActive) {
+        _log.warning(
+            'Stored email password missing during silent re-authentication.');
+        return;
+      }
+      _emit(const AuthenticationFailure(
           'Stored email password missing. Please log in manually.'));
       return;
     }
@@ -243,106 +371,161 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _activeSignupCredentialKey != null ||
         emailService != null;
 
-    Future<void>? emailProvisioningFuture;
-    if (emailService != null) {
-      final resolvedEmailPassword = emailPassword!;
-      emailProvisioningFuture = Future<EmailAccount>.sync(
-        () => emailService.ensureProvisioned(
-          displayName: displayName,
-          databasePrefix: ensuredDatabasePrefix,
-          databasePassphrase: ensuredDatabasePassphrase,
-          jid: resolvedJid,
-          passwordOverride: resolvedEmailPassword,
-          addressOverride: emailCredentials?.email,
-          principalIdOverride: emailCredentials?.principalId,
-        ),
-      ).then<void>((_) {});
-    }
+    final reuseExistingSession =
+        _xmppService.databasesInitialized && _xmppService.myJid == resolvedJid;
 
-    try {
-      password = await _xmppService.connect(
-        jid: resolvedJid,
-        password: xmppPassword,
-        databasePrefix: databasePrefix,
-        databasePassphrase: databasePassphrase,
-        preHashed: preHashed,
-      );
-    } on XmppAuthenticationException catch (_) {
-      await _cancelPendingEmailProvisioning(
-        emailProvisioningFuture,
-        resolvedJid,
-        clearCredentials: shouldClearEmailCredentialsOnFailure,
-      );
-      emit(const AuthenticationFailure('Incorrect username or password'));
-      await _xmppService.disconnect();
-      return;
-    } on XmppAlreadyConnectedException catch (_) {
-      await _cancelPendingEmailProvisioning(
-        emailProvisioningFuture,
-        resolvedJid,
-        clearCredentials: shouldClearEmailCredentialsOnFailure,
-      );
-      await _xmppService.disconnect();
-      emit(const AuthenticationNone());
-      return;
-    } on Exception catch (e) {
-      await _cancelPendingEmailProvisioning(
-        emailProvisioningFuture,
-        resolvedJid,
-        clearCredentials: shouldClearEmailCredentialsOnFailure,
-      );
-      _log.severe(e);
-      emit(const AuthenticationFailure('Error. Please try again later.'));
-      await _xmppService.disconnect();
-      return;
-    }
-
-    await _credentialStore.write(
-      key: databasePassphraseStorageKey,
-      value: databasePassphrase,
-    );
-
-    await _credentialStore.write(
-      key: databasePrefixStorageKey,
-      value: databasePrefix,
-    );
-
-    if (rememberMe) {
-      await _credentialStore.write(key: jidStorageKey, value: jid);
-      if (password != null) {
-        await _credentialStore.write(key: passwordStorageKey, value: password);
-      }
-    }
-
-    _authenticatedJid = jid;
-
-    if (emailProvisioningFuture != null) {
+    EndpointOverride? xmppEndpoint;
+    if (xmppEnabled) {
       try {
-        await emailProvisioningFuture;
-        _lastEmailProvisioningError = null;
-      } on EmailProvisioningException catch (error) {
-        final shouldAbort = enforceEmailProvisioning || !error.isRecoverable;
-        if (shouldAbort) {
-          _lastEmailProvisioningError = error;
-          emit(AuthenticationFailure(error.message));
-          await _cancelPendingEmailProvisioning(
-            emailProvisioningFuture,
-            resolvedJid,
-            clearCredentials: shouldClearEmailCredentialsOnFailure,
-          );
-          await _xmppService.disconnect();
-          return;
-        }
-        _log.warning('Email provisioning pending: ${error.message}');
-        _lastEmailProvisioningError = null;
-      } on Exception catch (error, stackTrace) {
-        _log.warning('Email provisioning failed', error, stackTrace);
+        xmppEndpoint = await _endpointResolver.resolveXmpp(
+          config,
+          fallback: _overrideFrom(serverLookup[config.domain]),
+        );
+      } on EndpointResolutionException catch (error) {
+        _emit(AuthenticationFailure(error.message, config: config));
+        return;
       }
     }
 
-    emit(const AuthenticationComplete());
-    await _recordAccountAuthenticated(resolvedJid);
-    _updateEmailForegroundKeepalive();
+    if (xmppEnabled) {
+      try {
+        password = await _xmppService.connect(
+          jid: resolvedJid,
+          password: xmppPassword,
+          databasePrefix: databasePrefix,
+          databasePassphrase: databasePassphrase,
+          preHashed: passwordPreHashed,
+          reuseExistingSession: reuseExistingSession,
+          endpoint: xmppEndpoint,
+        );
+        passwordPreHashed = true;
+      } on XmppAuthenticationException catch (_) {
+        final canResumeOffline =
+            usingStoredCredentials && hasStoredDatabaseSecrets;
+        if (canResumeOffline) {
+          final resumed = await _resumeOfflineLogin(
+            jid: resolvedJid,
+            displayName: displayName,
+            databasePrefix: ensuredDatabasePrefix,
+            databasePassphrase: ensuredDatabasePassphrase,
+            rememberMe: shouldPersistCredentials,
+            password: password,
+            passwordPreHashed: passwordPreHashed,
+            emailPassword: emailPassword,
+            emailCredentials: emailCredentials,
+            enforceEmailProvisioning: enforceEmailProvisioning,
+            clearEmailCredentials: shouldClearEmailCredentialsOnFailure,
+            databasePrefixStorageKey: databasePrefixStorageKey,
+            databasePassphraseStorageKey: databasePassphraseStorageKey,
+          );
+          if (resumed) {
+            return;
+          }
+        }
+        _emit(const AuthenticationFailure('Incorrect username or password'));
+        await _xmppService.disconnect();
+        _authenticatedJid = null;
+        return;
+      } on XmppNetworkException catch (error) {
+        final canResumeOffline = usingStoredCredentials &&
+            hasStoredDatabaseSecrets &&
+            hasCompletedAuthentication;
+        if (canResumeOffline) {
+          final resumed = await _resumeOfflineLogin(
+            jid: resolvedJid,
+            displayName: displayName,
+            databasePrefix: ensuredDatabasePrefix,
+            databasePassphrase: ensuredDatabasePassphrase,
+            rememberMe: shouldPersistCredentials,
+            password: password,
+            passwordPreHashed: passwordPreHashed,
+            emailPassword: emailPassword,
+            emailCredentials: emailCredentials,
+            enforceEmailProvisioning: enforceEmailProvisioning,
+            clearEmailCredentials: shouldClearEmailCredentialsOnFailure,
+            databasePrefixStorageKey: databasePrefixStorageKey,
+            databasePassphraseStorageKey: databasePassphraseStorageKey,
+          );
+          if (resumed) {
+            return;
+          }
+        }
+        _log.warning('Network/XMPP error during login', error);
+        _emit(const AuthenticationFailure('Error. Please try again later.'));
+        await _xmppService.disconnect();
+        _authenticatedJid = null;
+        return;
+      } on XmppAlreadyConnectedException catch (_) {
+        _log.fine('Re-auth attempted while already connected, ignoring.');
+        return;
+      } on Exception catch (error) {
+        final canResumeOffline = usingStoredCredentials &&
+            hasStoredDatabaseSecrets &&
+            hasCompletedAuthentication &&
+            _looksLikeConnectivityError(error);
+        if (canResumeOffline) {
+          final resumed = await _resumeOfflineLogin(
+            jid: resolvedJid,
+            displayName: displayName,
+            databasePrefix: ensuredDatabasePrefix,
+            databasePassphrase: ensuredDatabasePassphrase,
+            rememberMe: shouldPersistCredentials,
+            password: password,
+            passwordPreHashed: passwordPreHashed,
+            emailPassword: emailPassword,
+            emailCredentials: emailCredentials,
+            enforceEmailProvisioning: enforceEmailProvisioning,
+            clearEmailCredentials: shouldClearEmailCredentialsOnFailure,
+            databasePrefixStorageKey: databasePrefixStorageKey,
+            databasePassphraseStorageKey: databasePassphraseStorageKey,
+          );
+          if (resumed) {
+            return;
+          }
+        }
+        _log.severe(error);
+        _emit(const AuthenticationFailure('Error. Please try again later.'));
+        await _xmppService.disconnect();
+        _authenticatedJid = null;
+        return;
+      }
+    } else {
+      await _xmppService.resumeOfflineSession(
+        jid: resolvedJid,
+        databasePrefix: ensuredDatabasePrefix,
+        databasePassphrase: ensuredDatabasePassphrase,
+      );
+      password = resolvedPassword;
+    }
+
+    final emailReady = await _ensureEmailProvisioned(
+      displayName: displayName,
+      databasePrefix: ensuredDatabasePrefix,
+      databasePassphrase: ensuredDatabasePassphrase,
+      jid: resolvedJid,
+      enforceProvisioning: enforceEmailProvisioning,
+      clearCredentialsOnFailure: shouldClearEmailCredentialsOnFailure,
+      emailPassword: emailPassword,
+      emailCredentials: emailCredentials,
+    );
+    if (!emailReady) {
+      await _xmppService.disconnect();
+      if (!stickyAuthActive) {
+        _authenticatedJid = null;
+      }
+      return;
+    }
+
+    await _finalizeAuthentication(
+      jid: resolvedJid,
+      rememberMe: shouldPersistCredentials,
+      password: password,
+      passwordPreHashed: passwordPreHashed,
+      databasePrefixStorageKey: databasePrefixStorageKey,
+      databasePrefix: ensuredDatabasePrefix,
+      databasePassphraseStorageKey: databasePassphraseStorageKey,
+      databasePassphrase: ensuredDatabasePassphrase,
+    );
   }
 
   Future<void> _cancelPendingEmailProvisioning(
@@ -381,6 +564,213 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<bool> _resumeOfflineLogin({
+    required String jid,
+    required String displayName,
+    required String databasePrefix,
+    required String databasePassphrase,
+    required bool rememberMe,
+    required bool enforceEmailProvisioning,
+    required bool clearEmailCredentials,
+    required RegisteredCredentialKey databasePrefixStorageKey,
+    required RegisteredCredentialKey databasePassphraseStorageKey,
+    required bool passwordPreHashed,
+    String? password,
+    String? emailPassword,
+    provisioning.EmailProvisioningCredentials? emailCredentials,
+  }) async {
+    try {
+      await _xmppService.resumeOfflineSession(
+        jid: jid,
+        databasePrefix: databasePrefix,
+        databasePassphrase: databasePassphrase,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to resume offline session', error, stackTrace);
+      return false;
+    }
+
+    final emailReady = await _ensureEmailProvisioned(
+      displayName: displayName,
+      databasePrefix: databasePrefix,
+      databasePassphrase: databasePassphrase,
+      jid: jid,
+      enforceProvisioning: enforceEmailProvisioning,
+      clearCredentialsOnFailure: clearEmailCredentials,
+      emailPassword: emailPassword,
+      emailCredentials: emailCredentials,
+    );
+    if (!emailReady) {
+      await _xmppService.disconnect();
+      return false;
+    }
+
+    await _finalizeAuthentication(
+      jid: jid,
+      rememberMe: rememberMe,
+      password: password,
+      passwordPreHashed: passwordPreHashed,
+      databasePrefixStorageKey: databasePrefixStorageKey,
+      databasePrefix: databasePrefix,
+      databasePassphraseStorageKey: databasePassphraseStorageKey,
+      databasePassphrase: databasePassphrase,
+    );
+    return true;
+  }
+
+  Future<bool> _ensureEmailProvisioned({
+    required String displayName,
+    required String databasePrefix,
+    required String databasePassphrase,
+    required String jid,
+    required bool enforceProvisioning,
+    required bool clearCredentialsOnFailure,
+    String? emailPassword,
+    provisioning.EmailProvisioningCredentials? emailCredentials,
+  }) async {
+    if (!_endpointConfig.enableSmtp) {
+      return true;
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
+      return true;
+    }
+    var resolvedPassword = emailPassword;
+    if (resolvedPassword == null) {
+      final existing = await emailService.currentAccount(jid);
+      resolvedPassword = existing?.password;
+    }
+    if (resolvedPassword == null) {
+      if (!_stickyAuthActive) {
+        _emit(const AuthenticationFailure(
+            'Stored email password missing. Please log in manually.'));
+      } else {
+        _log.warning('Email password missing during silent re-auth.');
+      }
+      return false;
+    }
+    try {
+      await emailService.ensureProvisioned(
+        displayName: displayName,
+        databasePrefix: databasePrefix,
+        databasePassphrase: databasePassphrase,
+        jid: jid,
+        passwordOverride: resolvedPassword,
+        addressOverride: emailCredentials?.email,
+        principalIdOverride: emailCredentials?.principalId,
+      );
+      _lastEmailProvisioningError = null;
+      return true;
+    } on EmailProvisioningException catch (error) {
+      final shouldAbort = enforceProvisioning || !error.isRecoverable;
+      if (shouldAbort) {
+        _lastEmailProvisioningError = error;
+        if (!_stickyAuthActive) {
+          _emit(AuthenticationFailure(error.message));
+        } else {
+          _log.warning('Email provisioning failed silently: ${error.message}');
+        }
+        await _cancelPendingEmailProvisioning(
+          null,
+          jid,
+          clearCredentials: clearCredentialsOnFailure,
+        );
+        await _xmppService.disconnect();
+        return false;
+      }
+      _log.warning('Email provisioning pending: ${error.message}');
+      _lastEmailProvisioningError = null;
+      return true;
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Email provisioning failed', error, stackTrace);
+      if (enforceProvisioning) {
+        if (!_stickyAuthActive) {
+          _emit(const AuthenticationFailure('Error. Please try again later.'));
+        } else {
+          _log.warning('Silent re-auth email provisioning deferred.');
+        }
+        await _cancelPendingEmailProvisioning(
+          null,
+          jid,
+          clearCredentials: clearCredentialsOnFailure,
+        );
+        await _xmppService.disconnect();
+        return false;
+      }
+      return true;
+    }
+  }
+
+  Future<void> _finalizeAuthentication({
+    required String jid,
+    required bool rememberMe,
+    required String? password,
+    required bool passwordPreHashed,
+    required RegisteredCredentialKey databasePrefixStorageKey,
+    required String databasePrefix,
+    required RegisteredCredentialKey databasePassphraseStorageKey,
+    required String databasePassphrase,
+  }) async {
+    await _persistLoginSecrets(
+      jid: jid,
+      rememberMe: rememberMe,
+      password: password,
+      passwordPreHashed: passwordPreHashed,
+      databasePrefixStorageKey: databasePrefixStorageKey,
+      databasePrefix: databasePrefix,
+      databasePassphraseStorageKey: databasePassphraseStorageKey,
+      databasePassphrase: databasePassphrase,
+    );
+    _authenticatedJid = jid;
+    _emit(const AuthenticationComplete());
+    await _recordAccountAuthenticated(jid);
+    _updateEmailForegroundKeepalive();
+  }
+
+  Future<void> _persistLoginSecrets({
+    required String jid,
+    required bool rememberMe,
+    required String? password,
+    required bool passwordPreHashed,
+    required RegisteredCredentialKey databasePrefixStorageKey,
+    required String databasePrefix,
+    required RegisteredCredentialKey databasePassphraseStorageKey,
+    required String databasePassphrase,
+  }) async {
+    await _credentialStore.write(
+      key: databasePassphraseStorageKey,
+      value: databasePassphrase,
+    );
+    await _credentialStore.write(
+      key: databasePrefixStorageKey,
+      value: databasePrefix,
+    );
+    if (!rememberMe) {
+      _log.fine('Persisting credentials despite rememberMe=false request.');
+    }
+    await _credentialStore.write(key: jidStorageKey, value: jid);
+    if (password != null) {
+      await _credentialStore.write(key: passwordStorageKey, value: password);
+      await _credentialStore.write(
+        key: passwordPreHashedStorageKey,
+        value: passwordPreHashed.toString(),
+      );
+    }
+  }
+
+  bool _looksLikeConnectivityError(Object error) {
+    if (error is SocketException ||
+        error is TimeoutException ||
+        error is HttpException ||
+        error is http.ClientException) {
+      return true;
+    }
+    if (error is XmppException && error.wrapped != null) {
+      return _looksLikeConnectivityError(error.wrapped!);
+    }
+    return false;
+  }
+
   Future<void> signup({
     required String username,
     required String password,
@@ -389,14 +779,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captcha,
     required bool rememberMe,
   }) async {
-    emit(const AuthenticationSignUpInProgress());
-    final host = state.server;
+    _emit(const AuthenticationSignUpInProgress());
+    final host = _endpointConfig.domain;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
       username: username,
       host: host,
     );
     if (!cleanupComplete) {
-      emit(const AuthenticationSignupFailure(
+      _emit(const AuthenticationSignupFailure(
         signupCleanupInProgressMessage,
         isCleanupBlocked: true,
       ));
@@ -411,7 +801,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     var signupComplete = false;
     provisioning.EmailProvisioningCredentials? emailProvisioningCredentials;
     try {
-      if (_emailService != null) {
+      if (_emailService != null && _endpointConfig.enableSmtp) {
         emailProvisioningCredentials =
             await _emailProvisioningClient.createAccount(
           localpart: username,
@@ -437,7 +827,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         },
       );
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
-        emit(AuthenticationSignupFailure(response.body));
+        _emit(AuthenticationSignupFailure(response.body));
         return;
       }
       await login(
@@ -451,11 +841,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
       _log.warning(
           'Email provisioning failed before signup', error, stackTrace);
-      emit(AuthenticationSignupFailure(error.message));
+      _emit(AuthenticationSignupFailure(error.message));
       return;
     } on Exception catch (error, stackTrace) {
       _log.warning('Signup failed', error, stackTrace);
-      emit(const AuthenticationSignupFailure(
+      _emit(const AuthenticationSignupFailure(
         'Failed to register, try again later.',
       ));
       return;
@@ -545,7 +935,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> checkNotPwned({required String password}) async {
-    emit(const AuthenticationSignUpInProgress(fromSubmission: false));
+    _emit(const AuthenticationSignUpInProgress(fromSubmission: false));
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {
@@ -556,17 +946,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           final pwned = '$subhash${e.split(':')[0]}';
           return pwned == hash;
         })) {
-          emit(const AuthenticationSignupFailure(
+          _emit(const AuthenticationSignupFailure(
               'Hackers have already found this password so it is insecure. '
               'Use a different one or allow insecure passwords.'));
           return false;
         }
       }
     } on Exception catch (_) {
-      emit(const AuthenticationNone());
+      _emit(const AuthenticationNone());
       return true;
     }
-    emit(const AuthenticationNone());
+    _emit(const AuthenticationNone());
     return true;
   }
 
@@ -580,23 +970,26 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       case LogoutSeverity.normal:
         await _credentialStore.delete(key: jidStorageKey);
         await _credentialStore.delete(key: passwordStorageKey);
+        await _credentialStore.delete(key: passwordPreHashedStorageKey);
       case LogoutSeverity.burn:
         await _credentialStore.deleteAll(burn: true);
         await _xmppService.burn();
     }
 
     await _xmppService.disconnect();
-    if (severity == LogoutSeverity.burn) {
-      await _emailService?.burn(jid: currentJid);
-    } else {
-      await _emailService?.shutdown(
-        jid: currentJid,
-        clearCredentials: severity == LogoutSeverity.normal,
-      );
+    if (_endpointConfig.enableSmtp) {
+      if (severity == LogoutSeverity.burn) {
+        await _emailService?.burn(jid: currentJid);
+      } else {
+        await _emailService?.shutdown(
+          jid: currentJid,
+          clearCredentials: severity == LogoutSeverity.normal,
+        );
+      }
     }
 
     _authenticatedJid = null;
-    emit(const AuthenticationNone());
+    _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
   }
 
@@ -607,9 +1000,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String password,
     required String password2,
   }) async {
-    emit(const AuthenticationPasswordChangeInProgress());
+    _emit(const AuthenticationPasswordChangeInProgress());
     final response = await http.post(
-      AuthenticationCubit.changePasswordUrl,
+      changePasswordUrl,
       body: {
         'username': username,
         'host': host,
@@ -619,9 +1012,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       },
     );
     if (response.statusCode == 200) {
-      emit(AuthenticationPasswordChangeSuccess(response.body));
+      _emit(AuthenticationPasswordChangeSuccess(response.body));
     } else {
-      emit(AuthenticationPasswordChangeFailure(response.body));
+      _emit(AuthenticationPasswordChangeFailure(response.body));
     }
   }
 
@@ -630,15 +1023,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String host,
     required String password,
   }) async {
-    emit(const AuthenticationUnregisterInProgress());
+    _emit(const AuthenticationUnregisterInProgress());
     try {
-      await _deleteProvisionedEmailAccountForUser(
-        username: username,
-        host: host,
-        password: password,
-      );
+      if (_endpointConfig.enableSmtp) {
+        await _deleteProvisionedEmailAccountForUser(
+          username: username,
+          host: host,
+          password: password,
+        );
+      }
       final response = await http.post(
-        AuthenticationCubit.deleteAccountUrl,
+        deleteAccountUrl,
         body: {
           'username': username,
           'host': host,
@@ -649,11 +1044,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await logout(severity: LogoutSeverity.burn);
         await _removeCompletedAccountRecord(username, host);
       } else {
-        emit(AuthenticationUnregisterFailure(response.body));
+        _emit(AuthenticationUnregisterFailure(response.body));
       }
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to delete account', error, stackTrace);
-      emit(const AuthenticationUnregisterFailure(
+      _emit(const AuthenticationUnregisterFailure(
         'Unable to delete account. Please try again later.',
       ));
     }
@@ -662,7 +1057,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _updateEmailForegroundKeepalive() {
     final emailService = _emailService;
     if (emailService == null) return;
-    final shouldRun = foregroundServiceActive.value &&
+    final shouldRun = _endpointConfig.enableSmtp &&
+        foregroundServiceActive.value &&
         _authenticatedJid != null &&
         state is AuthenticationComplete;
     unawaited(_setEmailForegroundKeepalive(emailService, shouldRun));
@@ -847,7 +1243,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     try {
       final response = await _httpClient.post(
-        AuthenticationCubit.deleteAccountUrl,
+        deleteAccountUrl,
         body: {
           'username': deletion.username,
           'host': deletion.host,
@@ -1072,7 +1468,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final stateSnapshot = state;
     if (stateSnapshot is AuthenticationSignupFailure &&
         stateSnapshot.isCleanupBlocked) {
-      emit(const AuthenticationNone());
+      _emit(const AuthenticationNone());
     }
   }
 

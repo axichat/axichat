@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -41,7 +42,8 @@ enum _InsecurePasswordReason { weak, breached }
 const _strengthMediumColor = Color(0xFFF97316);
 const _strengthStrongColor = Color(0xFF22C55E);
 
-class _SignupFormState extends State<SignupForm> {
+class _SignupFormState extends State<SignupForm>
+    with AutomaticKeepAliveClientMixin {
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
@@ -72,6 +74,7 @@ class _SignupFormState extends State<SignupForm> {
   int _allowInsecureResetTick = 0;
   bool _captchaHasLoadedOnce = false;
   Timer? _captchaRetryTimer;
+  String? _lastCaptchaServer;
 
   var _currentIndex = 0;
   String? _errorText;
@@ -81,6 +84,7 @@ class _SignupFormState extends State<SignupForm> {
   @override
   void initState() {
     super.initState();
+    _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
     _captchaSrc = _loadCaptchaSrc();
     _jidTextController = TextEditingController()
       ..addListener(_handleFieldProgressChanged);
@@ -168,7 +172,10 @@ class _SignupFormState extends State<SignupForm> {
   Future<String> _loadCaptchaSrc() async {
     late final XmlDocument document;
     try {
-      final response = await http.get(AuthenticationCubit.registrationUrl);
+      final registrationUrl =
+          context.read<AuthenticationCubit>().registrationUrl;
+      _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
+      final response = await http.get(registrationUrl);
       if (response.statusCode != 200) return '';
       document = XmlDocument.parse(response.body);
     } on HttpException catch (_) {
@@ -393,6 +400,7 @@ class _SignupFormState extends State<SignupForm> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return BlocConsumer<AuthenticationCubit, AuthenticationState>(
       // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
       listener: (context, state) {
@@ -404,6 +412,13 @@ class _SignupFormState extends State<SignupForm> {
         }
       },
       builder: (context, state) {
+        if (_lastCaptchaServer != state.server) {
+          _lastCaptchaServer = state.server;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _reloadCaptcha(resetFirstLoad: true);
+          });
+        }
         final bool onSubmitStep = _currentIndex == _formKeys.length - 1;
         final bool signupFlowActive =
             state is AuthenticationSignUpInProgress && onSubmitStep;
@@ -508,7 +523,7 @@ class _SignupFormState extends State<SignupForm> {
                               placeholder: const Text('Username'),
                               enabled: !loading,
                               controller: _jidTextController,
-                              trailing: Text('@${state.server}'),
+                              trailing: EndpointSuffix(server: state.server),
                               validator: (text) {
                                 if (text.isEmpty) {
                                   return 'Enter a username';
@@ -818,6 +833,9 @@ class _SignupFormState extends State<SignupForm> {
       },
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }
 
 class _SignupProgressMeter extends StatelessWidget {
