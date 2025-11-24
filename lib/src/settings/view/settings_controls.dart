@@ -13,9 +13,11 @@ class SettingsControls extends StatelessWidget {
   const SettingsControls({
     super.key,
     this.showDivider = false,
+    this.showAppearanceDivider = true,
   });
 
   final bool showDivider;
+  final bool showAppearanceDivider;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +47,7 @@ class SettingsControls extends StatelessWidget {
                 ),
               ),
             ],
-            const AxiListDivider(),
+            if (showAppearanceDivider) const AxiListDivider(),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 16.0,

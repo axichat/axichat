@@ -654,6 +654,7 @@ class _ChatState extends State<Chat> {
         math.min(screenWidth * drawerWidthFraction, drawerMaxWidth);
     showGeneralDialog(
       context: context,
+      useRootNavigator: false,
       barrierDismissible: true,
       barrierLabel: 'Room members',
       barrierColor: Colors.black.withValues(alpha: 0.45),
@@ -938,9 +939,10 @@ class _ChatState extends State<Chat> {
 
   Future<void> _handleSendButtonLongPress() async {
     if (widget.readOnly) return;
-    final action = await showModalBottomSheet<String>(
+    final action = await showAdaptiveBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      dialogMaxWidth: 420,
       builder: (context) {
         final colors = context.colorScheme;
         return SafeArea(
@@ -1237,9 +1239,10 @@ class _ChatState extends State<Chat> {
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
     if (!mounted) return;
-    await showModalBottomSheet<void>(
+    await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      dialogMaxWidth: 520,
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);
@@ -3945,8 +3948,9 @@ class _ChatState extends State<Chat> {
 
   Future<String?> _pickEmoji() async {
     if (!mounted) return null;
-    return showModalBottomSheet<String>(
+    return showAdaptiveBottomSheet<String>(
       context: context,
+      dialogMaxWidth: 420,
       builder: (context) => SizedBox(
         height: 320,
         child: EmojiPicker(

@@ -28,11 +28,12 @@ class SessionCapabilityIndicators extends StatelessWidget {
     final chatChip = _chatChipData(colors);
     final emailChip = _emailChipData(colors);
     final chipAlignment = compact ? WrapAlignment.end : WrapAlignment.center;
+    final double runSpacing = compact ? _capabilityChipRunSpacing : 0.0;
     return Wrap(
       alignment: chipAlignment,
       runAlignment: chipAlignment,
       spacing: _capabilityChipSpacing,
-      runSpacing: _capabilityChipRunSpacing,
+      runSpacing: runSpacing,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _CapabilityChip(data: chatChip, compact: compact),

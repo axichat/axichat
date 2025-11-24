@@ -20,9 +20,10 @@ class AxiTooltip extends StatelessWidget {
         ? content.style!
         : context.textTheme.muted;
     final plainText = _plainText(content);
+    final bool hasPlainText = plainText != null;
     return Tooltip(
-      richMessage: _richSpan(content, textStyle),
-      message: plainText ?? '',
+      richMessage: hasPlainText ? null : _richSpan(content, textStyle),
+      message: hasPlainText ? plainText : null,
       preferBelow: true,
       verticalOffset: 12,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

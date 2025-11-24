@@ -52,8 +52,10 @@ class AxiIconButton extends StatelessWidget {
             type: MaterialType.transparency,
             shape: paintShape,
             clipBehavior: Clip.antiAlias,
-            child: InkWell(
+            child: InkResponse(
               onTap: onPressed,
+              containedInkWell: true,
+              highlightShape: BoxShape.rectangle,
               customBorder: paintShape,
               splashFactory:
                   isDesktop ? NoSplash.splashFactory : InkRipple.splashFactory,
@@ -62,6 +64,7 @@ class AxiIconButton extends StatelessWidget {
                   : colors.primary.withValues(alpha: 0.18),
               hoverColor: colors.primary.withValues(alpha: 0.08),
               highlightColor: Colors.transparent,
+              focusColor: Colors.transparent,
               child: SizedBox(
                 width: kDefaultSize,
                 height: kDefaultSize,

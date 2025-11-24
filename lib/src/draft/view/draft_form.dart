@@ -658,9 +658,10 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
     if (!mounted) return;
-    await showModalBottomSheet<void>(
+    await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      dialogMaxWidth: 520,
       builder: (sheetContext) {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes);

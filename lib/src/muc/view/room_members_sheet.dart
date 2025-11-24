@@ -1,8 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
-import 'package:axichat/src/common/ui/axi_avatar.dart';
-import 'package:axichat/src/common/ui/axi_list_tile.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
@@ -35,105 +34,122 @@ class RoomMembersSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final groups = _sections();
     final theme = context.textTheme;
+    final colors = context.colorScheme;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.card,
+            border: Border.all(color: colors.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Members', style: theme.h4),
-                const Spacer(),
-                if (canInvite)
-                  ShadButton.outline(
-                    size: ShadButtonSize.sm,
-                    onPressed: () async {
-                      final jids = await _promptInvite(context);
-                      if (jids != null && jids.isNotEmpty) {
-                        for (final jid in jids) {
-                          onInvite(jid.trim());
-                        }
-                      }
-                    },
-                    child: const Text('Invite user'),
-                  ),
-                if (onClose != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(LucideIcons.x),
-                    tooltip: 'Close',
-                    onPressed: onClose,
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (onChangeNickname != null || onLeaveRoom != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Row(
                   children: [
-                    if (onChangeNickname != null)
+                    Text(
+                      'Members',
+                      style: theme.h4.copyWith(color: colors.foreground),
+                    ),
+                    const Spacer(),
+                    if (canInvite)
                       ShadButton.outline(
                         size: ShadButtonSize.sm,
                         onPressed: () async {
-                          final next = await _promptNickname(context);
-                          if (next?.isNotEmpty == true) {
-                            onChangeNickname!(next!);
+                          final jids = await _promptInvite(context);
+                          if (jids != null && jids.isNotEmpty) {
+                            for (final jid in jids) {
+                              onInvite(jid.trim());
+                            }
                           }
                         },
-                        child: Text(
-                          'Change nick${currentNickname == null ? '' : ' (${currentNickname!})'}',
-                        ),
+                        child: const Text('Invite user'),
                       ),
-                    if (onLeaveRoom != null)
-                      ShadButton.destructive(
-                        size: ShadButtonSize.sm,
-                        onPressed: onLeaveRoom,
-                        child: const Text('Leave room'),
+                    if (onClose != null) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(LucideIcons.x),
+                        tooltip: 'Close',
+                        onPressed: onClose,
                       ),
+                    ],
                   ],
                 ),
-              ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: groups.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No members yet',
-                        style: theme.muted,
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemBuilder: (context, index) {
-                        final group = groups[index];
-                        return _MemberSection(
-                          title: group.title,
-                          occupants: group.members,
-                          buildActions: _actionsFor,
-                          onAction: onAction,
-                          myOccupantId: roomState.myOccupantId,
-                          myAffiliation: roomState.myAffiliation,
-                        );
-                      },
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemCount: groups.length,
+                const SizedBox(height: 12),
+                if (onChangeNickname != null || onLeaveRoom != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (onChangeNickname != null)
+                          ShadButton.outline(
+                            size: ShadButtonSize.sm,
+                            onPressed: () async {
+                              final next = await _promptNickname(context);
+                              if (next?.isNotEmpty == true) {
+                                onChangeNickname!(next!);
+                              }
+                            },
+                            child: Text(
+                              'Change nick${currentNickname == null ? '' : ' (${currentNickname!})'}',
+                            ),
+                          ),
+                        if (onLeaveRoom != null)
+                          ShadButton.destructive(
+                            size: ShadButtonSize.sm,
+                            onPressed: onLeaveRoom,
+                            child: const Text('Leave room'),
+                          ),
+                      ],
                     ),
+                  ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: groups.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No members yet',
+                            style: theme.muted
+                                .copyWith(color: colors.mutedForeground),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: EdgeInsets.zero,
+                          itemBuilder: (context, index) {
+                            final group = groups[index];
+                            return _MemberSection(
+                              title: group.title,
+                              occupants: group.members,
+                              buildActions: _actionsFor,
+                              onAction: onAction,
+                              myOccupantId: roomState.myOccupantId,
+                              myAffiliation: roomState.myAffiliation,
+                            );
+                          },
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemCount: groups.length,
+                        ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Future<List<String>?> _promptInvite(BuildContext context) async {
-    return showModalBottomSheet<List<String>>(
+    return showAdaptiveBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: false,
+      dialogMaxWidth: 520,
       builder: (context) => const _InviteChipsSheet(
         initialRecipients: [],
       ),
@@ -363,20 +379,19 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: 16 + viewInsets,
-      ),
-      child: SafeArea(
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: 16 + viewInsets,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Invite users', style: context.textTheme.h4),
-            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Text('Invite users', style: context.textTheme.h4),
+            ),
             RecipientChipsBar(
               recipients: _recipients,
               availableChats: const <chat_models.Chat>[],
@@ -387,31 +402,34 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               collapsedByDefault: false,
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                ShadButton.outline(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                ShadButton(
-                  onPressed: _recipients.isEmpty
-                      ? null
-                      : () {
-                          final invitees = _recipients
-                              .where((recipient) => recipient.included)
-                              .map(
-                                (recipient) =>
-                                    recipient.target.address ??
-                                    recipient.target.chat?.jid,
-                              )
-                              .whereType<String>()
-                              .toList();
-                          Navigator.of(context).pop(invitees);
-                        },
-                  child: const Text('Send invites'),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  ShadButton.outline(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ShadButton(
+                    onPressed: _recipients.isEmpty
+                        ? null
+                        : () {
+                            final invitees = _recipients
+                                .where((recipient) => recipient.included)
+                                .map(
+                                  (recipient) =>
+                                      recipient.target.address ??
+                                      recipient.target.chat?.jid,
+                                )
+                                .whereType<String>()
+                                .toList();
+                            Navigator.of(context).pop(invitees);
+                          },
+                    child: const Text('Send invites'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

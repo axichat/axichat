@@ -93,6 +93,7 @@ class AxiNavigationRail extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                           color: colors.foreground,
                         ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     )
@@ -153,6 +154,14 @@ class _AxiNavigationRailItem extends StatelessWidget {
     final colors = context.colorScheme;
     final iconColor = selected ? colors.primary : colors.foreground;
     final textColor = selected ? colors.primary : colors.foreground;
+    final itemShape = SquircleBorder(
+      cornerRadius: radius.topLeft.x,
+      side: BorderSide(
+        color: selected
+            ? colors.primary.withValues(alpha: 0.5)
+            : Colors.transparent,
+      ),
+    );
 
     Widget icon = Icon(
       destination.icon,
@@ -173,23 +182,20 @@ class _AxiNavigationRailItem extends StatelessWidget {
         decoration: ShapeDecoration(
           color: selected
               ? Color.alphaBlend(selectionOverlay, surfaceColor)
-              : surfaceColor,
-          shape: SquircleBorder(
-            cornerRadius: radius.topLeft.x,
-            side: BorderSide(
-              color: selected
-                  ? colors.primary.withValues(alpha: 0.5)
-                  : colors.border,
-            ),
-          ),
+              : Colors.transparent,
+          shape: itemShape,
         ),
-        child: InkWell(
-          customBorder: SquircleBorder(cornerRadius: radius.topLeft.x),
+        child: InkResponse(
+          containedInkWell: true,
+          highlightShape: BoxShape.rectangle,
+          customBorder: itemShape,
           onTap: onTap,
           splashFactory:
               isDesktop ? NoSplash.splashFactory : InkRipple.splashFactory,
-          hoverColor: colors.primary.withValues(alpha: 0.08),
-          splashColor: colors.primary.withValues(alpha: 0.14),
+          hoverColor: colors.primary.withValues(alpha: 0.06),
+          splashColor: colors.primary.withValues(alpha: 0.12),
+          highlightColor: Colors.transparent,
+          focusColor: Colors.transparent,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: collapsed ? 10 : 12,
@@ -207,6 +213,7 @@ class _AxiNavigationRailItem extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: textColor,
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
