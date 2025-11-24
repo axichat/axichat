@@ -35,7 +35,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     await context.read<AuthenticationCubit>().unregister(
           username: context.read<ProfileCubit>().state.username,
-          host: AuthenticationCubit.domain,
+          host: context.read<AuthenticationCubit>().endpointConfig.domain,
           password: _passwordTextController.value.text,
         );
     _passwordTextController.clear();

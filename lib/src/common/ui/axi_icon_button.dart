@@ -40,22 +40,24 @@ class AxiIconButton extends StatelessWidget {
       width: kTapTargetSize,
       height: kTapTargetSize,
       child: Center(
-        child: Material(
-          color: Colors.transparent,
-          shape: paintShape,
-          clipBehavior: Clip.antiAlias,
-          child: Ink(
-            width: kDefaultSize,
-            height: kDefaultSize,
-            decoration: ShapeDecoration(
-              color: colors.card,
-              shape: paintShape,
-            ),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            color: colors.card,
+            shape: paintShape,
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            shape: paintShape,
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onPressed,
               customBorder: paintShape,
               splashFactory: InkRipple.splashFactory,
-              child: Center(child: icon),
+              child: SizedBox(
+                width: kDefaultSize,
+                height: kDefaultSize,
+                child: Center(child: icon),
+              ),
             ),
           ),
         ),

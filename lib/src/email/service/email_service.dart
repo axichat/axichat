@@ -41,12 +41,10 @@ class EmailAccount {
   const EmailAccount({
     required this.address,
     required this.password,
-    this.principalId,
   });
 
   final String address;
   final String password;
-  final int? principalId;
 }
 
 class EmailProvisioningException implements Exception {
@@ -112,7 +110,6 @@ class EmailService {
   final EmailBlockingService blocking;
   final EmailSpamService spam;
   final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
-  final Map<String, RegisteredCredentialKey> _principalKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
@@ -123,7 +120,6 @@ class EmailService {
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
-  final Map<String, RegisteredCredentialKey> _legacyPrincipalKeys = {};
   final Map<String, RegisteredCredentialKey> _legacyAddressKeys = {};
   final Map<String, RegisteredCredentialKey> _legacyPasswordKeys = {};
   final Map<String, RegisteredCredentialKey> _legacyProvisionedKeys = {};
@@ -170,16 +166,9 @@ class EmailService {
     if (address == null || password == null) {
       return null;
     }
-    final principalRaw = await _readCredentialWithLegacy(
-      primary: _principalKeyForScope(scope),
-      legacy: _legacyPrincipalKeyForScope(scope),
-    );
-    final principalId =
-        principalRaw == null ? null : int.tryParse(principalRaw);
     return EmailAccount(
       address: address,
       password: password,
-      principalId: principalId,
     );
   }
 
@@ -190,7 +179,6 @@ class EmailService {
     required String jid,
     String? passwordOverride,
     String? addressOverride,
-    int? principalIdOverride,
   }) async {
     final scope = _scopeForJid(jid);
     final needsInit = _databasePrefix != databasePrefix ||
@@ -217,11 +205,9 @@ class EmailService {
 
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
-    final principalKey = _principalKeyForScope(scope);
     final provisionedKey = _provisionedKeyForScope(scope);
     final legacyAddressKey = _legacyAddressKeyForScope(scope);
     final legacyPasswordKey = _legacyPasswordKeyForScope(scope);
-    final legacyPrincipalKey = _legacyPrincipalKeyForScope(scope);
     final legacyProvisionedKey = _legacyProvisionedKeyForScope(scope);
 
     var address = await _readCredentialWithLegacy(
@@ -232,11 +218,6 @@ class EmailService {
       primary: passwordKey,
       legacy: legacyPasswordKey,
     );
-    final principalRaw = await _readCredentialWithLegacy(
-      primary: principalKey,
-      legacy: legacyPrincipalKey,
-    );
-    int? principalId = principalRaw == null ? null : int.tryParse(principalRaw);
     final normalizedOverrideAddress = addressOverride?.trim().toLowerCase();
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
@@ -266,22 +247,6 @@ class EmailService {
       }
     } else if (password == null) {
       throw StateError('Failed to resolve email password for $jid');
-    }
-
-    final resolvedPrincipalOverride = principalIdOverride;
-    if (resolvedPrincipalOverride != null && resolvedPrincipalOverride > 0) {
-      if (principalId != resolvedPrincipalOverride) {
-        principalId = resolvedPrincipalOverride;
-        credentialsMutated = true;
-        await _credentialStore.write(
-          key: principalKey,
-          value: resolvedPrincipalOverride.toString(),
-        );
-        await _credentialStore.write(
-          key: legacyPrincipalKey,
-          value: resolvedPrincipalOverride.toString(),
-        );
-      }
     }
 
     var alreadyProvisioned = (await _readCredentialWithLegacy(
@@ -373,6 +338,38 @@ class EmailService {
     );
     _activeAccount = account;
     return account;
+  }
+
+  Future<void> updatePassword({
+    required String jid,
+    required String displayName,
+    required String password,
+  }) async {
+    await _ensureReady();
+    final scope = _scopeForJid(jid);
+    final address = await _readCredentialWithLegacy(
+      primary: _addressKeyForScope(scope),
+      legacy: _legacyAddressKeyForScope(scope),
+    );
+    if (address == null || address.isEmpty) {
+      throw StateError('No email address found for $jid');
+    }
+    await _credentialStore.write(
+      key: _passwordKeyForScope(scope),
+      value: password,
+    );
+    await _credentialStore.write(
+      key: _legacyPasswordKeyForScope(scope),
+      value: password,
+    );
+    await _transport.configureAccount(
+      address: address,
+      password: password,
+      displayName: displayName,
+      additional: _buildConnectionConfig(address),
+    );
+    _activeCredentialScope = scope;
+    _activeAccount = EmailAccount(address: address, password: password);
   }
 
   Future<void> start() async {
@@ -1473,20 +1470,6 @@ class EmailService {
     );
   }
 
-  RegisteredCredentialKey _principalKeyForScope(String scope) {
-    return _principalKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey('email_principal_$scope'),
-    );
-  }
-
-  RegisteredCredentialKey _legacyPrincipalKeyForScope(String scope) {
-    return _legacyPrincipalKeys.putIfAbsent(
-      scope,
-      () => CredentialStore.registerKey('chatmail_principal_$scope'),
-    );
-  }
-
   RegisteredCredentialKey _provisionedKeyForScope(String scope) {
     return _provisionedKeys.putIfAbsent(
       scope,
@@ -1540,10 +1523,6 @@ class EmailService {
     await _deleteCredentialPair(
       primary: _passwordKeyForScope(scope),
       legacy: _legacyPasswordKeyForScope(scope),
-    );
-    await _deleteCredentialPair(
-      primary: _principalKeyForScope(scope),
-      legacy: _legacyPrincipalKeyForScope(scope),
     );
     await _deleteCredentialPair(
       primary: _provisionedKeyForScope(scope),

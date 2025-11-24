@@ -124,9 +124,9 @@ class CalendarNavigation extends StatelessWidget {
 
         const Border? border = null;
         const List<BoxShadow> navShadows = [];
-        final brightness = Theme.of(context).brightness;
+        final brightness = ShadTheme.of(context).brightness;
         final Color navBackground = brightness == Brightness.dark
-            ? Theme.of(context).colorScheme.surface
+            ? colors.card
             : calendarSidebarBackgroundColor;
         return ColoredBox(
           color: navBackground,

@@ -136,7 +136,12 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/licenses/delta_chat_core_mpl.txt
+    - assets/licenses/noto_color_emoji_ofl.txt
     - shorebird.yaml
+  fonts:
+    - family: NotoColorEmoji
+      fonts:
+        - asset: assets/fonts/NotoColorEmoji.ttf
 
 flutter_launcher_icons:
   android: true

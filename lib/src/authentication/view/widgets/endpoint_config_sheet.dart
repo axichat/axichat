@@ -1,5 +1,5 @@
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -8,14 +8,34 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class EndpointConfigSheet extends StatefulWidget {
-  const EndpointConfigSheet({super.key});
+  const EndpointConfigSheet({super.key, required this.compact});
 
-  static Future<void> show(BuildContext context) => showModalBottomSheet(
+  final bool compact;
+
+  static Future<void> show(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final useBottomSheet =
+        size.width < smallScreen || size.shortestSide < compactDeviceBreakpoint;
+    if (useBottomSheet) {
+      return showModalBottomSheet(
         context: context,
         isScrollControlled: true,
+        useSafeArea: true,
         showDragHandle: true,
-        builder: (_) => const EndpointConfigSheet(),
+        backgroundColor: Colors.transparent,
+        builder: (_) => const EndpointConfigSheet(compact: true),
       );
+    }
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.all(24),
+        child: EndpointConfigSheet(compact: false),
+      ),
+    );
+  }
 
   @override
   State<EndpointConfigSheet> createState() => _EndpointConfigSheetState();
@@ -115,182 +135,237 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final viewInsets = MediaQuery.viewInsetsOf(context);
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: 16 + viewInsets.bottom,
-        top: 12,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Custom server',
-            style: textTheme.h4,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields '
-            'blank to keep defaults.',
-            style: textTheme.muted,
-          ),
-          const SizedBox(height: 16),
-          AxiTextFormField(
+    final placeholderStyle =
+        textTheme.muted.copyWith(color: colors.mutedForeground);
+    final inputStyle = TextStyle(color: colors.foreground);
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Custom server',
+          style: textTheme.h4,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields '
+          'blank to keep defaults.',
+          style: textTheme.muted.copyWith(color: colors.mutedForeground),
+        ),
+        const SizedBox(height: 16),
+        AxiTextFormField(
+          autocorrect: false,
+          keyboardType: TextInputType.url,
+          controller: _domainController,
+          placeholder: Text('Domain or IP', style: placeholderStyle),
+          placeholderStyle: placeholderStyle,
+          style: inputStyle,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _ToggleTile(
+                label: 'XMPP',
+                value: _enableXmpp,
+                onChanged: (value) =>
+                    setState(() => _enableXmpp = value ?? _enableXmpp),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ToggleTile(
+                label: 'SMTP',
+                value: _enableSmtp,
+                onChanged: (value) =>
+                    setState(() => _enableSmtp = value ?? _enableSmtp),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _ToggleTile(
+                label: 'Use DNS',
+                value: _useDns,
+                onChanged: (value) => setState(() {
+                  _useDns = value ?? _useDns;
+                  if (!_useDns) {
+                    _useSrv = false;
+                    _requireDnssec = false;
+                  }
+                }),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ToggleTile(
+                label: 'Use SRV',
+                value: _useSrv,
+                enabled: _useDns,
+                onChanged: (value) =>
+                    setState(() => _useSrv = value ?? _useSrv),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _ToggleTile(
+          label: 'Require DNSSEC',
+          value: _requireDnssec,
+          enabled: _useDns,
+          onChanged: (value) =>
+              setState(() => _requireDnssec = value ?? _requireDnssec),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: AxiTextFormField(
+                autocorrect: false,
+                keyboardType: TextInputType.text,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'[A-Za-z0-9._:-]'),
+                  ),
+                ],
+                placeholder:
+                    Text('XMPP host (optional)', style: placeholderStyle),
+                placeholderStyle: placeholderStyle,
+                controller: _xmppHostController,
+                style: inputStyle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 96,
+              child: AxiTextFormField(
+                autocorrect: false,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                placeholder: Text('Port', style: placeholderStyle),
+                placeholderStyle: placeholderStyle,
+                controller: _xmppPortController,
+                style: inputStyle,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: AxiTextFormField(
+                autocorrect: false,
+                keyboardType: TextInputType.url,
+                placeholder:
+                    Text('SMTP host (optional)', style: placeholderStyle),
+                placeholderStyle: placeholderStyle,
+                controller: _smtpHostController,
+                style: inputStyle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 96,
+              child: AxiTextFormField(
+                autocorrect: false,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                placeholder: Text('Port', style: placeholderStyle),
+                placeholderStyle: placeholderStyle,
+                controller: _smtpPortController,
+                style: inputStyle,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 120,
+          child: AxiTextFormField(
             autocorrect: false,
-            keyboardType: TextInputType.url,
-            controller: _domainController,
-            placeholder: const Text('Domain or IP'),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ToggleTile(
-                  label: 'XMPP',
-                  value: _enableXmpp,
-                  onChanged: (value) =>
-                      setState(() => _enableXmpp = value ?? _enableXmpp),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ToggleTile(
-                  label: 'SMTP',
-                  value: _enableSmtp,
-                  onChanged: (value) =>
-                      setState(() => _enableSmtp = value ?? _enableSmtp),
-                ),
-              ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
             ],
+            placeholder: Text('API port', style: placeholderStyle),
+            placeholderStyle: placeholderStyle,
+            controller: _apiPortController,
+            style: inputStyle,
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ToggleTile(
-                  label: 'Use DNS',
-                  value: _useDns,
-                  onChanged: (value) => setState(() {
-                    _useDns = value ?? _useDns;
-                    if (!_useDns) {
-                      _useSrv = false;
-                      _requireDnssec = false;
-                    }
-                  }),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: ShadButton.secondary(
+                onPressed: _reset,
+                child: const Text('Reset to axi.im'),
+              ).withTapBounce(),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ShadButton(
+                onPressed: _save,
+                child: const Text('Save'),
+              ).withTapBounce(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Advanced server options stay hidden until you tap the username '
+          'suffix.',
+          style: textTheme.muted.copyWith(color: colors.mutedForeground),
+        ),
+      ],
+    );
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          left: widget.compact ? 12 : 24,
+          right: widget.compact ? 12 : 24,
+          top: widget.compact ? 12 : 24,
+          bottom: (widget.compact ? 12 : 24) + viewInsets.bottom,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: widget.compact ? 560 : 680,
+            ),
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.card,
+                shadows: const [
+                  BoxShadow(
+                    color: Color(0x1A000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+                shape: SquircleBorder(
+                  cornerRadius: 18,
+                  side: BorderSide(color: colors.border),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ToggleTile(
-                  label: 'Use SRV',
-                  value: _useSrv,
-                  enabled: _useDns,
-                  onChanged: (value) =>
-                      setState(() => _useSrv = value ?? _useSrv),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.compact ? 16 : 20,
+                  vertical: widget.compact ? 16 : 20,
                 ),
+                child: content,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _ToggleTile(
-            label: 'Require DNSSEC',
-            value: _requireDnssec,
-            enabled: _useDns,
-            onChanged: (value) =>
-                setState(() => _requireDnssec = value ?? _requireDnssec),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: AxiTextFormField(
-                  autocorrect: false,
-                  keyboardType: TextInputType.url,
-                  placeholder: const Text('XMPP host (optional)'),
-                  controller: _xmppHostController,
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 96,
-                child: AxiTextFormField(
-                  autocorrect: false,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
-                  placeholder: const Text('Port'),
-                  controller: _xmppPortController,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: AxiTextFormField(
-                  autocorrect: false,
-                  keyboardType: TextInputType.url,
-                  placeholder: const Text('SMTP host (optional)'),
-                  controller: _smtpHostController,
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 96,
-                child: AxiTextFormField(
-                  autocorrect: false,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
-                  placeholder: const Text('Port'),
-                  controller: _smtpPortController,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 120,
-            child: AxiTextFormField(
-              autocorrect: false,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-              placeholder: const Text('API port'),
-              controller: _apiPortController,
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ShadButton.secondary(
-                  onPressed: _reset,
-                  child: const Text('Reset to axi.im'),
-                ).withTapBounce(),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ShadButton(
-                  onPressed: _save,
-                  child: const Text('Save'),
-                ).withTapBounce(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Advanced server options stay hidden until you tap the username '
-            'suffix.',
-            style: textTheme.muted.copyWith(color: colors.muted),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -334,6 +409,7 @@ class _ToggleTile extends StatelessWidget {
     final materialText = Theme.of(context).textTheme.bodyMedium;
     return DecoratedBox(
       decoration: BoxDecoration(
+        color: colors.background,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.border),
       ),

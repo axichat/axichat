@@ -413,14 +413,18 @@ class XmppPresenceManager extends mox.PresenceManager {
       tag: 'x',
     );
     if (mucUser == null) return false;
-    final occupantId = _extractMucOccupantId(stanza);
-    if (occupantId == null || occupantId.isEmpty) return false;
     final item = _mucItemNode(mucUser);
     final affiliation = OccupantAffiliation.fromString(
       item?.attributes['affiliation'] as String?,
     );
     final role = OccupantRole.fromString(item?.attributes['role'] as String?);
     final realJid = item?.attributes['jid'] as String?;
+    final occupantId = _resolveMucOccupantId(
+      rawOccupantId: _extractMucOccupantId(stanza),
+      realJid: realJid,
+      occupantJid: jid,
+    );
+    if (occupantId == null || occupantId.isEmpty) return false;
     final isUnavailable = stanza.type == Presence.unavailable.name;
     if (owner is MucService) {
       final muc = owner as MucService;
@@ -475,6 +479,23 @@ class XmppPresenceManager extends mox.PresenceManager {
     );
     final id = node?.attributes['id'];
     return id is String ? id : null;
+  }
+
+  String? _resolveMucOccupantId({
+    required String? rawOccupantId,
+    required String? realJid,
+    required mox.JID occupantJid,
+  }) {
+    if (rawOccupantId != null && rawOccupantId.isNotEmpty) {
+      return rawOccupantId;
+    }
+    if (realJid != null && realJid.isNotEmpty) {
+      return mox.JID.fromString(realJid).toBare().toString();
+    }
+    if (occupantJid.resource.isNotEmpty) {
+      return '${occupantJid.toBare()}/${occupantJid.resource}';
+    }
+    return occupantJid.toBare().toString();
   }
 
   Future<void> _acknowledgeUnsubscribe(mox.JID jid) async {

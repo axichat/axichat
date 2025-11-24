@@ -41,6 +41,9 @@ export 'squircle_border.dart';
 const appDisplayName = 'axichat';
 const androidIconPath = 'app_icon';
 
+const emojiFontFamily = 'NotoColorEmoji';
+const emojiFontFallback = <String>[emojiFontFamily];
+
 const smallScreen = 820.0;
 const mediumScreen = 900.0;
 const largeScreen = 1200.0;

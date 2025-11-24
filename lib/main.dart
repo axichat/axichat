@@ -95,11 +95,19 @@ void _configureLogging() {
 }
 
 void _registerThirdPartyLicenses() {
+  const deltaLicenseAsset = 'assets/licenses/delta_chat_core_mpl.txt';
+  const notoColorEmojiLicenseAsset = 'assets/licenses/noto_color_emoji_ofl.txt';
   LicenseRegistry.addLicense(() async* {
-    final text =
-        await rootBundle.loadString('assets/licenses/delta_chat_core_mpl.txt');
+    final text = await rootBundle.loadString(deltaLicenseAsset);
     yield LicenseEntryWithLineBreaks(
       ['Delta Chat Core (MPL-2.0)'],
+      text,
+    );
+  });
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString(notoColorEmojiLicenseAsset);
+    yield LicenseEntryWithLineBreaks(
+      ['Noto Color Emoji (OFL-1.1)'],
       text,
     );
   });

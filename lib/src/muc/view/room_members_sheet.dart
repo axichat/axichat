@@ -1,6 +1,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/common/ui/axi_avatar.dart';
+import 'package:axichat/src/common/ui/axi_list_tile.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
@@ -16,6 +18,7 @@ class RoomMembersSheet extends StatelessWidget {
     this.onChangeNickname,
     this.onLeaveRoom,
     this.currentNickname,
+    this.onClose,
     super.key,
   });
 
@@ -26,6 +29,7 @@ class RoomMembersSheet extends StatelessWidget {
   final ValueChanged<String>? onChangeNickname;
   final VoidCallback? onLeaveRoom;
   final String? currentNickname;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +39,6 @@ class RoomMembersSheet extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -55,6 +58,14 @@ class RoomMembersSheet extends StatelessWidget {
                     },
                     child: const Text('Invite user'),
                   ),
+                if (onClose != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(LucideIcons.x),
+                    tooltip: 'Close',
+                    onPressed: onClose,
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -87,24 +98,31 @@ class RoomMembersSheet extends StatelessWidget {
                   ],
                 ),
               ),
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.6,
-              child: SingleChildScrollView(
-                child: Column(
-                  children: groups
-                      .map(
-                        (group) => _MemberSection(
+            const SizedBox(height: 8),
+            Expanded(
+              child: groups.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No members yet',
+                        style: theme.muted,
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemBuilder: (context, index) {
+                        final group = groups[index];
+                        return _MemberSection(
                           title: group.title,
                           occupants: group.members,
                           buildActions: _actionsFor,
                           onAction: onAction,
                           myOccupantId: roomState.myOccupantId,
                           myAffiliation: roomState.myAffiliation,
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
+                        );
+                      },
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemCount: groups.length,
+                    ),
             ),
           ],
         ),
@@ -235,45 +253,34 @@ class _MemberSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Text(title, style: theme.muted),
-          ),
-          ...occupants.map(
-            (occupant) {
-              final actions = buildActions(occupant);
-              final labels = <String>[];
-              if (occupant.affiliation.isOwner) labels.add('Owner');
-              if (occupant.affiliation.isAdmin) labels.add('Admin');
-              if (occupant.affiliation.isMember &&
-                  !occupant.affiliation.isOwner &&
-                  !occupant.affiliation.isAdmin) {
-                labels.add('Member');
-              }
-              if (occupant.role.isModerator) labels.add('Moderator');
-              final jid = occupant.realJid;
-              return Card(
-                elevation: 0,
-                color: context.colorScheme.muted.withValues(alpha: 0.08),
-                child: ListTile(
-                  dense: true,
-                  title: Text(occupant.nick, style: theme.p),
-                  subtitle: Text(
-                    [
-                      ...labels,
-                      if (jid != null) jid,
-                      if (occupant.occupantId != jid) occupant.occupantId,
-                    ].where((value) => value.isNotEmpty).join(' • '),
-                    style: theme.muted,
-                  ),
-                  trailing: actions.isEmpty
-                      ? null
-                      : PopupMenuButton<MucModerationAction>(
+    const memberTileHeight = 64.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text(title, style: theme.muted),
+        ),
+        ...occupants.map(
+          (occupant) {
+            final actions = buildActions(occupant);
+            final subtitle = _roleSubtitle(occupant);
+            final isSelf = occupant.occupantId == myOccupantId;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: AxiListTile(
+                leading: AxiAvatar(
+                  jid: _avatarKey(occupant),
+                  size: 44,
+                ),
+                title: occupant.nick,
+                subtitle: subtitle,
+                selected: isSelf,
+                minTileHeight: memberTileHeight,
+                actions: actions.isEmpty
+                    ? null
+                    : [
+                        PopupMenuButton<MucModerationAction>(
                           icon: const Icon(LucideIcons.ellipsisVertical),
                           onSelected: (action) =>
                               onAction(occupant.occupantId, action),
@@ -286,12 +293,12 @@ class _MemberSection extends StatelessWidget {
                               )
                               .toList(),
                         ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+                      ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -304,6 +311,33 @@ class _MemberSection extends StatelessWidget {
         MucModerationAction.moderator => 'Grant moderator',
         MucModerationAction.participant => 'Revoke moderator',
       };
+
+  String _roleSubtitle(Occupant occupant) {
+    final labels = <String>[];
+    if (occupant.affiliation.isOwner) {
+      labels.add('Owner');
+    } else if (occupant.affiliation.isAdmin) {
+      labels.add('Admin');
+    } else if (occupant.affiliation.isMember) {
+      labels.add('Member');
+    } else {
+      labels.add('Visitor');
+    }
+    if (occupant.role.isModerator) labels.add('Moderator');
+    return labels.join(' • ');
+  }
+
+  String _avatarKey(Occupant occupant) {
+    final realJid = occupant.realJid;
+    if (realJid == null || realJid.isEmpty) {
+      return occupant.nick;
+    }
+    final separatorIndex = realJid.indexOf('/');
+    if (separatorIndex <= 0) {
+      return realJid;
+    }
+    return realJid.substring(0, separatorIndex);
+  }
 }
 
 class _InviteChipsSheet extends StatefulWidget {

@@ -25,6 +25,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/env.dart';
@@ -48,7 +49,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter/rendering.dart' show PipelineOwner, RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -183,6 +184,7 @@ const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
 const _messageListTailSpacer = 36.0;
+const _subjectFieldHeight = 24.0;
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -437,7 +439,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                           color: context.colorScheme.destructive,
                         ),
                       );
-                    } else if (state.status == RequestStatus.loading) {
+                    } else if (state.status.isLoading) {
                       statusChild = Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -461,7 +463,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                         'Matches will appear in the conversation below.',
                         style: context.textTheme.muted,
                       );
-                    } else if (state.status == RequestStatus.success) {
+                    } else if (state.status.isSuccess) {
                       final matchCount = state.results.length;
                       statusChild = Text(
                         matchCount == 0
@@ -645,26 +647,67 @@ class _ChatState extends State<Chat> {
   }
 
   void _showMembers(RoomState roomState) {
-    showModalBottomSheet(
+    final screenWidth = MediaQuery.of(context).size.width;
+    const drawerMaxWidth = 420.0;
+    const drawerWidthFraction = 0.9;
+    final drawerWidth =
+        math.min(screenWidth * drawerWidthFraction, drawerMaxWidth);
+    showGeneralDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (context) => RoomMembersSheet(
-        roomState: roomState,
-        canInvite: true,
-        onInvite: (jid) =>
-            context.read<ChatBloc>().add(ChatInviteRequested(jid)),
-        onAction: (occupantId, action) => context.read<ChatBloc>().add(
-              ChatModerationActionRequested(
-                occupantId: occupantId,
-                action: action,
+      barrierDismissible: true,
+      barrierLabel: 'Room members',
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      transitionDuration: baseAnimationDuration,
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(
+            width: drawerWidth,
+            child: Material(
+              color: context.colorScheme.background,
+              elevation: 12,
+              child: RoomMembersSheet(
+                roomState: roomState,
+                canInvite: true,
+                onInvite: (jid) =>
+                    context.read<ChatBloc>().add(ChatInviteRequested(jid)),
+                onAction: (occupantId, action) => context.read<ChatBloc>().add(
+                      ChatModerationActionRequested(
+                        occupantId: occupantId,
+                        action: action,
+                      ),
+                    ),
+                onChangeNickname: (nick) => context
+                    .read<ChatBloc>()
+                    .add(ChatNicknameChangeRequested(nick)),
+                onLeaveRoom: () => context
+                    .read<ChatBloc>()
+                    .add(const ChatLeaveRoomRequested()),
+                currentNickname:
+                    roomState.occupants[roomState.myOccupantId]?.nick,
+                onClose: Navigator.of(context).pop,
               ),
             ),
-        onChangeNickname: (nick) =>
-            context.read<ChatBloc>().add(ChatNicknameChangeRequested(nick)),
-        onLeaveRoom: () =>
-            context.read<ChatBloc>().add(const ChatLeaveRoomRequested()),
-        currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
-      ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.08, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: FadeTransition(
+            opacity: curved,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -1877,9 +1920,11 @@ class _ChatState extends State<Chat> {
               builder: (context, state) {
                 final profile = context.watch<ProfileCubit?>()?.state;
                 final readOnly = widget.readOnly;
-                final emailService =
-                    RepositoryProvider.of<EmailService>(context, listen: false);
-                final emailSelfJid = emailService.selfSenderJid;
+                final emailService = RepositoryProvider.of<EmailService?>(
+                  context,
+                  listen: false,
+                );
+                final emailSelfJid = emailService?.selfSenderJid;
                 final chatEntity = state.chat;
                 final jid = chatEntity?.jid;
                 final isEmailChat = chatEntity?.deltaChatId != null;
@@ -2064,7 +2109,6 @@ class _ChatState extends State<Chat> {
                         ] else
                           const SizedBox.shrink(),
                       ],
-                      bottom: null,
                     ),
                     body: Column(
                       children: [
@@ -4791,6 +4835,15 @@ class _ChatComposerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final xmppService = context.read<XmppService>();
+    final myJid = xmppService.myJid;
+    final suggestionAddresses = <String>{
+      if (myJid != null && myJid.isNotEmpty) myJid,
+    };
+    final suggestionDomains = <String>{
+      EndpointConfig.defaultDomain,
+      if (myJid != null && myJid.isNotEmpty) mox.JID.fromString(myJid).domain,
+    };
     final width = MediaQuery.sizeOf(context).width;
     final horizontalPadding = width >= smallScreen
         ? _desktopComposerHorizontalInset
@@ -4930,6 +4983,8 @@ class _ChatComposerSection extends StatelessWidget {
           availableChats: availableChats,
           latestStatuses: latestStatuses,
           collapsedByDefault: true,
+          suggestionAddresses: suggestionAddresses,
+          suggestionDomains: suggestionDomains,
           onRecipientAdded: onRecipientAdded,
           onRecipientRemoved: onRecipientRemoved,
           onRecipientToggled: onRecipientToggled,
@@ -4962,13 +5017,13 @@ class _SubjectTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final subjectStyle = context.textTheme.p.copyWith(
-      fontSize: 15,
+      fontSize: 14,
       height: 1.05,
       fontWeight: FontWeight.w600,
       color: colors.foreground,
     );
     return SizedBox(
-      height: 28,
+      height: _subjectFieldHeight,
       child: Semantics(
         label: 'Email subject',
         textField: true,

@@ -111,6 +111,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
+    on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
@@ -164,8 +165,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       add(_EmailSyncStateChanged(initialSyncState));
     }
     if (messageService case final XmppService xmppService) {
+      add(_XmppConnectionStateChanged(xmppService.connectionState));
       _connectivitySubscription = xmppService.connectivityStream.listen(
         (connectionState) {
+          add(_XmppConnectionStateChanged(connectionState));
           if (connectionState == ConnectionState.connected) {
             unawaited(_catchUpFromMam());
           }
@@ -316,6 +319,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _mamLoading = false;
   }
 
+  Future<void> _ensureMucMembership(Chat chat) async {
+    if (chat.type != ChatType.groupChat) return;
+    if (state.xmppConnectionState != ConnectionState.connected) return;
+    try {
+      await _mucService.ensureJoined(
+        roomJid: chat.jid,
+        nickname: chat.myNickname,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to ensure membership for ${chat.jid}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   void _subscribeToMessages({
     required int limit,
     required MessageTimelineFilter filter,
@@ -373,6 +393,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (!resetContext && state.items.isNotEmpty) {
         _mucService.trackOccupantsFromMessages(event.chat.jid, state.items);
       }
+      unawaited(_ensureMucMembership(event.chat));
     } else {
       emit(state.copyWith(roomState: null));
     }
@@ -736,6 +757,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  void _onXmppConnectionStateChanged(
+    _XmppConnectionStateChanged event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state.xmppConnectionState == event.state) return;
+    emit(state.copyWith(xmppConnectionState: event.state));
+    final chat = state.chat;
+    if (event.state == ConnectionState.connected &&
+        chat?.type == ChatType.groupChat) {
+      unawaited(_ensureMucMembership(chat!));
+    }
+  }
+
   Future<void> _onChatMessageFocused(
     ChatMessageFocused event,
     Emitter<ChatState> emit,
@@ -816,6 +850,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (state.composerError != null) {
       emit(state.copyWith(composerError: null));
+    }
+    if (chat.type == ChatType.groupChat) {
+      await _ensureMucMembership(chat);
     }
     final recipients = _resolveComposerRecipients(chat);
     final split = _splitRecipientsForSend(

@@ -224,7 +224,7 @@ class MaterialAxichat extends StatelessWidget {
           brightness: Brightness.dark,
           neutrals: chatNeutrals,
         );
-        return ShadApp.router(
+        final app = ShadApp.router(
           localizationsDelegates: const [
             AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
@@ -267,22 +267,25 @@ class MaterialAxichat extends StatelessWidget {
             final focusRingColor = materialColors.primary.withValues(
               alpha: theme.brightness == Brightness.dark ? 0.25 : 0.15,
             );
+            final textThemeWithEmojiFallback = TextTheme(
+              displayLarge: shadTheme.textTheme.h1Large,
+              displayMedium: shadTheme.textTheme.h1,
+              displaySmall: shadTheme.textTheme.h2,
+              titleLarge: shadTheme.textTheme.h3,
+              titleMedium: shadTheme.textTheme.large,
+              titleSmall: shadTheme.textTheme.small,
+              bodyLarge: shadTheme.textTheme.p,
+              bodyMedium: shadTheme.textTheme.small,
+              bodySmall: shadTheme.textTheme.muted,
+              labelLarge: shadTheme.textTheme.muted,
+              labelMedium: shadTheme.textTheme.muted,
+              labelSmall: shadTheme.textTheme.muted,
+            ).apply(
+              fontFamilyFallback: emojiFontFallback,
+            );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: 20),
-              textTheme: TextTheme(
-                displayLarge: shadTheme.textTheme.h1Large,
-                displayMedium: shadTheme.textTheme.h1,
-                displaySmall: shadTheme.textTheme.h2,
-                titleLarge: shadTheme.textTheme.h3,
-                titleMedium: shadTheme.textTheme.large,
-                titleSmall: shadTheme.textTheme.small,
-                bodyLarge: shadTheme.textTheme.p,
-                bodyMedium: shadTheme.textTheme.small,
-                bodySmall: shadTheme.textTheme.muted,
-                labelLarge: shadTheme.textTheme.muted,
-                labelMedium: shadTheme.textTheme.muted,
-                labelSmall: shadTheme.textTheme.muted,
-              ),
+              textTheme: textThemeWithEmojiFallback,
               scaffoldBackgroundColor: materialColors.background,
               dividerColor: materialColors.border,
               cardColor: materialColors.card,
@@ -437,6 +440,8 @@ class MaterialAxichat extends StatelessWidget {
             return content;
           },
         );
+
+        return ScaffoldMessenger(child: app);
       },
     );
   }
