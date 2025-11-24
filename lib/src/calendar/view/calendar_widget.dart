@@ -28,9 +28,9 @@ class CalendarNavSurface extends StatelessWidget {
   final Widget child;
 
   static Color backgroundColor(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.brightness == Brightness.dark
-        ? theme.colorScheme.surface
+    final scheme = context.colorScheme;
+    return ShadTheme.of(context).brightness == Brightness.dark
+        ? scheme.card
         : calendarSidebarBackgroundColor;
   }
 

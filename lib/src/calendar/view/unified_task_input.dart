@@ -308,11 +308,13 @@ class _UnifiedTaskDialogHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
     return Container(
       padding: calendarPaddingXl,
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
+          bottom: BorderSide(color: colors.border),
         ),
       ),
       child: Row(
@@ -320,7 +322,7 @@ class _UnifiedTaskDialogHeader extends StatelessWidget {
           Expanded(
             child: Text(
               isEditing ? 'Edit Task' : 'New Task',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: textTheme.h4,
             ),
           ),
           IconButton(
@@ -459,12 +461,13 @@ class _UnifiedTaskDateTimeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Date & Time',
-          style: Theme.of(context).textTheme.labelMedium,
+          style: textTheme.muted,
         ),
         const SizedBox(height: calendarGutterSm),
         TaskDateTimeToolbar(
@@ -500,12 +503,13 @@ class _UnifiedTaskDurationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Duration',
-          style: Theme.of(context).textTheme.labelMedium,
+          style: textTheme.muted,
         ),
         const SizedBox(height: calendarGutterSm),
         ShadSelect<Duration>(
@@ -571,6 +575,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     return BlocConsumer<T, CalendarState>(
       listener: (context, state) {
         if (state.error != null && isSubmitting) {
@@ -585,7 +590,7 @@ class _UnifiedTaskDialogActions<T extends BaseCalendarBloc>
           padding: calendarPaddingXl,
           decoration: BoxDecoration(
             border: Border(
-              top: BorderSide(color: Theme.of(context).dividerColor),
+              top: BorderSide(color: colors.border),
             ),
           ),
           child: Column(

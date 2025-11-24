@@ -435,6 +435,9 @@ extension ChatTransportExtension on Chat {
   }
 
   bool get isEmailOnlyContact {
+    if (type != ChatType.chat) {
+      return false;
+    }
     final remote = remoteJid.toLowerCase();
     if (!remote.contains('@')) {
       return false;
@@ -442,8 +445,12 @@ extension ChatTransportExtension on Chat {
     return !_axiDomainPattern.hasMatch(remote);
   }
 
-  MessageTransport get defaultTransport =>
-      isEmailOnlyContact ? MessageTransport.email : MessageTransport.xmpp;
+  MessageTransport get defaultTransport {
+    if (type != ChatType.chat) {
+      return MessageTransport.xmpp;
+    }
+    return isEmailOnlyContact ? MessageTransport.email : MessageTransport.xmpp;
+  }
 
   MessageTransport get transport => defaultTransport;
 }

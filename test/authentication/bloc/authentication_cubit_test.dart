@@ -27,10 +27,6 @@ Uri _registrationMatcher() => any<Uri>(
       that: predicate((Uri uri) => uri.path.contains('/register/new/')),
     );
 
-Uri _deleteMatcher() => any<Uri>(
-      that: predicate((Uri uri) => uri.path.contains('/register/delete/')),
-    );
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -78,6 +74,9 @@ void main() {
       if (key.value == 'completed_signup_accounts_v1') {
         return completedSignupAccountsPayload;
       }
+      if (key.value == 'password_prehashed_v1') {
+        return true.toString();
+      }
       return null;
     });
 
@@ -114,6 +113,14 @@ void main() {
     when(() => mockEmailService.setForegroundKeepalive(any()))
         .thenAnswer((_) async {});
     when(() => mockEmailService.setClientState(any())).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.shutdown(
+        jid: any(named: 'jid'),
+        clearCredentials: any(named: 'clearCredentials'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => mockEmailService.burn(jid: any(named: 'jid')))
+        .thenAnswer((_) async {});
 
     when(
       () => mockProvisioningClient.createAccount(
@@ -124,12 +131,10 @@ void main() {
       (_) async => const provisioning.EmailProvisioningCredentials(
         email: 'prov@axi.im',
         password: validPassword,
-        principalId: 1,
       ),
     );
     when(
       () => mockProvisioningClient.deleteAccount(
-        principalId: any(named: 'principalId'),
         email: any(named: 'email'),
         password: any(named: 'password'),
       ),
@@ -153,6 +158,8 @@ void main() {
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
           )).thenThrow(XmppAuthenticationException());
       when(() => mockXmppService.connect(
             jid: validJid,
@@ -160,6 +167,8 @@ void main() {
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
           )).thenAnswer((_) async => saltedPassword);
     });
 
@@ -402,6 +411,50 @@ void main() {
         const AuthenticationNone(),
       ],
     );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Preserves authenticated session on network failures.',
+      setUp: () {
+        when(() => mockCredentialStore.read(key: any(named: 'key')))
+            .thenAnswer((invocation) async {
+          final key =
+              invocation.namedArguments[#key] as RegisteredCredentialKey;
+          return switch (key.value) {
+            'jid' => validJid,
+            'password' => validPassword,
+            'password_prehashed_v1' => true.toString(),
+            _ => null,
+          };
+        });
+        when(() => mockXmppService.connect(
+              jid: any(named: 'jid'),
+              password: any(named: 'password'),
+              databasePrefix: any(named: 'databasePrefix'),
+              databasePassphrase: any(named: 'databasePassphrase'),
+              preHashed: any(named: 'preHashed'),
+              reuseExistingSession: any(named: 'reuseExistingSession'),
+              endpoint: any(named: 'endpoint'),
+            )).thenThrow(XmppNetworkException());
+        when(() => mockXmppService.resumeOfflineSession(
+              jid: any(named: 'jid'),
+              databasePrefix: any(named: 'databasePrefix'),
+              databasePassphrase: any(named: 'databasePassphrase'),
+            )).thenAnswer((_) async {});
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.login(),
+      expect: () => [],
+      verify: (bloc) {
+        verify(() => mockXmppService.disconnect()).called(1);
+        expect(bloc.state, isA<AuthenticationComplete>());
+      },
+    );
   });
 
   group('signup', () {
@@ -419,6 +472,8 @@ void main() {
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
           )).thenThrow(XmppAuthenticationException());
     });
 
@@ -444,20 +499,24 @@ void main() {
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (bloc) {
-        verify(() => mockHttpClient.post(
-              _deleteMatcher(),
-              body: any(named: 'body'),
-            )).called(1);
+        verify(
+          () => mockProvisioningClient.deleteAccount(
+            email: '$validUsername@${AuthenticationCubit.domain}',
+            password: validPassword,
+          ),
+        ).called(1);
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Queues the rollback when delete request fails.',
       setUp: () {
-        when(() => mockHttpClient.post(
-              _deleteMatcher(),
-              body: any(named: 'body'),
-            )).thenThrow(Exception('offline'));
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(Exception('offline'));
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
@@ -500,6 +559,8 @@ void main() {
               databasePrefix: any(named: 'databasePrefix'),
               databasePassphrase: any(named: 'databasePassphrase'),
               preHashed: any(named: 'preHashed'),
+              reuseExistingSession: any(named: 'reuseExistingSession'),
+              endpoint: any(named: 'endpoint'),
             )).thenThrow(XmppAuthenticationException());
       },
       build: () => AuthenticationCubit(
@@ -522,10 +583,12 @@ void main() {
         AuthenticationFailure('Incorrect username or password'),
       ],
       verify: (_) {
-        verifyNever(() => mockHttpClient.post(
-              _deleteMatcher(),
-              body: any(named: 'body'),
-            ));
+        verifyNever(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        );
         expect(pendingSignupRollbacksPayload, isNull);
       },
     );
@@ -541,10 +604,12 @@ void main() {
             'createdAt': '2024-01-01T00:00:00.000Z',
           },
         ]);
-        when(() => mockHttpClient.post(
-              _deleteMatcher(),
-              body: any(named: 'body'),
-            )).thenAnswer((_) async => Response('fail', 500));
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(Exception('fail'));
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
@@ -620,10 +685,6 @@ void main() {
 
   group('unregister', () {
     setUp(() {
-      when(() => mockHttpClient.post(
-            _deleteMatcher(),
-            body: any(named: 'body'),
-          )).thenAnswer((_) async => Response('', 200));
       when(() => mockCredentialStore.deleteAll(burn: any(named: 'burn')))
           .thenAnswer((_) async => true);
       when(() => mockXmppService.burn()).thenAnswer((_) async {});
@@ -636,14 +697,12 @@ void main() {
           (_) async => const EmailAccount(
             address: 'user@axi.im',
             password: validPassword,
-            principalId: 99,
           ),
         );
         when(() => mockEmailService.burn(jid: any(named: 'jid')))
             .thenAnswer((_) async {});
         when(
           () => mockProvisioningClient.deleteAccount(
-            principalId: 99,
             email: 'user@axi.im',
             password: validPassword,
           ),
@@ -669,15 +728,10 @@ void main() {
       verify: (_) {
         verify(
           () => mockProvisioningClient.deleteAccount(
-            principalId: 99,
             email: 'user@axi.im',
             password: validPassword,
           ),
         ).called(1);
-        verify(() => mockHttpClient.post(
-              _deleteMatcher(),
-              body: any(named: 'body'),
-            )).called(1);
         verify(() => mockXmppService.burn()).called(1);
         verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
       },
@@ -694,9 +748,22 @@ void main() {
     final securePassword = generateRandomString();
 
     setUp(() {
+      when(() => mockHttpClient.get(any(that: isA<Uri>())))
+          .thenAnswer((invocation) async {
+        final uri = invocation.positionalArguments.first as Uri;
+        if (uri.toString().contains('5BAA6')) {
+          return Response(
+            '1E4C9B93F3F0682250B6CF8331B7EE68FD8:10\r\n',
+            200,
+          );
+        }
+        return Response('', 200);
+      });
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
         xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
       );
     });
 

@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -32,6 +33,15 @@ class ComposeScreen extends StatelessWidget {
     final xmppService = locate<XmppService>();
     final MessageService messageService = xmppService;
     final emailService = _maybeLocate<EmailService>();
+    final suggestionAddresses = <String>{
+      if (xmppService.myJid?.isNotEmpty == true) xmppService.myJid!,
+      if (emailService?.activeAccount?.address.isNotEmpty == true)
+        emailService!.activeAccount!.address,
+    };
+    final suggestionDomains = <String>{
+      EndpointConfig.defaultDomain,
+      ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
+    };
     return Scaffold(
       backgroundColor: context.colorScheme.background,
       appBar: AppBar(
@@ -111,6 +121,8 @@ class ComposeScreen extends StatelessWidget {
                         body: body,
                         subject: subject,
                         attachmentMetadataIds: attachmentMetadataIds,
+                        suggestionAddresses: suggestionAddresses,
+                        suggestionDomains: suggestionDomains,
                       ),
                     );
                   },
@@ -129,5 +141,16 @@ class ComposeScreen extends StatelessWidget {
     } catch (_) {
       return null;
     }
+  }
+
+  String? _domainFromAddress(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty || !trimmed.contains('@')) {
+      return null;
+    }
+    final parts = trimmed.split('@');
+    if (parts.length != 2) return null;
+    final domain = parts.last.trim().toLowerCase();
+    return domain.isEmpty ? null : domain;
   }
 }

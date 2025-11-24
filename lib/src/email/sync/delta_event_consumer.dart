@@ -291,42 +291,99 @@ class DeltaEventConsumer {
     required Message message,
     required DeltaMessage delta,
   }) async {
-    if (!delta.hasFile || delta.filePath == null) {
+    if (!delta.hasFile) {
       return message;
     }
     final metadataId = deltaFileMetadataId(delta.id);
     final existing = await db.getFileMetadata(metadataId);
-    final metadata = _metadataFromDelta(delta: delta, metadataId: metadataId);
-    if (existing != null) {
-      final merged = existing.copyWith(
-        path: metadata.path ?? existing.path,
-        mimeType: metadata.mimeType ?? existing.mimeType,
-        sizeBytes: metadata.sizeBytes ?? existing.sizeBytes,
-        width: metadata.width ?? existing.width,
-        height: metadata.height ?? existing.height,
-      );
-      if (merged != existing) {
-        await db.saveFileMetadata(merged);
-      }
-      return message.copyWith(fileMetadataID: existing.id);
+    final resolvedMetadata =
+        _metadataFromDelta(delta: delta, metadataId: metadataId);
+    final merged = _mergeMetadata(existing, resolvedMetadata);
+    if (merged != null && (existing == null || merged != existing)) {
+      await db.saveFileMetadata(merged);
     }
-    await db.saveFileMetadata(metadata);
-    return message.copyWith(fileMetadataID: metadata.id);
+    var next = message.copyWith(
+      fileMetadataID: merged?.id ?? existing?.id ?? resolvedMetadata.id,
+    );
+    final normalizedBody = next.body?.trim() ?? '';
+    if (normalizedBody.isEmpty) {
+      next = next.copyWith(body: _attachmentLabel(merged ?? resolvedMetadata));
+    }
+    return next;
   }
 
   FileMetadataData _metadataFromDelta({
     required DeltaMessage delta,
     required String metadataId,
   }) {
+    final path = delta.filePath?.trim();
+    final sanitizedPath = path == null || path.isEmpty ? null : path;
     return FileMetadataData(
       id: metadataId,
-      filename: delta.fileName ?? p.basename(delta.filePath!),
-      path: delta.filePath,
+      filename: _resolvedFilename(
+        explicitName: delta.fileName,
+        fallbackPath: sanitizedPath,
+        deltaId: delta.id,
+      ),
+      path: sanitizedPath,
       mimeType: delta.fileMime,
       sizeBytes: delta.fileSize,
       width: delta.width,
       height: delta.height,
     );
+  }
+
+  FileMetadataData? _mergeMetadata(
+    FileMetadataData? existing,
+    FileMetadataData next,
+  ) {
+    if (existing == null) return next;
+    final merged = existing.copyWith(
+      filename:
+          existing.filename.isNotEmpty ? existing.filename : next.filename,
+      path: next.path ?? existing.path,
+      mimeType: next.mimeType ?? existing.mimeType,
+      sizeBytes: next.sizeBytes ?? existing.sizeBytes,
+      width: next.width ?? existing.width,
+      height: next.height ?? existing.height,
+    );
+    return merged;
+  }
+
+  String _resolvedFilename({
+    required String? explicitName,
+    required String? fallbackPath,
+    required int deltaId,
+  }) {
+    final trimmedName = explicitName?.trim();
+    if (trimmedName?.isNotEmpty == true) {
+      return p.normalize(trimmedName!);
+    }
+    if (fallbackPath?.isNotEmpty == true) {
+      return p.basename(fallbackPath!);
+    }
+    return 'attachment-$deltaId';
+  }
+
+  String _attachmentLabel(FileMetadataData metadata) {
+    final sizeBytes = metadata.sizeBytes;
+    final label = metadata.filename.trim();
+    if (sizeBytes == null) return '📎 $label';
+    final sizeLabel = _formatBytes(sizeBytes);
+    return '📎 $label ($sizeLabel)';
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return 'Unknown size';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   Future<Message> _applyShareMetadata({

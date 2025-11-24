@@ -25,6 +25,7 @@ class ChatState with _$ChatState {
     @Default(0) int emailSubjectHydrationId,
     String? emailSubjectHydrationText,
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
+    @Default(ConnectionState.notConnected) ConnectionState xmppConnectionState,
     ChatToast? toast,
     @Default(0) int toastId,
   }) = _ChatState;

@@ -31,6 +31,15 @@ final class _EmailSyncStateChanged extends ChatEvent {
   List<Object?> get props => [state];
 }
 
+final class _XmppConnectionStateChanged extends ChatEvent {
+  const _XmppConnectionStateChanged(this.state);
+
+  final ConnectionState state;
+
+  @override
+  List<Object?> get props => [state];
+}
+
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 

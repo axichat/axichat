@@ -41,7 +41,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     await context.read<AuthenticationCubit>().changePassword(
           username: context.read<ProfileCubit>().state.username,
-          host: AuthenticationCubit.domain,
+          host: context.read<AuthenticationCubit>().endpointConfig.domain,
           oldPassword: _passwordTextController.value.text,
           password: _newPasswordTextController.value.text,
           password2: _newPassword2TextController.value.text,

@@ -19,7 +19,11 @@ class TransportAwareAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarIdentifier = chat.avatarIdentifier;
+    final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
+        ? chat.contactDisplayName!.trim()
+        : chat.title.trim().isNotEmpty
+            ? chat.title.trim()
+            : chat.avatarIdentifier;
     final supportsEmail = chat.transport.isEmail;
     final isAxiCompatible = chat.isAxiContact;
     final shouldLabelAll = !supportsEmail && isAxiCompatible;

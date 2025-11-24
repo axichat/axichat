@@ -12,12 +12,10 @@ class EmailProvisioningCredentials {
   const EmailProvisioningCredentials({
     required this.email,
     required this.password,
-    required this.principalId,
   });
 
   final String email;
   final String password;
-  final int principalId;
 }
 
 enum EmailProvisioningApiErrorCode {
@@ -26,6 +24,7 @@ enum EmailProvisioningApiErrorCode {
   invalidResponse,
   network,
   authenticationFailed,
+  notFound,
 }
 
 class EmailProvisioningApiException implements Exception {
@@ -189,7 +188,6 @@ class EmailProvisioningClient {
   }
 
   Future<void> deleteAccount({
-    required int principalId,
     required String email,
     required String password,
   }) async {
@@ -197,7 +195,6 @@ class EmailProvisioningClient {
     final normalizedEmail = email.trim();
     final headers = _headers();
     final payload = jsonEncode({
-      'principal_id': principalId,
       'email': normalizedEmail,
       'password': password,
     });
@@ -272,6 +269,75 @@ class EmailProvisioningClient {
     );
   }
 
+  Future<void> changePassword({
+    required String email,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final uri = _buildEndpoint('password');
+    final headers = _headers();
+    final payload = jsonEncode({
+      'email': email.trim(),
+      'old_password': oldPassword,
+      'new_password': newPassword,
+    });
+
+    http.Response response;
+    try {
+      response = await _httpClient.post(uri, headers: headers, body: payload);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to reach email password change service',
+        error,
+        stackTrace,
+      );
+      throw const EmailProvisioningApiException(
+        'We could not reach the email service. Please try again later.',
+        code: EmailProvisioningApiErrorCode.network,
+        isRecoverable: true,
+      );
+    }
+
+    if (response.statusCode == 200) {
+      return;
+    }
+
+    if (response.statusCode == 401) {
+      throw const EmailProvisioningApiException(
+        'Incorrect current password. Please try again.',
+        code: EmailProvisioningApiErrorCode.authenticationFailed,
+        isRecoverable: true,
+      );
+    }
+
+    if (response.statusCode == 404) {
+      throw const EmailProvisioningApiException(
+        'Account not found.',
+        code: EmailProvisioningApiErrorCode.notFound,
+      );
+    }
+
+    if (response.statusCode >= 500) {
+      final detail = _errorMessageFrom(response.body);
+      _log.warning(
+        'Email password change unavailable: ${response.statusCode}'
+        '${detail == null ? '' : ' $detail'}',
+      );
+      throw const EmailProvisioningApiException(
+        'We could not change your password. Please try again later.',
+        code: EmailProvisioningApiErrorCode.unavailable,
+        isRecoverable: true,
+      );
+    }
+
+    final detail = _errorMessageFrom(response.body);
+    throw EmailProvisioningApiException(
+      detail ?? 'Unable to change password. Please try again later.',
+      code: EmailProvisioningApiErrorCode.invalidResponse,
+      statusCode: response.statusCode,
+    );
+  }
+
   Uri _buildEndpoint(String resource) {
     final segments = [
       ..._baseUrl.pathSegments.where((segment) => segment.isNotEmpty),
@@ -315,17 +381,12 @@ class EmailProvisioningClient {
         throw const FormatException('Expected JSON object');
       }
       final email = decoded['email'];
-      final principalId = decoded['principal_id'];
       if (email is! String || email.isEmpty) {
         throw const FormatException('Missing email field');
-      }
-      if (principalId is! num) {
-        throw const FormatException('Missing principal_id field');
       }
       return EmailProvisioningCredentials(
         email: email,
         password: password,
-        principalId: principalId.toInt(),
       );
     } on FormatException catch (error, stackTrace) {
       _log.warning('Invalid email provisioning response', error, stackTrace);

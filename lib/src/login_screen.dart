@@ -273,34 +273,62 @@ class _LoginScreenState extends State<LoginScreen>
                                     side: BorderSide(color: colors.border),
                                   ),
                                 ),
-                                child: AnimatedCrossFade(
-                                  crossFadeState: (!_signupFlowLocked && _login)
-                                      ? CrossFadeState.showFirst
-                                      : CrossFadeState.showSecond,
+                                child: AnimatedSize(
                                   duration: context
                                       .read<SettingsCubit>()
                                       .animationDuration,
-                                  firstChild: Padding(
-                                    padding: const EdgeInsets.all(24.0),
-                                    child: LoginForm(
-                                      onSubmitStart: () =>
-                                          _handleSubmissionRequested(
-                                        _AuthFlow.login,
-                                        label: 'Logging you in…',
+                                  curve: Curves.easeInOut,
+                                  child: Stack(
+                                    children: [
+                                      AnimatedOpacity(
+                                        duration: context
+                                            .read<SettingsCubit>()
+                                            .animationDuration,
+                                        curve: Curves.easeInOut,
+                                        opacity: (!_signupFlowLocked && _login)
+                                            ? 1
+                                            : 0,
+                                        child: IgnorePointer(
+                                          ignoring:
+                                              _signupFlowLocked || !_login,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(24.0),
+                                            child: LoginForm(
+                                              onSubmitStart: () =>
+                                                  _handleSubmissionRequested(
+                                                _AuthFlow.login,
+                                                label: 'Logging you in…',
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  secondChild: Padding(
-                                    padding: const EdgeInsets.all(24.0),
-                                    child: SignupForm(
-                                      onSubmitStart: () =>
-                                          _handleSubmissionRequested(
-                                        _AuthFlow.signup,
-                                        label: 'Creating your account…',
+                                      AnimatedOpacity(
+                                        duration: context
+                                            .read<SettingsCubit>()
+                                            .animationDuration,
+                                        curve: Curves.easeInOut,
+                                        opacity: (!_signupFlowLocked && _login)
+                                            ? 0
+                                            : 1,
+                                        child: IgnorePointer(
+                                          ignoring:
+                                              !_signupFlowLocked && _login,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(24.0),
+                                            child: SignupForm(
+                                              onSubmitStart: () =>
+                                                  _handleSubmissionRequested(
+                                                _AuthFlow.signup,
+                                                label: 'Creating your account…',
+                                              ),
+                                              onLoadingChanged:
+                                                  _handleSignupLoadingChanged,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                      onLoadingChanged:
-                                          _handleSignupLoadingChanged,
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ),

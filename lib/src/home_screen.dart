@@ -26,6 +26,7 @@ import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
+import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
@@ -377,6 +378,11 @@ class HomeScreen extends StatelessWidget {
             BlocProvider(
               create: (context) => ConnectivityCubit(
                 xmppBase: context.read<XmppService>(),
+              ),
+            ),
+            BlocProvider(
+              create: (context) => EmailSyncCubit(
+                emailService: context.read<EmailService>(),
               ),
             ),
           ],

@@ -7,13 +7,17 @@ import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
+import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:flutter/material.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -43,6 +47,9 @@ class ProfileScreen extends StatelessWidget {
           ),
           BlocProvider.value(
             value: locate<ConnectivityCubit>(),
+          ),
+          BlocProvider.value(
+            value: locate<EmailSyncCubit>(),
           ),
           BlocProvider.value(
             value: locate<SettingsCubit>(),
@@ -84,10 +91,18 @@ class _ProfileBodyState extends State<_ProfileBody> {
     });
   }
 
+  ConnectionState _xmppStateFor(ConnectivityState state) => switch (state) {
+        ConnectivityConnected() => ConnectionState.connected,
+        ConnectivityConnecting() => ConnectionState.connecting,
+        ConnectivityError() => ConnectionState.error,
+        ConnectivityNotConnected() => ConnectionState.notConnected,
+      };
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, state) {
+        final ConnectionState connectionState = _xmppStateFor(state);
         return Scaffold(
           appBar: AppBar(
             title: const Text('Profile'),
@@ -250,6 +265,22 @@ class _ProfileBodyState extends State<_ProfileBody> {
                                         CrossAxisAlignment.center,
                                     spacing: 8.0,
                                     children: [
+                                      BlocBuilder<EmailSyncCubit,
+                                          EmailSyncState>(
+                                        builder: (context, emailSyncState) {
+                                          return SizedBox(
+                                            width: double.infinity,
+                                            child: Center(
+                                              child:
+                                                  SessionCapabilityIndicators(
+                                                xmppState: connectionState,
+                                                emailState: emailSyncState,
+                                                emailEnabled: true,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
                                       ConstrainedBox(
                                         constraints: const BoxConstraints(
                                             maxWidth: 300.0),

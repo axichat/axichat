@@ -4,6 +4,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/ui/axi_avatar.dart';
 import 'package:axichat/src/common/ui/string_to_color.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -16,8 +17,12 @@ const Duration _chipMotionDuration = Duration(milliseconds: 320);
 const Curve _chipMotionCurve = Curves.easeInOutCubic;
 const Duration _barAnimationDuration = Duration(milliseconds: 360);
 const int _maxAutocompleteSuggestions = 8;
-const double _suggestionTileHeight = 52;
+const double _suggestionTileHeight = 56;
 const double _suggestionMaxHeight = 320;
+const double _collapsedHeaderPadding = 2;
+const double _expandedHeaderPadding = 4;
+const double _collapsedBodyPadding = 6;
+const double _expandedBodyPadding = 8;
 
 class RecipientChipsBar extends StatefulWidget {
   const RecipientChipsBar({
@@ -29,6 +34,8 @@ class RecipientChipsBar extends StatefulWidget {
     required this.onRecipientRemoved,
     required this.latestStatuses,
     this.collapsedByDefault = false,
+    this.suggestionAddresses = const <String>{},
+    this.suggestionDomains = const <String>{},
   });
 
   final List<ComposerRecipient> recipients;
@@ -38,6 +45,8 @@ class RecipientChipsBar extends StatefulWidget {
   final ValueChanged<String> onRecipientRemoved;
   final Map<String, FanOutRecipientState> latestStatuses;
   final bool collapsedByDefault;
+  final Set<String> suggestionAddresses;
+  final Set<String> suggestionDomains;
 
   @override
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
@@ -145,7 +154,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         .toList();
     final knownDomains = _knownDomains();
     final knownAddresses = _knownAddresses();
-    final bodyPadding = EdgeInsets.fromLTRB(16, 8, 16, _barCollapsed ? 8 : 12);
+    final headerPadding = EdgeInsets.symmetric(
+      vertical:
+          _barCollapsed ? _collapsedHeaderPadding : _expandedHeaderPadding,
+    );
+    final bodyPadding = EdgeInsets.fromLTRB(
+      16,
+      _barCollapsed ? _collapsedBodyPadding : _expandedBodyPadding,
+      16,
+      _barCollapsed ? _collapsedBodyPadding : 12,
+    );
     final headerStyle = theme.textTheme.labelSmall?.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w600,
@@ -199,7 +217,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                 child: AnimatedContainer(
                   duration: _barAnimationDuration,
                   curve: Curves.easeInOutCubic,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  padding: headerPadding,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: _headerFocused
@@ -407,12 +425,17 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   Set<String> _knownDomains() {
-    final domains = <String>{};
+    final domains = <String>{EndpointConfig.defaultDomain}
+      ..addAll(widget.suggestionDomains);
     void addFrom(String? address) {
       final domain = _extractDomain(address);
       if (domain != null) {
         domains.add(domain);
       }
+    }
+
+    for (final suggestion in widget.suggestionAddresses) {
+      addFrom(suggestion);
     }
 
     for (final chat in widget.availableChats) {
@@ -430,7 +453,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   Set<String> _knownAddresses() {
-    final addresses = <String>{};
+    final addresses = <String>{}..addAll(widget.suggestionAddresses);
     void add(String? raw) {
       final value = raw?.trim();
       if (value == null || value.isEmpty) return;
@@ -493,6 +516,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     Set<String> knownAddresses,
   ) {
     final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return const Iterable<FanOutTarget>.empty();
+    }
     final query = trimmed.toLowerCase();
     final results = <FanOutTarget>[];
     final seen = <String>{};
@@ -864,7 +890,11 @@ class _RecipientAutocompleteField extends StatelessWidget {
       child: RawAutocomplete<FanOutTarget>(
         textEditingController: controller,
         focusNode: focusNode,
-        optionsBuilder: (value) => optionsBuilder(value.text),
+        optionsBuilder: (value) {
+          final query = value.text.trim();
+          if (query.isEmpty) return const Iterable<FanOutTarget>.empty();
+          return optionsBuilder(query);
+        },
         displayStringForOption: (option) =>
             option.chat?.title ?? option.displayName ?? option.address ?? '',
         fieldViewBuilder:
@@ -954,6 +984,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
           final colors = context.colorScheme;
           final theme = Theme.of(context).textTheme;
           final overlayRadius = BorderRadius.circular(20);
+          final highlightedIndex = AutocompleteHighlightedOption.of(context);
           final titleStyle = theme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
             color: colors.foreground,
@@ -1013,6 +1044,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
                         dividerColor: dividerColor,
                         trailingIconColor: trailingIconColor,
                         hoverColor: hoverColor,
+                        highlightedIndex: highlightedIndex,
                       ),
                     ),
                   ),
@@ -1040,6 +1072,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
     required this.dividerColor,
     required this.trailingIconColor,
     required this.hoverColor,
+    required this.highlightedIndex,
   });
 
   final List<FanOutTarget> options;
@@ -1049,6 +1082,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
   final Color dividerColor;
   final Color trailingIconColor;
   final Color hoverColor;
+  final int? highlightedIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -1087,11 +1121,14 @@ class _AutocompleteOptionsList extends StatelessWidget {
             final border = index == options.length - 1
                 ? BorderSide.none
                 : BorderSide(color: dividerColor, width: 0.7);
+            final highlighted =
+                highlightedIndex != null && highlightedIndex == index;
             return InkWell(
               onTap: () => onSelected(option),
               hoverColor: hoverColor,
               child: Container(
                 decoration: BoxDecoration(
+                  color: highlighted ? hoverColor : null,
                   border: Border(bottom: border),
                 ),
                 padding:

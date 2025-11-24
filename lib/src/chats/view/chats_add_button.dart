@@ -34,7 +34,7 @@ class ChatsAddButton extends StatelessWidget {
                 title: const Text('Create chat room'),
                 content: BlocConsumer<ChatsCubit, ChatsState>(
                   listener: (context, state) {
-                    if (state.creationStatus == RequestStatus.success) {
+                    if (state.creationStatus.isSuccess) {
                       context.pop();
                     }
                   },
@@ -46,8 +46,7 @@ class ChatsAddButton extends StatelessWidget {
                           padding: const EdgeInsets.all(8.0),
                           child: AxiTextFormField(
                             placeholder: const Text('Name'),
-                            enabled:
-                                state.creationStatus != RequestStatus.loading,
+                            enabled: !state.creationStatus.isLoading,
                             onChanged: (value) {
                               setState(() => title = value);
                             },

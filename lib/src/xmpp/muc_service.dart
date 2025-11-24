@@ -114,6 +114,32 @@ mixin MucService on XmppBase, BaseStreamService {
     throw XmppMessageException();
   }
 
+  Future<void> ensureJoined({
+    required String roomJid,
+    String? nickname,
+    int maxHistoryStanzas = 0,
+  }) async {
+    final key = _roomKey(roomJid);
+    final room = _roomStates[key];
+    final myOccupant =
+        room?.myOccupantId == null ? null : room!.occupants[room.myOccupantId!];
+    if (myOccupant?.isPresent == true) {
+      return;
+    }
+    final preferredNick = nickname?.trim();
+    final rememberedNick = preferredNick?.isNotEmpty == true
+        ? preferredNick!
+        : _roomNicknames[key];
+    final resolvedNick = rememberedNick?.isNotEmpty == true
+        ? rememberedNick!
+        : _nickForRoom(null);
+    await joinRoom(
+      roomJid: roomJid,
+      nickname: resolvedNick,
+      maxHistoryStanzas: maxHistoryStanzas,
+    );
+  }
+
   Future<void> inviteUserToRoom({
     required String roomJid,
     required String inviteeJid,
@@ -277,12 +303,17 @@ mixin MucService on XmppBase, BaseStreamService {
 
   void trackOccupantsFromMessages(String roomJid, Iterable<Message> messages) {
     for (final message in messages) {
-      if (message.occupantID == null) continue;
       final nick = _nickFromSender(message.senderJid);
       if (nick == null) continue;
+      final occupantId = _resolveOccupantId(
+        occupantId: message.occupantID,
+        roomJid: roomJid,
+        nick: nick,
+      );
+      if (occupantId == null) continue;
       _upsertOccupant(
         roomJid: roomJid,
-        occupantId: message.occupantID!,
+        occupantId: occupantId,
         nick: nick,
       );
     }
@@ -292,12 +323,17 @@ mixin MucService on XmppBase, BaseStreamService {
     mox.MessageEvent event,
     Message message,
   ) {
-    if (message.occupantID == null) return;
     final nick = event.from.resource;
     if (nick.isEmpty) return;
+    final occupantId = _resolveOccupantId(
+      occupantId: message.occupantID,
+      roomJid: message.chatJid,
+      nick: nick,
+    );
+    if (occupantId == null) return;
     _upsertOccupant(
       roomJid: message.chatJid,
-      occupantId: message.occupantID!,
+      occupantId: occupantId,
       nick: nick,
     );
   }
@@ -436,6 +472,18 @@ mixin MucService on XmppBase, BaseStreamService {
     _roomStates[key] = room;
     _roomStreams[key]?.add(room);
     return room;
+  }
+
+  String? _resolveOccupantId({
+    required String? occupantId,
+    required String roomJid,
+    required String nick,
+  }) {
+    if (occupantId != null && occupantId.isNotEmpty) {
+      return occupantId;
+    }
+    if (nick.isEmpty) return null;
+    return '$roomJid/$nick';
   }
 
   bool _isSelfOccupant(Occupant occupant) {

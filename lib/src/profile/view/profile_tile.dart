@@ -1,12 +1,16 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
+import 'package:axichat/src/email/bloc/email_sync_cubit.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:flutter/material.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ProfileTile extends StatelessWidget {
   const ProfileTile({super.key});
@@ -16,6 +20,10 @@ class ProfileTile extends StatelessWidget {
     if (context.read<ProfileCubit?>() == null) {
       return const SizedBox();
     }
+    final connectionState = _xmppStateFor(
+      context.watch<ConnectivityCubit>().state,
+    );
+    final EmailSyncState emailSyncState = context.watch<EmailSyncCubit>().state;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         final usernameStyle = context.textTheme.large.copyWith(
@@ -69,15 +77,17 @@ class ProfileTile extends StatelessWidget {
             shape: Border(
               top: BorderSide(color: context.colorScheme.border),
             ),
-            trailing: AxiIconButton(
-              iconData: LucideIcons.bug,
-              onPressed: () => context.push(
-                const ComposeRoute().location,
-                extra: {
-                  'locate': context.read,
-                  'jids': ['feedback@axi.im'],
-                  'attachments': const <String>[],
-                },
+            trailing: SizedBox(
+              width: 220,
+              child: FittedBox(
+                alignment: Alignment.centerRight,
+                fit: BoxFit.scaleDown,
+                child: SessionCapabilityIndicators(
+                  xmppState: connectionState,
+                  emailState: emailSyncState,
+                  emailEnabled: true,
+                  compact: true,
+                ),
               ),
             ),
           ),
@@ -86,3 +96,10 @@ class ProfileTile extends StatelessWidget {
     );
   }
 }
+
+ConnectionState _xmppStateFor(ConnectivityState state) => switch (state) {
+      ConnectivityConnected() => ConnectionState.connected,
+      ConnectivityConnecting() => ConnectionState.connecting,
+      ConnectivityError() => ConnectionState.error,
+      ConnectivityNotConnected() => ConnectionState.notConnected,
+    };

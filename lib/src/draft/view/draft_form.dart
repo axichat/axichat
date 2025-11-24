@@ -25,7 +25,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _draftComposerControlExtent = 52;
+const double _draftComposerControlExtent = 44;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -35,6 +35,8 @@ class DraftForm extends StatefulWidget {
     this.body = '',
     this.subject = '',
     this.attachmentMetadataIds = const [],
+    this.suggestionAddresses = const <String>{},
+    this.suggestionDomains = const <String>{},
   });
 
   final int? id;
@@ -42,6 +44,8 @@ class DraftForm extends StatefulWidget {
   final String body;
   final String subject;
   final List<String> attachmentMetadataIds;
+  final Set<String> suggestionAddresses;
+  final Set<String> suggestionDomains;
 
   @override
   State<DraftForm> createState() => _DraftFormState();
@@ -158,6 +162,8 @@ class _DraftFormState extends State<DraftForm> {
                   onRecipientToggled: _handleRecipientToggled,
                   latestStatuses: const {},
                   collapsedByDefault: false,
+                  suggestionAddresses: widget.suggestionAddresses,
+                  suggestionDomains: widget.suggestionDomains,
                 ),
                 const SizedBox(height: 12),
                 Padding(
