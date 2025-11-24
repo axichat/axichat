@@ -363,7 +363,13 @@ class RenderChatBubbleSurface extends RenderBox
     required _CutoutType type,
     required _CutoutAnchor anchor,
   }) {
-    if (child == null || style == null) return;
+    if (child == null) return;
+    if (style == null) {
+      child.layout(BoxConstraints.tight(Size.zero), parentUsesSize: true);
+      final childParentData = child.parentData as _ChatBubbleParentData;
+      childParentData.offset = Offset.zero;
+      return;
+    }
     final styleCornerClearance = style.cornerClearance ?? cornerClearance;
     final horizontalAnchor =
         anchor == _CutoutAnchor.top || anchor == _CutoutAnchor.bottom;

@@ -106,6 +106,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Profile'),
+            backgroundColor: context.colorScheme.background,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
             leadingWidth: AxiIconButton.kDefaultSize + 24,
             leading: Padding(
               padding: const EdgeInsets.only(left: 12),
@@ -128,253 +132,314 @@ class _ProfileBodyState extends State<_ProfileBody> {
                 ),
               ),
             ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: context.colorScheme.border,
+              ),
+            ),
           ),
           body: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500.0),
-                child: SingleChildScrollView(
-                  child: IndexedStack(
-                    index: _profileRoute.index,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const ConnectivityIndicator(),
-                          const ShorebirdChecker(),
-                          Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: BlocBuilder<ProfileCubit, ProfileState>(
-                              builder: (context, profileState) {
-                                final usernameStyle =
-                                    context.textTheme.large.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: context.colorScheme.foreground,
-                                );
-                                final subtitleStyle =
-                                    context.textTheme.muted.copyWith(
-                                  color: context.colorScheme.mutedForeground,
-                                );
-                                return ShadCard(
-                                  rowMainAxisSize: MainAxisSize.max,
-                                  columnCrossAxisAlignment:
-                                      CrossAxisAlignment.center,
-                                  leading: Hero(
-                                    tag: 'avatar',
-                                    child: AxiAvatar(
-                                      jid: profileState.jid,
-                                      subscription: Subscription.both,
-                                      // Presence is ingested for MUC features
-                                      // but we hide presence UI for contacts.
-                                      presence: null,
-                                      status: null,
-                                      active: false,
-                                    ),
-                                  ),
-                                  title: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Hero(
-                                        tag: 'title',
-                                        child: Material(
-                                          color: Colors.transparent,
-                                          child: Text(
-                                            profileState.username,
-                                            style: usernameStyle,
-                                            textAlign: TextAlign.center,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  description: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Expanded(
-                                        child: SelectionArea(
-                                          child: Wrap(
-                                            alignment: WrapAlignment.center,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            spacing: 0,
-                                            runSpacing: 2,
-                                            children: [
-                                              AxiTooltip(
-                                                builder: (_) => ConstrainedBox(
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                          maxWidth: 300.0),
-                                                  child: const Text(
-                                                    'This is your Jabber ID. Comprised of your '
-                                                    'username and domain, it\'s a unique address '
-                                                    'that represents you on the XMPP network.',
-                                                    textAlign: TextAlign.left,
-                                                  ),
-                                                ),
-                                                child: Hero(
-                                                  tag: 'subtitle',
-                                                  child: Material(
-                                                    color: Colors.transparent,
-                                                    child: Text(
-                                                      profileState.jid,
-                                                      style: subtitleStyle,
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              if (profileState
-                                                  .resource.isNotEmpty)
-                                                AxiTooltip(
-                                                  builder: (_) =>
-                                                      ConstrainedBox(
-                                                    constraints:
-                                                        const BoxConstraints(
-                                                            maxWidth: 300.0),
-                                                    child: const Text(
-                                                      'This is your XMPP resource. Every device '
-                                                      'you use has a different one, which is why '
-                                                      'your phone can have a different presence '
-                                                      'to your desktop.',
-                                                      textAlign: TextAlign.left,
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    '/${profileState.resource}',
-                                                    style: subtitleStyle,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    maxLines: 1,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: const LogoutButton(),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    spacing: 8.0,
-                                    children: [
-                                      BlocBuilder<EmailSyncCubit,
-                                          EmailSyncState>(
-                                        builder: (context, emailSyncState) {
-                                          return SizedBox(
-                                            width: double.infinity,
-                                            child: Center(
-                                              child:
-                                                  SessionCapabilityIndicators(
-                                                xmppState: connectionState,
-                                                emailState: emailSyncState,
-                                                emailEnabled: true,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      ConstrainedBox(
-                                        constraints: const BoxConstraints(
-                                            maxWidth: 300.0),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: AxiTextFormField(
-                                            placeholder:
-                                                const Text('Status message'),
-                                            initialValue: profileState.status,
-                                            onSubmitted: (value) => context
-                                                .read<ProfileCubit?>()
-                                                ?.updatePresence(status: value),
-                                          ),
-                                        ),
-                                      ),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        alignment: WrapAlignment.center,
-                                        children: [
-                                          ShadButton.outline(
-                                            size: ShadButtonSize.sm,
-                                            child: const Text('View archives'),
-                                            onPressed: () => context.push(
-                                              const ArchivesRoute().location,
-                                              extra: widget.locate,
-                                            ),
-                                          ).withTapBounce(),
-                                          ShadButton.outline(
-                                            size: ShadButtonSize.sm,
-                                            child:
-                                                const Text('Change password'),
-                                            onPressed: () => setState(() {
-                                              _profileRoute =
-                                                  _ProfileRoute.changePassword;
-                                            }),
-                                          ).withTapBounce(),
-                                          ShadButton.destructive(
-                                            size: ShadButtonSize.sm,
-                                            child: const Text('Delete account'),
-                                            onPressed: () => setState(() {
-                                              _profileRoute =
-                                                  _ProfileRoute.delete;
-                                            }),
-                                          ).withTapBounce(),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: ProfileFingerprint(),
-                          ),
-                          const SizedBox(height: 8),
-                          const SettingsControls(showDivider: true),
-                          AboutListTile(
-                            icon: const Icon(LucideIcons.info),
-                            applicationName: appDisplayName,
-                            applicationVersion: _applicationVersion,
-                            applicationLegalese:
-                                'Copyright (C) 2025 Eliot Lew\n\n'
-                                'This program is free software: you can redistribute it and/or modify '
-                                'it under the terms of the GNU Affero General Public License as '
-                                'published by the Free Software Foundation, either version 3 of the '
-                                'License, or (at your option) any later version.\n\n'
-                                'This program is distributed in the hope that it will be useful, '
-                                'but WITHOUT ANY WARRANTY; without even the implied warranty of '
-                                'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
-                                'GNU Affero General Public License for more details.\n\n'
-                                'You should have received a copy of the GNU Affero General Public License '
-                                'along with this program. If not, see <https://www.gnu.org/licenses/>.',
-                          ),
-                        ],
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: ChangePasswordForm(),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: UnregisterForm(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWideLayout = constraints.maxWidth >= largeScreen;
+                return IndexedStack(
+                  index: _profileRoute.index,
+                  children: [
+                    _buildMainContent(
+                      context: context,
+                      isWideLayout: isWideLayout,
+                      connectionState: connectionState,
+                    ),
+                    _buildFormPage(const ChangePasswordForm()),
+                    _buildFormPage(const UnregisterForm()),
+                  ],
+                );
+              },
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMainContent({
+    required BuildContext context,
+    required bool isWideLayout,
+    required ConnectionState connectionState,
+  }) {
+    final profileCard = _buildProfileCard(connectionState);
+    final settingsContent = _buildSettingsContent();
+    if (!isWideLayout) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500.0),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const ConnectivityIndicator(),
+                const ShorebirdChecker(),
+                profileCard,
+                const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: ProfileFingerprint(),
+                ),
+                const SizedBox(height: 8),
+                settingsContent,
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 420,
+              minWidth: 340,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const ConnectivityIndicator(),
+                const SizedBox(height: 8),
+                const ShorebirdChecker(),
+                profileCard,
+                const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: ProfileFingerprint(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: settingsContent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCard(ConnectionState connectionState) {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: BlocBuilder<ProfileCubit, ProfileState>(
+        builder: (context, profileState) {
+          final usernameStyle = context.textTheme.large.copyWith(
+            fontWeight: FontWeight.w700,
+            color: context.colorScheme.foreground,
+          );
+          final subtitleStyle = context.textTheme.muted.copyWith(
+            color: context.colorScheme.mutedForeground,
+          );
+          return ShadCard(
+            rowMainAxisSize: MainAxisSize.max,
+            columnCrossAxisAlignment: CrossAxisAlignment.center,
+            leading: Hero(
+              tag: 'avatar',
+              child: AxiAvatar(
+                jid: profileState.jid,
+                subscription: Subscription.both,
+                // Presence is ingested for MUC features
+                // but we hide presence UI for contacts.
+                presence: null,
+                status: null,
+                active: false,
+              ),
+            ),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Hero(
+                  tag: 'title',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Text(
+                      profileState.username,
+                      style: usernameStyle,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            description: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Expanded(
+                  child: SelectionArea(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 0,
+                      runSpacing: 2,
+                      children: [
+                        AxiTooltip(
+                          builder: (_) => ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 300.0),
+                            child: const Text(
+                              'This is your Jabber ID. Comprised of your '
+                              'username and domain, it\'s a unique address '
+                              'that represents you on the XMPP network.',
+                              textAlign: TextAlign.left,
+                            ),
+                          ),
+                          child: Hero(
+                            tag: 'subtitle',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: Text(
+                                profileState.jid,
+                                style: subtitleStyle,
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (profileState.resource.isNotEmpty)
+                          AxiTooltip(
+                            builder: (_) => ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(maxWidth: 300.0),
+                              child: const Text(
+                                'This is your XMPP resource. Every device '
+                                'you use has a different one, which is why '
+                                'your phone can have a different presence '
+                                'to your desktop.',
+                                textAlign: TextAlign.left,
+                              ),
+                            ),
+                            child: Text(
+                              '/${profileState.resource}',
+                              style: subtitleStyle,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            trailing: const LogoutButton(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              spacing: 8.0,
+              children: [
+                BlocBuilder<EmailSyncCubit, EmailSyncState>(
+                  builder: (context, emailSyncState) {
+                    return SizedBox(
+                      width: double.infinity,
+                      child: Center(
+                        child: SessionCapabilityIndicators(
+                          xmppState: connectionState,
+                          emailState: emailSyncState,
+                          emailEnabled: true,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300.0),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: AxiTextFormField(
+                      placeholder: const Text('Status message'),
+                      initialValue: profileState.status,
+                      onSubmitted: (value) => context
+                          .read<ProfileCubit?>()
+                          ?.updatePresence(status: value),
+                    ),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    ShadButton.outline(
+                      size: ShadButtonSize.sm,
+                      child: const Text('View archives'),
+                      onPressed: () => context.push(
+                        const ArchivesRoute().location,
+                        extra: widget.locate,
+                      ),
+                    ).withTapBounce(),
+                    ShadButton.outline(
+                      size: ShadButtonSize.sm,
+                      child: const Text('Change password'),
+                      onPressed: () => setState(() {
+                        _profileRoute = _ProfileRoute.changePassword;
+                      }),
+                    ).withTapBounce(),
+                    ShadButton.destructive(
+                      size: ShadButtonSize.sm,
+                      child: const Text('Delete account'),
+                      onPressed: () => setState(() {
+                        _profileRoute = _ProfileRoute.delete;
+                      }),
+                    ).withTapBounce(),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSettingsContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SettingsControls(showDivider: true),
+        AboutListTile(
+          icon: const Icon(LucideIcons.info),
+          applicationName: appDisplayName,
+          applicationVersion: _applicationVersion,
+          applicationLegalese: 'Copyright (C) 2025 Eliot Lew\n\n'
+              'This program is free software: you can redistribute it and/or modify '
+              'it under the terms of the GNU Affero General Public License as '
+              'published by the Free Software Foundation, either version 3 of the '
+              'License, or (at your option) any later version.\n\n'
+              'This program is distributed in the hope that it will be useful, '
+              'but WITHOUT ANY WARRANTY; without even the implied warranty of '
+              'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
+              'GNU Affero General Public License for more details.\n\n'
+              'You should have received a copy of the GNU Affero General Public License '
+              'along with this program. If not, see <https://www.gnu.org/licenses/>.',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormPage(Widget child) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: child,
+        ),
+      ),
     );
   }
 }

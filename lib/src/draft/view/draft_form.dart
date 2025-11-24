@@ -184,13 +184,14 @@ class _DraftFormState extends State<DraftForm> {
                             textInputAction: TextInputAction.next,
                             onSubmitted: (_) => _bodyFocusNode.requestFocus(),
                             placeholder: const Text('Subject (optional)'),
-                            constraints: const BoxConstraints(
-                              minHeight: _draftComposerControlExtent,
+                            constraints: const BoxConstraints.tightFor(
+                              height: _draftComposerControlExtent,
                             ),
                             crossAxisAlignment: CrossAxisAlignment.center,
                             placeholderAlignment: Alignment.centerLeft,
                             inputPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
+                              horizontal: 12,
+                              vertical: 10,
                             ),
                           ),
                         ),

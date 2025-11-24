@@ -553,6 +553,10 @@ class TaskSidebarState extends State<TaskSidebar>
                 color: calendarBorderColor,
                 width: calendarBorderStroke,
               ),
+              top: BorderSide(
+                color: calendarBorderColor,
+                width: calendarBorderStroke,
+              ),
             ),
           ),
           child: Stack(

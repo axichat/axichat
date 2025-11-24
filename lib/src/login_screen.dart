@@ -34,7 +34,6 @@ enum _AuthFlow {
 const double _primaryPanePadding = 12.0;
 const double _secondaryPaneGutter = 0.0;
 const double _unsplitHorizontalMargin = 16.0;
-const double _guestPaneMaxWidth = 720.0;
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
