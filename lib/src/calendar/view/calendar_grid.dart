@@ -942,7 +942,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final DateTime initialCandidate = midpoint.isBefore(minSelectable)
         ? minSelectable
         : (midpoint.isAfter(maxSelectable) ? maxSelectable : midpoint);
-    final DateTime? picked = await showModalBottomSheet<DateTime>(
+    final DateTime? picked = await showAdaptiveBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1150,7 +1150,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final double maxSheetHeight =
         hostMediaQuery.size.height - safeTopInset - safeBottomInset;
 
-    await showModalBottomSheet<void>(
+    await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

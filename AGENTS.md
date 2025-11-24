@@ -152,6 +152,7 @@ chatsService: context.read<XmppService>(),
 
 ### Code Style Requirements
 
+- NEVER use `_build` helpers for building widgets. Private method helpers starting with `_build` are FORBIDDEN. ALWAYS create an actual widget instead.
 - **Always use cascade operators where possible** to reduce repetition
 - **Extract common functionality to extension methods**, especially for enums
 - **After every code change:** Run `dart format .` → `dart analyze` → `dart fix --apply` using MCP

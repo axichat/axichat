@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1538,6 +1539,11 @@ class TaskSidebarState extends State<TaskSidebar>
   bool _shouldUseSheetMenus(BuildContext context) {
     final bool hasMouse =
         RendererBinding.instance.mouseTracker.mouseIsConnected;
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    if (commandSurface == CommandSurface.menu) {
+      return false;
+    }
     return ResponsiveHelper.isCompact(context) || !hasMouse;
   }
 
@@ -1562,7 +1568,7 @@ class TaskSidebarState extends State<TaskSidebar>
     final double safeTopInset = viewMedia.viewPadding.top;
     final double safeBottomInset = viewMedia.viewPadding.bottom;
 
-    await showModalBottomSheet<void>(
+    await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

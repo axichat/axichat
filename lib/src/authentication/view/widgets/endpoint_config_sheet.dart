@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -13,27 +14,17 @@ class EndpointConfigSheet extends StatefulWidget {
   final bool compact;
 
   static Future<void> show(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final useBottomSheet =
-        size.width < smallScreen || size.shortestSide < compactDeviceBreakpoint;
-    if (useBottomSheet) {
-      return showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const EndpointConfigSheet(compact: true),
-      );
-    }
-    return showDialog<void>(
+    final commandSurface =
+        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+    final bool compact = commandSurface == CommandSurface.sheet;
+    return showAdaptiveBottomSheet<void>(
       context: context,
-      barrierDismissible: true,
-      builder: (_) => const Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.all(24),
-        child: EndpointConfigSheet(compact: false),
-      ),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: compact,
+      backgroundColor: Colors.transparent,
+      dialogMaxWidth: compact ? 560 : 720,
+      builder: (_) => EndpointConfigSheet(compact: compact),
     );
   }
 
@@ -135,6 +126,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final viewInsets = MediaQuery.viewInsetsOf(context);
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final titleStyle = textTheme.h4.copyWith(color: colors.foreground);
     final placeholderStyle =
         textTheme.muted.copyWith(color: colors.mutedForeground);
     final inputStyle = TextStyle(color: colors.foreground);
@@ -144,7 +136,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       children: [
         Text(
           'Custom server',
-          style: textTheme.h4,
+          style: titleStyle,
         ),
         const SizedBox(height: 8),
         Text(
@@ -384,7 +376,12 @@ class EndpointSuffix extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => EndpointConfigSheet.show(context),
-        child: Text('@$server'),
+        child: Text(
+          '@$server',
+          style: context.textTheme.p.copyWith(
+            color: context.colorScheme.foreground,
+          ),
+        ),
       ),
     );
   }
@@ -406,10 +403,13 @@ class _ToggleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final materialText = Theme.of(context).textTheme.bodyMedium;
+    final textTheme = context.textTheme;
+    final textStyle = textTheme.p.copyWith(
+      color: enabled ? colors.foreground : colors.mutedForeground,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.background,
+        color: colors.card,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.border),
       ),
@@ -420,8 +420,7 @@ class _ToggleTile extends StatelessWidget {
           children: [
             Text(
               label,
-              style: (materialText ?? const TextStyle())
-                  .copyWith(color: enabled ? colors.foreground : colors.muted),
+              style: textStyle,
             ),
             ShadSwitch(
               value: value,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:axichat/src/app.dart';
 
 class AxiBadge extends StatelessWidget {
   const AxiBadge({
@@ -14,12 +15,42 @@ class AxiBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Badge.count(
-      count: count,
-      offset: offset ?? const Offset(12, -12),
-      largeSize: 19,
-      isLabelVisible: count > 0,
-      child: child,
+    if (count <= 0) return child;
+    final colors = context.colorScheme;
+    final text = count > 99 ? '99+' : '$count';
+    final resolvedOffset = offset ?? const Offset(10, -6);
+    final badge = DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colors.background,
+          width: 1.5,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          text,
+          style: context.textTheme.small.copyWith(
+            color: colors.primaryForeground,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          top: resolvedOffset.dy,
+          right: resolvedOffset.dx,
+          child: badge,
+        ),
+      ],
     );
   }
 }

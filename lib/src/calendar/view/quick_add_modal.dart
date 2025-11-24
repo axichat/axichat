@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../common/env.dart';
 import '../../common/ui/ui.dart';
 import '../constants.dart';
 import '../models/calendar_task.dart';
@@ -1089,36 +1090,34 @@ Future<void> showQuickAddModal({
   required LocationAutocompleteHelper locationHelper,
   String? initialValidationMessage,
 }) {
-  if (ResponsiveHelper.isCompact(context)) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => QuickAddModal(
-        surface: QuickAddModalSurface.bottomSheet,
-        prefilledDateTime: prefilledDateTime,
-        prefilledText: prefilledText,
-        onTaskAdded: onTaskAdded,
-        locationHelper: locationHelper,
-        initialValidationMessage: initialValidationMessage,
-      ),
-    );
-  }
-  return showDialog<void>(
+  final commandSurface =
+      EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+  final bool useSheet = commandSurface == CommandSurface.sheet;
+  final surface =
+      useSheet ? QuickAddModalSurface.bottomSheet : QuickAddModalSurface.dialog;
+
+  return showAdaptiveBottomSheet<void>(
     context: context,
-    barrierDismissible: false,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
     barrierColor: Colors.transparent,
-    builder: (context) => QuickAddModal(
+    showDragHandle: useSheet,
+    isDismissible: useSheet,
+    dialogMaxWidth: 760,
+    builder: (sheetContext) => QuickAddModal(
+      surface: surface,
       prefilledDateTime: prefilledDateTime,
       prefilledText: prefilledText,
       onTaskAdded: onTaskAdded,
       locationHelper: locationHelper,
       initialValidationMessage: initialValidationMessage,
-      onDismiss: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).maybePop();
-        }
-      },
+      onDismiss: useSheet
+          ? null
+          : () {
+              if (Navigator.of(sheetContext).canPop()) {
+                Navigator.of(sheetContext).maybePop();
+              }
+            },
     ),
   );
 }

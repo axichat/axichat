@@ -37,6 +37,7 @@ export 'password_input.dart';
 export 'presence_indicator.dart';
 export 'string_to_color.dart';
 export 'squircle_border.dart';
+export 'axi_adaptive_sheet.dart';
 
 const appDisplayName = 'axichat';
 const androidIconPath = 'app_icon';

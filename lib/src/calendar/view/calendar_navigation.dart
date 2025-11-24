@@ -684,7 +684,7 @@ class _DateLabelState extends State<_DateLabel> {
       return;
     }
     setState(() => _isBottomSheetOpen = true);
-    await showModalBottomSheet<void>(
+    await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

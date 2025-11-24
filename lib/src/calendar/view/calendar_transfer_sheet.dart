@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/calendar_transfer_service.dart';
@@ -6,7 +7,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   BuildContext context, {
   String title = 'Choose export format',
 }) {
-  return showModalBottomSheet<CalendarExportFormat>(
+  return showAdaptiveBottomSheet<CalendarExportFormat>(
     context: context,
     useSafeArea: true,
     showDragHandle: true,
