@@ -46,6 +46,7 @@ part 'blocking_service.dart';
 part 'chats_service.dart';
 part 'muc_service.dart';
 part 'message_service.dart';
+part 'mam_sm_guard.dart';
 part 'omemo_service.dart';
 part 'presence_service.dart';
 part 'roster_service.dart';
@@ -54,10 +55,12 @@ part 'xmpp_connection.dart';
 sealed class XmppException implements Exception {
   XmppException([this.wrapped]) : super();
 
-  final Exception? wrapped;
+  final Object? wrapped;
 }
 
-final class XmppAuthenticationException extends XmppException {}
+final class XmppAuthenticationException extends XmppException {
+  XmppAuthenticationException([super.wrapped]);
+}
 
 final class XmppNetworkException extends XmppException {
   XmppNetworkException([super.wrapped]);
@@ -213,6 +216,7 @@ class XmppService extends XmppBase
   );
 
   static XmppService? _instance;
+  static const bool _enableStreamManagement = true;
 
   factory XmppService({
     required FutureOr<XmppConnection> Function() buildConnection,
@@ -303,6 +307,8 @@ class XmppService extends XmppBase
         }
         // Device publishing is now handled internally by OmemoManager.
         if (event.resumed) return;
+        final sm = _connection.getManager<XmppStreamManagementManager>();
+        await sm?.handleFailedResumption();
         unawaited(
           _connection.getManager<mox.HttpFileUploadManager>()?.isSupported(),
         );
@@ -323,9 +329,10 @@ class XmppService extends XmppBase
       })
       ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
         if (event.error is mox.StreamUndefinedConditionError) {
-          await _connection
-              .getManager<XmppStreamManagementManager>()
-              ?.resetState();
+          final sm = _connection.getManager<XmppStreamManagementManager>();
+          await sm?.resetState();
+          await sm?.clearPersistedState();
+          await _connection.setShouldReconnect(false);
           if (await _connection.reconnectionPolicy.canTriggerFailure()) {
             await _connection.reconnectionPolicy.onFailure();
           }
@@ -334,26 +341,30 @@ class XmppService extends XmppBase
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([
-      XmppStreamManagementManager(owner: this),
-      mox.DiscoManager([
-        mox.Identity(
-          category: 'client',
-          type: _capability.discoClient,
-          name: appDisplayName,
-        ),
-      ]),
-      mox.PingManager(const Duration(minutes: 3)),
-      // mox.EntityCapabilitiesManager(),
-      mox.PubSubManager(),
-      mox.CSIManager(),
-      // mox.UserAvatarManager(),
-      mox.StableIdManager(),
-      mox.CryptographicHashManager(),
-      // mox.VCardManager(),
-      mox.OccupantIdManager(),
-    ]);
+  List<mox.XmppManagerBase> get featureManagers {
+    final managers = super.featureManagers
+      ..addAll([
+        XmppStreamManagementManager(owner: this),
+        mox.DiscoManager([
+          mox.Identity(
+            category: 'client',
+            type: _capability.discoClient,
+            name: appDisplayName,
+          ),
+        ]),
+        mox.PingManager(const Duration(minutes: 3)),
+        // mox.EntityCapabilitiesManager(),
+        mox.PubSubManager(),
+        mox.CSIManager(),
+        // mox.UserAvatarManager(),
+        mox.StableIdManager(),
+        mox.CryptographicHashManager(),
+        // mox.VCardManager(),
+        mox.OccupantIdManager(),
+      ]);
+
+    return managers;
+  }
 
   @override
   String? get username => _myJid?.local;
@@ -549,8 +560,13 @@ class XmppService extends XmppBase
 
     if (result.isType<mox.XmppError>()) {
       final error = result.get<mox.XmppError>();
-      _xmppLogger.info('Login failed with network error: $error');
-      throw XmppNetworkException();
+      _xmppLogger.info('Login failed with error: $error');
+      if (_isAuthenticationError(error)) {
+        throw XmppAuthenticationException(
+          error is Exception ? error : null,
+        );
+      }
+      throw XmppNetworkException(error is Exception ? error : null);
     }
     if (!result.get<bool>()) {
       _xmppLogger.info('Login rejected by server.');
@@ -580,25 +596,45 @@ class XmppService extends XmppBase
     return _connection.saltedPassword;
   }
 
-  Future<void> _initConnection({bool preHashed = false}) async {
+  bool _isAuthenticationError(mox.XmppError error) {
+    if (error is mox.NegotiatorReturnedError) {
+      return _isAuthenticationError(error.error);
+    }
+    if (error is mox.SaslError) {
+      return error is mox.SaslNotAuthorizedError ||
+          error is mox.SaslCredentialsExpiredError ||
+          error is mox.SaslAccountDisabledError;
+    }
+    if (error is mox.InvalidHandshakeCredentialsError) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _initConnection({
+    bool preHashed = false,
+  }) async {
     _xmppLogger.info('Initializing connection object...');
-    final resource = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) async => ss.read(key: resourceStorageKey) as String?);
-    await _connection.registerFeatureNegotiators([
+    final storedResource = await _dbOpReturning<XmppStateStore, String?>(
+      (ss) async => ss.read(key: resourceStorageKey) as String?,
+    );
+    final smNegotiator = mox.StreamManagementNegotiator();
+    if (storedResource != null && storedResource.isNotEmpty) {
+      smNegotiator.resource = storedResource;
+    }
+    final featureNegotiators = <mox.XmppFeatureNegotiatorBase>[
       mox.StartTlsNegotiator(),
       mox.CSINegotiator(),
       mox.RosterFeatureNegotiator(),
       mox.PresenceNegotiator(),
       SaslScramNegotiator(preHashed: preHashed),
       mox.CarbonsNegotiator(),
-      mox.StreamManagementNegotiator()..resource = resource ?? '',
+      if (_enableStreamManagement) smNegotiator,
       mox.Sasl2Negotiator(),
       mox.Bind2Negotiator()..tag = 'axichat',
       mox.FASTSaslNegotiator(),
-    ]);
-
-    // Initialize OMEMO manager before registering managers
-    // await _completeOmemoManager();
+    ];
+    await _connection.registerFeatureNegotiators(featureNegotiators);
 
     await _connection.registerManagers(featureManagers);
 
@@ -697,6 +733,16 @@ class XmppService extends XmppBase
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
 
     resetEventHandlers();
+
+    try {
+      await _connection.setShouldReconnect(false);
+    } catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to disable reconnection policy before reset.',
+        error,
+        stackTrace,
+      );
+    }
 
     await _eventSubscription?.cancel();
     _eventSubscription = null;
@@ -903,6 +949,8 @@ class XmppResourceNegotiator extends mox.ResourceBindingNegotiator {
   }
 }
 
+/// Stream management negotiator that tolerates missing managers and avoids null
+/// dereferences during feature matching.
 class XmppSocketWrapper implements mox.BaseSocketWrapper {
   XmppSocketWrapper({bool logTraffic = false})
       : _logIncomingOutgoing = logTraffic;
@@ -1122,7 +1170,6 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
       : super(ackTimeout: const Duration(minutes: 2));
 
   final XmppService owner;
-
   final _log = Logger('XmppStreamManagementManager');
 
   static const keyPrefix = 'stream_management';
@@ -1132,6 +1179,18 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
       XmppStateStore.registerKey('${keyPrefix}_resID');
   final streamResumptionLocationKey =
       XmppStateStore.registerKey('${keyPrefix}_resLoc');
+
+  Future<void> clearPersistedState() async {
+    await owner._dbOp<XmppStateStore>(
+      (ss) async {
+        await ss.delete(key: clientToServerCountKey);
+        await ss.delete(key: serverToClientCountKey);
+        await ss.delete(key: streamResumptionIDKey);
+        await ss.delete(key: streamResumptionLocationKey);
+      },
+      awaitDatabase: true,
+    );
+  }
 
   @override
   Future<void> commitState() async {
@@ -1170,6 +1229,14 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
 
       await setState(newState);
     });
+  }
+
+  Future<void> handleFailedResumption() async {
+    _log.info(
+      'Stream resumption was not accepted; clearing SM state.',
+    );
+    await resetState();
+    await clearPersistedState();
   }
 
   // This is for delivery receipts in UI, not XEP-0198.

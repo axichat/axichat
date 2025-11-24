@@ -524,6 +524,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       mox.MessageManager(),
       mox.CarbonsManager(),
       mox.MAMManager(),
+      MamStreamManagementGuard(),
       mox.MessageDeliveryReceiptManager(),
       mox.ChatMarkerManager(),
       mox.MessageRepliesManager(),
