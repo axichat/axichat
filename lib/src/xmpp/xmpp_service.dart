@@ -306,9 +306,12 @@ class XmppService extends XmppBase
           }
         }
         // Device publishing is now handled internally by OmemoManager.
+        if (!event.resumed && _streamResumptionAttempted) {
+          final sm = _connection.getManager<XmppStreamManagementManager>();
+          await sm?.handleFailedResumption();
+        }
+        _streamResumptionAttempted = false;
         if (event.resumed) return;
-        final sm = _connection.getManager<XmppStreamManagementManager>();
-        await sm?.handleFailedResumption();
         unawaited(
           _connection.getManager<mox.HttpFileUploadManager>()?.isSupported(),
         );
@@ -404,6 +407,7 @@ class XmppService extends XmppBase
 
   var _synchronousConnection = Completer<void>();
   var _foregroundServiceNotificationSent = false;
+  var _streamResumptionAttempted = false;
 
   @override
   Future<String?> connect({
@@ -638,7 +642,18 @@ class XmppService extends XmppBase
 
     await _connection.registerManagers(featureManagers);
 
-    await _connection.loadStreamState();
+    _streamResumptionAttempted = false;
+    if (_enableStreamManagement) {
+      final sm = _connection.getManager<XmppStreamManagementManager>();
+      if (sm != null) {
+        _streamResumptionAttempted = await _dbOpReturning<XmppStateStore, bool>(
+          (ss) async => ss.read(key: sm.streamResumptionIDKey) != null,
+        );
+        if (_streamResumptionAttempted) {
+          await _connection.loadStreamState();
+        }
+      }
+    }
     await _dbOp<XmppStateStore>((ss) async {
       final fastToken = ss.read(key: fastTokenStorageKey) as String?;
       var userAgentId = ss.read(key: userAgentStorageKey) as String?;
@@ -788,6 +803,7 @@ class XmppService extends XmppBase
 
     _myJid = null;
     _synchronousConnection = Completer<void>();
+    _streamResumptionAttempted = false;
 
     await super._reset();
 
