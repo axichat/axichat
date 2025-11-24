@@ -110,6 +110,7 @@ class XmppConnection extends mox.XmppConnection {
       await mm.sendMessage(
         packet.to,
         packet.extensions,
+        type: packet.type ?? 'chat',
       );
       return true;
     }

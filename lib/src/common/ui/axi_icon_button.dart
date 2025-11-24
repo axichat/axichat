@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -24,6 +25,8 @@ class AxiIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final env = EnvScope.maybeOf(context);
+    final isDesktop = env?.isDesktopPlatform ?? false;
     final Color resolvedForeground = color ?? colors.foreground;
     final Color resolvedBorder = borderColor ?? colors.border;
     final paintShape = SquircleBorder(
@@ -52,7 +55,13 @@ class AxiIconButton extends StatelessWidget {
             child: InkWell(
               onTap: onPressed,
               customBorder: paintShape,
-              splashFactory: InkRipple.splashFactory,
+              splashFactory:
+                  isDesktop ? NoSplash.splashFactory : InkRipple.splashFactory,
+              splashColor: isDesktop
+                  ? Colors.transparent
+                  : colors.primary.withValues(alpha: 0.18),
+              hoverColor: colors.primary.withValues(alpha: 0.08),
+              highlightColor: Colors.transparent,
               child: SizedBox(
                 width: kDefaultSize,
                 height: kDefaultSize,

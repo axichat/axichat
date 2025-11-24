@@ -1,4 +1,5 @@
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -43,6 +44,8 @@ class AxiListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final env = EnvScope.maybeOf(context);
+    final isDesktop = env?.isDesktopPlatform ?? false;
     final brightness = Theme.of(context).brightness;
     final selectionOverlay = colors.primary.withValues(
       alpha: brightness == Brightness.dark ? 0.12 : 0.06,
@@ -110,6 +113,16 @@ class AxiListTile extends StatelessWidget {
         children: [...?actions],
       ),
     );
+    if (isDesktop) {
+      child = Theme(
+        data: Theme.of(context).copyWith(
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: Colors.transparent,
+          hoverColor: selectionOverlay,
+        ),
+        child: child,
+      );
+    }
 
     if (paintSurface) {
       child = AnimatedContainer(

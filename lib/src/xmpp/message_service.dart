@@ -544,6 +544,31 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       // mox.SFSManager(),
     ]);
 
+  mox.MessageEvent _buildOutgoingMessageEvent({
+    required Message message,
+    Message? quotedMessage,
+    List<mox.StanzaHandlerExtension> extraExtensions = const [],
+    ChatType chatType = ChatType.chat,
+  }) {
+    final quotedJid = quotedMessage == null
+        ? null
+        : mox.JID.fromString(quotedMessage.senderJid);
+    final targetJid = mox.JID.fromString(message.chatJid);
+    final isGroupChat = chatType == ChatType.groupChat;
+    final isPrivateMucMessage = isGroupChat && targetJid.resource.isNotEmpty;
+    final toJid =
+        isGroupChat && !isPrivateMucMessage ? targetJid.toBare() : targetJid;
+    final type = isGroupChat && !isPrivateMucMessage ? 'groupchat' : 'chat';
+
+    return message.toMox(
+      quotedBody: quotedMessage?.body,
+      quotedJid: quotedJid,
+      extraExtensions: extraExtensions,
+      toJidOverride: toJid,
+      type: type,
+    );
+  }
+
   Future<void> sendMessage({
     required String jid,
     required String text,
@@ -590,15 +615,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     }
 
     try {
-      final quotedJid = quotedMessage == null
-          ? null
-          : mox.JID.fromString(quotedMessage.senderJid);
+      final stanza = _buildOutgoingMessageEvent(
+        message: message,
+        quotedMessage: quotedMessage,
+        extraExtensions: extraExtensions,
+        chatType: chatType,
+      );
       final sent = await _connection.sendMessage(
-        message.toMox(
-          quotedBody: quotedMessage?.body,
-          quotedJid: quotedJid,
-          extraExtensions: extraExtensions,
-        ),
+        stanza,
       );
       if (!sent) {
         if (shouldStore) {
@@ -744,21 +768,20 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     }
 
     try {
-      final quotedJid = quotedMessage == null
-          ? null
-          : mox.JID.fromString(quotedMessage.senderJid);
       final extraExtensions = [
         const mox.MessageProcessingHintData(
           [mox.MessageProcessingHint.store],
         ),
         mox.OOBData(getUrl, filename),
       ];
+      final stanza = _buildOutgoingMessageEvent(
+        message: message,
+        quotedMessage: quotedMessage,
+        extraExtensions: extraExtensions,
+        chatType: chatType,
+      );
       final sent = await _connection.sendMessage(
-        message.toMox(
-          quotedBody: quotedMessage?.body,
-          quotedJid: quotedJid,
-          extraExtensions: extraExtensions,
-        ),
+        stanza,
       );
       if (!sent) {
         if (shouldStore) {
@@ -911,13 +934,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     );
   }
 
-  Future<void> resendMessage(String stanzaID) async {
+  Future<void> resendMessage(
+    String stanzaID, {
+    ChatType? chatType,
+  }) async {
     final message = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(stanzaID),
     );
     if (message == null || message.body?.isNotEmpty != true) {
       return;
     }
+    final resolvedChatType = chatType ??
+        await _dbOpReturning<XmppDatabase, ChatType?>(
+          (db) async => (await db.getChat(message.chatJid))?.type,
+        ) ??
+        ChatType.chat;
     Message? quoted;
     if (message.quoting != null) {
       quoted = await _dbOpReturning<XmppDatabase, Message?>(
@@ -929,7 +960,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       text: message.body!,
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
-      chatType: message.occupantID == null ? ChatType.chat : ChatType.groupChat,
+      chatType: resolvedChatType,
     );
   }
 
@@ -1420,9 +1451,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     if (event.type != 'error') return false;
 
     _log.info('Handling error message...');
-    if (event.error == null || event.id == null) return true;
+    final stanzaId = event.id;
+    if (stanzaId == null) return true;
 
-    final error = switch (event.error!) {
+    final stanzaError = event.error;
+    final error = switch (stanzaError) {
       mox.ServiceUnavailableError _ => MessageError.serviceUnavailable,
       mox.RemoteServerNotFoundError _ => MessageError.serverNotFound,
       mox.RemoteServerTimeoutError _ => MessageError.serverTimeout,
@@ -1430,7 +1463,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     };
 
     await _dbOp<XmppDatabase>(
-      (db) => db.saveMessageError(stanzaID: event.id!, error: error),
+      (db) => db.saveMessageError(
+        stanzaID: stanzaId,
+        error: error,
+      ),
     );
     return true;
   }

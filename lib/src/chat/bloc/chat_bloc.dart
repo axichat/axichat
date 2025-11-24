@@ -1160,6 +1160,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final message = event.message;
+    final chatType = state.chat?.type ?? ChatType.chat;
     final isEmailMessage = message.deltaChatId != null;
     try {
       if (isEmailMessage) {
@@ -1180,15 +1181,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             attachment: attachment,
             encryptionProtocol: message.encryptionProtocol,
             quotedMessage: quoted,
-            chatType:
-                message.occupantID == null ? ChatType.chat : ChatType.groupChat,
+            chatType: chatType,
           );
         }
         return;
       }
       final hasBody = message.body?.isNotEmpty == true;
       if (!hasBody) return;
-      await _messageService.resendMessage(message.stanzaID);
+      await _messageService.resendMessage(
+        message.stanzaID,
+        chatType: chatType,
+      );
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to resend message ${message.stanzaID}',

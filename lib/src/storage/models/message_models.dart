@@ -321,6 +321,8 @@ class Message with _$Message implements Insertable<Message> {
     String? quotedBody,
     mox.JID? quotedJid,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
+    mox.JID? toJidOverride,
+    String? type,
   }) {
     final extensions = <mox.StanzaHandlerExtension>[
       const mox.MarkableData(true),
@@ -366,12 +368,14 @@ class Message with _$Message implements Insertable<Message> {
 
     extensions.addAll(extraExtensions);
 
+    final toJid = toJidOverride ?? mox.JID.fromString(chatJid);
     return mox.MessageEvent(
       mox.JID.fromString(senderJid),
-      mox.JID.fromString(chatJid),
+      toJid,
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList(extensions),
       id: stanzaID,
+      type: type,
     );
   }
 

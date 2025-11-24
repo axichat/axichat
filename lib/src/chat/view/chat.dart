@@ -3363,79 +3363,201 @@ class _ChatState extends State<Chat> {
                                                     _selectionActionButtonKeys
                                                         .clear();
                                                   }
-                                                  final actionBar =
-                                                      _MessageActionBar(
-                                                    onReply: () {
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatQuoteRequested(
+                                                  void onReply() {
+                                                    context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          ChatQuoteRequested(
+                                                            messageModel,
+                                                          ),
+                                                        );
+                                                    _focusNode.requestFocus();
+                                                    _clearAllSelections();
+                                                  }
+
+                                                  VoidCallback? onForward;
+                                                  if (!(isInviteMessage ||
+                                                      inviteRevoked ||
+                                                      isInviteRevocationMessage)) {
+                                                    onForward =
+                                                        () => _handleForward(
                                                               messageModel,
-                                                            ),
-                                                          );
-                                                      _focusNode.requestFocus();
-                                                      _clearAllSelections();
-                                                    },
-                                                    onForward: isInviteMessage ||
-                                                            inviteRevoked ||
-                                                            isInviteRevocationMessage
-                                                        ? null
-                                                        : () => _handleForward(
-                                                            messageModel),
-                                                    onCopy: () => _copyMessage(
-                                                      dashMessage: message,
-                                                      model: messageModel,
-                                                    ),
-                                                    onShare: () =>
-                                                        _shareMessage(
-                                                      dashMessage: message,
-                                                      model: messageModel,
-                                                    ),
-                                                    onAddToCalendar: () =>
-                                                        _handleAddToCalendar(
-                                                      dashMessage: message,
-                                                      model: messageModel,
-                                                    ),
-                                                    onDetails: () =>
-                                                        _showMessageDetails(
-                                                            message),
-                                                    onSelect:
-                                                        includeSelectAction
-                                                            ? () =>
-                                                                _startMultiSelect(
-                                                                  messageModel,
-                                                                )
-                                                            : null,
-                                                    onResend: canResend
-                                                        ? () => context
+                                                            );
+                                                  }
+                                                  void onCopy() => _copyMessage(
+                                                        dashMessage: message,
+                                                        model: messageModel,
+                                                      );
+                                                  void onShare() =>
+                                                      _shareMessage(
+                                                        dashMessage: message,
+                                                        model: messageModel,
+                                                      );
+                                                  void onAddToCalendar() =>
+                                                      _handleAddToCalendar(
+                                                        dashMessage: message,
+                                                        model: messageModel,
+                                                      );
+                                                  void onDetails() =>
+                                                      _showMessageDetails(
+                                                          message);
+                                                  VoidCallback? onSelect;
+                                                  if (includeSelectAction) {
+                                                    onSelect =
+                                                        () => _startMultiSelect(
+                                                              messageModel,
+                                                            );
+                                                  }
+                                                  VoidCallback? onResend;
+                                                  if (canResend) {
+                                                    onResend = () => context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          ChatMessageResendRequested(
+                                                            messageModel,
+                                                          ),
+                                                        );
+                                                  }
+                                                  VoidCallback? onEdit;
+                                                  if (canEdit) {
+                                                    onEdit = () => unawaited(
+                                                          _handleEditMessage(
+                                                            messageModel,
+                                                          ),
+                                                        );
+                                                  }
+                                                  VoidCallback? onRevokeInvite;
+                                                  if (isInviteMessage && self) {
+                                                    onRevokeInvite = () =>
+                                                        context
                                                             .read<ChatBloc>()
                                                             .add(
-                                                              ChatMessageResendRequested(
+                                                              ChatInviteRevocationRequested(
                                                                 messageModel,
                                                               ),
-                                                            )
-                                                        : null,
-                                                    onEdit: canEdit
-                                                        ? () => unawaited(
-                                                              _handleEditMessage(
-                                                                messageModel,
-                                                              ),
-                                                            )
-                                                        : null,
+                                                            );
+                                                  }
+
+                                                  final actionBar =
+                                                      _MessageActionBar(
+                                                    onReply: onReply,
+                                                    onForward: onForward,
+                                                    onCopy: onCopy,
+                                                    onShare: onShare,
+                                                    onAddToCalendar:
+                                                        onAddToCalendar,
+                                                    onDetails: onDetails,
+                                                    onSelect: onSelect,
+                                                    onResend: onResend,
+                                                    onEdit: onEdit,
                                                     hitRegionKeys:
                                                         actionButtonKeys,
                                                     onRevokeInvite:
-                                                        isInviteMessage && self
-                                                            ? () => context
-                                                                .read<
-                                                                    ChatBloc>()
-                                                                .add(
-                                                                  ChatInviteRevocationRequested(
-                                                                    messageModel,
-                                                                  ),
-                                                                )
-                                                            : null,
+                                                        onRevokeInvite,
                                                   );
+                                                  final messageMenuItems =
+                                                      <Widget>[
+                                                    ShadContextMenuItem(
+                                                      leading: const Icon(
+                                                        LucideIcons.reply,
+                                                      ),
+                                                      onPressed: onReply,
+                                                      child: const Text(
+                                                        'Reply',
+                                                      ),
+                                                    ),
+                                                    if (onForward != null)
+                                                      ShadContextMenuItem(
+                                                        leading: const Icon(
+                                                          LucideIcons.reply,
+                                                        ),
+                                                        onPressed: onForward,
+                                                        child: const Text(
+                                                          'Forward',
+                                                        ),
+                                                      ),
+                                                    if (onResend != null)
+                                                      ShadContextMenuItem(
+                                                        leading: const Icon(
+                                                          LucideIcons.repeat,
+                                                        ),
+                                                        onPressed: onResend,
+                                                        child: const Text(
+                                                          'Resend',
+                                                        ),
+                                                      ),
+                                                    if (onEdit != null)
+                                                      ShadContextMenuItem(
+                                                        leading: const Icon(
+                                                          LucideIcons
+                                                              .pencilLine,
+                                                        ),
+                                                        onPressed: onEdit,
+                                                        child: const Text(
+                                                          'Edit',
+                                                        ),
+                                                      ),
+                                                    if (onRevokeInvite != null)
+                                                      ShadContextMenuItem(
+                                                        leading: const Icon(
+                                                          LucideIcons.ban,
+                                                        ),
+                                                        onPressed:
+                                                            onRevokeInvite,
+                                                        child: const Text(
+                                                          'Revoke',
+                                                        ),
+                                                      ),
+                                                    ShadContextMenuItem(
+                                                      leading: const Icon(
+                                                        LucideIcons.copy,
+                                                      ),
+                                                      onPressed: onCopy,
+                                                      child: const Text(
+                                                        'Copy',
+                                                      ),
+                                                    ),
+                                                    ShadContextMenuItem(
+                                                      leading: const Icon(
+                                                        LucideIcons.share2,
+                                                      ),
+                                                      onPressed: onShare,
+                                                      child: const Text(
+                                                        'Share',
+                                                      ),
+                                                    ),
+                                                    ShadContextMenuItem(
+                                                      leading: const Icon(
+                                                        LucideIcons
+                                                            .calendarPlus,
+                                                      ),
+                                                      onPressed:
+                                                          onAddToCalendar,
+                                                      child: const Text(
+                                                        'Add to calendar',
+                                                      ),
+                                                    ),
+                                                    ShadContextMenuItem(
+                                                      leading: const Icon(
+                                                        LucideIcons.info,
+                                                      ),
+                                                      onPressed: onDetails,
+                                                      child: const Text(
+                                                        'Details',
+                                                      ),
+                                                    ),
+                                                    if (onSelect != null)
+                                                      ShadContextMenuItem(
+                                                        leading: const Icon(
+                                                          LucideIcons
+                                                              .squareCheck,
+                                                        ),
+                                                        onPressed: onSelect,
+                                                        child: const Text(
+                                                          'Select',
+                                                        ),
+                                                      ),
+                                                  ];
                                                   if (isSingleSelection) {
                                                     _activeSelectionExtrasKey ??=
                                                         GlobalKey();
@@ -3592,6 +3714,21 @@ class _ChatState extends State<Chat> {
                                                                   alignedBubble,
                                                             )
                                                           : alignedBubble;
+                                                  final isDesktopPlatform =
+                                                      EnvScope.maybeOf(context)
+                                                              ?.isDesktopPlatform ??
+                                                          false;
+                                                  final contextualBubble =
+                                                      isDesktopPlatform
+                                                          ? AxiContextMenuRegion(
+                                                              longPressEnabled:
+                                                                  false,
+                                                              items:
+                                                                  messageMenuItems,
+                                                              child:
+                                                                  bubbleDisplay,
+                                                            )
+                                                          : bubbleDisplay;
                                                   final selectableBubble =
                                                       GestureDetector(
                                                     behavior: HitTestBehavior
@@ -3616,7 +3753,15 @@ class _ChatState extends State<Chat> {
                                                             _toggleMessageSelection(
                                                               messageModel,
                                                             ),
-                                                    child: bubbleDisplay,
+                                                    onSecondaryTapUp:
+                                                        isDesktopPlatform &&
+                                                                !widget.readOnly
+                                                            ? (_) =>
+                                                                _toggleMessageSelection(
+                                                                  messageModel,
+                                                                )
+                                                            : null,
+                                                    child: contextualBubble,
                                                   );
                                                   final animatedStack =
                                                       AnimatedSize(

@@ -1,4 +1,5 @@
 // ignore_for_file: unnecessary_type_check
+import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
@@ -693,7 +694,7 @@ class _ScaleOnlyFabAnimator extends FloatingActionButtonAnimator {
       FloatingActionButtonAnimator.scaling.getAnimationRestart(previousValue);
 }
 
-class _HomeNavigationRail extends StatelessWidget {
+class _HomeNavigationRail extends StatefulWidget {
   const _HomeNavigationRail({
     required this.tabs,
     required this.selectedIndex,
@@ -711,21 +712,29 @@ class _HomeNavigationRail extends StatelessWidget {
   final VoidCallback onCalendarSelected;
 
   @override
+  State<_HomeNavigationRail> createState() => _HomeNavigationRailState();
+}
+
+class _HomeNavigationRailState extends State<_HomeNavigationRail> {
+  bool _collapsed = false;
+
+  @override
   Widget build(BuildContext context) {
     final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
-    if (tabs.isEmpty) {
+    if (widget.tabs.isEmpty) {
       return const SizedBox.shrink();
     }
-    final baseDestinations = tabs
+    final badgeCounts = _computeBadgeCounts(inviteCount);
+    final baseDestinations = widget.tabs
         .map(
           (tab) => AxiRailDestination(
             icon: _tabIcon(tab.id),
             label: tab.label,
-            badgeCount: tab.id == HomeTab.invites ? inviteCount : 0,
+            badgeCount: badgeCounts[tab.id] ?? 0,
           ),
         )
         .toList();
-    if (calendarAvailable) {
+    if (widget.calendarAvailable) {
       baseDestinations.add(
         const AxiRailDestination(
           icon: LucideIcons.calendarClock,
@@ -733,26 +742,56 @@ class _HomeNavigationRail extends StatelessWidget {
         ),
       );
     }
-    final safeIndex = selectedIndex.clamp(0, tabs.length - 1).toInt();
+    final safeIndex =
+        widget.selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
     final selectedRailIndex =
-        calendarActive ? baseDestinations.length - 1 : safeIndex;
+        widget.calendarActive ? baseDestinations.length - 1 : safeIndex;
     return SafeArea(
       left: false,
       right: false,
       child: AxiNavigationRail(
         destinations: baseDestinations,
         selectedIndex: selectedRailIndex,
+        collapsed: _collapsed,
+        onToggleCollapse: () {
+          setState(() => _collapsed = !_collapsed);
+        },
+        backgroundColor: context.colorScheme.background,
         onDestinationSelected: (index) {
           final calendarIndex =
-              calendarAvailable ? baseDestinations.length - 1 : null;
+              widget.calendarAvailable ? baseDestinations.length - 1 : null;
           if (calendarIndex != null && index == calendarIndex) {
-            onCalendarSelected();
+            widget.onCalendarSelected();
             return;
           }
-          onDestinationSelected(index);
+          if (widget.calendarActive) {
+            widget.onCalendarSelected();
+          }
+          widget.onDestinationSelected(index);
         },
       ),
     );
+  }
+
+  Map<HomeTab, int> _computeBadgeCounts(int inviteCount) {
+    final chats = context.watch<ChatsCubit?>()?.state.items;
+    final draftsState = context.watch<DraftCubit?>()?.state;
+    final drafts = draftsState is DraftsAvailable ? draftsState.items : null;
+    final unreadCount = chats == null
+        ? 0
+        : chats
+            .where((chat) => !chat.archived && !chat.spam)
+            .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
+    final spamCount = chats == null
+        ? 0
+        : chats.where((chat) => chat.spam && !chat.archived).length;
+    final draftsCount = drafts?.length ?? 0;
+    return <HomeTab, int>{
+      HomeTab.invites: inviteCount,
+      HomeTab.chats: unreadCount,
+      HomeTab.drafts: draftsCount,
+      HomeTab.spam: spamCount,
+    };
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -250,6 +251,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final item = widget.item;
     final colors = context.colorScheme;
     final textScaler = MediaQuery.of(context).textScaler;
+    final isDesktop = EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
     double scaled(double value) {
       if (!value.isFinite) {
         return value;
@@ -468,7 +470,14 @@ class _ChatListTileState extends State<ChatListTile> {
     final semanticsHint = selectionActive
         ? (isSelected ? 'Press to unselect chat' : 'Press to select chat')
         : 'Press to open chat';
-    final tileContent = tileSurface.withTapBounce();
+    Widget tileContent = tileSurface.withTapBounce();
+    if (isDesktop) {
+      tileContent = AxiContextMenuRegion(
+        longPressEnabled: false,
+        items: _chatContextMenuItems(item, chatsCubit),
+        child: tileContent,
+      );
+    }
     return FocusableActionDetector(
       focusNode: _focusNode,
       onShowFocusHighlight: (value) {
@@ -646,6 +655,102 @@ class _ChatListTileState extends State<ChatListTile> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _exportChatFromContextMenu(Chat chat) async {
+    final chatsCubit = context.read<ChatsCubit?>();
+    if (chatsCubit == null) return;
+    try {
+      final result = await ChatHistoryExporter.exportChats(
+        chats: [chat],
+        loadHistory: chatsCubit.loadChatHistory,
+      );
+      if (!mounted) return;
+      final file = result.file;
+      if (file == null) {
+        _showMessage('No text content to export');
+        return;
+      }
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Chat export from Axichat',
+        subject: 'Chat with ${chat.title}',
+      );
+      if (!mounted) return;
+      _showMessage('Chat exported');
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('Unable to export chat');
+    }
+  }
+
+  List<Widget> _chatContextMenuItems(Chat chat, ChatsCubit? chatsCubit) {
+    final disabled = chatsCubit == null;
+    return [
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.messagesSquare),
+        onPressed: disabled ? null : () => unawaited(_handleTap(chat)),
+        child: const Text('Open'),
+      ),
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.squareCheck),
+        onPressed:
+            disabled ? null : () => chatsCubit.ensureChatSelected(chat.jid),
+        child: const Text('Select'),
+      ),
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.share2),
+        onPressed:
+            disabled ? null : () => unawaited(_exportChatFromContextMenu(chat)),
+        child: const Text('Export'),
+      ),
+      ShadContextMenuItem(
+        leading: Icon(
+          chat.favorited ? LucideIcons.starOff : LucideIcons.star,
+        ),
+        onPressed: disabled
+            ? null
+            : () async {
+                await chatsCubit.toggleFavorited(
+                  jid: chat.jid,
+                  favorited: !chat.favorited,
+                );
+              },
+        child: Text(chat.favorited ? 'Unfavorite' : 'Favorite'),
+      ),
+      ShadContextMenuItem(
+        leading: Icon(
+          chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
+        ),
+        onPressed: disabled
+            ? null
+            : () async {
+                await chatsCubit.toggleArchived(
+                  jid: chat.jid,
+                  archived: !chat.archived,
+                );
+              },
+        child: Text(chat.archived ? 'Unarchive' : 'Archive'),
+      ),
+      if (!widget.archivedContext)
+        ShadContextMenuItem(
+          leading: Icon(chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff),
+          onPressed: disabled
+              ? null
+              : () async {
+                  await chatsCubit.toggleHidden(
+                    jid: chat.jid,
+                    hidden: !chat.hidden,
+                  );
+                },
+          child: Text(chat.hidden ? 'Show' : 'Hide'),
+        ),
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.trash2),
+        onPressed: disabled ? null : () => _confirmDelete(chat),
+        child: const Text('Delete'),
+      ),
+    ];
   }
 }
 

@@ -15,13 +15,11 @@ class AxiAdaptiveLayout extends StatelessWidget {
     this.centerSecondary = true,
     this.primaryAlignment,
     this.secondaryAlignment,
-    int primaryFlex = 4,
-    int secondaryFlex = 6,
+    this.primaryFlex = 4,
+    this.secondaryFlex = 6,
     EdgeInsets? primaryPadding,
     EdgeInsets? secondaryPadding,
-  })  : primaryFlex = primaryFlex,
-        secondaryFlex = secondaryFlex,
-        primaryPadding = primaryPadding ?? panePadding,
+  })  : primaryPadding = primaryPadding ?? panePadding,
         secondaryPadding = secondaryPadding ?? panePadding;
 
   final Widget primaryChild;
