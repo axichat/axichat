@@ -304,4 +304,5 @@ Examples:
 - Calendar screens stay declarative—wire interactions into bloc helpers (for example `commitTaskInteraction`) and never mutate calendar models from widgets or controllers.
 
 **After model changes:** `dart run build_runner build --delete-conflicting-outputs`
-- NEVER read from .pub-cache
+
+[//]: # (- NEVER read from .pub-cache)
