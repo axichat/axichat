@@ -48,11 +48,11 @@ class _AxiMoreState extends State<AxiMore> {
           ),
         );
       },
-      child: ShadIconButton.ghost(
-        enabled: widget.enabled,
-        onPressed: popoverController.toggle,
-        icon: const Icon(LucideIcons.ellipsisVertical),
-      ).withTapBounce(enabled: widget.enabled),
+      child: AxiIconButton(
+        iconData: LucideIcons.ellipsisVertical,
+        tooltip: 'More options',
+        onPressed: widget.enabled ? popoverController.toggle : null,
+      ),
     );
   }
 }

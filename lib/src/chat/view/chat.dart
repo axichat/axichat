@@ -647,6 +647,8 @@ class _ChatState extends State<Chat> {
   }
 
   void _showMembers(RoomState roomState) {
+    final chatBloc = context.read<ChatBloc>();
+    final navigator = Navigator.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     const drawerMaxWidth = 420.0;
     const drawerWidthFraction = 0.9;
@@ -670,23 +672,19 @@ class _ChatState extends State<Chat> {
               child: RoomMembersSheet(
                 roomState: roomState,
                 canInvite: true,
-                onInvite: (jid) =>
-                    context.read<ChatBloc>().add(ChatInviteRequested(jid)),
-                onAction: (occupantId, action) => context.read<ChatBloc>().add(
-                      ChatModerationActionRequested(
-                        occupantId: occupantId,
-                        action: action,
-                      ),
-                    ),
-                onChangeNickname: (nick) => context
-                    .read<ChatBloc>()
-                    .add(ChatNicknameChangeRequested(nick)),
-                onLeaveRoom: () => context
-                    .read<ChatBloc>()
-                    .add(const ChatLeaveRoomRequested()),
+                onInvite: (jid) => chatBloc.add(ChatInviteRequested(jid)),
+                onAction: (occupantId, action) => chatBloc.add(
+                  ChatModerationActionRequested(
+                    occupantId: occupantId,
+                    action: action,
+                  ),
+                ),
+                onChangeNickname: (nick) =>
+                    chatBloc.add(ChatNicknameChangeRequested(nick)),
+                onLeaveRoom: () => chatBloc.add(const ChatLeaveRoomRequested()),
                 currentNickname:
                     roomState.occupants[roomState.myOccupantId]?.nick,
-                onClose: Navigator.of(context).pop,
+                onClose: navigator.pop,
               ),
             ),
           ),
@@ -1225,8 +1223,8 @@ class _ChatState extends State<Chat> {
             Positioned(
               top: 8,
               right: 8,
-              child: IconButton(
-                icon: const Icon(LucideIcons.x),
+              child: AxiIconButton(
+                iconData: LucideIcons.x,
                 tooltip: 'Close',
                 onPressed: () => Navigator.of(dialogContext).pop(),
               ),
@@ -1937,6 +1935,10 @@ class _ChatState extends State<Chat> {
                 final currentUserId = isDefaultEmail
                     ? (emailSelfJid ?? profile?.jid ?? '')
                     : (profile?.jid ?? emailSelfJid ?? '');
+                final myOccupantId = state.roomState?.myOccupantId;
+                final myOccupant = myOccupantId == null
+                    ? null
+                    : state.roomState?.occupants[myOccupantId];
                 final shareContexts = state.shareContexts;
                 final recipients = state.recipients;
                 final pendingAttachments = state.pendingAttachments;
@@ -1959,13 +1961,14 @@ class _ChatState extends State<Chat> {
                         .where((chat) => chat.jid != chatEntity?.jid)
                         .toList();
                 final isGroupChat = chatEntity?.type == ChatType.groupChat;
-                final selfUserId =
-                    isGroupChat && state.roomState?.myOccupantId != null
-                        ? state.roomState!.myOccupantId!
-                        : currentUserId;
+                final selfUserId = isGroupChat && myOccupantId != null
+                    ? myOccupantId
+                    : currentUserId;
                 final user = ChatUser(
                   id: selfUserId,
-                  firstName: profile?.username ?? '',
+                  firstName: (isGroupChat ? myOccupant?.nick : null) ??
+                      profile?.username ??
+                      '',
                 );
                 final spacerUser = ChatUser(
                   id: _selectionSpacerMessageId,
@@ -2541,7 +2544,10 @@ class _ChatState extends State<Chat> {
                                               typingUsers:
                                                   typingUsers.take(1).toList(),
                                               messageOptions: MessageOptions(
-                                                showOtherUsersAvatar: false,
+                                                showOtherUsersAvatar:
+                                                    isGroupChat,
+                                                showCurrentUserAvatar: false,
+                                                showOtherUsersName: true,
                                                 borderRadius: 0,
                                                 maxWidth: messageRowMaxWidth,
                                                 messagePadding: EdgeInsets.zero,
@@ -2553,6 +2559,11 @@ class _ChatState extends State<Chat> {
                                                 userNameBuilder: (user) {
                                                   if (user.id ==
                                                       _selectionSpacerMessageId) {
+                                                    return const SizedBox
+                                                        .shrink();
+                                                  }
+                                                  if (isGroupChat &&
+                                                      user.id == selfUserId) {
                                                     return const SizedBox
                                                         .shrink();
                                                   }
@@ -2571,6 +2582,46 @@ class _ChatState extends State<Chat> {
                                                           .textTheme.muted
                                                           .copyWith(
                                                               fontSize: 12.0),
+                                                    ),
+                                                  );
+                                                },
+                                                top: (message, previous, next) {
+                                                  final isSelectionSpacer =
+                                                      message.customProperties?[
+                                                              'selectionSpacer'] ==
+                                                          true;
+                                                  final isEmptyState =
+                                                      message.customProperties?[
+                                                              'emptyState'] ==
+                                                          true;
+                                                  final isSelfMessage = (message
+                                                              .customProperties?[
+                                                          'isSelf'] as bool?) ??
+                                                      false;
+                                                  if (!isGroupChat ||
+                                                      !isSelfMessage ||
+                                                      isSelectionSpacer ||
+                                                      isEmptyState) {
+                                                    return const SizedBox
+                                                        .shrink();
+                                                  }
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                      left:
+                                                          _chatHorizontalPadding,
+                                                      right:
+                                                          _chatHorizontalPadding,
+                                                      bottom: 4,
+                                                    ),
+                                                    child: Text(
+                                                      message.user
+                                                          .getFullName(),
+                                                      style: context
+                                                          .textTheme.muted
+                                                          .copyWith(
+                                                        fontSize: 12.0,
+                                                      ),
                                                     ),
                                                   );
                                                 },
@@ -3458,109 +3509,6 @@ class _ChatState extends State<Chat> {
                                                     onRevokeInvite:
                                                         onRevokeInvite,
                                                   );
-                                                  final messageMenuItems =
-                                                      <Widget>[
-                                                    ShadContextMenuItem(
-                                                      leading: const Icon(
-                                                        LucideIcons.reply,
-                                                      ),
-                                                      onPressed: onReply,
-                                                      child: const Text(
-                                                        'Reply',
-                                                      ),
-                                                    ),
-                                                    if (onForward != null)
-                                                      ShadContextMenuItem(
-                                                        leading: const Icon(
-                                                          LucideIcons.reply,
-                                                        ),
-                                                        onPressed: onForward,
-                                                        child: const Text(
-                                                          'Forward',
-                                                        ),
-                                                      ),
-                                                    if (onResend != null)
-                                                      ShadContextMenuItem(
-                                                        leading: const Icon(
-                                                          LucideIcons.repeat,
-                                                        ),
-                                                        onPressed: onResend,
-                                                        child: const Text(
-                                                          'Resend',
-                                                        ),
-                                                      ),
-                                                    if (onEdit != null)
-                                                      ShadContextMenuItem(
-                                                        leading: const Icon(
-                                                          LucideIcons
-                                                              .pencilLine,
-                                                        ),
-                                                        onPressed: onEdit,
-                                                        child: const Text(
-                                                          'Edit',
-                                                        ),
-                                                      ),
-                                                    if (onRevokeInvite != null)
-                                                      ShadContextMenuItem(
-                                                        leading: const Icon(
-                                                          LucideIcons.ban,
-                                                        ),
-                                                        onPressed:
-                                                            onRevokeInvite,
-                                                        child: const Text(
-                                                          'Revoke',
-                                                        ),
-                                                      ),
-                                                    ShadContextMenuItem(
-                                                      leading: const Icon(
-                                                        LucideIcons.copy,
-                                                      ),
-                                                      onPressed: onCopy,
-                                                      child: const Text(
-                                                        'Copy',
-                                                      ),
-                                                    ),
-                                                    ShadContextMenuItem(
-                                                      leading: const Icon(
-                                                        LucideIcons.share2,
-                                                      ),
-                                                      onPressed: onShare,
-                                                      child: const Text(
-                                                        'Share',
-                                                      ),
-                                                    ),
-                                                    ShadContextMenuItem(
-                                                      leading: const Icon(
-                                                        LucideIcons
-                                                            .calendarPlus,
-                                                      ),
-                                                      onPressed:
-                                                          onAddToCalendar,
-                                                      child: const Text(
-                                                        'Add to calendar',
-                                                      ),
-                                                    ),
-                                                    ShadContextMenuItem(
-                                                      leading: const Icon(
-                                                        LucideIcons.info,
-                                                      ),
-                                                      onPressed: onDetails,
-                                                      child: const Text(
-                                                        'Details',
-                                                      ),
-                                                    ),
-                                                    if (onSelect != null)
-                                                      ShadContextMenuItem(
-                                                        leading: const Icon(
-                                                          LucideIcons
-                                                              .squareCheck,
-                                                        ),
-                                                        onPressed: onSelect,
-                                                        child: const Text(
-                                                          'Select',
-                                                        ),
-                                                      ),
-                                                  ];
                                                   if (isSingleSelection) {
                                                     _activeSelectionExtrasKey ??=
                                                         GlobalKey();
@@ -3721,17 +3669,6 @@ class _ChatState extends State<Chat> {
                                                       EnvScope.maybeOf(context)
                                                               ?.isDesktopPlatform ??
                                                           false;
-                                                  final contextualBubble =
-                                                      isDesktopPlatform
-                                                          ? AxiContextMenuRegion(
-                                                              longPressEnabled:
-                                                                  false,
-                                                              items:
-                                                                  messageMenuItems,
-                                                              child:
-                                                                  bubbleDisplay,
-                                                            )
-                                                          : bubbleDisplay;
                                                   final selectableBubble =
                                                       GestureDetector(
                                                     behavior: HitTestBehavior
@@ -3750,7 +3687,9 @@ class _ChatState extends State<Chat> {
                                                         _clearMessageSelection();
                                                       }
                                                     },
-                                                    onLongPress: widget.readOnly
+                                                    onLongPress: widget
+                                                                .readOnly ||
+                                                            isDesktopPlatform
                                                         ? null
                                                         : () =>
                                                             _toggleMessageSelection(
@@ -3764,7 +3703,7 @@ class _ChatState extends State<Chat> {
                                                                   messageModel,
                                                                 )
                                                             : null,
-                                                    child: contextualBubble,
+                                                    child: bubbleDisplay,
                                                   );
                                                   final animatedStack =
                                                       AnimatedSize(
@@ -5361,43 +5300,21 @@ class _ChatComposerIconButton extends StatelessWidget {
         ? colors.mutedForeground
         : (activeColor ?? colors.foreground);
     final minButtonExtent = scaled(50);
-    final splashRadius = scaled(24);
-    final button = IconButton(
-      icon: Icon(icon, size: scaled(24), color: iconColor),
+    final cornerRadius = scaled(14);
+    return AxiIconButton(
+      iconData: icon,
       tooltip: tooltip,
+      semanticLabel: tooltip,
       onPressed: onPressed,
-      splashRadius: splashRadius,
-      padding: EdgeInsets.zero,
-      constraints: BoxConstraints(
-        minWidth: minButtonExtent,
-        minHeight: minButtonExtent,
-      ),
-      visualDensity: VisualDensity.compact,
-    );
-    Widget interactiveChild = DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: SquircleBorder(
-          cornerRadius: scaled(14),
-          side: BorderSide(color: colors.border, width: scaled(1.4)),
-        ),
-      ),
-      child: button,
-    ).withTapBounce(enabled: onPressed != null);
-    if (onLongPress != null) {
-      interactiveChild = GestureDetector(
-        behavior: HitTestBehavior.deferToChild,
-        onLongPress: onLongPress,
-        child: interactiveChild,
-      );
-    }
-    return Semantics(
-      button: true,
-      enabled: onPressed != null,
-      label: tooltip,
-      onTap: onPressed,
       onLongPress: onLongPress,
-      child: interactiveChild,
+      color: iconColor,
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderWidth: scaled(1.4),
+      cornerRadius: cornerRadius,
+      buttonSize: minButtonExtent,
+      tapTargetSize: minButtonExtent,
+      iconSize: scaled(24),
     );
   }
 }
@@ -6310,11 +6227,13 @@ class _QuoteBanner extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            onPressed: onClear,
-            icon: const Icon(LucideIcons.x),
-            color: colors.mutedForeground,
+          AxiIconButton(
+            iconData: LucideIcons.x,
             tooltip: 'Cancel reply',
+            onPressed: onClear,
+            color: colors.mutedForeground,
+            backgroundColor: colors.card,
+            borderColor: colors.border,
           ),
         ],
       ),

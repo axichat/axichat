@@ -287,7 +287,9 @@ class _FileAttachment extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          ShadIconButton(
+          AxiIconButton(
+            iconData: LucideIcons.download,
+            tooltip: 'Download attachment',
             onPressed: url == null && metadata.path == null
                 ? null
                 : () => _openAttachment(
@@ -295,7 +297,6 @@ class _FileAttachment extends StatelessWidget {
                       url: url,
                       path: metadata.path,
                     ),
-            icon: const Icon(LucideIcons.download),
           ),
         ],
       ),

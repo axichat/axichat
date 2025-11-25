@@ -325,9 +325,12 @@ class _UnifiedTaskDialogHeader extends StatelessWidget {
               style: textTheme.h4,
             ),
           ),
-          IconButton(
+          AxiIconButton(
+            iconData: Icons.close,
+            tooltip: 'Close',
             onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.close),
+            backgroundColor: colors.card,
+            borderColor: colors.border,
           ),
         ],
       ),

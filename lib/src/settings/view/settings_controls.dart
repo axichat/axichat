@@ -142,26 +142,6 @@ class SettingsControls extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
-                label: const Text('Mute notifications'),
-                sublabel: const Text('Stop receiving message notifications.'),
-                value: state.mute,
-                onChanged: (mute) =>
-                    context.read<SettingsCubit>().toggleMute(mute),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: ShadSwitch(
-                label: const Text('Send read receipts'),
-                value: state.readReceipts,
-                onChanged: (readReceipts) => context
-                    .read<SettingsCubit>()
-                    .toggleReadReceipts(readReceipts),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
               child: AxiListTile(
                 title: 'Message storage',
                 subtitle:
@@ -193,6 +173,26 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Mute notifications'),
+                sublabel: const Text('Stop receiving message notifications.'),
+                value: state.mute,
+                onChanged: (mute) =>
+                    context.read<SettingsCubit>().toggleMute(mute),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Send read receipts'),
+                value: state.readReceipts,
+                onChanged: (readReceipts) => context
+                    .read<SettingsCubit>()
+                    .toggleReadReceipts(readReceipts),
               ),
             ),
             Padding(

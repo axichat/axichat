@@ -397,12 +397,18 @@ class RenderChatBubbleSurface extends RenderBox
           );
     if (!unboundedSelection && maxContentExtent <= 0) {
       child.layout(BoxConstraints.tight(Size.zero), parentUsesSize: true);
+      final childParentData = child.parentData as _ChatBubbleParentData;
+      childParentData.offset = Offset.zero;
       return;
     }
     child.layout(childConstraints, parentUsesSize: true);
     final childSize = child.size;
     final childExtent = horizontalAnchor ? childSize.width : childSize.height;
-    if (childExtent <= 0) return;
+    if (childExtent <= 0) {
+      final childParentData = child.parentData as _ChatBubbleParentData;
+      childParentData.offset = Offset.zero;
+      return;
+    }
 
     final desiredThickness = childExtent + paddingExtent;
     final resolvedThickness = math.min(

@@ -437,7 +437,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final current = updated[occupantId];
     final isNickMatch =
         nick.toLowerCase() == (_roomNicknames[key]?.toLowerCase() ?? '');
-    final isSelf = realJid != null ? _isSelfRealJid(realJid) : false;
+    final resolvedRealJid = realJid ?? current?.realJid;
+    final isSelf =
+        resolvedRealJid != null ? _isSelfRealJid(resolvedRealJid) : false;
     var resolvedAffiliation = affiliation ?? current?.affiliation;
     if ((resolvedAffiliation == null || resolvedAffiliation.isNone) && isSelf) {
       resolvedAffiliation = OccupantAffiliation.member;
@@ -455,14 +457,25 @@ mixin MucService on XmppBase, BaseStreamService {
             ))
         .copyWith(
       nick: nick,
-      realJid: realJid ?? current?.realJid,
+      realJid: resolvedRealJid,
       affiliation: resolvedAffiliation ?? OccupantAffiliation.none,
       role: role ?? current?.role,
       isPresent: isPresent ?? current?.isPresent ?? true,
     );
     updated[occupantId] = next;
     var myOccupantId = existing.myOccupantId;
-    if (myOccupantId == null && (_isSelfOccupant(next) || isNickMatch)) {
+    final shouldMarkSelf = _isSelfOccupant(next) || isNickMatch;
+    if (shouldMarkSelf) {
+      _roomNicknames[key] = nick;
+      if (resolvedRealJid != null) {
+        updated.removeWhere(
+          (key, occupant) =>
+              key != occupantId && occupant.realJid == resolvedRealJid,
+        );
+      }
+      if (myOccupantId != null && myOccupantId != occupantId) {
+        updated.remove(myOccupantId);
+      }
       myOccupantId = occupantId;
     }
     final room = existing.copyWith(

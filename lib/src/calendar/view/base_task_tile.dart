@@ -1,3 +1,4 @@
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -461,6 +462,7 @@ class _FullTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : task.priorityColor;
     return Container(
@@ -558,16 +560,30 @@ class _FullTaskTile extends StatelessWidget {
                             text: statusText,
                           ),
                           const Spacer(),
-                          IconButton(
-                            onPressed: onEdit,
-                            icon: const Icon(Icons.edit, size: 18),
+                          AxiIconButton(
+                            iconData: Icons.edit,
                             tooltip: 'Edit task',
+                            onPressed: onEdit,
+                            iconSize: 18,
+                            buttonSize: 36,
+                            tapTargetSize: 40,
+                            cornerRadius: 12,
+                            backgroundColor: colors.card,
+                            borderColor: colors.border,
+                            color: colors.mutedForeground,
                           ),
                           const SizedBox(width: calendarGutterSm),
-                          IconButton(
-                            onPressed: onDelete,
-                            icon: const Icon(Icons.delete, size: 18),
+                          AxiIconButton(
+                            iconData: Icons.delete,
                             tooltip: 'Delete task',
+                            onPressed: onDelete,
+                            iconSize: 18,
+                            buttonSize: 36,
+                            tapTargetSize: 40,
+                            cornerRadius: 12,
+                            backgroundColor: colors.card,
+                            borderColor: colors.border,
+                            color: colors.destructive,
                           ),
                         ],
                       ),

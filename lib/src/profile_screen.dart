@@ -31,6 +31,10 @@ enum _ProfileRoute {
   delete,
 }
 
+const _profileActionSpacingWide = 12.0;
+const _profileActionSpacingNarrow = 10.0;
+const _profileActionRunSpacing = 10.0;
+
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required this.locate});
 
@@ -289,8 +293,10 @@ class _ProfileCardSection extends StatelessWidget {
               final bool wideCard =
                   isWideLayout && constraints.maxWidth >= 360.0;
               final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
-              final double actionSpacing = wideCard ? 12.0 : 8.0;
-              final double actionRunSpacing = wideCard ? 0.0 : 8.0;
+              final double actionSpacing = wideCard
+                  ? _profileActionSpacingWide
+                  : _profileActionSpacingNarrow;
+              const double actionRunSpacing = _profileActionRunSpacing;
               return ShadCard(
                 rowMainAxisSize: MainAxisSize.max,
                 columnCrossAxisAlignment: CrossAxisAlignment.center,
@@ -470,21 +476,29 @@ class _SettingsPanel extends StatelessWidget {
           showDivider: showTopDivider,
           showAppearanceDivider: showTopDivider,
         ),
-        AboutListTile(
-          icon: const Icon(LucideIcons.info),
-          applicationName: appDisplayName,
-          applicationVersion: applicationVersion,
-          applicationLegalese: 'Copyright (C) 2025 Eliot Lew\n\n'
-              'This program is free software: you can redistribute it and/or modify '
-              'it under the terms of the GNU Affero General Public License as '
-              'published by the Free Software Foundation, either version 3 of the '
-              'License, or (at your option) any later version.\n\n'
-              'This program is distributed in the hope that it will be useful, '
-              'but WITHOUT ANY WARRANTY; without even the implied warranty of '
-              'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
-              'GNU Affero General Public License for more details.\n\n'
-              'You should have received a copy of the GNU Affero General Public License '
-              'along with this program. If not, see <https://www.gnu.org/licenses/>.',
+        ListTileTheme(
+          data: const ListTileThemeData(
+            dense: true,
+            minVerticalPadding: 0,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12.0),
+            visualDensity: VisualDensity(horizontal: 0, vertical: -2),
+          ),
+          child: AboutListTile(
+            icon: const Icon(LucideIcons.info),
+            applicationName: appDisplayName,
+            applicationVersion: applicationVersion,
+            applicationLegalese: 'Copyright (C) 2025 Eliot Lew\n\n'
+                'This program is free software: you can redistribute it and/or modify '
+                'it under the terms of the GNU Affero General Public License as '
+                'published by the Free Software Foundation, either version 3 of the '
+                'License, or (at your option) any later version.\n\n'
+                'This program is distributed in the hope that it will be useful, '
+                'but WITHOUT ANY WARRANTY; without even the implied warranty of '
+                'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the '
+                'GNU Affero General Public License for more details.\n\n'
+                'You should have received a copy of the GNU Affero General Public License '
+                'along with this program. If not, see <https://www.gnu.org/licenses/>.',
+          ),
         ),
       ],
     );

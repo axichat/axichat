@@ -58,8 +58,15 @@ const _draftsSearchFilters = [
 
 const double _secondaryPaneGutter = 0.0;
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _railCollapsed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +168,7 @@ class HomeScreen extends StatelessWidget {
                             selectedIndex:
                                 DefaultTabController.maybeOf(context)?.index ??
                                     0,
+                            collapsed: _railCollapsed,
                             onDestinationSelected: (index) {
                               final controller =
                                   DefaultTabController.maybeOf(context);
@@ -195,6 +203,12 @@ class HomeScreen extends StatelessWidget {
                                   navPlacement: navPlacement,
                                   showNavigationRail:
                                       navPlacement != NavPlacement.rail,
+                                  navRailCollapsed: _railCollapsed,
+                                  onToggleNavRail: () {
+                                    setState(() {
+                                      _railCollapsed = !_railCollapsed;
+                                    });
+                                  },
                                 ),
                                 secondaryChild: openJid == null
                                     ? constrainSecondary(
@@ -434,11 +448,15 @@ class Nexus extends StatefulWidget {
     required this.tabs,
     required this.navPlacement,
     this.showNavigationRail = true,
+    this.navRailCollapsed = false,
+    this.onToggleNavRail,
   });
 
   final List<HomeTabEntry> tabs;
   final NavPlacement navPlacement;
   final bool showNavigationRail;
+  final bool navRailCollapsed;
+  final VoidCallback? onToggleNavRail;
 
   @override
   State<Nexus> createState() => _NexusState();
@@ -500,6 +518,14 @@ class _NexusState extends State<Nexus> {
       children: [
         AxiAppBar(
           showTitle: widget.navPlacement != NavPlacement.rail,
+          leading: widget.navPlacement == NavPlacement.rail &&
+                  widget.onToggleNavRail != null
+              ? AxiIconButton(
+                  iconData: LucideIcons.menu,
+                  tooltip: widget.navRailCollapsed ? 'Show menu' : 'Hide menu',
+                  onPressed: widget.onToggleNavRail,
+                )
+              : null,
           trailing: _SearchToggleButton(
             active: searchActive,
             onPressed: searchState == null
@@ -610,10 +636,14 @@ class _NexusState extends State<Nexus> {
           _HomeNavigationRail(
             tabs: widget.tabs,
             selectedIndex: _tabController?.index ?? 0,
+            collapsed: widget.navRailCollapsed,
             onDestinationSelected: _handleRailSelection,
             calendarAvailable: false,
             calendarActive: false,
             onCalendarSelected: () {},
+            onCollapsedChanged: widget.onToggleNavRail == null
+                ? null
+                : (_) => widget.onToggleNavRail!(),
           ),
           Expanded(child: column),
         ],
@@ -698,28 +728,73 @@ class _HomeNavigationRail extends StatefulWidget {
   const _HomeNavigationRail({
     required this.tabs,
     required this.selectedIndex,
+    required this.collapsed,
     required this.onDestinationSelected,
     required this.calendarAvailable,
     required this.calendarActive,
     required this.onCalendarSelected,
+    this.onCollapsedChanged,
   });
 
   final List<HomeTabEntry> tabs;
   final int selectedIndex;
+  final bool collapsed;
   final ValueChanged<int> onDestinationSelected;
   final bool calendarAvailable;
   final bool calendarActive;
   final VoidCallback onCalendarSelected;
+  final ValueChanged<bool>? onCollapsedChanged;
 
   @override
   State<_HomeNavigationRail> createState() => _HomeNavigationRailState();
 }
 
 class _HomeNavigationRailState extends State<_HomeNavigationRail> {
-  bool _collapsed = false;
+  TabController? _tabController;
+  int _controllerIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllerIndex = widget.selectedIndex;
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeNavigationRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_tabController == null && widget.selectedIndex != _controllerIndex) {
+      _controllerIndex = widget.selectedIndex;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = DefaultTabController.of(context);
+    if (_tabController == controller) return;
+    _tabController?.removeListener(_handleTabChange);
+    _tabController = controller;
+    _controllerIndex = controller.index;
+    _tabController?.addListener(_handleTabChange);
+  }
+
+  @override
+  void dispose() {
+    _tabController?.removeListener(_handleTabChange);
+    super.dispose();
+  }
+
+  void _handleTabChange() {
+    final controller = _tabController;
+    if (controller == null || controller.indexIsChanging) return;
+    setState(() {
+      _controllerIndex = controller.index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final selectedIndex = _tabController?.index ?? _controllerIndex;
     final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
     if (widget.tabs.isEmpty) {
       return const SizedBox.shrink();
@@ -742,8 +817,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         ),
       );
     }
-    final safeIndex =
-        widget.selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
+    final safeIndex = selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
     final selectedRailIndex =
         widget.calendarActive ? baseDestinations.length - 1 : safeIndex;
     return SafeArea(
@@ -752,12 +826,15 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
       child: AxiNavigationRail(
         destinations: baseDestinations,
         selectedIndex: selectedRailIndex,
-        collapsed: _collapsed,
-        onToggleCollapse: () {
-          setState(() => _collapsed = !_collapsed);
-        },
+        collapsed: widget.collapsed,
+        onToggleCollapse: widget.onCollapsedChanged == null
+            ? null
+            : () => widget.onCollapsedChanged!(!widget.collapsed),
         backgroundColor: context.colorScheme.background,
         onDestinationSelected: (index) {
+          setState(() {
+            _controllerIndex = index;
+          });
           final calendarIndex =
               widget.calendarAvailable ? baseDestinations.length - 1 : null;
           if (calendarIndex != null && index == calendarIndex) {

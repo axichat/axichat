@@ -36,109 +36,99 @@ class RoomMembersSheet extends StatelessWidget {
     final theme = context.textTheme;
     final colors = context.colorScheme;
     return SafeArea(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.card,
-            border: Border.all(color: colors.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: AxiModalSurface(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
+                Text(
+                  'Members',
+                  style: theme.h4.copyWith(color: colors.foreground),
+                ),
+                const Spacer(),
+                if (canInvite)
+                  ShadButton.outline(
+                    size: ShadButtonSize.sm,
+                    onPressed: () async {
+                      final jids = await _promptInvite(context);
+                      if (jids != null && jids.isNotEmpty) {
+                        for (final jid in jids) {
+                          onInvite(jid.trim());
+                        }
+                      }
+                    },
+                    child: const Text('Invite user'),
+                  ),
+                if (onClose != null) ...[
+                  const SizedBox(width: 8),
+                  AxiIconButton(
+                    iconData: LucideIcons.x,
+                    tooltip: 'Close',
+                    onPressed: onClose,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (onChangeNickname != null || onLeaveRoom != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Text(
-                      'Members',
-                      style: theme.h4.copyWith(color: colors.foreground),
-                    ),
-                    const Spacer(),
-                    if (canInvite)
+                    if (onChangeNickname != null)
                       ShadButton.outline(
                         size: ShadButtonSize.sm,
                         onPressed: () async {
-                          final jids = await _promptInvite(context);
-                          if (jids != null && jids.isNotEmpty) {
-                            for (final jid in jids) {
-                              onInvite(jid.trim());
-                            }
+                          final next = await _promptNickname(context);
+                          if (next?.isNotEmpty == true) {
+                            onChangeNickname!(next!);
                           }
                         },
-                        child: const Text('Invite user'),
+                        child: Text(
+                          'Change nick${currentNickname == null ? '' : ' (${currentNickname!})'}',
+                        ),
                       ),
-                    if (onClose != null) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x),
-                        tooltip: 'Close',
-                        onPressed: onClose,
+                    if (onLeaveRoom != null)
+                      ShadButton.destructive(
+                        size: ShadButtonSize.sm,
+                        onPressed: onLeaveRoom,
+                        child: const Text('Leave room'),
                       ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 12),
-                if (onChangeNickname != null || onLeaveRoom != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (onChangeNickname != null)
-                          ShadButton.outline(
-                            size: ShadButtonSize.sm,
-                            onPressed: () async {
-                              final next = await _promptNickname(context);
-                              if (next?.isNotEmpty == true) {
-                                onChangeNickname!(next!);
-                              }
-                            },
-                            child: Text(
-                              'Change nick${currentNickname == null ? '' : ' (${currentNickname!})'}',
-                            ),
-                          ),
-                        if (onLeaveRoom != null)
-                          ShadButton.destructive(
-                            size: ShadButtonSize.sm,
-                            onPressed: onLeaveRoom,
-                            child: const Text('Leave room'),
-                          ),
-                      ],
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: groups.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No members yet',
+                        style:
+                            theme.muted.copyWith(color: colors.mutedForeground),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemBuilder: (context, index) {
+                        final group = groups[index];
+                        return _MemberSection(
+                          title: group.title,
+                          occupants: group.members,
+                          buildActions: _actionsFor,
+                          onAction: onAction,
+                          myOccupantId: roomState.myOccupantId,
+                          myAffiliation: roomState.myAffiliation,
+                        );
+                      },
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemCount: groups.length,
                     ),
-                  ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: groups.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No members yet',
-                            style: theme.muted
-                                .copyWith(color: colors.mutedForeground),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: EdgeInsets.zero,
-                          itemBuilder: (context, index) {
-                            final group = groups[index];
-                            return _MemberSection(
-                              title: group.title,
-                              occupants: group.members,
-                              buildActions: _actionsFor,
-                              onAction: onAction,
-                              myOccupantId: roomState.myOccupantId,
-                              myAffiliation: roomState.myAffiliation,
-                            );
-                          },
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemCount: groups.length,
-                        ),
-                ),
-              ],
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -158,28 +148,34 @@ class RoomMembersSheet extends StatelessWidget {
 
   Future<String?> _promptNickname(BuildContext context) async {
     final controller = TextEditingController(text: currentNickname ?? '');
-    return showDialog<String>(
+    return showShadDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Change nickname'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Enter a nickname',
+      builder: (dialogContext) {
+        final pop = Navigator.of(dialogContext).pop;
+        final focusNode = FocusNode();
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => focusNode.requestFocus(),
+        );
+        return ShadDialog(
+          title: const Text('Change nickname'),
+          actions: [
+            ShadButton.outline(
+              onPressed: () => pop(),
+              child: const Text('Cancel'),
+            ).withTapBounce(),
+            ShadButton(
+              onPressed: () => pop(controller.text.trim()),
+              child: const Text('Update'),
+            ).withTapBounce(),
+          ],
+          child: AxiTextFormField(
+            controller: controller,
+            focusNode: focusNode,
+            placeholder: const Text('Enter a nickname'),
+            onSubmitted: (_) => pop(controller.text.trim()),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Update'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
