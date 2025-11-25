@@ -6,6 +6,7 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -17,18 +18,27 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   DraftCubit({
     required MessageService messageService,
     EmailService? emailService,
+    required SettingsCubit settingsCubit,
   })  : _messageService = messageService,
+        _settingsCubit = settingsCubit,
+        _settingsState = settingsCubit.state,
         _emailService = emailService,
         super(const DraftsAvailable(items: null)) {
     _draftsSubscription = _messageService
         .draftsStream()
         .listen((items) => emit(DraftsAvailable(items: items)));
+    _settingsSubscription = _settingsCubit.stream.listen((state) {
+      _settingsState = state;
+    });
   }
 
   final MessageService _messageService;
   final EmailService? _emailService;
+  final SettingsCubit _settingsCubit;
+  SettingsState _settingsState;
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
+  StreamSubscription<SettingsState>? _settingsSubscription;
 
   @override
   void onChange(Change<DraftState> change) {
@@ -42,6 +52,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   @override
   Future<void> close() async {
     await _draftsSubscription.cancel();
+    await _settingsSubscription?.cancel();
     return super.close();
   }
 
@@ -129,6 +140,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (!hasSubject && trimmedBody.isEmpty && attachments.isEmpty) {
       throw const FanOutValidationException('Message cannot be empty.');
     }
+    final includeSignatureToken = _settingsState.shareTokenSignatureEnabled &&
+        targets.every((target) => target.chat?.shareSignatureEnabled ?? true);
     final shareId = ShareTokenCodec.generateShareId();
     if (trimmedBody.isNotEmpty || hasSubject) {
       final report = await emailService.fanOutSend(
@@ -136,6 +149,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         body: trimmedBody,
         subject: subject,
         shareId: shareId,
+        useSubjectToken: includeSignatureToken,
+        tokenAsSignature: includeSignatureToken,
       );
       _throwIfFanOutFailed(
         report,
@@ -148,6 +163,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         attachment: attachment,
         subject: subject,
         shareId: shareId,
+        useSubjectToken: includeSignatureToken,
+        tokenAsSignature: includeSignatureToken,
       );
       _throwIfFanOutFailed(
         report,

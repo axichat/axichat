@@ -1,13 +1,13 @@
 import 'dart:convert';
 
 import 'package:axichat/src/storage/models/database_converters.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:uuid/uuid.dart';
+import 'package:axichat/src/storage/database.dart' show MessagesCompanion;
 
 part 'message_models.freezed.dart';
 

@@ -65,7 +65,7 @@ class SessionCapabilityIndicators extends StatelessWidget {
       icon: LucideIcons.messageCircle,
       label: 'Chat',
       status: _chatStatusLabel(),
-      background: palette.background,
+      background: colors.card,
       foreground: palette.foreground,
     );
   }
@@ -77,7 +77,7 @@ class SessionCapabilityIndicators extends StatelessWidget {
       icon: LucideIcons.mail,
       label: 'Email',
       status: _emailStatusLabel(),
-      background: palette.background,
+      background: colors.card,
       foreground: palette.foreground,
     );
   }
@@ -144,27 +144,50 @@ class _CapabilityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     final chipPadding = compact
         ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
         : const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
     return DecoratedBox(
       decoration: ShapeDecoration(
         color: data.background,
-        shape: SquircleBorder(cornerRadius: 12),
+        shape: SquircleBorder(
+          cornerRadius: 12,
+          side: BorderSide(color: colors.border),
+        ),
       ),
       child: Padding(
         padding: chipPadding,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(data.icon, size: 14, color: data.foreground),
+            Icon(data.icon, size: 14, color: colors.foreground),
             const SizedBox(width: 6),
-            Text(
-              '${data.label} • ${data.status}',
-              style: context.textTheme.small.copyWith(
-                color: data.foreground,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  data.label,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  ' • ',
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  data.status,
+                  style: context.textTheme.small.copyWith(
+                    color: data.foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -175,11 +198,9 @@ class _CapabilityChip extends StatelessWidget {
 
 class _CapabilityPalette {
   const _CapabilityPalette({
-    required this.background,
     required this.foreground,
   });
 
-  final Color background;
   final Color foreground;
 }
 
@@ -191,24 +212,20 @@ _CapabilityPalette _paletteForLevel(
 ) {
   switch (level) {
     case _CapabilityLevel.ready:
-      return _CapabilityPalette(
-        background: colors.primary.withValues(alpha: 0.12),
-        foreground: colors.primary,
+      return const _CapabilityPalette(
+        foreground: axiGreen,
       );
     case _CapabilityLevel.syncing:
       return _CapabilityPalette(
-        background: colors.muted.withValues(alpha: 0.2),
-        foreground: colors.mutedForeground,
+        foreground: colors.primary,
       );
     case _CapabilityLevel.offline:
     case _CapabilityLevel.disabled:
       return _CapabilityPalette(
-        background: colors.muted.withValues(alpha: 0.14),
         foreground: colors.mutedForeground,
       );
     case _CapabilityLevel.error:
       return _CapabilityPalette(
-        background: colors.destructive.withValues(alpha: 0.14),
         foreground: colors.destructive,
       );
   }

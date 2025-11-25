@@ -1,7 +1,8 @@
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
-/// Shared checkbox used by calendar controls to keep a smaller visual while
-/// maintaining the full 48x48 accessible tap target.
+/// Shared checkbox used by calendar controls to keep a compact visual while
+/// still providing a comfortable tap target inside the surrounding tile.
 class CalendarCheckbox extends StatelessWidget {
   const CalendarCheckbox({
     super.key,
@@ -32,14 +33,14 @@ class CalendarCheckbox extends StatelessWidget {
     return MouseRegion(
       cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       child: SizedBox(
-        width: kMinInteractiveDimension,
-        height: kMinInteractiveDimension,
+        width: calendarCheckboxTapTarget,
+        height: calendarCheckboxTapTarget,
         child: Checkbox(
           value: checkboxValue,
           tristate: isIndeterminate,
           onChanged:
               isEnabled ? (checked) => onChanged!(checked ?? false) : null,
-          materialTapTargetSize: MaterialTapTargetSize.padded,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity(
             horizontal: visualScale,
             vertical: visualScale,

@@ -40,6 +40,15 @@ final class _XmppConnectionStateChanged extends ChatEvent {
   List<Object?> get props => [state];
 }
 
+final class _HttpUploadSupportUpdated extends ChatEvent {
+  const _HttpUploadSupportUpdated(this.supported);
+
+  final bool supported;
+
+  @override
+  List<Object?> get props => [supported];
+}
+
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 
@@ -79,6 +88,15 @@ final class ChatMuted extends ChatEvent {
 
   @override
   List<Object?> get props => [muted];
+}
+
+final class ChatShareSignatureToggled extends ChatEvent {
+  const ChatShareSignatureToggled(this.enabled);
+
+  final bool enabled;
+
+  @override
+  List<Object?> get props => [enabled];
 }
 
 final class ChatResponsivityChanged extends ChatEvent {

@@ -3,13 +3,12 @@ import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
-import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RosterList extends StatelessWidget {
@@ -90,13 +89,10 @@ class RosterList extends StatelessWidget {
                     ShadContextMenuItem(
                       leading: const Icon(LucideIcons.pencilLine),
                       child: const Text('Compose'),
-                      onPressed: () => context.push(
-                        const ComposeRoute().location,
-                        extra: {
-                          'locate': context.read,
-                          'jids': [item.jid],
-                          'attachments': const <String>[],
-                        },
+                      onPressed: () =>
+                          context.read<ComposeWindowCubit>().openDraft(
+                        jids: [item.jid],
+                        attachmentMetadataIds: const <String>[],
                       ),
                     ),
                     BlockMenuItem(jid: item.jid),

@@ -135,8 +135,8 @@ const _selectionBubbleInteriorInset = _selectionCutoutDepth + 6.0;
 const _selectionBubbleVerticalInset = 4.0;
 const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
-const _selectionIndicatorInboundGap = 10.0;
-const _selectionIndicatorOutboundGap = 14.0;
+const _selectionIndicatorInset =
+    2.0; // Centers the 28px indicator within the 40px cutout.
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -185,6 +185,8 @@ const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
 const _messageListTailSpacer = 36.0;
 const _subjectFieldHeight = 24.0;
+const _subjectDividerPadding = 2.0;
+const _subjectDividerThickness = 1.0;
 
 class _MessageFilterOption {
   const _MessageFilterOption(this.filter, this.label);
@@ -203,54 +205,6 @@ const _messageFilterOptions = [
     'All with contact',
   ),
 ];
-
-final List<chat_models.Chat> _debugEmailRecipients = List.generate(
-  2,
-  (index) => chat_models.Chat(
-    jid: 'debug${index + 1}@example.com',
-    title: 'Debug Recipient ${index + 1}',
-    type: chat_models.ChatType.chat,
-    lastChangeTimestamp: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    emailAddress: 'debug${index + 1}@example.com',
-  ),
-);
-
-const _debugReactionEmojis = [
-  '👍',
-  '❤️',
-  '😂',
-  '😮',
-  '😢',
-  '🙏',
-  '🔥',
-  '👏',
-  '😎',
-  '🤔',
-  '😴',
-  '😡',
-  '🥳',
-  '🤯',
-  '😇',
-  '🤖',
-  '👀',
-  '💯',
-  '🎉',
-  '🫡',
-];
-
-final List<ReactionPreview> _debugReactionPreviews = List.unmodifiable(
-  List.generate(
-    _debugReactionEmojis.length,
-    (index) => ReactionPreview(
-      emoji: _debugReactionEmojis[index],
-      count: (index % 3) + 1,
-      reactedBySelf: index == 0,
-    ),
-  ),
-);
-
-const _debugReactionBody =
-    'Incoming preview bubble showcasing reaction overflow.';
 
 class _ChatSearchToggleButton extends StatelessWidget {
   const _ChatSearchToggleButton();
@@ -427,10 +381,53 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ShadSelect<String>(
+                        initialValue: state.subjectFilter ?? '',
+                        onChanged: (value) {
+                          context.read<ChatSearchCubit?>()?.updateSubjectFilter(
+                                value?.isEmpty == true ? null : value,
+                              );
+                        },
+                        options: [
+                          const ShadOption<String>(
+                            value: '',
+                            child: Text('Any subject'),
+                          ),
+                          ...state.subjects.map(
+                            (subject) => ShadOption<String>(
+                              value: subject,
+                              child: Text(subject),
+                            ),
+                          ),
+                        ],
+                        selectedOptionBuilder: (_, value) => Text(
+                          value.isNotEmpty ? value : 'Any subject',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ShadSwitch(
+                      value: state.excludeSubject,
+                      onChanged: (value) => context
+                          .read<ChatSearchCubit?>()
+                          ?.toggleExcludeSubject(value),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Exclude subject',
+                      style: context.textTheme.muted,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Builder(
                   builder: (context) {
                     final trimmedQuery = state.query.trim();
-                    final queryEmpty = trimmedQuery.isEmpty;
+                    final hasSubject = state.subjectFilter?.isNotEmpty == true;
+                    final queryEmpty = trimmedQuery.isEmpty && !hasSubject;
                     Widget? statusChild;
                     if (state.error != null) {
                       statusChild = Text(
@@ -1076,6 +1073,7 @@ class _ChatState extends State<Chat> {
 
   List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
+    required bool attachmentsEnabled,
   }) {
     final accessories = <ChatComposerAccessory>[
       ChatComposerAccessory.leading(
@@ -1086,7 +1084,7 @@ class _ChatState extends State<Chat> {
       ),
       ChatComposerAccessory.leading(
         child: _AttachmentAccessoryButton(
-          enabled: !_sendingAttachment,
+          enabled: attachmentsEnabled && !_sendingAttachment,
           onPressed: _handleAttachmentPressed,
         ),
       ),
@@ -1835,7 +1833,9 @@ class _ChatState extends State<Chat> {
     return BlocBuilder<ChatSearchCubit, ChatSearchState>(
       builder: (context, searchState) {
         final trimmedQuery = searchState.query.trim();
-        final searchFiltering = searchState.active && trimmedQuery.isNotEmpty;
+        final hasSubjectFilter = searchState.subjectFilter?.isNotEmpty == true;
+        final searchFiltering =
+            searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
         final searchResults = searchState.results;
         if (searchState.active && _settingsPanelExpanded) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2362,52 +2362,6 @@ class _ChatState extends State<Chat> {
                                         ),
                                       );
                                     }
-                                    if (!isEmailChat) {
-                                      final chatJid = state.chat?.jid ??
-                                          'preview@axichat.dev';
-                                      final debugMessageId =
-                                          '__debug_reactions_$chatJid';
-                                      final debugTimestamp =
-                                          DateTime.now().toUtc();
-                                      const debugSenderJid =
-                                          'preview@axichat.dev';
-                                      final debugModel = Message(
-                                        stanzaID: debugMessageId,
-                                        senderJid: debugSenderJid,
-                                        chatJid: chatJid,
-                                        body: _debugReactionBody,
-                                        timestamp: debugTimestamp,
-                                        reactionsPreview:
-                                            _debugReactionPreviews,
-                                      );
-                                      dashMessages.add(
-                                        ChatMessage(
-                                          user: ChatUser(
-                                            id: debugSenderJid,
-                                            firstName: state.chat?.title ??
-                                                'Preview Contact',
-                                          ),
-                                          createdAt: debugTimestamp,
-                                          text: _debugReactionBody,
-                                          customProperties: {
-                                            'id': debugMessageId,
-                                            'body': _debugReactionBody,
-                                            'edited': false,
-                                            'retracted': false,
-                                            'error': MessageError.none,
-                                            'encrypted': false,
-                                            'trust': null,
-                                            'trusted': null,
-                                            'isSelf': false,
-                                            'model': debugModel,
-                                            'quoted': null,
-                                            'reactions': _debugReactionPreviews,
-                                            'shareParticipants':
-                                                const <chat_models.Chat>[],
-                                          },
-                                        ),
-                                      );
-                                    }
                                     final emptyStateLabel = searchFiltering
                                         ? 'No matches'
                                         : 'No messages';
@@ -2547,7 +2501,7 @@ class _ChatState extends State<Chat> {
                                                 showOtherUsersAvatar:
                                                     isGroupChat,
                                                 showCurrentUserAvatar: false,
-                                                showOtherUsersName: true,
+                                                showOtherUsersName: isGroupChat,
                                                 borderRadius: 0,
                                                 maxWidth: messageRowMaxWidth,
                                                 messagePadding: EdgeInsets.zero,
@@ -2556,35 +2510,6 @@ class _ChatState extends State<Chat> {
                                                     Colors.transparent,
                                                 containerColor:
                                                     Colors.transparent,
-                                                userNameBuilder: (user) {
-                                                  if (user.id ==
-                                                      _selectionSpacerMessageId) {
-                                                    return const SizedBox
-                                                        .shrink();
-                                                  }
-                                                  if (isGroupChat &&
-                                                      user.id == selfUserId) {
-                                                    return const SizedBox
-                                                        .shrink();
-                                                  }
-                                                  return Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                      left:
-                                                          _chatHorizontalPadding,
-                                                      right:
-                                                          _chatHorizontalPadding,
-                                                      bottom: 4,
-                                                    ),
-                                                    child: Text(
-                                                      user.getFullName(),
-                                                      style: context
-                                                          .textTheme.muted
-                                                          .copyWith(
-                                                              fontSize: 12.0),
-                                                    ),
-                                                  );
-                                                },
                                                 top: (message, previous, next) {
                                                   final isSelectionSpacer =
                                                       message.customProperties?[
@@ -2651,12 +2576,7 @@ class _ChatState extends State<Chat> {
                                                           const <chat_models
                                                               .Chat>[];
                                                   final recipientCutoutParticipants =
-                                                      isEmailChat
-                                                          ? <chat_models.Chat>[
-                                                              ...bannerParticipants,
-                                                              ..._debugEmailRecipients,
-                                                            ]
-                                                          : bannerParticipants;
+                                                      bannerParticipants;
                                                   final extraStyle = context
                                                       .textTheme.muted
                                                       .copyWith(
@@ -2718,10 +2638,6 @@ class _ChatState extends State<Chat> {
                                                   final timestampColor =
                                                       chatTokens.timestamp;
                                                   const iconSize = 13.0;
-                                                  final iconFamily = message
-                                                      .status!.icon.fontFamily;
-                                                  final iconPackage = message
-                                                      .status!.icon.fontPackage;
                                                   final chainedPrev =
                                                       _chatMessagesShouldChain(
                                                     message,
@@ -2774,6 +2690,25 @@ class _ChatState extends State<Chat> {
                                                           ? LucideIcons.mail
                                                           : LucideIcons
                                                               .messageCircle;
+                                                  TextSpan iconDetailSpan(
+                                                    IconData icon,
+                                                    Color color,
+                                                  ) =>
+                                                      TextSpan(
+                                                        text:
+                                                            String.fromCharCode(
+                                                          icon.codePoint,
+                                                        ),
+                                                        style: TextStyle(
+                                                          color: color,
+                                                          fontSize: iconSize,
+                                                          fontFamily:
+                                                              icon.fontFamily,
+                                                          package:
+                                                              icon.fontPackage,
+                                                          height: 1,
+                                                        ),
+                                                      );
                                                   final time = TextSpan(
                                                     text:
                                                         '${message.createdAt.hour.toString().padLeft(2, '0')}:'
@@ -2785,36 +2720,22 @@ class _ChatState extends State<Chat> {
                                                       fontSize: 11.0,
                                                     ),
                                                   );
-                                                  final status = TextSpan(
-                                                    text: String.fromCharCode(
-                                                      message.status!.icon
-                                                          .codePoint,
-                                                    ),
-                                                    style: TextStyle(
-                                                      color: self
-                                                          ? colors
-                                                              .primaryForeground
-                                                          : timestampColor,
-                                                      fontSize: iconSize,
-                                                      fontFamily: iconFamily,
-                                                      package: iconPackage,
-                                                    ),
-                                                  );
+                                                  final statusIcon =
+                                                      message.status?.icon;
+                                                  final status =
+                                                      statusIcon == null
+                                                          ? null
+                                                          : iconDetailSpan(
+                                                              statusIcon,
+                                                              self
+                                                                  ? colors
+                                                                      .primaryForeground
+                                                                  : timestampColor,
+                                                            );
                                                   final transportDetail =
-                                                      TextSpan(
-                                                    text: String.fromCharCode(
-                                                      transportIconData
-                                                          .codePoint,
-                                                    ),
-                                                    style: TextStyle(
-                                                      color: timeColor,
-                                                      fontSize: iconSize,
-                                                      fontFamily:
-                                                          transportIconData
-                                                              .fontFamily,
-                                                      package: transportIconData
-                                                          .fontPackage,
-                                                    ),
+                                                      iconDetailSpan(
+                                                    transportIconData,
+                                                    timeColor,
                                                   );
                                                   final trusted =
                                                       message.customProperties![
@@ -2822,28 +2743,13 @@ class _ChatState extends State<Chat> {
                                                   final verification =
                                                       trusted == null
                                                           ? null
-                                                          : TextSpan(
-                                                              text: String
-                                                                  .fromCharCode(
-                                                                trusted
-                                                                    .toShieldIcon
-                                                                    .codePoint,
-                                                              ),
-                                                              style: context
-                                                                  .textTheme
-                                                                  .muted
-                                                                  .copyWith(
-                                                                color: trusted
-                                                                    ? axiGreen
-                                                                    : colors
-                                                                        .destructive,
-                                                                fontSize:
-                                                                    iconSize,
-                                                                fontFamily:
-                                                                    iconFamily,
-                                                                package:
-                                                                    iconPackage,
-                                                              ),
+                                                          : iconDetailSpan(
+                                                              trusted
+                                                                  .toShieldIcon,
+                                                              trusted
+                                                                  ? axiGreen
+                                                                  : colors
+                                                                      .destructive,
                                                             );
                                                   final messageModel =
                                                       message.customProperties?[
@@ -2906,7 +2812,8 @@ class _ChatState extends State<Chat> {
                                                       !showCompactReactions &&
                                                           isEmailChat &&
                                                           recipientCutoutParticipants
-                                                              .isNotEmpty;
+                                                                  .length >
+                                                              1;
                                                   Widget? recipientOverlay;
                                                   CutoutStyle? recipientStyle;
                                                   if (hasInviteBadge &&
@@ -2965,13 +2872,10 @@ class _ChatState extends State<Chat> {
                                                       ),
                                                     );
                                                     selectionOverlay = Padding(
-                                                      padding: EdgeInsets.only(
-                                                        left: self
-                                                            ? _selectionIndicatorOutboundGap
-                                                            : 0,
-                                                        right: self
-                                                            ? 0
-                                                            : _selectionIndicatorInboundGap,
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                        left:
+                                                            _selectionIndicatorInset,
                                                       ),
                                                       child: indicator,
                                                     );
@@ -3045,27 +2949,75 @@ class _ChatState extends State<Chat> {
                                                     if (showSubjectBanner) {
                                                       final String subjectText =
                                                           subjectLabel;
+                                                      final textTheme =
+                                                          Theme.of(context)
+                                                              .textTheme;
+                                                      final baseSubjectStyle =
+                                                          textTheme
+                                                                  .titleMedium ??
+                                                              textTheme
+                                                                  .bodyLarge ??
+                                                              context.textTheme
+                                                                  .lead;
+                                                      final subjectStyle =
+                                                          baseSubjectStyle
+                                                              .copyWith(
+                                                        color: textColor,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      );
+                                                      final subjectPainter =
+                                                          TextPainter(
+                                                        text: TextSpan(
+                                                          text: subjectText,
+                                                          style: subjectStyle,
+                                                        ),
+                                                        textDirection:
+                                                            Directionality.of(
+                                                          context,
+                                                        ),
+                                                        textScaler: MediaQuery
+                                                                .maybeTextScalerOf(
+                                                              context,
+                                                            ) ??
+                                                            TextScaler
+                                                                .noScaling,
+                                                      )..layout();
                                                       bubbleChildren.add(
                                                         Text(
                                                           subjectText,
-                                                          style: Theme.of(
-                                                            context,
-                                                          )
-                                                              .textTheme
-                                                              .titleMedium
-                                                              ?.copyWith(
-                                                                color:
-                                                                    textColor,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
+                                                          style: subjectStyle,
                                                         ),
                                                       );
-                                                      bubbleChildren
-                                                          .add(const SizedBox(
-                                                        height: 6,
-                                                      ));
+                                                      bubbleChildren.add(
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            vertical:
+                                                                _subjectDividerPadding,
+                                                          ),
+                                                          child: Align(
+                                                            alignment: Alignment
+                                                                .centerLeft,
+                                                            child: DecoratedBox(
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: context
+                                                                    .colorScheme
+                                                                    .border,
+                                                              ),
+                                                              child: SizedBox(
+                                                                height:
+                                                                    _subjectDividerThickness,
+                                                                width:
+                                                                    subjectPainter
+                                                                        .width,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      );
                                                     }
                                                     bubbleChildren.add(
                                                       DynamicInlineText(
@@ -3075,7 +3027,9 @@ class _ChatState extends State<Chat> {
                                                         details: [
                                                           time,
                                                           transportDetail,
-                                                          if (self) status,
+                                                          if (self &&
+                                                              status != null)
+                                                            status,
                                                           if (verification !=
                                                               null)
                                                             verification,
@@ -3675,10 +3629,9 @@ class _ChatState extends State<Chat> {
                                                         .translucent,
                                                     onTap: () {
                                                       if (_multiSelectActive) {
-                                                        _toggleMultiSelectMessage(
-                                                          messageModel,
-                                                        );
-                                                      } else if (isInviteMessage &&
+                                                        return;
+                                                      }
+                                                      if (isInviteMessage &&
                                                           !inviteRevoked) {
                                                         _handleInviteTap(
                                                           messageModel,
@@ -3860,7 +3813,12 @@ class _ChatState extends State<Chat> {
                                               pendingAttachmentMenuBuilder:
                                                   _pendingAttachmentMenuItems,
                                               buildComposerAccessories:
-                                                  _composerAccessories,
+                                                  ({required bool canSend}) =>
+                                                      _composerAccessories(
+                                                canSend: canSend,
+                                                attachmentsEnabled: state
+                                                    .supportsHttpFileUpload,
+                                              ),
                                               onSend: _handleSendMessage,
                                             );
                                           }(),
@@ -5299,7 +5257,7 @@ class _ChatComposerIconButton extends StatelessWidget {
     final iconColor = onPressed == null
         ? colors.mutedForeground
         : (activeColor ?? colors.foreground);
-    final minButtonExtent = scaled(50);
+    final minButtonExtent = scaled(42);
     final cornerRadius = scaled(14);
     return AxiIconButton(
       iconData: icon,
@@ -5314,7 +5272,7 @@ class _ChatComposerIconButton extends StatelessWidget {
       cornerRadius: cornerRadius,
       buttonSize: minButtonExtent,
       tapTargetSize: minButtonExtent,
-      iconSize: scaled(24),
+      iconSize: scaled(22),
     );
   }
 }
@@ -5806,47 +5764,75 @@ class _ChatSettingsButtons extends StatelessWidget {
     final showDirectOnly = state.viewFilter == MessageTimelineFilter.directOnly;
     final notificationsEnabled = !chat.muted;
     final isSpamChat = chat.spam;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      alignment: WrapAlignment.center,
+    final globalSignatureEnabled =
+        context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
+    final chatSignatureEnabled = chat.shareSignatureEnabled;
+    final signatureActive = globalSignatureEnabled && chatSignatureEnabled;
+    final signatureHint = globalSignatureEnabled
+        ? 'Helps keep multi-recipient email threads intact.'
+        : 'Disabled globally; replies may not thread.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ContextActionButton(
-          icon: Icon(
-            showDirectOnly ? LucideIcons.user : LucideIcons.users,
-            size: iconSize,
-          ),
-          label: showDirectOnly ? 'Showing direct only' : 'Showing all',
-          onPressed: () => onViewFilterChanged(
-            showDirectOnly
-                ? MessageTimelineFilter.allWithContact
-                : MessageTimelineFilter.directOnly,
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            ContextActionButton(
+              icon: Icon(
+                showDirectOnly ? LucideIcons.user : LucideIcons.users,
+                size: iconSize,
+              ),
+              label: showDirectOnly ? 'Showing direct only' : 'Showing all',
+              onPressed: () => onViewFilterChanged(
+                showDirectOnly
+                    ? MessageTimelineFilter.allWithContact
+                    : MessageTimelineFilter.directOnly,
+              ),
+            ),
+            ContextActionButton(
+              icon: Icon(
+                notificationsEnabled ? LucideIcons.bellOff : LucideIcons.bell,
+                size: iconSize,
+              ),
+              label: notificationsEnabled
+                  ? 'Mute notifications'
+                  : 'Enable notifications',
+              onPressed: () => onToggleNotifications(!notificationsEnabled),
+            ),
+            ContextActionButton(
+              icon: Icon(
+                isSpamChat ? LucideIcons.inbox : LucideIcons.flag,
+                size: iconSize,
+              ),
+              label: isSpamChat ? 'Move to inbox' : 'Report spam',
+              destructive: !isSpamChat,
+              onPressed: () => onSpamToggle(!isSpamChat),
+            ),
+            _BlockActionButton(
+              jid: chat.jid,
+              emailAddress: chat.emailAddress,
+              useEmailBlocking: chat.defaultTransport.isEmail,
+            ),
+          ],
         ),
-        ContextActionButton(
-          icon: Icon(
-            notificationsEnabled ? LucideIcons.bellOff : LucideIcons.bell,
-            size: iconSize,
+        if (chat.supportsEmail) ...[
+          const SizedBox(height: 12),
+          ShadSwitch(
+            label: const Text('Include share token footer for email'),
+            sublabel: Text(
+              '$signatureHint Disabling can break threading and attachment grouping.',
+              style: context.textTheme.muted,
+            ),
+            value: signatureActive,
+            onChanged: globalSignatureEnabled
+                ? (enabled) => context
+                    .read<ChatBloc>()
+                    .add(ChatShareSignatureToggled(enabled))
+                : null,
           ),
-          label: notificationsEnabled
-              ? 'Mute notifications'
-              : 'Enable notifications',
-          onPressed: () => onToggleNotifications(!notificationsEnabled),
-        ),
-        ContextActionButton(
-          icon: Icon(
-            isSpamChat ? LucideIcons.inbox : LucideIcons.flag,
-            size: iconSize,
-          ),
-          label: isSpamChat ? 'Move to inbox' : 'Report spam',
-          destructive: !isSpamChat,
-          onPressed: () => onSpamToggle(!isSpamChat),
-        ),
-        _BlockActionButton(
-          jid: chat.jid,
-          emailAddress: chat.emailAddress,
-          useEmailBlocking: chat.defaultTransport.isEmail,
-        ),
+        ],
       ],
     );
   }
@@ -6406,6 +6392,7 @@ class _GuestChatState extends State<GuestChat> {
 
   List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
+    required bool attachmentsEnabled,
   }) {
     return [
       ChatComposerAccessory.leading(
@@ -6416,7 +6403,7 @@ class _GuestChatState extends State<GuestChat> {
       ),
       ChatComposerAccessory.leading(
         child: _AttachmentAccessoryButton(
-          enabled: false,
+          enabled: attachmentsEnabled && false,
           onPressed: _showPreviewAttachmentNotice,
         ),
       ),
@@ -6517,7 +6504,10 @@ class _GuestChatState extends State<GuestChat> {
                   focusNode: _focusNode,
                   hintText: 'Send a message',
                   onSend: _handleSend,
-                  actions: _composerAccessories(canSend: _composerHasText),
+                  actions: _composerAccessories(
+                    canSend: _composerHasText,
+                    attachmentsEnabled: false,
+                  ),
                   sendEnabled: _composerHasText,
                 ),
               ),

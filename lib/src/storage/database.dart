@@ -46,11 +46,15 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Message>> searchChatMessages({
     required String jid,
-    required String query,
+    String? query,
+    String? subject,
+    bool excludeSubject = false,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
     int limit,
     bool ascending,
   });
+
+  Future<List<String>> subjectsForChat(String jid);
 
   Future<Message?> getMessageByStanzaID(String stanzaID);
 
@@ -226,6 +230,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> markChatMuted({
     required String jid,
     required bool muted,
+  });
+
+  Future<void> setChatShareSignature({
+    required String jid,
+    required bool enabled,
   });
 
   Future<void> markChatFavorited({
@@ -954,7 +963,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration {
@@ -1048,6 +1057,9 @@ WHERE subject_token IS NOT NULL
         }
         if (from < 13) {
           await _mergeEmailChats();
+        }
+        if (from < 14) {
+          await m.addColumn(chats, chats.shareSignatureEnabled);
         }
       },
       beforeOpen: (_) async {
@@ -1149,16 +1161,24 @@ WHERE subject_token IS NOT NULL
   @override
   Future<List<Message>> searchChatMessages({
     required String jid,
-    required String query,
+    String? query,
+    String? subject,
+    bool excludeSubject = false,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
     int limit = 200,
     bool ascending = false,
   }) async {
-    if (query.trim().isEmpty) return const [];
+    final normalizedQuery = query?.trim().toLowerCase() ?? '';
+    final normalizedSubject = subject?.trim().toLowerCase() ?? '';
+    final hasQuery = normalizedQuery.isNotEmpty;
+    final hasSubject = normalizedSubject.isNotEmpty;
+    if (!hasQuery && !hasSubject) return const [];
     final filterValue = filter.index;
     final orderClause = ascending ? 'ASC' : 'DESC';
-    final normalizedQuery = query.trim().toLowerCase();
-    final likePattern = '%${_escapeLikePattern(normalizedQuery)}%';
+    final likePattern =
+        hasQuery ? '%${_escapeLikePattern(normalizedQuery)}%' : '%';
+    final subjectPattern =
+        hasSubject ? '%${_escapeLikePattern(normalizedSubject)}%' : '%';
     final selectable = customSelect(
       '''
       SELECT m.*
@@ -1168,12 +1188,24 @@ WHERE subject_token IS NOT NULL
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
-        AND LOWER(COALESCE(m.body, '')) LIKE ? ESCAPE '\\'
+        AND (
+          CASE WHEN ? = 0 THEN 1
+               ELSE LOWER(COALESCE(m.body, '')) LIKE ? ESCAPE '\\'
+          END
+        )
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
           ELSE
             (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+        AND (
+          CASE WHEN ? = 0 THEN 1
+               WHEN ? = 1 THEN
+                 COALESCE(LOWER(TRIM(ms.subject)), '') NOT LIKE ? ESCAPE '\\'
+               ELSE
+                 LOWER(TRIM(ms.subject)) LIKE ? ESCAPE '\\'
           END
         )
       ORDER BY m.timestamp $orderClause
@@ -1182,8 +1214,13 @@ WHERE subject_token IS NOT NULL
       variables: [
         Variable<String>(jid),
         Variable<String>(jid),
+        Variable<int>(hasQuery ? 1 : 0),
         Variable<String>(likePattern),
         Variable<int>(filterValue),
+        Variable<int>(hasSubject ? 1 : 0),
+        Variable<int>(excludeSubject ? 1 : 0),
+        Variable<String>(subjectPattern),
+        Variable<String>(subjectPattern),
         Variable<int>(limit),
       ],
       readsFrom: {
@@ -1194,6 +1231,33 @@ WHERE subject_token IS NOT NULL
       },
     );
     return selectable.map((row) => messages.map(row.data)).get();
+  }
+
+  @override
+  Future<List<String>> subjectsForChat(String jid) async {
+    final selectable = customSelect(
+      '''
+      SELECT DISTINCT TRIM(ms.subject) AS subject
+      FROM message_shares ms
+      JOIN message_copies mc ON mc.share_id = ms.share_id
+      JOIN messages m ON m.delta_msg_id = mc.dc_msg_id
+      WHERE m.chat_jid = ?
+        AND ms.subject IS NOT NULL
+        AND TRIM(ms.subject) <> ''
+      ORDER BY LOWER(TRIM(ms.subject)) ASC
+      ''',
+      variables: [Variable<String>(jid)],
+      readsFrom: {
+        messageShares,
+        messageCopies,
+        messages,
+      },
+    );
+    final rows = await selectable.get();
+    return rows
+        .map((row) => row.data['subject'] as String?)
+        .whereType<String>()
+        .toList();
   }
 
   Future<Message?> getLastMessageForChat(String jid) async {
@@ -1805,6 +1869,17 @@ WHERE subject_token IS NOT NULL
     _log.info('Marking chat: $jid as muted: $muted');
     await (update(chats)..where((chats) => chats.jid.equals(jid)))
         .write(ChatsCompanion(muted: Value(muted)));
+  }
+
+  @override
+  Future<void> setChatShareSignature({
+    required String jid,
+    required bool enabled,
+  }) async {
+    _log.info('Setting chat: $jid share signature to: $enabled');
+    await (update(chats)..where((chats) => chats.jid.equals(jid))).write(
+      ChatsCompanion(shareSignatureEnabled: Value(enabled)),
+    );
   }
 
   @override

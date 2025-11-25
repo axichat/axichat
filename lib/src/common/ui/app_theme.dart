@@ -1,4 +1,5 @@
-import 'package:axichat/src/common/ui/ui.dart' show inputSubtextInsets;
+import 'package:axichat/src/common/ui/ui.dart'
+    show inputSubtextInsets, interFontFallback, interFontFamily;
 import 'package:axichat/src/settings/bloc/settings_cubit.dart' show ShadColor;
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -127,10 +128,31 @@ class AppTheme {
     final patchedScheme = brightness == Brightness.light
         ? _lightScheme(baseScheme, neutrals)
         : _darkScheme(baseScheme, neutrals);
+    final baseTextTheme = ShadTextTheme();
+    TextStyle inter(TextStyle style) {
+      return style.copyWith(
+        fontFamily: interFontFamily,
+        fontFamilyFallback: interFontFallback,
+      );
+    }
+
+    final textTheme = baseTextTheme.copyWith(
+      h1Large: inter(baseTextTheme.h1Large),
+      h1: inter(baseTextTheme.h1),
+      h2: inter(baseTextTheme.h2),
+      h3: inter(baseTextTheme.h3),
+      h4: inter(baseTextTheme.h4),
+      lead: inter(baseTextTheme.lead),
+      large: inter(baseTextTheme.large),
+      small: inter(baseTextTheme.small),
+      p: inter(baseTextTheme.p),
+      muted: inter(baseTextTheme.muted),
+    );
 
     return ShadThemeData(
       brightness: brightness,
       colorScheme: patchedScheme,
+      textTheme: textTheme,
       decoration: const ShadDecoration(
         errorPadding: inputSubtextInsets,
       ),

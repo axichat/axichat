@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
 import 'package:axichat/src/chats/view/archived_chat_screen.dart';
 import 'package:axichat/src/chats/view/archives_screen.dart';
-import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';
 import 'package:axichat/src/home_screen.dart';
 import 'package:axichat/src/login_screen.dart';
@@ -25,7 +24,6 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const HomeRoute().location: const HomeRoute(),
   const ProfileRoute().location: const ProfileRoute(),
   const ArchivesRoute().location: const ArchivesRoute(),
-  const ComposeRoute().location: const ComposeRoute(),
   const GuestCalendarRoute().location: const GuestCalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
   const EmailDemoRoute().location: const EmailDemoRoute(),
@@ -57,7 +55,6 @@ class TransitionGoRouteData extends GoRouteData {
         ),
       ],
     ),
-    TypedGoRoute<ComposeRoute>(path: ComposeRoute.path),
   ],
 )
 class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
@@ -115,43 +112,6 @@ class ArchivedChatRoute extends TransitionGoRouteData
         locate: state.extra! as T Function<T>(),
         jid: jid,
       );
-}
-
-class ComposeRoute extends TransitionGoRouteData with AuthenticationRouteData {
-  const ComposeRoute();
-
-  static const path = 'compose';
-
-  @override
-  bool get authenticationRequired => true;
-
-  @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final extra = state.extra as Map<String, dynamic>?;
-    final locator = _resolveLocator(context, extra);
-    return ComposeScreen(
-      locate: locator,
-      id: extra?['id'],
-      jids: extra?['jids'] ?? [''],
-      body: extra?['body'] ?? '',
-      subject: extra?['subject'] ?? '',
-      attachmentMetadataIds: extra?['attachments'] ?? const <String>[],
-    );
-  }
-
-  ServiceLocator _resolveLocator(
-    BuildContext context,
-    Map<String, dynamic>? extra,
-  ) {
-    final locator = extra?['locate'] as ServiceLocator?;
-    if (locator != null) {
-      return locator;
-    }
-    final fallbackContext =
-        GoRouter.of(context).routerDelegate.navigatorKey.currentContext ??
-            context;
-    return <T>() => fallbackContext.read<T>();
-  }
 }
 
 @TypedGoRoute<GuestCalendarRoute>(path: '/guest-calendar')

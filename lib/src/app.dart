@@ -7,11 +7,15 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -123,6 +127,9 @@ class _AxichatState extends State<Axichat> {
           RepositoryProvider<XmppService>.value(
             value: widget._xmppService!,
           ),
+        RepositoryProvider<MessageService>(
+          create: (context) => context.read<XmppService>(),
+        ),
         RepositoryProvider.value(value: widget._notificationService),
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
@@ -161,6 +168,21 @@ class _AxichatState extends State<Axichat> {
           ),
           BlocProvider(
             create: (context) => ShareIntentCubit()..initialize(),
+          ),
+          BlocProvider(
+            create: (context) => ChatsCubit(
+              chatsService: context.read<XmppService>(),
+            ),
+          ),
+          BlocProvider(
+            create: (context) => DraftCubit(
+              messageService: context.read<MessageService>(),
+              emailService: context.read<EmailService>(),
+              settingsCubit: context.read<SettingsCubit>(),
+            ),
+          ),
+          BlocProvider(
+            create: (context) => ComposeWindowCubit(),
           ),
           if (widget._storageManager.guestStorage != null)
             BlocProvider(
@@ -281,7 +303,8 @@ class MaterialAxichat extends StatelessWidget {
               labelMedium: shadTheme.textTheme.muted,
               labelSmall: shadTheme.textTheme.muted,
             ).apply(
-              fontFamilyFallback: emojiFontFallback,
+              fontFamily: interFontFamily,
+              fontFamilyFallback: interFontFallback,
             );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: 20),
@@ -415,6 +438,7 @@ class MaterialAxichat extends StatelessWidget {
               child: Stack(
                 children: [
                   if (child != null) child else const SizedBox.shrink(),
+                  const ComposeWindowOverlay(),
                   const OmemoOperationOverlay(),
                 ],
               ),
@@ -430,7 +454,6 @@ class MaterialAxichat extends StatelessWidget {
             content = EnvScope(
               child: _ShortcutBindings(
                 enabled: actionsEnabled,
-                router: _router,
                 child: _DesktopMenuShell(
                   actionsEnabled: actionsEnabled,
                   child: content,
@@ -452,14 +475,10 @@ class MaterialAxichat extends StatelessWidget {
     final authState = context.read<AuthenticationCubit>().state;
     if (authState is! AuthenticationComplete) return;
     final payload = shareState.payload!;
-    _router.push(
-      const ComposeRoute().location,
-      extra: {
-        'locate': context.read,
-        'body': payload.text,
-        'jids': [''],
-        'attachments': const <String>[],
-      },
+    context.read<ComposeWindowCubit>().openDraft(
+      body: payload.text,
+      jids: const [''],
+      attachmentMetadataIds: const <String>[],
     );
     context.read<ShareIntentCubit>().consume();
   }
@@ -496,12 +515,10 @@ class ToggleCalendarIntent extends Intent {
 class _ShortcutBindings extends StatelessWidget {
   const _ShortcutBindings({
     required this.enabled,
-    required this.router,
     required this.child,
   });
 
   final bool enabled;
-  final GoRouter router;
   final Widget child;
 
   @override
@@ -514,12 +531,8 @@ class _ShortcutBindings extends StatelessWidget {
       actions: {
         ComposeIntent: CallbackAction<ComposeIntent>(
           onInvoke: (_) {
-            router.push(
-              const ComposeRoute().location,
-              extra: {
-                'locate': context.read,
-                'attachments': const <String>[],
-              },
+            context.read<ComposeWindowCubit>().openDraft(
+              attachmentMetadataIds: const <String>[],
             );
             return null;
           },

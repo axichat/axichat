@@ -118,9 +118,9 @@ class AxiNavigationRail extends StatelessWidget {
                     Expanded(
                       child: Text(
                         appDisplayName,
-                        style: context.textTheme.h3.copyWith(
+                        style: context.textTheme.h2.copyWith(
                           fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
+                          letterSpacing: -0.3,
                           color: colors.foreground,
                         ),
                         maxLines: 1,
@@ -131,6 +131,12 @@ class AxiNavigationRail extends StatelessWidget {
                     const Spacer(),
                 ],
               ),
+            ),
+            const SizedBox(height: 12),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.border,
             ),
             const SizedBox(height: 12),
           ],
@@ -157,7 +163,7 @@ class AxiNavigationRail extends StatelessWidget {
   }
 }
 
-class _AxiNavigationRailItem extends StatelessWidget {
+class _AxiNavigationRailItem extends StatefulWidget {
   const _AxiNavigationRailItem({
     required this.destination,
     required this.selected,
@@ -179,87 +185,112 @@ class _AxiNavigationRailItem extends StatelessWidget {
   final Color surfaceColor;
 
   @override
+  State<_AxiNavigationRailItem> createState() => _AxiNavigationRailItemState();
+}
+
+class _AxiNavigationRailItemState extends State<_AxiNavigationRailItem> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final iconColor = selected ? colors.primary : colors.foreground;
-    final textColor = selected ? colors.primary : colors.foreground;
+    final iconColor = widget.selected ? colors.primary : colors.foreground;
+    final textColor = widget.selected ? colors.primary : colors.foreground;
     final itemShape = SquircleBorder(
-      cornerRadius: radius.topLeft.x,
-      side: BorderSide(
-        color: colors.border,
-      ),
+      cornerRadius: widget.radius.topLeft.x,
+      side: BorderSide(color: colors.border),
     );
+    final hoverTint = colors.primary.withValues(alpha: 0.06);
+    final baseBackground = widget.selected
+        ? Color.alphaBlend(widget.selectionOverlay, widget.surfaceColor)
+        : widget.surfaceColor;
+    final background = _hovered && widget.isDesktop
+        ? Color.alphaBlend(hoverTint, baseBackground)
+        : baseBackground;
 
     final Widget icon = Icon(
-      destination.icon,
+      widget.destination.icon,
       color: iconColor,
       size: 20,
     );
-    final Widget? badge = destination.badgeCount > 0
-        ? _RailBadge(count: destination.badgeCount)
+    final Widget? badge = widget.destination.badgeCount > 0
+        ? _RailBadge(count: widget.destination.badgeCount)
         : null;
 
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        decoration: ShapeDecoration(
-          color: selected
-              ? Color.alphaBlend(selectionOverlay, surfaceColor)
-              : Colors.transparent,
-          shape: itemShape,
-        ),
-        child: InkResponse(
-          containedInkWell: true,
-          highlightShape: BoxShape.rectangle,
-          customBorder: itemShape,
-          onTap: onTap,
-          splashFactory:
-              isDesktop ? NoSplash.splashFactory : InkRipple.splashFactory,
-          hoverColor: colors.primary.withValues(alpha: 0.06),
-          splashColor: colors.primary.withValues(alpha: 0.12),
-          highlightColor: Colors.transparent,
-          focusColor: Colors.transparent,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: collapsed ? 8 : 12,
-              vertical: 12,
-            ),
-            child: collapsed
-                ? Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      icon,
-                      if (badge != null)
-                        Positioned(
-                          top: -6,
-                          right: -8,
-                          child: badge,
-                        ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      icon,
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          destination.label,
-                          style: context.textTheme.small.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: textColor,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        badge,
-                      ],
-                    ],
+    final content = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.collapsed ? 8 : 12,
+        vertical: 12,
+      ),
+      child: widget.collapsed
+          ? Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                icon,
+                if (badge != null)
+                  Positioned(
+                    top: -6,
+                    right: -8,
+                    child: badge,
                   ),
-          ),
+              ],
+            )
+          : Row(
+              children: [
+                icon,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.destination.label,
+                    style: context.textTheme.small.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (badge != null) ...[
+                  const SizedBox(width: 8),
+                  badge,
+                ],
+              ],
+            ),
+    );
+
+    final child = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeInOutCubic,
+      decoration: ShapeDecoration(
+        color: background,
+        shape: itemShape,
+      ),
+      child: widget.isDesktop
+          ? content
+          : InkWell(
+              customBorder: itemShape,
+              onTap: widget.onTap,
+              highlightColor: Colors.transparent,
+              splashColor: colors.primary.withValues(alpha: 0.12),
+              hoverColor: hoverTint,
+              child: content,
+            ),
+    );
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.isDesktop ? widget.onTap : null,
+        child: Semantics(
+          selected: widget.selected,
+          button: true,
+          label: widget.destination.label,
+          onTap: widget.onTap,
+          child: child,
         ),
       ),
     );

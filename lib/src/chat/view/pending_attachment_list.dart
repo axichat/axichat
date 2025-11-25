@@ -374,15 +374,16 @@ class _PendingAttachmentActionBar extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          runSpacing: 6,
           children: [
             _PendingAttachmentActionButton(
               icon: LucideIcons.refreshCcw,
               label: 'Retry',
               onPressed: onRetry,
             ),
-            const SizedBox(width: 10),
             _PendingAttachmentActionButton(
               icon: LucideIcons.x,
               label: 'Remove',

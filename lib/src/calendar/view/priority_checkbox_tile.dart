@@ -73,8 +73,8 @@ class PriorityCheckboxTile extends StatelessWidget {
               child: Row(
                 children: [
                   SizedBox(
-                    width: kMinInteractiveDimension,
-                    height: kMinInteractiveDimension,
+                    width: calendarCheckboxTapTarget,
+                    height: calendarCheckboxTapTarget,
                     child: Center(
                       child: CalendarCheckbox(
                         value: value,

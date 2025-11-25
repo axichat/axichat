@@ -17,6 +17,7 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -99,6 +100,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required ChatsService chatsService,
     required NotificationService notificationService,
     required MucService mucService,
+    required SettingsCubit settingsCubit,
     EmailService? emailService,
     OmemoService? omemoService,
   })  : _messageService = messageService,
@@ -107,6 +109,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _emailService = emailService,
         _omemoService = omemoService,
         _mucService = mucService,
+        _settingsCubit = settingsCubit,
+        _settingsState = settingsCubit.state,
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
@@ -120,6 +124,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       transformer: blocThrottle(downTime),
     );
     on<ChatMuted>(_onChatMuted);
+    on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatResponsivityChanged>(_onChatResponsivityChanged);
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
@@ -133,6 +138,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteRequested>(_onChatInviteRequested);
     on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
+    on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
     on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
@@ -174,7 +180,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           }
         },
       );
+      _httpUploadSupportSubscription =
+          xmppService.httpUploadSupportStream.listen(
+        (support) => add(_HttpUploadSupportUpdated(support.supported)),
+      );
+      add(_HttpUploadSupportUpdated(xmppService.httpUploadSupport.supported));
     }
+    _settingsSubscription = _settingsCubit.stream.listen((state) {
+      _settingsState = state;
+    });
   }
 
   static const messageBatchSize = 50;
@@ -199,6 +213,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final EmailService? _emailService;
   final OmemoService? _omemoService;
   final MucService _mucService;
+  final SettingsCubit _settingsCubit;
+  SettingsState _settingsState;
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
@@ -209,6 +225,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
+  StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
+  StreamSubscription<SettingsState>? _settingsSubscription;
   var _currentMessageLimit = messageBatchSize;
   String? _emailSyncComposerMessage;
   String? _mamBeforeId;
@@ -359,6 +377,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _roomSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
+    await _httpUploadSupportSubscription?.cancel();
+    await _settingsSubscription?.cancel();
     _typingTimer?.cancel();
     _typingTimer = null;
     return super.close();
@@ -770,6 +790,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  void _onHttpUploadSupportUpdated(
+    _HttpUploadSupportUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state.supportsHttpFileUpload == event.supported) return;
+    emit(state.copyWith(supportsHttpFileUpload: event.supported));
+  }
+
   Future<void> _onChatMessageFocused(
     ChatMessageFocused event,
     Emitter<ChatState> emit,
@@ -957,7 +985,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
       if (attachmentsViaXmpp) {
-        await _sendXmppAttachments(
+        final sent = await _sendXmppAttachments(
           attachments: queuedAttachments,
           chat: chat,
           recipients: xmppRecipients,
@@ -965,6 +993,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           quotedDraft: quotedDraft,
           caption: hasXmppBody ? xmppBody : null,
         );
+        if (!sent) {
+          return;
+        }
         xmppSendSucceeded = true;
       } else if (xmppRecipients.isNotEmpty && hasXmppBody) {
         await _sendXmppFanOut(
@@ -1042,6 +1073,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     if (jid == null) return;
     await _chatsService.toggleChatMuted(jid: jid!, muted: event.muted);
+  }
+
+  Future<void> _onChatShareSignatureToggled(
+    ChatShareSignatureToggled event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    await _chatsService.toggleChatShareSignature(
+      jid: chat.jid,
+      enabled: event.enabled,
+    );
+    emit(
+      state.copyWith(
+        chat: chat.copyWith(shareSignatureEnabled: event.enabled),
+      ),
+    );
   }
 
   Future<void> _onChatResponsivityChanged(
@@ -1314,13 +1362,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         !requiresXmpp) {
       return;
     }
-    await _sendXmppAttachments(
+    final sent = await _sendXmppAttachments(
       attachments: [latest],
       chat: chat,
       recipients: xmppRecipients,
       emit: emit,
       quotedDraft: state.quoting,
     );
+    if (!sent) {
+      return;
+    }
   }
 
   Future<void> _onChatPendingAttachmentRemoved(
@@ -1575,7 +1626,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _removePendingAttachment(pending.id, emit);
   }
 
-  Future<void> _sendXmppAttachments({
+  Future<bool> _sendXmppAttachments({
     required Iterable<PendingAttachment> attachments,
     required Chat chat,
     required List<ComposerRecipient> recipients,
@@ -1583,6 +1634,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Message? quotedDraft,
     String? caption,
   }) async {
+    if (!state.supportsHttpFileUpload) {
+      const message = 'File upload is not available on this server.';
+      emit(state.copyWith(composerError: message));
+      return false;
+    }
     final targets = <String, Chat>{};
     if (recipients.isEmpty) {
       targets[chat.jid] = chat;
@@ -1640,12 +1696,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachments: [current],
           emit: emit,
         );
-      } on XmppMessageException catch (_) {
+        return false;
+      } on XmppUploadUnavailableException catch (_) {
+        const message =
+            'File uploads are unavailable right now. Saved to drafts.';
         _markPendingAttachmentFailed(
           current.id,
           emit,
-          message: 'Unable to send attachment. Please try again.',
+          message: message,
         );
+        emit(state.copyWith(composerError: message));
         await _saveXmppDraft(
           chat: chat,
           recipients: recipients,
@@ -1653,13 +1713,65 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachments: [current],
           emit: emit,
         );
+        return false;
+      } on XmppUploadNotSupportedException catch (_) {
+        const message = 'File upload is not available on this server.';
+        _markPendingAttachmentFailed(
+          current.id,
+          emit,
+          message: message,
+        );
+        emit(state.copyWith(composerError: message));
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: recipients,
+          body: '',
+          attachments: [current],
+          emit: emit,
+        );
+        return false;
+      } on XmppUploadMisconfiguredException catch (_) {
+        const message =
+            'File upload failed because the server’s upload component is misconfigured or temporarily unavailable.';
+        _markPendingAttachmentFailed(
+          current.id,
+          emit,
+          message: message,
+        );
+        emit(state.copyWith(composerError: message));
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: recipients,
+          body: '',
+          attachments: [current],
+          emit: emit,
+        );
+        return false;
+      } on XmppMessageException catch (_) {
+        const message = 'Unable to send attachment. Please try again.';
+        _markPendingAttachmentFailed(
+          current.id,
+          emit,
+          message: message,
+        );
+        emit(state.copyWith(composerError: message));
+        await _saveXmppDraft(
+          chat: chat,
+          recipients: recipients,
+          body: '',
+          attachments: [current],
+          emit: emit,
+        );
+        return false;
       } on Exception catch (error, stackTrace) {
         _log.warning(
           'Failed to send XMPP attachment for chat ${chat.jid}',
           error,
           stackTrace,
         );
-        _markPendingAttachmentFailed(current.id, emit);
+        const message = 'Unable to send attachment. Please try again.';
+        _markPendingAttachmentFailed(current.id, emit, message: message);
+        emit(state.copyWith(composerError: message));
         await _saveXmppDraft(
           chat: chat,
           recipients: recipients,
@@ -1667,8 +1779,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachments: [current],
           emit: emit,
         );
+        return false;
       }
     }
+    return true;
   }
 
   Future<void> _handleBrokenEmailSend({
@@ -1991,6 +2105,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     final service = _emailService;
     if (service == null || recipients.isEmpty) return false;
+    final chat = state.chat;
+    if (chat == null) return false;
+    final useSignatureToken =
+        _settingsState.shareTokenSignatureEnabled && chat.shareSignatureEnabled;
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
     try {
       final report = await service.fanOutSend(
@@ -1999,6 +2117,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachment: attachment,
         shareId: effectiveShareId,
         subject: subject,
+        useSubjectToken: useSignatureToken,
+        tokenAsSignature: useSignatureToken,
       );
       final mergedRecipients = _mergeRecipientsWithReport(report);
       final reports =

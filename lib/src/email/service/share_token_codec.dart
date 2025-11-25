@@ -18,6 +18,10 @@ class ShareTokenCodec {
     '^\\s*\\[s:([A-Z0-9]{$_legacyTokenLength,$_maxCapabilityLength})\\]\\s*',
     caseSensitive: false,
   );
+  static final RegExp _footerPattern = RegExp(
+    '(?is)^(.*?)(?:\\n\\n)?(?:--\\s*\\n)?\\s*Please do not remove:\\s*\\[s:'
+    '([A-Z0-9]{$_legacyTokenLength,$_maxCapabilityLength})\\]\\s*\$',
+  );
   static const String _alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   static final Random _random = _secureRandom();
 
@@ -66,10 +70,23 @@ class ShareTokenCodec {
 
   static String decorateToken(String token) => '[s:${token.toUpperCase()}]';
 
+  static String _decorateFooter(String token) =>
+      'Please do not remove: ${decorateToken(token)}';
+
   static String injectToken({
     required String token,
     required String body,
+    bool asSignature = false,
   }) {
+    if (asSignature) {
+      final trimmed = body.trimRight();
+      final buffer = StringBuffer()..write(trimmed);
+      if (trimmed.isNotEmpty) {
+        buffer.write('\n\n');
+      }
+      buffer.writeln(_decorateFooter(token));
+      return buffer.toString().trimRight();
+    }
     if (body.trim().isEmpty) {
       return decorateToken(token);
     }
@@ -79,12 +96,23 @@ class ShareTokenCodec {
   static ShareTokenParseResult? stripToken(String? text) {
     if (text == null || text.isEmpty) return null;
     final match = _pattern.firstMatch(text);
-    if (match == null) return null;
-    final token = match.group(1)!.toUpperCase();
-    final cleaned = text.substring(match.end);
-    return ShareTokenParseResult(
-      token: token,
-      cleanedBody: cleaned.trimLeft(),
-    );
+    if (match != null) {
+      final token = match.group(1)!.toUpperCase();
+      final cleaned = text.substring(match.end);
+      return ShareTokenParseResult(
+        token: token,
+        cleanedBody: cleaned.trimLeft(),
+      );
+    }
+    final footerMatch = _footerPattern.firstMatch(text);
+    if (footerMatch != null) {
+      final token = footerMatch.group(2)!.toUpperCase();
+      final cleaned = footerMatch.group(1) ?? '';
+      return ShareTokenParseResult(
+        token: token,
+        cleanedBody: cleaned.trimRight(),
+      );
+    }
+    return null;
   }
 }

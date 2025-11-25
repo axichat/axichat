@@ -5,6 +5,9 @@ import 'package:flutter/rendering.dart';
 
 typedef LinkTapCallback = void Function(String url);
 
+const double _detailStartGap = 8.0;
+const double _detailSpacing = 6.0;
+
 class DynamicTextLink {
   const DynamicTextLink({required this.range, required this.url});
 
@@ -22,7 +25,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
   });
 
   final TextSpan text;
-  final List<TextSpan> details;
+  final List<InlineSpan> details;
   final List<DynamicTextLink> links;
   final LinkTapCallback? onLinkTap;
 
@@ -57,7 +60,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
 class DynamicInlineTextRenderObject extends RenderBox {
   DynamicInlineTextRenderObject({
     required TextSpan text,
-    required List<TextSpan> details,
+    required List<InlineSpan> details,
     required TextDirection textDirection,
     required TextScaler textScaler,
     List<DynamicTextLink> links = const [],
@@ -79,9 +82,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
     markNeedsSemanticsUpdate();
   }
 
-  List<TextSpan> _details;
+  List<InlineSpan> _details;
 
-  set details(List<TextSpan> value) {
+  set details(List<InlineSpan> value) {
     if (value == _details) return;
     _details = value;
     markNeedsLayout();
@@ -170,31 +173,49 @@ class DynamicInlineTextRenderObject extends RenderBox {
     );
   }
 
-  double _lineHeight = 0;
-  int _lineCount = 0;
   double _maxLineWidth = 0;
   double _finalLineWidth = 0;
   double _detailsWidth = 0;
   double _detailsHeight = 0;
   bool _canInlineDetails = false;
+  List<LineMetrics> _textLineMetrics = const [];
+  List<LineMetrics> _detailLineMetrics = const [];
 
   late TextPainter _textPainter;
   late List<TextPainter> _detailPainters;
 
-  final int detailSpacing = 2;
+  bool _hasWidgetSpan(InlineSpan span) {
+    var found = false;
+    span.visitChildren((child) {
+      if (child is WidgetSpan) {
+        found = true;
+        return false;
+      }
+      return true;
+    });
+    return found;
+  }
+
+  void _debugAssertNoWidgetSpans() {
+    assert(
+      !_hasWidgetSpan(text) && _details.every((span) => !_hasWidgetSpan(span)),
+      'DynamicInlineText does not support WidgetSpans. Use glyph-based spans instead.',
+    );
+  }
 
   Size _layout(double maxWidth) {
+    _debugAssertNoWidgetSpans();
     final plainText = text.toPlainText();
     if (plainText.isEmpty) return Size.zero;
     assert(maxWidth > 0);
 
-    _lineHeight = 0;
-    _lineCount = 0;
     _maxLineWidth = 0;
     _finalLineWidth = 0;
     _detailsWidth = 0;
     _detailsHeight = 0;
     _canInlineDetails = false;
+    _textLineMetrics = const [];
+    _detailLineMetrics = const [];
 
     _textPainter = TextPainter(
       text: text,
@@ -204,18 +225,34 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     _textPainter.layout(maxWidth: maxWidth);
     final textLines = _textPainter.computeLineMetrics();
+    _textLineMetrics = textLines;
 
-    _detailPainters = _details.map((e) {
+    _detailPainters = [];
+    _detailLineMetrics = [];
+    if (_details.isNotEmpty) {
+      _detailsWidth = _detailStartGap;
+    }
+
+    for (var index = 0; index < _details.length; index++) {
       final painter = TextPainter(
-        text: e,
+        text: _details[index],
         textDirection: _textDirection,
         textScaler: _textScaler,
       );
       painter.layout(maxWidth: maxWidth);
-      _detailsWidth += painter.computeLineMetrics().first.width + detailSpacing;
-      _detailsHeight = max(_detailsHeight, painter.height);
-      return painter;
-    }).toList();
+      final lineMetrics = painter.computeLineMetrics();
+      if (lineMetrics.isNotEmpty) {
+        final metrics = lineMetrics.first;
+        _detailsWidth += metrics.width;
+        _detailsHeight = max(_detailsHeight, metrics.height);
+        _detailLineMetrics.add(metrics);
+      }
+      _detailPainters.add(painter);
+      final hasTrailingDetail = index < _details.length - 1;
+      if (hasTrailingDetail) {
+        _detailsWidth += _detailSpacing;
+      }
+    }
 
     _maxLineWidth = max(
       textLines.fold(0, (prev, e) => max(prev, e.width)),
@@ -225,16 +262,18 @@ class DynamicInlineTextRenderObject extends RenderBox {
     final messageSize = Size(_maxLineWidth, _textPainter.height);
 
     _finalLineWidth = textLines.last.width;
-    _lineHeight = textLines.last.height;
-    _lineCount = textLines.length;
 
-    final combinedWidth = _finalLineWidth + _detailsWidth * 1.08;
-    _canInlineDetails = combinedWidth <
-        (textLines.length == 1 ? maxWidth : min(_maxLineWidth, maxWidth));
+    final combinedWidth =
+        _detailsWidth == 0 ? _finalLineWidth : _finalLineWidth + _detailsWidth;
+    _canInlineDetails = _detailsWidth > 0 &&
+        combinedWidth <
+            (textLines.length == 1 ? maxWidth : min(_maxLineWidth, maxWidth));
 
     return _canInlineDetails
         ? Size(
-            textLines.length == 1 ? combinedWidth : _maxLineWidth,
+            textLines.length == 1
+                ? combinedWidth
+                : max(_maxLineWidth, combinedWidth),
             messageSize.height,
           )
         : Size(
@@ -249,13 +288,27 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     _textPainter.paint(context.canvas, offset);
 
-    var dx = offset.dx + size.width - _detailsWidth;
-    var dy =
-        offset.dy + _lineHeight * (_lineCount - (_canInlineDetails ? 1 : 0));
+    if (_detailPainters.isEmpty) return;
 
-    for (final painter in _detailPainters) {
+    final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
+    var dx = _canInlineDetails
+        ? offset.dx + _finalLineWidth + _detailStartGap
+        : offset.dx + size.width - _detailsWidth;
+    for (var i = 0; i < _detailPainters.length; i++) {
+      final painter = _detailPainters[i];
+      final metrics =
+          _detailLineMetrics.length > i ? _detailLineMetrics[i] : null;
+      final detailBaseline =
+          metrics?.baseline ?? painter.computeLineMetrics().first.baseline;
+      final dy = _canInlineDetails && lastLine != null
+          ? offset.dy + lastLine.baseline - detailBaseline
+          : offset.dy + _textPainter.height;
       painter.paint(context.canvas, Offset(dx, dy));
-      dx += painter.width + detailSpacing;
+      dx += painter.width;
+      final hasTrailingDetail = i < _detailPainters.length - 1;
+      if (hasTrailingDetail) {
+        dx += _detailSpacing;
+      }
     }
   }
 

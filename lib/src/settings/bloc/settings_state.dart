@@ -26,6 +26,7 @@ class SettingsState with _$SettingsState {
     @Default(false) bool lowMotion,
     @Default(true) bool colorfulAvatars,
     @Default(MessageStorageMode.local) MessageStorageMode messageStorageMode,
+    @Default(true) bool shareTokenSignatureEnabled,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>

@@ -8,6 +8,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,6 +30,7 @@ class ArchivedChatScreen extends StatelessWidget {
     final notificationService = locate<NotificationService>();
     final emailService = locate<EmailService>();
     final chatsCubit = locate<ChatsCubit>();
+    final settingsCubit = locate<SettingsCubit>();
     final OmemoService? omemoService =
         xmppService is OmemoService ? xmppService as OmemoService : null;
     ProfileCubit? profileCubit;
@@ -63,6 +65,7 @@ class ArchivedChatScreen extends StatelessWidget {
             notificationService: notificationService,
             emailService: emailService,
             omemoService: omemoService,
+            settingsCubit: settingsCubit,
           ),
         ),
         BlocProvider(

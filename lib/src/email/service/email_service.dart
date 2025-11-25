@@ -463,7 +463,8 @@ class EmailService {
     String? subjectToken;
     if (normalizedSubject != null) {
       shareId = ShareTokenCodec.generateShareId();
-      subjectToken = _shareTokenForShare(shareId);
+      // Single-recipient sends do not need a visible subject token.
+      subjectToken = null;
       final db = await _databaseBuilder();
       final participants = await _shareParticipants(
         shareId: shareId,
@@ -490,7 +491,10 @@ class EmailService {
               body: trimmedBody,
             ),
           )
-        : trimmedBody;
+        : _composeSubjectEnvelope(
+            subject: normalizedSubject,
+            body: trimmedBody,
+          );
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
@@ -531,6 +535,7 @@ class EmailService {
     String? body,
     EmailAttachment? attachment,
     bool useSubjectToken = true,
+    bool tokenAsSignature = true,
     String? shareId,
     String? subject,
   }) async {
@@ -566,8 +571,9 @@ class EmailService {
     }
     final resolvedShareId =
         shareId ?? existingShare?.shareId ?? ShareTokenCodec.generateShareId();
+    final shouldUseToken = useSubjectToken && resolvedTargets.length > 1;
     final resolvedToken = existingShare?.subjectToken ??
-        (useSubjectToken ? _shareTokenForShare(resolvedShareId) : null);
+        (shouldUseToken ? _shareTokenForShare(resolvedShareId) : null);
     final resolvedSubject = normalizedSubject ?? existingShare?.subject;
 
     final transmitBody = resolvedToken != null
@@ -577,8 +583,12 @@ class EmailService {
               subject: resolvedSubject,
               body: trimmedBody,
             ),
+            asSignature: tokenAsSignature,
           )
-        : (trimmedBody ?? '');
+        : _composeSubjectEnvelope(
+            subject: resolvedSubject,
+            body: trimmedBody,
+          );
     final sanitizedBody = trimmedBody ?? '';
 
     final captionText = attachment?.caption?.trim();
@@ -589,8 +599,12 @@ class EmailService {
               subject: resolvedSubject,
               body: captionText,
             ),
+            asSignature: tokenAsSignature,
           )
-        : captionText;
+        : _composeSubjectEnvelope(
+            subject: resolvedSubject,
+            body: captionText,
+          );
     final sanitizedCaption = captionText ?? '';
 
     final participants = await _shareParticipants(
