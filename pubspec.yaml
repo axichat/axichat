@@ -13,7 +13,8 @@ repository: https://gitlab.com/axichat/axichat.git
 issue_tracker: https://gitlab.com/axichat/axichat/-/issues
 
 environment:
-  sdk: '>=3.4.3 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
+  flutter: '>=3.27.0'
 
 dependencies:
   bloc: ^8.1.4
@@ -137,8 +138,64 @@ flutter:
     - assets/icons/
     - assets/licenses/delta_chat_core_mpl.txt
     - assets/licenses/noto_color_emoji_ofl.txt
+    - assets/licenses/inter_ofl.txt
+    - assets/licenses/dmsans_ofl.txt
     - shorebird.yaml
   fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+          weight: 800
+        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+          weight: 900
+        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+          weight: 700
+          style: italic
+        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+          weight: 800
+          style: italic
+        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+          weight: 900
+          style: italic
+    - family: DMSans
+      fonts:
+        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-VariableFont_opsz,wght.ttf
+          weight: 700
+        - asset: assets/fonts/DMSans-Italic-VariableFont_opsz,wght.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/DMSans-Italic-VariableFont_opsz,wght.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/DMSans-Italic-VariableFont_opsz,wght.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/DMSans-Italic-VariableFont_opsz,wght.ttf
+          weight: 700
+          style: italic
     - family: NotoColorEmoji
       fonts:
         - asset: assets/fonts/NotoColorEmoji.ttf

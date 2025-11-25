@@ -1,12 +1,19 @@
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:axichat/src/storage/database.dart'
+    show
+        BlocklistCompanion,
+        ChatsCompanion,
+        EmailBlocklistCompanion,
+        EmailSpamlistCompanion,
+        InvitesCompanion,
+        RosterCompanion;
 
 part 'chat_models.freezed.dart';
 part 'chat_models.g.dart';
@@ -264,6 +271,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool hidden,
     @Default(false) bool spam,
     @Default(true) bool markerResponsive,
+    @Default(true) bool shareSignatureEnabled,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
@@ -293,6 +301,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required bool hidden,
     required bool spam,
     required bool markerResponsive,
+    required bool shareSignatureEnabled,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
     required String? contactDisplayName,
@@ -334,6 +343,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         hidden: Value(hidden),
         spam: Value(spam),
         markerResponsive: Value(markerResponsive),
+        shareSignatureEnabled: Value(shareSignatureEnabled),
         encryptionProtocol: Value(encryptionProtocol),
         contactID: Value.absentIfNull(contactID),
         contactDisplayName: Value.absentIfNull(contactDisplayName),
@@ -381,6 +391,9 @@ class Chats extends Table {
   BoolColumn get spam => boolean().withDefault(const Constant(false))();
 
   BoolColumn get markerResponsive =>
+      boolean().withDefault(const Constant(true))();
+
+  BoolColumn get shareSignatureEnabled =>
       boolean().withDefault(const Constant(true))();
 
   IntColumn get encryptionProtocol =>

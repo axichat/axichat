@@ -84,6 +84,8 @@ final class XmppAbortedException extends XmppException {}
 
 final class XmppMessageException extends XmppException {}
 
+final class XmppForeignDomainException extends XmppMessageException {}
+
 final class XmppRosterException extends XmppException {}
 
 final class XmppPresenceException extends XmppException {}
@@ -102,6 +104,39 @@ final class XmppFileTooBigException extends XmppMessageException {
   final int? maxBytes;
 }
 
+final class XmppUploadUnavailableException extends XmppMessageException {}
+
+final class XmppUploadNotSupportedException extends XmppMessageException {}
+
+final class XmppUploadMisconfiguredException extends XmppMessageException {
+  XmppUploadMisconfiguredException([this.diagnostics]);
+
+  final String? diagnostics;
+}
+
+class HttpUploadSupport {
+  const HttpUploadSupport({
+    required this.supported,
+    this.entityJid,
+    this.maxFileSizeBytes,
+  });
+
+  final bool supported;
+  final String? entityJid;
+  final int? maxFileSizeBytes;
+
+  @override
+  bool operator ==(Object other) {
+    return other is HttpUploadSupport &&
+        other.supported == supported &&
+        other.entityJid == entityJid &&
+        other.maxFileSizeBytes == maxFileSizeBytes;
+  }
+
+  @override
+  int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
+}
+
 // Hardcode the socket endpoints so we never block on DNS when dialing the XMPP
 // server. The `domain` parameter is still passed through for TLS/SASL SNI.
 final serverLookup = <String, IOEndpoint>{
@@ -114,6 +149,23 @@ final serverLookup = <String, IOEndpoint>{
   'draugr.de': const IOEndpoint('23.88.8.69', 5222),
   'jix.im': const IOEndpoint('51.77.59.5', 5222),
 };
+
+bool _isFirstPartyJid({
+  required mox.JID? myJid,
+  required String jid,
+}) {
+  if (myJid == null) {
+    return false;
+  }
+  try {
+    final target = mox.JID.fromString(jid);
+    final myDomain = myJid.domain.toLowerCase();
+    final targetDomain = target.domain.toLowerCase();
+    return targetDomain == myDomain || targetDomain.endsWith('.$myDomain');
+  } on Exception {
+    return false;
+  }
+}
 
 typedef ConnectionState = mox.XmppConnectionState;
 
@@ -131,6 +183,8 @@ abstract interface class XmppBase {
   String? get username;
 
   mox.JID? get _myJid;
+
+  HttpUploadSupport get httpUploadSupport;
 
   Future<XmppDatabase> get database;
 
@@ -246,6 +300,16 @@ class XmppService extends XmppBase
   // Calendar sync message callback
   Future<void> Function(CalendarSyncMessage)? _calendarSyncCallback;
 
+  final _httpUploadSupportController =
+      StreamController<HttpUploadSupport>.broadcast();
+  var _httpUploadSupport = const HttpUploadSupport(supported: false);
+
+  @override
+  HttpUploadSupport get httpUploadSupport => _httpUploadSupport;
+
+  Stream<HttpUploadSupport> get httpUploadSupportStream =>
+      _httpUploadSupportController.stream;
+
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
   final resourceStorageKey = XmppStateStore.registerKey('resource');
@@ -289,6 +353,9 @@ class XmppService extends XmppBase
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) {
         _connectionState = event.state;
         _connectivityStream.add(event.state);
+        if (event.state != ConnectionState.connected) {
+          _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+        }
         if (withForeground) {
           _connection.updateConnectivityNotification(event.state);
         }
@@ -312,9 +379,7 @@ class XmppService extends XmppBase
         }
         _streamResumptionAttempted = false;
         if (event.resumed) return;
-        unawaited(
-          _connection.getManager<mox.HttpFileUploadManager>()?.isSupported(),
-        );
+        unawaited(_refreshHttpUploadSupport());
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -378,6 +443,8 @@ class XmppService extends XmppBase
   String? get boundResource => _connection.hasConnectionSettings
       ? _connection.connectionSettings.jid.resource
       : null;
+
+  bool get supportsHttpUpload => _httpUploadSupport.supported;
 
   bool get connected => connectionState == mox.XmppConnectionState.connected;
 
@@ -746,6 +813,7 @@ class XmppService extends XmppBase
     if (!needsReset) return;
 
     _xmppLogger.info('Resetting${e != null ? ' due to $e' : ''}...');
+    _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
 
     resetEventHandlers();
 
@@ -833,6 +901,9 @@ class XmppService extends XmppBase
 
   Future<void> close() async {
     await _reset();
+    if (!_httpUploadSupportController.isClosed) {
+      await _httpUploadSupportController.close();
+    }
     _instance = null;
   }
 
@@ -886,6 +957,74 @@ class XmppService extends XmppBase
     } on Exception catch (e, s) {
       _xmppLogger.severe('Unexpected exception during operation on $T.', e, s);
       throw XmppUnknownException(e);
+    }
+  }
+
+  bool _hasHttpUploadIdentity(mox.DiscoInfo info) {
+    final hasIdentity = info.identities.any(
+      (identity) => identity.category == 'store' && identity.type == 'file',
+    );
+    return hasIdentity && info.features.contains(mox.httpFileUploadXmlns);
+  }
+
+  int? _httpUploadMaxFileSize(mox.DiscoInfo info) {
+    for (final form in info.extendedInfo) {
+      for (final field in form.fields) {
+        if (field.varAttr == 'max-file-size') {
+          return int.tryParse(field.values.first);
+        }
+      }
+    }
+    return null;
+  }
+
+  void _updateHttpUploadSupport(HttpUploadSupport support) {
+    if (_httpUploadSupport == support) return;
+    _httpUploadSupport = support;
+    _httpUploadSupportController.add(support);
+  }
+
+  Future<void> _refreshHttpUploadSupport() async {
+    final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
+    final discoManager = _connection.getManager<mox.DiscoManager>();
+    if (uploadManager == null || discoManager == null) {
+      _xmppLogger.fine(
+        'HTTP upload discovery skipped: manager missing (upload=$uploadManager, disco=$discoManager).',
+      );
+      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+      return;
+    }
+    try {
+      final supported = await uploadManager.isSupported();
+      String? entityJid;
+      int? maxSize;
+      final discoResult = await discoManager.performDiscoSweep();
+      if (discoResult.isType<List<mox.DiscoInfo>>()) {
+        final infos = discoResult.get<List<mox.DiscoInfo>>();
+        for (final info in infos) {
+          if (_hasHttpUploadIdentity(info)) {
+            entityJid = info.jid.toString();
+            maxSize = _httpUploadMaxFileSize(info);
+            break;
+          }
+        }
+      }
+      final resolvedSupport = HttpUploadSupport(
+        supported: supported && entityJid != null,
+        entityJid: entityJid,
+        maxFileSizeBytes: maxSize,
+      );
+      _xmppLogger.fine(
+        'HTTP upload supported=${resolvedSupport.supported} entity=${entityJid ?? 'none'} maxSize=${maxSize ?? -1}B',
+      );
+      _updateHttpUploadSupport(resolvedSupport);
+    } catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to refresh HTTP upload support.',
+        error,
+        stackTrace,
+      );
+      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -105,6 +106,7 @@ class ComposeScreen extends StatelessWidget {
                           create: (context) => DraftCubit(
                             messageService: messageService,
                             emailService: emailService,
+                            settingsCubit: context.read<SettingsCubit>(),
                           ),
                         ),
                     ];

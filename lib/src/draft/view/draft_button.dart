@@ -1,8 +1,7 @@
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class DraftButton extends StatelessWidget {
@@ -13,12 +12,8 @@ class DraftButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     void handleCompose() {
-      context.push(
-        const ComposeRoute().location,
-        extra: {
-          'locate': context.read,
-          'attachments': const <String>[],
-        },
+      context.read<ComposeWindowCubit>().openDraft(
+        attachmentMetadataIds: const <String>[],
       );
     }
 

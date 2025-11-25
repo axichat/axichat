@@ -44,13 +44,25 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(indicateTyping: indicateTyping));
   }
 
+  void toggleShareTokenSignature(bool enabled) {
+    emit(state.copyWith(shareTokenSignatureEnabled: enabled));
+  }
+
   void updateMessageStorageMode(MessageStorageMode mode) {
     emit(state.copyWith(messageStorageMode: mode));
   }
 
   @override
-  SettingsState? fromJson(Map<String, dynamic> json) =>
-      SettingsState.fromJson(json);
+  SettingsState? fromJson(Map<String, dynamic> json) {
+    try {
+      final hasColor = json['shadColor'] != null;
+      final parsed = SettingsState.fromJson(json);
+      // Force blue as the default palette on fresh boots or malformed payloads.
+      return hasColor ? parsed : parsed.copyWith(shadColor: ShadColor.blue);
+    } catch (_) {
+      return const SettingsState(shadColor: ShadColor.blue);
+    }
+  }
 
   @override
   Map<String, dynamic>? toJson(SettingsState state) => state.toJson();

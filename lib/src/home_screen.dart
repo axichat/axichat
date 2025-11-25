@@ -24,6 +24,7 @@ import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
@@ -36,14 +37,12 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
-import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -79,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isOmemo = getService() is OmemoService;
     final isBlocking = getService() is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
+    final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
 
     final tabs = <HomeTabEntry>[
       if (isChat)
@@ -89,37 +89,40 @@ class _HomeScreenState extends State<HomeScreen> {
             key: const PageStorageKey('Chats'),
             showCalendarShortcut: navPlacement != NavPlacement.rail,
           ),
-          fab: const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ChatsFilterButton(),
-              DraftButton(),
-              ChatsAddButton(),
-            ],
-          ),
+          fab: const _TabActionGroup(includePrimaryActions: true),
           searchFilters: chatsSearchFilters,
         ),
       if (isMessage)
-        const HomeTabEntry(
+        HomeTabEntry(
           id: HomeTab.drafts,
           label: 'Drafts',
-          body: DraftsList(key: PageStorageKey('Drafts')),
+          body: const DraftsList(key: PageStorageKey('Drafts')),
+          fab: showDesktopPrimaryActions
+              ? const _TabActionGroup(includePrimaryActions: true)
+              : null,
           searchFilters: _draftsSearchFilters,
         ),
       if (isChat)
-        const HomeTabEntry(
+        HomeTabEntry(
           id: HomeTab.spam,
           label: 'Spam',
-          body: SpamList(key: PageStorageKey('Spam')),
+          body: const SpamList(key: PageStorageKey('Spam')),
+          fab: showDesktopPrimaryActions
+              ? const _TabActionGroup(includePrimaryActions: true)
+              : null,
           searchFilters: spamSearchFilters,
         ),
       if (isBlocking)
-        const HomeTabEntry(
+        HomeTabEntry(
           id: HomeTab.blocked,
           label: 'Blocked',
-          body: BlocklistList(key: PageStorageKey('Blocked')),
-          fab: BlocklistAddButton(),
+          body: const BlocklistList(key: PageStorageKey('Blocked')),
+          fab: showDesktopPrimaryActions
+              ? const _TabActionGroup(
+                  includePrimaryActions: true,
+                  extraActions: [BlocklistAddButton()],
+                )
+              : const BlocklistAddButton(),
           searchFilters: _blocklistSearchFilters,
         ),
     ];
@@ -237,6 +240,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                             .read<XmppService>()
                                                         as OmemoService
                                                     : null,
+                                                settingsCubit: context
+                                                    .read<SettingsCubit>(),
                                               ),
                                             ),
                                             BlocProvider(
@@ -306,19 +311,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 initialFilters: initialTabFilters,
               ),
             ),
-            if (isChat)
-              BlocProvider(
-                create: (context) => ChatsCubit(
-                  chatsService: context.read<XmppService>(),
-                ),
-              ),
-            if (isMessage)
-              BlocProvider(
-                create: (context) => DraftCubit(
-                  messageService: context.read<XmppService>(),
-                  emailService: context.read<EmailService>(),
-                ),
-              ),
             if (isRoster)
               BlocProvider(
                 create: (context) => RosterCubit(
@@ -414,12 +406,8 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: {
         ComposeIntent: CallbackAction<ComposeIntent>(
           onInvoke: (_) {
-            context.push(
-              const ComposeRoute().location,
-              extra: {
-                'locate': context.read,
-                'attachments': const <String>[],
-              },
+            context.read<ComposeWindowCubit>().openDraft(
+              attachmentMetadataIds: const <String>[],
             );
             return null;
           },
@@ -661,6 +649,37 @@ class _NexusState extends State<Nexus> {
   }
 }
 
+class _TabActionGroup extends StatelessWidget {
+  const _TabActionGroup({
+    this.includePrimaryActions = false,
+    this.extraActions = const <Widget>[],
+  });
+
+  final bool includePrimaryActions;
+  final List<Widget> extraActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = <Widget>[];
+    if (includePrimaryActions) {
+      actions.addAll(const [
+        ChatsFilterButton(),
+        DraftButton(),
+        ChatsAddButton(),
+      ]);
+    }
+    actions.addAll(extraActions);
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: actions,
+    );
+  }
+}
+
 class _SearchToggleButton extends StatelessWidget {
   const _SearchToggleButton({
     required this.active,
@@ -800,54 +819,89 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
       return const SizedBox.shrink();
     }
     final badgeCounts = _computeBadgeCounts(inviteCount);
-    final baseDestinations = widget.tabs
-        .map(
-          (tab) => AxiRailDestination(
-            icon: _tabIcon(tab.id),
-            label: tab.label,
-            badgeCount: badgeCounts[tab.id] ?? 0,
-          ),
-        )
-        .toList();
-    if (widget.calendarAvailable) {
-      baseDestinations.add(
-        const AxiRailDestination(
-          icon: LucideIcons.calendarClock,
-          label: 'Calendar',
+    final calendarDestinationIndex = _calendarDestinationIndex();
+    final destinations = <AxiRailDestination>[];
+    for (final tab in widget.tabs) {
+      destinations.add(
+        AxiRailDestination(
+          icon: _tabIcon(tab.id),
+          label: tab.label,
+          badgeCount: badgeCounts[tab.id] ?? 0,
         ),
       );
+      if (calendarDestinationIndex != null &&
+          destinations.length == calendarDestinationIndex) {
+        destinations.add(
+          const AxiRailDestination(
+            icon: LucideIcons.calendarClock,
+            label: 'Calendar',
+          ),
+        );
+      }
     }
-    final safeIndex = selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
+    final safeTabIndex = selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
     final selectedRailIndex =
-        widget.calendarActive ? baseDestinations.length - 1 : safeIndex;
+        widget.calendarActive && calendarDestinationIndex != null
+            ? calendarDestinationIndex
+            : _destinationIndexForTab(safeTabIndex, calendarDestinationIndex);
+    final effectiveSelectedIndex =
+        selectedRailIndex.clamp(0, destinations.length - 1).toInt();
     return SafeArea(
       left: false,
       right: false,
       child: AxiNavigationRail(
-        destinations: baseDestinations,
-        selectedIndex: selectedRailIndex,
+        destinations: destinations,
+        selectedIndex: effectiveSelectedIndex,
         collapsed: widget.collapsed,
         onToggleCollapse: widget.onCollapsedChanged == null
             ? null
             : () => widget.onCollapsedChanged!(!widget.collapsed),
         backgroundColor: context.colorScheme.background,
         onDestinationSelected: (index) {
-          setState(() {
-            _controllerIndex = index;
-          });
-          final calendarIndex =
-              widget.calendarAvailable ? baseDestinations.length - 1 : null;
+          final calendarIndex = _calendarDestinationIndex();
           if (calendarIndex != null && index == calendarIndex) {
             widget.onCalendarSelected();
             return;
           }
+          final tabIndex = _tabIndexForDestination(index, calendarIndex);
+          if (tabIndex == null) return;
           if (widget.calendarActive) {
             widget.onCalendarSelected();
           }
-          widget.onDestinationSelected(index);
+          setState(() {
+            _controllerIndex = tabIndex;
+          });
+          widget.onDestinationSelected(tabIndex);
         },
       ),
     );
+  }
+
+  int? _calendarDestinationIndex() {
+    if (!widget.calendarAvailable) return null;
+    final chatIndex =
+        widget.tabs.indexWhere((entry) => entry.id == HomeTab.chats);
+    if (chatIndex == -1) {
+      return widget.tabs.length;
+    }
+    return chatIndex + 1;
+  }
+
+  int _destinationIndexForTab(int tabIndex, int? calendarDestinationIndex) {
+    if (calendarDestinationIndex == null) return tabIndex;
+    return tabIndex >= calendarDestinationIndex ? tabIndex + 1 : tabIndex;
+  }
+
+  int? _tabIndexForDestination(
+      int destinationIndex, int? calendarDestinationIndex) {
+    if (calendarDestinationIndex == null) return destinationIndex;
+    if (destinationIndex == calendarDestinationIndex) {
+      return null;
+    }
+    if (destinationIndex > calendarDestinationIndex) {
+      return destinationIndex - 1;
+    }
+    return destinationIndex;
   }
 
   Map<HomeTab, int> _computeBadgeCounts(int inviteCount) {

@@ -15,6 +15,7 @@ class ChatTransportPreference {
 mixin ChatsService on XmppBase, BaseStreamService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
+  final Logger _chatLog = Logger('ChatsService');
 
   RegisteredStateKey _transportKeyFor(String jid) => _transportKeys.putIfAbsent(
         jid,
@@ -181,6 +182,10 @@ mixin ChatsService on XmppBase, BaseStreamService {
     required String jid,
     required mox.ChatState state,
   }) async {
+    if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
+      _chatLog.fine('Skipping chat state for foreign domain: $jid');
+      return;
+    }
     await _connection.sendChatState(state: state, jid: jid);
   }
 
@@ -220,6 +225,15 @@ mixin ChatsService on XmppBase, BaseStreamService {
   }) async {
     await _dbOp<XmppDatabase>(
       (db) => db.markChatMuted(jid: jid, muted: muted),
+    );
+  }
+
+  Future<void> toggleChatShareSignature({
+    required String jid,
+    required bool enabled,
+  }) async {
+    await _dbOp<XmppDatabase>(
+      (db) => db.setChatShareSignature(jid: jid, enabled: enabled),
     );
   }
 

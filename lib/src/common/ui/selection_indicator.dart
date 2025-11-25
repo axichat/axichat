@@ -47,11 +47,14 @@ class SelectionIndicator extends StatelessWidget {
       ),
     );
     if (onPressed != null) {
-      child = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onPressed,
-        child: child,
-      ).withTapBounce();
+      child = MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: child,
+        ).withTapBounce(),
+      );
     }
     return AnimatedOpacity(
       duration: _animationDuration,

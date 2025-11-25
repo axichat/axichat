@@ -133,7 +133,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - integration_test
         - email_provisioning # Provides EMAIL_PROVISIONING_SHARED_SECRET for dart-define builds/tests.
@@ -177,7 +177,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
         - github # Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
@@ -203,7 +203,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - shorebird # Codemagic must expose SHOREBIRD_TOKEN for patching builds.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
@@ -235,7 +235,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
         - github # Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
@@ -261,7 +261,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - shorebird # Codemagic group must include SHOREBIRD_TOKEN for dev patching.
         - email_provisioning # EMAIL_PROVISIONING_SHARED_SECRET for provisioning glue service.
@@ -292,7 +292,7 @@ workflows:
     max_build_duration: 60
     instance_type: windows_x2
     environment:
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
         - github # Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
@@ -337,7 +337,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: stable
+      flutter: 3.38.0
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN for Linux desktop releases.
         - github # Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.

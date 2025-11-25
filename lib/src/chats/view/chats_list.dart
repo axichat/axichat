@@ -1056,8 +1056,8 @@ class _ChatActionsToggle extends StatelessWidget {
     final colors = context.colorScheme;
     final textScaler = MediaQuery.of(context).textScaler;
     double scaled(double value) => textScaler.scale(value);
-    final iconSize = scaled(20);
-    final minButtonSize = scaled(40);
+    final iconSize = scaled(18);
+    final minButtonSize = scaled(36);
     final borderWidth = scaled(1.4);
     final icon = expanded ? LucideIcons.x : LucideIcons.ellipsisVertical;
     final tooltip = expanded ? 'Hide chat actions' : 'Show chat actions';

@@ -16,6 +16,9 @@ class ChatSearchState extends Equatable {
     this.status = RequestStatus.none,
     this.results = const [],
     this.error,
+    this.subjectFilter,
+    this.excludeSubject = false,
+    this.subjects = const [],
   });
 
   final bool active;
@@ -25,6 +28,9 @@ class ChatSearchState extends Equatable {
   final RequestStatus status;
   final List<Message> results;
   final String? error;
+  final String? subjectFilter;
+  final bool excludeSubject;
+  final List<String> subjects;
 
   bool get hasResults => results.isNotEmpty;
 
@@ -36,6 +42,9 @@ class ChatSearchState extends Equatable {
     RequestStatus? status,
     List<Message>? results,
     String? error,
+    String? subjectFilter,
+    bool? excludeSubject,
+    List<String>? subjects,
   }) {
     return ChatSearchState(
       active: active ?? this.active,
@@ -45,6 +54,9 @@ class ChatSearchState extends Equatable {
       status: status ?? this.status,
       results: results ?? this.results,
       error: error,
+      subjectFilter: subjectFilter ?? this.subjectFilter,
+      excludeSubject: excludeSubject ?? this.excludeSubject,
+      subjects: subjects ?? this.subjects,
     );
   }
 
@@ -57,6 +69,9 @@ class ChatSearchState extends Equatable {
         status,
         results,
         error,
+        subjectFilter,
+        excludeSubject,
+        subjects,
       ];
 }
 
@@ -73,6 +88,7 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
   final int resultLimit;
 
   Timer? _debounce;
+  bool _subjectsLoaded = false;
 
   void toggleActive() => setActive(!state.active);
 
@@ -85,11 +101,14 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
           status: RequestStatus.none,
           results: const [],
           error: null,
+          excludeSubject: false,
+          subjectFilter: null,
         ),
       );
       return;
     }
     emit(state.copyWith(active: true));
+    unawaited(_maybeLoadSubjects());
     if (state.query.trim().isNotEmpty) {
       _scheduleSearch(immediate: true);
     }
@@ -112,9 +131,36 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     _scheduleSearch(immediate: true);
   }
 
+  Future<void> _maybeLoadSubjects() async {
+    if (_subjectsLoaded) return;
+    try {
+      final subjects = await _messageService.subjectsForChat(jid);
+      _subjectsLoaded = true;
+      emit(state.copyWith(subjects: subjects));
+    } catch (_) {
+      // Silent failure; search can proceed without subject options.
+    }
+  }
+
+  void updateSubjectFilter(String? subject) {
+    emit(
+      state.copyWith(
+        subjectFilter: subject?.trim().isEmpty == true ? null : subject?.trim(),
+      ),
+    );
+    _scheduleSearch(immediate: true);
+  }
+
+  void toggleExcludeSubject(bool exclude) {
+    emit(state.copyWith(excludeSubject: exclude));
+    _scheduleSearch(immediate: true);
+  }
+
   void _scheduleSearch({bool immediate = false}) {
     _debounce?.cancel();
-    if (state.query.trim().isEmpty) {
+    final hasQuery = state.query.trim().isNotEmpty;
+    final hasSubject = state.subjectFilter?.isNotEmpty == true;
+    if (!hasQuery && !hasSubject) {
       emit(
         state.copyWith(
           status: RequestStatus.none,
@@ -135,12 +181,15 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
 
   Future<void> _performSearch() async {
     final query = state.query.trim();
-    if (query.isEmpty) return;
+    final subject = state.subjectFilter?.trim();
+    if (query.isEmpty && (subject == null || subject.isEmpty)) return;
     emit(state.copyWith(status: RequestStatus.loading, error: null));
     try {
       final results = await _messageService.searchChatMessages(
         jid: jid,
         query: query,
+        subject: subject,
+        excludeSubject: state.excludeSubject,
         filter: state.filter,
         sortOrder: state.sort,
         limit: resultLimit,

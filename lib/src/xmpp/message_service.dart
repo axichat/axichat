@@ -327,23 +327,33 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
 
   Future<List<Message>> searchChatMessages({
     required String jid,
-    required String query,
+    String? query,
+    String? subject,
+    bool excludeSubject = false,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
     SearchSortOrder sortOrder = SearchSortOrder.newestFirst,
     int limit = 200,
   }) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) return const [];
+    final trimmed = query?.trim() ?? '';
+    final trimmedSubject = subject?.trim() ?? '';
+    if (trimmed.isEmpty && trimmedSubject.isEmpty) return const [];
     return await _dbOpReturning<XmppDatabase, List<Message>>(
       (db) => db.searchChatMessages(
         jid: jid,
         query: trimmed,
+        subject: trimmedSubject,
+        excludeSubject: excludeSubject,
         filter: filter,
         limit: limit,
         ascending: sortOrder == SearchSortOrder.oldestFirst,
       ),
     );
   }
+
+  Future<List<String>> subjectsForChat(String jid) async =>
+      await _dbOpReturning<XmppDatabase, List<String>>(
+        (db) => db.subjectsForChat(jid),
+      );
 
   Stream<List<Draft>> draftsStream({
     int start = 0,
@@ -584,6 +594,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       _log.warning('Attempted to send a message before a JID was bound.');
       throw XmppMessageException();
     }
+    if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
+      _log.warning('Blocked XMPP send to foreign domain: $jid');
+      throw XmppForeignDomainException();
+    }
     final shouldStore = _messageStorageMode.isLocal && (storeLocally ?? true);
     final message = Message(
       stanzaID: _connection.generateId(),
@@ -656,14 +670,24 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       _log.warning('Attempted to send an attachment before a JID was bound.');
       throw XmppMessageException();
     }
+    if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
+      _log.warning('Blocked XMPP attachment send to foreign domain: $jid');
+      throw XmppForeignDomainException();
+    }
     final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
     if (uploadManager == null) {
       _log.warning('HTTP upload manager unavailable; ensure it is registered.');
       throw XmppMessageException();
     }
+    final uploadSupport = httpUploadSupport;
+    _log.fine(
+      'HTTP upload support snapshot: supported=${uploadSupport.supported} '
+      'entity=${uploadSupport.entityJid ?? 'unknown'} '
+      'maxSize=${uploadSupport.maxFileSizeBytes ?? 'unspecified'}',
+    );
     if (!await uploadManager.isSupported()) {
       _log.warning('Server does not advertise HTTP file upload support.');
-      throw XmppMessageException();
+      throw XmppUploadNotSupportedException();
     }
     final file = File(attachment.path);
     if (!await file.exists()) {
@@ -688,11 +712,35 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       if (slotResult.isType<mox.HttpFileUploadError>()) {
         final error = slotResult.get<mox.HttpFileUploadError>();
         if (error is mox.FileTooBigError) {
-          throw XmppFileTooBigException(_maxUploadSize(error));
+          final maxSize =
+              _maxUploadSize(error) ?? uploadSupport.maxFileSizeBytes;
+          throw XmppFileTooBigException(maxSize);
         }
-        throw XmppMessageException();
+        if (error is mox.NoEntityKnownError) {
+          throw XmppUploadNotSupportedException();
+        }
+        if (error is mox.UnknownHttpFileUploadError) {
+          await _logHttpUploadServiceError(
+            filename: filename,
+            sizeBytes: size,
+            contentType: contentType,
+          );
+          throw XmppUploadMisconfiguredException();
+        }
+        throw XmppUploadUnavailableException();
       }
       slot = slotResult.get<mox.HttpFileUploadSlot>();
+    } on XmppUploadUnavailableException {
+      _log.severe('HTTP upload service unavailable; request failed.');
+      rethrow;
+    } on XmppUploadNotSupportedException {
+      _log.warning('HTTP upload service not supported on this server.');
+      rethrow;
+    } on XmppUploadMisconfiguredException {
+      _log.warning('HTTP upload service misconfigured or unavailable.');
+      rethrow;
+    } on XmppMessageException {
+      rethrow;
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to request upload slot for $filename',
@@ -870,6 +918,57 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
           return null;
         }
       }
+    }
+  }
+
+  Future<void> _logHttpUploadServiceError({
+    required String filename,
+    required int sizeBytes,
+    required String contentType,
+  }) async {
+    final target = httpUploadSupport.entityJid;
+    if (target == null) {
+      _log.warning('Cannot log HTTP upload IQ error: no upload entity known.');
+      return;
+    }
+    try {
+      final response = await _connection.sendStanza(
+        mox.StanzaDetails(
+          mox.Stanza.iq(
+            to: target,
+            type: 'get',
+            children: [
+              mox.XMLNode.xmlns(
+                tag: 'request',
+                xmlns: mox.httpFileUploadXmlns,
+                attributes: {
+                  'filename': filename,
+                  'size': sizeBytes.toString(),
+                  'content-type': contentType,
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      if (response == null || response.attributes['type'] != 'error') {
+        return;
+      }
+      final error = response.firstTag('error');
+      final stanzaCondition =
+          error?.firstTagByXmlns(mox.fullStanzaXmlns)?.tag ?? 'unknown';
+      final text = error?.firstTag('text')?.innerText() ?? '';
+      final from = response.attributes['from']?.toString();
+      _log.warning(
+        'HTTP upload slot request error from=${from ?? 'unknown'} '
+        'condition=$stanzaCondition text=${text.isEmpty ? 'none' : text}',
+      );
+    } catch (error, stackTrace) {
+      _log.fine(
+        'Failed to log HTTP upload IQ error.',
+        error,
+        stackTrace,
+      );
     }
   }
 

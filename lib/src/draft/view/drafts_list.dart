@@ -1,13 +1,12 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
-import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 class DraftsList extends StatelessWidget {
   const DraftsList({super.key});
@@ -80,17 +79,13 @@ class DraftsList extends StatelessWidget {
               return ListItemPadding(
                 child: AxiListTile(
                   key: Key(item.id.toString()),
-                  onTap: () => context.push(
-                    const ComposeRoute().location,
-                    extra: {
-                      'locate': context.read,
-                      'id': item.id,
-                      'jids': item.jids,
-                      'body': item.body,
-                      'subject': item.subject ?? '',
-                      'attachments': item.attachmentMetadataIds,
-                    },
-                  ),
+                  onTap: () => context.read<ComposeWindowCubit>().openDraft(
+                        id: item.id,
+                        jids: item.jids,
+                        body: item.body ?? '',
+                        subject: item.subject ?? '',
+                        attachmentMetadataIds: item.attachmentMetadataIds,
+                      ),
                   menuItems: [
                     AxiDeleteMenuItem(
                       onPressed: () async {

@@ -9,6 +9,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/email/service/chatmail_provisioning_client.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -45,6 +46,8 @@ class MockChatmailProvisioningClient extends Mock
     implements ChatmailProvisioningClient {}
 
 class MockOmemoService extends Mock implements OmemoService {}
+
+class MockSettingsCubit extends Mock implements SettingsCubit {}
 
 class MockDeltaContextHandle extends Mock implements DeltaContextHandle {}
 

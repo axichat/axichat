@@ -25,7 +25,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _draftComposerControlExtent = 44;
+const double _draftComposerControlExtent = 42;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -37,6 +37,8 @@ class DraftForm extends StatefulWidget {
     this.attachmentMetadataIds = const [],
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
+    this.onClosed,
+    this.onDiscarded,
   });
 
   final int? id;
@@ -46,12 +48,16 @@ class DraftForm extends StatefulWidget {
   final List<String> attachmentMetadataIds;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
+  final VoidCallback? onClosed;
+  final VoidCallback? onDiscarded;
 
   @override
   State<DraftForm> createState() => _DraftFormState();
 }
 
 class _DraftFormState extends State<DraftForm> {
+  final _formKey = GlobalKey<FormState>();
+  bool _showValidationMessages = false;
   late final MessageService _messageService;
   late final TextEditingController _bodyTextController;
   late final TextEditingController _subjectTextController;
@@ -100,10 +106,15 @@ class _DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final chats = context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[];
+    final autovalidateMode = _showValidationMessages
+        ? AutovalidateMode.always
+        : AutovalidateMode.disabled;
     const horizontalPadding = EdgeInsets.symmetric(horizontal: 16);
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 20),
       child: Form(
+        key: _formKey,
+        autovalidateMode: autovalidateMode,
         child: BlocConsumer<DraftCubit, DraftState>(
           listener: (context, state) {
             if (state is DraftSaveComplete) {
@@ -117,6 +128,16 @@ class _DraftFormState extends State<DraftForm> {
                   message: state.message,
                 ),
               );
+            } else if (state is DraftSendComplete) {
+              ShadToaster.maybeOf(context)?.show(
+                FeedbackToast.success(title: 'Sent'),
+              );
+              final onClosed = widget.onClosed;
+              if (onClosed != null) {
+                onClosed();
+              } else if (Navigator.of(context).canPop()) {
+                context.pop();
+              }
             }
           },
           builder: (context, state) {
@@ -125,14 +146,11 @@ class _DraftFormState extends State<DraftForm> {
             final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
             final hasAttachments = pendingAttachments.isNotEmpty;
-            final hasQueuedAttachments = pendingAttachments.any(
-              (attachment) =>
-                  attachment.status == PendingAttachmentStatus.queued,
-            );
             final split = _splitRecipients(
               forceEmailAll: hasAttachments,
             );
             final hasActiveRecipients = split.hasActiveRecipients;
+            final hasContent = _hasContent(hasAttachments: hasAttachments);
             final canSave = enabled &&
                 (hasActiveRecipients ||
                     bodyText.isNotEmpty ||
@@ -143,64 +161,114 @@ class _DraftFormState extends State<DraftForm> {
                     bodyText.isNotEmpty ||
                     subjectText.isNotEmpty ||
                     hasAttachments);
-            final canSend = enabled &&
-                hasActiveRecipients &&
-                (bodyText.isNotEmpty ||
-                    subjectText.isNotEmpty ||
-                    hasAttachments ||
-                    hasQueuedAttachments);
+            final sendBlocker = _sendValidationMessage(
+              hasActiveRecipients: hasActiveRecipients,
+              hasContent: hasContent,
+            );
+            final isSending = state is DraftSending;
+            final readyToSend = sendBlocker == null;
 
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                RecipientChipsBar(
-                  recipients: _recipients,
-                  availableChats: chats,
-                  onRecipientAdded: _handleRecipientAdded,
-                  onRecipientRemoved: _handleRecipientRemoved,
-                  onRecipientToggled: _handleRecipientToggled,
-                  latestStatuses: const {},
-                  collapsedByDefault: false,
-                  suggestionAddresses: widget.suggestionAddresses,
-                  suggestionDomains: widget.suggestionDomains,
+                FormField<void>(
+                  validator: (_) =>
+                      hasActiveRecipients ? null : 'No recipients',
+                  builder: (field) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        RecipientChipsBar(
+                          recipients: _recipients,
+                          availableChats: chats,
+                          onRecipientAdded: (target) {
+                            _handleRecipientAdded(target);
+                            field.didChange(null);
+                          },
+                          onRecipientRemoved: (key) {
+                            _handleRecipientRemoved(key);
+                            field.didChange(null);
+                          },
+                          onRecipientToggled: (key) {
+                            _handleRecipientToggled(key);
+                            field.didChange(null);
+                          },
+                          latestStatuses: const {},
+                          collapsedByDefault: false,
+                          suggestionAddresses: widget.suggestionAddresses,
+                          suggestionDomains: widget.suggestionDomains,
+                        ),
+                        if (_showValidationMessages && field.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              field.errorText!,
+                              style: TextStyle(
+                                color: context.colorScheme.destructive,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 Padding(
                   padding: horizontalPadding,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: Semantics(
-                          label: 'Email subject',
-                          textField: true,
-                          child: AxiTextFormField(
-                            controller: _subjectTextController,
-                            focusNode: _subjectFocusNode,
-                            enabled: enabled,
-                            minLines: 1,
-                            maxLines: 1,
-                            textInputAction: TextInputAction.next,
-                            onSubmitted: (_) => _bodyFocusNode.requestFocus(),
-                            placeholder: const Text('Subject (optional)'),
-                            constraints: const BoxConstraints.tightFor(
-                              height: _draftComposerControlExtent,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Semantics(
+                              label: 'Email subject',
+                              textField: true,
+                              child: AxiTextFormField(
+                                controller: _subjectTextController,
+                                focusNode: _subjectFocusNode,
+                                enabled: enabled,
+                                minLines: 1,
+                                maxLines: 1,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) =>
+                                    _bodyFocusNode.requestFocus(),
+                                placeholder: const Text('Subject (optional)'),
+                                constraints: const BoxConstraints.tightFor(
+                                  height: _draftComposerControlExtent,
+                                ),
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                placeholderAlignment: Alignment.centerLeft,
+                                inputPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                              ),
                             ),
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            placeholderAlignment: Alignment.centerLeft,
-                            inputPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
+                          ),
+                          const SizedBox(width: 12),
+                          _DraftSendIconButton(
+                            readyToSend: readyToSend,
+                            sending: isSending,
+                            disabledReason: sendBlocker,
+                            onPressed: isSending ? null : _handleSendDraft,
+                          ),
+                        ],
+                      ),
+                      if (_showValidationMessages && sendBlocker != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            sendBlocker,
+                            style: TextStyle(
+                              color: context.colorScheme.destructive,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      _DraftSendIconButton(
-                        enabled: canSend,
-                        onPressed: canSend ? _handleSendDraft : null,
-                      ),
                     ],
                   ),
                 ),
@@ -243,6 +311,29 @@ class _DraftFormState extends State<DraftForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (state is DraftSending)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    context.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Sending...',
+                                style: context.textTheme.muted,
+                              ),
+                            ],
+                          ),
+                        ),
                       if (state is DraftFailure)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -353,12 +444,14 @@ class _DraftFormState extends State<DraftForm> {
         _recipients.add(ComposerRecipient(target: target));
       }
     });
+    _revalidateFormIfNeeded();
   }
 
   void _handleRecipientRemoved(String key) {
     setState(() {
       _recipients.removeWhere((recipient) => recipient.key == key);
     });
+    _revalidateFormIfNeeded();
   }
 
   void _handleRecipientToggled(String key) {
@@ -368,6 +461,7 @@ class _DraftFormState extends State<DraftForm> {
       final recipient = _recipients[index];
       _recipients[index] = recipient.copyWith(included: !recipient.included);
     });
+    _revalidateFormIfNeeded();
   }
 
   Future<void> _handleAttachmentAdded() async {
@@ -490,11 +584,14 @@ class _DraftFormState extends State<DraftForm> {
       _pendingAttachments = const [];
       _bodyTextController.clear();
       _subjectTextController.clear();
+      _showValidationMessages = false;
     });
     _showToast('Draft discarded.');
+    widget.onDiscarded?.call();
   }
 
   Future<void> _handleSendDraft() async {
+    setState(() => _showValidationMessages = true);
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit == null) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
@@ -508,6 +605,17 @@ class _DraftFormState extends State<DraftForm> {
       }
       return recipient.target;
     }).toList();
+    final validationMessage = _sendValidationMessage(
+      hasActiveRecipients: split.hasActiveRecipients,
+      hasContent: _hasContent(hasAttachments: hasAttachments),
+    );
+    final formValid = _formKey.currentState?.validate() ?? false;
+    if (validationMessage != null || !formValid) {
+      if (validationMessage != null) {
+        _showToast(validationMessage);
+      }
+      return;
+    }
     final succeeded = await draftCubit.sendDraft(
       id: id,
       xmppJids: xmppJids,
@@ -519,9 +627,7 @@ class _DraftFormState extends State<DraftForm> {
     if (!mounted) {
       return;
     }
-    if (succeeded) {
-      context.pop();
-    } else {
+    if (!succeeded) {
       _bodyFocusNode.requestFocus();
     }
   }
@@ -600,6 +706,33 @@ class _DraftFormState extends State<DraftForm> {
 
   String _nextPendingAttachmentId() =>
       'draft-pending-${_pendingAttachmentSeed++}';
+
+  bool _hasContent({required bool hasAttachments}) {
+    return _bodyTextController.text.trim().isNotEmpty ||
+        _subjectTextController.text.trim().isNotEmpty ||
+        hasAttachments ||
+        _pendingAttachments.any(
+          (attachment) => attachment.status == PendingAttachmentStatus.queued,
+        );
+  }
+
+  String? _sendValidationMessage({
+    required bool hasActiveRecipients,
+    required bool hasContent,
+  }) {
+    if (!hasActiveRecipients) {
+      return 'No recipients';
+    }
+    if (!hasContent) {
+      return 'Add a subject, message, or attachment';
+    }
+    return null;
+  }
+
+  void _revalidateFormIfNeeded() {
+    if (!_showValidationMessages) return;
+    _formKey.currentState?.validate();
+  }
 
   void _handlePendingAttachmentRetry(String id) {}
 
@@ -708,30 +841,60 @@ class _DraftFormState extends State<DraftForm> {
 
 class _DraftSendIconButton extends StatelessWidget {
   const _DraftSendIconButton({
-    required this.enabled,
+    required this.readyToSend,
+    required this.sending,
+    this.disabledReason,
     required this.onPressed,
   });
 
-  final bool enabled;
+  final bool readyToSend;
+  final bool sending;
+  final String? disabledReason;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final iconColor = enabled ? colors.primary : colors.mutedForeground;
-    final borderColor = enabled ? colors.primary : colors.border;
-    // ignore: prefer_const_constructors
-    // ignore: prefer_const_constructors
-    return Tooltip(
-      message: 'Send draft',
-      waitDuration: const Duration(milliseconds: 400),
-      child: _DraftComposerIconButton(
-        tooltip: 'Send draft',
-        icon: LucideIcons.send,
-        onPressed: enabled ? onPressed : null,
-        iconColorOverride: iconColor,
-        borderColorOverride: borderColor,
-      ),
+    final iconColor = readyToSend
+        ? colors.primary
+        : colors.mutedForeground.withValues(
+            alpha: 0.9,
+          );
+    final borderColor = readyToSend ? colors.primary : colors.border;
+    final tooltip = disabledReason ?? 'Send draft';
+    final interactive = onPressed != null && !sending;
+    final button = _DraftComposerIconButton(
+      tooltip: tooltip,
+      icon: sending ? LucideIcons.loader : LucideIcons.send,
+      onPressed: interactive ? onPressed : null,
+      iconColorOverride: iconColor,
+      borderColorOverride: borderColor,
+    );
+    if (!sending) {
+      return button;
+    }
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Opacity(
+          opacity: 0.75,
+          child: button,
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Center(
+              child: SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation(colors.primary),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -851,22 +1014,19 @@ class _DraftComposerIconButton extends StatelessWidget {
     final iconColor = iconColorOverride ??
         (enabled ? colors.foreground : colors.mutedForeground);
     final borderColor = borderColorOverride ?? colors.border;
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
-      child: AxiIconButton(
-        iconData: icon,
-        semanticLabel: tooltip,
-        onPressed: onPressed,
-        color: iconColor,
-        backgroundColor: colors.card,
-        borderColor: borderColor,
-        borderWidth: 1.4,
-        cornerRadius: 16,
-        buttonSize: _draftComposerControlExtent,
-        tapTargetSize: _draftComposerControlExtent,
-        iconSize: 24,
-      ),
+    return AxiIconButton(
+      iconData: icon,
+      tooltip: tooltip,
+      semanticLabel: tooltip,
+      onPressed: onPressed,
+      color: iconColor,
+      backgroundColor: colors.card,
+      borderColor: borderColor,
+      borderWidth: 1.4,
+      cornerRadius: 16,
+      buttonSize: _draftComposerControlExtent,
+      tapTargetSize: _draftComposerControlExtent,
+      iconSize: 24,
     );
   }
 }

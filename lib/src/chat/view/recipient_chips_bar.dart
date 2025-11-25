@@ -211,49 +211,52 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   'Recipients ${recipients.length}, ${_barCollapsed ? 'collapsed' : 'expanded'}',
               hint: _barCollapsed ? 'Press to expand' : 'Press to collapse',
               onTap: _toggleBarCollapsed,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _toggleBarCollapsed,
-                child: AnimatedContainer(
-                  duration: _barAnimationDuration,
-                  curve: Curves.easeInOutCubic,
-                  padding: headerPadding,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: _headerFocused
-                        ? Border.all(
-                            color: colors.primary,
-                            width: 1.5,
-                          )
-                        : null,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Send to...',
-                          style: headerStyle,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggleBarCollapsed,
+                  child: AnimatedContainer(
+                    duration: _barAnimationDuration,
+                    curve: Curves.easeInOutCubic,
+                    padding: headerPadding,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: _headerFocused
+                          ? Border.all(
+                              color: colors.primary,
+                              width: 1.5,
+                            )
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Send to...',
+                            style: headerStyle,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      _RecipientsCountBadge(
-                        count: recipients.length,
-                        expanded: !_barCollapsed,
-                        colors: colors,
-                      ),
-                      const SizedBox(width: 4),
-                      AnimatedSwitcher(
-                        duration: _barAnimationDuration,
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: Icon(
-                          arrowIcon,
-                          key: ValueKey<bool>(_barCollapsed),
-                          size: 18,
-                          color: colors.onSurfaceVariant,
+                        const SizedBox(width: 8),
+                        _RecipientsCountBadge(
+                          count: recipients.length,
+                          expanded: !_barCollapsed,
+                          colors: colors,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        AnimatedSwitcher(
+                          duration: _barAnimationDuration,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          child: Icon(
+                            arrowIcon,
+                            key: ValueKey<bool>(_barCollapsed),
+                            size: 18,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

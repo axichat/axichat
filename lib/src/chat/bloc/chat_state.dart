@@ -26,6 +26,7 @@ class ChatState with _$ChatState {
     String? emailSubjectHydrationText,
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
     @Default(ConnectionState.notConnected) ConnectionState xmppConnectionState,
+    @Default(false) bool supportsHttpFileUpload,
     ChatToast? toast,
     @Default(0) int toastId,
   }) = _ChatState;

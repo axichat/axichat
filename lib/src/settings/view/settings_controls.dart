@@ -207,6 +207,19 @@ class SettingsControls extends StatelessWidget {
                     .toggleIndicateTyping(indicateTyping),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ShadSwitch(
+                label: const Text('Include share token footer'),
+                sublabel: const Text(
+                  'Helps keep multi-recipient email threads and attachments linked. Turning this off can break threading.',
+                ),
+                value: state.shareTokenSignatureEnabled,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleShareTokenSignature(enabled),
+              ),
+            ),
             const AxiListDivider(),
           ],
         );

@@ -44,6 +44,10 @@ const androidIconPath = 'app_icon';
 
 const emojiFontFamily = 'NotoColorEmoji';
 const emojiFontFallback = <String>[emojiFontFamily];
+const dmSansFontFamily = 'DMSans';
+const dmSansFontFallback = <String>[emojiFontFamily];
+const interFontFamily = 'Inter';
+const interFontFallback = <String>[dmSansFontFamily, emojiFontFamily];
 
 const smallScreen = 820.0;
 const mediumScreen = 900.0;
@@ -174,6 +178,7 @@ const calendarGutterSm = 8.0;
 const calendarGutterMd = 12.0;
 const calendarGutterLg = 16.0;
 // Dedicated form spacing between stacked controls.
+const calendarCheckboxTapTarget = 36.0;
 const calendarFormGap = 10.0;
 const calendarTaskDetailGap = 3.0;
 const calendarCompactDayColumnWidth = 120.0;
