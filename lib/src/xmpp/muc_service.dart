@@ -303,7 +303,8 @@ mixin MucService on XmppBase, BaseStreamService {
 
   void trackOccupantsFromMessages(String roomJid, Iterable<Message> messages) {
     for (final message in messages) {
-      final nick = _nickFromSender(message.senderJid);
+      final nick = _nickFromSender(message.senderJid) ??
+          _nickFromSender(message.occupantID ?? '');
       if (nick == null) continue;
       final occupantId = _resolveOccupantId(
         occupantId: message.occupantID,

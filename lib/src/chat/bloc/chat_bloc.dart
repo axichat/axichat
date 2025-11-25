@@ -238,6 +238,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   bool get encryptionAvailable => _omemoService != null;
   bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
+  String? _bareJid(String? jid) {
+    if (jid == null || jid.isEmpty) return null;
+    try {
+      return mox.JID.fromString(jid).toBare().toString();
+    } on Exception {
+      return jid;
+    }
+  }
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
@@ -433,9 +441,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
     if (!_isEmailChat && lifecycleState == AppLifecycleState.resumed) {
+      final selfBare = _bareJid(_chatsService.myJid);
       for (final item in event.items) {
         if (!item.displayed &&
-            item.senderJid != _chatsService.myJid &&
+            _bareJid(item.senderJid) != selfBare &&
             item.body?.isNotEmpty == true) {
           _messageService.sendReadMarker(jid!, item.stanzaID);
         }

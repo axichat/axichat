@@ -22,11 +22,21 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _tzInitialized = false;
+  bool _schedulingUnsupported = false;
+  final Map<int, Timer> _inAppTimers = {};
 
   bool mute = false;
 
   bool get needsPermissions =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  bool get _supportsPlatformScheduling =>
+      Platform.isAndroid ||
+      Platform.isIOS ||
+      Platform.isMacOS ||
+      Platform.isWindows;
+
+  static const String _unsupportedSchedulingMessage =
+      'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
 
   String get channel => 'Messages';
 
@@ -179,25 +189,101 @@ class NotificationService {
     String? payload,
   }) async {
     if (mute) return;
-    if (!await hasAllNotificationPermissions()) return;
+    final hasPermissions = await hasAllNotificationPermissions();
+    if (!hasPermissions) return;
+    final scheduledLocal = scheduledAt.toLocal();
+    if (_schedulingUnsupported || !_supportsPlatformScheduling) {
+      _markSchedulingUnsupported();
+      await _scheduleInAppTimer(
+        id: id,
+        scheduledAt: scheduledLocal,
+        title: title,
+        body: body,
+        payload: payload,
+      );
+      return;
+    }
     await _ensureTimeZones();
 
     final notificationDetails = await _notificationDetails();
-    final scheduled = tz.TZDateTime.from(scheduledAt, tz.local);
+    final scheduled = tz.TZDateTime.from(scheduledLocal, tz.local);
 
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      scheduled,
-      notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: payload,
-      matchDateTimeComponents: null,
-    );
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduled,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: payload,
+        matchDateTimeComponents: null,
+      );
+    } on UnimplementedError catch (error, stackTrace) {
+      _markSchedulingUnsupported(error: error, stackTrace: stackTrace);
+      await _scheduleInAppTimer(
+        id: id,
+        scheduledAt: scheduledLocal,
+        title: title,
+        body: body,
+        payload: payload,
+      );
+    }
   }
 
-  Future<void> cancelNotification(int id) => _plugin.cancel(id);
+  Future<void> cancelNotification(int id) {
+    _cancelInAppTimer(id);
+    return _plugin.cancel(id);
+  }
+
+  void _markSchedulingUnsupported({Object? error, StackTrace? stackTrace}) {
+    if (_schedulingUnsupported) {
+      return;
+    }
+    _schedulingUnsupported = true;
+    debugPrint(_unsupportedSchedulingMessage);
+    if (error != null) {
+      debugPrint('$error');
+    }
+    if (stackTrace != null) {
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _scheduleInAppTimer({
+    required int id,
+    required DateTime scheduledAt,
+    required String title,
+    String? body,
+    String? payload,
+  }) async {
+    final delay = scheduledAt.difference(DateTime.now());
+    _cancelInAppTimer(id);
+    if (delay.isNegative || delay.inMicroseconds == 0) {
+      await _fireImmediate(id: id, title: title, body: body, payload: payload);
+      return;
+    }
+    _inAppTimers[id] = Timer(delay, () {
+      _inAppTimers.remove(id);
+      unawaited(
+        _fireImmediate(id: id, title: title, body: body, payload: payload),
+      );
+    });
+  }
+
+  Future<void> _fireImmediate({
+    required int id,
+    required String title,
+    String? body,
+    String? payload,
+  }) async {
+    final notificationDetails = await _notificationDetails();
+    await _plugin.show(id, title, body, notificationDetails, payload: payload);
+  }
+
+  void _cancelInAppTimer(int id) {
+    _inAppTimers.remove(id)?.cancel();
+  }
 
   Future<void> _ensureTimeZones() async {
     if (_tzInitialized) {

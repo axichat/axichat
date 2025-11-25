@@ -16,7 +16,7 @@ const double _composeHeaderHeight = 48;
 const double _composeWindowPadding = 12;
 const double _composeWindowWidth = 520;
 const double _composeWindowExpandedWidth = 720;
-const double _composeWindowHeight = 520;
+const double _composeWindowHeight = 560;
 const double _composeWindowExpandedHeight = 640;
 const double _composeWindowMinWidth = 360;
 const double _composeWindowMinHeight = 260;
@@ -285,16 +285,16 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
 
     final double availableHeight =
         math.max(mediaSize.height - (_composeWindowPadding * 2), 0);
-    final double constrainedHeight = math.min(
-      isExpanded ? _composeWindowExpandedHeight : _composeWindowHeight,
-      availableHeight,
+    final double normalHeight = math.max(
+      math.min(
+        isExpanded ? _composeWindowExpandedHeight : _composeWindowHeight,
+        availableHeight,
+      ),
+      math.min(availableHeight, _composeWindowMinHeight),
     );
-    final double targetHeight = isMinimized
-        ? _composeHeaderHeight
-        : math.max(
-            constrainedHeight,
-            math.min(availableHeight, _composeWindowMinHeight),
-          );
+    final double targetHeight =
+        isMinimized ? _composeHeaderHeight : normalHeight;
+    final double collapseOffset = isMinimized ? normalHeight - targetHeight : 0;
     final double bodyHeight = math.max(targetHeight - _composeHeaderHeight, 0);
 
     final resolvedOffset = _resolveOffset(
@@ -302,7 +302,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       viewportSize: mediaSize,
       viewPadding: widget.viewPadding,
       targetWidth: targetWidth,
-      targetHeight: targetHeight,
+      targetHeight: normalHeight,
       index: widget.index,
     );
 
@@ -310,7 +310,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       duration: _isDragging ? Duration.zero : baseAnimationDuration,
       curve: Curves.easeOutCubic,
       left: resolvedOffset.dx,
-      top: resolvedOffset.dy,
+      top: resolvedOffset.dy + collapseOffset,
       width: targetWidth,
       height: targetHeight,
       child: Material(
@@ -342,7 +342,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
                 onDragStart: (details) =>
                     _handleDragStart(details, resolvedOffset),
                 onDragUpdate: (details) =>
-                    _handleDragUpdate(details, targetWidth, targetHeight),
+                    _handleDragUpdate(details, targetWidth, normalHeight),
                 onDragEnd: _handleDragEnd,
               ),
               Expanded(
