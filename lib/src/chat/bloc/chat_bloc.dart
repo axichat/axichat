@@ -114,6 +114,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         super(const ChatState(items: [])) {
     on<_ChatUpdated>(_onChatUpdated);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
+    on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
@@ -247,11 +248,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<int> _localMessageCount(Chat chat) => _messageService
+      .countLocalMessages(jid: chat.remoteJid, filter: state.viewFilter);
+
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
-  Future<void> _loadEarlierFromMam() async {
+  Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
     final chat = state.chat;
     if (chat == null || _mamLoading || _mamComplete) return;
+    final localCount = await _localMessageCount(chat);
+    if (localCount >= desiredWindow) return;
     final beforeId = _mamBeforeId ??
         (state.items.isEmpty ? null : state.items.last.stanzaID);
     if (beforeId == null) return;
@@ -263,9 +269,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pageSize: messageBatchSize,
         isMuc: chat.type == ChatType.groupChat,
       );
-      _mamBeforeId = result.lastId ?? result.firstId ?? _mamBeforeId;
-      _mamTotalCount = result.count ?? _mamTotalCount;
-      _mamComplete = result.complete || _reachedMamTotal();
+      await _updateMamStateFromResult(chat, result);
     } on Exception catch (error, stackTrace) {
       _log.fine(
         'Failed to load older MAM page for ${chat.jid}',
@@ -283,16 +287,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chat.remoteJid,
     );
     if (lastSeen == null) return;
+    if (_mamLoading) return;
+    _mamLoading = true;
     try {
-      final result = await _messageService.fetchSinceFromArchive(
-        jid: chat.remoteJid,
-        since: lastSeen,
-        pageSize: messageBatchSize,
-        isMuc: chat.type == ChatType.groupChat,
-      );
-      _mamBeforeId = result.lastId ?? _mamBeforeId;
-      _mamTotalCount = result.count ?? _mamTotalCount;
-      _mamComplete = result.complete || _reachedMamTotal();
+      String? afterId;
+      while (true) {
+        final result = await _messageService.fetchSinceFromArchive(
+          jid: chat.remoteJid,
+          since: lastSeen,
+          pageSize: messageBatchSize,
+          isMuc: chat.type == ChatType.groupChat,
+          after: afterId,
+        );
+        await _updateMamStateFromResult(
+          chat,
+          result,
+          updateTotal: false,
+        );
+        final nextAfter = result.lastId ?? afterId;
+        if (result.complete || nextAfter == afterId || nextAfter == null) {
+          break;
+        }
+        afterId = nextAfter;
+      }
     } on Exception catch (error, stackTrace) {
       _log.fine(
         'Failed to catch up via MAM for ${chat.jid}',
@@ -300,6 +317,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
     }
+    _mamLoading = false;
   }
 
   Future<void> _initializeViewFilter() async {
@@ -320,11 +338,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _mamLoading = false;
   }
 
-  bool _reachedMamTotal() =>
-      _mamTotalCount != null && state.items.length >= _mamTotalCount!;
-
   Future<void> _hydrateLatestFromMam(Chat chat) async {
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
+    final localCount = await _localMessageCount(chat);
+    if (localCount >= _currentMessageLimit) return;
     _mamLoading = true;
     try {
       final result = await _messageService.fetchLatestFromArchive(
@@ -332,9 +349,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pageSize: messageBatchSize,
         isMuc: chat.type == ChatType.groupChat,
       );
-      _mamBeforeId = result.lastId ?? result.firstId ?? _mamBeforeId;
-      _mamTotalCount = result.count ?? _mamTotalCount;
-      _mamComplete = result.complete || _reachedMamTotal();
+      await _updateMamStateFromResult(chat, result);
     } on Exception catch (error, stackTrace) {
       _log.fine(
         'Failed to hydrate MAM for chat ${chat.jid}',
@@ -343,6 +358,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     _mamLoading = false;
+  }
+
+  Future<void> _updateMamStateFromResult(
+    Chat chat,
+    MamPageResult result, {
+    bool updateTotal = true,
+  }) async {
+    _mamBeforeId = result.lastId ?? result.firstId ?? _mamBeforeId;
+    if (!updateTotal) {
+      return;
+    }
+
+    _mamTotalCount = result.count ?? _mamTotalCount;
+    if (_mamTotalCount == null && !result.complete) {
+      _mamComplete = _mamComplete || result.complete;
+      return;
+    }
+
+    final total = _mamTotalCount;
+    final localCount = await _localMessageCount(chat);
+    if (total == null) {
+      _mamComplete = _mamComplete || result.complete;
+      return;
+    }
+    _mamComplete = _mamComplete || result.complete || localCount >= total;
   }
 
   Future<void> _ensureMucMembership(Chat chat) async {
@@ -416,8 +456,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (event.chat.type == ChatType.groupChat) {
       _roomSubscription = _mucService
           .roomStateStream(event.chat.jid)
-          .listen((room) => emit(state.copyWith(roomState: room)));
-      unawaited(_mucService.warmRoomFromHistory(roomJid: event.chat.jid));
+          .listen((room) => add(_RoomStateUpdated(room)));
+      if (resetContext || state.roomState == null) {
+        _primeRoomState(event.chat);
+      }
       if (!resetContext && state.items.isNotEmpty) {
         _mucService.trackOccupantsFromMessages(event.chat.jid, state.items);
       }
@@ -425,6 +467,38 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       emit(state.copyWith(roomState: null));
     }
+  }
+
+  void _onRoomStateUpdated(
+    _RoomStateUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    final chatJid = _bareJid(state.chat?.jid);
+    if (chatJid == null) return;
+    if (chatJid != _bareJid(event.roomState.roomJid)) return;
+    emit(state.copyWith(roomState: event.roomState));
+  }
+
+  void _primeRoomState(Chat chat) {
+    final cachedRoom = _mucService.roomStateFor(chat.jid);
+    if (cachedRoom != null) {
+      add(_RoomStateUpdated(cachedRoom));
+    }
+    unawaited(() async {
+      try {
+        final warmed = await _mucService.warmRoomFromHistory(roomJid: chat.jid);
+        if (isClosed) return;
+        if (_bareJid(state.chat?.jid) != _bareJid(chat.jid)) return;
+        if (state.roomState != null) return;
+        add(_RoomStateUpdated(warmed));
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          'Failed to warm room state for ${chat.jid}',
+          error,
+          stackTrace,
+        );
+      }
+    }());
   }
 
   Future<void> _onChatMessagesUpdated(
@@ -1132,7 +1206,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final nextLimit = state.items.length + messageBatchSize;
     _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
-    await _loadEarlierFromMam();
+    await _loadEarlierFromMam(desiredWindow: nextLimit);
   }
 
   Future<void> _onChatAlertHidden(

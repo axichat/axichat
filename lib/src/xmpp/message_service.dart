@@ -155,6 +155,15 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     );
   }
 
+  Future<int> countLocalMessages({
+    required String jid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, int>(
+      (db) => db.countChatMessages(jid, filter: filter),
+    );
+  }
+
   MessageStorageMode get messageStorageMode => _messageStorageMode;
 
   void updateMessageStorageMode(MessageStorageMode mode) {
@@ -1123,17 +1132,20 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     required DateTime since,
     int pageSize = 50,
     bool isMuc = false,
+    String? after,
   }) async =>
       _fetchMamPage(
         jid: jid,
         start: since,
         pageSize: pageSize,
         isMuc: isMuc,
+        after: after,
       );
 
   Future<MamPageResult> _fetchMamPage({
     required String jid,
     String? before,
+    String? after,
     DateTime? start,
     int pageSize = 50,
     bool isMuc = false,
@@ -1155,6 +1167,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       options: options,
       rsm: mox.ResultSetManagement(
         before: before,
+        after: after,
         max: pageSize,
       ),
     );
