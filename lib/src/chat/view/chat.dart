@@ -7,7 +7,9 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
+import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
+import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
@@ -680,6 +682,23 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(const ChatTypingStarted());
   }
 
+  void _appendTaskShareText(CalendarTask task) {
+    final String shareText = task.toShareText();
+    final String existing = _textController.text;
+    final String separator = existing.trim().isEmpty ? '' : '\n\n';
+    final String nextText = '$existing$separator$shareText';
+    _textController.value = _textController.value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+      composing: TextRange.empty,
+    );
+    _focusNode.requestFocus();
+  }
+
+  void _handleTaskDrop(CalendarDragPayload payload) {
+    _appendTaskShareText(payload.snapshot);
+  }
+
   String? _nickFromSender(String senderJid) {
     final slashIndex = senderJid.indexOf('/');
     if (slashIndex == -1 || slashIndex + 1 >= senderJid.length) {
@@ -696,6 +715,24 @@ class _ChatState extends State<Chat> {
     } on Exception {
       return jid;
     }
+  }
+
+  bool _isQuotedMessageFromSelf({
+    required Message quotedMessage,
+    required bool isGroupChat,
+    required String? myOccupantId,
+    required String? currentUserId,
+  }) {
+    if (isGroupChat && myOccupantId != null) {
+      final quotedOccupantId = quotedMessage.occupantID;
+      if (quotedOccupantId != null && quotedOccupantId.isNotEmpty) {
+        return quotedOccupantId == myOccupantId;
+      }
+      if (quotedMessage.senderJid == myOccupantId) {
+        return true;
+      }
+    }
+    return _bareJid(quotedMessage.senderJid) == _bareJid(currentUserId);
   }
 
   void _toggleSettingsPanel() {
@@ -2587,8 +2624,12 @@ class _ChatState extends State<Chat> {
                                           key: ValueKey<String?>(
                                               quoting.stanzaID),
                                           message: quoting,
-                                          isSelf: _bareJid(quoting.senderJid) ==
-                                              _bareJid(currentUserId),
+                                          isSelf: _isQuotedMessageFromSelf(
+                                            quotedMessage: quoting,
+                                            isGroupChat: isGroupChat,
+                                            myOccupantId: myOccupantId,
+                                            currentUserId: currentUserId,
+                                          ),
                                           onClear: () => context
                                               .read<ChatBloc>()
                                               .add(const ChatQuoteCleared()),
@@ -3106,13 +3147,17 @@ class _ChatState extends State<Chat> {
                                                           _QuotedMessagePreview(
                                                             message:
                                                                 quotedModel,
-                                                            isSelf: _bareJid(
-                                                                  quotedModel
-                                                                      .senderJid,
-                                                                ) ==
-                                                                _bareJid(
-                                                                  user.id,
-                                                                ),
+                                                            isSelf:
+                                                                _isQuotedMessageFromSelf(
+                                                              quotedMessage:
+                                                                  quotedModel,
+                                                              isGroupChat:
+                                                                  isGroupChat,
+                                                              myOccupantId:
+                                                                  myOccupantId,
+                                                              currentUserId:
+                                                                  currentUserId,
+                                                            ),
                                                           ),
                                                         );
                                                       }
@@ -4187,6 +4232,7 @@ class _ChatState extends State<Chat> {
                                                 attachmentsEnabled: state
                                                     .supportsHttpFileUpload,
                                               ),
+                                              onTaskDropped: _handleTaskDrop,
                                               onSend: _handleSendMessage,
                                             );
                                           }(),
@@ -5230,6 +5276,7 @@ class _ChatComposerSection extends StatelessWidget {
     this.showAttachmentWarning = false,
     this.retryReport,
     this.retryShareId,
+    this.onTaskDropped,
   });
 
   final String hintText;
@@ -5260,6 +5307,7 @@ class _ChatComposerSection extends StatelessWidget {
   final bool showAttachmentWarning;
   final FanOutSendReport? retryReport;
   final String? retryShareId;
+  final ValueChanged<CalendarDragPayload>? onTaskDropped;
 
   @override
   Widget build(BuildContext context) {
@@ -5333,17 +5381,20 @@ class _ChatComposerSection extends StatelessWidget {
                     attachmentTray,
                     const SizedBox(height: 12),
                   ],
-                  ChatCutoutComposer(
-                    controller: textController,
-                    focusNode: textFocusNode,
-                    hintText: hintText,
-                    semanticsLabel: 'Message input',
-                    onSend: onSend,
-                    header: subjectHeader,
-                    actions: buildComposerAccessories(
-                      canSend: sendEnabled,
+                  _ComposerTaskDropRegion(
+                    onTaskDropped: onTaskDropped,
+                    child: ChatCutoutComposer(
+                      controller: textController,
+                      focusNode: textFocusNode,
+                      hintText: hintText,
+                      semanticsLabel: 'Message input',
+                      onSend: onSend,
+                      header: subjectHeader,
+                      actions: buildComposerAccessories(
+                        canSend: sendEnabled,
+                      ),
+                      sendEnabled: sendEnabled,
                     ),
-                    sendEnabled: sendEnabled,
                   ),
                 ],
               ),
@@ -5427,6 +5478,43 @@ class _ChatComposerSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: children,
       ),
+    );
+  }
+}
+
+class _ComposerTaskDropRegion extends StatelessWidget {
+  const _ComposerTaskDropRegion({
+    required this.child,
+    this.onTaskDropped,
+  });
+
+  final Widget child;
+  final ValueChanged<CalendarDragPayload>? onTaskDropped;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTaskDropped == null) {
+      return child;
+    }
+    final colors = context.colorScheme;
+    return DragTarget<CalendarDragPayload>(
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (details) => onTaskDropped?.call(details.data),
+      builder: (context, candidate, rejected) {
+        final bool hovering = candidate.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: hovering ? colors.primary : Colors.transparent,
+              width: 1.5,
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: child,
+        );
+      },
     );
   }
 }

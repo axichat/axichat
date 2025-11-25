@@ -540,6 +540,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
   @override
   List<mox.XmppManagerBase> get featureManagers => super.featureManagers
     ..addAll([
+      MessageSanitizerManager(),
       mox.MessageManager(),
       mox.CarbonsManager(),
       mox.MAMManager(),
@@ -711,55 +712,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     final contentType = attachment.mimeType?.isNotEmpty == true
         ? attachment.mimeType!
         : 'application/octet-stream';
-    mox.HttpFileUploadSlot slot;
-    try {
-      final slotResult = await uploadManager.requestUploadSlot(
-        filename,
-        size,
-        contentType: contentType,
-      );
-      if (slotResult.isType<mox.HttpFileUploadError>()) {
-        final error = slotResult.get<mox.HttpFileUploadError>();
-        if (error is mox.FileTooBigError) {
-          final maxSize =
-              _maxUploadSize(error) ?? uploadSupport.maxFileSizeBytes;
-          throw XmppFileTooBigException(maxSize);
-        }
-        if (error is mox.NoEntityKnownError) {
-          throw XmppUploadNotSupportedException();
-        }
-        if (error is mox.UnknownHttpFileUploadError) {
-          await _logHttpUploadServiceError(
-            filename: filename,
-            sizeBytes: size,
-            contentType: contentType,
-          );
-          throw XmppUploadMisconfiguredException();
-        }
-        throw XmppUploadUnavailableException();
-      }
-      slot = slotResult.get<mox.HttpFileUploadSlot>();
-    } on XmppUploadUnavailableException {
-      _log.severe('HTTP upload service unavailable; request failed.');
-      rethrow;
-    } on XmppUploadNotSupportedException {
-      _log.warning('HTTP upload service not supported on this server.');
-      rethrow;
-    } on XmppUploadMisconfiguredException {
-      _log.warning('HTTP upload service misconfigured or unavailable.');
-      rethrow;
-    } on XmppMessageException {
-      rethrow;
-    } catch (error, stackTrace) {
-      _log.warning(
-        'Failed to request upload slot for $filename',
-        error,
-        stackTrace,
-      );
-      throw XmppMessageException();
-    }
-    final getUrl = slot.getUrl.toString();
-    final putUrl = slot.putUrl.toString();
+    final slot = await _requestHttpUploadSlot(
+      uploadManager: uploadManager,
+      filename: filename,
+      sizeBytes: size,
+      contentType: contentType,
+    );
+    final getUrl = slot.getUrl;
+    final putUrl = slot.putUrl;
     final metadata = FileMetadataData(
       id: attachment.metadataId ?? uuid.v4(),
       filename: filename,
@@ -801,12 +761,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       _addServerOnlyMessage(jid, message);
     }
     try {
-      await _uploadFileToSlot(
-        slot,
-        file,
-        sizeBytes: size,
-        putUrl: putUrl,
-      );
+      await _uploadFileToSlot(slot, file, sizeBytes: size, putUrl: putUrl);
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to upload attachment $filename',
@@ -870,8 +825,76 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
   }
 
+  Future<_UploadSlot> _requestHttpUploadSlot({
+    required mox.HttpFileUploadManager uploadManager,
+    required String filename,
+    required int sizeBytes,
+    required String contentType,
+  }) async {
+    try {
+      final slotResult = await uploadManager.requestUploadSlot(
+        filename,
+        sizeBytes,
+        contentType: contentType,
+      );
+      if (!slotResult.isType<mox.HttpFileUploadError>()) {
+        return _UploadSlot.fromMox(slotResult.get<mox.HttpFileUploadSlot>());
+      }
+      final error = slotResult.get<mox.HttpFileUploadError>();
+      return _handleUploadSlotError(
+        error: error,
+        filename: filename,
+        sizeBytes: sizeBytes,
+        contentType: contentType,
+      );
+    } on XmppUploadUnavailableException {
+      _log.severe('HTTP upload service unavailable; request failed.');
+      rethrow;
+    } on XmppUploadNotSupportedException {
+      _log.warning('HTTP upload service not supported on this server.');
+      rethrow;
+    } on XmppUploadMisconfiguredException {
+      _log.warning('HTTP upload service misconfigured or unavailable.');
+      rethrow;
+    } on XmppMessageException {
+      rethrow;
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to request upload slot for $filename',
+        error,
+        stackTrace,
+      );
+      throw XmppMessageException();
+    }
+  }
+
+  Future<_UploadSlot> _handleUploadSlotError({
+    required mox.HttpFileUploadError error,
+    required String filename,
+    required int sizeBytes,
+    required String contentType,
+  }) async {
+    if (error is mox.FileTooBigError) {
+      final maxSize =
+          _maxUploadSize(error) ?? httpUploadSupport.maxFileSizeBytes;
+      throw XmppFileTooBigException(maxSize);
+    }
+    if (error is mox.NoEntityKnownError) {
+      throw XmppUploadNotSupportedException();
+    }
+    if (error is mox.UnknownHttpFileUploadError) {
+      await _logHttpUploadServiceError(
+        filename: filename,
+        sizeBytes: sizeBytes,
+        contentType: contentType,
+      );
+      throw XmppUploadMisconfiguredException();
+    }
+    throw XmppUploadUnavailableException();
+  }
+
   Future<void> _uploadFileToSlot(
-    mox.HttpFileUploadSlot slot,
+    _UploadSlot slot,
     File file, {
     int? sizeBytes,
     required String putUrl,
@@ -1864,6 +1887,26 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
 //   });
 //   return allowed;
 // }
+}
+
+class _UploadSlot {
+  _UploadSlot({
+    required this.getUrl,
+    required this.putUrl,
+    Map<String, String>? headers,
+  }) : headers = headers ?? const {};
+
+  factory _UploadSlot.fromMox(mox.HttpFileUploadSlot slot) {
+    return _UploadSlot(
+      getUrl: slot.getUrl.toString(),
+      putUrl: slot.putUrl.toString(),
+      headers: Map<String, String>.from(slot.headers),
+    );
+  }
+
+  final String getUrl;
+  final String putUrl;
+  final Map<String, String> headers;
 }
 
 class _ReactionBucket {

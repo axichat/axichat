@@ -46,6 +46,7 @@ part 'blocking_service.dart';
 part 'chats_service.dart';
 part 'muc_service.dart';
 part 'message_service.dart';
+part 'message_sanitizer.dart';
 part 'mam_sm_guard.dart';
 part 'omemo_service.dart';
 part 'presence_service.dart';

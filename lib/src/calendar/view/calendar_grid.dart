@@ -20,6 +20,7 @@ import '../models/calendar_task.dart';
 import '../utils/location_autocomplete.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/task_share_formatter.dart';
 import '../utils/time_formatter.dart';
 import 'edit_task_dropdown.dart';
 import 'models/task_context_action.dart';
@@ -731,6 +732,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _copyTask(CalendarTask task) {
     _taskInteractionController.setClipboardTemplate(task);
+  }
+
+  Future<void> _copyTaskToClipboard(CalendarTask task) async {
+    final String payload = task.toShareText();
+    await Clipboard.setData(ClipboardData(text: payload));
+    if (!mounted) {
+      return;
+    }
+    FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
   }
 
   void _pasteTask(DateTime slotTime) {
@@ -2354,6 +2364,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         icon: Icons.copy_outlined,
         label: 'Copy Task',
         onSelected: () => _copyTask(task),
+      ),
+      TaskContextAction(
+        icon: Icons.share_outlined,
+        label: 'Copy to Clipboard',
+        onSelected: () => _copyTaskToClipboard(task),
       ),
     ];
 

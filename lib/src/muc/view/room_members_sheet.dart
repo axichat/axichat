@@ -148,35 +148,24 @@ class RoomMembersSheet extends StatelessWidget {
 
   Future<String?> _promptNickname(BuildContext context) async {
     final controller = TextEditingController(text: currentNickname ?? '');
-    return showShadDialog<String>(
+    final focusNode = FocusNode();
+    final result = await showAdaptiveBottomSheet<String>(
       context: context,
-      builder: (dialogContext) {
-        final pop = Navigator.of(dialogContext).pop;
-        final focusNode = FocusNode();
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => focusNode.requestFocus(),
-        );
-        return ShadDialog(
-          title: const Text('Change nickname'),
-          actions: [
-            ShadButton.outline(
-              onPressed: () => pop(),
-              child: const Text('Cancel'),
-            ).withTapBounce(),
-            ShadButton(
-              onPressed: () => pop(controller.text.trim()),
-              child: const Text('Update'),
-            ).withTapBounce(),
-          ],
-          child: AxiTextFormField(
-            controller: controller,
-            focusNode: focusNode,
-            placeholder: const Text('Enter a nickname'),
-            onSubmitted: (_) => pop(controller.text.trim()),
-          ),
+      isScrollControlled: true,
+      useRootNavigator: false,
+      builder: (sheetContext) {
+        final pop = Navigator.of(sheetContext).pop;
+        return _NicknameSheet(
+          controller: controller,
+          focusNode: focusNode,
+          onCancel: () => pop(),
+          onSubmit: (value) => pop(value.trim()),
         );
       },
     );
+    controller.dispose();
+    focusNode.dispose();
+    return result;
   }
 
   List<_MemberGroup> _sections() {
@@ -396,6 +385,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               onRecipientRemoved: _removeRecipient,
               onRecipientToggled: _toggleRecipient,
               collapsedByDefault: false,
+              horizontalPadding: 0,
             ),
             const SizedBox(height: 12),
             Padding(
@@ -405,7 +395,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                   ShadButton.outline(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
-                  ),
+                  ).withTapBounce(),
                   const SizedBox(width: 8),
                   ShadButton(
                     onPressed: _recipients.isEmpty
@@ -423,7 +413,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                             Navigator.of(context).pop(invitees);
                           },
                     child: const Text('Send invites'),
-                  ),
+                  ).withTapBounce(),
                 ],
               ),
             ),
@@ -462,5 +452,72 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       final recipient = _recipients[index];
       _recipients[index] = recipient.copyWith(included: !recipient.included);
     });
+  }
+}
+
+class _NicknameSheet extends StatefulWidget {
+  const _NicknameSheet({
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onSubmit;
+  final VoidCallback onCancel;
+
+  @override
+  State<_NicknameSheet> createState() => _NicknameSheetState();
+}
+
+class _NicknameSheetState extends State<_NicknameSheet> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => widget.focusNode.requestFocus(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
+    final colors = context.colorScheme;
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Change nickname',
+            style: textTheme.h4.copyWith(color: colors.foreground),
+          ),
+          const SizedBox(height: 12),
+          AxiTextFormField(
+            controller: widget.controller,
+            focusNode: widget.focusNode,
+            placeholder: const Text('Enter a nickname'),
+            onSubmitted: widget.onSubmit,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ShadButton.outline(
+                onPressed: widget.onCancel,
+                child: const Text('Cancel'),
+              ).withTapBounce(),
+              const SizedBox(width: 8),
+              ShadButton(
+                onPressed: () => widget.onSubmit(widget.controller.text.trim()),
+                child: const Text('Update'),
+              ).withTapBounce(),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
