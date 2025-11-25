@@ -306,9 +306,19 @@ class MaterialAxichat extends StatelessWidget {
               fontFamily: interFontFamily,
               fontFamilyFallback: interFontFallback,
             );
+            final appBarTitleStyle = shadTheme.textTheme.h3.copyWith(
+              fontFamily: gabaritoFontFamily,
+              fontFamilyFallback: gabaritoFontFallback,
+              color: materialColors.foreground,
+              fontWeight: FontWeight.w700,
+            );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: 20),
               textTheme: textThemeWithEmojiFallback,
+              appBarTheme: theme.appBarTheme.copyWith(
+                titleTextStyle: appBarTitleStyle,
+                toolbarTextStyle: appBarTitleStyle,
+              ),
               scaffoldBackgroundColor: materialColors.background,
               dividerColor: materialColors.border,
               cardColor: materialColors.card,

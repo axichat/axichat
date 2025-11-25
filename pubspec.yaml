@@ -140,6 +140,7 @@ flutter:
     - assets/licenses/noto_color_emoji_ofl.txt
     - assets/licenses/inter_ofl.txt
     - assets/licenses/dmsans_ofl.txt
+    - assets/licenses/gabarito_ofl.txt
     - shorebird.yaml
   fonts:
     - family: Inter
@@ -196,6 +197,20 @@ flutter:
         - asset: assets/fonts/DMSans-Italic-VariableFont_opsz,wght.ttf
           weight: 700
           style: italic
+    - family: Gabarito
+      fonts:
+        - asset: assets/fonts/Gabarito-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Gabarito-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Gabarito-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Gabarito-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Gabarito-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Gabarito-Black.ttf
+          weight: 900
     - family: NotoColorEmoji
       fonts:
         - asset: assets/fonts/NotoColorEmoji.ttf

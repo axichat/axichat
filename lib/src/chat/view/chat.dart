@@ -560,6 +560,65 @@ class Chat extends StatefulWidget {
   State<Chat> createState() => _ChatState();
 }
 
+class _RoomMembersDrawerContent extends StatelessWidget {
+  const _RoomMembersDrawerContent({
+    required this.onInvite,
+    required this.onAction,
+    required this.onChangeNickname,
+    required this.onLeaveRoom,
+    required this.onClose,
+  });
+
+  final ValueChanged<String> onInvite;
+  final void Function(String occupantId, MucModerationAction action) onAction;
+  final ValueChanged<String> onChangeNickname;
+  final VoidCallback onLeaveRoom;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ChatBloc, ChatState>(
+      builder: (context, state) {
+        final roomState = state.roomState;
+        if (roomState == null) {
+          final colors = context.colorScheme;
+          final textTheme = context.textTheme;
+          return SafeArea(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AxiProgressIndicator(
+                    dimension: 24,
+                    color: colors.foreground,
+                    semanticsLabel: 'Loading members',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Loading members…',
+                    style:
+                        textTheme.muted.copyWith(color: colors.mutedForeground),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return RoomMembersSheet(
+          roomState: roomState,
+          canInvite: true,
+          onInvite: onInvite,
+          onAction: onAction,
+          onChangeNickname: onChangeNickname,
+          onLeaveRoom: onLeaveRoom,
+          currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
+          onClose: onClose,
+        );
+      },
+    );
+  }
+}
+
 class _ChatState extends State<Chat> {
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
@@ -657,7 +716,7 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatMuted(!enable));
   }
 
-  void _showMembers(RoomState roomState) {
+  void _showMembers() {
     final chatBloc = context.read<ChatBloc>();
     final navigator = Navigator.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
@@ -680,22 +739,22 @@ class _ChatState extends State<Chat> {
             child: Material(
               color: context.colorScheme.background,
               elevation: 12,
-              child: RoomMembersSheet(
-                roomState: roomState,
-                canInvite: true,
-                onInvite: (jid) => chatBloc.add(ChatInviteRequested(jid)),
-                onAction: (occupantId, action) => chatBloc.add(
-                  ChatModerationActionRequested(
-                    occupantId: occupantId,
-                    action: action,
+              child: BlocProvider.value(
+                value: chatBloc,
+                child: _RoomMembersDrawerContent(
+                  onInvite: (jid) => chatBloc.add(ChatInviteRequested(jid)),
+                  onAction: (occupantId, action) => chatBloc.add(
+                    ChatModerationActionRequested(
+                      occupantId: occupantId,
+                      action: action,
+                    ),
                   ),
+                  onChangeNickname: (nick) =>
+                      chatBloc.add(ChatNicknameChangeRequested(nick)),
+                  onLeaveRoom: () =>
+                      chatBloc.add(const ChatLeaveRoomRequested()),
+                  onClose: navigator.pop,
                 ),
-                onChangeNickname: (nick) =>
-                    chatBloc.add(ChatNicknameChangeRequested(nick)),
-                onLeaveRoom: () => chatBloc.add(const ChatLeaveRoomRequested()),
-                currentNickname:
-                    roomState.occupants[roomState.myOccupantId]?.nick,
-                onClose: navigator.pop,
               ),
             ),
           ),
@@ -2118,7 +2177,10 @@ class _ChatState extends State<Chat> {
                                       ),
                                       child: Text(
                                         state.chat?.title ?? '',
-                                        style: context.textTheme.h4,
+                                        style: Theme.of(context)
+                                                .appBarTheme
+                                                .titleTextStyle ??
+                                            context.textTheme.h4,
                                       ),
                                     ),
                                     Expanded(
@@ -2138,14 +2200,7 @@ class _ChatState extends State<Chat> {
                             AxiIconButton(
                               iconData: LucideIcons.users,
                               tooltip: 'Room members',
-                              onPressed: () {
-                                final room = state.roomState;
-                                if (room == null) {
-                                  _showSnackbar('Loading members…');
-                                  return;
-                                }
-                                _showMembers(room);
-                              },
+                              onPressed: _showMembers,
                             ),
                           const _ChatSearchToggleButton(),
                           if (!readOnly) ...[
@@ -3106,20 +3161,21 @@ class _ChatState extends State<Chat> {
                                                           final textTheme =
                                                               Theme.of(context)
                                                                   .textTheme;
-                                                          final baseSubjectStyle =
+                                                          final baseSubjectStyle = textTheme
+                                                                  .titleSmall ??
                                                               textTheme
-                                                                      .titleMedium ??
-                                                                  textTheme
-                                                                      .bodyLarge ??
-                                                                  context
-                                                                      .textTheme
-                                                                      .lead;
+                                                                  .bodyMedium ??
+                                                              textTheme
+                                                                  .bodyLarge ??
+                                                              context.textTheme
+                                                                  .lead;
                                                           final subjectStyle =
                                                               baseSubjectStyle
                                                                   .copyWith(
                                                             color: textColor,
                                                             fontWeight:
                                                                 FontWeight.w600,
+                                                            height: 1.2,
                                                           );
                                                           final subjectPainter =
                                                               TextPainter(

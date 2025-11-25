@@ -18,6 +18,11 @@ class AxiAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasLeading = leading != null;
     final hasTitle = showTitle;
+    final titleStyle = Theme.of(context).appBarTheme.titleTextStyle ??
+        context.textTheme.h3.copyWith(
+          fontFamily: gabaritoFontFamily,
+          fontFamilyFallback: gabaritoFontFallback,
+        );
     return Container(
       height: 56.0,
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -34,7 +39,7 @@ class AxiAppBar extends StatelessWidget {
           if (hasTitle)
             Text(
               appDisplayName,
-              style: context.textTheme.h3,
+              style: titleStyle,
             ),
           if (hasTitle || hasLeading) const Spacer(),
           if (!hasTitle && !hasLeading) const Spacer(),

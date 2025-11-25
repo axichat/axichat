@@ -22,6 +22,15 @@ final class _ChatMessagesUpdated extends ChatEvent {
   List<Object?> get props => [items];
 }
 
+final class _RoomStateUpdated extends ChatEvent {
+  const _RoomStateUpdated(this.roomState);
+
+  final RoomState roomState;
+
+  @override
+  List<Object?> get props => [roomState];
+}
+
 final class _EmailSyncStateChanged extends ChatEvent {
   const _EmailSyncStateChanged(this.state);
 

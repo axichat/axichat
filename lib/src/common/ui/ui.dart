@@ -56,6 +56,12 @@ const dmSansMinWeight = 400.0;
 const dmSansMaxWeight = 700.0;
 const interFontFamily = 'Inter';
 const interFontFallback = <String>[dmSansFontFamily, emojiFontFamily];
+const gabaritoFontFamily = 'Gabarito';
+const gabaritoFontFallback = <String>[
+  interFontFamily,
+  dmSansFontFamily,
+  emojiFontFamily,
+];
 
 const smallScreen = 820.0;
 const mediumScreen = 900.0;

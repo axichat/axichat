@@ -39,6 +39,11 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Future<int> countChatMessages(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
   Future<List<Message>> getAllMessagesForChat(
     String jid, {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
@@ -1096,6 +1101,45 @@ WHERE subject_token IS NOT NULL
       limit: end,
       offset: start,
     ).get();
+  }
+
+  @override
+  Future<int> countChatMessages(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    final filterValue = filter.index;
+    final query = await customSelect(
+      '''
+      SELECT COUNT(*) AS count
+      FROM messages m
+      LEFT JOIN message_copies mc ON mc.dc_msg_id = m.delta_msg_id
+      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+      LEFT JOIN message_participants mp
+        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+      WHERE m.chat_jid = ?
+        AND (
+          CASE WHEN ? = 0 THEN
+            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+          ELSE
+            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+      ''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<int>(filterValue),
+      ],
+      readsFrom: {
+        messages,
+        messageCopies,
+        messageShares,
+        messageParticipants,
+      },
+    ).getSingle();
+
+    return query.read<int>('count');
   }
 
   Selectable<Message> _chatMessagesSelectable({

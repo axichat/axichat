@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
@@ -11,6 +12,7 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -145,6 +147,13 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) => messageStreamController.stream);
+
+    when(
+      () => messageService.countLocalMessages(
+        jid: any(named: 'jid'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async => 0);
 
     when(() => chatsService.chatStream(any()))
         .thenAnswer((_) => chatStreamController.stream);
@@ -747,5 +756,204 @@ void main() {
     expect(bloc.state.toast?.message, contains('Drafts'));
 
     await bloc.close();
+  });
+
+  test('skips MAM hydrate when local window already cached', () async {
+    when(
+      () => messageService.countLocalMessages(
+        jid: any(named: 'jid'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async => ChatBloc.messageBatchSize);
+
+    when(
+      () => messageService.fetchLatestFromArchive(
+        jid: any(named: 'jid'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+      ),
+    ).thenAnswer((_) async => const xmpp.MamPageResult(complete: true));
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settingsCubit: settingsCubit,
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.fetchLatestFromArchive(
+        jid: any(named: 'jid'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+      ),
+    );
+
+    await bloc.close();
+  });
+
+  test('loads earlier via MAM when local history is short', () async {
+    final counts = Queue<int>.from([0, 1, 1, 2]);
+
+    when(
+      () => messageService.countLocalMessages(
+        jid: any(named: 'jid'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async {
+      if (counts.isEmpty) return 2;
+      return counts.removeFirst();
+    });
+
+    when(
+      () => messageService.fetchLatestFromArchive(
+        jid: any(named: 'jid'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+      ),
+    ).thenAnswer(
+      (_) async => const xmpp.MamPageResult(
+        complete: false,
+        firstId: 'latest-1',
+        lastId: 'latest-1',
+        count: 2,
+      ),
+    );
+
+    when(
+      () => messageService.fetchBeforeFromArchive(
+        jid: any(named: 'jid'),
+        before: any(named: 'before'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+      ),
+    ).thenAnswer(
+      (_) async => const xmpp.MamPageResult(
+        complete: true,
+        firstId: 'earlier-1',
+        lastId: 'earlier-1',
+        count: 3,
+      ),
+    );
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settingsCubit: settingsCubit,
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(const ChatLoadEarlier());
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verify(
+      () => messageService.fetchBeforeFromArchive(
+        jid: any(named: 'jid'),
+        before: any(named: 'before'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+      ),
+    ).called(1);
+
+    await bloc.close();
+  });
+
+  test('catch-up paginates MAM when reconnecting after gap', () async {
+    final xmppService = MockXmppService();
+    final connectivityController =
+        StreamController<xmpp.ConnectionState>.broadcast();
+
+    when(() => xmppService.connectionState)
+        .thenReturn(xmpp.ConnectionState.notConnected);
+    when(() => xmppService.connectivityStream)
+        .thenAnswer((_) => connectivityController.stream);
+    when(() => xmppService.httpUploadSupportStream)
+        .thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+    when(() => xmppService.httpUploadSupport)
+        .thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(
+      () => xmppService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => messageStreamController.stream);
+    when(() => xmppService.sendReadMarker(any(), any()))
+        .thenAnswer((_) async {});
+    when(
+      () => xmppService.countLocalMessages(
+        jid: any(named: 'jid'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async => ChatBloc.messageBatchSize);
+    when(
+      () => xmppService.fetchLatestFromArchive(
+        jid: any(named: 'jid'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+      ),
+    ).thenAnswer((_) async => const xmpp.MamPageResult(complete: true));
+    when(() => xmppService.loadLastSeenTimestamp(any()))
+        .thenAnswer((_) async => DateTime(2024));
+
+    final mamPages = Queue<xmpp.MamPageResult>.from([
+      const xmpp.MamPageResult(complete: false, firstId: 'p0', lastId: 'p1'),
+      const xmpp.MamPageResult(complete: true, firstId: 'p1', lastId: 'p2'),
+    ]);
+
+    when(
+      () => xmppService.fetchSinceFromArchive(
+        jid: any(named: 'jid'),
+        since: any(named: 'since'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+        after: any(named: 'after'),
+      ),
+    ).thenAnswer((_) async => mamPages.removeFirst());
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: xmppService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settingsCubit: settingsCubit,
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    connectivityController.add(xmpp.ConnectionState.connected);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verify(
+      () => xmppService.fetchSinceFromArchive(
+        jid: any(named: 'jid'),
+        since: any(named: 'since'),
+        pageSize: any(named: 'pageSize'),
+        isMuc: any(named: 'isMuc'),
+        after: any(named: 'after'),
+      ),
+    ).called(2);
+
+    await bloc.close();
+    await connectivityController.close();
   });
 }

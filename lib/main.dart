@@ -97,6 +97,9 @@ void _configureLogging() {
 void _registerThirdPartyLicenses() {
   const deltaLicenseAsset = 'assets/licenses/delta_chat_core_mpl.txt';
   const notoColorEmojiLicenseAsset = 'assets/licenses/noto_color_emoji_ofl.txt';
+  const interLicenseAsset = 'assets/licenses/inter_ofl.txt';
+  const dmSansLicenseAsset = 'assets/licenses/dmsans_ofl.txt';
+  const gabaritoLicenseAsset = 'assets/licenses/gabarito_ofl.txt';
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(deltaLicenseAsset);
     yield LicenseEntryWithLineBreaks(
@@ -108,6 +111,27 @@ void _registerThirdPartyLicenses() {
     final text = await rootBundle.loadString(notoColorEmojiLicenseAsset);
     yield LicenseEntryWithLineBreaks(
       ['Noto Color Emoji (OFL-1.1)'],
+      text,
+    );
+  });
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString(interLicenseAsset);
+    yield LicenseEntryWithLineBreaks(
+      ['Inter (OFL-1.1)'],
+      text,
+    );
+  });
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString(dmSansLicenseAsset);
+    yield LicenseEntryWithLineBreaks(
+      ['DM Sans (OFL-1.1)'],
+      text,
+    );
+  });
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString(gabaritoLicenseAsset);
+    yield LicenseEntryWithLineBreaks(
+      ['Gabarito (OFL-1.1)'],
       text,
     );
   });
