@@ -11,7 +11,17 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart' as intl;
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+String? _bareJid(String? jid) {
+  if (jid == null || jid.isEmpty) return null;
+  try {
+    return mox.JID.fromString(jid).toBare().toString();
+  } on Exception {
+    return jid;
+  }
+}
 
 class ChatMessageDetails extends StatelessWidget {
   const ChatMessageDetails({super.key});
@@ -33,8 +43,9 @@ class ChatMessageDetails extends StatelessWidget {
           emailService = null;
         }
         final emailSelfJid = emailService?.selfSenderJid;
-        final isFromSelf = message.senderJid == profileState.jid ||
-            (emailSelfJid != null && message.senderJid == emailSelfJid);
+        final bareSender = _bareJid(message.senderJid);
+        final isFromSelf = bareSender == _bareJid(profileState.jid) ||
+            (emailSelfJid != null && bareSender == _bareJid(emailSelfJid));
         final shareContext = state.shareContexts[message.stanzaID];
         final shareParticipants = _shareParticipants(
           shareContext?.participants ?? const <Chat>[],

@@ -277,12 +277,14 @@ class Message with _$Message implements Insertable<Message> {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
+    final isGroupChat = event.type == 'groupchat';
     final chatJid = event.isCarbon ? to : from;
+    final senderJid = isGroupChat ? event.from.toString() : from;
     final invite = _ParsedInvite.fromBody(event.text, to: to);
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
-      senderJid: from,
+      senderJid: senderJid,
       chatJid: chatJid,
       body: invite?.displayBody ?? event.text,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
@@ -292,7 +294,8 @@ class Message with _$Message implements Insertable<Message> {
           false,
       quoting: get<mox.ReplyData>()?.id,
       originID: get<mox.StableIdData>()?.originId,
-      occupantID: get<mox.OccupantIdData>()?.id,
+      occupantID: get<mox.OccupantIdData>()?.id ??
+          (isGroupChat ? event.from.toString() : null),
       encryptionProtocol:
           event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
       deviceID: get<OmemoDeviceData>()?.id,

@@ -182,6 +182,7 @@ const _reactionQuickChoices = [
 ];
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
+const _loadingStateMessageId = '__loading_state__';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
 const _guestDesktopHorizontalPadding = _chatHorizontalPadding + 6.0;
@@ -572,6 +573,7 @@ class _ChatState extends State<Chat> {
   final _fileMetadataFutures = <String, Future<FileMetadataData?>>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
+  var _chatOpenedAt = DateTime.now();
 
   var _chatRoute = _ChatRoute.main;
   var _settingsPanelExpanded = false;
@@ -626,6 +628,15 @@ class _ChatState extends State<Chat> {
     }
     final nick = senderJid.substring(slashIndex + 1).trim();
     return nick.isEmpty ? null : nick;
+  }
+
+  String? _bareJid(String? jid) {
+    if (jid == null || jid.isEmpty) return null;
+    try {
+      return mox.JID.fromString(jid).toBare().toString();
+    } on Exception {
+      return jid;
+    }
   }
 
   void _toggleSettingsPanel() {
@@ -753,11 +764,35 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatSubjectChanged(text));
   }
 
-  bool _shouldAnimateMessage(String? messageId) {
-    if (messageId == null ||
-        messageId.isEmpty ||
+  void _hydrateAnimatedMessages(List<Message> messages) {
+    final openedAt = _chatOpenedAt;
+    _animatedMessageIds
+      ..clear()
+      ..addAll(
+        messages
+            .where(
+              (message) =>
+                  message.timestamp == null ||
+                  !message.timestamp!.isAfter(openedAt),
+            )
+            .map((message) => message.stanzaID)
+            .whereType<String>()
+            .where((id) => id.isNotEmpty),
+      );
+    _hydratedAnimatedMessages = true;
+  }
+
+  bool _shouldAnimateMessage(Message message) {
+    final messageId = message.stanzaID;
+    if (messageId.isEmpty ||
         messageId == _selectionSpacerMessageId ||
-        messageId == _emptyStateMessageId) {
+        messageId == _emptyStateMessageId ||
+        messageId == _loadingStateMessageId) {
+      return false;
+    }
+    final timestamp = message.timestamp;
+    if (timestamp == null || !timestamp.isAfter(_chatOpenedAt)) {
+      _animatedMessageIds.add(messageId);
       return false;
     }
     if (_animatedMessageIds.contains(messageId)) {
@@ -1905,7 +1940,14 @@ class _ChatState extends State<Chat> {
                 listener: (_, __) {
                   _animatedMessageIds.clear();
                   _hydratedAnimatedMessages = false;
+                  _chatOpenedAt = DateTime.now();
                 },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    !_hydratedAnimatedMessages &&
+                    previous.items != current.items,
+                listener: (_, state) => _hydrateAnimatedMessages(state.items),
               ),
             ],
             child: BlocConsumer<ChatBloc, ChatState>(
@@ -2183,15 +2225,8 @@ class _ChatState extends State<Chat> {
                                                   true,
                                         )
                                         .toList();
-                                    if (!_hydratedAnimatedMessages) {
-                                      _animatedMessageIds.addAll(
-                                        filteredItems
-                                            .map((message) => message.stanzaID)
-                                            .whereType<String>()
-                                            .where((id) => id.isNotEmpty),
-                                      );
-                                      _hydratedAnimatedMessages = true;
-                                    }
+                                    final loadingMessages =
+                                        !_hydratedAnimatedMessages;
                                     final selectedMessages =
                                         _collectSelectedMessages(filteredItems);
                                     if (_multiSelectActive &&
@@ -2257,11 +2292,12 @@ class _ChatState extends State<Chat> {
                                         index < filteredItems.length;
                                         index++) {
                                       final e = filteredItems[index];
-                                      final isSelfXmpp =
-                                          e.senderJid == profile?.jid;
-                                      final isSelfEmail =
+                                      final senderBare = _bareJid(e.senderJid);
+                                      final isSelfXmpp = senderBare != null &&
+                                          senderBare == _bareJid(profile?.jid);
+                                      final isSelfEmail = senderBare != null &&
                                           emailSelfJid != null &&
-                                              e.senderJid == emailSelfJid;
+                                          senderBare == _bareJid(emailSelfJid);
                                       final occupantId = e.occupantID;
                                       final occupant = occupantId == null
                                           ? null
@@ -2398,7 +2434,19 @@ class _ChatState extends State<Chat> {
                                     final emptyStateLabel = searchFiltering
                                         ? 'No matches'
                                         : 'No messages';
-                                    if (filteredItems.isEmpty) {
+                                    if (loadingMessages) {
+                                      dashMessages.add(
+                                        ChatMessage(
+                                          user: spacerUser,
+                                          createdAt: _selectionSpacerTimestamp,
+                                          text: ' ',
+                                          customProperties: const {
+                                            'id': _loadingStateMessageId,
+                                            'loadingState': true,
+                                          },
+                                        ),
+                                      );
+                                    } else if (filteredItems.isEmpty) {
                                       dashMessages.add(
                                         ChatMessage(
                                           user: spacerUser,
@@ -2484,8 +2532,8 @@ class _ChatState extends State<Chat> {
                                           key: ValueKey<String?>(
                                               quoting.stanzaID),
                                           message: quoting,
-                                          isSelf: quoting.senderJid ==
-                                              currentUserId,
+                                          isSelf: _bareJid(quoting.senderJid) ==
+                                              _bareJid(currentUserId),
                                           onClear: () => context
                                               .read<ChatBloc>()
                                               .add(const ChatQuoteCleared()),
@@ -2552,6 +2600,10 @@ class _ChatState extends State<Chat> {
                                                           message.customProperties?[
                                                                   'emptyState'] ==
                                                               true;
+                                                      final isLoadingState =
+                                                          message.customProperties?[
+                                                                  'loadingState'] ==
+                                                              true;
                                                       final isSelfMessage =
                                                           (message.customProperties?[
                                                                       'isSelf']
@@ -2560,7 +2612,8 @@ class _ChatState extends State<Chat> {
                                                       if (!isGroupChat ||
                                                           !isSelfMessage ||
                                                           isSelectionSpacer ||
-                                                          isEmptyState) {
+                                                          isEmptyState ||
+                                                          isLoadingState) {
                                                         return const SizedBox
                                                             .shrink();
                                                       }
@@ -2643,6 +2696,27 @@ class _ChatState extends State<Chat> {
                                                               style: context
                                                                   .textTheme
                                                                   .muted,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }
+                                                      final isLoadingState =
+                                                          message.customProperties?[
+                                                                  'loadingState'] ==
+                                                              true;
+                                                      if (isLoadingState) {
+                                                        return Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            vertical: 24,
+                                                          ),
+                                                          child: Center(
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                              color: context
+                                                                  .colorScheme
+                                                                  .primary,
                                                             ),
                                                           ),
                                                         );
@@ -2977,9 +3051,13 @@ class _ChatState extends State<Chat> {
                                                           _QuotedMessagePreview(
                                                             message:
                                                                 quotedModel,
-                                                            isSelf: quotedModel
-                                                                    .senderJid ==
-                                                                user.id,
+                                                            isSelf: _bareJid(
+                                                                  quotedModel
+                                                                      .senderJid,
+                                                                ) ==
+                                                                _bareJid(
+                                                                  user.id,
+                                                                ),
                                                           ),
                                                         );
                                                       }
@@ -3729,8 +3807,7 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                   animate:
                                                                       _shouldAnimateMessage(
-                                                                    messageModel
-                                                                        .stanzaID,
+                                                                    messageModel,
                                                                   ),
                                                                   isSelf: self,
                                                                   child:

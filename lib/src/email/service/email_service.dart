@@ -1033,8 +1033,9 @@ class EmailService {
       if (message.warning == MessageWarning.emailSpamQuarantined) {
         return;
       }
+      String bare(String value) => value.split('/').first;
       final selfJid = selfSenderJid;
-      if (selfJid != null && message.senderJid == selfJid) {
+      if (selfJid != null && bare(message.senderJid) == bare(selfJid)) {
         return;
       }
       final notificationBody =
