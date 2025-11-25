@@ -46,6 +46,14 @@ const emojiFontFamily = 'NotoColorEmoji';
 const emojiFontFallback = <String>[emojiFontFamily];
 const dmSansFontFamily = 'DMSans';
 const dmSansFontFallback = <String>[emojiFontFamily];
+const dmSansOpticalSizeAxis = 'opsz';
+const dmSansDefaultOpticalSize = 16.0;
+const dmSansMinOpticalSize = 9.0;
+const dmSansMaxOpticalSize = 40.0;
+const dmSansWeightAxis = 'wght';
+const dmSansDefaultWeight = 600.0;
+const dmSansMinWeight = 400.0;
+const dmSansMaxWeight = 700.0;
 const interFontFamily = 'Inter';
 const interFontFallback = <String>[dmSansFontFamily, emojiFontFamily];
 

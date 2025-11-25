@@ -137,6 +137,8 @@ const _selectionOuterInset =
     _selectionCutoutDepth + (SelectionIndicator.size / 2);
 const _selectionIndicatorInset =
     2.0; // Centers the 28px indicator within the 40px cutout.
+const _messageAvatarSize = 36.0;
+const _messageRowAvatarReservation = 56.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -146,6 +148,14 @@ const _selectionBubbleOutboundSpacing = _selectionBubbleInteriorInset +
     _selectionBubbleOutboundExtraGap +
     _selectionBubbleOutboundSpacingBoost;
 const _recipientBubbleInset = _recipientCutoutDepth;
+const _groupPreviewUserId = 'group-preview-user';
+const _groupPreviewUserName = 'Preview Member';
+const _groupPreviewMessageStagger = Duration(milliseconds: 1);
+const _groupPreviewMessages = <String>[
+  'Preview inbound message for layout.',
+  'Second preview to check consecutive spacing.',
+  'Third preview for avatar alignment.',
+];
 const _recipientOverflowGap = 6.0;
 const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
@@ -2199,12 +2209,31 @@ class _ChatState extends State<Chat> {
                                             : _messageListTailSpacer;
                                     final baseBubbleMaxWidth =
                                         contentWidth * (isCompact ? 0.8 : 0.7);
-                                    final messageRowMaxWidth = contentWidth;
-                                    final clampedBubbleWidth =
+                                    final inboundAvatarReservation = isGroupChat
+                                        ? _messageRowAvatarReservation
+                                        : 0.0;
+                                    final inboundClampedBubbleWidth =
+                                        baseBubbleMaxWidth.clamp(
+                                      0.0,
+                                      contentWidth - inboundAvatarReservation,
+                                    );
+                                    final outboundClampedBubbleWidth =
                                         baseBubbleMaxWidth.clamp(
                                       0.0,
                                       contentWidth,
                                     );
+                                    final inboundMessageRowMaxWidth = math.min(
+                                      contentWidth - inboundAvatarReservation,
+                                      inboundClampedBubbleWidth +
+                                          _selectionOuterInset,
+                                    );
+                                    final outboundMessageRowMaxWidth = math.min(
+                                      contentWidth,
+                                      outboundClampedBubbleWidth +
+                                          _selectionOuterInset,
+                                    );
+                                    final messageRowConstraintWidth =
+                                        contentWidth;
                                     final dashMessages = <ChatMessage>[];
                                     final shownSubjectShares = <String>{};
                                     final revokedInviteTokens = <String>{
@@ -2379,6 +2408,39 @@ class _ChatState extends State<Chat> {
                                         ),
                                       );
                                     }
+                                    if (isGroupChat) {
+                                      final previewUser = ChatUser(
+                                        id: _groupPreviewUserId,
+                                        firstName: _groupPreviewUserName,
+                                      );
+                                      final previewTimestamp =
+                                          DateTime.now().toUtc();
+                                      for (var previewIndex = 0;
+                                          previewIndex <
+                                              _groupPreviewMessages.length;
+                                          previewIndex++) {
+                                        final previewText =
+                                            _groupPreviewMessages[previewIndex];
+                                        dashMessages.add(
+                                          ChatMessage(
+                                            user: previewUser,
+                                            createdAt: previewTimestamp.add(
+                                              _groupPreviewMessageStagger *
+                                                  previewIndex,
+                                            ),
+                                            text: previewText,
+                                            status: MessageStatus.read,
+                                            customProperties: {
+                                              'id':
+                                                  'group-preview-$previewIndex',
+                                              'body': previewText,
+                                              'isSelf': false,
+                                              'error': MessageError.none,
+                                            },
+                                          ),
+                                        );
+                                      }
+                                    }
                                     dashMessages.add(
                                       ChatMessage(
                                         user: spacerUser,
@@ -2498,12 +2560,12 @@ class _ChatState extends State<Chat> {
                                               typingUsers:
                                                   typingUsers.take(1).toList(),
                                               messageOptions: MessageOptions(
-                                                showOtherUsersAvatar:
-                                                    isGroupChat,
+                                                showOtherUsersAvatar: false,
                                                 showCurrentUserAvatar: false,
                                                 showOtherUsersName: isGroupChat,
                                                 borderRadius: 0,
-                                                maxWidth: messageRowMaxWidth,
+                                                maxWidth:
+                                                    messageRowConstraintWidth,
                                                 messagePadding: EdgeInsets.zero,
                                                 spaceWhenAvatarIsHidden: 0,
                                                 currentUserContainerColor:
@@ -2614,11 +2676,14 @@ class _ChatState extends State<Chat> {
                                                               as bool? ??
                                                           (message.user.id ==
                                                               profile?.jid);
+                                                  final bubbleMaxWidth = self
+                                                      ? outboundMessageRowMaxWidth
+                                                      : inboundMessageRowMaxWidth;
                                                   final error = message
-                                                          .customProperties![
-                                                      'error'] as MessageError;
+                                                          .customProperties?[
+                                                      'error'] as MessageError?;
                                                   final isError =
-                                                      error.isNotNone;
+                                                      error?.isNotNone ?? false;
                                                   final bubbleColor = isError
                                                       ? colors.destructive
                                                       : self
@@ -2637,7 +2702,6 @@ class _ChatState extends State<Chat> {
                                                           : colors.foreground;
                                                   final timestampColor =
                                                       chatTokens.timestamp;
-                                                  const iconSize = 13.0;
                                                   final chainedPrev =
                                                       _chatMessagesShouldChain(
                                                     message,
@@ -2676,6 +2740,15 @@ class _ChatState extends State<Chat> {
                                                           ? colors
                                                               .primaryForeground
                                                           : timestampColor;
+                                                  final detailStyle = context
+                                                      .textTheme.muted
+                                                      .copyWith(
+                                                    color: timeColor,
+                                                    fontSize: 11.0,
+                                                    height: 1.0,
+                                                    textBaseline:
+                                                        TextBaseline.alphabetic,
+                                                  );
                                                   final isEmailMessage = (message
                                                                   .customProperties?[
                                                               'isEmailMessage']
@@ -2699,26 +2772,20 @@ class _ChatState extends State<Chat> {
                                                             String.fromCharCode(
                                                           icon.codePoint,
                                                         ),
-                                                        style: TextStyle(
+                                                        style: detailStyle
+                                                            .copyWith(
                                                           color: color,
-                                                          fontSize: iconSize,
                                                           fontFamily:
                                                               icon.fontFamily,
                                                           package:
                                                               icon.fontPackage,
-                                                          height: 1,
                                                         ),
                                                       );
                                                   final time = TextSpan(
                                                     text:
                                                         '${message.createdAt.hour.toString().padLeft(2, '0')}:'
                                                         '${message.createdAt.minute.toString().padLeft(2, '0')}',
-                                                    style: context
-                                                        .textTheme.muted
-                                                        .copyWith(
-                                                      color: timeColor,
-                                                      fontSize: 11.0,
-                                                    ),
+                                                    style: detailStyle,
                                                   );
                                                   final statusIcon =
                                                       message.status?.icon;
@@ -2997,23 +3064,19 @@ class _ChatState extends State<Chat> {
                                                             vertical:
                                                                 _subjectDividerPadding,
                                                           ),
-                                                          child: Align(
-                                                            alignment: Alignment
-                                                                .centerLeft,
-                                                            child: DecoratedBox(
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: context
-                                                                    .colorScheme
-                                                                    .border,
-                                                              ),
-                                                              child: SizedBox(
-                                                                height:
-                                                                    _subjectDividerThickness,
-                                                                width:
-                                                                    subjectPainter
-                                                                        .width,
-                                                              ),
+                                                          child: DecoratedBox(
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: context
+                                                                  .colorScheme
+                                                                  .border,
+                                                            ),
+                                                            child: SizedBox(
+                                                              height:
+                                                                  _subjectDividerThickness,
+                                                              width:
+                                                                  subjectPainter
+                                                                      .width,
                                                             ),
                                                           ),
                                                         ),
@@ -3162,15 +3225,17 @@ class _ChatState extends State<Chat> {
                                                       selectionOverlay != null
                                                           ? _selectionOuterInset
                                                           : 0.0;
-                                                  final bubbleMaxWidth =
+                                                  final cappedBubbleWidth =
                                                       math.min(
-                                                    messageRowMaxWidth,
-                                                    clampedBubbleWidth +
+                                                    bubbleMaxWidth,
+                                                    (self
+                                                            ? outboundClampedBubbleWidth
+                                                            : inboundClampedBubbleWidth) +
                                                         selectionAllowance,
                                                   );
                                                   final bubbleConstraints =
                                                       BoxConstraints(
-                                                    maxWidth: bubbleMaxWidth,
+                                                    maxWidth: cappedBubbleWidth,
                                                   );
                                                   final bubbleHighlightColor =
                                                       context
@@ -3678,12 +3743,76 @@ class _ChatState extends State<Chat> {
                                                   );
                                                   Widget bubbleWithSlack =
                                                       animatedStack;
+                                                  final hasAvatarSlot =
+                                                      isGroupChat &&
+                                                          isRenderableBubble &&
+                                                          !self;
+                                                  if (hasAvatarSlot) {
+                                                    bubbleWithSlack =
+                                                        ConstrainedBox(
+                                                      constraints:
+                                                          BoxConstraints(
+                                                        maxWidth:
+                                                            messageRowConstraintWidth,
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .end,
+                                                        children: [
+                                                          if (!self)
+                                                            SizedBox(
+                                                              width:
+                                                                  _messageRowAvatarReservation,
+                                                              child: Align(
+                                                                alignment: Alignment
+                                                                    .bottomLeft,
+                                                                child:
+                                                                    _MessageAvatar(
+                                                                  jid: messageModel
+                                                                      .senderJid,
+                                                                  size:
+                                                                      _messageAvatarSize,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          Flexible(
+                                                            fit: FlexFit.loose,
+                                                            child:
+                                                                ConstrainedBox(
+                                                              constraints:
+                                                                  BoxConstraints(
+                                                                maxWidth:
+                                                                    bubbleMaxWidth,
+                                                              ),
+                                                              child:
+                                                                  bubbleWithSlack,
+                                                            ),
+                                                          ),
+                                                          if (self)
+                                                            const SizedBox(
+                                                              width:
+                                                                  _messageRowAvatarReservation,
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    bubbleWithSlack =
+                                                        ConstrainedBox(
+                                                      constraints:
+                                                          BoxConstraints(
+                                                        maxWidth:
+                                                            bubbleMaxWidth,
+                                                      ),
+                                                      child: bubbleWithSlack,
+                                                    );
+                                                  }
                                                   bubbleWithSlack = Align(
                                                     alignment: Alignment.center,
-                                                    child: SizedBox(
-                                                      width: messageRowMaxWidth,
-                                                      child: bubbleWithSlack,
-                                                    ),
+                                                    child: bubbleWithSlack,
                                                   );
                                                   return KeyedSubtree(
                                                     key: messageKey,
@@ -4419,6 +4548,21 @@ _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip(
     overflowed: truncated,
     totalWidth: totalWidth,
   );
+}
+
+class _MessageAvatar extends StatelessWidget {
+  const _MessageAvatar({required this.jid, this.size = _messageAvatarSize});
+
+  final String jid;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiAvatar(
+      jid: jid,
+      size: size,
+    );
+  }
 }
 
 class _ReactionStrip extends StatelessWidget {
