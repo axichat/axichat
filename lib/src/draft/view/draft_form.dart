@@ -111,7 +111,7 @@ class _DraftFormState extends State<DraftForm> {
         : AutovalidateMode.disabled;
     const horizontalPadding = EdgeInsets.symmetric(horizontal: 16);
     return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.zero,
       child: Form(
         key: _formKey,
         autovalidateMode: autovalidateMode,
@@ -300,7 +300,7 @@ class _DraftFormState extends State<DraftForm> {
                       focusNode: _bodyFocusNode,
                       enabled: enabled,
                       minLines: 7,
-                      maxLines: 7,
+                      maxLines: null,
                       placeholder: const Text('Message'),
                     ),
                   ),
