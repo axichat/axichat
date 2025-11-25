@@ -97,7 +97,7 @@ class AxiNavigationRail extends StatelessWidget {
       duration: animationDuration,
       curve: Curves.easeInOutCubic,
       width: railWidth,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      padding: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: surfaceColor,
         border: Border(
@@ -108,35 +108,39 @@ class AxiNavigationRail extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (showTitle) ...[
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: collapsed ? 4 : 6,
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: colors.border),
+                ),
               ),
-              child: Row(
-                children: [
-                  if (showTitle && !collapsed)
-                    Expanded(
-                      child: Text(
-                        appDisplayName,
-                        style: context.textTheme.h2.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                          color: colors.foreground,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    )
-                  else if (showTitle)
-                    const Spacer(),
-                ],
+              child: SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: (collapsed ? 4 : 6) + 12,
+                  ),
+                  child: Row(
+                    children: [
+                      if (showTitle && !collapsed)
+                        Expanded(
+                          child: Text(
+                            appDisplayName,
+                            style: context.textTheme.h2.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              color: colors.foreground,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      else if (showTitle)
+                        const Spacer(),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: colors.border,
             ),
             const SizedBox(height: 12),
           ],
@@ -144,7 +148,7 @@ class AxiNavigationRail extends StatelessWidget {
             final destination = destinations[index];
             final selected = index == safeIndex;
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: _AxiNavigationRailItem(
                 destination: destination,
                 selected: selected,

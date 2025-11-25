@@ -438,8 +438,24 @@ class MaterialAxichat extends StatelessWidget {
               child: Stack(
                 children: [
                   if (child != null) child else const SizedBox.shrink(),
-                  const ComposeWindowOverlay(),
-                  const OmemoOperationOverlay(),
+                  Overlay(
+                    initialEntries: [
+                      OverlayEntry(
+                        maintainState: true,
+                        builder: (context) => const Material(
+                          type: MaterialType.transparency,
+                          child: ComposeWindowOverlay(),
+                        ),
+                      ),
+                      OverlayEntry(
+                        maintainState: true,
+                        builder: (context) => const Material(
+                          type: MaterialType.transparency,
+                          child: OmemoOperationOverlay(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             );

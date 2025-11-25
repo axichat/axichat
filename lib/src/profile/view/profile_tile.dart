@@ -27,7 +27,7 @@ class ProfileTile extends StatelessWidget {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         final usernameStyle = context.textTheme.large.copyWith(
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           color: context.colorScheme.foreground,
         );
         final subtitleStyle = context.textTheme.muted.copyWith(

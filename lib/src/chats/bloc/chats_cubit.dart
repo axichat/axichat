@@ -59,14 +59,9 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   void toggleCalendar() {
     if (state.openCalendar) {
-      // Close calendar
       emit(state.copyWith(openCalendar: false));
     } else {
-      // Open calendar and close any open chat
-      emit(state.copyWith(openCalendar: true, openJid: null));
-      if (state.openJid != null) {
-        _chatsService.closeChat();
-      }
+      emit(state.copyWith(openCalendar: true));
     }
   }
 

@@ -4,6 +4,10 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class AxiListTile extends StatelessWidget {
+  static const EdgeInsets _defaultContentPadding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+  static const double _defaultMinTileHeight = 72.0;
+
   const AxiListTile({
     super.key,
     this.leading,
@@ -63,9 +67,8 @@ class AxiListTile extends StatelessWidget {
     Widget child = ListTile(
       titleAlignment: ListTileTitleAlignment.center,
       horizontalTitleGap: 16.0,
-      contentPadding:
-          contentPadding ?? const EdgeInsets.only(left: 16.0, right: 16.0),
-      minTileHeight: minTileHeight ?? 84.0,
+      contentPadding: contentPadding ?? _defaultContentPadding,
+      minTileHeight: minTileHeight ?? _defaultMinTileHeight,
       selected: selected,
       selectedTileColor: Colors.transparent,
       hoverColor: selectionOverlay,
@@ -87,8 +90,11 @@ class AxiListTile extends StatelessWidget {
           ? null
           : Text(
               title!,
-              style: context.textTheme.small
-                  .copyWith(color: colors.foreground, height: 1.2),
+              style: context.textTheme.small.copyWith(
+                color: colors.foreground,
+                height: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
       subtitle: subtitle == null
