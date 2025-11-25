@@ -24,6 +24,7 @@ import '../utils/nl_parser_service.dart';
 import '../utils/nl_schedule_adapter.dart';
 import '../utils/recurrence_utils.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/task_share_formatter.dart';
 import '../utils/task_title_validation.dart';
 import '../utils/time_formatter.dart';
 import 'calendar_transfer_sheet.dart';
@@ -1484,6 +1485,11 @@ class TaskSidebarState extends State<TaskSidebar>
         label: 'Copy',
         onSelected: () => _copyTaskDetails(task),
       ),
+      TaskContextAction(
+        icon: Icons.share_outlined,
+        label: 'Copy to Clipboard',
+        onSelected: () => _copyTaskShareText(task),
+      ),
     ];
   }
 
@@ -1515,6 +1521,14 @@ class TaskSidebarState extends State<TaskSidebar>
     }
   }
 
+  Future<void> _copyTaskShareText(CalendarTask task) async {
+    final String payload = task.toShareText();
+    await Clipboard.setData(ClipboardData(text: payload));
+    if (mounted) {
+      FeedbackSystem.showSuccess(context, 'Task copied to clipboard');
+    }
+  }
+
   void _deleteSidebarTask(CalendarTask task) {
     _bloc.add(CalendarEvent.taskDeleted(taskId: task.id));
     _closeTaskPopover(task.id);
@@ -1527,6 +1541,11 @@ class TaskSidebarState extends State<TaskSidebar>
         leading: const Icon(Icons.copy_outlined),
         onPressed: () => _copyTaskDetails(task),
         child: const Text('Copy Task'),
+      ),
+      ShadContextMenuItem(
+        leading: const Icon(Icons.share_outlined),
+        onPressed: () => _copyTaskShareText(task),
+        child: const Text('Copy to Clipboard'),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.delete_outline),

@@ -93,6 +93,8 @@ class ChatToast extends Equatable {
   List<Object?> get props => [message, variant];
 }
 
+enum MamPageDirection { before, after }
+
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required this.jid,
@@ -234,6 +236,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   int? _mamTotalCount;
   bool _mamComplete = false;
   bool _mamLoading = false;
+  bool _mamCatchingUp = false;
+  Completer<void>? _mamLoadingCompleter;
 
   RestartableTimer? _typingTimer;
 
@@ -253,6 +257,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
+  void _beginMamLoad() {
+    _mamLoading = true;
+    _mamLoadingCompleter = Completer<void>();
+  }
+
+  void _finishMamLoad() {
+    _mamLoading = false;
+    _mamLoadingCompleter?.complete();
+    _mamLoadingCompleter = null;
+  }
+
   Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
     final chat = state.chat;
     if (chat == null || _mamLoading || _mamComplete) return;
@@ -261,7 +276,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final beforeId = _mamBeforeId ??
         (state.items.isEmpty ? null : state.items.last.stanzaID);
     if (beforeId == null) return;
-    _mamLoading = true;
+    _beginMamLoad();
     try {
       final result = await _messageService.fetchBeforeFromArchive(
         jid: chat.remoteJid,
@@ -269,7 +284,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pageSize: messageBatchSize,
         isMuc: chat.type == ChatType.groupChat,
       );
-      await _updateMamStateFromResult(chat, result);
+      await _updateMamStateFromResult(
+        chat,
+        result,
+        direction: MamPageDirection.before,
+      );
     } on Exception catch (error, stackTrace) {
       _log.fine(
         'Failed to load older MAM page for ${chat.jid}',
@@ -277,7 +296,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
     }
-    _mamLoading = false;
+    _finishMamLoad();
   }
 
   Future<void> _catchUpFromMam() async {
@@ -287,8 +306,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chat.remoteJid,
     );
     if (lastSeen == null) return;
-    if (_mamLoading) return;
-    _mamLoading = true;
+    if (_mamCatchingUp) return;
+    if (_mamLoading && _mamLoadingCompleter != null) {
+      await _mamLoadingCompleter!.future;
+    }
+    _mamCatchingUp = true;
+    _beginMamLoad();
     try {
       String? afterId;
       while (true) {
@@ -303,6 +326,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chat,
           result,
           updateTotal: false,
+          direction: MamPageDirection.after,
         );
         final nextAfter = result.lastId ?? afterId;
         if (result.complete || nextAfter == afterId || nextAfter == null) {
@@ -317,7 +341,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
     }
-    _mamLoading = false;
+    _finishMamLoad();
+    _mamCatchingUp = false;
   }
 
   Future<void> _initializeViewFilter() async {
@@ -336,20 +361,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _mamTotalCount = null;
     _mamComplete = false;
     _mamLoading = false;
+    _mamCatchingUp = false;
+    _mamLoadingCompleter?.complete();
+    _mamLoadingCompleter = null;
   }
 
   Future<void> _hydrateLatestFromMam(Chat chat) async {
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _localMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
-    _mamLoading = true;
+    _beginMamLoad();
     try {
       final result = await _messageService.fetchLatestFromArchive(
         jid: chat.remoteJid,
         pageSize: messageBatchSize,
         isMuc: chat.type == ChatType.groupChat,
       );
-      await _updateMamStateFromResult(chat, result);
+      await _updateMamStateFromResult(
+        chat,
+        result,
+        direction: MamPageDirection.before,
+      );
     } on Exception catch (error, stackTrace) {
       _log.fine(
         'Failed to hydrate MAM for chat ${chat.jid}',
@@ -357,31 +389,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
     }
-    _mamLoading = false;
+    _finishMamLoad();
   }
 
   Future<void> _updateMamStateFromResult(
     Chat chat,
     MamPageResult result, {
     bool updateTotal = true,
+    MamPageDirection direction = MamPageDirection.before,
   }) async {
-    _mamBeforeId = result.lastId ?? result.firstId ?? _mamBeforeId;
+    if (direction == MamPageDirection.before) {
+      _mamBeforeId = result.firstId ?? _mamBeforeId ?? result.lastId;
+    } else {
+      _mamBeforeId ??= result.firstId ?? result.lastId;
+    }
     if (!updateTotal) {
+      if (result.complete) {
+        _mamComplete = true;
+      }
       return;
     }
 
     _mamTotalCount = result.count ?? _mamTotalCount;
-    if (_mamTotalCount == null && !result.complete) {
+    if (_mamTotalCount == null) {
       _mamComplete = _mamComplete || result.complete;
       return;
     }
-
-    final total = _mamTotalCount;
+    final total = _mamTotalCount!;
     final localCount = await _localMessageCount(chat);
-    if (total == null) {
-      _mamComplete = _mamComplete || result.complete;
-      return;
-    }
     _mamComplete = _mamComplete || result.complete || localCount >= total;
   }
 

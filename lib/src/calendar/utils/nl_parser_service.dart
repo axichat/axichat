@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'nl_schedule_adapter.dart';
 import 'schedule_parser.dart';
+import 'task_share_formatter.dart';
 
 /// Lightweight runtime service that wires the offline `ScheduleParser`
 /// into the app through `NlScheduleAdapter`. It centralizes timezone
@@ -40,6 +41,15 @@ class NlScheduleParserService {
     ParseContext? context,
   }) async {
     final ctx = context ?? await _parseContext();
+    final NlAdapterResult? shared = TaskShareDecoder.tryDecode(
+      input: input,
+      adapter: _adapter,
+      context: ctx,
+    );
+    if (shared != null) {
+      _maybeLogNotes(shared);
+      return shared;
+    }
     final parser = _adapter.buildParser(ctx);
     final ScheduleItem parsed = parser.parse(input);
     final result = _adapter.mapToAppTypes(parsed, ctx: ctx);

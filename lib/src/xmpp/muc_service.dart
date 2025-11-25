@@ -258,11 +258,14 @@ mixin MucService on XmppBase, BaseStreamService {
     required String roomJid,
     required String nickname,
   }) async {
+    final trimmed = nickname.trim();
+    _roomNicknames[_roomKey(roomJid)] = trimmed;
     await joinRoom(
       roomJid: roomJid,
-      nickname: nickname,
+      nickname: trimmed,
       maxHistoryStanzas: 0,
     );
+    await _applyLocalNickname(roomJid: roomJid, nickname: trimmed);
   }
 
   Future<void> acceptRoomInvite({
@@ -302,6 +305,9 @@ mixin MucService on XmppBase, BaseStreamService {
   }
 
   void trackOccupantsFromMessages(String roomJid, Iterable<Message> messages) {
+    final key = _roomKey(roomJid);
+    final selfOccupantId = _roomStates[key]?.myOccupantId;
+    final preferredSelfNick = _roomNicknames[key];
     for (final message in messages) {
       final nick = _nickFromSender(message.senderJid) ??
           _nickFromSender(message.occupantID ?? '');
@@ -312,10 +318,15 @@ mixin MucService on XmppBase, BaseStreamService {
         nick: nick,
       );
       if (occupantId == null) continue;
+      final resolvedNick = selfOccupantId != null &&
+              occupantId == selfOccupantId &&
+              preferredSelfNick?.isNotEmpty == true
+          ? preferredSelfNick!
+          : nick;
       _upsertOccupant(
         roomJid: roomJid,
         occupantId: occupantId,
-        nick: nick,
+        nick: resolvedNick,
       );
     }
   }
@@ -607,5 +618,43 @@ mixin MucService on XmppBase, BaseStreamService {
     );
     final sent = await _connection.sendMessage(stanza);
     if (!sent) throw XmppMessageException();
+  }
+
+  Future<void> _applyLocalNickname({
+    required String roomJid,
+    required String nickname,
+  }) async {
+    final key = _roomKey(roomJid);
+    _roomNicknames[key] = nickname;
+    final existing = _roomStates[key];
+    final myOccupantId = existing?.myOccupantId;
+    final currentOccupant =
+        myOccupantId == null ? null : existing?.occupants[myOccupantId];
+    if (existing != null) {
+      final occupantId = _resolveOccupantId(
+        occupantId: myOccupantId != null && myOccupantId.startsWith('$key/')
+            ? null
+            : myOccupantId,
+        roomJid: roomJid,
+        nick: nickname,
+      );
+      _upsertOccupant(
+        roomJid: roomJid,
+        occupantId: occupantId ?? '$key/$nickname',
+        nick: nickname,
+        realJid: currentOccupant?.realJid,
+        affiliation: currentOccupant?.affiliation,
+        role: currentOccupant?.role,
+        isPresent: currentOccupant?.isPresent,
+      );
+    }
+    await _dbOp<XmppDatabase>(
+      (db) async {
+        final chat = await db.getChat(roomJid);
+        if (chat != null && chat.myNickname != nickname) {
+          await db.updateChat(chat.copyWith(myNickname: nickname));
+        }
+      },
+    );
   }
 }

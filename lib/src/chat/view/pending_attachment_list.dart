@@ -414,6 +414,8 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final errorLabel =
+        message?.isNotEmpty == true ? message! : 'Unable to send attachment.';
     return Positioned.fill(
       child: ClipRRect(
         borderRadius: borderRadius,
@@ -424,43 +426,43 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(
-                  LucideIcons.triangleAlert,
-                  size: 16,
-                  color: colors.destructiveForeground,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message ?? 'Unable to send attachment.',
-                  style: context.textTheme.small.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colors.destructiveForeground,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  fileName,
-                  style: context.textTheme.small.copyWith(
-                    color: colors.destructiveForeground.withValues(alpha: 0.9),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 8,
-                  runSpacing: 6,
+                Row(
                   children: [
-                    _PendingAttachmentActionButton(
+                    Icon(
+                      LucideIcons.triangleAlert,
+                      size: 14,
+                      color: colors.destructiveForeground,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Tooltip(
+                        message: '$errorLabel ($fileName)',
+                        child: Text(
+                          errorLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textTheme.small.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colors.destructiveForeground,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _PendingAttachmentOverlayAction(
                       icon: LucideIcons.refreshCcw,
-                      label: 'Retry',
+                      tooltip: 'Retry upload',
                       onPressed: onRetry,
                     ),
-                    _PendingAttachmentActionButton(
+                    _PendingAttachmentOverlayAction(
                       icon: LucideIcons.x,
-                      label: 'Remove',
+                      tooltip: 'Remove attachment',
                       onPressed: onRemove,
                     ),
                   ],
@@ -470,6 +472,40 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PendingAttachmentOverlayAction extends StatelessWidget {
+  const _PendingAttachmentOverlayAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  static const double _buttonSize = 20;
+  static const double _tapTargetSize = 26;
+  static const double _iconSize = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    return AxiIconButton(
+      iconData: icon,
+      tooltip: tooltip,
+      onPressed: onPressed,
+      buttonSize: _buttonSize,
+      tapTargetSize: _tapTargetSize,
+      iconSize: _iconSize,
+      backgroundColor: colors.destructiveForeground.withValues(alpha: 0.12),
+      borderColor: colors.destructiveForeground.withValues(alpha: 0.4),
+      color: colors.destructiveForeground,
+      cornerRadius: 10,
+      borderWidth: 1,
     );
   }
 }

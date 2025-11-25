@@ -36,6 +36,7 @@ class RecipientChipsBar extends StatefulWidget {
     this.collapsedByDefault = false,
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
+    this.horizontalPadding = 16,
   });
 
   final List<ComposerRecipient> recipients;
@@ -47,6 +48,7 @@ class RecipientChipsBar extends StatefulWidget {
   final bool collapsedByDefault;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
+  final double horizontalPadding;
 
   @override
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
@@ -159,9 +161,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           _barCollapsed ? _collapsedHeaderPadding : _expandedHeaderPadding,
     );
     final bodyPadding = EdgeInsets.fromLTRB(
-      16,
+      widget.horizontalPadding,
       _barCollapsed ? _collapsedBodyPadding : _expandedBodyPadding,
-      16,
+      widget.horizontalPadding,
       _barCollapsed ? _collapsedBodyPadding : 12,
     );
     final headerStyle = theme.textTheme.labelSmall?.copyWith(
