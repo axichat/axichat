@@ -866,6 +866,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final attachmentsViaXmpp =
         hasQueuedAttachments && xmppRecipients.isNotEmpty;
     final requiresEmail = emailRecipients.isNotEmpty || attachmentsViaEmail;
+    final xmppBody = _composeXmppBody(
+      body: trimmedText,
+      subject: state.emailSubject,
+    );
+    final hasXmppBody = xmppBody.isNotEmpty;
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
@@ -951,33 +956,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emailSendSucceeded = true;
         }
       }
-      if (xmppRecipients.isNotEmpty) {
-        final xmppBody = _composeXmppBody(
-          body: trimmedText,
-          subject: state.emailSubject,
-        );
-        if (xmppBody.isNotEmpty) {
-          await _sendXmppFanOut(
-            recipients: xmppRecipients,
-            body: xmppBody,
-            quotedDraft: quotedDraft,
-          );
-          xmppSendSucceeded = true;
-        }
-      } else if (!requiresEmail && trimmedText.isNotEmpty) {
-        final sameChatQuote =
-            quotedDraft != null && quotedDraft.chatJid == chat.jid
-                ? quotedDraft
-                : null;
-        await _messageService.sendMessage(
-          jid: chat.jid,
-          text: trimmedText,
-          encryptionProtocol: chat.encryptionProtocol,
-          quotedMessage: sameChatQuote,
-          chatType: chat.type,
-        );
-        xmppSendSucceeded = true;
-      }
       if (attachmentsViaXmpp) {
         await _sendXmppAttachments(
           attachments: queuedAttachments,
@@ -985,6 +963,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           recipients: xmppRecipients,
           emit: emit,
           quotedDraft: quotedDraft,
+          caption: hasXmppBody ? xmppBody : null,
+        );
+        xmppSendSucceeded = true;
+      } else if (xmppRecipients.isNotEmpty && hasXmppBody) {
+        await _sendXmppFanOut(
+          recipients: xmppRecipients,
+          body: xmppBody,
+          quotedDraft: quotedDraft,
+        );
+        xmppSendSucceeded = true;
+      } else if (!requiresEmail && hasXmppBody) {
+        final sameChatQuote =
+            quotedDraft != null && quotedDraft.chatJid == chat.jid
+                ? quotedDraft
+                : null;
+        await _messageService.sendMessage(
+          jid: chat.jid,
+          text: xmppBody,
+          encryptionProtocol: chat.encryptionProtocol,
+          quotedMessage: sameChatQuote,
+          chatType: chat.type,
         );
         xmppSendSucceeded = true;
       }
@@ -1582,6 +1581,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
     Message? quotedDraft,
+    String? caption,
   }) async {
     final targets = <String, Chat>{};
     if (recipients.isEmpty) {
@@ -1598,13 +1598,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     for (final attachment in attachments) {
       var current = attachment;
-      if (current.status != PendingAttachmentStatus.uploading) {
-        current = current.copyWith(
-          status: PendingAttachmentStatus.uploading,
-          clearErrorMessage: true,
-        );
-        _replacePendingAttachment(current, emit);
-      }
+      final updatedAttachment = caption?.isNotEmpty == true
+          ? current.attachment.copyWith(caption: caption)
+          : current.attachment;
+      current = current.copyWith(
+        attachment: updatedAttachment,
+        status: PendingAttachmentStatus.uploading,
+        clearErrorMessage: true,
+      );
+      _replacePendingAttachment(current, emit);
       try {
         for (final target in targets.values) {
           final quote = quotedDraft != null && quotedDraft.chatJid == target.jid

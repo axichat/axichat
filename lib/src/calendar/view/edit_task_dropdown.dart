@@ -1,3 +1,4 @@
+import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -446,6 +447,7 @@ class _EditTaskHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterLg,
@@ -462,11 +464,17 @@ class _EditTaskHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            color: calendarSubtitleColor,
+          AxiIconButton(
+            iconData: Icons.close,
             tooltip: 'Close',
             onPressed: onClose,
+            color: calendarSubtitleColor,
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            iconSize: 18,
+            buttonSize: 34,
+            tapTargetSize: 40,
+            cornerRadius: 12,
           ),
         ],
       ),

@@ -582,22 +582,29 @@ class _CalendarDateHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
     return Container(
       padding: calendarPaddingXl,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
+          AxiIconButton(
+            iconData: Icons.chevron_left,
+            tooltip: 'Previous date',
             onPressed: onPrevious,
-            icon: const Icon(Icons.chevron_left),
+            backgroundColor: colors.card,
+            borderColor: colors.border,
           ),
           Text(
             label,
             style: calendarTitleTextStyle,
           ),
-          IconButton(
+          AxiIconButton(
+            iconData: Icons.chevron_right,
+            tooltip: 'Next date',
             onPressed: onNext,
-            icon: const Icon(Icons.chevron_right),
+            backgroundColor: colors.card,
+            borderColor: colors.border,
           ),
         ],
       ),

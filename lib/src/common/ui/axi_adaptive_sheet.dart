@@ -1,4 +1,5 @@
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -23,6 +24,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
 }) {
   final commandSurface =
       EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+  final scheme = ShadTheme.of(context).colorScheme;
 
   if (commandSurface == CommandSurface.sheet) {
     return showModalBottomSheet<T>(
@@ -32,10 +34,22 @@ Future<T?> showAdaptiveBottomSheet<T>({
       showDragHandle: showDragHandle,
       enableDrag: enableDrag,
       isDismissible: isDismissible,
-      backgroundColor: backgroundColor,
+      backgroundColor: Colors.transparent,
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
-      builder: builder,
+      builder: (sheetContext) {
+        final Widget child = builder(sheetContext);
+        final double bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: AxiModalSurface(
+            backgroundColor: backgroundColor ?? scheme.card,
+            borderColor: scheme.border,
+            padding: const EdgeInsets.all(16),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -71,9 +85,62 @@ Future<T?> showAdaptiveBottomSheet<T>({
           useSafeArea ? SafeArea(child: constrainedChild) : constrainedChild;
       return Dialog(
         insetPadding: dialogInsets,
-        backgroundColor: resolvedBackground,
-        child: wrappedChild,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        child: AxiModalSurface(
+          backgroundColor: resolvedBackground,
+          borderColor: scheme.border,
+          padding: const EdgeInsets.all(16),
+          child: wrappedChild,
+        ),
       );
     },
   );
+}
+
+class AxiModalSurface extends StatelessWidget {
+  const AxiModalSurface({
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.backgroundColor,
+    this.borderColor,
+    this.cornerRadius = 18,
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color? backgroundColor;
+  final Color? borderColor;
+  final double cornerRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = ShadTheme.of(context).colorScheme;
+    final shape = SquircleBorder(
+      cornerRadius: cornerRadius,
+      side: BorderSide(color: borderColor ?? scheme.border),
+    );
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: shape),
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: backgroundColor ?? scheme.card,
+          shape: shape,
+          shadows: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 18,
+              offset: Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
+      ),
+    );
+  }
 }

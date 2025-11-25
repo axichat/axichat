@@ -1,8 +1,9 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class AxiRailDestination {
   const AxiRailDestination({
@@ -14,6 +15,39 @@ class AxiRailDestination {
   final IconData icon;
   final String label;
   final int badgeCount;
+}
+
+class _RailBadge extends StatelessWidget {
+  const _RailBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final text = count > 99 ? '99+' : '$count';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colors.background,
+          width: 1.5,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          text,
+          style: context.textTheme.small.copyWith(
+            color: colors.primaryForeground,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Desktop-friendly navigation rail that matches Axichat styling instead of the
@@ -52,21 +86,16 @@ class AxiNavigationRail extends StatelessWidget {
     // Fixed width keeps labels readable and avoids the vertical text shown by
     // the stock rail when space is tight.
     const double expandedWidth = 216;
-    const double collapsedWidth = 96;
+    const double collapsedWidth = 72;
     final double railWidth = collapsed ? collapsedWidth : expandedWidth;
     final int safeIndex = destinations.isEmpty
         ? 0
         : selectedIndex.clamp(0, destinations.length - 1);
     final Color surfaceColor = backgroundColor ?? colors.background;
-    final Widget? collapseControl = onToggleCollapse == null
-        ? null
-        : AxiIconButton(
-            iconData:
-                collapsed ? LucideIcons.chevronRight : LucideIcons.chevronLeft,
-            tooltip: collapsed ? 'Expand menu' : 'Collapse menu',
-            onPressed: onToggleCollapse,
-          );
-    return Container(
+    final animationDuration = context.read<SettingsCubit>().animationDuration;
+    return AnimatedContainer(
+      duration: animationDuration,
+      curve: Curves.easeInOutCubic,
       width: railWidth,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
@@ -78,7 +107,7 @@ class AxiNavigationRail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (showTitle || collapseControl != null) ...[
+          if (showTitle) ...[
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: collapsed ? 4 : 6,
@@ -89,8 +118,9 @@ class AxiNavigationRail extends StatelessWidget {
                     Expanded(
                       child: Text(
                         appDisplayName,
-                        style: context.textTheme.large.copyWith(
+                        style: context.textTheme.h3.copyWith(
                           fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
                           color: colors.foreground,
                         ),
                         maxLines: 1,
@@ -99,7 +129,6 @@ class AxiNavigationRail extends StatelessWidget {
                     )
                   else if (showTitle)
                     const Spacer(),
-                  if (collapseControl != null) collapseControl,
                 ],
               ),
             ),
@@ -157,24 +186,18 @@ class _AxiNavigationRailItem extends StatelessWidget {
     final itemShape = SquircleBorder(
       cornerRadius: radius.topLeft.x,
       side: BorderSide(
-        color: selected
-            ? colors.primary.withValues(alpha: 0.5)
-            : Colors.transparent,
+        color: colors.border,
       ),
     );
 
-    Widget icon = Icon(
+    final Widget icon = Icon(
       destination.icon,
       color: iconColor,
       size: 20,
     );
-    if (destination.badgeCount > 0) {
-      icon = AxiBadge(
-        count: destination.badgeCount,
-        offset: const Offset(10, -6),
-        child: icon,
-      );
-    }
+    final Widget? badge = destination.badgeCount > 0
+        ? _RailBadge(count: destination.badgeCount)
+        : null;
 
     return Material(
       color: Colors.transparent,
@@ -198,28 +221,44 @@ class _AxiNavigationRailItem extends StatelessWidget {
           focusColor: Colors.transparent,
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: collapsed ? 10 : 12,
+              horizontal: collapsed ? 8 : 12,
               vertical: 12,
             ),
-            child: Row(
-              children: [
-                icon,
-                if (!collapsed) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      destination.label,
-                      style: context.textTheme.small.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
+            child: collapsed
+                ? Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      icon,
+                      if (badge != null)
+                        Positioned(
+                          top: -6,
+                          right: -8,
+                          child: badge,
+                        ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      icon,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          destination.label,
+                          style: context.textTheme.small.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                      if (badge != null) ...[
+                        const SizedBox(width: 8),
+                        badge,
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
           ),
         ),
       ),

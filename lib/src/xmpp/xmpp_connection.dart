@@ -70,6 +70,10 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.blockingManager);
       case == mox.CSIManager:
         return getManagerById(mox.csiManager);
+      case == mox.HttpFileUploadManager:
+        return getManagerById(mox.httpFileUploadManager);
+      case == mox.FileUploadNotificationManager:
+        return getManagerById(mox.fileUploadNotificationManager);
       default:
         return null;
     }

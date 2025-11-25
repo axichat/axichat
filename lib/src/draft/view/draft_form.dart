@@ -643,8 +643,8 @@ class _DraftFormState extends State<DraftForm> {
               Positioned(
                 top: 8,
                 right: 8,
-                child: IconButton(
-                  icon: const Icon(LucideIcons.x),
+                child: AxiIconButton(
+                  iconData: LucideIcons.x,
                   tooltip: 'Close',
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
@@ -851,40 +851,21 @@ class _DraftComposerIconButton extends StatelessWidget {
     final iconColor = iconColorOverride ??
         (enabled ? colors.foreground : colors.mutedForeground);
     final borderColor = borderColorOverride ?? colors.border;
-    final button = IconButton(
-      icon: Icon(icon, size: 24, color: iconColor),
-      tooltip: tooltip,
-      onPressed: onPressed,
-      splashRadius: _draftComposerControlExtent / 2,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(
-        minWidth: _draftComposerControlExtent,
-        minHeight: _draftComposerControlExtent,
-      ),
-      visualDensity: VisualDensity.compact,
-    );
-    final decorated = DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: SquircleBorder(
-          cornerRadius: 16,
-          side: BorderSide(
-            color: borderColor,
-            width: 1.4,
-          ),
-        ),
-      ),
-      child: button,
-    );
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 400),
-      child: Semantics(
-        button: true,
-        enabled: enabled,
-        label: tooltip,
-        onTap: enabled ? onPressed : null,
-        child: decorated.withTapBounce(enabled: enabled),
+      child: AxiIconButton(
+        iconData: icon,
+        semanticLabel: tooltip,
+        onPressed: onPressed,
+        color: iconColor,
+        backgroundColor: colors.card,
+        borderColor: borderColor,
+        borderWidth: 1.4,
+        cornerRadius: 16,
+        buttonSize: _draftComposerControlExtent,
+        tapTargetSize: _draftComposerControlExtent,
+        iconSize: 24,
       ),
     );
   }

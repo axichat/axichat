@@ -1057,39 +1057,31 @@ class _ChatActionsToggle extends StatelessWidget {
     final textScaler = MediaQuery.of(context).textScaler;
     double scaled(double value) => textScaler.scale(value);
     final iconSize = scaled(20);
-    final splashRadius = scaled(22);
     final minButtonSize = scaled(40);
     final borderWidth = scaled(1.4);
+    final icon = expanded ? LucideIcons.x : LucideIcons.ellipsisVertical;
+    final tooltip = expanded ? 'Hide chat actions' : 'Show chat actions';
+    final button = AxiIconButton(
+      iconData: icon,
+      tooltip: tooltip,
+      semanticLabel: tooltip,
+      onPressed: onPressed,
+      color: colors.mutedForeground,
+      backgroundColor: backgroundColor,
+      borderColor: colors.border,
+      borderWidth: borderWidth,
+      cornerRadius: scaled(14),
+      buttonSize: minButtonSize,
+      tapTargetSize: minButtonSize,
+      iconSize: iconSize,
+    );
     return Semantics(
       container: true,
       button: true,
       toggled: expanded,
-      label: expanded ? 'Hide chat actions' : 'Show chat actions',
+      label: tooltip,
       onTap: onPressed,
-      child: DecoratedBox(
-        decoration: ShapeDecoration(
-          color: backgroundColor,
-          shape: SquircleBorder(
-            cornerRadius: scaled(14),
-            side: BorderSide(color: colors.border, width: borderWidth),
-          ),
-        ),
-        child: IconButton(
-          iconSize: iconSize,
-          splashRadius: splashRadius,
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: BoxConstraints(
-            minWidth: minButtonSize,
-            minHeight: minButtonSize,
-          ),
-          icon: Icon(
-            expanded ? LucideIcons.x : LucideIcons.ellipsisVertical,
-            color: colors.mutedForeground,
-          ),
-          onPressed: onPressed,
-        ).withTapBounce(),
-      ),
+      child: button,
     );
   }
 }

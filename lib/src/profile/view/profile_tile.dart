@@ -74,9 +74,6 @@ class ProfileTile extends StatelessWidget {
               const ProfileRoute().location,
               extra: context.read,
             ),
-            shape: Border(
-              top: BorderSide(color: context.colorScheme.border),
-            ),
             trailing: SizedBox(
               width: 220,
               child: FittedBox(

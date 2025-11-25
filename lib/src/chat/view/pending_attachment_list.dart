@@ -354,10 +354,12 @@ class _PendingAttachmentActionBar extends StatelessWidget {
     if (!isFailed) {
       return Align(
         alignment: Alignment.centerRight,
-        child: IconButton(
+        child: AxiIconButton(
+          iconData: LucideIcons.x,
           tooltip: 'Remove attachment',
           onPressed: onRemove,
-          icon: const Icon(LucideIcons.x),
+          backgroundColor: context.colorScheme.card,
+          borderColor: context.colorScheme.border,
         ),
       );
     }
@@ -445,15 +447,16 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     _PendingAttachmentActionButton(
                       icon: LucideIcons.refreshCcw,
                       label: 'Retry',
                       onPressed: onRetry,
                     ),
-                    const SizedBox(width: 8),
                     _PendingAttachmentActionButton(
                       icon: LucideIcons.x,
                       label: 'Remove',
