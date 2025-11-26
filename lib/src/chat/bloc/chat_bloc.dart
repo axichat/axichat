@@ -1175,6 +1175,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emit: emit,
       );
     } finally {
+      if ((emailSendSucceeded || xmppSendSucceeded) &&
+          queuedAttachments.isNotEmpty) {
+        _removePendingAttachmentsByIds(
+          queuedAttachments.map((pending) => pending.id),
+          emit,
+        );
+      }
       if (state.quoting != null) {
         emit(state.copyWith(quoting: null));
       }
@@ -2439,6 +2446,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     final updated = state.pendingAttachments
         .where((pending) => pending.id != attachmentId)
+        .toList();
+    if (updated.length == state.pendingAttachments.length) return;
+    emit(state.copyWith(pendingAttachments: updated));
+  }
+
+  void _removePendingAttachmentsByIds(
+    Iterable<String> attachmentIds,
+    Emitter<ChatState> emit,
+  ) {
+    final ids = attachmentIds.toSet();
+    if (ids.isEmpty) return;
+    final updated = state.pendingAttachments
+        .where((pending) => !ids.contains(pending.id))
         .toList();
     if (updated.length == state.pendingAttachments.length) return;
     emit(state.copyWith(pendingAttachments: updated));

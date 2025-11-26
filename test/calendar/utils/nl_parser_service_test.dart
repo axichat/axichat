@@ -33,6 +33,47 @@ void main() {
     expect(snapshot['hasStart'], isTrue);
   });
 
+  group('task share formatting', () {
+    test('omits current-year suffix and avoids repeating same-day date', () {
+      final DateTime reference = DateTime.utc(2024, 3, 1);
+      final DateTime start = DateTime.utc(2024, 3, 15, 9);
+      final CalendarTask task = CalendarTask(
+        id: 't1',
+        title: 'Team sync',
+        scheduledTime: start,
+        duration: const Duration(minutes: 90),
+        createdAt: reference,
+        modifiedAt: reference,
+      );
+
+      final String shareText = task.toShareText(now: reference);
+
+      expect(shareText, isNot(contains('2024')));
+      expect(shareText, contains('on Mar 15 from 9:00 AM to 10:30 AM'));
+      expect(RegExp(r'Mar 15').allMatches(shareText).length, 1);
+    });
+
+    test('keeps explicit year for non-current schedules', () {
+      final DateTime reference = DateTime.utc(2024, 3, 1);
+      final DateTime start = DateTime.utc(2025, 3, 15, 9);
+      final CalendarTask task = CalendarTask(
+        id: 't2',
+        title: 'Future offsite',
+        scheduledTime: start,
+        duration: const Duration(minutes: 90),
+        createdAt: reference,
+        modifiedAt: reference,
+      );
+
+      final String shareText = task.toShareText(now: reference);
+
+      expect(
+        shareText,
+        contains('on Mar 15, 2025 from 9:00 AM to 10:30 AM'),
+      );
+    });
+  });
+
   test('shared task text round-trips task fields', () async {
     tzdata.initializeTimeZones();
     final ctx = ParseContext(
@@ -77,7 +118,7 @@ void main() {
       occurrenceOverrides: overrides,
     );
 
-    final String shareText = task.toShareText();
+    final String shareText = task.toShareText(now: ctx.reference);
     final NlScheduleParserService service = NlScheduleParserService();
     final NlAdapterResult result = await service.parse(shareText, context: ctx);
     final CalendarTask parsed = result.task;
@@ -105,5 +146,36 @@ void main() {
     expect(parsedOverride?.scheduledTime, sourceOverride.scheduledTime);
     expect(parsedOverride?.duration, sourceOverride.duration);
     expect(parsedOverride?.location, sourceOverride.location);
+  });
+
+  test('round-trips omitted-year share text in current year', () async {
+    tzdata.initializeTimeZones();
+    final DateTime reference = DateTime.utc(2024, 5, 1);
+    final ParseContext ctx = ParseContext(
+      location: tz.UTC,
+      timezoneId: 'UTC',
+      reference: reference,
+    );
+
+    final DateTime start = DateTime.utc(2024, 8, 20, 16);
+    final CalendarTask task = CalendarTask(
+      id: 't3',
+      title: 'Quarterly review',
+      scheduledTime: start,
+      duration: const Duration(hours: 2),
+      createdAt: reference,
+      modifiedAt: reference,
+    );
+
+    final String shareText = task.toShareText(now: reference);
+    expect(shareText, isNot(contains('2024')));
+    expect(shareText, contains('on Aug 20 from 4:00 PM to 6:00 PM'));
+
+    final NlScheduleParserService service = NlScheduleParserService();
+    final NlAdapterResult result = await service.parse(shareText, context: ctx);
+
+    expect(result.task.scheduledTime, task.scheduledTime);
+    expect(result.task.displayEnd, task.displayEnd);
+    expect(result.task.title, task.title);
   });
 }

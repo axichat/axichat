@@ -69,9 +69,32 @@ class _PeerCapabilities {
     supportsMarkers: false,
     supportsReceipts: false,
   );
+
+  static const supportsAll = _PeerCapabilities(
+    supportsMarkers: true,
+    supportsReceipts: true,
+  );
 }
 
 mixin MessageService on XmppBase, BaseStreamService, MucService {
+  bool _isMucChatJid(String jid) {
+    try {
+      return mox.JID.fromString(jid).domain == mucServiceHost;
+    } on Exception {
+      return false;
+    }
+  }
+
+  String _chatStateMessageType(String jid) {
+    if (!_isMucChatJid(jid)) return 'chat';
+    try {
+      final parsed = mox.JID.fromString(jid);
+      return parsed.resource.isEmpty ? 'groupchat' : 'chat';
+    } on Exception {
+      return 'chat';
+    }
+  }
+
   Stream<List<Message>> messageStreamForChat(
     String jid, {
     int start = 0,
@@ -654,6 +677,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         }
         throw XmppMessageException();
       }
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.markMessageAcked(message.stanzaID),
+        );
+      }
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send message ${message.stanzaID}',
@@ -713,7 +741,6 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         ? attachment.mimeType!
         : 'application/octet-stream';
     final slot = await _requestHttpUploadSlot(
-      uploadManager: uploadManager,
       filename: filename,
       sizeBytes: size,
       contentType: contentType,
@@ -826,23 +853,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<_UploadSlot> _requestHttpUploadSlot({
-    required mox.HttpFileUploadManager uploadManager,
     required String filename,
     required int sizeBytes,
     required String contentType,
   }) async {
+    final uploadTarget = httpUploadSupport.entityJid;
+    final maxSize = httpUploadSupport.maxFileSizeBytes;
+    if (maxSize != null && sizeBytes > maxSize) {
+      throw XmppFileTooBigException(maxSize);
+    }
+    if (uploadTarget == null) {
+      throw XmppUploadNotSupportedException();
+    }
     try {
-      final slotResult = await uploadManager.requestUploadSlot(
-        filename,
-        sizeBytes,
-        contentType: contentType,
-      );
-      if (!slotResult.isType<mox.HttpFileUploadError>()) {
-        return _UploadSlot.fromMox(slotResult.get<mox.HttpFileUploadSlot>());
-      }
-      final error = slotResult.get<mox.HttpFileUploadError>();
-      return _handleUploadSlotError(
-        error: error,
+      return await _requestUploadSlotViaStanza(
+        uploadJid: uploadTarget,
         filename: filename,
         sizeBytes: sizeBytes,
         contentType: contentType,
@@ -868,29 +893,69 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     }
   }
 
-  Future<_UploadSlot> _handleUploadSlotError({
-    required mox.HttpFileUploadError error,
+  Future<_UploadSlot> _requestUploadSlotViaStanza({
+    required String uploadJid,
     required String filename,
     required int sizeBytes,
     required String contentType,
   }) async {
-    if (error is mox.FileTooBigError) {
-      final maxSize =
-          _maxUploadSize(error) ?? httpUploadSupport.maxFileSizeBytes;
-      throw XmppFileTooBigException(maxSize);
+    final response = await _connection.sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          to: uploadJid,
+          type: 'get',
+          children: [
+            mox.XMLNode.xmlns(
+              tag: 'request',
+              xmlns: mox.httpFileUploadXmlns,
+              attributes: {
+                'filename': filename,
+                'size': sizeBytes.toString(),
+                'content-type': contentType,
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+    if (response == null) {
+      throw XmppUploadUnavailableException();
     }
-    if (error is mox.NoEntityKnownError) {
-      throw XmppUploadNotSupportedException();
+    final type = response.attributes['type']?.toString();
+    if (type != 'result') {
+      final error = response.firstTag('error');
+      final condition = error?.firstTagByXmlns(mox.fullStanzaXmlns)?.tag;
+      if (condition == 'not-acceptable') {
+        throw XmppFileTooBigException(httpUploadSupport.maxFileSizeBytes);
+      }
+      if (condition == 'service-unavailable') {
+        throw XmppUploadMisconfiguredException();
+      }
+      throw XmppUploadUnavailableException();
     }
-    if (error is mox.UnknownHttpFileUploadError) {
-      await _logHttpUploadServiceError(
-        filename: filename,
-        sizeBytes: sizeBytes,
-        contentType: contentType,
-      );
+    final slot = response.firstTag('slot', xmlns: mox.httpFileUploadXmlns);
+    final putUrl = slot?.firstTag('put')?.attributes['url']?.toString();
+    final getUrl = slot?.firstTag('get')?.attributes['url']?.toString();
+    if (putUrl == null || getUrl == null) {
       throw XmppUploadMisconfiguredException();
     }
-    throw XmppUploadUnavailableException();
+    final headers = Map<String, String>.fromEntries(
+      slot
+              ?.findTags('header')
+              .map(
+                (tag) => MapEntry(
+                  tag.attributes['name']?.toString() ?? '',
+                  tag.innerText(),
+                ),
+              )
+              .where((entry) => entry.key.isNotEmpty) ??
+          const Iterable<MapEntry<String, String>>.empty(),
+    );
+    return _UploadSlot(
+      getUrl: getUrl,
+      putUrl: putUrl,
+      headers: headers,
+    );
   }
 
   Future<void> _uploadFileToSlot(
@@ -936,23 +1001,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
-  int? _maxUploadSize(mox.FileTooBigError error) {
-    final dynamic dynamicError = error;
-    try {
-      return dynamicError.maxSize as int?;
-    } catch (_) {
-      try {
-        return dynamicError.maxFileSize as int?;
-      } catch (_) {
-        try {
-          return dynamicError.max as int?;
-        } catch (_) {
-          return null;
-        }
-      }
-    }
-  }
-
+  // ignore: unused_element
   Future<void> _logHttpUploadServiceError({
     required String filename,
     required int sizeBytes,
@@ -1096,6 +1145,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<bool> _canSendChatMarkers({required String to}) async {
+    if (_isMucChatJid(to)) return true;
     if (to == myJid) return false;
     final capabilities = await _capabilitiesFor(to);
     return capabilities.supportsMarkers;
@@ -1103,17 +1153,19 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
 
   Future<void> sendReadMarker(String to, String stanzaID) async {
     if (!await _canSendChatMarkers(to: to)) return;
-
+    final messageType = _chatStateMessageType(to);
     _connection.sendChatMarker(
       to: to,
       stanzaID: stanzaID,
       marker: mox.ChatMarker.received,
+      messageType: messageType,
     );
 
     await _connection.sendChatMarker(
       to: to,
       stanzaID: stanzaID,
       marker: mox.ChatMarker.displayed,
+      messageType: messageType,
     );
 
     await _dbOp<XmppDatabase>(
@@ -1469,13 +1521,18 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     if (id == null) return;
 
     final peer = event.from.toBare().toString();
-    final capabilities = await _capabilitiesFor(peer);
+    final isMuc = event.type == 'groupchat';
+    final target = isMuc ? event.from.toString() : peer;
+    final messageType = _chatStateMessageType(target);
+    final capabilities =
+        isMuc ? _PeerCapabilities.supportsAll : await _capabilitiesFor(peer);
 
     if (markable && capabilities.supportsMarkers) {
       await _connection.sendChatMarker(
-        to: peer,
+        to: target,
         stanzaID: id,
         marker: mox.ChatMarker.received,
+        messageType: messageType,
       );
 
       await _dbOp<XmppDatabase>(
@@ -1490,11 +1547,12 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       await _connection.sendMessage(
         mox.MessageEvent(
           _myJid!,
-          event.from.toBare(),
+          mox.JID.fromString(target),
           false,
           mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
             mox.MessageDeliveryReceivedData(id),
           ]),
+          type: messageType,
         ),
       );
 
@@ -1896,6 +1954,7 @@ class _UploadSlot {
     Map<String, String>? headers,
   }) : headers = headers ?? const {};
 
+  // ignore: unused_element
   factory _UploadSlot.fromMox(mox.HttpFileUploadSlot slot) {
     return _UploadSlot(
       getUrl: slot.getUrl.toString(),

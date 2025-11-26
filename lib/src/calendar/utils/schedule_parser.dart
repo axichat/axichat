@@ -404,7 +404,15 @@ class ScheduleParser {
     if (results.isNotEmpty) {
       final withTime =
           results.where((r) => r.start.isCertain(Component.hour)).toList();
-      best = withTime.isNotEmpty ? withTime.last : results.last;
+      final withDate =
+          withTime.where((r) => r.start.isCertain(Component.day)).toList();
+      if (withDate.isNotEmpty) {
+        best = withDate.last;
+      } else if (withTime.isNotEmpty) {
+        best = withTime.last;
+      } else {
+        best = results.last;
+      }
     }
 
     tz.TZDateTime? start;

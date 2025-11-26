@@ -105,12 +105,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       return;
     }
     emit(state.copyWith(creationStatus: RequestStatus.loading));
-    final mucService =
-        _chatsService is MucService ? _chatsService as MucService : null;
-    if (mucService == null) {
-      emit(state.copyWith(creationStatus: RequestStatus.failure));
-      return;
-    }
+    final mucService = _chatsService as MucService;
     try {
       final roomJid = await mucService.createRoom(
         name: title,

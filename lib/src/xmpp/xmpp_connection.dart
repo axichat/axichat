@@ -126,6 +126,7 @@ class XmppConnection extends mox.XmppConnection {
     required String to,
     required String stanzaID,
     required mox.ChatMarker marker,
+    String messageType = 'chat',
   }) async {
     if (getManager<mox.MessageManager>() case final mm?) {
       await mm.sendMessage(
@@ -133,6 +134,7 @@ class XmppConnection extends mox.XmppConnection {
         mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
           mox.ChatMarkerData(marker, stanzaID),
         ]),
+        type: messageType,
       );
       return true;
     }
@@ -162,11 +164,13 @@ class XmppConnection extends mox.XmppConnection {
   Future<void> sendChatState({
     required String jid,
     required mox.ChatState state,
+    String messageType = 'chat',
   }) async {
     if (getManager<mox.ChatStateManager>() case final cm?) {
       return await cm.sendChatState(
         state,
         jid,
+        messageType: messageType,
       );
     }
   }

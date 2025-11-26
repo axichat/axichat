@@ -12,10 +12,28 @@ class ChatTransportPreference {
   final bool isExplicit;
 }
 
-mixin ChatsService on XmppBase, BaseStreamService {
+mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   final Logger _chatLog = Logger('ChatsService');
+
+  bool _isMucChatJid(String jid) {
+    try {
+      return mox.JID.fromString(jid).domain == mucServiceHost;
+    } on Exception {
+      return false;
+    }
+  }
+
+  String _chatStateMessageType(String jid) {
+    if (!_isMucChatJid(jid)) return 'chat';
+    try {
+      final parsed = mox.JID.fromString(jid);
+      return parsed.resource.isEmpty ? 'groupchat' : 'chat';
+    } on Exception {
+      return 'chat';
+    }
+  }
 
   RegisteredStateKey _transportKeyFor(String jid) => _transportKeys.putIfAbsent(
         jid,
@@ -186,7 +204,12 @@ mixin ChatsService on XmppBase, BaseStreamService {
       _chatLog.fine('Skipping chat state for foreign domain: $jid');
       return;
     }
-    await _connection.sendChatState(state: state, jid: jid);
+    final messageType = _chatStateMessageType(jid);
+    await _connection.sendChatState(
+      state: state,
+      jid: jid,
+      messageType: messageType,
+    );
   }
 
   Future<void> sendTyping({
