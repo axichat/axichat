@@ -138,6 +138,7 @@ mixin MucService on XmppBase, BaseStreamService {
       nickname: resolvedNick,
       maxHistoryStanzas: maxHistoryStanzas,
     );
+    await _applyLocalNickname(roomJid: roomJid, nickname: resolvedNick);
   }
 
   Future<void> inviteUserToRoom({
@@ -630,24 +631,22 @@ mixin MucService on XmppBase, BaseStreamService {
     final myOccupantId = existing?.myOccupantId;
     final currentOccupant =
         myOccupantId == null ? null : existing?.occupants[myOccupantId];
-    if (existing != null) {
-      final occupantId = _resolveOccupantId(
-        occupantId: myOccupantId != null && myOccupantId.startsWith('$key/')
-            ? null
-            : myOccupantId,
-        roomJid: roomJid,
-        nick: nickname,
-      );
-      _upsertOccupant(
-        roomJid: roomJid,
-        occupantId: occupantId ?? '$key/$nickname',
-        nick: nickname,
-        realJid: currentOccupant?.realJid,
-        affiliation: currentOccupant?.affiliation,
-        role: currentOccupant?.role,
-        isPresent: currentOccupant?.isPresent,
-      );
-    }
+    final occupantId = _resolveOccupantId(
+      occupantId: myOccupantId != null && myOccupantId.startsWith('$key/')
+          ? null
+          : myOccupantId,
+      roomJid: roomJid,
+      nick: nickname,
+    );
+    _upsertOccupant(
+      roomJid: roomJid,
+      occupantId: occupantId ?? '$key/$nickname',
+      nick: nickname,
+      realJid: currentOccupant?.realJid,
+      affiliation: currentOccupant?.affiliation,
+      role: currentOccupant?.role,
+      isPresent: currentOccupant?.isPresent ?? false,
+    );
     await _dbOp<XmppDatabase>(
       (db) async {
         final chat = await db.getChat(roomJid);

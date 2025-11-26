@@ -1037,6 +1037,32 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     final RenderObject? surfaceObject =
         _surfaceKey.currentContext?.findRenderObject();
+    if (surfaceObject is RenderBox) {
+      final Offset surfaceOrigin = surfaceObject.localToGlobal(Offset.zero);
+      final Rect surfaceBounds = surfaceOrigin & surfaceObject.size;
+      if (!surfaceBounds.contains(details.globalPosition)) {
+        _handleSurfaceDragExit();
+        return;
+      }
+      final HitTestResult hitTest = HitTestResult();
+      final FlutterView? implicitView =
+          RendererBinding.instance.platformDispatcher.implicitView;
+      if (implicitView == null) {
+        _handleSurfaceDragExit();
+        return;
+      }
+      RendererBinding.instance.hitTestInView(
+        hitTest,
+        details.globalPosition,
+        implicitView.viewId,
+      );
+      final bool hitSurface =
+          hitTest.path.any((entry) => identical(entry.target, surfaceObject));
+      if (!hitSurface) {
+        _handleSurfaceDragExit();
+        return;
+      }
+    }
     if (surfaceObject is RenderCalendarSurface) {
       final DragPreview? preview =
           surfaceObject.previewForGlobalPosition(details.globalPosition);

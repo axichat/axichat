@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/models/pending_attachment.dart';
@@ -862,7 +863,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 }
 
-class _DraftTaskDropRegion extends StatelessWidget {
+class _DraftTaskDropRegion extends StatefulWidget {
   const _DraftTaskDropRegion({
     required this.child,
     this.onTaskDropped,
@@ -872,18 +873,63 @@ class _DraftTaskDropRegion extends StatelessWidget {
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
 
   @override
+  State<_DraftTaskDropRegion> createState() => _DraftTaskDropRegionState();
+}
+
+class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
+  CalendarDragPayload? _hoverPayload;
+  Offset? _localPosition;
+
+  RenderBox? get _box => context.findRenderObject() as RenderBox?;
+
+  void _updateHover(DragTargetDetails<CalendarDragPayload> details) {
+    final RenderBox? box = _box;
+    final Offset local =
+        box != null ? box.globalToLocal(details.offset) : details.offset;
+    setState(() {
+      _hoverPayload = details.data;
+      _localPosition = local;
+    });
+  }
+
+  void _handleLeave(CalendarDragPayload? payload) {
+    if (_hoverPayload == null) {
+      return;
+    }
+    setState(() {
+      _hoverPayload = null;
+      _localPosition = null;
+    });
+  }
+
+  void _handleDrop(DragTargetDetails<CalendarDragPayload> details) {
+    widget.onTaskDropped?.call(details.data);
+    _handleLeave(details.data);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (onTaskDropped == null) {
-      return child;
+    if (widget.onTaskDropped == null) {
+      return widget.child;
     }
     final colors = context.colorScheme;
     final borderRadius = context.radius;
     return DragTarget<CalendarDragPayload>(
-      onWillAcceptWithDetails: (_) => true,
-      onAcceptWithDetails: (details) => onTaskDropped?.call(details.data),
+      hitTestBehavior: HitTestBehavior.translucent,
+      onWillAcceptWithDetails: (details) {
+        _updateHover(details);
+        return true;
+      },
+      onMove: _updateHover,
+      onAcceptWithDetails: _handleDrop,
+      onLeave: _handleLeave,
       builder: (context, candidates, __) {
-        final hovering = candidates.isNotEmpty;
-        return AnimatedContainer(
+        final hovering = candidates.isNotEmpty || _hoverPayload != null;
+        final payload = _hoverPayload;
+        final Offset? anchor = _localPosition;
+        final RenderBox? box = _box;
+        final Size? regionSize = box?.size;
+        final Widget highlight = AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
@@ -894,9 +940,198 @@ class _DraftTaskDropRegion extends StatelessWidget {
             borderRadius: borderRadius,
             color: hovering ? colors.primary.withValues(alpha: 0.04) : null,
           ),
-          child: child,
+          child: widget.child,
+        );
+        if (payload == null || anchor == null || regionSize == null) {
+          return highlight;
+        }
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            highlight,
+            _TaskDragGhostOverlay(
+              payload: payload,
+              anchor: anchor,
+              regionSize: regionSize,
+            ),
+          ],
         );
       },
+    );
+  }
+}
+
+class _TaskDragGhostOverlay extends StatelessWidget {
+  const _TaskDragGhostOverlay({
+    required this.payload,
+    required this.anchor,
+    required this.regionSize,
+  });
+
+  final CalendarDragPayload payload;
+  final Offset anchor;
+  final Size regionSize;
+  static const double _defaultGhostWidth = 240;
+  static const double _defaultGhostHeight = 84;
+  static const double _minGhostWidth = 180;
+  static const double _maxGhostWidth = 360;
+  static const double _minGhostHeight = 64;
+  static const double _maxGhostHeight = 180;
+  static const double _pointerClampPadding = 0.25;
+
+  Size _ghostSize() {
+    final double width = payload.sourceBounds?.width ?? _defaultGhostWidth;
+    final double height = payload.sourceBounds?.height ?? _defaultGhostHeight;
+    return Size(
+      width.clamp(_minGhostWidth, _maxGhostWidth),
+      height.clamp(_minGhostHeight, _maxGhostHeight),
+    );
+  }
+
+  Offset _ghostOffset(Size ghostSize) {
+    final double pointerFraction =
+        (payload.pointerNormalizedX ?? 0.5).clamp(0.0, 1.0).toDouble();
+    final double pointerOffsetY =
+        (payload.pointerOffsetY ?? (ghostSize.height / 2))
+            .clamp(0.0, ghostSize.height)
+            .toDouble();
+    double left = anchor.dx - (ghostSize.width * pointerFraction);
+    double top = anchor.dy - pointerOffsetY;
+    final double minLeft = -ghostSize.width * _pointerClampPadding;
+    final double maxLeft =
+        regionSize.width - (ghostSize.width * (1 - _pointerClampPadding));
+    final double minTop = -ghostSize.height * _pointerClampPadding;
+    final double maxTop =
+        regionSize.height - (ghostSize.height * _pointerClampPadding);
+    left = left.clamp(minLeft, maxLeft);
+    top = top.clamp(minTop, maxTop);
+    return Offset(left, top);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Size ghostSize = _ghostSize();
+    final Offset offset = _ghostOffset(ghostSize);
+    return Positioned(
+      left: offset.dx,
+      top: offset.dy,
+      child: IgnorePointer(
+        child: _DraftTaskDragGhost(
+          payload: payload,
+          size: ghostSize,
+        ),
+      ),
+    );
+  }
+}
+
+class _DraftTaskDragGhost extends StatelessWidget {
+  const _DraftTaskDragGhost({
+    required this.payload,
+    required this.size,
+  });
+
+  final CalendarDragPayload payload;
+  final Size size;
+
+  String _timingLabel(BuildContext context) {
+    final CalendarTask task = payload.snapshot;
+    final DateTime? start = task.scheduledTime;
+    final DateTime? deadline = task.deadline;
+    if (start != null) {
+      return TimeFormatter.formatFriendlyDateTime(start);
+    }
+    if (deadline != null) {
+      return 'Due ${TimeFormatter.formatFriendlyDateTime(deadline)}';
+    }
+    return 'No schedule';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final CalendarTask task = payload.snapshot;
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    final materialScheme = Theme.of(context).colorScheme;
+    final String title =
+        task.title.trim().isEmpty ? 'Untitled task' : task.title.trim();
+    final String? description = task.description?.trim().isNotEmpty == true
+        ? task.description!.trim()
+        : null;
+    final borderRadius = context.radius;
+    return Material(
+      color: Colors.transparent,
+      elevation: 8,
+      borderRadius: borderRadius,
+      child: Container(
+        width: size.width,
+        constraints: BoxConstraints(minHeight: size.height),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.card.withValues(alpha: 0.96),
+          borderRadius: borderRadius,
+          border: Border.all(
+            color: colors.primary,
+            width: 1.25,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: materialScheme.shadow.withValues(alpha: 0.14),
+              blurRadius: 12,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.small.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colors.foreground,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  LucideIcons.calendarClock,
+                  size: 14,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    _timingLabel(context),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.muted.copyWith(
+                      color: colors.mutedForeground,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (description != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.muted.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
