@@ -413,6 +413,14 @@ class XmppPresenceManager extends mox.PresenceManager {
       tag: 'x',
     );
     if (mucUser == null) return false;
+    if (owner is MucService) {
+      final muc = owner as MucService;
+      final roomBare = jid.toBare().toString();
+      if (muc.hasLeftRoom(roomBare)) {
+        _log.fine('Ignoring presence for left room $roomBare');
+        return true;
+      }
+    }
     final item = _mucItemNode(mucUser);
     final affiliation = OccupantAffiliation.fromString(
       item?.attributes['affiliation'] as String?,
