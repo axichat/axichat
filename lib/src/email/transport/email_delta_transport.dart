@@ -532,13 +532,16 @@ class EmailDeltaTransport implements ChatTransport {
       await db.saveFileMetadata(metadata);
     }
     final displayBody = localBodyOverride ?? body;
+    final resolvedBody = (displayBody?.trim().isNotEmpty == true)
+        ? displayBody!.trim()
+        : (metadata == null ? null : _attachmentLabel(metadata));
     final resolvedTimestamp = timestamp ?? DateTime.timestamp();
     final message = Message(
       stanzaID: _stanzaId(msgId),
       senderJid: _selfJid,
       chatJid: chat.jid,
       timestamp: resolvedTimestamp,
-      body: displayBody,
+      body: resolvedBody,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
@@ -664,6 +667,27 @@ class EmailDeltaTransport implements ChatTransport {
       width: attachment.width,
       height: attachment.height,
     );
+  }
+
+  String _attachmentLabel(FileMetadataData metadata) {
+    final sizeBytes = metadata.sizeBytes;
+    final label = metadata.filename.trim();
+    if (sizeBytes == null) return '📎 $label';
+    final sizeLabel = _formatBytes(sizeBytes);
+    return '📎 $label ($sizeLabel)';
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return 'Unknown size';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   int _viewTypeFor(EmailAttachment attachment) {

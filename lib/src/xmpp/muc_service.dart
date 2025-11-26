@@ -10,6 +10,7 @@ mixin MucService on XmppBase, BaseStreamService {
   final _roomStreams = <String, StreamController<RoomState>>{};
   final _roomNicknames = <String, String>{};
   final _createdRooms = <String>{};
+  final _seededDummyRooms = <String>{};
   String? _mucServiceHost;
 
   String get mucServiceHost =>
@@ -261,12 +262,12 @@ mixin MucService on XmppBase, BaseStreamService {
   }) async {
     final trimmed = nickname.trim();
     _roomNicknames[_roomKey(roomJid)] = trimmed;
+    await _applyLocalNickname(roomJid: roomJid, nickname: trimmed);
     await joinRoom(
       roomJid: roomJid,
       nickname: trimmed,
       maxHistoryStanzas: 0,
     );
-    await _applyLocalNickname(roomJid: roomJid, nickname: trimmed);
   }
 
   Future<void> acceptRoomInvite({
@@ -642,10 +643,10 @@ mixin MucService on XmppBase, BaseStreamService {
       roomJid: roomJid,
       occupantId: occupantId ?? '$key/$nickname',
       nick: nickname,
-      realJid: currentOccupant?.realJid,
+      realJid: currentOccupant?.realJid ?? _myJid?.toBare().toString(),
       affiliation: currentOccupant?.affiliation,
       role: currentOccupant?.role,
-      isPresent: currentOccupant?.isPresent ?? false,
+      isPresent: currentOccupant?.isPresent ?? true,
     );
     await _dbOp<XmppDatabase>(
       (db) async {
@@ -655,5 +656,76 @@ mixin MucService on XmppBase, BaseStreamService {
         }
       },
     );
+  }
+
+  Future<void> seedDummyRoomData(String roomJid) async {
+    final key = _roomKey(roomJid);
+    if (_seededDummyRooms.contains(key)) return;
+    final rememberedNick = _roomNicknames[key]?.trim();
+    var resolvedNick =
+        rememberedNick?.isNotEmpty == true ? rememberedNick : null;
+    if (resolvedNick == null) {
+      final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+        (db) => db.getChat(roomJid),
+      );
+      final storedNick = chat?.myNickname?.trim();
+      if (storedNick?.isNotEmpty == true) {
+        resolvedNick = storedNick;
+      }
+    }
+    final myNick = resolvedNick ?? _nickForRoom(null);
+    await _applyLocalNickname(roomJid: roomJid, nickname: myNick);
+
+    const dummyMembers = [
+      ('sam', 'Sam'),
+      ('cora', 'Cora'),
+      ('pavel', 'Pavel'),
+    ];
+
+    for (final member in dummyMembers) {
+      final occupantId = '$key/${member.$2}';
+      _upsertOccupant(
+        roomJid: roomJid,
+        occupantId: occupantId,
+        nick: member.$2,
+        realJid: '${member.$1}@example.test',
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+      );
+    }
+
+    final now = DateTime.timestamp();
+    final snippets = <String>[
+      'Hey everyone, testing the room UI!',
+      'Presence is taking a sec—this is a dummy member.',
+      'If you see this, the member drawer seeded correctly.',
+    ];
+    final idPrefix =
+        base64Url.encode(utf8.encode(key)).replaceAll('=', '').toLowerCase();
+    for (var index = 0; index < dummyMembers.length; index++) {
+      final member = dummyMembers[index];
+      final occupantId = '$key/${member.$2}';
+      final senderJid = '$roomJid/${member.$2}';
+      final stanzaID = 'dummy-$idPrefix-$index';
+      final existing = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByStanzaID(stanzaID),
+      );
+      if (existing != null) continue;
+      final message = Message(
+        stanzaID: stanzaID,
+        senderJid: senderJid,
+        chatJid: roomJid,
+        body: snippets[index % snippets.length],
+        timestamp:
+            now.subtract(Duration(minutes: (dummyMembers.length - index) * 2)),
+        occupantID: occupantId,
+      );
+      await _dbOp<XmppDatabase>(
+        (db) => db.saveMessage(message, chatType: ChatType.groupChat),
+      );
+    }
+
+    _seededDummyRooms.add(key);
   }
 }

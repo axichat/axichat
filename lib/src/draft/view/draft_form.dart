@@ -167,9 +167,7 @@ class _DraftFormState extends State<DraftForm> {
             final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
             final hasAttachments = pendingAttachments.isNotEmpty;
-            final split = _splitRecipients(
-              forceEmailAll: hasAttachments,
-            );
+            final split = _splitRecipients();
             final hasActiveRecipients = split.hasActiveRecipients;
             final hasContent = _hasContent(hasAttachments: hasAttachments);
             final canSave = enabled &&
@@ -421,8 +419,15 @@ class _DraftFormState extends State<DraftForm> {
     return recipients;
   }
 
-  bool _isAxiDestination(String value) =>
-      value.toLowerCase().endsWith('@axi.im');
+  bool _isAxiDestination(String value) {
+    final lower = value.toLowerCase();
+    final atIndex = lower.indexOf('@');
+    if (atIndex == -1) {
+      return false;
+    }
+    final domain = lower.substring(atIndex + 1);
+    return domain == 'axi.im' || domain.endsWith('.axi.im');
+  }
 
   Future<void> _hydrateAttachments() async {
     if (widget.attachmentMetadataIds.isEmpty) {
@@ -619,13 +624,19 @@ class _DraftFormState extends State<DraftForm> {
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit == null) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
-    final split = _splitRecipients(forceEmailAll: hasAttachments);
+    final split = _splitRecipients();
     final xmppJids =
         split.xmppTargets.map(_resolveXmppJid).whereType<String>().toList();
     final emailTargets = split.emailTargets.map((recipient) {
       final chat = recipient.target.chat;
       if (chat != null) {
-        return FanOutTarget.chat(chat);
+        final address = _recipientAddress(chat);
+        if (address != null && address.isNotEmpty) {
+          return FanOutTarget.address(
+            address: address,
+            displayName: chat.contactDisplayName ?? chat.title,
+          );
+        }
       }
       return recipient.target;
     }).toList();
@@ -680,23 +691,20 @@ class _DraftFormState extends State<DraftForm> {
     List<ComposerRecipient> emailTargets,
     List<ComposerRecipient> xmppTargets,
     bool hasActiveRecipients
-  }) _splitRecipients({
-    required bool forceEmailAll,
-  }) {
+  }) _splitRecipients() {
     final emailTargets = <ComposerRecipient>[];
     final xmppTargets = <ComposerRecipient>[];
     for (final recipient in _recipients) {
       if (!recipient.included) continue;
-      if (forceEmailAll) {
+      final xmppJid = _resolveXmppJid(recipient);
+      final isEmailRecipient = _isEmailRecipient(recipient);
+      if (isEmailRecipient) {
         emailTargets.add(recipient);
         continue;
       }
-      final xmppJid = _resolveXmppJid(recipient);
       if (xmppJid != null) {
         xmppTargets.add(recipient);
-        continue;
       }
-      emailTargets.add(recipient);
     }
     return (
       emailTargets: emailTargets,
@@ -717,6 +725,29 @@ class _DraftFormState extends State<DraftForm> {
       return null;
     }
     return _isAxiDestination(candidate) ? candidate : null;
+  }
+
+  bool _isEmailRecipient(ComposerRecipient recipient) {
+    final chat = recipient.target.chat;
+    if (chat != null) {
+      final address = _recipientAddress(chat);
+      return address != null && !_isAxiDestination(address);
+    }
+    final normalizedAddress = recipient.target.normalizedAddress;
+    final rawAddress = recipient.target.address;
+    final candidate = normalizedAddress ?? rawAddress?.trim();
+    if (candidate == null || candidate.isEmpty) {
+      return false;
+    }
+    return !_isAxiDestination(candidate);
+  }
+
+  String? _recipientAddress(Chat chat) {
+    final email = chat.emailAddress?.trim();
+    if (email?.isNotEmpty == true) {
+      return email;
+    }
+    return chat.jid;
   }
 
   List<EmailAttachment> _currentAttachments() =>
@@ -1152,46 +1183,22 @@ class _DraftSendIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final iconColor = readyToSend
-        ? colors.primary
-        : colors.mutedForeground.withValues(
-            alpha: 0.9,
-          );
-    final borderColor = readyToSend ? colors.primary : colors.border;
-    final tooltip = disabledReason ?? 'Send draft';
+    final disabledColor = colors.mutedForeground.withValues(alpha: 0.9);
+    final iconColor = sending
+        ? disabledColor
+        : readyToSend
+            ? colors.primary
+            : disabledColor;
+    final borderColor =
+        sending || !readyToSend ? colors.border : colors.primary;
+    final tooltip = sending ? 'Sending…' : disabledReason ?? 'Send draft';
     final interactive = onPressed != null && !sending;
-    final button = _DraftComposerIconButton(
+    return _DraftComposerIconButton(
       tooltip: tooltip,
-      icon: sending ? LucideIcons.loader : LucideIcons.send,
+      icon: LucideIcons.send,
       onPressed: interactive ? onPressed : null,
       iconColorOverride: iconColor,
       borderColorOverride: borderColor,
-    );
-    if (!sending) {
-      return button;
-    }
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Opacity(
-          opacity: 0.75,
-          child: button,
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Center(
-              child: SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation(colors.primary),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

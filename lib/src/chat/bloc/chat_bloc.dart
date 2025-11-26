@@ -515,6 +515,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _primeRoomState(Chat chat) {
+    if (chat.type == ChatType.groupChat) {
+      unawaited(_mucService.seedDummyRoomData(chat.jid));
+    }
     final cachedRoom = _mucService.roomStateFor(chat.jid);
     if (cachedRoom != null) {
       add(_RoomStateUpdated(cachedRoom));
@@ -743,14 +746,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final chatJid = state.chat?.jid;
     if (chatJid == null || state.chat?.type != ChatType.groupChat) return;
-    if (event.nickname.trim().isEmpty) return;
+    final trimmed = event.nickname.trim();
+    if (trimmed.isEmpty) return;
     try {
       await _mucService.changeNickname(
         roomJid: chatJid,
-        nickname: event.nickname.trim(),
+        nickname: trimmed,
       );
       emit(
         state.copyWith(
+          chat: state.chat?.copyWith(myNickname: trimmed),
+          roomState: _mucService.roomStateFor(chatJid) ?? state.roomState,
           toast: const ChatToast(message: 'Nickname updated'),
           toastId: state.toastId + 1,
         ),
