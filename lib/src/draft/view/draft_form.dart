@@ -74,6 +74,8 @@ class _DraftFormState extends State<DraftForm> {
   bool _loadingAttachments = false;
   bool _addingAttachment = false;
   int _pendingAttachmentSeed = 0;
+  bool _sendingDraft = false;
+  bool _sendCompletionHandled = false;
 
   @override
   void initState() {
@@ -142,7 +144,36 @@ class _DraftFormState extends State<DraftForm> {
               ShadToaster.maybeOf(context)?.show(
                 FeedbackToast.success(title: 'Draft saved'),
               );
+            }
+            if (state is DraftSending) {
+              if (_sendingDraft && mounted) {
+                setState(() {
+                  _pendingAttachments = _pendingAttachments
+                      .map(
+                        (pending) => pending.copyWith(
+                          status: PendingAttachmentStatus.uploading,
+                          clearErrorMessage: true,
+                        ),
+                      )
+                      .toList();
+                });
+              }
             } else if (state is DraftFailure) {
+              if (!_sendingDraft) return;
+              if (mounted) {
+                setState(() {
+                  _sendCompletionHandled = true;
+                  _sendingDraft = false;
+                  _pendingAttachments = _pendingAttachments
+                      .map(
+                        (pending) => pending.copyWith(
+                          status: PendingAttachmentStatus.failed,
+                          errorMessage: state.message,
+                        ),
+                      )
+                      .toList();
+                });
+              }
               ShadToaster.maybeOf(context)?.show(
                 FeedbackToast.error(
                   title: 'Whoops',
@@ -150,19 +181,13 @@ class _DraftFormState extends State<DraftForm> {
                 ),
               );
             } else if (state is DraftSendComplete) {
-              ShadToaster.maybeOf(context)?.show(
-                FeedbackToast.success(title: 'Sent'),
-              );
-              final onClosed = widget.onClosed;
-              if (onClosed != null) {
-                onClosed();
-              } else if (Navigator.of(context).canPop()) {
-                context.pop();
-              }
+              _handleSendComplete();
             }
           },
           builder: (context, state) {
-            final enabled = state is! DraftSending;
+            final isSending = state is DraftSending && _sendingDraft;
+            final showFailure = state is DraftFailure && _sendingDraft;
+            final enabled = !isSending;
             final bodyText = _bodyTextController.text.trim();
             final subjectText = _subjectTextController.text.trim();
             final pendingAttachments = _pendingAttachments;
@@ -184,7 +209,6 @@ class _DraftFormState extends State<DraftForm> {
               hasActiveRecipients: hasActiveRecipients,
               hasContent: hasContent,
             );
-            final isSending = state is DraftSending;
             final readyToSend = sendBlocker == null;
 
             return _DraftTaskDropRegion(
@@ -332,7 +356,7 @@ class _DraftFormState extends State<DraftForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (state is DraftSending)
+                        if (isSending)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
@@ -355,7 +379,7 @@ class _DraftFormState extends State<DraftForm> {
                               ],
                             ),
                           ),
-                        if (state is DraftFailure)
+                        if (showFailure)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
@@ -635,6 +659,7 @@ class _DraftFormState extends State<DraftForm> {
           return FanOutTarget.address(
             address: address,
             displayName: chat.contactDisplayName ?? chat.title,
+            shareSignatureEnabled: chat.shareSignatureEnabled,
           );
         }
       }
@@ -651,19 +676,75 @@ class _DraftFormState extends State<DraftForm> {
       }
       return;
     }
-    final succeeded = await draftCubit.sendDraft(
-      id: id,
-      xmppJids: xmppJids,
-      emailTargets: emailTargets,
-      body: _bodyTextController.text,
-      subject: _subjectTextController.text,
-      attachments: _currentAttachments(),
-    );
+    if (mounted) {
+      setState(() {
+        _sendingDraft = true;
+        _sendCompletionHandled = false;
+        _pendingAttachments = _pendingAttachments
+            .map(
+              (pending) => pending.copyWith(
+                status: PendingAttachmentStatus.uploading,
+                clearErrorMessage: true,
+              ),
+            )
+            .toList();
+      });
+    }
+    var succeeded = false;
+    try {
+      succeeded = await draftCubit.sendDraft(
+        id: id,
+        xmppJids: xmppJids,
+        emailTargets: emailTargets,
+        body: _bodyTextController.text,
+        subject: _subjectTextController.text,
+        attachments: _currentAttachments(),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _sendingDraft = false;
+        _sendCompletionHandled = true;
+      });
+      _showToast('Failed to send draft.');
+      return;
+    }
     if (!mounted) {
       return;
     }
     if (!succeeded) {
+      setState(() {
+        _sendingDraft = false;
+        _sendCompletionHandled = true;
+      });
       _bodyFocusNode.requestFocus();
+      return;
+    }
+    _handleSendComplete();
+    if (mounted && !_sendCompletionHandled && _sendingDraft) {
+      setState(() => _sendingDraft = false);
+    }
+  }
+
+  void _handleSendComplete() {
+    if (_sendCompletionHandled) {
+      return;
+    }
+    _sendCompletionHandled = true;
+    if (!mounted) return;
+    setState(() {
+      _sendingDraft = false;
+      _pendingAttachments = const [];
+      _pendingAttachmentSeed = 0;
+    });
+    ShadToaster.maybeOf(context)?.show(
+      FeedbackToast.success(title: 'Sent'),
+    );
+    final onClosed = widget.onClosed;
+    if (onClosed != null) {
+      onClosed();
+    } else if (Navigator.of(context).canPop()) {
+      context.pop();
     }
   }
 

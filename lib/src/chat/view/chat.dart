@@ -140,7 +140,7 @@ const _selectionOuterInset =
 const _selectionIndicatorInset =
     2.0; // Centers the 28px indicator within the 40px cutout.
 const _messageAvatarSize = 36.0;
-const _messageRowAvatarReservation = 56.0;
+const _messageRowAvatarReservation = 44.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -2674,8 +2674,7 @@ class _ChatState extends State<Chat> {
                                                     showOtherUsersAvatar: false,
                                                     showCurrentUserAvatar:
                                                         false,
-                                                    showOtherUsersName:
-                                                        isGroupChat,
+                                                    showOtherUsersName: false,
                                                     borderRadius: 0,
                                                     maxWidth:
                                                         messageRowConstraintWidth,
@@ -2686,54 +2685,6 @@ class _ChatState extends State<Chat> {
                                                         Colors.transparent,
                                                     containerColor:
                                                         Colors.transparent,
-                                                    top: (message, previous,
-                                                        next) {
-                                                      final isSelectionSpacer =
-                                                          message.customProperties?[
-                                                                  'selectionSpacer'] ==
-                                                              true;
-                                                      final isEmptyState =
-                                                          message.customProperties?[
-                                                                  'emptyState'] ==
-                                                              true;
-                                                      final isLoadingState =
-                                                          message.customProperties?[
-                                                                  'loadingState'] ==
-                                                              true;
-                                                      final isSelfMessage =
-                                                          (message.customProperties?[
-                                                                      'isSelf']
-                                                                  as bool?) ??
-                                                              false;
-                                                      if (!isGroupChat ||
-                                                          !isSelfMessage ||
-                                                          isSelectionSpacer ||
-                                                          isEmptyState ||
-                                                          isLoadingState) {
-                                                        return const SizedBox
-                                                            .shrink();
-                                                      }
-                                                      return Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                          left:
-                                                              _chatHorizontalPadding,
-                                                          right:
-                                                              _chatHorizontalPadding,
-                                                          bottom: 4,
-                                                        ),
-                                                        child: Text(
-                                                          message.user
-                                                              .getFullName(),
-                                                          style: context
-                                                              .textTheme.muted
-                                                              .copyWith(
-                                                            fontSize: 12.0,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
                                                     messageTextBuilder:
                                                         (message, previous,
                                                             next) {
@@ -3596,10 +3547,6 @@ class _ChatState extends State<Chat> {
                                                               .centerRight
                                                           : Alignment
                                                               .centerLeft;
-                                                      final targetAlignment =
-                                                          isSingleSelection
-                                                              ? Alignment.center
-                                                              : baseAlignment;
                                                       final shadowedBubble =
                                                           ConstrainedBox(
                                                         constraints:
@@ -3607,13 +3554,9 @@ class _ChatState extends State<Chat> {
                                                         child: bubble,
                                                       );
                                                       final alignedBubble =
-                                                          AnimatedAlign(
-                                                        duration:
-                                                            _bubbleFocusDuration,
-                                                        curve:
-                                                            _bubbleFocusCurve,
+                                                          Align(
                                                         alignment:
-                                                            targetAlignment,
+                                                            baseAlignment,
                                                         child: shadowedBubble,
                                                       );
                                                       final canResend = message
@@ -3976,8 +3919,65 @@ class _ChatState extends State<Chat> {
                                                           ],
                                                         ),
                                                       );
+                                                      final shouldShowSenderLabel =
+                                                          isRenderableBubble &&
+                                                              !_chatMessagesShouldChain(
+                                                                message,
+                                                                previous,
+                                                              );
+                                                      final fullName = message
+                                                          .user
+                                                          .getFullName()
+                                                          .trim();
+                                                      final displayName = self
+                                                          ? 'You'
+                                                          : (fullName.isEmpty
+                                                              ? message.user.id
+                                                              : fullName);
                                                       Widget bubbleWithSlack =
                                                           animatedStack;
+                                                      if (shouldShowSenderLabel &&
+                                                          displayName
+                                                              .isNotEmpty) {
+                                                        bubbleWithSlack =
+                                                            Column(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          crossAxisAlignment: self
+                                                              ? CrossAxisAlignment
+                                                                  .end
+                                                              : CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                bottom: 6,
+                                                              ),
+                                                              child: Text(
+                                                                displayName,
+                                                                style: context
+                                                                    .textTheme
+                                                                    .small
+                                                                    .copyWith(
+                                                                  color: colors
+                                                                      .mutedForeground,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                                textAlign: self
+                                                                    ? TextAlign
+                                                                        .right
+                                                                    : TextAlign
+                                                                        .left,
+                                                              ),
+                                                            ),
+                                                            animatedStack,
+                                                          ],
+                                                        );
+                                                      }
                                                       final hasAvatarSlot =
                                                           isGroupChat &&
                                                               isRenderableBubble &&
@@ -4049,17 +4049,28 @@ class _ChatState extends State<Chat> {
                                                               bubbleWithSlack,
                                                         );
                                                       }
-                                                      bubbleWithSlack = Align(
-                                                        alignment:
-                                                            isSingleSelection
-                                                                ? Alignment
-                                                                    .center
-                                                                : self
-                                                                    ? Alignment
-                                                                        .centerRight
-                                                                    : Alignment
-                                                                        .centerLeft,
-                                                        child: bubbleWithSlack,
+                                                      final messageRowAlignment =
+                                                          isSingleSelection
+                                                              ? Alignment.center
+                                                              : self
+                                                                  ? Alignment
+                                                                      .centerRight
+                                                                  : Alignment
+                                                                      .centerLeft;
+                                                      bubbleWithSlack =
+                                                          SizedBox(
+                                                        width:
+                                                            messageRowConstraintWidth,
+                                                        child: AnimatedAlign(
+                                                          duration:
+                                                              _bubbleFocusDuration,
+                                                          curve:
+                                                              _bubbleFocusCurve,
+                                                          alignment:
+                                                              messageRowAlignment,
+                                                          child:
+                                                              bubbleWithSlack,
+                                                        ),
                                                       );
                                                       return KeyedSubtree(
                                                         key: messageKey,
@@ -5551,6 +5562,7 @@ class _SubjectTextField extends StatelessWidget {
           textCapitalization: TextCapitalization.sentences,
           cursorColor: colors.primary,
           onSubmitted: (_) => onSubmitted(),
+          onEditingComplete: onSubmitted,
           style: subjectStyle,
           decoration: InputDecoration(
             hintText: 'Subject',
@@ -7134,6 +7146,32 @@ class _GuestMessageBubble extends StatelessWidget {
         child: inlineText,
       ),
     );
+    final showSenderLabel = !chainedPrev;
+    final fullName = message.user.getFullName().trim();
+    final displayName =
+        isSelf ? 'You' : (fullName.isEmpty ? message.user.id : fullName);
+    Widget bubbleWithLabel = bubble;
+    if (showSenderLabel && displayName.isNotEmpty) {
+      bubbleWithLabel = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              displayName,
+              style: context.textTheme.small.copyWith(
+                color: colors.mutedForeground,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: isSelf ? TextAlign.right : TextAlign.left,
+            ),
+          ),
+          bubble,
+        ],
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.only(
@@ -7146,7 +7184,7 @@ class _GuestMessageBubble extends StatelessWidget {
         alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
-          child: bubble,
+          child: bubbleWithLabel,
         ),
       ),
     );

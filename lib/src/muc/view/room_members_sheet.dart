@@ -37,44 +37,25 @@ class RoomMembersSheet extends StatelessWidget {
     final colors = context.colorScheme;
     return SafeArea(
       child: AxiModalSurface(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Members',
-                  style: theme.h4.copyWith(color: colors.foreground),
-                ),
-                const Spacer(),
-                if (canInvite)
-                  ShadButton.outline(
-                    size: ShadButtonSize.sm,
-                    onPressed: () async {
-                      final jids = await _promptInvite(context);
-                      if (jids != null && jids.isNotEmpty) {
-                        for (final jid in jids) {
-                          onInvite(jid.trim());
-                        }
-                      }
-                    },
-                    child: const Text('Invite user'),
-                  ),
-                if (onClose != null) ...[
-                  const SizedBox(width: 8),
-                  AxiIconButton(
-                    iconData: LucideIcons.x,
-                    tooltip: 'Close',
-                    onPressed: onClose,
-                  ),
-                ],
-              ],
+            Container(
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: colors.border)),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: _HeaderRow(
+                canInvite: canInvite,
+                onInviteTap: () => _handleInvite(context),
+                onClose: onClose,
+              ),
             ),
             const SizedBox(height: 12),
             if (onChangeNickname != null || onLeaveRoom != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -103,30 +84,32 @@ class RoomMembersSheet extends StatelessWidget {
               ),
             const SizedBox(height: 8),
             Expanded(
-              child: groups.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No members yet',
-                        style:
-                            theme.muted.copyWith(color: colors.mutedForeground),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: groups.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No members yet',
+                          style: theme.muted
+                              .copyWith(color: colors.mutedForeground),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemBuilder: (context, index) {
+                          final group = groups[index];
+                          return _MemberSection(
+                            title: group.title,
+                            occupants: group.members,
+                            buildActions: _actionsFor,
+                            onAction: onAction,
+                            myOccupantId: roomState.myOccupantId,
+                          );
+                        },
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemCount: groups.length,
                       ),
-                    )
-                  : ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemBuilder: (context, index) {
-                        final group = groups[index];
-                        return _MemberSection(
-                          title: group.title,
-                          occupants: group.members,
-                          buildActions: _actionsFor,
-                          onAction: onAction,
-                          myOccupantId: roomState.myOccupantId,
-                          myAffiliation: roomState.myAffiliation,
-                        );
-                      },
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemCount: groups.length,
-                    ),
+              ),
             ),
           ],
         ),
@@ -144,6 +127,15 @@ class RoomMembersSheet extends StatelessWidget {
         initialRecipients: [],
       ),
     );
+  }
+
+  Future<void> _handleInvite(BuildContext context) async {
+    final jids = await _promptInvite(context);
+    if (jids != null && jids.isNotEmpty) {
+      for (final jid in jids) {
+        onInvite(jid.trim());
+      }
+    }
   }
 
   Future<String?> _promptNickname(BuildContext context) async {
@@ -202,26 +194,40 @@ class RoomMembersSheet extends StatelessWidget {
     if (occupant.occupantId == roomState.myOccupantId) return const [];
     final myAffiliation = roomState.myAffiliation;
     final myRole = roomState.myRole;
-    final isOwnerOrAdmin = myAffiliation.isOwner || myAffiliation.isAdmin;
-    final canModerateRoles = isOwnerOrAdmin || myRole.isModerator;
+    final isOwner = myAffiliation.isOwner;
+    final isAdmin = myAffiliation.isAdmin;
+    final isModerator = myRole.isModerator;
+    final canSetRoles = isOwner || isAdmin || isModerator;
     final actions = <MucModerationAction>[];
     final hasRealJid = occupant.realJid?.isNotEmpty == true;
-    if (canModerateRoles) {
+    if (canSetRoles) {
       actions.add(MucModerationAction.kick);
     }
-    if (isOwnerOrAdmin && hasRealJid) {
+    if ((isOwner || isAdmin) && hasRealJid) {
       actions.add(MucModerationAction.ban);
-      actions.addAll([
-        MucModerationAction.member,
-        MucModerationAction.admin,
-        MucModerationAction.owner,
-      ]);
     }
-    if (isOwnerOrAdmin) {
-      actions.add(MucModerationAction.moderator);
+    if (isOwner || isAdmin) {
+      if (!occupant.affiliation.isMember) {
+        actions.add(MucModerationAction.member);
+      }
+      if (isOwner) {
+        if (!occupant.affiliation.isAdmin) {
+          actions.add(MucModerationAction.admin);
+        }
+        if (!occupant.affiliation.isOwner) {
+          actions.add(MucModerationAction.owner);
+        }
+      }
+      if (occupant.role.isModerator) {
+        actions.add(MucModerationAction.participant);
+      } else {
+        actions.add(MucModerationAction.moderator);
+      }
     }
-    if (canModerateRoles) {
-      actions.add(MucModerationAction.participant);
+    if (canSetRoles && !actions.contains(MucModerationAction.participant)) {
+      if (occupant.role.isModerator) {
+        actions.add(MucModerationAction.participant);
+      }
     }
     return actions;
   }
@@ -241,7 +247,6 @@ class _MemberSection extends StatelessWidget {
     required this.buildActions,
     required this.onAction,
     required this.myOccupantId,
-    required this.myAffiliation,
   });
 
   final String title;
@@ -249,12 +254,10 @@ class _MemberSection extends StatelessWidget {
   final List<MucModerationAction> Function(Occupant occupant) buildActions;
   final void Function(String occupantId, MucModerationAction action) onAction;
   final String? myOccupantId;
-  final OccupantAffiliation myAffiliation;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.textTheme;
-    const memberTileHeight = 64.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -269,32 +272,13 @@ class _MemberSection extends StatelessWidget {
             final isSelf = occupant.occupantId == myOccupantId;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              child: AxiListTile(
-                leading: AxiAvatar(
-                  jid: _avatarKey(occupant),
-                  size: 44,
-                ),
-                title: occupant.nick,
+              child: _MemberTile(
+                key: ValueKey(occupant.occupantId),
+                occupant: occupant,
                 subtitle: subtitle,
-                selected: isSelf,
-                minTileHeight: memberTileHeight,
-                actions: actions.isEmpty
-                    ? null
-                    : [
-                        PopupMenuButton<MucModerationAction>(
-                          icon: const Icon(LucideIcons.ellipsisVertical),
-                          onSelected: (action) =>
-                              onAction(occupant.occupantId, action),
-                          itemBuilder: (context) => actions
-                              .map(
-                                (action) => PopupMenuItem(
-                                  value: action,
-                                  child: Text(_actionLabel(action)),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
+                actions: actions,
+                onAction: onAction,
+                isSelf: isSelf,
               ),
             );
           },
@@ -302,16 +286,6 @@ class _MemberSection extends StatelessWidget {
       ],
     );
   }
-
-  String _actionLabel(MucModerationAction action) => switch (action) {
-        MucModerationAction.kick => 'Kick',
-        MucModerationAction.ban => 'Ban',
-        MucModerationAction.member => 'Make member',
-        MucModerationAction.admin => 'Make admin',
-        MucModerationAction.owner => 'Make owner',
-        MucModerationAction.moderator => 'Grant moderator',
-        MucModerationAction.participant => 'Revoke moderator',
-      };
 
   String _roleSubtitle(Occupant occupant) {
     final labels = <String>[];
@@ -327,18 +301,201 @@ class _MemberSection extends StatelessWidget {
     if (occupant.role.isModerator) labels.add('Moderator');
     return labels.join(' • ');
   }
+}
 
-  String _avatarKey(Occupant occupant) {
-    final realJid = occupant.realJid;
-    if (realJid == null || realJid.isEmpty) {
-      return occupant.nick;
-    }
-    final separatorIndex = realJid.indexOf('/');
-    if (separatorIndex <= 0) {
-      return realJid;
-    }
-    return realJid.substring(0, separatorIndex);
+class _MemberTile extends StatefulWidget {
+  const _MemberTile({
+    required this.occupant,
+    required this.subtitle,
+    required this.actions,
+    required this.onAction,
+    required this.isSelf,
+    super.key,
+  });
+
+  final Occupant occupant;
+  final String subtitle;
+  final List<MucModerationAction> actions;
+  final void Function(String occupantId, MucModerationAction action) onAction;
+  final bool isSelf;
+
+  @override
+  State<_MemberTile> createState() => _MemberTileState();
+}
+
+class _MemberTileState extends State<_MemberTile> {
+  bool _showActions = false;
+
+  void _toggleActions() => setState(() => _showActions = !_showActions);
+
+  void _closeActions() => setState(() => _showActions = false);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final borderColor =
+        widget.isSelf ? colors.primary.withValues(alpha: 0.3) : colors.border;
+
+    final tile = AxiListTile(
+      onTap: widget.actions.isEmpty ? null : _toggleActions,
+      leading: AxiAvatar(
+        jid: _avatarKey(widget.occupant),
+        size: 44,
+      ),
+      title: widget.occupant.nick,
+      subtitle: widget.subtitle,
+      selected: widget.isSelf,
+      paintSurface: true,
+      tapBounce: true,
+      minTileHeight: 64,
+      surfaceColor: colors.card,
+      surfaceShape: SquircleBorder(
+        cornerRadius: 18,
+        side: BorderSide(color: borderColor),
+      ),
+      contentPadding: const EdgeInsetsDirectional.fromSTEB(16, 10, 16, 10),
+    );
+
+    final actionsPanel = widget.actions.isEmpty
+        ? const SizedBox.shrink()
+        : AnimatedCrossFade(
+            duration: baseAnimationDuration,
+            sizeCurve: Curves.easeInOutCubic,
+            crossFadeState: _showActions
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
+              child: _MemberActionPanel(
+                occupantId: widget.occupant.occupantId,
+                actions: widget.actions,
+                onAction: widget.onAction,
+                onClose: _closeActions,
+              ),
+            ),
+          );
+
+    return Column(
+      children: [
+        tile,
+        actionsPanel,
+      ],
+    );
   }
+}
+
+class _MemberActionPanel extends StatelessWidget {
+  const _MemberActionPanel({
+    required this.occupantId,
+    required this.actions,
+    required this.onAction,
+    required this.onClose,
+  });
+
+  final String occupantId;
+  final List<MucModerationAction> actions;
+  final void Function(String occupantId, MucModerationAction action) onAction;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = MediaQuery.of(context).textScaler;
+    double scaled(double value) => textScaler.scale(value);
+    final iconSize = scaled(16);
+    final spacing = scaled(8);
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      alignment: WrapAlignment.start,
+      children: actions.map((action) {
+        final descriptor = _MemberActionDescriptor.forAction(action);
+        final builder = descriptor.destructive
+            ? ShadButton.destructive
+            : ShadButton.outline;
+        return builder(
+            size: ShadButtonSize.sm,
+            onPressed: () {
+              onClose();
+              onAction(occupantId, action);
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(descriptor.icon, size: iconSize),
+                SizedBox(width: scaled(6)),
+                Text(descriptor.label),
+              ],
+            ));
+      }).toList(),
+    );
+  }
+}
+
+class _MemberActionDescriptor {
+  const _MemberActionDescriptor({
+    required this.label,
+    required this.icon,
+    this.destructive = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool destructive;
+
+  static _MemberActionDescriptor forAction(MucModerationAction action) {
+    switch (action) {
+      case MucModerationAction.kick:
+        return const _MemberActionDescriptor(
+          label: 'Kick',
+          icon: LucideIcons.logOut,
+          destructive: true,
+        );
+      case MucModerationAction.ban:
+        return const _MemberActionDescriptor(
+          label: 'Ban',
+          icon: LucideIcons.shieldOff,
+          destructive: true,
+        );
+      case MucModerationAction.member:
+        return const _MemberActionDescriptor(
+          label: 'Make member',
+          icon: LucideIcons.userRound,
+        );
+      case MucModerationAction.admin:
+        return const _MemberActionDescriptor(
+          label: 'Make admin',
+          icon: LucideIcons.shield,
+        );
+      case MucModerationAction.owner:
+        return const _MemberActionDescriptor(
+          label: 'Make owner',
+          icon: LucideIcons.crown,
+        );
+      case MucModerationAction.moderator:
+        return const _MemberActionDescriptor(
+          label: 'Grant moderator',
+          icon: LucideIcons.gavel,
+        );
+      case MucModerationAction.participant:
+        return const _MemberActionDescriptor(
+          label: 'Revoke moderator',
+          icon: LucideIcons.userMinus,
+        );
+    }
+  }
+}
+
+String _avatarKey(Occupant occupant) {
+  final realJid = occupant.realJid;
+  if (realJid == null || realJid.isEmpty) {
+    return occupant.nick;
+  }
+  final separatorIndex = realJid.indexOf('/');
+  if (separatorIndex <= 0) {
+    return realJid;
+  }
+  return realJid.substring(0, separatorIndex);
 }
 
 class _InviteChipsSheet extends StatefulWidget {
@@ -518,6 +675,54 @@ class _NicknameSheetState extends State<_NicknameSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HeaderRow extends StatelessWidget {
+  const _HeaderRow({
+    required this.canInvite,
+    required this.onInviteTap,
+    required this.onClose,
+  });
+
+  final bool canInvite;
+  final Future<void> Function()? onInviteTap;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.textTheme;
+    final colors = context.colorScheme;
+    return Row(
+      children: [
+        Text(
+          'Members',
+          style: theme.h4.copyWith(color: colors.foreground),
+        ),
+        const Spacer(),
+        if (canInvite)
+          ShadButton.outline(
+            size: ShadButtonSize.sm,
+            onPressed: onInviteTap,
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.userPlus, size: 16),
+                SizedBox(width: 6),
+                Text('Invite user'),
+              ],
+            ),
+          ),
+        if (onClose != null) ...[
+          const SizedBox(width: 8),
+          AxiIconButton(
+            iconData: LucideIcons.x,
+            tooltip: 'Close',
+            onPressed: onClose,
+          ),
+        ],
+      ],
     );
   }
 }

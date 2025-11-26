@@ -583,17 +583,6 @@ class EmailDeltaTransport implements ChatTransport {
       emailAddress: emailAddress,
       deltaChatId: chatId,
     );
-    final existingByAddress = await db.getChat(emailAddress);
-    if (existingByAddress != null) {
-      final merged = existingByAddress.copyWith(
-        deltaChatId: chatId,
-        emailAddress: emailAddress,
-        contactDisplayName: chat.contactDisplayName,
-        contactID: chat.contactID,
-      );
-      await db.updateChat(merged);
-      return merged;
-    }
     await db.createChat(chat);
     return chat;
   }

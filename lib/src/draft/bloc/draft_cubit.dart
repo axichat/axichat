@@ -141,7 +141,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       throw const FanOutValidationException('Message cannot be empty.');
     }
     final includeSignatureToken = _settingsState.shareTokenSignatureEnabled &&
-        targets.every((target) => target.chat?.shareSignatureEnabled ?? true);
+        targets.every((target) => target.shareSignatureEnabled);
     final shareId = ShareTokenCodec.generateShareId();
     if (trimmedBody.isNotEmpty || hasSubject) {
       final report = await emailService.fanOutSend(

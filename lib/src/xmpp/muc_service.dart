@@ -9,6 +9,7 @@ mixin MucService on XmppBase, BaseStreamService {
   final _roomStates = <String, RoomState>{};
   final _roomStreams = <String, StreamController<RoomState>>{};
   final _roomNicknames = <String, String>{};
+  final _leftRooms = <String>{};
   final _createdRooms = <String>{};
   final _seededDummyRooms = <String>{};
   String? _mucServiceHost;
@@ -42,10 +43,32 @@ mixin MucService on XmppBase, BaseStreamService {
 
   RoomState? roomStateFor(String roomJid) => _roomStates[_roomKey(roomJid)];
 
+  bool hasLeftRoom(String roomJid) => _leftRooms.contains(_roomKey(roomJid));
+
+  void _markRoomJoined(String roomJid) {
+    _leftRooms.remove(_roomKey(roomJid));
+  }
+
+  void _markRoomLeft(String roomJid) {
+    final key = _roomKey(roomJid);
+    _leftRooms.add(key);
+    final room = RoomState(
+      roomJid: key,
+      occupants: const {},
+      myOccupantId: null,
+    );
+    _roomStates[key] = room;
+    _roomStreams[key]?.add(room);
+  }
+
   Future<RoomState> warmRoomFromHistory({
     required String roomJid,
     int limit = 200,
   }) async {
+    final key = _roomKey(roomJid);
+    if (_leftRooms.contains(key)) {
+      return _roomStates[key] ?? RoomState(roomJid: key, occupants: const {});
+    }
     final messages = await _dbOpReturning<XmppDatabase, List<Message>>(
       (db) => db.getChatMessages(
         roomJid,
@@ -95,6 +118,7 @@ mixin MucService on XmppBase, BaseStreamService {
     required String nickname,
     int maxHistoryStanzas = 0,
   }) async {
+    _markRoomJoined(roomJid);
     _roomNicknames[_roomKey(roomJid)] = nickname;
     if (_connection.getManager<mox.MUCManager>() case final manager?) {
       if (manager is MUCManager) {
@@ -121,6 +145,7 @@ mixin MucService on XmppBase, BaseStreamService {
     int maxHistoryStanzas = 0,
   }) async {
     final key = _roomKey(roomJid);
+    if (_leftRooms.contains(key)) return;
     final room = _roomStates[key];
     final myOccupant =
         room?.myOccupantId == null ? null : room!.occupants[room.myOccupantId!];
@@ -251,6 +276,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> leaveRoom(String roomJid) async {
     if (_connection.getManager<mox.MUCManager>() case final manager?) {
       await manager.leaveRoom(mox.JID.fromString(roomJid));
+      _markRoomLeft(roomJid);
       return;
     }
     throw XmppMessageException();
@@ -308,6 +334,7 @@ mixin MucService on XmppBase, BaseStreamService {
 
   void trackOccupantsFromMessages(String roomJid, Iterable<Message> messages) {
     final key = _roomKey(roomJid);
+    if (_leftRooms.contains(key)) return;
     final selfOccupantId = _roomStates[key]?.myOccupantId;
     final preferredSelfNick = _roomNicknames[key];
     for (final message in messages) {
@@ -337,6 +364,7 @@ mixin MucService on XmppBase, BaseStreamService {
     mox.MessageEvent event,
     Message message,
   ) {
+    if (_leftRooms.contains(_roomKey(message.chatJid))) return;
     final nick = event.from.resource;
     if (nick.isEmpty) return;
     final occupantId = _resolveOccupantId(
@@ -361,6 +389,7 @@ mixin MucService on XmppBase, BaseStreamService {
     OccupantRole? role,
     bool isPresent = true,
   }) {
+    if (_leftRooms.contains(_roomKey(roomJid))) return;
     _upsertOccupant(
       roomJid: roomJid,
       occupantId: occupantId,
@@ -660,6 +689,7 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> seedDummyRoomData(String roomJid) async {
     final key = _roomKey(roomJid);
+    if (_leftRooms.contains(key)) return;
     if (_seededDummyRooms.contains(key)) return;
     final rememberedNick = _roomNicknames[key]?.trim();
     var resolvedNick =
@@ -677,36 +707,56 @@ mixin MucService on XmppBase, BaseStreamService {
     await _applyLocalNickname(roomJid: roomJid, nickname: myNick);
 
     const dummyMembers = [
-      ('sam', 'Sam'),
-      ('cora', 'Cora'),
-      ('pavel', 'Pavel'),
+      (
+        id: 'sam',
+        name: 'Sam',
+        affiliation: OccupantAffiliation.owner,
+        role: OccupantRole.participant,
+        message: 'Giving the room a quick look before we roll it out.',
+      ),
+      (
+        id: 'cora',
+        name: 'Cora',
+        affiliation: OccupantAffiliation.admin,
+        role: OccupantRole.none,
+        message: 'I can help if anything looks off in this room.',
+      ),
+      (
+        id: 'pavel',
+        name: 'Pavel',
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.moderator,
+        message: 'Toggling the moderator tools—do they show up for you?',
+      ),
+      (
+        id: 'veda',
+        name: 'Veda',
+        affiliation: OccupantAffiliation.none,
+        role: OccupantRole.visitor,
+        message: 'Passing through as a visitor to check the roster.',
+      ),
     ];
 
     for (final member in dummyMembers) {
-      final occupantId = '$key/${member.$2}';
+      final occupantId = '$key/${member.name}';
       _upsertOccupant(
         roomJid: roomJid,
         occupantId: occupantId,
-        nick: member.$2,
-        realJid: '${member.$1}@example.test',
-        affiliation: OccupantAffiliation.member,
-        role: OccupantRole.participant,
+        nick: member.name,
+        realJid: '${member.id}@example.test',
+        affiliation: member.affiliation,
+        role: member.role,
         isPresent: true,
       );
     }
 
     final now = DateTime.timestamp();
-    final snippets = <String>[
-      'Hey everyone, testing the room UI!',
-      'Presence is taking a sec—this is a dummy member.',
-      'If you see this, the member drawer seeded correctly.',
-    ];
     final idPrefix =
         base64Url.encode(utf8.encode(key)).replaceAll('=', '').toLowerCase();
     for (var index = 0; index < dummyMembers.length; index++) {
       final member = dummyMembers[index];
-      final occupantId = '$key/${member.$2}';
-      final senderJid = '$roomJid/${member.$2}';
+      final occupantId = '$key/${member.name}';
+      final senderJid = '$roomJid/${member.name}';
       final stanzaID = 'dummy-$idPrefix-$index';
       final existing = await _dbOpReturning<XmppDatabase, Message?>(
         (db) => db.getMessageByStanzaID(stanzaID),
@@ -716,7 +766,7 @@ mixin MucService on XmppBase, BaseStreamService {
         stanzaID: stanzaID,
         senderJid: senderJid,
         chatJid: roomJid,
-        body: snippets[index % snippets.length],
+        body: member.message,
         timestamp:
             now.subtract(Duration(minutes: (dummyMembers.length - index) * 2)),
         occupantID: occupantId,

@@ -833,6 +833,11 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         }
         throw XmppMessageException();
       }
+      if (shouldStore) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.markMessageAcked(message.stanzaID),
+        );
+      }
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment message ${message.stanzaID}',

@@ -49,17 +49,20 @@ class FanOutTarget extends Equatable {
     required this.chat,
     required this.address,
     required this.displayName,
+    required this.shareSignatureEnabled,
   });
 
   factory FanOutTarget.chat(Chat chat) => FanOutTarget._(
         chat: chat,
         address: chat.emailAddress,
         displayName: chat.contactDisplayName,
+        shareSignatureEnabled: chat.shareSignatureEnabled,
       );
 
   factory FanOutTarget.address({
     required String address,
     String? displayName,
+    bool shareSignatureEnabled = true,
   }) {
     final trimmed = address.trim();
     final resolvedDisplayName = displayName?.trim();
@@ -69,12 +72,14 @@ class FanOutTarget extends Equatable {
       displayName: resolvedDisplayName?.isNotEmpty == true
           ? resolvedDisplayName
           : trimmed,
+      shareSignatureEnabled: shareSignatureEnabled,
     );
   }
 
   final Chat? chat;
   final String? address;
   final String? displayName;
+  final bool shareSignatureEnabled;
 
   String get key => chat?.jid ?? normalizedAddress ?? address!;
 
@@ -87,7 +92,8 @@ class FanOutTarget extends Equatable {
   }
 
   @override
-  List<Object?> get props => [chat?.jid, address, displayName];
+  List<Object?> get props =>
+      [chat?.jid, address, displayName, shareSignatureEnabled];
 }
 
 class ShareContext extends Equatable {
