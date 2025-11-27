@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:axichat/main.dart' as app;
-import 'package:axichat/src/authentication/view/login_form.dart';
 import 'package:axichat/src/authentication/view/logout_button.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations_en.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
 import 'package:axichat/src/roster/view/roster_add_button.dart';
 import 'package:dash_chat_2/dash_chat_2.dart';
@@ -84,7 +84,9 @@ void main() {
 
         await tester.pumpAndSettle();
 
-        await tester.pumpUntil(find.text(LoginForm.title));
+        await tester.pumpUntil(
+          find.text(AppLocalizationsEn().authLogin),
+        );
 
         await tester.enterText(
           find.byKey(loginUsernameKey),
@@ -180,7 +182,9 @@ void main() {
 
         await tester.tap(findContinueButton);
 
-        await tester.pumpUntil(find.text(LoginForm.title));
+        await tester.pumpUntil(
+          find.text(AppLocalizationsEn().authLogin),
+        );
       },
     );
   });

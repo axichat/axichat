@@ -158,6 +158,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteJoinRequested>(_onInviteJoinRequested);
     on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
+    on<ChatContactRenameRequested>(_onContactRenameRequested);
     if (jid != null) {
       _notificationService.dismissNotifications();
       _chatSubscription = _chatsService
@@ -252,8 +253,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<int> _localMessageCount(Chat chat) => _messageService
-      .countLocalMessages(jid: chat.remoteJid, filter: state.viewFilter);
+  Future<int> _archivedMessageCount(Chat chat) {
+    if (_messageService.messageStorageMode.isServerOnly) {
+      final visibleMessages = state.items.where(
+        (message) => message.pseudoMessageType == null,
+      );
+      return Future<int>.value(visibleMessages.length);
+    }
+    return _messageService.countLocalMessages(
+      jid: chat.remoteJid,
+      filter: state.viewFilter,
+      includePseudoMessages: false,
+    );
+  }
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
@@ -271,7 +283,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
     final chat = state.chat;
     if (chat == null || _mamLoading || _mamComplete) return;
-    final localCount = await _localMessageCount(chat);
+    final localCount = await _archivedMessageCount(chat);
     if (localCount >= desiredWindow) return;
     final beforeId = _mamBeforeId ??
         (state.items.isEmpty ? null : state.items.last.stanzaID);
@@ -368,7 +380,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _hydrateLatestFromMam(Chat chat) async {
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
-    final localCount = await _localMessageCount(chat);
+    final localCount = await _archivedMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
     _beginMamLoad();
     try {
@@ -416,7 +428,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final total = _mamTotalCount!;
-    final localCount = await _localMessageCount(chat);
+    final localCount = await _archivedMessageCount(chat);
     _mamComplete = _mamComplete || result.complete || localCount >= total;
   }
 
@@ -552,7 +564,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
-    if (!_isEmailChat && lifecycleState == AppLifecycleState.resumed) {
+    if (!_isEmailChat &&
+        state.chat?.type != ChatType.groupChat &&
+        lifecycleState == AppLifecycleState.resumed) {
       final selfBare = _bareJid(_chatsService.myJid);
       for (final item in event.items) {
         if (!item.displayed &&
@@ -767,6 +781,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         state.copyWith(
           toast: const ChatToast(
             message: 'Could not change nickname',
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onContactRenameRequested(
+    ChatContactRenameRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || chat.type != ChatType.chat) return;
+    final trimmed = event.displayName.trim();
+    final alias = trimmed.isEmpty ? null : trimmed;
+    try {
+      await _chatsService.renameChatContact(
+        jid: chat.jid,
+        displayName: trimmed,
+      );
+      emit(
+        state.copyWith(
+          chat: chat.copyWith(
+            contactDisplayName: alias,
+          ),
+          toast: ChatToast(message: event.successMessage),
+          toastId: state.toastId + 1,
+        ),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to rename contact ${chat.jid}', error, stackTrace);
+      emit(
+        state.copyWith(
+          toast: ChatToast(
+            message: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,

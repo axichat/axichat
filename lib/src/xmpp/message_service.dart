@@ -1,5 +1,7 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
+final RegExp _crlfPattern = RegExp(r'[\r\n]');
+
 extension MessageEvent on mox.MessageEvent {
   String get text =>
       get<mox.ReplyData>()?.withoutFallback ??
@@ -44,6 +46,8 @@ class _ServerOnlyConversation {
 
 final _capabilityCacheKey =
     XmppStateStore.registerKey('message_peer_capabilities');
+const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
+const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 
 class _PeerCapabilities {
   const _PeerCapabilities({
@@ -181,9 +185,14 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
   Future<int> countLocalMessages({
     required String jid,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    bool includePseudoMessages = true,
   }) async {
     return _dbOpReturning<XmppDatabase, int>(
-      (db) => db.countChatMessages(jid, filter: filter),
+      (db) => db.countChatMessages(
+        jid,
+        filter: filter,
+        includePseudoMessages: includePseudoMessages,
+      ),
     );
   }
 
@@ -257,6 +266,21 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         conversation.messages.length,
       );
     }
+    _emitServerOnlyConversation(jid);
+  }
+
+  void _ackServerOnlyMessage(String jid, String stanzaID) {
+    final conversation = _serverOnlyConversations[jid];
+    if (conversation == null) {
+      return;
+    }
+    final index = conversation.messages
+        .indexWhere((existing) => existing.stanzaID == stanzaID);
+    if (index == -1) {
+      return;
+    }
+    conversation.messages[index] =
+        conversation.messages[index].copyWith(acked: true);
     _emitServerOnlyConversation(jid);
   }
 
@@ -681,6 +705,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         await _dbOp<XmppDatabase>(
           (db) => db.markMessageAcked(message.stanzaID),
         );
+      } else if (_messageStorageMode.isServerOnly) {
+        _ackServerOnlyMessage(jid, message.stanzaID);
       }
     } catch (error, stackTrace) {
       _log.warning(
@@ -732,8 +758,18 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       _log.warning('Attachment missing on disk: ${attachment.path}');
       throw XmppMessageException();
     }
-    final size =
-        attachment.sizeBytes > 0 ? attachment.sizeBytes : await file.length();
+    final actualSize = await file.length();
+    _log.fine(
+      'Attachment size check: declared=${attachment.sizeBytes} '
+      'actual=$actualSize path=${file.path}',
+    );
+    if (attachment.sizeBytes > 0 && attachment.sizeBytes != actualSize) {
+      _log.fine(
+        'Attachment size mismatch; declared=${attachment.sizeBytes} '
+        'actual=$actualSize. Using actual size.',
+      );
+    }
+    final size = actualSize;
     final filename = attachment.fileName.isEmpty
         ? p.basename(file.path)
         : p.normalize(attachment.fileName);
@@ -787,8 +823,18 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       _rememberStableKey(jid, stableKey);
       _addServerOnlyMessage(jid, message);
     }
+    _log.fine(
+      'Uploading attachment $filename ($size bytes) to HTTP upload slot.',
+    );
     try {
-      await _uploadFileToSlot(slot, file, sizeBytes: size, putUrl: putUrl);
+      await _uploadFileToSlot(
+        slot,
+        file,
+        sizeBytes: size,
+        putUrl: putUrl,
+        contentType: contentType,
+      );
+      _log.fine('Upload complete for attachment $filename');
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to upload attachment $filename',
@@ -837,6 +883,8 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
         await _dbOp<XmppDatabase>(
           (db) => db.markMessageAcked(message.stanzaID),
         );
+      } else if (_messageStorageMode.isServerOnly) {
+        _ackServerOnlyMessage(jid, message.stanzaID);
       }
     } catch (error, stackTrace) {
       _log.warning(
@@ -871,6 +919,10 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
       throw XmppUploadNotSupportedException();
     }
     try {
+      _log.fine(
+        'Requesting HTTP upload slot for $filename size=$sizeBytes '
+        'contentType=$contentType target=$uploadTarget',
+      );
       return await _requestUploadSlotViaStanza(
         uploadJid: uploadTarget,
         filename: filename,
@@ -904,63 +956,70 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     required int sizeBytes,
     required String contentType,
   }) async {
-    final response = await _connection.sendStanza(
-      mox.StanzaDetails(
-        mox.Stanza.iq(
-          to: uploadJid,
-          type: 'get',
-          children: [
-            mox.XMLNode.xmlns(
-              tag: 'request',
-              xmlns: mox.httpFileUploadXmlns,
-              attributes: {
-                'filename': filename,
-                'size': sizeBytes.toString(),
-                'content-type': contentType,
-              },
+    try {
+      final response = await _connection
+          .sendStanza(
+            mox.StanzaDetails(
+              mox.Stanza.iq(
+                to: uploadJid,
+                type: 'get',
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: 'request',
+                    xmlns: mox.httpFileUploadXmlns,
+                    attributes: {
+                      'filename': filename,
+                      'size': sizeBytes.toString(),
+                      'content-type': contentType,
+                    },
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-    if (response == null) {
-      throw XmppUploadUnavailableException();
-    }
-    final type = response.attributes['type']?.toString();
-    if (type != 'result') {
-      final error = response.firstTag('error');
-      final condition = error?.firstTagByXmlns(mox.fullStanzaXmlns)?.tag;
-      if (condition == 'not-acceptable') {
-        throw XmppFileTooBigException(httpUploadSupport.maxFileSizeBytes);
+          )
+          .timeout(_httpUploadSlotTimeout);
+      if (response == null) {
+        throw XmppUploadUnavailableException();
       }
-      if (condition == 'service-unavailable') {
+      final type = response.attributes['type']?.toString();
+      if (type != 'result') {
+        final error = response.firstTag('error');
+        final condition = error?.firstTagByXmlns(mox.fullStanzaXmlns)?.tag;
+        if (condition == 'not-acceptable') {
+          throw XmppFileTooBigException(httpUploadSupport.maxFileSizeBytes);
+        }
+        if (condition == 'service-unavailable') {
+          throw XmppUploadMisconfiguredException();
+        }
+        throw XmppUploadUnavailableException();
+      }
+      final slot = response.firstTag('slot', xmlns: mox.httpFileUploadXmlns);
+      final putUrl = slot?.firstTag('put')?.attributes['url']?.toString();
+      final getUrl = slot?.firstTag('get')?.attributes['url']?.toString();
+      if (putUrl == null || getUrl == null) {
         throw XmppUploadMisconfiguredException();
       }
+      final headers = Map<String, String>.fromEntries(
+        slot
+                ?.findTags('header')
+                .map(
+                  (tag) => MapEntry(
+                    tag.attributes['name']?.toString() ?? '',
+                    tag.innerText(),
+                  ),
+                )
+                .where((entry) => entry.key.isNotEmpty) ??
+            const Iterable<MapEntry<String, String>>.empty(),
+      )..removeWhere((key, value) => key.isEmpty);
+      final sanitizedHeaders = _sanitizeSlotHeaders(headers);
+      return _UploadSlot(
+        getUrl: getUrl,
+        putUrl: putUrl,
+        headers: sanitizedHeaders,
+      );
+    } on TimeoutException {
       throw XmppUploadUnavailableException();
     }
-    final slot = response.firstTag('slot', xmlns: mox.httpFileUploadXmlns);
-    final putUrl = slot?.firstTag('put')?.attributes['url']?.toString();
-    final getUrl = slot?.firstTag('get')?.attributes['url']?.toString();
-    if (putUrl == null || getUrl == null) {
-      throw XmppUploadMisconfiguredException();
-    }
-    final headers = Map<String, String>.fromEntries(
-      slot
-              ?.findTags('header')
-              .map(
-                (tag) => MapEntry(
-                  tag.attributes['name']?.toString() ?? '',
-                  tag.innerText(),
-                ),
-              )
-              .where((entry) => entry.key.isNotEmpty) ??
-          const Iterable<MapEntry<String, String>>.empty(),
-    );
-    return _UploadSlot(
-      getUrl: getUrl,
-      putUrl: putUrl,
-      headers: headers,
-    );
   }
 
   Future<void> _uploadFileToSlot(
@@ -968,24 +1027,83 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
     File file, {
     int? sizeBytes,
     required String putUrl,
+    required String contentType,
   }) async {
-    final client = http.Client();
+    final client = HttpClient()..connectionTimeout = _httpUploadPutTimeout;
+    final uploadLength = sizeBytes ?? await file.length();
+    final stopwatch = Stopwatch()..start();
+    final uri = Uri.parse(putUrl);
     try {
-      final request = http.StreamedRequest(
-        'PUT',
-        Uri.parse(putUrl),
-      )..headers.addAll(slot.headers);
-      request.contentLength = sizeBytes ?? await file.length();
-      await file.openRead().pipe(request.sink);
-      final response = await client.send(request);
-      await response.stream.drain();
-      final success = response.statusCode >= 200 && response.statusCode < 300;
+      final request = await client.openUrl('PUT', uri);
+      slot.headers.forEach(request.headers.set);
+      final hasContentTypeHeader = slot.headers.keys.any(
+        (key) => key.toLowerCase() == HttpHeaders.contentTypeHeader,
+      );
+      if (!hasContentTypeHeader) {
+        request.headers.contentType = ContentType.parse(contentType);
+      }
+      request.headers.contentLength = uploadLength;
+      _log.finer(
+        'HTTP upload PUT ${uri.path} len=$uploadLength headers=${request.headers}',
+      );
+      await file.openRead().timeout(_httpUploadPutTimeout).forEach(request.add);
+      _log.finer(
+        'HTTP upload PUT stream sent in ${stopwatch.elapsedMilliseconds}ms '
+        'len=$uploadLength path=${uri.path}',
+      );
+      final response = await request.close().timeout(_httpUploadPutTimeout);
+      final statusCode = response.statusCode;
+      _log.finer(
+        'HTTP upload PUT received status $statusCode '
+        'after ${stopwatch.elapsedMilliseconds}ms path=${uri.path}',
+      );
+      final bodyBytes = await response
+          .timeout(_httpUploadPutTimeout)
+          .fold<List<int>>(<int>[], (buffer, data) {
+        buffer.addAll(data);
+        return buffer;
+      });
+      final success = statusCode >= 200 && statusCode < 300;
       if (!success) {
+        _log.warning(
+          'HTTP upload failed with status $statusCode '
+          'for ${uri.path} body=${utf8.decode(bodyBytes, allowMalformed: true)}',
+        );
         throw XmppMessageException();
       }
+      _log.finer(
+        'HTTP upload PUT completed with $statusCode '
+        'in ${stopwatch.elapsedMilliseconds}ms '
+        'path=${uri.path} bodyLen=${bodyBytes.length}',
+      );
+    } on TimeoutException {
+      _log.warning(
+        'HTTP upload timed out after ${_httpUploadPutTimeout.inSeconds}s '
+        'for ${uri.path}',
+      );
+      throw XmppUploadUnavailableException();
+    } catch (error, stackTrace) {
+      _log.warning(
+        'HTTP upload failed for ${uri.path}',
+        error,
+        stackTrace,
+      );
+      rethrow;
     } finally {
       client.close();
+      stopwatch.stop();
     }
+  }
+
+  Map<String, String> _sanitizeSlotHeaders(Map<String, String> headers) {
+    final sanitized = <String, String>{};
+    headers.forEach((name, value) {
+      final cleanedName = name.replaceAll(_crlfPattern, '').trim();
+      final cleanedValue = value.replaceAll(_crlfPattern, '').trim();
+      if (cleanedName.isEmpty || cleanedValue.isEmpty) return;
+      sanitized[cleanedName] = cleanedValue;
+    });
+    return sanitized;
   }
 
   String _attachmentLabel(String filename, int sizeBytes) {
@@ -1150,7 +1268,7 @@ mixin MessageService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<bool> _canSendChatMarkers({required String to}) async {
-    if (_isMucChatJid(to)) return true;
+    if (_isMucChatJid(to)) return false;
     if (to == myJid) return false;
     final capabilities = await _capabilitiesFor(to);
     return capabilities.supportsMarkers;

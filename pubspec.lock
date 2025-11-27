@@ -1046,15 +1046,17 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/moxxmpp"
-      relative: true
-    source: path
-    version: "0.6.3"
+      ref: "v0.6.4"
+      resolved-ref: e0675e8106fff9ab992d24f40131139f0f7eb7bb
+      url: "https://gitlab.com/axichat/moxxmpp.git"
+    source: git
+    version: "0.6.4"
   moxxmpp_socket_tcp:
     dependency: "direct main"
     description:
       path: "packages/moxxmpp_socket_tcp"
-      ref: "v0.6.3"
-      resolved-ref: b31f6516b7f421228a12b55fda0b6ba0718708a7
+      ref: "v0.6.4"
+      resolved-ref: e0675e8106fff9ab992d24f40131139f0f7eb7bb
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
     version: "0.4.1"

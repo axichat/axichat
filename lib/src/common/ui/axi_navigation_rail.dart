@@ -63,6 +63,7 @@ class AxiNavigationRail extends StatelessWidget {
     this.collapsed = false,
     this.onToggleCollapse,
     this.backgroundColor,
+    this.footer,
   }) : assert(destinations.length > 0, 'Destinations cannot be empty');
 
   final List<AxiRailDestination> destinations;
@@ -72,6 +73,7 @@ class AxiNavigationRail extends StatelessWidget {
   final bool collapsed;
   final VoidCallback? onToggleCollapse;
   final Color? backgroundColor;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +95,13 @@ class AxiNavigationRail extends StatelessWidget {
         : selectedIndex.clamp(0, destinations.length - 1);
     final Color surfaceColor = backgroundColor ?? colors.background;
     final animationDuration = context.read<SettingsCubit>().animationDuration;
+    final titleStyle = context.textTheme.h2.copyWith(
+      fontFamily: gabaritoFontFamily,
+      fontFamilyFallback: gabaritoFontFallback,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -0.3,
+      color: colors.foreground,
+    );
     return AnimatedContainer(
       duration: animationDuration,
       curve: Curves.easeInOutCubic,
@@ -126,11 +135,7 @@ class AxiNavigationRail extends StatelessWidget {
                         Expanded(
                           child: Text(
                             appDisplayName,
-                            style: context.textTheme.h2.copyWith(
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                              color: colors.foreground,
-                            ),
+                            style: titleStyle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -161,6 +166,13 @@ class AxiNavigationRail extends StatelessWidget {
               ),
             );
           }),
+          if (footer != null) ...[
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: footer!,
+            ),
+          ],
         ],
       ),
     );

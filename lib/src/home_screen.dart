@@ -1,5 +1,8 @@
 // ignore_for_file: unnecessary_type_check
 import 'dart:math' as math;
+import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
+import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
+import 'package:axichat/src/accessibility/view/accessibility_find_action_button.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
@@ -33,6 +36,8 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
 import 'package:axichat/src/home/home_search_models.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/profile_tile.dart';
@@ -46,14 +51,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const _blocklistSearchFilters = [
-  HomeSearchFilter(id: 'all', label: 'All blocked'),
-];
+List<HomeSearchFilter> _blocklistSearchFilters(AppLocalizations l10n) => [
+      HomeSearchFilter(id: 'all', label: l10n.blocklistFilterAll),
+    ];
 
-const _draftsSearchFilters = [
-  HomeSearchFilter(id: 'all', label: 'All drafts'),
-  HomeSearchFilter(id: 'attachments', label: 'With attachments'),
-];
+List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
+      HomeSearchFilter(id: 'all', label: l10n.draftsFilterAll),
+      HomeSearchFilter(
+        id: 'attachments',
+        label: l10n.draftsFilterAttachments,
+      ),
+    ];
 
 const double _secondaryPaneGutter = 0.0;
 
@@ -70,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final getService = context.read<XmppService>;
+    final l10n = context.l10n;
 
     final isChat = getService() is ChatsService;
     final isMessage = getService() is MessageService;
@@ -79,43 +88,47 @@ class _HomeScreenState extends State<HomeScreen> {
     final isBlocking = getService() is BlockingService;
     final navPlacement = EnvScope.of(context).navPlacement;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
+    final chatsFilters = chatsSearchFilters(l10n);
+    final spamFilters = spamSearchFilters(l10n);
+    final draftsFilters = _draftsSearchFilters(l10n);
+    final blocklistFilters = _blocklistSearchFilters(l10n);
 
     final tabs = <HomeTabEntry>[
       if (isChat)
         HomeTabEntry(
           id: HomeTab.chats,
-          label: 'Chats',
+          label: l10n.homeTabChats,
           body: ChatsList(
             key: const PageStorageKey('Chats'),
             showCalendarShortcut: navPlacement != NavPlacement.rail,
           ),
           fab: const _TabActionGroup(includePrimaryActions: true),
-          searchFilters: chatsSearchFilters,
+          searchFilters: chatsFilters,
         ),
       if (isMessage)
         HomeTabEntry(
           id: HomeTab.drafts,
-          label: 'Drafts',
+          label: l10n.homeTabDrafts,
           body: const DraftsList(key: PageStorageKey('Drafts')),
           fab: showDesktopPrimaryActions
               ? const _TabActionGroup(includePrimaryActions: true)
               : null,
-          searchFilters: _draftsSearchFilters,
+          searchFilters: draftsFilters,
         ),
       if (isChat)
         HomeTabEntry(
           id: HomeTab.spam,
-          label: 'Spam',
+          label: l10n.homeTabSpam,
           body: const SpamList(key: PageStorageKey('Spam')),
           fab: showDesktopPrimaryActions
               ? const _TabActionGroup(includePrimaryActions: true)
               : null,
-          searchFilters: spamSearchFilters,
+          searchFilters: spamFilters,
         ),
       if (isBlocking)
         HomeTabEntry(
           id: HomeTab.blocked,
-          label: 'Blocked',
+          label: l10n.homeTabBlocked,
           body: const BlocklistList(key: PageStorageKey('Blocked')),
           fab: showDesktopPrimaryActions
               ? const _TabActionGroup(
@@ -123,13 +136,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   extraActions: [BlocklistAddButton()],
                 )
               : const BlocklistAddButton(),
-          searchFilters: _blocklistSearchFilters,
+          searchFilters: blocklistFilters,
         ),
     ];
     if (tabs.isEmpty) {
-      return const Scaffold(
+      return Scaffold(
         body: Center(
-          child: Text('No modules available'),
+          child: Text(l10n.homeNoModules),
         ),
       );
     }
@@ -311,6 +324,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 initialFilters: initialTabFilters,
               ),
             ),
+            BlocProvider(
+              create: (context) => AccessibilityActionBloc(
+                chatsService: context.read<XmppService>(),
+                messageService: context.read<XmppService>(),
+                rosterService: isRoster
+                    ? context.read<XmppService>() as RosterService
+                    : null,
+                initialLocalization: l10n,
+              ),
+            ),
             if (isRoster)
               BlocProvider(
                 create: (context) => RosterCubit(
@@ -424,8 +447,24 @@ class _HomeScreenState extends State<HomeScreen> {
             return null;
           },
         ),
+        OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
+          onInvoke: (_) {
+            context.read<AccessibilityActionBloc?>()?.add(
+                  const AccessibilityMenuOpened(),
+                );
+            return null;
+          },
+        ),
       },
-      child: scaffold,
+      child: Stack(
+        children: [
+          scaffold,
+          BlocProvider.value(
+            value: context.read<AccessibilityActionBloc>(),
+            child: const AccessibilityActionMenu(),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -487,9 +526,12 @@ class _NexusState extends State<Nexus> {
   @override
   Widget build(BuildContext context) {
     final showToast = ShadToaster.maybeOf(context)?.show;
+    final l10n = context.l10n;
     final searchState = context.watch<HomeSearchCubit?>();
     final searchActive = searchState?.state.active ?? false;
     final chatsCubit = context.watch<ChatsCubit?>();
+    final draftState = context.watch<DraftCubit?>()?.state;
+    final drafts = draftState?.items;
     List<Chat> selectedChats = const <Chat>[];
     if (chatsCubit != null &&
         chatsCubit.state.selectedJids.isNotEmpty &&
@@ -501,6 +543,23 @@ class _NexusState extends State<Nexus> {
           .toList();
     }
     final selectionActive = selectedChats.isNotEmpty && chatsCubit != null;
+    final inviteCount = context.watch<RosterCubit?>()?.inviteCount ?? 0;
+    final unreadCount = chatsCubit == null || chatsCubit.state.items == null
+        ? 0
+        : chatsCubit.state.items!
+            .where((chat) => !chat.archived && !chat.spam)
+            .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
+    final spamCount = chatsCubit == null || chatsCubit.state.items == null
+        ? 0
+        : chatsCubit.state.items!
+            .where((chat) => chat.spam && !chat.archived)
+            .length;
+    final badgeCounts = <HomeTab, int>{
+      HomeTab.invites: inviteCount,
+      HomeTab.chats: unreadCount,
+      HomeTab.drafts: drafts?.length ?? 0,
+      HomeTab.spam: spamCount,
+    };
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -510,15 +569,24 @@ class _NexusState extends State<Nexus> {
                   widget.onToggleNavRail != null
               ? AxiIconButton(
                   iconData: LucideIcons.menu,
-                  tooltip: widget.navRailCollapsed ? 'Show menu' : 'Hide menu',
+                  tooltip: widget.navRailCollapsed
+                      ? l10n.homeRailShowMenu
+                      : l10n.homeRailHideMenu,
                   onPressed: widget.onToggleNavRail,
                 )
               : null,
-          trailing: _SearchToggleButton(
-            active: searchActive,
-            onPressed: searchState == null
-                ? null
-                : () => context.read<HomeSearchCubit>().toggleSearch(),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _FindActionIconButton(),
+              const SizedBox(width: 4),
+              _SearchToggleButton(
+                active: searchActive,
+                onPressed: searchState == null
+                    ? null
+                    : () => context.read<HomeSearchCubit>().toggleSearch(),
+              ),
+            ],
           ),
         ),
         _HomeSearchPanel(tabs: widget.tabs),
@@ -589,17 +657,10 @@ class _NexusState extends State<Nexus> {
         children: [
           AxiTabBar(
             backgroundColor: context.colorScheme.background,
+            badges: widget.tabs.map((tab) => badgeCounts[tab.id] ?? 0).toList(),
+            badgeOffset: const Offset(0, -12),
             tabs: widget.tabs.map((tab) {
-              if (tab.id == HomeTab.invites) {
-                final length = context.watch<RosterCubit?>()?.inviteCount;
-                return Tab(
-                  child: AxiBadge(
-                    count: length ?? 0,
-                    child: Text(tab.label),
-                  ),
-                );
-              }
-              return Tab(text: tab.label);
+              return Tab(child: Text(tab.label));
             }).toList(),
           ),
           const ProfileTile(),
@@ -680,6 +741,23 @@ class _TabActionGroup extends StatelessWidget {
   }
 }
 
+class _FindActionIconButton extends StatelessWidget {
+  const _FindActionIconButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<AccessibilityActionBloc?>();
+    if (bloc == null) {
+      return const SizedBox.shrink();
+    }
+    return AxiIconButton(
+      iconData: LucideIcons.command,
+      tooltip: 'Find action',
+      onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+    );
+  }
+}
+
 class _SearchToggleButton extends StatelessWidget {
   const _SearchToggleButton({
     required this.active,
@@ -691,9 +769,10 @@ class _SearchToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AxiIconButton(
       iconData: active ? LucideIcons.x : LucideIcons.search,
-      tooltip: active ? 'Close search' : 'Search',
+      tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
       onPressed: onPressed,
     );
   }
@@ -771,6 +850,7 @@ class _HomeNavigationRail extends StatefulWidget {
 class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   TabController? _tabController;
   int _controllerIndex = 0;
+  late final AppLocalizations l10n = context.l10n;
 
   @override
   void initState() {
@@ -832,9 +912,9 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
       if (calendarDestinationIndex != null &&
           destinations.length == calendarDestinationIndex) {
         destinations.add(
-          const AxiRailDestination(
+          AxiRailDestination(
             icon: LucideIcons.calendarClock,
-            label: 'Calendar',
+            label: l10n.homeRailCalendar,
           ),
         );
       }
@@ -857,6 +937,9 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
             ? null
             : () => widget.onCollapsedChanged!(!widget.collapsed),
         backgroundColor: context.colorScheme.background,
+        footer: AccessibilityFindActionButton(
+          compact: widget.collapsed,
+        ),
         onDestinationSelected: (index) {
           final calendarIndex = _calendarDestinationIndex();
           if (calendarIndex != null && index == calendarIndex) {
@@ -907,7 +990,7 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
   Map<HomeTab, int> _computeBadgeCounts(int inviteCount) {
     final chats = context.watch<ChatsCubit?>()?.state.items;
     final draftsState = context.watch<DraftCubit?>()?.state;
-    final drafts = draftsState is DraftsAvailable ? draftsState.items : null;
+    final drafts = draftsState?.items;
     final unreadCount = chats == null
         ? 0
         : chats
@@ -1014,6 +1097,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         }
       },
       builder: (context, state) {
+        final l10n = context.l10n;
         final active = state.active;
         final tab = state.activeTab;
         final entry = tab == null
@@ -1029,8 +1113,8 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         final effectiveFilterId =
             filters.isEmpty ? null : (selectedFilterId ?? filters.first.id);
         final placeholder = entry == null
-            ? 'Search tabs'
-            : 'Search ${entry.label.toLowerCase()}';
+            ? l10n.homeSearchPlaceholderTabs
+            : l10n.homeSearchPlaceholderForTab(entry.label);
         final filterLabel =
             filters.isEmpty ? null : _filterLabel(filters, effectiveFilterId);
         return AnimatedCrossFade(
@@ -1064,7 +1148,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     const SizedBox(width: 8),
                     AxiIconButton(
                       iconData: LucideIcons.x,
-                      tooltip: 'Clear',
+                      tooltip: l10n.commonClear,
                       onPressed: _controller.text.isEmpty
                           ? null
                           : () => context
@@ -1077,7 +1161,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                       onPressed: () => context
                           .read<HomeSearchCubit?>()
                           ?.setSearchActive(false),
-                      child: const Text('Cancel'),
+                      child: Text(l10n.commonCancel),
                     ),
                   ],
                 ),
@@ -1136,7 +1220,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     child: Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        'Filter: $filterLabel',
+                        l10n.homeSearchFilterLabel(filterLabel),
                         style: context.textTheme.muted,
                       ),
                     ),

@@ -5,6 +5,7 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -17,6 +18,7 @@ class DraftsList extends StatelessWidget {
       buildWhen: (_, current) => current is DraftsAvailable,
       builder: (context, state) {
         late final List<Draft>? items;
+        final l10n = context.l10n;
 
         if (state is! DraftsAvailable) {
           items = context.read<DraftCubit>()['items'];
@@ -63,7 +65,7 @@ class DraftsList extends StatelessWidget {
         if (visibleItems.isEmpty) {
           return Center(
             child: Text(
-              'No drafts yet',
+              l10n.draftsEmpty,
               style: context.textTheme.muted,
             ),
           );
@@ -89,7 +91,10 @@ class DraftsList extends StatelessWidget {
                   menuItems: [
                     AxiDeleteMenuItem(
                       onPressed: () async {
-                        if (await confirm(context, text: 'Delete draft?') ==
+                        if (await confirm(
+                                  context,
+                                  text: l10n.draftsDeleteConfirm,
+                                ) ==
                                 true &&
                             context.mounted) {
                           context.read<DraftCubit?>()?.deleteDraft(id: item.id);
@@ -100,7 +105,8 @@ class DraftsList extends StatelessWidget {
                   leading: AxiAvatar(
                     jid: recipients == 1 ? item.jids[0] : recipients.toString(),
                   ),
-                  title: '${_subjectLabel(item)} — ${_recipientLabel(item)}',
+                  title:
+                      '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
                   subtitle: item.body?.isNotEmpty == true
                       ? item.body
                       : item.jids.join(', '),
@@ -122,15 +128,15 @@ bool _draftMatchesQuery(Draft draft, String query) {
       (draft.subject?.toLowerCase().contains(lower) ?? false);
 }
 
-String _subjectLabel(Draft draft) {
+String _subjectLabel(BuildContext context, Draft draft) {
   final subject = draft.subject?.trim();
   if (subject == null || subject.isEmpty) {
-    return '(no subject)';
+    return context.l10n.draftNoSubject;
   }
   return subject;
 }
 
-String _recipientLabel(Draft draft) {
+String _recipientLabel(BuildContext context, Draft draft) {
   final count = draft.jids.length;
-  return count == 1 ? '1 recipient' : '$count recipients';
+  return context.l10n.draftRecipientCount(count);
 }

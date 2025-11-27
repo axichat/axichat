@@ -21,9 +21,11 @@ class NotificationService {
       : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
+  bool _initialized = false;
   bool _tzInitialized = false;
   bool _schedulingUnsupported = false;
   final Map<int, Timer> _inAppTimers = {};
+  Completer<void>? _initializationCompleter;
 
   bool mute = false;
 
@@ -40,47 +42,78 @@ class NotificationService {
 
   String get channel => 'Messages';
 
-  Future<void> init() async {
-    FlutterForegroundTask.initCommunicationPort();
-    ensureNotificationTapPortInitialized();
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings(androidIconPath);
-    const DarwinInitializationSettings initializationSettingsDarwin =
-        DarwinInitializationSettings();
-    const LinuxInitializationSettings initializationSettingsLinux =
-        LinuxInitializationSettings(defaultActionName: 'Open notification');
-    const WindowsInitializationSettings initializationSettingsWindows =
-        WindowsInitializationSettings(
-      appName: 'Axichat',
-      appUserModelId: 'Im.Axi.Axichat',
-      guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
-    );
+  Future<void> init() => _ensureInitialized();
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsDarwin,
-      macOS: initializationSettingsDarwin,
-      linux: initializationSettingsLinux,
-      windows: initializationSettingsWindows,
-    );
-
-    await _plugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: notificationTapBackground,
-    );
-
-    await _ensureTimeZones();
-
-    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-    if (launchDetails?.didNotificationLaunchApp == true) {
-      final payload = launchDetails?.notificationResponse?.payload;
-      recordNotificationLaunch(payload);
-    }
+  Future<NotificationAppLaunchDetails?>
+      getAppNotificationAppLaunchDetails() async {
+    await _ensureInitialized();
+    return _plugin.getNotificationAppLaunchDetails();
   }
 
-  Future<NotificationAppLaunchDetails?> getAppNotificationAppLaunchDetails() =>
-      _plugin.getNotificationAppLaunchDetails();
+  Future<void> _ensureInitialized() async {
+    if (_initialized) {
+      return;
+    }
+    if (_initializationCompleter != null) {
+      return _initializationCompleter!.future;
+    }
+
+    final completer = Completer<void>();
+    _initializationCompleter = completer;
+
+    try {
+      FlutterForegroundTask.initCommunicationPort();
+      ensureNotificationTapPortInitialized();
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings(androidIconPath);
+      const DarwinInitializationSettings initializationSettingsDarwin =
+          DarwinInitializationSettings();
+      const LinuxInitializationSettings initializationSettingsLinux =
+          LinuxInitializationSettings(defaultActionName: 'Open notification');
+      const WindowsInitializationSettings initializationSettingsWindows =
+          WindowsInitializationSettings(
+        appName: 'Axichat',
+        appUserModelId: 'Im.Axi.Axichat',
+        guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
+      );
+
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsDarwin,
+        macOS: initializationSettingsDarwin,
+        linux: initializationSettingsLinux,
+        windows: initializationSettingsWindows,
+      );
+
+      await _plugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: notificationTapBackground,
+      );
+
+      await _ensureTimeZones();
+
+      try {
+        final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+        if (launchDetails?.didNotificationLaunchApp == true) {
+          final payload = launchDetails?.notificationResponse?.payload;
+          recordNotificationLaunch(payload);
+        }
+      } on UnimplementedError catch (error, stackTrace) {
+        debugPrint(
+          'Notification launch details unsupported on this platform: $error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
+
+      _initialized = true;
+      completer.complete();
+    } catch (error, stackTrace) {
+      _initializationCompleter = null;
+      completer.completeError(error, stackTrace);
+      rethrow;
+    }
+  }
 
   Future<bool> hasAllNotificationPermissions() async {
     if (!needsPermissions) return true;
@@ -168,6 +201,7 @@ class NotificationService {
       if (!await condition) return;
     }
 
+    await _ensureInitialized();
     final notificationDetails = await _notificationDetails();
 
     await _plugin.show(
@@ -179,7 +213,10 @@ class NotificationService {
     );
   }
 
-  Future<void> dismissNotifications() => _plugin.cancelAll();
+  Future<void> dismissNotifications() async {
+    await _ensureInitialized();
+    await _plugin.cancelAll();
+  }
 
   Future<void> scheduleNotification({
     required int id,
@@ -191,6 +228,7 @@ class NotificationService {
     if (mute) return;
     final hasPermissions = await hasAllNotificationPermissions();
     if (!hasPermissions) return;
+    await _ensureInitialized();
     final scheduledLocal = scheduledAt.toLocal();
     if (_schedulingUnsupported || !_supportsPlatformScheduling) {
       _markSchedulingUnsupported();
@@ -231,9 +269,10 @@ class NotificationService {
     }
   }
 
-  Future<void> cancelNotification(int id) {
+  Future<void> cancelNotification(int id) async {
     _cancelInAppTimer(id);
-    return _plugin.cancel(id);
+    await _ensureInitialized();
+    await _plugin.cancel(id);
   }
 
   void _markSchedulingUnsupported({Object? error, StackTrace? stackTrace}) {
@@ -302,6 +341,7 @@ class NotificationService {
   }
 
   Future<NotificationDetails> _notificationDetails() async {
+    await _ensureInitialized();
     final packageInfo = await PackageInfo.fromPlatform();
 
     final androidDetails = AndroidNotificationDetails(

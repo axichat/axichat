@@ -43,12 +43,12 @@ dependencies:
     git:
       url: https://gitlab.com/axichat/moxxmpp.git
       path: packages/moxxmpp
-      ref: v0.6.3
+      ref: v0.6.4
   moxxmpp_socket_tcp:
     git:
       url: https://gitlab.com/axichat/moxxmpp.git
       path: packages/moxxmpp_socket_tcp
-      ref: v0.6.3
+      ref: v0.6.4
   moxlib:
     hosted:
       name: moxlib
@@ -98,8 +98,6 @@ dependency_overrides:
   intl: ^0.20.2
   analyzer: 6.4.1
   _fe_analyzer_shared: 67.0.0
-  moxxmpp:
-    path: packages/moxxmpp
 
 dev_dependencies:
   flutter_driver:

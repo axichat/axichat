@@ -152,6 +152,7 @@ void main() {
       () => messageService.countLocalMessages(
         jid: any(named: 'jid'),
         filter: any(named: 'filter'),
+        includePseudoMessages: any(named: 'includePseudoMessages'),
       ),
     ).thenAnswer((_) async => 0);
 
@@ -763,6 +764,7 @@ void main() {
       () => messageService.countLocalMessages(
         jid: any(named: 'jid'),
         filter: any(named: 'filter'),
+        includePseudoMessages: any(named: 'includePseudoMessages'),
       ),
     ).thenAnswer((_) async => ChatBloc.messageBatchSize);
 
@@ -805,6 +807,7 @@ void main() {
       () => messageService.countLocalMessages(
         jid: any(named: 'jid'),
         filter: any(named: 'filter'),
+        includePseudoMessages: any(named: 'includePseudoMessages'),
       ),
     ).thenAnswer((_) async {
       if (counts.isEmpty) return 2;
@@ -899,6 +902,7 @@ void main() {
       () => xmppService.countLocalMessages(
         jid: any(named: 'jid'),
         filter: any(named: 'filter'),
+        includePseudoMessages: any(named: 'includePseudoMessages'),
       ),
     ).thenAnswer((_) async => ChatBloc.messageBatchSize);
     when(

@@ -8,6 +8,8 @@ import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.da
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -28,8 +30,6 @@ class SignupForm extends StatefulWidget {
 
   final VoidCallback? onSubmitStart;
   final ValueChanged<bool>? onLoadingChanged;
-
-  static const title = 'Sign Up';
 
   @override
   State<SignupForm> createState() => _SignupFormState();
@@ -231,15 +231,16 @@ class _SignupFormState extends State<SignupForm>
   static const _progressSegmentCount = 3;
 
   String get _currentStepLabel {
+    final l10n = context.l10n;
     switch (_currentIndex) {
       case 0:
-        return 'Choose username';
+        return l10n.signupStepUsername;
       case 1:
-        return 'Create password';
+        return l10n.signupStepPassword;
       case 2:
-        return 'Verify captcha';
+        return l10n.signupStepCaptcha;
       default:
-        return 'Setup';
+        return l10n.signupStepSetup;
     }
   }
 
@@ -437,6 +438,7 @@ class _SignupFormState extends State<SignupForm>
             context.read<SettingsCubit>().animationDuration;
         final showGlobalError =
             !_showBreachedError && (_errorText?.trim().isNotEmpty ?? false);
+        final l10n = context.l10n;
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -458,7 +460,7 @@ class _SignupFormState extends State<SignupForm>
                 Padding(
                   padding: horizontalPadding,
                   child: Text(
-                    SignupForm.title,
+                    l10n.signupTitle,
                     style: context.textTheme.h3,
                   ),
                 ),
@@ -470,7 +472,7 @@ class _SignupFormState extends State<SignupForm>
                         ? Semantics(
                             liveRegion: true,
                             container: true,
-                            label: 'Error: ${_errorText!}',
+                            label: l10n.signupErrorPrefix(_errorText!),
                             child: Text(
                               _errorText!,
                               key: const ValueKey('signup-global-error-text'),
@@ -516,20 +518,21 @@ class _SignupFormState extends State<SignupForm>
                                 ),
                               ],
                               keyboardType: TextInputType.name,
-                              description: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 6.0),
-                                child: Text('Case insensitive'),
+                              description: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 6.0),
+                                child: Text(l10n.authUsernameCaseInsensitive),
                               ),
-                              placeholder: const Text('Username'),
+                              placeholder: Text(l10n.authUsername),
                               enabled: !loading,
                               controller: _jidTextController,
                               trailing: EndpointSuffix(server: state.server),
                               validator: (text) {
                                 if (text.isEmpty) {
-                                  return 'Enter a username';
+                                  return l10n.authUsernameRequired;
                                 }
                                 if (!_usernamePattern.hasMatch(text)) {
-                                  return '4-20 alphanumeric, allowing ".", "_" and "-".';
+                                  return l10n.authUsernameRules;
                                 }
                                 return null;
                               },
@@ -556,7 +559,7 @@ class _SignupFormState extends State<SignupForm>
                                   controller: _password2TextController,
                                   confirmValidator: (text) =>
                                       text != _passwordTextController.text
-                                          ? 'Passwords don\'t match'
+                                          ? l10n.authPasswordsMismatch
                                           : null,
                                 ),
                               ),
@@ -652,13 +655,14 @@ class _SignupFormState extends State<SignupForm>
                                         children: [
                                           Semantics(
                                             label: persistentError
-                                                ? 'Captcha unavailable'
-                                                : 'Captcha challenge',
+                                                ? l10n.signupCaptchaUnavailable
+                                                : l10n.signupCaptchaChallenge,
                                             hint: persistentError
-                                                ? 'Captcha failed to load. Use reload to try again.'
+                                                ? l10n.signupCaptchaFailed
                                                 : describingLoading
-                                                    ? 'Captcha loading'
-                                                    : 'Enter the characters shown in this captcha image.',
+                                                    ? l10n.signupCaptchaLoading
+                                                    : l10n
+                                                        .signupCaptchaInstructions,
                                             image:
                                                 !persistentError && hasValidUrl,
                                             child: persistentError
@@ -675,12 +679,11 @@ class _SignupFormState extends State<SignupForm>
                                           Semantics(
                                             button: true,
                                             enabled: !loading,
-                                            label: 'Reload captcha',
-                                            hint:
-                                                'Get a new captcha image if you cannot read this one.',
+                                            label: l10n.signupCaptchaReload,
+                                            hint: l10n.signupCaptchaReloadHint,
                                             child: AxiIconButton(
                                               iconData: LucideIcons.refreshCw,
-                                              tooltip: 'Reload captcha',
+                                              tooltip: l10n.signupCaptchaReload,
                                               onPressed: loading
                                                   ? null
                                                   : () => _reloadCaptcha(),
@@ -700,12 +703,12 @@ class _SignupFormState extends State<SignupForm>
                                     autocorrect: false,
                                     keyboardType: TextInputType.number,
                                     placeholder:
-                                        const Text('Enter the above text'),
+                                        Text(l10n.signupCaptchaPlaceholder),
                                     enabled: !loading,
                                     controller: _captchaTextController,
                                     validator: (text) {
                                       if (text.isEmpty) {
-                                        return 'Enter the text from the image';
+                                        return l10n.signupCaptchaValidation;
                                       }
                                       return null;
                                     },
@@ -752,7 +755,7 @@ class _SignupFormState extends State<SignupForm>
                                       _currentIndex--;
                                     });
                                   },
-                                  child: const Text('Back'),
+                                  child: Text(l10n.commonBack),
                                 ).withTapBounce(
                                   enabled: !loading && !isCheckingPwned,
                                 ),
@@ -779,11 +782,11 @@ class _SignupFormState extends State<SignupForm>
                                   secondChild: AxiProgressIndicator(
                                     color:
                                         context.colorScheme.primaryForeground,
-                                    semanticsLabel: 'Checking password safety',
+                                    semanticsLabel: l10n.authPasswordPending,
                                   ),
                                 ),
                                 trailing: const SizedBox.shrink(),
-                                child: const Text('Continue'),
+                                child: Text(l10n.signupContinue),
                               ).withTapBounce(
                                 enabled: !loading && !isCheckingPwned,
                               ),
@@ -804,11 +807,11 @@ class _SignupFormState extends State<SignupForm>
                                 firstChild: const SizedBox(),
                                 secondChild: AxiProgressIndicator(
                                   color: context.colorScheme.primaryForeground,
-                                  semanticsLabel: 'Waiting for signup',
+                                  semanticsLabel: l10n.authSignupPending,
                                 ),
                               ),
                               trailing: const SizedBox.shrink(),
-                              child: const Text('Sign up'),
+                              child: Text(l10n.authSignUp),
                             ).withTapBounce(
                               enabled: !loading && !cleanupBlocked,
                             )
@@ -856,6 +859,7 @@ class _SignupProgressMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final targetPercent = (progressValue * 100).clamp(0.0, 100.0);
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: targetPercent),
@@ -867,9 +871,13 @@ class _SignupProgressMeter extends StatelessWidget {
         final currentStepNumber =
             (currentStepIndex + 1).clamp(1, totalSteps).toInt();
         return Semantics(
-          label: 'Signup progress',
-          value:
-              'Step $currentStepNumber of $totalSteps: $currentStepLabel. ${clampedPercent.round()} percent complete.',
+          label: l10n.signupProgressLabel,
+          value: l10n.signupProgressValue(
+            currentStepNumber,
+            totalSteps,
+            currentStepLabel,
+            clampedPercent.round(),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -877,7 +885,7 @@ class _SignupProgressMeter extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Account setup',
+                    l10n.signupProgressSection,
                     style: context.textTheme.muted,
                   ),
                   Text(
@@ -938,6 +946,7 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final targetBits = entropyBits.clamp(0.0, maxEntropyBits);
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: targetBits),
@@ -953,11 +962,11 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Password strength',
+                  l10n.signupPasswordStrength,
                   style: context.textTheme.muted,
                 ),
                 Text(
-                  _labelForLevel(strengthLevel),
+                  _labelForLevel(strengthLevel, l10n),
                   style: context.textTheme.muted.copyWith(
                     color: fillColor,
                     fontWeight: FontWeight.w600,
@@ -994,7 +1003,7 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
                       key: const ValueKey('breach-warning'),
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        'This password has been found in a hacked database.',
+                        l10n.signupPasswordBreached,
                         style: context.textTheme.muted.copyWith(
                           color: colors.destructive,
                           fontWeight: FontWeight.w600,
@@ -1009,16 +1018,19 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
     );
   }
 
-  static String _labelForLevel(_PasswordStrengthLevel level) {
+  static String _labelForLevel(
+    _PasswordStrengthLevel level,
+    AppLocalizations l10n,
+  ) {
     switch (level) {
       case _PasswordStrengthLevel.empty:
-        return 'None';
+        return l10n.signupStrengthNone;
       case _PasswordStrengthLevel.weak:
-        return 'Weak';
+        return l10n.signupStrengthWeak;
       case _PasswordStrengthLevel.medium:
-        return 'Medium';
+        return l10n.signupStrengthMedium;
       case _PasswordStrengthLevel.stronger:
-        return 'Stronger';
+        return l10n.signupStrengthStronger;
     }
   }
 
@@ -1061,6 +1073,7 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AnimatedSwitcher(
       duration: animationDuration,
       switchInCurve: Curves.easeIn,
@@ -1075,8 +1088,8 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
                   key: ValueKey('${reason!.name}-$resetTick'),
                   enabled: !loading && !pwnedCheckInProgress,
                   initialValue: allowInsecurePassword,
-                  inputLabel: const Text('I understand the risk'),
-                  inputSublabel: Text(_reasonDescription(reason!)),
+                  inputLabel: Text(l10n.signupRiskAcknowledgement),
+                  inputSublabel: Text(_reasonDescription(reason!, l10n)),
                   onChanged: onChanged,
                 ),
                 AnimatedOpacity(
@@ -1086,7 +1099,7 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4, top: 4),
                     child: Text(
-                      'Check the box above to continue.',
+                      l10n.signupRiskError,
                       style: TextStyle(
                         color: context.colorScheme.destructive,
                         fontSize: 12,
@@ -1099,11 +1112,14 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
     );
   }
 
-  static String _reasonDescription(_InsecurePasswordReason reason) {
+  static String _reasonDescription(
+    _InsecurePasswordReason reason,
+    AppLocalizations l10n,
+  ) {
     if (reason == _InsecurePasswordReason.breached) {
-      return 'Allow this password even though it appeared in a breach.';
+      return l10n.signupRiskAllowBreach;
     }
-    return 'Allow this password even though it is considered weak.';
+    return l10n.signupRiskAllowWeak;
   }
 }
 
@@ -1274,10 +1290,11 @@ class _CaptchaErrorMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return SizedBox.expand(
       child: Center(
         child: Text(
-          'Unable to load captcha.\nTap refresh to try again.',
+          l10n.signupCaptchaErrorMessage,
           textAlign: TextAlign.center,
           style: context.textTheme.muted.copyWith(
             color: context.colorScheme.destructive,

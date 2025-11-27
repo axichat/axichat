@@ -1,5 +1,6 @@
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -9,11 +10,11 @@ Future<bool?> showNotificationDialog(
     showShadDialog<bool>(
       context: context,
       builder: (context) => ShadDialog(
-        title: const Text('Enable message notifications'),
+        title: Text(context.l10n.notificationsDialogTitle),
         actions: [
           ShadButton.destructive(
             onPressed: () => context.pop(false),
-            child: const Text('Ignore'),
+            child: Text(context.l10n.notificationsDialogIgnore),
           ).withTapBounce(),
           ShadButton(
             onPressed: () async {
@@ -23,9 +24,9 @@ Future<bool?> showNotificationDialog(
                 context.pop(true);
               }
             },
-            child: const Text('Continue'),
+            child: Text(context.l10n.notificationsDialogContinue),
           ).withTapBounce(),
         ],
-        child: const Text('Chats can always be muted later.'),
+        child: Text(context.l10n.notificationsDialogDescription),
       ),
     );

@@ -6,8 +6,10 @@ import 'package:axichat/src/common/ui/axi_avatar.dart';
 import 'package:axichat/src/common/ui/string_to_color.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -67,6 +69,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late List<ComposerRecipient> _renderedRecipients;
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
+  List<FanOutTarget> _suggestions = const <FanOutTarget>[];
+  final ValueNotifier<int?> _highlightedSuggestionIndex =
+      ValueNotifier<int?>(null);
+  String? _pendingRemovalKey;
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
 
@@ -85,6 +91,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       parent: _collapseController,
       curve: Curves.easeInOutCubic,
     );
+    _controller.addListener(_handleTextChanged);
   }
 
   @override
@@ -95,10 +102,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       _animateCollapse(_barCollapsed);
     }
     _syncRenderedRecipients();
+    _prunePendingRemoval();
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleTextChanged);
+    _highlightedSuggestionIndex.dispose();
     _controller.dispose();
     _focusNode.dispose();
     _collapseController.dispose();
@@ -109,6 +119,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final l10n = context.l10n;
     final recipients = widget.recipients;
     final visibleRecipients = _visibleRecipientsForState();
     final overflow = recipients.length - visibleRecipients.length;
@@ -121,17 +132,17 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           child: _RecipientChip(
             recipient: recipient,
             status: _statusFor(recipient),
+            pendingRemoval: _pendingRemovalKey == recipient.key,
             onToggle: () => widget.onRecipientToggled(recipient.key),
-            onRemove: recipient.pinned
-                ? null
-                : () => widget.onRecipientRemoved(recipient.key),
+            onRemove:
+                recipient.pinned ? null : () => _removeRecipient(recipient.key),
           ),
         ),
       if (!_barCollapsed && !_expanded && overflow > 0)
         _AnimatedChipWrapper(
           key: ValueKey('show-more-$overflow'),
           child: _ActionChip(
-            label: '+$overflow more',
+            label: l10n.recipientsOverflowMore(overflow),
             icon: Icons.add,
             onPressed: () => _toggleListExpansion(true),
           ),
@@ -140,7 +151,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         _AnimatedChipWrapper(
           key: const ValueKey('collapse'),
           child: _ActionChip(
-            label: 'Collapse',
+            label: l10n.recipientsCollapse,
             icon: Icons.expand_less,
             onPressed: () => _toggleListExpansion(false),
           ),
@@ -209,9 +220,15 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
               container: true,
               button: true,
               toggled: !_barCollapsed,
-              label:
-                  'Recipients ${recipients.length}, ${_barCollapsed ? 'collapsed' : 'expanded'}',
-              hint: _barCollapsed ? 'Press to expand' : 'Press to collapse',
+              label: l10n.recipientsSemantics(
+                recipients.length,
+                _barCollapsed
+                    ? l10n.recipientsStateCollapsed
+                    : l10n.recipientsStateExpanded,
+              ),
+              hint: _barCollapsed
+                  ? l10n.recipientsHintExpand
+                  : l10n.recipientsHintCollapse,
               onTap: _toggleBarCollapsed,
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
@@ -235,7 +252,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                       children: [
                         Expanded(
                           child: Text(
-                            'Send to...',
+                            l10n.recipientsHeaderTitle,
                             style: headerStyle,
                           ),
                         ),
@@ -292,8 +309,12 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             knownDomains,
                             knownAddresses,
                           ),
+                          highlightedIndexListenable:
+                              _highlightedSuggestionIndex,
                           onManualEntry: _handleManualEntry,
-                          onRecipientAdded: widget.onRecipientAdded,
+                          onOptionsChanged: _updateSuggestions,
+                          onSubmitted: _handleAutocompleteSubmit,
+                          onRecipientAdded: _handleRecipientAdded,
                         ),
                       ),
                     ],
@@ -315,10 +336,21 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace &&
-        _controller.text.isEmpty) {
-      _removeLastRecipient();
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown) {
+      return _moveAutocompleteHighlight(1);
+    }
+    if (key == LogicalKeyboardKey.arrowUp) {
+      return _moveAutocompleteHighlight(-1);
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _handleAutocompleteSubmit();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.backspace && _controller.text.isEmpty) {
+      _handleBackspacePress();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -328,15 +360,114 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (!_looksLikeEmail(value)) {
       return false;
     }
-    widget.onRecipientAdded(FanOutTarget.address(address: value));
+    _handleRecipientAdded(FanOutTarget.address(address: value));
     return true;
   }
 
-  void _removeLastRecipient() {
-    final removable =
-        widget.recipients.where((recipient) => !recipient.pinned).toList();
+  void _updateSuggestions(List<FanOutTarget> suggestions) {
+    _suggestions = suggestions;
+    _highlightedSuggestionIndex.value = null;
+  }
+
+  void _handleTextChanged() {
+    if (_pendingRemovalKey != null && _controller.text.isNotEmpty) {
+      _clearPendingRemoval();
+    }
+  }
+
+  KeyEventResult _moveAutocompleteHighlight(int delta) {
+    if (_suggestions.isEmpty) {
+      return KeyEventResult.ignored;
+    }
+    int? next = _highlightedSuggestionIndex.value;
+    if (next == null) {
+      if (delta > 0) {
+        next = 0;
+      } else {
+        return KeyEventResult.handled;
+      }
+    } else {
+      final candidate = next + delta;
+      if (candidate < 0) {
+        next = null;
+      } else if (candidate >= _suggestions.length) {
+        next = _suggestions.length - 1;
+      } else {
+        next = candidate;
+      }
+    }
+    if (next == _highlightedSuggestionIndex.value) {
+      return KeyEventResult.handled;
+    }
+    _highlightedSuggestionIndex.value = next;
+    return KeyEventResult.handled;
+  }
+
+  bool _handleAutocompleteSubmit() {
+    final text = _controller.text.trim();
+    final highlighted = _highlightedSuggestionIndex.value;
+    if (highlighted != null &&
+        highlighted >= 0 &&
+        highlighted < _suggestions.length) {
+      _handleRecipientAdded(_suggestions[highlighted]);
+      _controller.clear();
+      _updateSuggestions(const <FanOutTarget>[]);
+      return true;
+    }
+    if (text.isEmpty) {
+      return false;
+    }
+    if (_handleManualEntry(text)) {
+      _controller.clear();
+      _updateSuggestions(const <FanOutTarget>[]);
+      return true;
+    }
+    return false;
+  }
+
+  void _handleBackspacePress() {
+    final removable = _removableRecipients();
     if (removable.isEmpty) return;
-    widget.onRecipientRemoved(removable.last.key);
+    final lastKey = removable.last.key;
+    if (_pendingRemovalKey == lastKey) {
+      _removeRecipient(lastKey);
+      return;
+    }
+    _setPendingRemoval(lastKey);
+  }
+
+  void _setPendingRemoval(String key) {
+    if (_pendingRemovalKey == key) return;
+    setState(() => _pendingRemovalKey = key);
+  }
+
+  void _clearPendingRemoval() {
+    if (_pendingRemovalKey == null) return;
+    setState(() => _pendingRemovalKey = null);
+  }
+
+  void _prunePendingRemoval() {
+    final key = _pendingRemovalKey;
+    if (key == null) return;
+    final exists = widget.recipients.any((recipient) => recipient.key == key);
+    if (!exists) {
+      _clearPendingRemoval();
+    }
+  }
+
+  void _removeRecipient(String key) {
+    if (_pendingRemovalKey == key) {
+      _clearPendingRemoval();
+    }
+    widget.onRecipientRemoved(key);
+  }
+
+  List<ComposerRecipient> _removableRecipients() =>
+      widget.recipients.where((recipient) => !recipient.pinned).toList();
+
+  void _handleRecipientAdded(FanOutTarget target) {
+    _clearPendingRemoval();
+    widget.onRecipientAdded(target);
   }
 
   bool _looksLikeEmail(String value) {
@@ -640,12 +771,14 @@ class _RecipientChip extends StatelessWidget {
     required this.recipient,
     required this.onToggle,
     required this.onRemove,
+    this.pendingRemoval = false,
     this.status,
   });
 
   final ComposerRecipient recipient;
   final VoidCallback onToggle;
   final VoidCallback? onRemove;
+  final bool pendingRemoval;
   final FanOutRecipientState? status;
 
   @override
@@ -665,7 +798,14 @@ class _RecipientChip extends StatelessWidget {
         included ? _foregroundColor(background, colors) : colors.onSurface;
     final statusIcon = _statusIcon();
     final accentColor = baseColor.withValues(alpha: 1);
-    final borderColor = included ? accentColor : Colors.transparent;
+    final removalColor = colors.error;
+    final effectiveBackground = pendingRemoval
+        ? Color.alphaBlend(removalColor.withValues(alpha: 0.12), background)
+        : background;
+    final effectiveForeground = pendingRemoval ? removalColor : foreground;
+    final borderColor = pendingRemoval
+        ? removalColor
+        : (included ? accentColor : Colors.transparent);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: _chipHeight),
@@ -682,23 +822,26 @@ class _RecipientChip extends StatelessWidget {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(child: Text(_label)),
+            Flexible(child: Text(_label(context))),
           ],
         ),
         onPressed: onToggle,
         selected: included,
-        backgroundColor: background,
-        selectedColor: background,
-        labelStyle: TextStyle(color: foreground),
+        backgroundColor: effectiveBackground,
+        selectedColor: effectiveBackground,
+        labelStyle: TextStyle(color: effectiveForeground),
         deleteIcon: onRemove == null
             ? null
             : Icon(
                 Icons.close,
                 size: 16,
-                color: foreground,
+                color: effectiveForeground,
               ),
         onDeleted: onRemove,
-        side: BorderSide(color: borderColor, width: included ? 1.1 : 0),
+        side: BorderSide(
+          color: borderColor,
+          width: pendingRemoval || included ? 1.1 : 0,
+        ),
         elevation: included ? 1.5 : 0,
         shadowColor: colors.shadow,
         selectedShadowColor: colors.shadow,
@@ -710,13 +853,13 @@ class _RecipientChip extends StatelessWidget {
     );
   }
 
-  String get _label {
+  String _label(BuildContext context) {
     if (recipient.target.chat != null) {
       return recipient.target.chat!.title;
     }
     return recipient.target.displayName ??
         recipient.target.address ??
-        'Recipient';
+        context.l10n.recipientsFallbackLabel;
   }
 
   Color _chipColor(BuildContext context, bool colorfulAvatars) {
@@ -876,7 +1019,10 @@ class _RecipientAutocompleteField extends StatelessWidget {
     required this.tapRegionGroup,
     required this.backgroundColor,
     required this.optionsBuilder,
+    required this.highlightedIndexListenable,
     required this.onManualEntry,
+    required this.onOptionsChanged,
+    required this.onSubmitted,
     required this.onRecipientAdded,
   });
 
@@ -885,7 +1031,10 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final Object tapRegionGroup;
   final Color backgroundColor;
   final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
+  final ValueListenable<int?> highlightedIndexListenable;
   final bool Function(String value) onManualEntry;
+  final ValueChanged<List<FanOutTarget>> onOptionsChanged;
+  final bool Function() onSubmitted;
   final ValueChanged<FanOutTarget> onRecipientAdded;
 
   @override
@@ -897,13 +1046,17 @@ class _RecipientAutocompleteField extends StatelessWidget {
         focusNode: focusNode,
         optionsBuilder: (value) {
           final query = value.text.trim();
-          if (query.isEmpty) return const Iterable<FanOutTarget>.empty();
-          return optionsBuilder(query);
+          if (query.isEmpty) {
+            onOptionsChanged(const <FanOutTarget>[]);
+            return const Iterable<FanOutTarget>.empty();
+          }
+          final options = optionsBuilder(query).toList(growable: false);
+          onOptionsChanged(options);
+          return options;
         },
         displayStringForOption: (option) =>
             option.chat?.title ?? option.displayName ?? option.address ?? '',
-        fieldViewBuilder:
-            (context, fieldController, fieldFocusNode, onFieldSubmitted) {
+        fieldViewBuilder: (context, fieldController, fieldFocusNode, _) {
           final colors = Theme.of(context).colorScheme;
           final hintColor = colors.onSurfaceVariant.withValues(alpha: 0.8);
           final textStyle = Theme.of(context).textTheme.bodyMedium;
@@ -949,7 +1102,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
                           enableSuggestions: false,
                           autofillHints: const [AutofillHints.email],
                           decoration: InputDecoration(
-                            hintText: 'Add...',
+                            hintText: context.l10n.recipientsAddHint,
                             hintStyle: textStyle?.copyWith(color: hintColor),
                           ),
                           style: textStyle,
@@ -960,16 +1113,15 @@ class _RecipientAutocompleteField extends StatelessWidget {
                           onEditingComplete: () =>
                               fieldFocusNode.requestFocus(),
                           textAlignVertical: TextAlignVertical.center,
-                          onSubmitted: (value) {
-                            final trimmed = value.trim();
-                            if (trimmed.isEmpty) {
-                              fieldFocusNode.requestFocus();
-                              return;
-                            }
-                            if (onManualEntry(trimmed)) {
-                              fieldController.clear();
-                            } else {
-                              onFieldSubmitted();
+                          onSubmitted: (_) {
+                            final handled = onSubmitted();
+                            if (!handled) {
+                              final trimmed = fieldController.text.trim();
+                              if (trimmed.isNotEmpty &&
+                                  onManualEntry(trimmed)) {
+                                fieldController.clear();
+                                onOptionsChanged(const <FanOutTarget>[]);
+                              }
                             }
                             fieldFocusNode.requestFocus();
                           },
@@ -989,17 +1141,18 @@ class _RecipientAutocompleteField extends StatelessWidget {
           final colors = context.colorScheme;
           final theme = Theme.of(context).textTheme;
           final overlayRadius = BorderRadius.circular(20);
-          final highlightedIndex = AutocompleteHighlightedOption.of(context);
           final titleStyle = theme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
             color: colors.foreground,
           );
           final subtitleStyle = theme.bodySmall?.copyWith(
-            color: colors.muted,
+            color: colors.mutedForeground,
           );
           final dividerColor = colors.border.withValues(alpha: 0.55);
           final hoverColor = colors.muted.withValues(alpha: 0.08);
+          final highlightColor = colors.primary.withValues(alpha: 0.12);
           final trailingIconColor = colors.muted.withValues(alpha: 0.9);
+          final optionList = options.toList(growable: false);
           return TapRegion(
             groupId: tapRegionGroup,
             onTapOutside: (_) => focusNode.unfocus(),
@@ -1036,20 +1189,27 @@ class _RecipientAutocompleteField extends StatelessWidget {
                     borderRadius: overlayRadius,
                     child: Material(
                       color: Colors.transparent,
-                      child: _AutocompleteOptionsList(
-                        options: options.toList(growable: false),
-                        onSelected: (option) {
-                          onSelected(option);
-                          controller.clear();
-                          focusNode.requestFocus();
-                          onRecipientAdded(option);
+                      child: ValueListenableBuilder<int?>(
+                        valueListenable: highlightedIndexListenable,
+                        builder: (context, highlightedIndex, _) {
+                          return _AutocompleteOptionsList(
+                            options: optionList,
+                            onSelected: (option) {
+                              onSelected(option);
+                              controller.clear();
+                              onOptionsChanged(const <FanOutTarget>[]);
+                              focusNode.requestFocus();
+                              onRecipientAdded(option);
+                            },
+                            titleStyle: titleStyle,
+                            subtitleStyle: subtitleStyle,
+                            dividerColor: dividerColor,
+                            trailingIconColor: trailingIconColor,
+                            hoverColor: hoverColor,
+                            highlightColor: highlightColor,
+                            highlightedIndex: highlightedIndex,
+                          );
                         },
-                        titleStyle: titleStyle,
-                        subtitleStyle: subtitleStyle,
-                        dividerColor: dividerColor,
-                        trailingIconColor: trailingIconColor,
-                        hoverColor: hoverColor,
-                        highlightedIndex: highlightedIndex,
                       ),
                     ),
                   ),
@@ -1061,6 +1221,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
         onSelected: (selection) {
           onRecipientAdded(selection);
           controller.clear();
+          onOptionsChanged(const <FanOutTarget>[]);
           focusNode.requestFocus();
         },
       ),
@@ -1077,6 +1238,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
     required this.dividerColor,
     required this.trailingIconColor,
     required this.hoverColor,
+    required this.highlightColor,
     required this.highlightedIndex,
   });
 
@@ -1087,6 +1249,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
   final Color dividerColor;
   final Color trailingIconColor;
   final Color hoverColor;
+  final Color highlightColor;
   final int? highlightedIndex;
 
   @override
@@ -1133,7 +1296,7 @@ class _AutocompleteOptionsList extends StatelessWidget {
               hoverColor: hoverColor,
               child: Container(
                 decoration: BoxDecoration(
-                  color: highlighted ? hoverColor : null,
+                  color: highlighted ? highlightColor : null,
                   border: Border(bottom: border),
                 ),
                 padding:
@@ -1195,17 +1358,11 @@ class _SuggestionAvatar extends StatelessWidget {
       );
     }
     final address = option.address ?? option.chat?.emailAddress ?? '';
-    final background = stringToColor(address);
-    return CircleAvatar(
-      backgroundColor: background,
-      radius: 16,
-      child: Text(
-        address.isEmpty ? '?' : address.substring(0, 1).toUpperCase(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+    final jid = address.isNotEmpty ? address : option.displayName ?? '';
+    return AxiAvatar(
+      jid: jid,
+      size: 32,
+      shape: AxiAvatarShape.circle,
     );
   }
 }

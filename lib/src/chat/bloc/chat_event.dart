@@ -353,3 +353,18 @@ final class ChatNicknameChangeRequested extends ChatEvent {
   @override
   List<Object?> get props => [nickname];
 }
+
+final class ChatContactRenameRequested extends ChatEvent {
+  const ChatContactRenameRequested(
+    this.displayName, {
+    required this.successMessage,
+    required this.failureMessage,
+  });
+
+  final String displayName;
+  final String successMessage;
+  final String failureMessage;
+
+  @override
+  List<Object?> get props => [displayName, successMessage, failureMessage];
+}

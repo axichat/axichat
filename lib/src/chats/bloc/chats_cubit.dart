@@ -126,6 +126,16 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsService.deleteChatMessages(jid: jid);
   }
 
+  Future<void> renameContact({
+    required String jid,
+    required String displayName,
+  }) {
+    return _chatsService.renameChatContact(
+      jid: jid,
+      displayName: displayName,
+    );
+  }
+
   void ensureChatSelected(String jid) {
     if (state.selectedJids.contains(jid)) return;
     final updated = Set<String>.of(state.selectedJids)..add(jid);

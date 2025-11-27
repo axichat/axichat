@@ -8,6 +8,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,8 @@ class SpamList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final filters = spamSearchFilters(l10n);
     return BlocSelector<ChatsCubit, ChatsState, List<Chat>?>(
       selector: (state) {
         final items = state.items;
@@ -39,7 +42,7 @@ class SpamList extends StatelessWidget {
         final searchActive = searchState?.active ?? false;
         final query =
             searchActive ? (tabState?.query.trim().toLowerCase() ?? '') : '';
-        final filterId = tabState?.filterId ?? spamSearchFilters.first.id;
+        final filterId = tabState?.filterId ?? filters.first.id;
         final sortOrder = tabState?.sort ?? SearchSortOrder.newestFirst;
 
         var visibleItems = List<Chat>.from(items);
@@ -63,7 +66,7 @@ class SpamList extends StatelessWidget {
         if (visibleItems.isEmpty) {
           return Center(
             child: Text(
-              'No spam yet',
+              l10n.spamEmpty,
               style: context.textTheme.muted,
             ),
           );
@@ -85,7 +88,7 @@ class SpamList extends StatelessWidget {
                       child: ShadButton.secondary(
                         size: ShadButtonSize.sm,
                         onPressed: () => _moveToInbox(context, chat),
-                        child: const Text('Move to inbox'),
+                        child: Text(l10n.spamMoveToInbox),
                       ),
                     ),
                   ],
@@ -117,6 +120,7 @@ class SpamList extends StatelessWidget {
   }
 
   Future<void> _moveToInbox(BuildContext context, Chat chat) async {
+    final l10n = context.l10n;
     final xmppService = context.read<XmppService?>();
     final emailService = RepositoryProvider.of<EmailService?>(context);
     final toaster = ShadToaster.maybeOf(context);
@@ -127,8 +131,8 @@ class SpamList extends StatelessWidget {
     }
     toaster?.show(
       FeedbackToast.success(
-        title: 'Moved',
-        message: 'Returned ${chat.title} to inbox.',
+        title: l10n.spamMoveToastTitle,
+        message: l10n.spamMoveToastMessage(chat.title),
       ),
     );
   }

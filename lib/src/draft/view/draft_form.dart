@@ -19,6 +19,7 @@ import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:file_picker/file_picker.dart';
@@ -30,6 +31,7 @@ import 'package:mime/mime.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _draftComposerControlExtent = 42;
+const double _draftSubjectHeight = 32;
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -128,6 +130,7 @@ class _DraftFormState extends State<DraftForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final chats = context.watch<ChatsCubit?>()?.state.items ?? const <Chat>[];
     final autovalidateMode = _showValidationMessages
         ? AutovalidateMode.always
@@ -142,7 +145,7 @@ class _DraftFormState extends State<DraftForm> {
           listener: (context, state) {
             if (state is DraftSaveComplete) {
               ShadToaster.maybeOf(context)?.show(
-                FeedbackToast.success(title: 'Draft saved'),
+                FeedbackToast.success(title: l10n.draftSaved),
               );
             }
             if (state is DraftSending) {
@@ -176,7 +179,7 @@ class _DraftFormState extends State<DraftForm> {
               }
               ShadToaster.maybeOf(context)?.show(
                 FeedbackToast.error(
-                  title: 'Whoops',
+                  title: l10n.draftErrorTitle,
                   message: state.message,
                 ),
               );
@@ -219,7 +222,7 @@ class _DraftFormState extends State<DraftForm> {
                 children: [
                   FormField<void>(
                     validator: (_) =>
-                        hasActiveRecipients ? null : 'No recipients',
+                        hasActiveRecipients ? null : l10n.draftNoRecipients,
                     builder: (field) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -248,7 +251,7 @@ class _DraftFormState extends State<DraftForm> {
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
-                                field.errorText!,
+                                field.errorText ?? '',
                                 style: TextStyle(
                                   color: context.colorScheme.destructive,
                                   fontWeight: FontWeight.w600,
@@ -270,7 +273,7 @@ class _DraftFormState extends State<DraftForm> {
                           children: [
                             Expanded(
                               child: Semantics(
-                                label: 'Email subject',
+                                label: l10n.draftSubjectSemantics,
                                 textField: true,
                                 child: AxiTextFormField(
                                   controller: _subjectTextController,
@@ -281,15 +284,16 @@ class _DraftFormState extends State<DraftForm> {
                                   textInputAction: TextInputAction.next,
                                   onSubmitted: (_) =>
                                       _bodyFocusNode.requestFocus(),
-                                  placeholder: const Text('Subject (optional)'),
+                                  placeholder:
+                                      Text(l10n.draftSubjectHintOptional),
                                   constraints: const BoxConstraints.tightFor(
-                                    height: _draftComposerControlExtent,
+                                    height: _draftSubjectHeight,
                                   ),
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   placeholderAlignment: Alignment.centerLeft,
                                   inputPadding: const EdgeInsets.symmetric(
                                     horizontal: 12,
-                                    vertical: 8,
+                                    vertical: 4,
                                   ),
                                 ),
                               ),
@@ -338,7 +342,7 @@ class _DraftFormState extends State<DraftForm> {
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
-                      label: 'Message body',
+                      label: l10n.draftMessageSemantics,
                       textField: true,
                       child: AxiTextFormField(
                         controller: _bodyTextController,
@@ -346,7 +350,7 @@ class _DraftFormState extends State<DraftForm> {
                         enabled: enabled,
                         minLines: 7,
                         maxLines: null,
-                        placeholder: const Text('Message'),
+                        placeholder: Text(l10n.draftMessageHint),
                       ),
                     ),
                   ),
@@ -373,7 +377,7 @@ class _DraftFormState extends State<DraftForm> {
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
-                                  'Sending...',
+                                  l10n.draftSendingStatus,
                                   style: context.textTheme.muted,
                                 ),
                               ],
@@ -394,13 +398,13 @@ class _DraftFormState extends State<DraftForm> {
                             ShadButton.destructive(
                               enabled: canDiscard,
                               onPressed: canDiscard ? _handleDiscard : null,
-                              child: const Text('Discard'),
+                              child: Text(l10n.draftDiscard),
                             ).withTapBounce(enabled: canDiscard),
                             const Spacer(),
                             ShadButton.outline(
                               enabled: canSave,
                               onPressed: canSave ? _handleSaveDraft : null,
-                              child: const Text('Save draft'),
+                              child: Text(l10n.draftSave),
                             ).withTapBounce(enabled: canSave),
                           ],
                         ),
@@ -518,6 +522,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleAttachmentAdded() async {
+    final l10n = context.l10n;
     if (_addingAttachment) return;
     setState(() => _addingAttachment = true);
     try {
@@ -531,7 +536,7 @@ class _DraftFormState extends State<DraftForm> {
       final file = result.files.single;
       final path = file.path;
       if (path == null) {
-        _showToast('Selected file is not accessible.');
+        _showToast(l10n.draftAttachmentInaccessible);
         return;
       }
       final size = file.size > 0 ? file.size : await File(path).length();
@@ -554,9 +559,9 @@ class _DraftFormState extends State<DraftForm> {
         ];
       });
     } on PlatformException catch (error) {
-      _showToast(error.message ?? 'Unable to attach file.');
+      _showToast(error.message ?? l10n.draftAttachmentFailed);
     } on Exception {
-      _showToast('Unable to attach file.');
+      _showToast(l10n.draftAttachmentFailed);
     } finally {
       if (mounted) {
         setState(() => _addingAttachment = false);
@@ -627,6 +632,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleDiscard() async {
+    final l10n = context.l10n;
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit != null && id != null) {
       await draftCubit.deleteDraft(id: id!);
@@ -639,11 +645,12 @@ class _DraftFormState extends State<DraftForm> {
       _subjectTextController.clear();
       _showValidationMessages = false;
     });
-    _showToast('Draft discarded.');
+    _showToast(l10n.draftDiscarded);
     widget.onDiscarded?.call();
   }
 
   Future<void> _handleSendDraft() async {
+    final l10n = context.l10n;
     setState(() => _showValidationMessages = true);
     final draftCubit = context.read<DraftCubit?>();
     if (draftCubit == null) return;
@@ -697,6 +704,7 @@ class _DraftFormState extends State<DraftForm> {
         xmppJids: xmppJids,
         emailTargets: emailTargets,
         body: _bodyTextController.text,
+        l10n: l10n,
         subject: _subjectTextController.text,
         attachments: _currentAttachments(),
       );
@@ -706,7 +714,7 @@ class _DraftFormState extends State<DraftForm> {
         _sendingDraft = false;
         _sendCompletionHandled = true;
       });
-      _showToast('Failed to send draft.');
+      _showToast(l10n.draftSendFailed);
       return;
     }
     if (!mounted) {
@@ -727,6 +735,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   void _handleSendComplete() {
+    final l10n = context.l10n;
     if (_sendCompletionHandled) {
       return;
     }
@@ -738,7 +747,7 @@ class _DraftFormState extends State<DraftForm> {
       _pendingAttachmentSeed = 0;
     });
     ShadToaster.maybeOf(context)?.show(
-      FeedbackToast.success(title: 'Sent'),
+      FeedbackToast.success(title: l10n.draftSent),
     );
     final onClosed = widget.onClosed;
     if (onClosed != null) {
@@ -857,10 +866,10 @@ class _DraftFormState extends State<DraftForm> {
     required bool hasContent,
   }) {
     if (!hasActiveRecipients) {
-      return 'No recipients';
+      return context.l10n.draftNoRecipients;
     }
     if (!hasContent) {
-      return 'Add a subject, message, or attachment';
+      return context.l10n.draftValidationNoContent;
     }
     return null;
   }
@@ -889,11 +898,12 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
+    final l10n = context.l10n;
     if (!mounted) return;
     final attachment = pending.attachment;
     final file = File(attachment.path);
     if (!await file.exists()) {
-      _showToast('File no longer exists at ${attachment.path}.');
+      _showToast(l10n.draftFileMissing(attachment.path));
       return;
     }
     if (!mounted) return;
@@ -914,7 +924,7 @@ class _DraftFormState extends State<DraftForm> {
                 right: 8,
                 child: AxiIconButton(
                   iconData: LucideIcons.x,
-                  tooltip: 'Close',
+                  tooltip: l10n.commonClose,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
               ),
@@ -927,6 +937,7 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
     if (!mounted) return;
+    final l10n = context.l10n;
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -952,7 +963,7 @@ class _DraftFormState extends State<DraftForm> {
                 if (attachment.isImage)
                   ListTile(
                     leading: const Icon(LucideIcons.image),
-                    title: const Text('Preview'),
+                    title: Text(l10n.draftAttachmentPreview),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
                       _showAttachmentPreview(pending);
@@ -960,7 +971,7 @@ class _DraftFormState extends State<DraftForm> {
                   ),
                 ListTile(
                   leading: const Icon(LucideIcons.trash2),
-                  title: const Text('Remove attachment'),
+                  title: Text(l10n.draftRemoveAttachment),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _handlePendingAttachmentRemoved(pending.id);
@@ -1150,13 +1161,14 @@ class _DraftTaskDragGhost extends StatelessWidget {
     final CalendarTask task = payload.snapshot;
     final DateTime? start = task.scheduledTime;
     final DateTime? deadline = task.deadline;
+    final l10n = context.l10n;
     if (start != null) {
       return TimeFormatter.formatFriendlyDateTime(start);
     }
     if (deadline != null) {
-      return 'Due ${TimeFormatter.formatFriendlyDateTime(deadline)}';
+      return l10n.draftTaskDue(TimeFormatter.formatFriendlyDateTime(deadline));
     }
-    return 'No schedule';
+    return l10n.draftTaskNoSchedule;
   }
 
   @override
@@ -1165,8 +1177,9 @@ class _DraftTaskDragGhost extends StatelessWidget {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final materialScheme = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
     final String title =
-        task.title.trim().isEmpty ? 'Untitled task' : task.title.trim();
+        task.title.trim().isEmpty ? l10n.draftTaskUntitled : task.title.trim();
     final String? description = task.description?.trim().isNotEmpty == true
         ? task.description!.trim()
         : null;
@@ -1264,6 +1277,7 @@ class _DraftSendIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final l10n = context.l10n;
     final disabledColor = colors.mutedForeground.withValues(alpha: 0.9);
     final iconColor = sending
         ? disabledColor
@@ -1272,7 +1286,8 @@ class _DraftSendIconButton extends StatelessWidget {
             : disabledColor;
     final borderColor =
         sending || !readyToSend ? colors.border : colors.primary;
-    final tooltip = sending ? 'Sending…' : disabledReason ?? 'Send draft';
+    final tooltip =
+        sending ? l10n.draftSendingEllipsis : disabledReason ?? l10n.draftSend;
     final interactive = onPressed != null && !sending;
     return _DraftComposerIconButton(
       tooltip: tooltip,
@@ -1311,6 +1326,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final canSelectAttachment = enabled && !addingAttachment;
     final commandSurface =
         EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
@@ -1323,7 +1339,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
           ShadContextMenuItem(
             leading: const Icon(LucideIcons.image),
             onPressed: () => onPreview(pending),
-            child: const Text('Preview'),
+            child: Text(l10n.draftAttachmentPreview),
           ),
         );
       }
@@ -1331,7 +1347,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
         ShadContextMenuItem(
           leading: const Icon(LucideIcons.trash2),
           onPressed: () => onRemove(pending.id),
-          child: const Text('Remove attachment'),
+          child: Text(l10n.draftRemoveAttachment),
         ),
       );
       return items;
@@ -1342,7 +1358,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
       body = const Center(child: CircularProgressIndicator());
     } else if (attachments.isEmpty) {
       body = Text(
-        'No attachments yet',
+        l10n.draftNoAttachments,
         style: context.textTheme.muted,
       );
     } else {
@@ -1361,10 +1377,10 @@ class _DraftAttachmentsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Attachments'),
+            Text(l10n.draftAttachmentsLabel),
             const Spacer(),
             _DraftComposerIconButton(
-              tooltip: 'Add attachment',
+              tooltip: l10n.draftAddAttachment,
               icon: LucideIcons.paperclip,
               onPressed: canSelectAttachment ? onAddAttachment : null,
             ),

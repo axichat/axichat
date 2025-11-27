@@ -5,6 +5,8 @@ class AxiTabBar extends StatelessWidget {
   const AxiTabBar({
     super.key,
     required this.tabs,
+    this.badges = const <int>[],
+    this.badgeOffset,
     this.controller,
     this.padding = EdgeInsets.zero,
     this.backgroundColor,
@@ -19,6 +21,8 @@ class AxiTabBar extends StatelessWidget {
   });
 
   final List<Widget> tabs;
+  final List<int> badges;
+  final Offset? badgeOffset;
   final TabController? controller;
   final EdgeInsetsGeometry padding;
   final Color? backgroundColor;
@@ -54,13 +58,62 @@ class AxiTabBar extends StatelessWidget {
             (width.isFinite && width < tabs.length * minTabWidth);
         final TabAlignment alignment = tabAlignmentOverride ??
             (useScrollable ? TabAlignment.center : TabAlignment.fill);
+
+        final resolvedBadges = List<int>.filled(tabs.length, 0);
+        for (var i = 0; i < badges.length && i < resolvedBadges.length; i++) {
+          resolvedBadges[i] = badges[i];
+        }
+
+        List<Widget> buildBadgeTabs() {
+          return List<Widget>.generate(tabs.length, (index) {
+            final count = resolvedBadges[index];
+            if (count <= 0) return tabs[index];
+            final child = tabs[index];
+            final offset = badgeOffset ?? const Offset(0, -12);
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                child,
+                Positioned(
+                  top: offset.dy,
+                  right: offset.dx,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: backgroundColor ?? scheme.surface,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        count > 99 ? '99+' : '$count',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onPrimary,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          });
+        }
+
         return Material(
           color: backgroundColor ?? scheme.surface,
           child: Padding(
             padding: padding,
             child: TabBar(
               controller: controller,
-              tabs: tabs,
+              tabs: buildBadgeTabs(),
               isScrollable: useScrollable,
               tabAlignment: alignment,
               dividerHeight: 0,

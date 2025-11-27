@@ -21,9 +21,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
   EdgeInsets? dialogInsetPadding,
   double dialogMaxWidth = 640,
   double dialogMaxHeightFraction = 0.9,
+  EdgeInsetsGeometry surfacePadding = const EdgeInsets.all(16),
 }) {
-  final commandSurface =
-      EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+  final commandSurface = resolveCommandSurface(context);
   final scheme = ShadTheme.of(context).colorScheme;
 
   if (commandSurface == CommandSurface.sheet) {
@@ -45,7 +45,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           child: AxiModalSurface(
             backgroundColor: backgroundColor ?? scheme.card,
             borderColor: scheme.border,
-            padding: const EdgeInsets.all(16),
+            padding: surfacePadding,
             child: child,
           ),
         );
@@ -91,7 +91,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         child: AxiModalSurface(
           backgroundColor: resolvedBackground,
           borderColor: scheme.border,
-          padding: const EdgeInsets.all(16),
+          padding: surfacePadding,
           child: wrappedChild,
         ),
       );

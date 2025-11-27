@@ -3,6 +3,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -15,8 +16,6 @@ class LoginForm extends StatefulWidget {
   const LoginForm({super.key, this.onSubmitStart});
 
   final VoidCallback? onSubmitStart;
-
-  static const title = 'Log In';
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -63,6 +62,7 @@ class _LoginFormState extends State<LoginForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
+        final l10n = context.l10n;
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0);
@@ -81,7 +81,7 @@ class _LoginFormState extends State<LoginForm> {
                   Padding(
                     padding: errorPadding,
                     child: Text(
-                      LoginForm.title,
+                      l10n.authLogin,
                       style: context.textTheme.h3,
                     ),
                   ),
@@ -92,7 +92,7 @@ class _LoginFormState extends State<LoginForm> {
                         : Semantics(
                             liveRegion: true,
                             container: true,
-                            label: 'Error: $errorText',
+                            label: l10n.signupErrorPrefix(errorText),
                             child: Text(
                               errorText,
                               style: TextStyle(
@@ -112,7 +112,7 @@ class _LoginFormState extends State<LoginForm> {
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(
-                      label: 'Username',
+                      label: l10n.authUsername,
                       textField: true,
                       child: AxiTextFormField(
                         key: loginUsernameKey,
@@ -123,13 +123,13 @@ class _LoginFormState extends State<LoginForm> {
                           ),
                         ],
                         keyboardType: TextInputType.emailAddress,
-                        placeholder: const Text('Username'),
+                        placeholder: Text(l10n.authUsername),
                         enabled: !loading,
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
                         validator: (text) {
                           if (text.isEmpty) {
-                            return 'Enter a username';
+                            return l10n.authUsernameRequired;
                           }
                           return null;
                         },
@@ -165,11 +165,11 @@ class _LoginFormState extends State<LoginForm> {
                             firstChild: const SizedBox(),
                             secondChild: AxiProgressIndicator(
                               color: context.colorScheme.primaryForeground,
-                              semanticsLabel: 'Waiting for login',
+                              semanticsLabel: l10n.authLoginPending,
                             ),
                           ),
                           trailing: const SizedBox.shrink(),
-                          child: const Text('Log in'),
+                          child: Text(l10n.authLogin),
                         ).withTapBounce(enabled: !loading);
                         return AnimatedSize(
                           duration: animationDuration,

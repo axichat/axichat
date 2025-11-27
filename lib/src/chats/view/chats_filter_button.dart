@@ -2,6 +2,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -36,15 +37,17 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
+    final l10n = context.l10n;
+    final filters = chatsSearchFilters(l10n);
     final selectedFilterId = context
             .watch<HomeSearchCubit?>()
             ?.state
             .stateFor(HomeTab.chats)
             .filterId ??
-        chatsSearchFilters.first.id;
-    final selectedFilter = chatsSearchFilters.firstWhere(
+        filters.first.id;
+    final selectedFilter = filters.firstWhere(
       (filter) => filter.id == selectedFilterId,
-      orElse: () => chatsSearchFilters.first,
+      orElse: () => filters.first,
     );
     Widget trigger;
     if (widget.compact) {
@@ -54,12 +57,12 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
         child: const Icon(LucideIcons.listFilter, size: 16),
       ).withTapBounce();
       trigger = AxiTooltip(
-        builder: (_) => Text('Filter • ${selectedFilter.label}'),
+        builder: (_) => Text(l10n.filterTooltip(selectedFilter.label)),
         child: trigger,
       );
     } else {
       trigger = AxiTooltip(
-        builder: (_) => Text('Filter • ${selectedFilter.label}'),
+        builder: (_) => Text(l10n.filterTooltip(selectedFilter.label)),
         child: ShadButton.secondary(
           onPressed: popoverController.toggle,
           child: Row(
@@ -100,7 +103,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                   thickness: 1,
                   color: context.colorScheme.border,
                 ),
-                for (final option in chatsSearchFilters)
+                for (final option in filters)
                   ShadButton.ghost(
                     width: double.infinity,
                     foregroundColor: option.id == selectedFilter.id

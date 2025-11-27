@@ -20,6 +20,7 @@ import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 enum QuickAddModalSurface { dialog, bottomSheet }
 
@@ -306,7 +307,12 @@ class _QuickAddModalState extends State<QuickAddModal>
       _lastParserResult = null;
       _clearParserDrivenFields();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Parser unavailable (${error.runtimeType})')),
+        SnackBar(
+          content: Text(
+            context.l10n
+                .calendarParserUnavailable(error.runtimeType.toString()),
+          ),
+        ),
       );
     }
   }
@@ -731,6 +737,7 @@ class _QuickAddHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: calendarGutterLg,
@@ -750,7 +757,7 @@ class _QuickAddHeader extends StatelessWidget {
           ),
           const SizedBox(width: calendarGutterSm),
           Text(
-            'Add Task',
+            l10n.calendarAddTaskTitle,
             style: calendarTitleTextStyle.copyWith(fontSize: 18),
           ),
           const Spacer(),
@@ -794,6 +801,7 @@ class _QuickAddTaskNameField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     const padding = EdgeInsets.symmetric(
       horizontal: calendarGutterMd,
       vertical: calendarGutterMd,
@@ -813,8 +821,8 @@ class _QuickAddTaskNameField extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         autofocus: true,
-        labelText: 'Task name *',
-        hintText: 'Task name',
+        labelText: l10n.calendarTaskNameRequired,
+        hintText: l10n.calendarTaskNameHint,
         borderRadius: calendarBorderRadius,
         focusBorderColor: calendarPrimaryColor,
         textCapitalization: TextCapitalization.sentences,
@@ -855,9 +863,10 @@ class _QuickAddDescriptionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return TaskDescriptionField(
       controller: controller,
-      hintText: 'Description (optional)',
+      hintText: l10n.calendarDescriptionHint,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.sentences,
@@ -878,9 +887,10 @@ class _QuickAddLocationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return TaskLocationField(
       controller: controller,
-      hintText: 'Location (optional)',
+      hintText: l10n.calendarLocationHint,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
@@ -933,11 +943,12 @@ class _QuickAddScheduleSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AnimatedBuilder(
       animation: formController,
       builder: (context, _) {
         return TaskScheduleSection(
-          title: 'Schedule',
+          title: l10n.calendarScheduleLabel,
           headerStyle: calendarSubtitleTextStyle.copyWith(
             fontWeight: FontWeight.w600,
             fontSize: 13,
@@ -965,6 +976,7 @@ class _QuickAddDeadlineSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AnimatedBuilder(
       animation: formController,
       builder: (context, _) {
@@ -972,7 +984,7 @@ class _QuickAddDeadlineSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TaskSectionHeader(
-              title: 'Deadline',
+              title: l10n.calendarDeadlineLabel,
               textStyle: calendarSubtitleTextStyle.copyWith(
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
@@ -1003,6 +1015,7 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AnimatedBuilder(
       animation: formController,
       builder: (context, _) {
@@ -1010,7 +1023,7 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
             fallbackDate?.weekday ??
             DateTime.now().weekday;
         return TaskRecurrenceSection(
-          title: 'Repeat',
+          title: l10n.calendarRepeatLabel,
           headerStyle: calendarSubtitleTextStyle.copyWith(
             fontWeight: FontWeight.w600,
             fontSize: 13,
@@ -1041,6 +1054,7 @@ class _QuickAddActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return AnimatedBuilder(
       animation: formController,
       builder: (context, _) {
@@ -1055,7 +1069,7 @@ class _QuickAddActions extends StatelessWidget {
               children: [
                 Expanded(
                   child: TaskSecondaryButton(
-                    label: 'Cancel',
+                    label: l10n.calendarCancel,
                     onPressed: formController.isSubmitting ? null : onCancel,
                     foregroundColor: calendarSubtitleColor,
                     hoverForegroundColor: calendarPrimaryColor,
@@ -1065,7 +1079,7 @@ class _QuickAddActions extends StatelessWidget {
                 ),
                 Expanded(
                   child: TaskPrimaryButton(
-                    label: 'Add Task',
+                    label: l10n.calendarAddTaskAction,
                     onPressed: canSubmit && !formController.isSubmitting
                         ? onSubmit
                         : null,
@@ -1090,8 +1104,7 @@ Future<void> showQuickAddModal({
   required LocationAutocompleteHelper locationHelper,
   String? initialValidationMessage,
 }) {
-  final commandSurface =
-      EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
+  final commandSurface = resolveCommandSurface(context);
   final bool useSheet = commandSurface == CommandSurface.sheet;
   final surface =
       useSheet ? QuickAddModalSurface.bottomSheet : QuickAddModalSurface.dialog;

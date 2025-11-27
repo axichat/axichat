@@ -1,5 +1,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 
 const termsUrl = 'https://axichat.com/terms.pdf';
@@ -12,38 +13,39 @@ class TermsCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Align(
       alignment: Alignment.centerLeft,
       child: AxiCheckboxFormField(
         enabled: enabled,
         initialValue: false,
-        inputLabel: const Text('I accept the terms and conditions'),
+        inputLabel: Text(l10n.termsAcceptLabel),
         onChanged: (_) {},
         inputSublabel: RichText(
           text: TextSpan(
             style: context.textTheme.muted,
-            children: const [
+            children: [
               TextSpan(
-                text: 'You agree to our ',
+                text: l10n.termsAgreementPrefix,
               ),
               WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
                 child: AxiLink(
                   link: termsUrl,
-                  text: 'terms',
+                  text: l10n.termsAgreementTerms,
                 ),
               ),
               TextSpan(
-                text: ' and ',
+                text: l10n.termsAgreementAnd,
               ),
               WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
                 child: AxiLink(
                   link: privacyUrl,
-                  text: 'privacy policy',
+                  text: l10n.termsAgreementPrivacy,
                 ),
               ),
-              TextSpan(
+              const TextSpan(
                 text: '.',
               ),
             ],
@@ -51,7 +53,7 @@ class TermsCheckbox extends StatelessWidget {
         ),
         validator: (v) {
           if (v != true) {
-            return 'You must accept the terms and conditions';
+            return l10n.termsAgreementError;
           }
           return null;
         },

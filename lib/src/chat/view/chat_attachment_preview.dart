@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -151,19 +152,43 @@ class _ImageAttachment extends StatelessWidget {
               return _AttachmentLoadingPlaceholder(progress: value);
             },
           );
-    return _AttachmentSurface(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: radius,
-        child: GestureDetector(
-          onTap: () => _openAttachment(context, url: url, path: path),
-          child: AspectRatio(
-            aspectRatio: _aspectRatio(metadata),
-            child: image,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final targetWidth = _resolveWidth(constraints, context);
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: targetWidth,
+            child: _AttachmentSurface(
+              padding: EdgeInsets.zero,
+              backgroundColor: Colors.transparent,
+              borderSide: BorderSide.none,
+              child: ClipRRect(
+                borderRadius: radius,
+                child: GestureDetector(
+                  onTap: () => _openAttachment(context, url: url, path: path),
+                  child: AspectRatio(
+                    aspectRatio: _aspectRatio(metadata),
+                    child: image,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  double _resolveWidth(BoxConstraints constraints, BuildContext context) {
+    final availableWidth = constraints.maxWidth.isFinite
+        ? constraints.maxWidth
+        : MediaQuery.sizeOf(context).width;
+    final intrinsicWidth = metadata.width?.toDouble();
+    if (intrinsicWidth == null || intrinsicWidth <= 0) {
+      return availableWidth;
+    }
+    return math.min(intrinsicWidth, availableWidth);
   }
 
   double _aspectRatio(FileMetadataData metadata) {
@@ -308,20 +333,26 @@ class _AttachmentSurface extends StatelessWidget {
   const _AttachmentSurface({
     required this.child,
     this.padding = const EdgeInsets.all(12),
+    this.backgroundColor,
+    this.borderSide,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final Color? backgroundColor;
+  final BorderSide? borderSide;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final resolvedBackground = backgroundColor ?? colors.card;
+    final resolvedBorder = borderSide ?? BorderSide(color: colors.border);
     return DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.card,
+        color: resolvedBackground,
         shape: ContinuousRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: colors.border),
+          side: resolvedBorder,
         ),
       ),
       child: Padding(
