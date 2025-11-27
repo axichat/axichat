@@ -95,18 +95,15 @@ class CriticalPathPanel extends StatelessWidget {
   }
 
   CriticalPathProgress _progressFor(CalendarCriticalPath path) {
-    int total = 0;
-    int completed = 0;
+    final int total = path.taskIds.length;
+    var completed = 0;
     for (final String id in path.taskIds) {
       final String baseId = baseTaskIdFrom(id);
       final CalendarTask? task = tasks[baseId] ?? tasks[id];
-      if (task == null) {
-        continue;
+      if (task == null || !task.isCompleted) {
+        break;
       }
-      total += 1;
-      if (task.isCompleted) {
-        completed += 1;
-      }
+      completed += 1;
     }
     return CriticalPathProgress(
       total: total,
@@ -174,8 +171,13 @@ class CriticalPathCard extends StatelessWidget {
           ),
           const SizedBox(height: calendarInsetSm),
           Text(
-            '${progress.completed} of ${progress.total} tasks complete',
+            '${progress.completed} of ${progress.total} tasks completed in order',
             style: context.textTheme.muted.copyWith(fontSize: 12),
+          ),
+          const SizedBox(height: calendarInsetSm),
+          Text(
+            'Complete tasks in the listed order to advance',
+            style: context.textTheme.muted.copyWith(fontSize: 11),
           ),
           const SizedBox(height: calendarInsetSm),
           _CriticalPathProgressBar(
@@ -188,7 +190,7 @@ class CriticalPathCard extends StatelessWidget {
   }
 }
 
-class _CriticalPathProgressBar extends StatelessWidget {
+class _CriticalPathProgressBar extends StatefulWidget {
   const _CriticalPathProgressBar({
     required this.progressValue,
     required this.animationDuration,
@@ -198,12 +200,40 @@ class _CriticalPathProgressBar extends StatelessWidget {
   final Duration animationDuration;
 
   @override
+  State<_CriticalPathProgressBar> createState() =>
+      _CriticalPathProgressBarState();
+}
+
+class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
+  late double _startValue;
+  late double _targetValue;
+
+  @override
+  void initState() {
+    super.initState();
+    final double clamped = widget.progressValue.clamp(0.0, 1.0);
+    _startValue = clamped;
+    _targetValue = clamped;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CriticalPathProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final double next = widget.progressValue.clamp(0.0, 1.0);
+    if (next != _targetValue) {
+      setState(() {
+        _startValue = _targetValue;
+        _targetValue = next;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final double clamped = progressValue.clamp(0.0, 1.0);
     return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: clamped),
-      duration: animationDuration,
+      tween: Tween<double>(begin: _startValue, end: _targetValue),
+      duration: widget.animationDuration,
       curve: Curves.easeInOut,
       builder: (context, animatedValue, _) {
         final double fill = animatedValue.clamp(0.0, 1.0);

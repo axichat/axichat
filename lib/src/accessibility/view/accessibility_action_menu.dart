@@ -1,10 +1,10 @@
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -74,8 +74,7 @@ class _AccessibilityMenuScaffold extends StatelessWidget {
         Center(
           child: Shortcuts(
             shortcuts: const {
-              SingleActivator(LogicalKeyboardKey.escape):
-                  _AccessibilityDismissIntent(),
+              escapeShortcut: _AccessibilityDismissIntent(),
             },
             child: Actions(
               actions: {
@@ -123,6 +122,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     final headerTitle = _headerLabelFor(state.currentEntry.kind, context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         _AccessibilityMenuHeader(
           breadcrumb: headerTitle,
@@ -153,14 +153,14 @@ class _AccessibilityActionContent extends StatelessWidget {
         if (state.currentEntry.kind == AccessibilityStepKind.newContact)
           _NewContactSection(state: state),
         if (state.sections.isNotEmpty)
-          Expanded(
+          Flexible(
+            fit: FlexFit.loose,
             child: _AccessibilitySectionList(sections: state.sections),
           )
         else
-          const Expanded(
-            child: Center(
-              child: Text('No actions available right now'),
-            ),
+          const Flexible(
+            fit: FlexFit.loose,
+            child: Center(child: Text('No actions available right now')),
           ),
       ],
     );
@@ -198,10 +198,7 @@ class _AccessibilityMenuHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = context.colorScheme;
-    final platform = Theme.of(context).platform;
-    final shortcutLabel =
-        platform == TargetPlatform.macOS ? '⌘ + K' : 'Ctrl + K';
+    final findShortcut = findActionShortcut(Theme.of(context).platform);
     return Row(
       children: [
         if (onBack != null)
@@ -219,18 +216,32 @@ class _AccessibilityMenuHeader extends StatelessWidget {
                 style: context.textTheme.h3,
               ),
               const SizedBox(height: 4),
-              Text(
-                'Shortcut • $shortcutLabel',
-                style: context.textTheme.small.copyWith(
-                  color: scheme.mutedForeground,
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  ShortcutHint(
+                    shortcut: findShortcut,
+                    dense: true,
+                  ),
+                ],
               ),
             ],
           ),
         ),
         ShadButton.ghost(
           onPressed: onClose,
-          child: const Icon(Icons.close),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.close),
+              SizedBox(width: 6),
+              ShortcutHint(
+                shortcut: escapeShortcut,
+                dense: true,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -289,19 +300,22 @@ class _ComposerSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: state.recipients
-                .map(
-                  (recipient) => InputChip(
-                    label: Text(recipient.displayName),
-                    onDeleted: () => bloc.add(
-                      AccessibilityRecipientRemoved(recipient.jid),
+          Material(
+            type: MaterialType.transparency,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: state.recipients
+                  .map(
+                    (recipient) => InputChip(
+                      label: Text(recipient.displayName),
+                      onDeleted: () => bloc.add(
+                        AccessibilityRecipientRemoved(recipient.jid),
+                      ),
                     ),
-                  ),
-                )
-                .toList(),
+                  )
+                  .toList(),
+            ),
           ),
           const SizedBox(height: 8),
           _AccessibilityTextField(
@@ -415,47 +429,71 @@ class _AccessibilitySectionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<AccessibilityActionBloc>();
-    return ListView.builder(
-      itemCount: sections.length,
-      itemBuilder: (context, index) {
-        final section = sections[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (section.title != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    section.title!,
-                    style: context.textTheme.small.copyWith(
-                      color: context.colorScheme.mutedForeground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ...section.items.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _AccessibilityActionTile(
-                    item: item,
-                    onTap: () => bloc.add(
-                      AccessibilityMenuActionTriggered(item.action),
-                    ),
-                    onDismiss: item.dismissId == null
-                        ? null
-                        : () => bloc.add(
-                              AccessibilityMenuActionTriggered(
-                                AccessibilityDismissHighlightAction(
-                                  highlightId: item.dismissId!,
-                                ),
-                              ),
-                            ),
-                  ),
-                ),
+    final divider = Divider(
+      height: 1,
+      thickness: 1,
+      color: context.colorScheme.border,
+    );
+    final children = <Widget>[];
+    for (var sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+      final section = sections[sectionIndex];
+      if (section.title != null) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              section.title!,
+              style: context.textTheme.small.copyWith(
+                color: context.colorScheme.mutedForeground,
+                fontWeight: FontWeight.w600,
               ),
-            ],
+            ),
+          ),
+        );
+      }
+      for (var itemIndex = 0; itemIndex < section.items.length; itemIndex++) {
+        final item = section.items[itemIndex];
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _AccessibilityActionTile(
+              item: item,
+              onTap: () => bloc.add(
+                AccessibilityMenuActionTriggered(item.action),
+              ),
+              onDismiss: item.dismissId == null
+                  ? null
+                  : () => bloc.add(
+                        AccessibilityMenuActionTriggered(
+                          AccessibilityDismissHighlightAction(
+                            highlightId: item.dismissId!,
+                          ),
+                        ),
+                      ),
+            ),
+          ),
+        );
+        final hasMoreItems = itemIndex < section.items.length - 1;
+        if (hasMoreItems) {
+          children.add(divider);
+        }
+      }
+      final hasMoreSections = sectionIndex < sections.length - 1;
+      if (hasMoreSections) {
+        children.add(const SizedBox(height: 12));
+      }
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : double.infinity;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: ListView(
+            shrinkWrap: true,
+            physics: const ClampingScrollPhysics(),
+            children: children,
           ),
         );
       },

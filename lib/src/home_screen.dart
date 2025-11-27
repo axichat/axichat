@@ -2,7 +2,7 @@
 import 'dart:math' as math;
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
-import 'package:axichat/src/accessibility/view/accessibility_find_action_button.dart';
+import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
@@ -324,16 +324,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 initialFilters: initialTabFilters,
               ),
             ),
-            BlocProvider(
-              create: (context) => AccessibilityActionBloc(
-                chatsService: context.read<XmppService>(),
-                messageService: context.read<XmppService>(),
-                rosterService: isRoster
-                    ? context.read<XmppService>() as RosterService
-                    : null,
-                initialLocalization: l10n,
-              ),
-            ),
             if (isRoster)
               BlocProvider(
                 create: (context) => RosterCubit(
@@ -425,45 +415,64 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    return Actions(
-      actions: {
-        ComposeIntent: CallbackAction<ComposeIntent>(
-          onInvoke: (_) {
-            context.read<ComposeWindowCubit>().openDraft(
-              attachmentMetadataIds: const <String>[],
-            );
-            return null;
-          },
-        ),
-        ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
-          onInvoke: (_) {
-            context.read<HomeSearchCubit?>()?.toggleSearch();
-            return null;
-          },
-        ),
-        ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
-          onInvoke: (_) {
-            context.read<ChatsCubit?>()?.toggleCalendar();
-            return null;
-          },
-        ),
-        OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
-          onInvoke: (_) {
-            context.read<AccessibilityActionBloc?>()?.add(
-                  const AccessibilityMenuOpened(),
-                );
-            return null;
-          },
-        ),
-      },
-      child: Stack(
-        children: [
-          scaffold,
-          BlocProvider.value(
-            value: context.read<AccessibilityActionBloc>(),
-            child: const AccessibilityActionMenu(),
-          ),
-        ],
+    return BlocProvider(
+      create: (context) => AccessibilityActionBloc(
+        chatsService: context.read<XmppService>(),
+        messageService: context.read<XmppService>(),
+        rosterService:
+            isRoster ? context.read<XmppService>() as RosterService : null,
+        initialLocalization: l10n,
+      ),
+      child: Builder(
+        builder: (context) {
+          final findShortcut = findActionShortcut(Theme.of(context).platform);
+          return Focus(
+            autofocus: true,
+            child: Shortcuts(
+              shortcuts: {
+                findShortcut: const OpenFindActionIntent(),
+              },
+              child: Actions(
+                actions: {
+                  ComposeIntent: CallbackAction<ComposeIntent>(
+                    onInvoke: (_) {
+                      context.read<ComposeWindowCubit>().openDraft(
+                        attachmentMetadataIds: const <String>[],
+                      );
+                      return null;
+                    },
+                  ),
+                  ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
+                    onInvoke: (_) {
+                      context.read<HomeSearchCubit?>()?.toggleSearch();
+                      return null;
+                    },
+                  ),
+                  ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
+                    onInvoke: (_) {
+                      context.read<ChatsCubit?>()?.toggleCalendar();
+                      return null;
+                    },
+                  ),
+                  OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
+                    onInvoke: (_) {
+                      context.read<AccessibilityActionBloc?>()?.add(
+                            const AccessibilityMenuOpened(),
+                          );
+                      return null;
+                    },
+                  ),
+                },
+                child: Stack(
+                  children: [
+                    scaffold,
+                    const AccessibilityActionMenu(),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -560,6 +569,7 @@ class _NexusState extends State<Nexus> {
       HomeTab.drafts: drafts?.length ?? 0,
       HomeTab.spam: spamCount,
     };
+    final showFindActionInHeader = widget.navPlacement != NavPlacement.rail;
     final header = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -578,8 +588,10 @@ class _NexusState extends State<Nexus> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const _FindActionIconButton(),
-              const SizedBox(width: 4),
+              if (showFindActionInHeader) ...[
+                const _FindActionIconButton(),
+                const SizedBox(width: 4),
+              ],
               _SearchToggleButton(
                 active: searchActive,
                 onPressed: searchState == null
@@ -741,6 +753,57 @@ class _TabActionGroup extends StatelessWidget {
   }
 }
 
+class _AccessibilityFindActionRailItem extends StatelessWidget {
+  const _AccessibilityFindActionRailItem({required this.collapsed});
+
+  final bool collapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final bloc = context.read<AccessibilityActionBloc?>();
+    if (bloc == null) return const SizedBox.shrink();
+    final shortcut = findActionShortcut(Theme.of(context).platform);
+    final shortcutText = shortcutLabel(context, shortcut);
+    if (collapsed) {
+      return Tooltip(
+        message: 'Accessibility actions ($shortcutText)',
+        child: AxiIconButton(
+          iconData: LucideIcons.command,
+          tooltip: 'Accessibility actions ($shortcutText)',
+          onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+        ),
+      );
+    }
+    final colors = context.colorScheme;
+    final radius = context.radius;
+    return Semantics(
+      label: 'Accessibility actions',
+      button: true,
+      child: Material(
+        color: colors.background,
+        shape: SquircleBorder(
+          cornerRadius: radius.topLeft.x,
+          side: BorderSide(color: colors.border),
+        ),
+        child: InkWell(
+          borderRadius: radius,
+          onTap: () => bloc.add(const AccessibilityMenuOpened()),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                const Icon(LucideIcons.command, size: 20),
+                const SizedBox(width: 12),
+                ShortcutHint(shortcut: shortcut, dense: true),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FindActionIconButton extends StatelessWidget {
   const _FindActionIconButton();
 
@@ -750,9 +813,12 @@ class _FindActionIconButton extends StatelessWidget {
     if (bloc == null) {
       return const SizedBox.shrink();
     }
+    final shortcut = findActionShortcut(Theme.of(context).platform);
+    final tooltip =
+        'Accessibility actions (${shortcutLabel(context, shortcut)})';
     return AxiIconButton(
       iconData: LucideIcons.command,
-      tooltip: 'Find action',
+      tooltip: tooltip,
       onPressed: () => bloc.add(const AccessibilityMenuOpened()),
     );
   }
@@ -937,8 +1003,8 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
             ? null
             : () => widget.onCollapsedChanged!(!widget.collapsed),
         backgroundColor: context.colorScheme.background,
-        footer: AccessibilityFindActionButton(
-          compact: widget.collapsed,
+        footer: _AccessibilityFindActionRailItem(
+          collapsed: widget.collapsed,
         ),
         onDestinationSelected: (index) {
           final calendarIndex = _calendarDestinationIndex();
