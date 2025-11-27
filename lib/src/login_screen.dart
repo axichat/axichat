@@ -12,6 +12,7 @@ import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -229,6 +230,11 @@ class _LoginScreenState extends State<LoginScreen>
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const LanguageSelector(
+                      compact: true,
+                      labelStyle: LanguageLabelStyle.compact,
+                    ),
+                    const SizedBox(width: 8),
                     const AxiVersion(),
                     if (kDebugMode) ...[
                       const SizedBox(width: 8),

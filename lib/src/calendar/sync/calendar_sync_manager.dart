@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:crypto/crypto.dart';
 
 import '../models/calendar_exceptions.dart';
+import '../models/calendar_critical_path.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_sync_message.dart';
 import '../models/calendar_task.dart';
@@ -186,8 +187,36 @@ class CalendarSyncManager {
       }
     }
 
+    final mergedPaths = <String, CalendarCriticalPath>{};
+    final allPathIds = <String>{
+      ...local.criticalPaths.keys,
+      ...remote.criticalPaths.keys,
+    };
+
+    for (final id in allPathIds) {
+      final CalendarCriticalPath? localPath = local.criticalPaths[id];
+      final CalendarCriticalPath? remotePath = remote.criticalPaths[id];
+
+      if (localPath == null && remotePath != null) {
+        mergedPaths[id] = remotePath;
+        continue;
+      }
+
+      if (localPath != null && remotePath == null) {
+        mergedPaths[id] = localPath;
+        continue;
+      }
+
+      if (localPath != null && remotePath != null) {
+        mergedPaths[id] = remotePath.modifiedAt.isAfter(localPath.modifiedAt)
+            ? remotePath
+            : localPath;
+      }
+    }
+
     final merged = CalendarModel(
       tasks: mergedTasks,
+      criticalPaths: mergedPaths,
       lastModified: DateTime.now(),
       checksum: '',
     );

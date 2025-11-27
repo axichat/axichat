@@ -2,6 +2,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
@@ -344,6 +345,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     bool usesDesktopLayout,
   ) {
     final B? bloc = calendarBloc;
+    final SettingsCubit settingsCubit = context.watch<SettingsCubit>();
     final Widget base = CalendarNavigation(
       state: state,
       sidebarVisible: usesDesktopLayout,
@@ -358,6 +360,9 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       onRedo: () => bloc?.add(const CalendarEvent.redoRequested()),
       canUndo: state.canUndo,
       canRedo: state.canRedo,
+      hideCompletedScheduled: settingsCubit.state.hideCompletedScheduled,
+      onToggleHideCompletedScheduled:
+          settingsCubit.toggleHideCompletedScheduled,
     );
     final EdgeInsets? padding = navigationPadding(spec, usesDesktopLayout);
     if (padding == null) {

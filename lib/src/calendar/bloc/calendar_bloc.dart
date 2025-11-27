@@ -74,6 +74,18 @@ class CalendarBloc extends BaseCalendarBloc {
   }
 
   @override
+  Future<void> onCriticalPathsChanged(CalendarModel model) async {
+    try {
+      await _syncManager.pushFullSync();
+    } catch (error) {
+      developer.log(
+        'Failed to sync critical path change: $error',
+        name: 'CalendarBloc',
+      );
+    }
+  }
+
+  @override
   void logError(String message, Object error) {
     developer.log(message, name: 'CalendarBloc');
   }

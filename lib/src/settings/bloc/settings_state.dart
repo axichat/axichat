@@ -18,6 +18,7 @@ enum ShadColor {
 @freezed
 class SettingsState with _$SettingsState {
   const factory SettingsState({
+    @Default(AppLanguage.system) AppLanguage language,
     @Default(ThemeMode.light) ThemeMode themeMode,
     @Default(ShadColor.blue) ShadColor shadColor,
     @Default(false) bool mute,
@@ -27,6 +28,9 @@ class SettingsState with _$SettingsState {
     @Default(true) bool colorfulAvatars,
     @Default(MessageStorageMode.local) MessageStorageMode messageStorageMode,
     @Default(true) bool shareTokenSignatureEnabled,
+    @Default(false) bool hideCompletedScheduled,
+    @Default(false) bool hideCompletedUnscheduled,
+    @Default(false) bool hideCompletedReminders,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>

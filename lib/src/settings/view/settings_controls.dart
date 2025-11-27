@@ -1,6 +1,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
@@ -54,6 +55,14 @@ class SettingsControls extends StatelessWidget {
                 vertical: 6.0,
               ),
               child: Text('Appearance', style: context.textTheme.muted),
+            ),
+            const ListItemPadding(
+              child: AxiListTile(
+                title: 'Language',
+                actions: [
+                  LanguageSelector(),
+                ],
+              ),
             ),
             ListItemPadding(
               child: AxiListTile(

@@ -11,6 +11,7 @@ import '../controllers/task_interaction_controller.dart';
 import '../resizable_task_widget.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_draggable.dart';
+import 'calendar_completion_checkbox.dart';
 
 typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder?
     Function(
@@ -29,6 +30,7 @@ class CalendarTaskTileCallbacks {
     required this.onEnterSelectionMode,
     required this.onToggleSelection,
     required this.onTap,
+    this.onToggleCompletion,
   });
 
   final ValueChanged<CalendarTask> onResizePreview;
@@ -41,6 +43,7 @@ class CalendarTaskTileCallbacks {
   final VoidCallback onEnterSelectionMode;
   final VoidCallback onToggleSelection;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
+  final void Function(CalendarTask task, bool completed)? onToggleCompletion;
 }
 
 class CalendarTaskEntryBindings {
@@ -419,7 +422,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
 
             final bool paintSplitBorder = showSplitPreview && !isDraggingTask;
 
-            return AnimatedContainer(
+            final Widget paintedTask = AnimatedContainer(
               duration: bindings.splitPreviewAnimationDuration,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(calendarEventRadius),
@@ -433,6 +436,42 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                     : null,
               ),
               child: baseTask,
+            );
+
+            final void Function(CalendarTask task, bool completed)?
+                completionHandler = _callbacks.onToggleCompletion;
+            if (completionHandler == null) {
+              return paintedTask;
+            }
+
+            final bool disableToggle = isDraggingTask;
+            return Stack(
+              children: [
+                paintedTask,
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: IgnorePointer(
+                    ignoring: disableToggle,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: calendarContainerColor.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: calendarLightShadow,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: CalendarCompletionCheckbox(
+                          value: task.isCompleted,
+                          onChanged: (completed) =>
+                              completionHandler(task, completed),
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         );

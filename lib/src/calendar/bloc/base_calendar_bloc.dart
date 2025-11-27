@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../constants.dart';
 import '../models/calendar_exceptions.dart';
+import '../models/calendar_critical_path.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../reminders/calendar_reminder_controller.dart';
@@ -21,11 +22,13 @@ class _CalendarUndoSnapshot {
     required this.model,
     required this.isSelectionMode,
     required this.selectedTaskIds,
+    required this.focusedCriticalPathId,
   });
 
   final CalendarModel model;
   final bool isSelectionMode;
   final Set<String> selectedTaskIds;
+  final String? focusedCriticalPathId;
 }
 
 abstract class BaseCalendarBloc
@@ -80,6 +83,12 @@ abstract class BaseCalendarBloc
     on<CalendarTaskFocusRequested>(_onTaskFocusRequested);
     on<CalendarTaskFocusCleared>(_onTaskFocusCleared);
     on<CalendarTasksImported>(_onTasksImported);
+    on<CalendarCriticalPathCreated>(_onCriticalPathCreated);
+    on<CalendarCriticalPathRenamed>(_onCriticalPathRenamed);
+    on<CalendarCriticalPathDeleted>(_onCriticalPathDeleted);
+    on<CalendarCriticalPathTaskAdded>(_onCriticalPathTaskAdded);
+    on<CalendarCriticalPathTaskRemoved>(_onCriticalPathTaskRemoved);
+    on<CalendarCriticalPathFocused>(_onCriticalPathFocused);
   }
 
   final CalendarReminderController? _reminderController;
@@ -107,6 +116,7 @@ abstract class BaseCalendarBloc
       final selectedDate = json['selectedDate'] as String?;
       final view = json['viewMode'] as String?;
       final selectedDayIndex = json['selectedDayIndex'] as int?;
+      final focusedCriticalPathId = json['focusedCriticalPathId'] as String?;
 
       if (modelJson == null || selectedDate == null || view == null) {
         return null;
@@ -124,6 +134,10 @@ abstract class BaseCalendarBloc
         selectedDate: parsedDate,
         viewMode: viewMode,
         selectedDayIndex: selectedDayIndex,
+        focusedCriticalPathId: _normalizeFocusedPath(
+          focusedCriticalPathId,
+          model,
+        ),
       );
 
       return _stateWithDerived(restored);
@@ -142,6 +156,8 @@ abstract class BaseCalendarBloc
         'viewMode': state.viewMode.name,
         if (state.selectedDayIndex != null)
           'selectedDayIndex': state.selectedDayIndex,
+        if (state.focusedCriticalPathId != null)
+          'focusedCriticalPathId': state.focusedCriticalPathId,
       };
     } catch (error) {
       logError('Failed to persist calendar state', error);
@@ -272,6 +288,7 @@ abstract class BaseCalendarBloc
         model: state.model,
         isSelectionMode: state.isSelectionMode,
         selectedTaskIds: Set<String>.from(state.selectedTaskIds),
+        focusedCriticalPathId: state.focusedCriticalPathId,
       ),
     );
     if (_undoStack.length > _undoHistoryLimit) {
@@ -1729,6 +1746,201 @@ abstract class BaseCalendarBloc
     }
   }
 
+  Future<void> _onCriticalPathCreated(
+    CalendarCriticalPathCreated event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final String trimmedName = event.name.trim();
+      if (trimmedName.isEmpty) {
+        throw const CalendarValidationException(
+          'criticalPath',
+          'Path name cannot be empty',
+        );
+      }
+      _recordUndoSnapshot();
+      final DateTime now = _now();
+      final CalendarCriticalPath path = CalendarCriticalPath.create(
+        name: trimmedName,
+      ).copyWith(
+        createdAt: now,
+        modifiedAt: now,
+      );
+      CalendarModel updatedModel = state.model.addCriticalPath(path);
+      var shouldFocus = false;
+      final String? initialTaskId = event.taskId;
+      if (initialTaskId != null) {
+        final CalendarTask? task =
+            updatedModel.resolveTaskInstance(initialTaskId);
+        if (task != null) {
+          updatedModel = updatedModel.addTaskToCriticalPath(
+            pathId: path.id,
+            taskId: task.baseId,
+          );
+          shouldFocus = true;
+        }
+      }
+      emitModel(
+        updatedModel,
+        emit,
+        focusedCriticalPathId:
+            shouldFocus ? path.id : state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: shouldFocus,
+      );
+      await onCriticalPathsChanged(updatedModel);
+    } catch (error) {
+      await _handleError(error, 'Failed to create critical path', emit);
+    }
+  }
+
+  Future<void> _onCriticalPathRenamed(
+    CalendarCriticalPathRenamed event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final CalendarCriticalPath? existing =
+          state.model.criticalPaths[event.pathId];
+      if (existing == null) {
+        throw const CalendarValidationException(
+          'criticalPath',
+          'Critical path not found',
+        );
+      }
+      final String trimmedName = event.name.trim();
+      if (trimmedName.isEmpty) {
+        throw const CalendarValidationException(
+          'criticalPath',
+          'Path name cannot be empty',
+        );
+      }
+      _recordUndoSnapshot();
+      final CalendarCriticalPath renamed = existing.rename(trimmedName);
+      final CalendarModel updatedModel =
+          state.model.updateCriticalPath(renamed);
+      emitModel(
+        updatedModel,
+        emit,
+        focusedCriticalPathId: state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: true,
+      );
+      await onCriticalPathsChanged(updatedModel);
+    } catch (error) {
+      await _handleError(error, 'Failed to rename critical path', emit);
+    }
+  }
+
+  Future<void> _onCriticalPathDeleted(
+    CalendarCriticalPathDeleted event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      if (!state.model.criticalPaths.containsKey(event.pathId)) {
+        return;
+      }
+      _recordUndoSnapshot();
+      final CalendarModel updatedModel =
+          state.model.removeCriticalPath(event.pathId);
+      final bool shouldClearFocus = state.focusedCriticalPathId == event.pathId;
+      emitModel(
+        updatedModel,
+        emit,
+        focusedCriticalPathId:
+            shouldClearFocus ? null : state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: true,
+      );
+      await onCriticalPathsChanged(updatedModel);
+    } catch (error) {
+      await _handleError(error, 'Failed to delete critical path', emit);
+    }
+  }
+
+  Future<void> _onCriticalPathTaskAdded(
+    CalendarCriticalPathTaskAdded event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      final CalendarCriticalPath? path =
+          state.model.criticalPaths[event.pathId];
+      if (path == null || path.isArchived) {
+        throw const CalendarValidationException(
+          'criticalPath',
+          'Critical path not found',
+        );
+      }
+
+      final CalendarTask? task = state.model.resolveTaskInstance(event.taskId);
+      if (task == null) {
+        throw CalendarTaskNotFoundException(event.taskId);
+      }
+
+      _recordUndoSnapshot();
+      final CalendarModel updatedModel = state.model.addTaskToCriticalPath(
+        pathId: path.id,
+        taskId: task.baseId,
+        index: event.index,
+      );
+      emitModel(
+        updatedModel,
+        emit,
+        focusedCriticalPathId: state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: true,
+      );
+      await onCriticalPathsChanged(updatedModel);
+    } catch (error) {
+      await _handleError(
+        error,
+        'Failed to add task to critical path',
+        emit,
+      );
+    }
+  }
+
+  Future<void> _onCriticalPathTaskRemoved(
+    CalendarCriticalPathTaskRemoved event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      if (!state.model.criticalPaths.containsKey(event.pathId)) {
+        return;
+      }
+      _recordUndoSnapshot();
+      final CalendarModel updatedModel = state.model.removeTaskFromCriticalPath(
+        pathId: event.pathId,
+        taskId: baseTaskIdFrom(event.taskId),
+      );
+      emitModel(
+        updatedModel,
+        emit,
+        focusedCriticalPathId: state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: true,
+      );
+      await onCriticalPathsChanged(updatedModel);
+    } catch (error) {
+      await _handleError(
+        error,
+        'Failed to remove task from critical path',
+        emit,
+      );
+    }
+  }
+
+  void _onCriticalPathFocused(
+    CalendarCriticalPathFocused event,
+    Emitter<CalendarState> emit,
+  ) {
+    final String? normalized = _normalizeFocusedPath(
+      event.pathId,
+      state.model,
+    );
+    emit(
+      state.copyWith(
+        focusedCriticalPathId: normalized,
+        canUndo: _undoStack.isNotEmpty,
+        canRedo: _redoStack.isNotEmpty,
+      ),
+    );
+  }
+
   DateTime? _focusAnchorFor(String taskId) {
     final CalendarTask? direct = state.model.tasks[taskId];
     if (direct != null) {
@@ -2052,6 +2264,7 @@ abstract class BaseCalendarBloc
         model: state.model,
         isSelectionMode: state.isSelectionMode,
         selectedTaskIds: Set<String>.from(state.selectedTaskIds),
+        focusedCriticalPathId: state.focusedCriticalPathId,
       ),
     );
 
@@ -2061,6 +2274,8 @@ abstract class BaseCalendarBloc
       selectedDate: state.selectedDate,
       isSelectionMode: previousSnapshot.isSelectionMode,
       selectedTaskIds: Set<String>.from(previousSnapshot.selectedTaskIds),
+      focusedCriticalPathId: previousSnapshot.focusedCriticalPathId,
+      focusedCriticalPathSpecified: true,
     );
   }
 
@@ -2078,6 +2293,7 @@ abstract class BaseCalendarBloc
         model: state.model,
         isSelectionMode: state.isSelectionMode,
         selectedTaskIds: Set<String>.from(state.selectedTaskIds),
+        focusedCriticalPathId: state.focusedCriticalPathId,
       ),
     );
 
@@ -2087,6 +2303,8 @@ abstract class BaseCalendarBloc
       selectedDate: state.selectedDate,
       isSelectionMode: nextSnapshot.isSelectionMode,
       selectedTaskIds: Set<String>.from(nextSnapshot.selectedTaskIds),
+      focusedCriticalPathId: nextSnapshot.focusedCriticalPathId,
+      focusedCriticalPathSpecified: true,
     );
   }
 
@@ -2152,7 +2370,17 @@ abstract class BaseCalendarBloc
     DateTime? lastSyncTime,
     bool? isSelectionMode,
     Set<String>? selectedTaskIds,
+    String? focusedCriticalPathId,
+    bool focusedCriticalPathSpecified = false,
   }) {
+    final String? targetFocus = focusedCriticalPathSpecified
+        ? focusedCriticalPathId
+        : (focusedCriticalPathId ?? state.focusedCriticalPathId);
+    final String? normalizedFocus = _normalizeFocusedPath(
+      targetFocus,
+      model,
+    );
+
     final nextState = state.copyWith(
       model: model,
       dueReminders: _getDueReminders(model),
@@ -2164,11 +2392,23 @@ abstract class BaseCalendarBloc
       selectedTaskIds: selectedTaskIds ?? state.selectedTaskIds,
       canUndo: _undoStack.isNotEmpty,
       canRedo: _redoStack.isNotEmpty,
+      focusedCriticalPathId: normalizedFocus,
     );
     emit(nextState);
     _pendingReminderSync = _pendingReminderSync.then(
       (_) => _reminderController?.syncWithTasks(model.tasks.values),
     );
+  }
+
+  String? _normalizeFocusedPath(String? candidate, CalendarModel model) {
+    if (candidate == null) {
+      return null;
+    }
+    final CalendarCriticalPath? path = model.criticalPaths[candidate];
+    if (path == null || path.isArchived) {
+      return null;
+    }
+    return candidate;
   }
 
   List<CalendarTask> _getDueReminders(CalendarModel model) {
@@ -2200,6 +2440,9 @@ abstract class BaseCalendarBloc
     await _pendingReminderSync;
     return super.close();
   }
+
+  @protected
+  Future<void> onCriticalPathsChanged(CalendarModel model) async {}
 
   // Abstract methods for subclasses to implement
   Future<void> onTaskAdded(CalendarTask task);
