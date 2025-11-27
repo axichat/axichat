@@ -302,18 +302,12 @@ abstract class BaseCalendarBloc
     required bool isSelectionMode,
     required Set<String> selectedTaskIds,
   }) {
-    final sanitizedSelection = <String>{};
-    for (final id in selectedTaskIds) {
-      if (state.model.tasks.containsKey(id)) {
-        sanitizedSelection.add(id);
-        continue;
-      }
-      final String baseId = baseTaskIdFrom(id);
-      if (baseId != id && state.model.tasks.containsKey(baseId)) {
-        sanitizedSelection.add(id);
-      }
-    }
-    final nextMode = isSelectionMode && sanitizedSelection.isNotEmpty;
+    final Set<String> sanitizedSelection = _filterSelectionForFocus(
+      focusedPathId: state.focusedCriticalPathId,
+      model: state.model,
+      selection: selectedTaskIds,
+    );
+    final bool nextMode = isSelectionMode && sanitizedSelection.isNotEmpty;
     emit(
       state.copyWith(
         isSelectionMode: nextMode,
@@ -1932,9 +1926,19 @@ abstract class BaseCalendarBloc
       event.pathId,
       state.model,
     );
+    final Set<String> filteredSelection = _filterSelectionForFocus(
+      focusedPathId: normalized,
+      model: state.model,
+      selection: state.selectedTaskIds,
+    );
+    final bool nextSelectionMode =
+        state.isSelectionMode && filteredSelection.isNotEmpty;
     emit(
       state.copyWith(
         focusedCriticalPathId: normalized,
+        isSelectionMode: nextSelectionMode,
+        selectedTaskIds:
+            nextSelectionMode ? filteredSelection : const <String>{},
         canUndo: _undoStack.isNotEmpty,
         canRedo: _redoStack.isNotEmpty,
       ),
@@ -2381,6 +2385,17 @@ abstract class BaseCalendarBloc
       model,
     );
 
+    final Set<String> nextSelectionIds =
+        selectedTaskIds ?? state.selectedTaskIds;
+    final Set<String> filteredSelection = _filterSelectionForFocus(
+      focusedPathId: normalizedFocus,
+      model: model,
+      selection: nextSelectionIds,
+    );
+    final bool resolvedSelectionMode =
+        (isSelectionMode ?? state.isSelectionMode) &&
+            filteredSelection.isNotEmpty;
+
     final nextState = state.copyWith(
       model: model,
       dueReminders: _getDueReminders(model),
@@ -2388,8 +2403,9 @@ abstract class BaseCalendarBloc
       selectedDate: selectedDate ?? state.selectedDate,
       isLoading: isLoading ?? state.isLoading,
       lastSyncTime: lastSyncTime ?? state.lastSyncTime,
-      isSelectionMode: isSelectionMode ?? state.isSelectionMode,
-      selectedTaskIds: selectedTaskIds ?? state.selectedTaskIds,
+      isSelectionMode: resolvedSelectionMode,
+      selectedTaskIds:
+          resolvedSelectionMode ? filteredSelection : const <String>{},
       canUndo: _undoStack.isNotEmpty,
       canRedo: _redoStack.isNotEmpty,
       focusedCriticalPathId: normalizedFocus,
@@ -2409,6 +2425,38 @@ abstract class BaseCalendarBloc
       return null;
     }
     return candidate;
+  }
+
+  Set<String> _filterSelectionForFocus({
+    required String? focusedPathId,
+    required CalendarModel model,
+    required Set<String> selection,
+  }) {
+    if (selection.isEmpty) {
+      return selection;
+    }
+
+    final CalendarCriticalPath? focus =
+        focusedPathId == null ? null : model.criticalPaths[focusedPathId];
+
+    final Set<String> normalizedSelection = selection.where((id) {
+      final String baseId = baseTaskIdFrom(id);
+      return model.tasks.containsKey(id) || model.tasks.containsKey(baseId);
+    }).toSet();
+
+    if (focus == null || focus.isArchived) {
+      return normalizedSelection;
+    }
+
+    if (focus.taskIds.isEmpty) {
+      return <String>{};
+    }
+
+    final Set<String> allowedBaseIds =
+        focus.taskIds.map(baseTaskIdFrom).toSet();
+    return normalizedSelection
+        .where((id) => allowedBaseIds.contains(baseTaskIdFrom(id)))
+        .toSet();
   }
 
   List<CalendarTask> _getDueReminders(CalendarModel model) {

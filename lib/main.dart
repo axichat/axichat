@@ -1,5 +1,7 @@
 // ignore_for_file: avoid_print
 
+import 'dart:ui' as ui;
+
 import 'package:axichat/src/calendar/storage/calendar_hive_adapters.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
@@ -24,6 +26,7 @@ final ValueNotifier<bool> foregroundServiceActive = ValueNotifier(false);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installKeyboardGuard();
 
   _configureLogging();
   _registerThirdPartyLicenses();
@@ -146,4 +149,21 @@ class BlocLogger extends BlocObserver {
     // logger.info('${bloc.runtimeType} $change');
     super.onChange(bloc, change);
   }
+}
+
+void _installKeyboardGuard() {
+  final dispatcher = ServicesBinding.instance.platformDispatcher;
+  // ignore: deprecated_member_use
+  final keyEventManager = ServicesBinding.instance.keyEventManager;
+  dispatcher.onKeyData = (ui.KeyData data) {
+    if (data.type == ui.KeyEventType.up ||
+        data.type == ui.KeyEventType.repeat) {
+      final key = PhysicalKeyboardKey(data.physical);
+      if (!HardwareKeyboard.instance.physicalKeysPressed.contains(key)) {
+        return false;
+      }
+    }
+    // ignore: deprecated_member_use
+    return keyEventManager.handleKeyData(data);
+  };
 }

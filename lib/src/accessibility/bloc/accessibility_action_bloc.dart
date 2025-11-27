@@ -323,8 +323,9 @@ class AccessibilityActionBloc
 
   void _refreshContacts() {
     final map = <String, AccessibilityContact>{};
+    final orderedChats = <AccessibilityContact>[];
     for (final chat in _chats) {
-      map[chat.jid] = AccessibilityContact(
+      final contact = AccessibilityContact(
         jid: chat.jid,
         displayName: _displayNameForChat(chat),
         subtitle: chat.contactJid ?? chat.jid,
@@ -334,11 +335,14 @@ class AccessibilityActionBloc
         unreadCount: chat.unreadCount,
         isGroup: chat.type == ChatType.groupChat,
       );
+      orderedChats.add(contact);
+      map[chat.jid] = contact;
     }
+    final rosterOnly = <AccessibilityContact>[];
     for (final item in _roster) {
-      map.putIfAbsent(
-        item.jid,
-        () => AccessibilityContact(
+      if (map.containsKey(item.jid)) continue;
+      rosterOnly.add(
+        AccessibilityContact(
           jid: item.jid,
           displayName: item.contactDisplayName ?? item.title,
           subtitle: item.jid,
@@ -349,13 +353,12 @@ class AccessibilityActionBloc
         ),
       );
     }
-    final list = map.values.toList()
-      ..sort(
-        (a, b) => a.displayName.toLowerCase().compareTo(
-              b.displayName.toLowerCase(),
-            ),
-      );
-    _contacts = list;
+    rosterOnly.sort(
+      (a, b) => a.displayName.toLowerCase().compareTo(
+            b.displayName.toLowerCase(),
+          ),
+    );
+    _contacts = [...orderedChats, ...rosterOnly];
   }
 
   void _purgeDismissedHighlights() {
@@ -729,7 +732,7 @@ class AccessibilityActionBloc
       if (quickChats.isNotEmpty)
         AccessibilityMenuSection(
           id: 'recents',
-          title: _l10n.chatMembersLoading,
+          title: _l10n.homeTabChats,
           items: quickChats,
         ),
     ];

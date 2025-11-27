@@ -77,7 +77,7 @@ extension CalendarStateExtensions on CalendarState {
       return true;
     }
     if (focus.taskIds.isEmpty) {
-      return true;
+      return false;
     }
     final String baseId = task.baseId;
     for (final String id in focus.taskIds) {
