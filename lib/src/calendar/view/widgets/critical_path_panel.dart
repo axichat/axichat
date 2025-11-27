@@ -531,58 +531,104 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
   required BuildContext context,
   required List<CalendarCriticalPath> paths,
 }) {
-  return showModalBottomSheet<CriticalPathPickerResult>(
+  final colors = context.colorScheme;
+  final textTheme = context.textTheme;
+  return showAdaptiveBottomSheet<CriticalPathPickerResult>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    dialogMaxWidth: 420,
+    surfacePadding: const EdgeInsets.all(calendarGutterLg),
     builder: (sheetContext) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(calendarGutterLg),
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.colorScheme.card,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.colorScheme.border),
-            ),
-            padding: const EdgeInsets.all(calendarGutterLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Add to critical path',
-                  style: context.textTheme.h3.copyWith(fontSize: 16),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Add to critical path',
+                style: textTheme.h3.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: calendarGutterMd),
-                if (paths.isEmpty)
-                  Text(
-                    'Create a critical path to start tracking dependencies.',
-                    style: context.textTheme.muted,
-                  )
-                else
-                  ...paths.map(
-                    (path) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(path.name),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(sheetContext).pop(
+              ),
+              const Spacer(),
+              AxiIconButton(
+                iconData: Icons.close,
+                iconSize: 16,
+                buttonSize: 34,
+                tapTargetSize: 40,
+                backgroundColor: Colors.transparent,
+                borderColor: Colors.transparent,
+                color: colors.mutedForeground,
+                onPressed: () => Navigator.of(sheetContext).maybePop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: calendarGutterMd),
+          if (paths.isEmpty) ...[
+            Text(
+              'Create a critical path to start tracking dependencies.',
+              style: textTheme.muted,
+            ),
+            const SizedBox(height: calendarGutterMd),
+          ] else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: Scrollbar(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: paths.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: calendarInsetSm),
+                  itemBuilder: (_, index) {
+                    final path = paths[index];
+                    return ShadButton.ghost(
+                      size: ShadButtonSize.sm,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: calendarGutterMd,
+                        vertical: calendarInsetMd,
+                      ),
+                      onPressed: () => Navigator.of(sheetContext).pop(
                         CriticalPathPickerResult.path(path.id),
                       ),
-                    ),
-                  ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.add),
-                  title: const Text('New critical path'),
-                  onTap: () => Navigator.of(sheetContext).pop(
-                    const CriticalPathPickerResult.createNew(),
-                  ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.route, size: 16),
+                          const SizedBox(width: calendarInsetMd),
+                          Expanded(
+                            child: Text(
+                              path.name,
+                              style: textTheme.small.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 18,
+                            color: colors.mutedForeground,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
+              ),
+            ),
+          ShadButton(
+            onPressed: () => Navigator.of(sheetContext).pop(
+              const CriticalPathPickerResult.createNew(),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add, size: 16),
+                SizedBox(width: calendarInsetSm),
+                Text('New critical path'),
               ],
             ),
-          ),
-        ),
+          ).withTapBounce(),
+        ],
       );
     },
   );

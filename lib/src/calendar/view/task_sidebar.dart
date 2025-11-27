@@ -3590,7 +3590,7 @@ class _HideCompletedToggle extends StatelessWidget {
             ),
             const SizedBox(width: calendarInsetSm),
             Text(
-              hiding ? 'Show completed' : 'Hide completed',
+              'Completed',
               style: context.textTheme.small.copyWith(
                 color: foreground,
                 fontWeight: FontWeight.w700,

@@ -122,6 +122,8 @@ const _reactionOverflowSpacing = 4.0;
 const _reactionSubscriptPadding = 3.0;
 const _reactionCornerClearance = 12.0;
 const _cutoutMaxWidthFraction = 0.9;
+const _compactBubbleWidthFraction = 0.8;
+const _regularBubbleWidthFraction = 0.7;
 const _reactionOverflowGlyphWidth = 18.0;
 const _recipientCutoutDepth = 16.0;
 const _recipientCutoutRadius = 18.0;
@@ -2310,6 +2312,14 @@ class _ChatState extends State<Chat> {
                                     chatEntity != null &&
                                     chatEntity.type == ChatType.chat;
                                 final statusLabel = item?.status?.trim() ?? '';
+                                const double minTitleWidth = 220;
+                                const double maxTitleWidth = 420;
+                                final double titleMaxWidth = MediaQuery.sizeOf(
+                                      context,
+                                    ).width *
+                                    0.45;
+                                final double clampedTitleWidth = titleMaxWidth
+                                    .clamp(minTitleWidth, maxTitleWidth);
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -2319,67 +2329,77 @@ class _ChatState extends State<Chat> {
                                       badgeOffset: const Offset(-6, -4),
                                     ),
                                     const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Flexible(
-                                                fit: FlexFit.loose,
-                                                child: Text(
-                                                  state.chat?.displayName ?? '',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: Theme.of(context)
-                                                          .appBarTheme
-                                                          .titleTextStyle ??
-                                                      context.textTheme.h4,
-                                                ),
-                                              ),
-                                              if (canRenameContact)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsetsDirectional
-                                                          .only(start: 6),
-                                                  child: AxiTooltip(
-                                                    builder: (context) => Text(
-                                                      context.l10n
-                                                          .chatContactRenameTooltip,
-                                                    ),
-                                                    child: ShadIconButton.ghost(
-                                                      onPressed:
-                                                          _promptContactRename,
-                                                      icon: Icon(
-                                                        LucideIcons.pencilLine,
-                                                        size: 18,
-                                                        color: context
-                                                            .colorScheme
-                                                            .mutedForeground,
-                                                      ),
-                                                      decoration:
-                                                          const ShadDecoration(
-                                                        secondaryBorder:
-                                                            ShadBorder.none,
-                                                        secondaryFocusedBorder:
-                                                            ShadBorder.none,
-                                                      ),
-                                                    ).withTapBounce(),
+                                    Flexible(
+                                      fit: FlexFit.loose,
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: clampedTitleWidth,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Flexible(
+                                                  fit: FlexFit.loose,
+                                                  child: Text(
+                                                    state.chat?.displayName ??
+                                                        '',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: Theme.of(context)
+                                                            .appBarTheme
+                                                            .titleTextStyle ??
+                                                        context.textTheme.h4,
                                                   ),
                                                 ),
-                                            ],
-                                          ),
-                                          if (statusLabel.isNotEmpty)
-                                            Text(
-                                              statusLabel,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: context.textTheme.muted,
+                                                if (canRenameContact)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsetsDirectional
+                                                            .only(start: 6),
+                                                    child: AxiTooltip(
+                                                      builder: (context) =>
+                                                          Text(
+                                                        context.l10n
+                                                            .chatContactRenameTooltip,
+                                                      ),
+                                                      child:
+                                                          ShadIconButton.ghost(
+                                                        onPressed:
+                                                            _promptContactRename,
+                                                        icon: Icon(
+                                                          LucideIcons
+                                                              .pencilLine,
+                                                          size: 18,
+                                                          color: context
+                                                              .colorScheme
+                                                              .mutedForeground,
+                                                        ),
+                                                        decoration:
+                                                            const ShadDecoration(
+                                                          secondaryBorder:
+                                                              ShadBorder.none,
+                                                          secondaryFocusedBorder:
+                                                              ShadBorder.none,
+                                                        ),
+                                                      ).withTapBounce(),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
-                                        ],
+                                            if (statusLabel.isNotEmpty)
+                                              Text(
+                                                statusLabel,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: context.textTheme.muted,
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -2493,8 +2513,10 @@ class _ChatState extends State<Chat> {
                                                 _selectionSpacerHeight,
                                               )
                                             : _messageListTailSpacer;
-                                    final baseBubbleMaxWidth =
-                                        contentWidth * (isCompact ? 0.8 : 0.7);
+                                    final baseBubbleMaxWidth = contentWidth *
+                                        (isCompact
+                                            ? _compactBubbleWidthFraction
+                                            : _regularBubbleWidthFraction);
                                     final inboundAvatarReservation = isGroupChat
                                         ? _messageRowAvatarReservation
                                         : 0.0;
@@ -3599,17 +3621,17 @@ class _ChatState extends State<Chat> {
                                                       double extraOuterLeft = 0;
                                                       double extraOuterRight =
                                                           0;
+                                                      const selfEdgePadding =
+                                                          0.0;
                                                       final outerPadding =
                                                           EdgeInsets.only(
                                                         top: 2,
                                                         bottom: baseOuterBottom +
                                                             extraOuterBottom,
-                                                        left:
-                                                            _chatHorizontalPadding +
-                                                                extraOuterLeft,
-                                                        right:
-                                                            _chatHorizontalPadding +
-                                                                extraOuterRight,
+                                                        left: selfEdgePadding +
+                                                            extraOuterLeft,
+                                                        right: selfEdgePadding +
+                                                            extraOuterRight,
                                                       );
                                                       final bubble =
                                                           TweenAnimationBuilder<

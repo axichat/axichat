@@ -22,6 +22,11 @@ class SettingsControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const double compactTileHeight = 52;
+    const EdgeInsets compactTilePadding = EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 6,
+    );
     return BlocBuilder<SettingsCubit, SettingsState>(
       builder: (context, state) {
         return Column(
@@ -62,6 +67,8 @@ class SettingsControls extends StatelessWidget {
                 actions: [
                   LanguageSelector(),
                 ],
+                minTileHeight: compactTileHeight,
+                contentPadding: compactTilePadding,
               ),
             ),
             ListItemPadding(
@@ -89,6 +96,8 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
+                minTileHeight: compactTileHeight,
+                contentPadding: compactTilePadding,
               ),
             ),
             ListItemPadding(
@@ -116,6 +125,8 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
                 ],
+                minTileHeight: compactTileHeight,
+                contentPadding: compactTilePadding,
               ),
             ),
             Padding(
