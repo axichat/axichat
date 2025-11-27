@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/common/ui/jid_input.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -10,6 +12,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
+import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'accessibility_action_event.dart';
 part 'accessibility_action_state.dart';
@@ -20,9 +23,11 @@ class AccessibilityActionBloc
     required ChatsService chatsService,
     required MessageService messageService,
     required AppLocalizations initialLocalization,
+    EmailService? emailService,
     RosterService? rosterService,
   })  : _chatsService = chatsService,
         _messageService = messageService,
+        _emailService = emailService,
         _rosterService = rosterService,
         _log = Logger('AccessibilityActionBloc'),
         _l10n = initialLocalization,
@@ -58,6 +63,7 @@ class AccessibilityActionBloc
 
   final ChatsService _chatsService;
   final MessageService _messageService;
+  final EmailService? _emailService;
   final RosterService? _rosterService;
   final Logger _log;
   static const int _messagePageSize = 50;
@@ -234,8 +240,9 @@ class AccessibilityActionBloc
     Emitter<AccessibilityActionState> emit,
   ) async {
     final currentEntry = state.stack.last;
+    final trimmedMessage = state.composerText.trim();
     if (currentEntry.kind != AccessibilityStepKind.composer ||
-        state.composerText.trim().isEmpty ||
+        trimmedMessage.isEmpty ||
         currentEntry.recipients.isEmpty) {
       emit(
         state.copyWith(
@@ -253,16 +260,57 @@ class AccessibilityActionBloc
     );
     final failures = <String>[];
     for (final contact in currentEntry.recipients) {
+      if (_shouldSendEmail(contact)) {
+        final emailService = _emailService;
+        if (emailService == null) {
+          _log.warning(
+            'Email service unavailable; cannot send to foreign domain '
+            '${contact.jid}',
+          );
+          failures.add(contact.displayName);
+          continue;
+        }
+        try {
+          await emailService.sendToAddress(
+            address: contact.jid,
+            displayName:
+                contact.displayName == contact.jid ? null : contact.displayName,
+            body: trimmedMessage,
+          );
+          continue;
+        } on DeltaChatException catch (error, stackTrace) {
+          _log.warning(
+            'Failed to send accessibility email to ${contact.jid}',
+            error,
+            stackTrace,
+          );
+        } on Exception catch (error, stackTrace) {
+          _log.warning(
+            'Unexpected error sending accessibility email to ${contact.jid}',
+            error,
+            stackTrace,
+          );
+        }
+        failures.add(contact.displayName);
+        continue;
+      }
       try {
         await _messageService.sendMessage(
           jid: contact.jid,
-          text: state.composerText.trim(),
+          text: trimmedMessage,
           encryptionProtocol: contact.encryptionProtocol,
           chatType: contact.chatType,
         );
       } on XmppException catch (error, stackTrace) {
         _log.warning(
           'Failed to send accessibility message to ${contact.jid}',
+          error,
+          stackTrace,
+        );
+        failures.add(contact.displayName);
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+          'Unexpected error sending accessibility message to ${contact.jid}',
           error,
           stackTrace,
         );
@@ -278,6 +326,29 @@ class AccessibilityActionBloc
       ),
     );
     _rebuildSections(emit, state);
+  }
+
+  bool _shouldSendEmail(AccessibilityContact contact) {
+    if (contact.chatType != ChatType.chat) {
+      return false;
+    }
+    final messageService = _messageService;
+    if (messageService is! XmppService) {
+      return true;
+    }
+    final myJid = messageService.myJid;
+    if (myJid == null) {
+      return true;
+    }
+    try {
+      final mine = mox.JID.fromString(myJid);
+      final target = mox.JID.fromString(contact.jid);
+      final myDomain = mine.domain.toLowerCase();
+      final targetDomain = target.domain.toLowerCase();
+      return targetDomain != myDomain && !targetDomain.endsWith('.$myDomain');
+    } on Exception {
+      return true;
+    }
   }
 
   void _onRecipientRemoved(

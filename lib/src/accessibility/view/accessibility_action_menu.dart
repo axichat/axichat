@@ -13,19 +13,19 @@ const ShortcutActivator _nextItemActivator =
     SingleActivator(LogicalKeyboardKey.arrowDown);
 const ShortcutActivator _previousItemActivator =
     SingleActivator(LogicalKeyboardKey.arrowUp);
-const ShortcutActivator _nextSectionActivator = SingleActivator(
+const ShortcutActivator _nextGroupActivator = SingleActivator(
   LogicalKeyboardKey.arrowDown,
   shift: true,
 );
-const ShortcutActivator _previousSectionActivator = SingleActivator(
+const ShortcutActivator _previousGroupActivator = SingleActivator(
   LogicalKeyboardKey.arrowUp,
   shift: true,
 );
-final LogicalKeySet _nextSectionKeySet = LogicalKeySet(
+final LogicalKeySet _nextGroupKeySet = LogicalKeySet(
   LogicalKeyboardKey.shift,
   LogicalKeyboardKey.arrowDown,
 );
-final LogicalKeySet _previousSectionKeySet = LogicalKeySet(
+final LogicalKeySet _previousGroupKeySet = LogicalKeySet(
   LogicalKeyboardKey.shift,
   LogicalKeyboardKey.arrowUp,
 );
@@ -42,12 +42,18 @@ const MenuSerializableShortcut _nextItemShortcut =
     SingleActivator(LogicalKeyboardKey.arrowDown);
 const MenuSerializableShortcut _previousItemShortcut =
     SingleActivator(LogicalKeyboardKey.arrowUp);
-const MenuSerializableShortcut _nextSectionShortcut = SingleActivator(
+const MenuSerializableShortcut _nextGroupShortcut = SingleActivator(
   LogicalKeyboardKey.arrowDown,
   shift: true,
 );
-const MenuSerializableShortcut _previousSectionShortcut = SingleActivator(
+const MenuSerializableShortcut _previousGroupShortcut = SingleActivator(
   LogicalKeyboardKey.arrowUp,
+  shift: true,
+);
+const MenuSerializableShortcut _nextFocusShortcut =
+    SingleActivator(LogicalKeyboardKey.tab);
+const MenuSerializableShortcut _previousFocusShortcut = SingleActivator(
+  LogicalKeyboardKey.tab,
   shift: true,
 );
 const MenuSerializableShortcut _firstItemShortcut =
@@ -120,9 +126,22 @@ class _AccessibilityMenuScaffoldState
   final FocusScopeNode _focusScopeNode =
       FocusScopeNode(debugLabel: 'accessibility_menu_scope');
   final GlobalKey<_AccessibilitySectionListState> _listKey = GlobalKey();
+  final GlobalKey _legendGroupKey = GlobalKey(debugLabel: 'legend_group');
+  final GlobalKey _composerGroupKey = GlobalKey(debugLabel: 'composer_group');
+  final GlobalKey _newContactGroupKey =
+      GlobalKey(debugLabel: 'new_contact_group');
+  final FocusNode _shortcutLegendFocusNode =
+      FocusNode(debugLabel: 'accessibility_shortcut_legend');
+  final FocusNode _composerFocusNode =
+      FocusNode(debugLabel: 'accessibility_composer_field');
+  final FocusNode _newContactFocusNode =
+      FocusNode(debugLabel: 'accessibility_new_contact_field');
+  final Map<_AccessibilityGroup, VoidCallback> _groupFocusHandlers =
+      <_AccessibilityGroup, VoidCallback>{};
   FocusNode? _restoreFocusNode;
   bool _wasVisible = false;
   bool _isEditingText = false;
+  String? _lastAnnouncedStep;
 
   @override
   void initState() {
@@ -142,6 +161,7 @@ class _AccessibilityMenuScaffoldState
     if (widget.state.visible && !_wasVisible) {
       _restoreFocusNode = FocusManager.instance.primaryFocus;
       _scheduleInitialFocus();
+      _announceStepChange();
     } else if (!widget.state.visible && _wasVisible) {
       _focusScopeNode.unfocus();
       final previous = _restoreFocusNode;
@@ -151,13 +171,18 @@ class _AccessibilityMenuScaffoldState
           previous.canRequestFocus) {
         previous.requestFocus();
       }
+      _lastAnnouncedStep = null;
     }
+    _announceStepChange();
     _wasVisible = widget.state.visible;
   }
 
   @override
   void dispose() {
     FocusManager.instance.removeListener(_handleFocusChange);
+    _shortcutLegendFocusNode.dispose();
+    _composerFocusNode.dispose();
+    _newContactFocusNode.dispose();
     _focusScopeNode.dispose();
     super.dispose();
   }
@@ -167,17 +192,21 @@ class _AccessibilityMenuScaffoldState
     final bloc = context.read<AccessibilityActionBloc>();
     final shortcuts = <ShortcutActivator, Intent>{
       _escapeActivator: const _AccessibilityDismissIntent(),
+      _nextGroupActivator: const _NextGroupIntent(),
+      _previousGroupActivator: const _PreviousGroupIntent(),
+      _nextGroupKeySet: const _NextGroupIntent(),
+      _previousGroupKeySet: const _PreviousGroupIntent(),
       if (!_isEditingText) ...{
         _nextItemActivator: const _NextItemIntent(),
         _previousItemActivator: const _PreviousItemIntent(),
-        _nextSectionActivator: const _NextSectionIntent(),
-        _previousSectionActivator: const _PreviousSectionIntent(),
-        _nextSectionKeySet: const _NextSectionIntent(),
-        _previousSectionKeySet: const _PreviousSectionIntent(),
         _firstItemActivator: const _FirstItemIntent(),
         _lastItemActivator: const _LastItemIntent(),
       },
     };
+    final shortcutManager = ShortcutManager(
+      shortcuts: shortcuts,
+      modal: true,
+    );
     return Stack(
       children: [
         Positioned.fill(
@@ -190,6 +219,7 @@ class _AccessibilityMenuScaffoldState
         ),
         Center(
           child: Shortcuts(
+            manager: shortcutManager,
             shortcuts: shortcuts,
             child: Actions(
               actions: {
@@ -205,24 +235,16 @@ class _AccessibilityMenuScaffoldState
                   },
                 ),
                 _NextItemIntent: CallbackAction<_NextItemIntent>(
-                  onInvoke: (_) => _withList(
-                    (list) => list.focusNextItem(),
-                  ),
+                  onInvoke: (_) => _handleDirectionalMove(forward: true),
                 ),
                 _PreviousItemIntent: CallbackAction<_PreviousItemIntent>(
-                  onInvoke: (_) => _withList(
-                    (list) => list.focusPreviousItem(),
-                  ),
+                  onInvoke: (_) => _handleDirectionalMove(forward: false),
                 ),
-                _NextSectionIntent: CallbackAction<_NextSectionIntent>(
-                  onInvoke: (_) => _withList(
-                    (list) => list.focusNextSection(),
-                  ),
+                _NextGroupIntent: CallbackAction<_NextGroupIntent>(
+                  onInvoke: (_) => _focusNextGroup(),
                 ),
-                _PreviousSectionIntent: CallbackAction<_PreviousSectionIntent>(
-                  onInvoke: (_) => _withList(
-                    (list) => list.focusPreviousSection(),
-                  ),
+                _PreviousGroupIntent: CallbackAction<_PreviousGroupIntent>(
+                  onInvoke: (_) => _focusPreviousGroup(),
                 ),
                 _FirstItemIntent: CallbackAction<_FirstItemIntent>(
                   onInvoke: (_) => _withList((list) => list.focusFirstItem()),
@@ -246,19 +268,28 @@ class _AccessibilityMenuScaffoldState
                     padding: const EdgeInsets.all(20),
                     child: Material(
                       type: MaterialType.transparency,
-                      child: Semantics(
-                        scopesRoute: true,
-                        namesRoute: true,
-                        label: 'Accessibility actions dialog',
-                        hint:
-                            'Press Tab to reach shortcut instructions, then use arrow keys or Escape to exit.',
-                        explicitChildNodes: true,
-                        child: FocusTraversalGroup(
-                          policy: WidgetOrderTraversalPolicy(),
-                          child: _AccessibilityActionContent(
-                            state: widget.state,
-                            listKey: _listKey,
-                            enableActivationShortcut: !_isEditingText,
+                    child: Semantics(
+                      scopesRoute: true,
+                      namesRoute: true,
+                      label: 'Accessibility actions dialog',
+                      hint:
+                          'Press Tab to reach shortcut instructions, use arrow keys inside lists, Shift plus arrows to move between groups, or Escape to exit.',
+                      role: SemanticsRole.dialog,
+                      explicitChildNodes: true,
+                      child: FocusTraversalGroup(
+                        policy: OrderedTraversalPolicy(),
+                        child: _AccessibilityActionContent(
+                          state: widget.state,
+                          listKey: _listKey,
+                          enableActivationShortcut: !_isEditingText,
+                            registerGroup: _registerGroup,
+                            unregisterGroup: _unregisterGroup,
+                            legendFocusNode: _shortcutLegendFocusNode,
+                            composerFocusNode: _composerFocusNode,
+                            newContactFocusNode: _newContactFocusNode,
+                            legendGroupKey: _legendGroupKey,
+                            composerGroupKey: _composerGroupKey,
+                            newContactGroupKey: _newContactGroupKey,
                           ),
                         ),
                       ),
@@ -279,11 +310,119 @@ class _AccessibilityMenuScaffoldState
     action(list);
   }
 
+  void _handleDirectionalMove({required bool forward}) {
+    final current = _currentGroup();
+    if (current == _AccessibilityGroup.composer) {
+      _moveWithinGroup(_composerGroupKey, forward: forward);
+      return;
+    }
+    if (current == _AccessibilityGroup.newContact) {
+      _moveWithinGroup(_newContactGroupKey, forward: forward);
+      return;
+    }
+    if (current == _AccessibilityGroup.shortcuts) {
+      _moveWithinGroup(_legendGroupKey, forward: forward);
+      return;
+    }
+    _withList(
+      (list) => forward ? list.focusNextItem() : list.focusPreviousItem(),
+    );
+  }
+
+  void _moveWithinGroup(GlobalKey key, {required bool forward}) {
+    final context = key.currentContext;
+    if (context == null) return;
+    final focusScope = FocusScope.of(context);
+    if (forward) {
+      focusScope.nextFocus();
+    } else {
+      focusScope.previousFocus();
+    }
+  }
+
+  void _registerGroup(
+    _AccessibilityGroup group,
+    VoidCallback focusCallback,
+  ) {
+    _groupFocusHandlers[group] = focusCallback;
+  }
+
+  void _unregisterGroup(_AccessibilityGroup group) {
+    _groupFocusHandlers.remove(group);
+  }
+
+  List<_AccessibilityGroup> _groupOrder() {
+    final order = <_AccessibilityGroup>[];
+    switch (widget.state.currentEntry.kind) {
+      case AccessibilityStepKind.composer:
+        order.add(_AccessibilityGroup.composer);
+        order.add(_AccessibilityGroup.shortcuts);
+        break;
+      case AccessibilityStepKind.newContact:
+        order.add(_AccessibilityGroup.newContact);
+        order.add(_AccessibilityGroup.shortcuts);
+        break;
+      default:
+        order.add(_AccessibilityGroup.shortcuts);
+    }
+    if (widget.state.sections.isNotEmpty) {
+      order.add(_AccessibilityGroup.sections);
+    }
+    return order;
+  }
+
+  void _focusNextGroup() {
+    final order = _groupOrder();
+    if (order.isEmpty) return;
+    final current = _currentGroup();
+    final currentIndex =
+        current == null ? -1 : order.indexOf(current).clamp(0, order.length);
+    final nextIndex = (currentIndex + 1).clamp(0, order.length - 1).toInt();
+    _focusGroup(order[nextIndex]);
+  }
+
+  void _focusPreviousGroup() {
+    final order = _groupOrder();
+    if (order.isEmpty) return;
+    final current = _currentGroup();
+    final currentIndex =
+        current == null ? order.length : order.indexOf(current);
+    final previousIndex = (currentIndex - 1).clamp(0, order.length - 1).toInt();
+    _focusGroup(order[previousIndex]);
+  }
+
+  void _focusGroup(_AccessibilityGroup group) {
+    final handler = _groupFocusHandlers[group];
+    if (handler == null) return;
+    _focusScopeNode.requestFocus();
+    handler();
+  }
+
+  _AccessibilityGroup? _currentGroup() {
+    final focus = FocusManager.instance.primaryFocus;
+    final focusContext = focus?.context;
+    if (focusContext == null) return null;
+    return _AccessibilityGroupMarker.maybeOf(focusContext);
+  }
+
   void _scheduleInitialFocus() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _focusScopeNode.requestFocus();
-      _listKey.currentState?.focusFirstItem();
+      final groups = _groupOrder();
+      if (widget.state.currentEntry.kind == AccessibilityStepKind.composer &&
+          groups.contains(_AccessibilityGroup.composer)) {
+        _focusGroup(_AccessibilityGroup.composer);
+        return;
+      }
+      if (widget.state.currentEntry.kind == AccessibilityStepKind.newContact &&
+          groups.contains(_AccessibilityGroup.newContact)) {
+        _focusGroup(_AccessibilityGroup.newContact);
+        return;
+      }
+      if (groups.isNotEmpty) {
+        _focusGroup(groups.first);
+      }
     });
   }
 
@@ -295,6 +434,39 @@ class _AccessibilityMenuScaffoldState
       _isEditingText = editing;
     });
   }
+
+  void _announceStepChange() {
+    if (!mounted || !widget.state.visible) return;
+    final label = _stepLabel(widget.state.currentEntry);
+    if (label == null || label == _lastAnnouncedStep) return;
+    _lastAnnouncedStep = label;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.state.visible) return;
+      SemanticsService.announce(label, Directionality.of(context));
+    });
+  }
+
+  String? _stepLabel(AccessibilityStepEntry entry) {
+    final l10n = context.l10n;
+    switch (entry.kind) {
+      case AccessibilityStepKind.root:
+        return 'Accessibility actions';
+      case AccessibilityStepKind.contactPicker:
+        return 'Choose a contact';
+      case AccessibilityStepKind.composer:
+        return l10n.chatComposerMessageHint;
+      case AccessibilityStepKind.unread:
+        return 'Unread conversations';
+      case AccessibilityStepKind.invites:
+        return 'Pending invites';
+      case AccessibilityStepKind.newContact:
+        return 'Start a new address';
+      case AccessibilityStepKind.chatMessages:
+        final name =
+            entry.recipients.isNotEmpty ? entry.recipients.first.displayName : '';
+        return name.isNotEmpty ? 'Messages with $name' : 'Messages';
+    }
+  }
 }
 
 bool _isTextInputFocused() {
@@ -304,16 +476,59 @@ bool _isTextInputFocused() {
   return focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
 }
 
+enum _AccessibilityGroup {
+  shortcuts,
+  composer,
+  newContact,
+  sections,
+}
+
+class _AccessibilityGroupMarker extends InheritedWidget {
+  const _AccessibilityGroupMarker({
+    required this.group,
+    required super.child,
+  });
+
+  final _AccessibilityGroup group;
+
+  static _AccessibilityGroup? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_AccessibilityGroupMarker>()
+      ?.group;
+
+  @override
+  bool updateShouldNotify(covariant _AccessibilityGroupMarker oldWidget) =>
+      oldWidget.group != group;
+}
+
 class _AccessibilityActionContent extends StatelessWidget {
   const _AccessibilityActionContent({
     required this.state,
     required this.listKey,
     required this.enableActivationShortcut,
+    required this.registerGroup,
+    required this.unregisterGroup,
+    required this.legendFocusNode,
+    required this.composerFocusNode,
+    required this.newContactFocusNode,
+    required this.legendGroupKey,
+    required this.composerGroupKey,
+    required this.newContactGroupKey,
   });
 
   final AccessibilityActionState state;
   final GlobalKey<_AccessibilitySectionListState> listKey;
   final bool enableActivationShortcut;
+  final void Function(
+    _AccessibilityGroup group,
+    VoidCallback focus,
+  ) registerGroup;
+  final void Function(_AccessibilityGroup group) unregisterGroup;
+  final FocusNode legendFocusNode;
+  final FocusNode composerFocusNode;
+  final FocusNode newContactFocusNode;
+  final GlobalKey legendGroupKey;
+  final GlobalKey composerGroupKey;
+  final GlobalKey newContactGroupKey;
 
   @override
   Widget build(BuildContext context) {
@@ -322,61 +537,152 @@ class _AccessibilityActionContent extends StatelessWidget {
     final headerTitle = breadcrumbLabels.isNotEmpty
         ? breadcrumbLabels.last
         : _entryLabel(state.currentEntry, context);
+    final hasComposer =
+        state.currentEntry.kind == AccessibilityStepKind.composer;
+    final hasNewContact =
+        state.currentEntry.kind == AccessibilityStepKind.newContact;
+    final hasSections = state.sections.isNotEmpty;
+    const headerOrder = NumericFocusOrder(0);
+    final composerOrder = const NumericFocusOrder(1);
+    final newContactOrder = const NumericFocusOrder(1);
+    final legendOrder =
+        NumericFocusOrder(hasComposer || hasNewContact ? 2 : 1);
+    final statusOrder =
+        NumericFocusOrder(hasComposer || hasNewContact ? 1.5 : 1.2);
+    final sectionsOrder =
+        NumericFocusOrder(hasComposer || hasNewContact ? 3 : 2);
+
+    registerGroup(
+      _AccessibilityGroup.shortcuts,
+      () => legendFocusNode.requestFocus(),
+    );
+    if (hasComposer) {
+      registerGroup(
+        _AccessibilityGroup.composer,
+        () => composerFocusNode.requestFocus(),
+      );
+    } else {
+      unregisterGroup(_AccessibilityGroup.composer);
+    }
+    if (hasNewContact) {
+      registerGroup(
+        _AccessibilityGroup.newContact,
+        () => newContactFocusNode.requestFocus(),
+      );
+    } else {
+      unregisterGroup(_AccessibilityGroup.newContact);
+    }
+    if (hasSections) {
+      registerGroup(
+        _AccessibilityGroup.sections,
+        () => listKey.currentState?.focusFirstItem(),
+      );
+    } else {
+      unregisterGroup(_AccessibilityGroup.sections);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _AccessibilityMenuHeader(
-          breadcrumb: headerTitle,
-          breadcrumbs: breadcrumbLabels,
-          onCrumbSelected: (index) =>
-              bloc.add(AccessibilityMenuJumpedTo(index)),
-          onBack: state.stack.length > 1
-              ? () => bloc.add(const AccessibilityMenuBack())
-              : null,
-          onClose: () => bloc.add(const AccessibilityMenuClosed()),
+        FocusTraversalOrder(
+          order: headerOrder,
+          child: _AccessibilityMenuHeader(
+            breadcrumb: headerTitle,
+            breadcrumbs: breadcrumbLabels,
+            onCrumbSelected: (index) =>
+                bloc.add(AccessibilityMenuJumpedTo(index)),
+            onBack: state.stack.length > 1
+                ? () => bloc.add(const AccessibilityMenuBack())
+                : null,
+            onClose: () => bloc.add(const AccessibilityMenuClosed()),
+          ),
         ),
         const SizedBox(height: 12),
-        const _KeyboardShortcutLegend(),
+        FocusTraversalOrder(
+          order: legendOrder,
+          child: _AccessibilityGroupMarker(
+            group: _AccessibilityGroup.shortcuts,
+            child: _KeyboardShortcutLegend(
+              firstEntryFocusNode: legendFocusNode,
+              groupKey: legendGroupKey,
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         if (state.statusMessage != null)
-          _AccessibilityBanner(
-            message: state.statusMessage!,
-            color: context.colorScheme.card,
-            foreground: context.colorScheme.foreground,
-            icon: Icons.check_circle,
+          FocusTraversalOrder(
+            order: statusOrder,
+            child: _AccessibilityBanner(
+              message: state.statusMessage!,
+              color: context.colorScheme.card,
+              foreground: context.colorScheme.foreground,
+              icon: Icons.check_circle,
+            ),
           ),
         if (state.errorMessage != null)
-          _AccessibilityBanner(
-            message: state.errorMessage!,
-            color: context.colorScheme.destructive.withValues(alpha: 0.1),
-            foreground: context.colorScheme.destructive,
-            icon: Icons.error_outline,
+          FocusTraversalOrder(
+            order: statusOrder,
+            child: _AccessibilityBanner(
+              message: state.errorMessage!,
+              color: context.colorScheme.destructive.withValues(alpha: 0.1),
+              foreground: context.colorScheme.destructive,
+              icon: Icons.error_outline,
+            ),
           ),
         if (state.statusMessage != null || state.errorMessage != null)
           const SizedBox(height: 12),
-        if (state.currentEntry.kind == AccessibilityStepKind.composer)
-          _ComposerSection(state: state),
-        if (state.currentEntry.kind == AccessibilityStepKind.newContact)
-          _NewContactSection(state: state),
-        if (state.sections.isNotEmpty)
-          Flexible(
-            fit: FlexFit.loose,
-            child: Shortcuts(
-              shortcuts: enableActivationShortcut
-                  ? {_activateItemActivator: const _ActivateItemIntent()}
-                  : const {},
-              child: _AccessibilitySectionList(
-                key: listKey,
-                sections: state.sections,
-                headerLabel: headerTitle,
+        if (hasComposer)
+          FocusTraversalOrder(
+            order: composerOrder,
+            child: _AccessibilityGroupMarker(
+              group: _AccessibilityGroup.composer,
+              child: _ComposerSection(
+                state: state,
+                focusNode: composerFocusNode,
+                groupKey: composerGroupKey,
+              ),
+            ),
+          ),
+        if (hasNewContact)
+          FocusTraversalOrder(
+            order: newContactOrder,
+            child: _AccessibilityGroupMarker(
+              group: _AccessibilityGroup.newContact,
+              child: _NewContactSection(
+                state: state,
+                focusNode: newContactFocusNode,
+                groupKey: newContactGroupKey,
+              ),
+            ),
+          ),
+        if (hasSections)
+          FocusTraversalOrder(
+            order: sectionsOrder,
+            child: _AccessibilityGroupMarker(
+              group: _AccessibilityGroup.sections,
+              child: Flexible(
+                fit: FlexFit.loose,
+                child: Shortcuts(
+                  shortcuts: enableActivationShortcut
+                      ? {_activateItemActivator: const _ActivateItemIntent()}
+                      : const {},
+                  child: _AccessibilitySectionList(
+                    key: listKey,
+                    sections: state.sections,
+                    headerLabel: headerTitle,
+                    autofocus: !hasComposer && !hasNewContact,
+                  ),
+                ),
               ),
             ),
           )
         else
-          const Flexible(
-            fit: FlexFit.loose,
-            child: Center(child: Text('No actions available right now')),
+          FocusTraversalOrder(
+            order: sectionsOrder,
+            child: const Flexible(
+              fit: FlexFit.loose,
+              child: Center(child: Text('No actions available right now')),
+            ),
           ),
       ],
     );
@@ -637,7 +943,13 @@ class _AccessibilityBanner extends StatelessWidget {
 }
 
 class _KeyboardShortcutLegend extends StatelessWidget {
-  const _KeyboardShortcutLegend();
+  const _KeyboardShortcutLegend({
+    required this.firstEntryFocusNode,
+    required this.groupKey,
+  });
+
+  final FocusNode firstEntryFocusNode;
+  final GlobalKey groupKey;
 
   @override
   Widget build(BuildContext context) {
@@ -646,10 +958,19 @@ class _KeyboardShortcutLegend extends StatelessWidget {
       _ShortcutLegendEntry(
         label: 'Open menu',
         shortcut: platformShortcut,
+        focusNode: firstEntryFocusNode,
       ),
       const _ShortcutLegendEntry(
         label: 'Back a step or close',
         shortcut: escapeShortcut,
+      ),
+      const _ShortcutLegendEntry(
+        label: 'Next focus target',
+        shortcut: _nextFocusShortcut,
+      ),
+      const _ShortcutLegendEntry(
+        label: 'Previous focus target',
+        shortcut: _previousFocusShortcut,
       ),
       const _ShortcutLegendEntry(
         label: 'Activate item',
@@ -664,12 +985,12 @@ class _KeyboardShortcutLegend extends StatelessWidget {
         shortcut: _previousItemShortcut,
       ),
       const _ShortcutLegendEntry(
-        label: 'Next list',
-        shortcut: _nextSectionShortcut,
+        label: 'Next group',
+        shortcut: _nextGroupShortcut,
       ),
       const _ShortcutLegendEntry(
-        label: 'Previous list',
-        shortcut: _previousSectionShortcut,
+        label: 'Previous group',
+        shortcut: _previousGroupShortcut,
       ),
       const _ShortcutLegendEntry(
         label: 'First item',
@@ -681,23 +1002,48 @@ class _KeyboardShortcutLegend extends StatelessWidget {
       ),
     ];
     return Column(
+      key: groupKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(
-          header: true,
-          child: Text(
-            'Keyboard shortcuts',
-            style: context.textTheme.small.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        FocusScope(
+          child: Builder(
+            builder: (context) {
+              final hasFocus = FocusScope.of(context).hasFocus;
+              final colors = context.colorScheme;
+              final borderColor = hasFocus ? colors.primary : colors.border;
+              final borderWidth = hasFocus ? 2.5 : 1.0;
+              return AnimatedContainer(
+                duration: baseAnimationDuration,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor, width: borderWidth),
+                  color: colors.card,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        'Keyboard shortcuts',
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: entries,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: entries,
         ),
       ],
     );
@@ -708,10 +1054,12 @@ class _ShortcutLegendEntry extends StatelessWidget {
   const _ShortcutLegendEntry({
     required this.label,
     required this.shortcut,
+    this.focusNode,
   });
 
   final String label;
   final MenuSerializableShortcut shortcut;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -722,26 +1070,28 @@ class _ShortcutLegendEntry extends StatelessWidget {
     );
     final description = '$label, ${shortcutLabel(context, shortcut)}';
     return Focus(
+      focusNode: focusNode,
       child: Builder(
         builder: (context) {
           final hasFocus = Focus.of(context).hasFocus;
           final borderColor = hasFocus ? colors.primary : colors.border;
           final borderWidth = hasFocus ? 2.5 : 1.0;
           return Semantics(
-            label: description,
+            label: 'Keyboard shortcut: $description',
             focusable: true,
+            readOnly: true,
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: borderColor, width: borderWidth),
                 color: colors.muted.withValues(alpha: 0.04),
               ),
               child: Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                 child: Wrap(
-                  spacing: 10,
+                  spacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(label, style: textStyle),
@@ -758,72 +1108,97 @@ class _ShortcutLegendEntry extends StatelessWidget {
 }
 
 class _ComposerSection extends StatelessWidget {
-  const _ComposerSection({required this.state});
+  const _ComposerSection({
+    required this.state,
+    required this.focusNode,
+    required this.groupKey,
+  });
 
   final AccessibilityActionState state;
+  final FocusNode focusNode;
+  final GlobalKey groupKey;
 
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<AccessibilityActionBloc>();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Material(
-            type: MaterialType.transparency,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: state.recipients
-                  .map(
-                    (recipient) => Semantics(
-                      label: 'Recipient ${recipient.displayName}',
-                      button: true,
-                      hint: 'Press backspace or delete to remove',
-                      child: InputChip(
-                        label: Text(recipient.displayName),
-                        onDeleted: () => bloc.add(
-                          AccessibilityRecipientRemoved(recipient.jid),
+    return FocusTraversalGroup(
+      key: groupKey,
+      policy: WidgetOrderTraversalPolicy(),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Material(
+              type: MaterialType.transparency,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: state.recipients
+                    .map(
+                      (recipient) => Semantics(
+                        label: 'Recipient ${recipient.displayName}',
+                        button: true,
+                        hint: 'Press backspace or delete to remove',
+                        child: InputChip(
+                          label: Text(recipient.displayName),
+                          onDeleted: () => bloc.add(
+                            AccessibilityRecipientRemoved(recipient.jid),
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                  .toList(),
+                    )
+                    .toList(),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          _AccessibilityTextField(
-            label: context.l10n.chatComposerMessageHint,
-            text: state.composerText,
-            onChanged: (value) => bloc.add(AccessibilityComposerChanged(value)),
-            hintText: 'Type a message',
-            minLines: 3,
-            maxLines: 5,
-            enabled: !state.busy,
-          ),
-        ],
+            const SizedBox(height: 8),
+            _AccessibilityTextField(
+              label: context.l10n.chatComposerMessageHint,
+              text: state.composerText,
+              onChanged: (value) =>
+                  bloc.add(AccessibilityComposerChanged(value)),
+              hintText: 'Type a message',
+              minLines: 3,
+              maxLines: 5,
+              enabled: !state.busy,
+              focusNode: focusNode,
+              autofocus: true,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _NewContactSection extends StatelessWidget {
-  const _NewContactSection({required this.state});
+  const _NewContactSection({
+    required this.state,
+    required this.focusNode,
+    required this.groupKey,
+  });
 
   final AccessibilityActionState state;
+  final FocusNode focusNode;
+  final GlobalKey groupKey;
 
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<AccessibilityActionBloc>();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: _AccessibilityTextField(
-        label: 'Contact address',
-        text: state.newContactInput,
-        onChanged: (value) => bloc.add(AccessibilityNewContactChanged(value)),
-        hintText: 'someone@example.com',
-        enabled: !state.busy,
+    return FocusTraversalGroup(
+      key: groupKey,
+      policy: WidgetOrderTraversalPolicy(),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _AccessibilityTextField(
+          label: 'Contact address',
+          text: state.newContactInput,
+          onChanged: (value) => bloc.add(AccessibilityNewContactChanged(value)),
+          hintText: 'someone@example.com',
+          enabled: !state.busy,
+          focusNode: focusNode,
+          autofocus: true,
+        ),
       ),
     );
   }
@@ -838,6 +1213,8 @@ class _AccessibilityTextField extends StatefulWidget {
     this.minLines = 1,
     this.maxLines = 1,
     this.enabled = true,
+    this.focusNode,
+    this.autofocus = false,
   });
 
   final String label;
@@ -847,6 +1224,8 @@ class _AccessibilityTextField extends StatefulWidget {
   final int minLines;
   final int maxLines;
   final bool enabled;
+  final FocusNode? focusNode;
+  final bool autofocus;
 
   @override
   State<_AccessibilityTextField> createState() =>
@@ -856,8 +1235,9 @@ class _AccessibilityTextField extends StatefulWidget {
 class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   late final TextEditingController _controller =
       TextEditingController(text: widget.text);
-  late final FocusNode _focusNode =
+  late FocusNode _focusNode = widget.focusNode ??
       FocusNode(debugLabel: 'accessibility-text-${widget.label}');
+  late bool _ownsFocusNode = widget.focusNode == null;
 
   @override
   void initState() {
@@ -868,6 +1248,15 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   @override
   void didUpdateWidget(covariant _AccessibilityTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode && widget.focusNode != null) {
+      _focusNode.removeListener(_onFocusChanged);
+      if (_ownsFocusNode) {
+        _focusNode.dispose();
+      }
+      _focusNode = widget.focusNode!;
+      _ownsFocusNode = false;
+      _focusNode.addListener(_onFocusChanged);
+    }
     if (oldWidget.text != widget.text && _controller.text != widget.text) {
       _controller.text = widget.text;
       _controller.selection =
@@ -878,9 +1267,10 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   @override
   void dispose() {
     _controller.dispose();
-    _focusNode
-      ..removeListener(_onFocusChanged)
-      ..dispose();
+    _focusNode.removeListener(_onFocusChanged);
+    if (_ownsFocusNode) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -890,6 +1280,18 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final hasFocus = _focusNode.hasFocus;
+    if (widget.autofocus && !_focusNode.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_focusNode.canRequestFocus) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
+    final navigationShortcuts = <ShortcutActivator, Intent>{
+      _nextGroupActivator: const _NextGroupIntent(),
+      _previousGroupActivator: const _PreviousGroupIntent(),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -913,14 +1315,21 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
               ),
             ),
             padding: const EdgeInsets.all(2),
-            child: ShadInput(
-              controller: _controller,
-              focusNode: _focusNode,
-              enabled: widget.enabled,
-              minLines: widget.minLines,
-              maxLines: widget.maxLines,
-              placeholder: Text(widget.hintText),
-              onChanged: widget.onChanged,
+            child: Shortcuts(
+              manager: ShortcutManager(
+                shortcuts: navigationShortcuts,
+                modal: true,
+              ),
+              shortcuts: navigationShortcuts,
+              child: ShadInput(
+                controller: _controller,
+                focusNode: _focusNode,
+                enabled: widget.enabled,
+                minLines: widget.minLines,
+                maxLines: widget.maxLines,
+                placeholder: Text(widget.hintText),
+                onChanged: widget.onChanged,
+              ),
             ),
           ),
         ),
@@ -941,10 +1350,12 @@ class _AccessibilitySectionList extends StatefulWidget {
     super.key,
     required this.sections,
     required this.headerLabel,
+    this.autofocus = true,
   });
 
   final List<AccessibilityMenuSection> sections;
   final String headerLabel;
+  final bool autofocus;
 
   @override
   State<_AccessibilitySectionList> createState() =>
@@ -1076,7 +1487,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
               totalCount: _itemNodes.length,
               sectionLabel: sectionLabel,
               focusNode: focusNode,
-              autofocus: nodeIndex == 0,
+              autofocus: widget.autofocus && nodeIndex == 0,
               onFocused: () => _lastFocusedIndex = nodeIndex,
               onFocusChanged: (hasFocus) =>
                   _handleFocusChanged(nodeIndex, hasFocus),
@@ -1113,7 +1524,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
           container: true,
           label: 'Accessibility action list with ${_itemNodes.length} items',
           hint:
-              'Use arrow keys to move, Shift plus arrows to switch lists, Home or End to jump, Enter to activate, Escape to exit.',
+              'Use arrow keys to move, Shift plus arrows to switch groups, Home or End to jump, Enter to activate, Escape to exit.',
           explicitChildNodes: true,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
@@ -1156,7 +1567,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
       _lastFocusedIndex = null;
     }
     _hasFocusedItem = _itemNodes.any((node) => node.hasFocus);
-    if (_itemNodes.isNotEmpty && _lastFocusedIndex == null) {
+    if (widget.autofocus &&
+        _itemNodes.isNotEmpty &&
+        _lastFocusedIndex == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           focusFirstItem();
@@ -1272,6 +1685,8 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
       Scrollable.ensureVisible(
         focusContext,
         duration: baseAnimationDuration,
+        curve: Curves.easeInOutCubic,
+        alignment: previousIndex != null && index < previousIndex ? 0.0 : 1.0,
         alignmentPolicy: alignmentPolicy,
       );
     }
@@ -1473,12 +1888,12 @@ class _PreviousItemIntent extends Intent {
   const _PreviousItemIntent();
 }
 
-class _NextSectionIntent extends Intent {
-  const _NextSectionIntent();
+class _NextGroupIntent extends Intent {
+  const _NextGroupIntent();
 }
 
-class _PreviousSectionIntent extends Intent {
-  const _PreviousSectionIntent();
+class _PreviousGroupIntent extends Intent {
+  const _PreviousGroupIntent();
 }
 
 class _FirstItemIntent extends Intent {

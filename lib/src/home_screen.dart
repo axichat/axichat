@@ -88,7 +88,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _globalShortcutHandler = _handleGlobalShortcut;
     HardwareKeyboard.instance.addHandler(_globalShortcutHandler!);
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _shortcutFocusNode.requestFocus(),
+      (_) {
+        _shortcutFocusNode.requestFocus();
+        _restoreShortcutFocusIfEmpty();
+      },
     );
   }
 
@@ -106,18 +109,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final hasMeta = pressed.contains(LogicalKeyboardKey.metaLeft) ||
-        pressed.contains(LogicalKeyboardKey.metaRight) ||
-        pressed.contains(LogicalKeyboardKey.meta);
-    final hasControl = pressed.contains(LogicalKeyboardKey.controlLeft) ||
-        pressed.contains(LogicalKeyboardKey.controlRight) ||
-        pressed.contains(LogicalKeyboardKey.control);
+    final hasMeta = event.isMetaPressed;
+    final hasControl = event.isControlPressed;
     final shouldOpen =
         event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
     if (shouldOpen) {
-      final bloc = _accessibilityBloc;
-      if (bloc != null && !bloc.isClosed) {
+      final bloc = _currentAccessibilityBloc();
+      if (bloc != null) {
         bloc.add(const AccessibilityMenuOpened());
         return KeyEventResult.handled;
       }
@@ -136,19 +134,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  AccessibilityActionBloc? _currentAccessibilityBloc() {
+    final bloc = _accessibilityBloc;
+    if (bloc != null && !bloc.isClosed) return bloc;
+    if (!mounted) return null;
+    final resolved = context.read<AccessibilityActionBloc?>();
+    if (resolved != null && !resolved.isClosed) {
+      _accessibilityBloc = resolved;
+      return resolved;
+    }
+    return null;
+  }
+
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!mounted || event is! KeyDownEvent) return false;
-    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final hasMeta = pressed.contains(LogicalKeyboardKey.metaLeft) ||
-        pressed.contains(LogicalKeyboardKey.metaRight) ||
-        pressed.contains(LogicalKeyboardKey.meta);
-    final hasControl = pressed.contains(LogicalKeyboardKey.controlLeft) ||
-        pressed.contains(LogicalKeyboardKey.controlRight) ||
-        pressed.contains(LogicalKeyboardKey.control);
+    final hasMeta = event.isMetaPressed;
+    final hasControl = event.isControlPressed;
     if (event.logicalKey == LogicalKeyboardKey.keyK &&
         (hasMeta || hasControl)) {
-      final bloc = _accessibilityBloc;
-      if (bloc != null && !bloc.isClosed) {
+      final bloc = _currentAccessibilityBloc();
+      if (bloc != null) {
         bloc.add(const AccessibilityMenuOpened());
         return true;
       }
@@ -501,6 +506,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final bloc = AccessibilityActionBloc(
           chatsService: context.read<XmppService>(),
           messageService: context.read<XmppService>(),
+          emailService: context.read<EmailService>(),
           rosterService:
               isRoster ? context.read<XmppService>() as RosterService : null,
           initialLocalization: l10n,

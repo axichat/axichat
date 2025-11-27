@@ -235,15 +235,15 @@ List<Widget> _buildKeycaps({
   required ShadColorScheme colors,
   required TextStyle textStyle,
 }) {
-  final topSheen = Color.lerp(colors.card, Colors.white, 0.35)!;
-  final midTone = Color.lerp(colors.card, Colors.white, 0.12)!;
-  final bottomShade = Color.lerp(colors.card, Colors.black, 0.2)!;
-  final borderWidth = dense ? 1.15 : 1.45;
+  final topSheen = Color.lerp(colors.card, Colors.white, 0.38)!;
+  final midTone = Color.lerp(colors.card, Colors.white, 0.16)!;
+  final borderWidth = dense ? 1.1 : 1.35;
   const paddingDense = EdgeInsets.symmetric(horizontal: 8, vertical: 5);
   const paddingComfort = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
   final EdgeInsets padding = dense ? paddingDense : paddingComfort;
   const radiusValue = 8.0;
   final radius = BorderRadius.circular(radiusValue);
+  final drop = dense ? 3.0 : 4.0;
   final keyStyle = textStyle.copyWith(
     color: colors.foreground,
     fontWeight: FontWeight.w700,
@@ -254,106 +254,98 @@ List<Widget> _buildKeycaps({
     fontWeight: FontWeight.w600,
   );
 
-  final widgets = <Widget>[];
-  for (var i = 0; i < parts.length; i++) {
-    widgets.add(
-      DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          boxShadow: [
-            BoxShadow(
-              color: colors.foreground.withValues(alpha: 0.25),
-              offset: const Offset(0, 1.4),
-              blurRadius: 3.2,
-              spreadRadius: 0.2,
+  Widget keycap(String label) {
+    final backplateColor = Color.lerp(colors.card, colors.border, 0.45)!;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          top: drop,
+          left: 0,
+          right: 0,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: backplateColor,
+              borderRadius: radius,
+              boxShadow: [
+                BoxShadow(
+                  color: colors.foreground.withValues(alpha: 0.18),
+                  offset: Offset(0, drop / 2),
+                  blurRadius: drop * 1.6,
+                  spreadRadius: 0.2,
+                ),
+              ],
             ),
-            BoxShadow(
-              color: colors.foreground.withValues(alpha: 0.22),
-              offset: const Offset(0, 6.0),
-              blurRadius: 10.0,
-              spreadRadius: -0.5,
+            child: Padding(
+              padding: padding,
+              child: Opacity(
+                opacity: 0,
+                child: Text(label, style: keyStyle),
+              ),
             ),
-          ],
+          ),
         ),
-        child: ClipRRect(
-          borderRadius: radius,
-          child: Stack(
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      topSheen,
-                      midTone,
-                      colors.card,
-                      bottomShade,
-                    ],
-                    stops: const [0, 0.35, 0.7, 1],
-                  ),
-                  border: Border.all(
-                    color: colors.border.withValues(alpha: 0.95),
-                    width: borderWidth,
-                  ),
-                  borderRadius: radius,
-                ),
-                child: Padding(
-                  padding: padding,
-                  child: Text(parts[i], style: keyStyle),
-                ),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.08),
-                        Colors.transparent,
-                        colors.foreground.withValues(alpha: 0.04),
-                      ],
-                      stops: const [0, 0.45, 0.75],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  height: dense ? 7 : 9,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(radiusValue),
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        colors.foreground.withValues(alpha: 0.2),
-                        colors.foreground.withValues(alpha: 0.08),
-                        Colors.transparent,
-                      ],
-                      stops: const [0, 0.45, 1],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.foreground.withValues(alpha: 0.18),
-                        offset: const Offset(0, 1.2),
-                        blurRadius: 2.8,
-                        spreadRadius: 0.1,
-                      ),
-                    ],
-                  ),
-                ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                topSheen,
+                midTone,
+                colors.card,
+              ],
+              stops: const [0, 0.45, 1],
+            ),
+            border: Border.all(
+              color: colors.border.withValues(alpha: 0.95),
+              width: borderWidth,
+            ),
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: colors.foreground.withValues(alpha: 0.18),
+                offset: const Offset(0, 1.2),
+                blurRadius: 3.2,
               ),
             ],
           ),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: Stack(
+              children: [
+                Padding(
+                  padding: padding,
+                  child: Text(label, style: keyStyle),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.08),
+                          Colors.transparent,
+                          colors.foreground.withValues(alpha: 0.04),
+                        ],
+                        stops: const [0, 0.5, 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
+  }
+
+  final widgets = <Widget>[];
+  for (var i = 0; i < parts.length; i++) {
+    widgets.add(keycap(parts[i]));
     final hasNext = i < parts.length - 1;
     if (hasNext) {
       widgets.add(Text('+', style: connectorStyle));
