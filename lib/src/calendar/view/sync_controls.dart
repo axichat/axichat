@@ -190,8 +190,8 @@ class SyncStatusIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (String label, Widget indicator) = _resolveVisual(context);
-    return Tooltip(
-      message: label,
+    return AxiTooltip(
+      builder: (_) => Text(label),
       child: Semantics(
         label: label,
         child: indicator,

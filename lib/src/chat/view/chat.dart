@@ -2345,43 +2345,27 @@ class _ChatState extends State<Chat> {
                                                   padding:
                                                       const EdgeInsetsDirectional
                                                           .only(start: 6),
-                                                  child: Tooltip(
-                                                    message: context.l10n
-                                                        .chatContactRenameTooltip,
-                                                    child: ShadGestureDetector(
-                                                      onTap:
+                                                  child: AxiTooltip(
+                                                    builder: (context) => Text(
+                                                      context.l10n
+                                                          .chatContactRenameTooltip,
+                                                    ),
+                                                    child: ShadIconButton.ghost(
+                                                      onPressed:
                                                           _promptContactRename,
-                                                      hoverStrategies:
-                                                          mobileHoverStrategies,
-                                                      cursor: SystemMouseCursors
-                                                          .click,
-                                                      child: DecoratedBox(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: context
-                                                              .colorScheme.card,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(8),
-                                                          border: Border.all(
-                                                            color: context
-                                                                .colorScheme
-                                                                .border,
-                                                          ),
-                                                        ),
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .all(4),
-                                                          child: Icon(
-                                                            LucideIcons
-                                                                .pencilLine,
-                                                            size: 16,
-                                                            color: context
-                                                                .colorScheme
-                                                                .mutedForeground,
-                                                          ),
-                                                        ),
+                                                      icon: Icon(
+                                                        LucideIcons.pencilLine,
+                                                        size: 18,
+                                                        color: context
+                                                            .colorScheme
+                                                            .mutedForeground,
+                                                      ),
+                                                      decoration:
+                                                          const ShadDecoration(
+                                                        secondaryBorder:
+                                                            ShadBorder.none,
+                                                        secondaryFocusedBorder:
+                                                            ShadBorder.none,
                                                       ),
                                                     ).withTapBounce(),
                                                   ),

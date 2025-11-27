@@ -21,28 +21,31 @@ class LanguageSelector extends StatelessWidget {
     return BlocSelector<SettingsCubit, SettingsState, AppLanguage>(
       selector: (state) => state.language,
       builder: (context, language) {
-        return SizedBox(
-          width: compact ? 160 : 220,
-          child: ShadSelect<AppLanguage>(
-            initialValue: language,
-            onChanged: (value) {
-              if (value == null) return;
-              context.read<SettingsCubit>().updateLanguage(value);
-            },
-            options: AppLanguage.values
-                .map(
-                  (entry) => ShadOption<AppLanguage>(
-                    value: entry,
-                    child: _LanguageLabel(
-                      language: entry,
-                      style: labelStyle,
+        final maxWidth = compact ? 200.0 : 280.0;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: IntrinsicWidth(
+            child: ShadSelect<AppLanguage>(
+              initialValue: language,
+              onChanged: (value) {
+                if (value == null) return;
+                context.read<SettingsCubit>().updateLanguage(value);
+              },
+              options: AppLanguage.values
+                  .map(
+                    (entry) => ShadOption<AppLanguage>(
+                      value: entry,
+                      child: _LanguageLabel(
+                        language: entry,
+                        style: labelStyle,
+                      ),
                     ),
-                  ),
-                )
-                .toList(),
-            selectedOptionBuilder: (context, value) => _LanguageLabel(
-              language: value,
-              style: labelStyle,
+                  )
+                  .toList(),
+              selectedOptionBuilder: (context, value) => _LanguageLabel(
+                language: value,
+                style: labelStyle,
+              ),
             ),
           ),
         );

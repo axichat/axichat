@@ -267,8 +267,8 @@ class CalendarNavigation extends StatelessWidget {
       return _wrapWithCursor(button, onPressed != null);
     }
     return _wrapWithCursor(
-      Tooltip(
-        message: tooltip ?? label,
+      AxiTooltip(
+        builder: (_) => Text(tooltip ?? label),
         child: SizedBox(
           height: 40,
           child: button,
@@ -307,8 +307,8 @@ class CalendarNavigation extends StatelessWidget {
       );
     }
     final colors = context.colorScheme;
-    Widget control = Tooltip(
-      message: message,
+    Widget control = AxiTooltip(
+      builder: (_) => Text(message),
       child: TaskSecondaryButton(
         label: tooltip,
         icon: icon,
@@ -354,8 +354,8 @@ class CalendarNavigation extends StatelessWidget {
             hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
             child: Icon(icon, size: 16),
           );
-    Widget control = Tooltip(
-      message: tooltip,
+    Widget control = AxiTooltip(
+      builder: (_) => Text(tooltip),
       child: SizedBox(
         width: 44,
         height: 40,
@@ -483,10 +483,9 @@ class _TrailingControls extends StatelessWidget {
 
     final Widget? hideToggle = onToggleHideCompletedScheduled == null
         ? null
-        : ShadSwitch(
+        : _HideCompletedButton(
             value: hideCompletedScheduled,
-            onChanged: onToggleHideCompletedScheduled,
-            label: const Text('Hide completed'),
+            onChanged: onToggleHideCompletedScheduled!,
           );
 
     final trailingChildren = <Widget>[
@@ -508,6 +507,37 @@ class _TrailingControls extends StatelessWidget {
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: trailingChildren,
+    );
+  }
+}
+
+class _HideCompletedButton extends StatelessWidget {
+  const _HideCompletedButton({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final bool hiding = value;
+    final Color background =
+        hiding ? colors.primary.withValues(alpha: 0.08) : colors.card;
+    final Color border = hiding ? colors.primary : colors.border;
+    final Color foreground = hiding ? colors.primary : colors.mutedForeground;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
+      child: AxiIconButton(
+        iconData: hiding ? Icons.visibility_off : Icons.visibility,
+        tooltip: hiding ? 'Show completed' : 'Hide completed',
+        color: foreground,
+        backgroundColor: background,
+        borderColor: border,
+        onPressed: () => onChanged(!value),
+      ),
     );
   }
 }

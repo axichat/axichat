@@ -3474,7 +3474,10 @@ class _CalendarZoomControls extends StatelessWidget {
         onPressed: onPressed,
         enabled: onPressed != null,
       );
-      return Tooltip(message: tooltip, child: button);
+      return AxiTooltip(
+        builder: (_) => Text(tooltip),
+        child: button,
+      );
     }
 
     return Material(

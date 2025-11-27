@@ -71,10 +71,14 @@ class CalendarModel with _$CalendarModel {
     if (!tasks.containsKey(taskId)) return this;
     final updatedTasks = Map<String, CalendarTask>.from(tasks)..remove(taskId);
     final now = DateTime.now();
+    final String baseId = baseTaskIdFrom(taskId);
+    final bool shouldPrunePaths = !updatedTasks.containsKey(baseId);
     final updated = copyWith(
       tasks: updatedTasks,
       lastModified: now,
-      criticalPaths: _removeTaskFromPaths(taskId, now: now),
+      criticalPaths: shouldPrunePaths
+          ? _removeTaskFromPaths(taskId, now: now)
+          : criticalPaths,
     );
     return updated.copyWith(checksum: updated.calculateChecksum());
   }
@@ -104,10 +108,16 @@ class CalendarModel with _$CalendarModel {
       return this;
     }
     final now = DateTime.now();
+    final Set<String> missingBaseIds = taskIds
+        .map(baseTaskIdFrom)
+        .where((id) => !updatedTasks.containsKey(id))
+        .toSet();
     final updated = copyWith(
       tasks: updatedTasks,
       lastModified: now,
-      criticalPaths: _removeMissingTasksFromPaths(taskIds, now: now),
+      criticalPaths: missingBaseIds.isEmpty
+          ? criticalPaths
+          : _removeMissingTasksFromPaths(missingBaseIds, now: now),
     );
     return updated.copyWith(checksum: updated.calculateChecksum());
   }

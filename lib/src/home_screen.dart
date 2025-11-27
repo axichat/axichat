@@ -73,7 +73,22 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _shortcutFocusNode.requestFocus(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shortcutFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -427,6 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) {
           final findShortcut = findActionShortcut(Theme.of(context).platform);
           return Focus(
+            focusNode: _shortcutFocusNode,
             autofocus: true,
             child: Shortcuts(
               shortcuts: {
@@ -765,13 +781,10 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     final shortcut = findActionShortcut(Theme.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     if (collapsed) {
-      return Tooltip(
-        message: 'Accessibility actions ($shortcutText)',
-        child: AxiIconButton(
-          iconData: LucideIcons.command,
-          tooltip: 'Accessibility actions ($shortcutText)',
-          onPressed: () => bloc.add(const AccessibilityMenuOpened()),
-        ),
+      return AxiIconButton(
+        iconData: LucideIcons.accessibility,
+        tooltip: 'Accessibility actions ($shortcutText)',
+        onPressed: () => bloc.add(const AccessibilityMenuOpened()),
       );
     }
     final colors = context.colorScheme;
@@ -792,7 +805,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                const Icon(LucideIcons.command, size: 20),
+                const Icon(LucideIcons.accessibility, size: 20),
                 const SizedBox(width: 12),
                 ShortcutHint(shortcut: shortcut, dense: true),
               ],
@@ -814,12 +827,26 @@ class _FindActionIconButton extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
-    final tooltip =
-        'Accessibility actions (${shortcutLabel(context, shortcut)})';
-    return AxiIconButton(
-      iconData: LucideIcons.command,
-      tooltip: tooltip,
+    return ShadButton.ghost(
       onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Accessibility',
+            style: context.textTheme.small.copyWith(
+              color: context.colorScheme.foreground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          ShortcutHint(
+            shortcut: shortcut,
+            dense: true,
+          ),
+        ],
+      ),
     );
   }
 }

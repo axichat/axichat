@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -781,7 +782,6 @@ class TaskSidebarState extends State<TaskSidebar>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         criticalPathsPanel,
-                        const SizedBox(height: calendarGutterLg),
                         contentBody,
                       ],
                     );
@@ -2798,8 +2798,8 @@ class _SelectionTaskTile extends StatelessWidget {
                 scheduleLabel: scheduleLabel,
                 onToggleCompletion: (completed) =>
                     onToggleCompletion(task, completed),
-                trailing: Tooltip(
-                  message: context.l10n.calendarSelectionRemove,
+                trailing: AxiTooltip(
+                  builder: (_) => Text(context.l10n.calendarSelectionRemove),
                   child: ShadIconButton.ghost(
                     onPressed: () => onRemoveTask(task),
                     icon: const Icon(
@@ -3572,10 +3572,24 @@ class _HideCompletedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadSwitch(
-      label: const Text('Hide completed'),
-      value: value,
-      onChanged: onChanged,
+    final colors = context.colorScheme;
+    final bool hiding = value;
+    final Color background =
+        hiding ? colors.primary.withValues(alpha: 0.08) : colors.card;
+    final Color border = hiding ? colors.primary : colors.border;
+    final Color foreground = hiding ? colors.primary : colors.mutedForeground;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
+      child: AxiIconButton(
+        iconData: hiding ? Icons.visibility_off : Icons.visibility,
+        tooltip: hiding ? 'Show completed' : 'Hide completed',
+        color: foreground,
+        backgroundColor: background,
+        borderColor: border,
+        buttonSize: 34,
+        tapTargetSize: 40,
+        onPressed: () => onChanged(!value),
+      ),
     );
   }
 }

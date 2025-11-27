@@ -341,7 +341,12 @@ class TaskGhostIconButton extends StatelessWidget {
       onPressed: onPressed,
       child: Icon(icon, size: 16),
     );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+    return tooltip == null
+        ? button
+        : AxiTooltip(
+            builder: (_) => Text(tooltip!),
+            child: button,
+          );
   }
 }
 

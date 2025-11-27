@@ -175,9 +175,8 @@ class _ComposeHeaderButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final foreground = destructive ? colors.destructive : colors.foreground;
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
+    return AxiTooltip(
+      builder: (_) => Text(tooltip),
       child: AxiIconButton(
         iconData: icon,
         semanticLabel: tooltip,

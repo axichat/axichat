@@ -437,8 +437,8 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Tooltip(
-                        message: '$errorLabel ($fileName)',
+                      child: AxiTooltip(
+                        builder: (_) => Text('$errorLabel ($fileName)'),
                         child: Text(
                           errorLabel,
                           maxLines: 1,
@@ -566,8 +566,8 @@ class PendingAttachmentStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final background = colors.background.withValues(alpha: 0.85);
-    return Tooltip(
-      message: _statusLabel(status),
+    return AxiTooltip(
+      builder: (_) => Text(_statusLabel(status)),
       child: Container(
         width: 24,
         height: 24,
@@ -593,8 +593,8 @@ class PendingAttachmentStatusInlineBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: _statusLabel(status),
+    return AxiTooltip(
+      builder: (_) => Text(_statusLabel(status)),
       child: SizedBox(
         width: 20,
         height: 20,

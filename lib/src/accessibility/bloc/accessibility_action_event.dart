@@ -19,6 +19,15 @@ class AccessibilityMenuBack extends AccessibilityActionEvent {
   const AccessibilityMenuBack();
 }
 
+class AccessibilityMenuJumpedTo extends AccessibilityActionEvent {
+  const AccessibilityMenuJumpedTo(this.index);
+
+  final int index;
+
+  @override
+  List<Object?> get props => [index];
+}
+
 class AccessibilityMenuReset extends AccessibilityActionEvent {
   const AccessibilityMenuReset();
 }
