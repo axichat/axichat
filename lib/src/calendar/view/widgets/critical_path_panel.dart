@@ -7,7 +7,7 @@ import '../../models/calendar_critical_path.dart';
 import '../../models/calendar_task.dart';
 import '../../utils/recurrence_utils.dart';
 
-class CriticalPathPanel extends StatelessWidget {
+class CriticalPathPanel extends StatefulWidget {
   const CriticalPathPanel({
     super.key,
     required this.paths,
@@ -30,65 +30,123 @@ class CriticalPathPanel extends StatelessWidget {
   final Duration animationDuration;
 
   @override
+  State<CriticalPathPanel> createState() => _CriticalPathPanelState();
+}
+
+class _CriticalPathPanelState extends State<CriticalPathPanel> {
+  bool _isExpanded = false;
+
+  void _toggleExpanded() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+    });
+  }
+
+  void _expand() {
+    if (_isExpanded) {
+      return;
+    }
+    setState(() {
+      _isExpanded = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final bool hasPaths = paths.isNotEmpty;
+    final bool hasPaths = widget.paths.isNotEmpty;
     return Container(
       decoration: BoxDecoration(
         color: colors.card,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: colors.border),
       ),
       padding: calendarPaddingLg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Text(
-                'Critical Paths',
-                style: context.textTheme.muted.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              if (focusedPathId != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: calendarInsetSm),
-                  child: ShadButton.ghost(
-                    size: ShadButtonSize.sm,
-                    onPressed: () => onFocusPath(null),
-                    child: const Text('Show all'),
+          InkWell(
+            onTap: _toggleExpanded,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
+              child: Row(
+                children: [
+                  AnimatedRotation(
+                    turns: _isExpanded ? 0.25 : 0,
+                    duration: widget.animationDuration,
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: colors.mutedForeground,
+                    ),
                   ),
-                ),
-              ShadButton.outline(
-                size: ShadButtonSize.sm,
-                onPressed: onCreatePath,
-                child: const Text('New path'),
+                  const SizedBox(width: calendarInsetSm),
+                  Text(
+                    'Critical Paths',
+                    style: context.textTheme.muted.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.focusedPathId != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: calendarInsetSm),
+                      child: ShadButton.ghost(
+                        size: ShadButtonSize.sm,
+                        onPressed: () => widget.onFocusPath(null),
+                        child: const Text('Show all'),
+                      ),
+                    ),
+                  ShadButton.outline(
+                    size: ShadButtonSize.sm,
+                    onPressed: () {
+                      _expand();
+                      widget.onCreatePath();
+                    },
+                    child: const Text('New path'),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: calendarGutterMd),
-          if (!hasPaths)
-            Text(
-              'No critical paths yet. Create one to track must-do sequences.',
-              style: context.textTheme.muted,
-            )
-          else ...[
-            for (final CalendarCriticalPath path in paths) ...[
-              CriticalPathCard(
-                path: path,
-                animationDuration: animationDuration,
-                isFocused: focusedPathId == path.id,
-                progress: _progressFor(path),
-                onFocus: () =>
-                    onFocusPath(focusedPathId == path.id ? null : path),
-                onRename: () => onRenamePath(path),
-                onDelete: () => onDeletePath(path),
+          ClipRect(
+            child: AnimatedCrossFade(
+              duration: widget.animationDuration,
+              alignment: Alignment.topCenter,
+              crossFadeState: _isExpanded
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox.shrink(),
+              secondChild: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: calendarGutterMd),
+                  if (!hasPaths)
+                    Text(
+                      'No critical paths yet. Create one to track must-do sequences.',
+                      style: context.textTheme.muted,
+                    )
+                  else ...[
+                    for (final CalendarCriticalPath path in widget.paths) ...[
+                      CriticalPathCard(
+                        path: path,
+                        animationDuration: widget.animationDuration,
+                        isFocused: widget.focusedPathId == path.id,
+                        progress: _progressFor(path),
+                        onFocus: () => widget.onFocusPath(
+                          widget.focusedPathId == path.id ? null : path,
+                        ),
+                        onRename: () => widget.onRenamePath(path),
+                        onDelete: () => widget.onDeletePath(path),
+                      ),
+                      const SizedBox(height: calendarInsetMd),
+                    ],
+                  ],
+                ],
               ),
-              const SizedBox(height: calendarInsetMd),
-            ],
-          ],
+              sizeCurve: Curves.easeInOut,
+            ),
+          ),
         ],
       ),
     );
@@ -99,7 +157,7 @@ class CriticalPathPanel extends StatelessWidget {
     var completed = 0;
     for (final String id in path.taskIds) {
       final String baseId = baseTaskIdFrom(id);
-      final CalendarTask? task = tasks[baseId] ?? tasks[id];
+      final CalendarTask? task = widget.tasks[baseId] ?? widget.tasks[id];
       if (task == null || !task.isCompleted) {
         break;
       }
@@ -286,7 +344,7 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
   }
 }
 
-class _PathActions extends StatelessWidget {
+class _PathActions extends StatefulWidget {
   const _PathActions({
     required this.onFocus,
     required this.onRename,
@@ -300,66 +358,155 @@ class _PathActions extends StatelessWidget {
   final bool isFocused;
 
   @override
+  State<_PathActions> createState() => _PathActionsState();
+}
+
+class _PathActionsState extends State<_PathActions> {
+  static const double _menuMinWidth = 180;
+  late final ShadPopoverController _menuController;
+
+  @override
+  void initState() {
+    super.initState();
+    _menuController = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    _menuController.dispose();
+    super.dispose();
+  }
+
+  void _closeMenu() {
+    _menuController.toggle();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ShadButton.secondary(
-          size: ShadButtonSize.sm,
-          onPressed: onFocus,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isFocused ? Icons.visibility_off : Icons.visibility,
-                size: 14,
-                color: colors.primary,
-              ),
-              const SizedBox(width: calendarInsetSm),
-              Text(isFocused ? 'Unfocus' : 'Focus'),
-            ],
+        Padding(
+          padding: const EdgeInsets.only(right: calendarGutterSm),
+          child: ShadButton.secondary(
+            size: ShadButtonSize.sm,
+            onPressed: widget.onFocus,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  widget.isFocused ? Icons.visibility_off : Icons.visibility,
+                  size: 14,
+                  color: colors.primary,
+                ),
+                const SizedBox(width: calendarInsetSm),
+                Text(widget.isFocused ? 'Unfocus' : 'Focus'),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: calendarInsetSm),
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'rename':
-                onRename();
-                break;
-              case 'delete':
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem<String>(
-              value: 'rename',
-              child: Text('Rename'),
-            ),
-            PopupMenuItem<String>(
-              value: 'delete',
-              child: Text(
-                'Delete',
-                style: TextStyle(color: colors.destructive),
-              ),
-            ),
-          ],
-          child: Container(
-            padding: const EdgeInsets.all(calendarInsetSm),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colors.border),
-            ),
-            child: Icon(
-              Icons.more_horiz,
-              size: 18,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
+          child: ShadPopover(
+            controller: _menuController,
+            closeOnTapOutside: true,
+            padding: EdgeInsets.zero,
+            popover: (context) {
+              return Material(
+                type: MaterialType.transparency,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.card,
+                    borderRadius: BorderRadius.circular(calendarBorderRadius),
+                    border: Border.all(color: colors.border),
+                    boxShadow: calendarElevation2,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: _menuMinWidth),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PathMenuItem(
+                          icon: Icons.drive_file_rename_outline,
+                          label: 'Rename',
+                          onTap: () {
+                            _closeMenu();
+                            widget.onRename();
+                          },
+                        ),
+                        Divider(
+                          height: calendarBorderStroke,
+                          thickness: calendarBorderStroke,
+                          color: colors.border,
+                        ),
+                        _PathMenuItem(
+                          icon: Icons.delete_outline,
+                          label: 'Delete',
+                          destructive: true,
+                          onTap: () {
+                            _closeMenu();
+                            widget.onDelete();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: AxiIconButton(
+              iconData: Icons.more_horiz,
+              backgroundColor: colors.card,
+              borderColor: colors.border,
               color: colors.mutedForeground,
+              tooltip: 'More actions',
+              onPressed: _menuController.toggle,
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PathMenuItem extends StatelessWidget {
+  const _PathMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final Color foreground =
+        destructive ? colors.destructive : colors.foreground;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: calendarMenuItemPadding,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: foreground),
+            const SizedBox(width: calendarGutterSm),
+            Text(
+              label,
+              style: context.textTheme.small.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -454,36 +601,27 @@ Future<String?> promptCriticalPathName({
   String? initialValue,
 }) async {
   final controller = TextEditingController(text: initialValue ?? '');
+  final FocusNode focusNode = FocusNode();
   String? errorText;
-  final result = await showDialog<String>(
+  final result = await showShadDialog<String>(
     context: context,
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
-          return AlertDialog(
-            title: Text(title),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Path name',
-                errorText: errorText,
-              ),
-              onSubmitted: (value) {
-                final String trimmed = value.trim();
-                if (trimmed.isEmpty) {
-                  setState(() => errorText = 'Name cannot be empty');
-                  return;
-                }
-                Navigator.of(dialogContext).pop(trimmed);
-              },
+          final colors = context.colorScheme;
+          final textTheme = context.textTheme;
+          FocusScope.of(dialogContext).requestFocus(focusNode);
+          return ShadDialog(
+            title: Text(
+              title,
+              style: textTheme.h4.copyWith(fontWeight: FontWeight.w700),
             ),
             actions: [
-              TextButton(
+              ShadButton.outline(
                 onPressed: () => Navigator.of(dialogContext).maybePop(),
                 child: const Text('Cancel'),
-              ),
-              TextButton(
+              ).withTapBounce(),
+              ShadButton(
                 onPressed: () {
                   final String trimmed = controller.text.trim();
                   if (trimmed.isEmpty) {
@@ -493,13 +631,48 @@ Future<String?> promptCriticalPathName({
                   Navigator.of(dialogContext).pop(trimmed);
                 },
                 child: const Text('Save'),
-              ),
+              ).withTapBounce(),
             ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Name your critical path',
+                  style: textTheme.muted,
+                ),
+                const SizedBox(height: calendarGutterSm),
+                AxiTextFormField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  placeholder: const Text('Path name'),
+                  onSubmitted: (value) {
+                    final String trimmed = value.trim();
+                    if (trimmed.isEmpty) {
+                      setState(() => errorText = 'Name cannot be empty');
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(trimmed);
+                  },
+                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: calendarInsetMd),
+                  Text(
+                    errorText!,
+                    style: textTheme.small.copyWith(
+                      color: colors.destructive,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           );
         },
       );
     },
   );
+  focusNode.dispose();
   controller.dispose();
   if (result == null || result.trim().isEmpty) {
     return null;

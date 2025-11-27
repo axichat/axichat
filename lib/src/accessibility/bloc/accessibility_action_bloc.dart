@@ -36,6 +36,7 @@ class AccessibilityActionBloc
     on<AccessibilityRecipientRemoved>(_onRecipientRemoved);
     on<AccessibilityNewContactChanged>(_onNewContactChanged);
     on<AccessibilityConfirmNewContact>(_onConfirmNewContact);
+    on<AccessibilityMenuJumpedTo>(_onMenuJumpedTo);
     on<AccessibilityDataUpdated>(_onDataUpdated);
     on<AccessibilityLocaleUpdated>(_onLocaleUpdated);
 
@@ -142,6 +143,22 @@ class AccessibilityActionBloc
         ],
         composerText: '',
         newContactInput: '',
+        statusMessage: null,
+        errorMessage: null,
+      ),
+    );
+    _rebuildSections(emit, state);
+  }
+
+  void _onMenuJumpedTo(
+    AccessibilityMenuJumpedTo event,
+    Emitter<AccessibilityActionState> emit,
+  ) {
+    if (event.index < 0 || event.index >= state.stack.length) return;
+    final nextStack = state.stack.take(event.index + 1).toList();
+    emit(
+      state.copyWith(
+        stack: nextStack,
         statusMessage: null,
         errorMessage: null,
       ),

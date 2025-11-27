@@ -3,6 +3,7 @@ import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 class AccessibilityFindActionButton extends StatelessWidget {
   const AccessibilityFindActionButton({
@@ -22,12 +23,12 @@ class AccessibilityFindActionButton extends StatelessWidget {
     final shortcutText = shortcutLabel(context, shortcut);
     final tooltip = 'Accessibility actions ($shortcutText)';
     if (compact) {
-      return Tooltip(
-        message: tooltip,
+      return AxiTooltip(
+        builder: (_) => Text(tooltip),
         child: ShadButton.ghost(
           onPressed: () => bloc.add(const AccessibilityMenuOpened()),
           padding: const EdgeInsets.all(12),
-          child: const Icon(LucideIcons.command, size: 18),
+          child: const Icon(LucideIcons.accessibility, size: 18),
         ),
       );
     }
@@ -36,7 +37,7 @@ class AccessibilityFindActionButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(LucideIcons.command, size: 18),
+          const Icon(LucideIcons.accessibility, size: 18),
           const SizedBox(width: 10),
           ShortcutHint(
             shortcut: shortcut,
