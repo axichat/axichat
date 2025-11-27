@@ -9,6 +9,35 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+const ShortcutActivator _nextItemActivator =
+    SingleActivator(LogicalKeyboardKey.arrowDown);
+const ShortcutActivator _previousItemActivator =
+    SingleActivator(LogicalKeyboardKey.arrowUp);
+const ShortcutActivator _nextSectionActivator = SingleActivator(
+  LogicalKeyboardKey.arrowDown,
+  shift: true,
+);
+const ShortcutActivator _previousSectionActivator = SingleActivator(
+  LogicalKeyboardKey.arrowUp,
+  shift: true,
+);
+final LogicalKeySet _nextSectionKeySet = LogicalKeySet(
+  LogicalKeyboardKey.shift,
+  LogicalKeyboardKey.arrowDown,
+);
+final LogicalKeySet _previousSectionKeySet = LogicalKeySet(
+  LogicalKeyboardKey.shift,
+  LogicalKeyboardKey.arrowUp,
+);
+const ShortcutActivator _firstItemActivator =
+    SingleActivator(LogicalKeyboardKey.home);
+const ShortcutActivator _lastItemActivator =
+    SingleActivator(LogicalKeyboardKey.end);
+const ShortcutActivator _activateItemActivator =
+    SingleActivator(LogicalKeyboardKey.enter);
+const ShortcutActivator _escapeActivator =
+    SingleActivator(LogicalKeyboardKey.escape);
+
 const MenuSerializableShortcut _nextItemShortcut =
     SingleActivator(LogicalKeyboardKey.arrowDown);
 const MenuSerializableShortcut _previousItemShortcut =
@@ -64,7 +93,10 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
             duration: duration,
             curve: Curves.easeInOutCubic,
             child: state.visible
-                ? _AccessibilityMenuScaffold(state: state)
+                ? BlockSemantics(
+                    blocking: true,
+                    child: _AccessibilityMenuScaffold(state: state),
+                  )
                 : const SizedBox.shrink(),
           ),
         );
@@ -88,13 +120,18 @@ class _AccessibilityMenuScaffoldState
   final FocusScopeNode _focusScopeNode =
       FocusScopeNode(debugLabel: 'accessibility_menu_scope');
   final GlobalKey<_AccessibilitySectionListState> _listKey = GlobalKey();
+  FocusNode? _restoreFocusNode;
   bool _wasVisible = false;
+  bool _isEditingText = false;
 
   @override
   void initState() {
     super.initState();
+    _isEditingText = _isTextInputFocused();
+    FocusManager.instance.addListener(_handleFocusChange);
     _wasVisible = widget.state.visible;
     if (_wasVisible) {
+      _restoreFocusNode = FocusManager.instance.primaryFocus;
       _scheduleInitialFocus();
     }
   }
@@ -103,15 +140,24 @@ class _AccessibilityMenuScaffoldState
   void didUpdateWidget(covariant _AccessibilityMenuScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.state.visible && !_wasVisible) {
+      _restoreFocusNode = FocusManager.instance.primaryFocus;
       _scheduleInitialFocus();
     } else if (!widget.state.visible && _wasVisible) {
       _focusScopeNode.unfocus();
+      final previous = _restoreFocusNode;
+      _restoreFocusNode = null;
+      if (previous != null &&
+          previous.context != null &&
+          previous.canRequestFocus) {
+        previous.requestFocus();
+      }
     }
     _wasVisible = widget.state.visible;
   }
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_handleFocusChange);
     _focusScopeNode.dispose();
     super.dispose();
   }
@@ -120,13 +166,17 @@ class _AccessibilityMenuScaffoldState
   Widget build(BuildContext context) {
     final bloc = context.read<AccessibilityActionBloc>();
     final shortcuts = <ShortcutActivator, Intent>{
-      escapeShortcut: const _AccessibilityDismissIntent(),
-      _nextItemShortcut: const _NextItemIntent(),
-      _previousItemShortcut: const _PreviousItemIntent(),
-      _nextSectionShortcut: const _NextSectionIntent(),
-      _previousSectionShortcut: const _PreviousSectionIntent(),
-      _firstItemShortcut: const _FirstItemIntent(),
-      _lastItemShortcut: const _LastItemIntent(),
+      _escapeActivator: const _AccessibilityDismissIntent(),
+      if (!_isEditingText) ...{
+        _nextItemActivator: const _NextItemIntent(),
+        _previousItemActivator: const _PreviousItemIntent(),
+        _nextSectionActivator: const _NextSectionIntent(),
+        _previousSectionActivator: const _PreviousSectionIntent(),
+        _nextSectionKeySet: const _NextSectionIntent(),
+        _previousSectionKeySet: const _PreviousSectionIntent(),
+        _firstItemActivator: const _FirstItemIntent(),
+        _lastItemActivator: const _LastItemIntent(),
+      },
     };
     return Stack(
       children: [
@@ -180,6 +230,9 @@ class _AccessibilityMenuScaffoldState
                 _LastItemIntent: CallbackAction<_LastItemIntent>(
                   onInvoke: (_) => _withList((list) => list.focusLastItem()),
                 ),
+                _ActivateItemIntent: CallbackAction<_ActivateItemIntent>(
+                  onInvoke: (_) => _withList((list) => list.activateFocused()),
+                ),
               },
               child: FocusScope(
                 node: _focusScopeNode,
@@ -191,9 +244,24 @@ class _AccessibilityMenuScaffoldState
                   ),
                   child: AxiModalSurface(
                     padding: const EdgeInsets.all(20),
-                    child: _AccessibilityActionContent(
-                      state: widget.state,
-                      listKey: _listKey,
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: Semantics(
+                        scopesRoute: true,
+                        namesRoute: true,
+                        label: 'Accessibility actions dialog',
+                        hint:
+                            'Press Tab to reach shortcut instructions, then use arrow keys or Escape to exit.',
+                        explicitChildNodes: true,
+                        child: FocusTraversalGroup(
+                          policy: WidgetOrderTraversalPolicy(),
+                          child: _AccessibilityActionContent(
+                            state: widget.state,
+                            listKey: _listKey,
+                            enableActivationShortcut: !_isEditingText,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -218,16 +286,34 @@ class _AccessibilityMenuScaffoldState
       _listKey.currentState?.focusFirstItem();
     });
   }
+
+  void _handleFocusChange() {
+    final editing = _isTextInputFocused();
+    if (editing == _isEditingText) return;
+    if (!mounted) return;
+    setState(() {
+      _isEditingText = editing;
+    });
+  }
+}
+
+bool _isTextInputFocused() {
+  final focus = FocusManager.instance.primaryFocus;
+  final focusContext = focus?.context;
+  if (focusContext == null) return false;
+  return focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
 }
 
 class _AccessibilityActionContent extends StatelessWidget {
   const _AccessibilityActionContent({
     required this.state,
     required this.listKey,
+    required this.enableActivationShortcut,
   });
 
   final AccessibilityActionState state;
   final GlobalKey<_AccessibilitySectionListState> listKey;
+  final bool enableActivationShortcut;
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +321,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     final breadcrumbLabels = _breadcrumbLabels(state, context);
     final headerTitle = breadcrumbLabels.isNotEmpty
         ? breadcrumbLabels.last
-        : _headerLabelFor(state.currentEntry.kind, context);
+        : _entryLabel(state.currentEntry, context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -276,9 +362,15 @@ class _AccessibilityActionContent extends StatelessWidget {
         if (state.sections.isNotEmpty)
           Flexible(
             fit: FlexFit.loose,
-            child: _AccessibilitySectionList(
-              key: listKey,
-              sections: state.sections,
+            child: Shortcuts(
+              shortcuts: enableActivationShortcut
+                  ? {_activateItemActivator: const _ActivateItemIntent()}
+                  : const {},
+              child: _AccessibilitySectionList(
+                key: listKey,
+                sections: state.sections,
+                headerLabel: headerTitle,
+              ),
             ),
           )
         else
@@ -290,9 +382,12 @@ class _AccessibilityActionContent extends StatelessWidget {
     );
   }
 
-  String _headerLabelFor(AccessibilityStepKind kind, BuildContext context) {
+  String _entryLabel(
+    AccessibilityStepEntry entry,
+    BuildContext context,
+  ) {
     final l10n = context.l10n;
-    switch (kind) {
+    switch (entry.kind) {
       case AccessibilityStepKind.root:
         return 'Accessibility actions';
       case AccessibilityStepKind.contactPicker:
@@ -305,6 +400,11 @@ class _AccessibilityActionContent extends StatelessWidget {
         return 'Pending invites';
       case AccessibilityStepKind.newContact:
         return 'Start a new address';
+      case AccessibilityStepKind.chatMessages:
+        final name = entry.recipients.isNotEmpty
+            ? entry.recipients.first.displayName
+            : 'Messages';
+        return 'Messages with $name';
     }
   }
 
@@ -312,7 +412,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     AccessibilityActionState state,
     BuildContext context,
   ) =>
-      state.stack.map((entry) => _headerLabelFor(entry.kind, context)).toList();
+      state.stack.map((entry) => _entryLabel(entry, context)).toList();
 }
 
 class _AccessibilityMenuHeader extends StatelessWidget {
@@ -345,9 +445,12 @@ class _AccessibilityMenuHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                breadcrumb,
-                style: context.textTheme.h3,
+              Semantics(
+                header: true,
+                child: Text(
+                  breadcrumb,
+                  style: context.textTheme.h3,
+                ),
               ),
               const SizedBox(height: 4),
               if (breadcrumbs.isNotEmpty)
@@ -463,16 +566,22 @@ class _BreadcrumbChip extends StatelessWidget {
                   width: borderWidth,
                 ),
               ),
-              child: InkWell(
+              child: Material(
+                type: MaterialType.transparency,
                 borderRadius: radius,
-                onTap: onSelected == null ? null : () => onSelected!(index),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  child: Text(
-                    label,
-                    style: context.textTheme.small.copyWith(
-                      fontWeight: FontWeight.w700,
+                child: InkWell(
+                  borderRadius: radius,
+                  onTap: onSelected == null ? null : () => onSelected!(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      label,
+                      style: context.textTheme.small.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -500,24 +609,27 @@ class _AccessibilityBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Icon(icon, color: foreground, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: context.textTheme.small.copyWith(color: foreground),
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, color: foreground, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: context.textTheme.small.copyWith(color: foreground),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -571,10 +683,13 @@ class _KeyboardShortcutLegend extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Keyboard shortcuts',
-          style: context.textTheme.small.copyWith(
-            fontWeight: FontWeight.w700,
+        Semantics(
+          header: true,
+          child: Text(
+            'Keyboard shortcuts',
+            style: context.textTheme.small.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const SizedBox(height: 6),
@@ -607,27 +722,36 @@ class _ShortcutLegendEntry extends StatelessWidget {
     );
     final description = '$label, ${shortcutLabel(context, shortcut)}';
     return Focus(
-      child: Semantics(
-        label: description,
-        focusable: true,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border),
-            color: colors.muted.withValues(alpha: 0.04),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Wrap(
-              spacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(label, style: textStyle),
-                ShortcutHint(shortcut: shortcut, dense: true),
-              ],
+      child: Builder(
+        builder: (context) {
+          final hasFocus = Focus.of(context).hasFocus;
+          final borderColor = hasFocus ? colors.primary : colors.border;
+          final borderWidth = hasFocus ? 2.5 : 1.0;
+          return Semantics(
+            label: description,
+            focusable: true,
+            child: AnimatedContainer(
+              duration: baseAnimationDuration,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor, width: borderWidth),
+                color: colors.muted.withValues(alpha: 0.04),
+              ),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Wrap(
+                  spacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(label, style: textStyle),
+                    ShortcutHint(shortcut: shortcut, dense: true),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -777,28 +901,26 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
         Semantics(
           textField: true,
           label: widget.label,
-          hint: 'Enter text and press Escape to leave this field',
-          child: Focus(
-            focusNode: _focusNode,
-            child: AnimatedContainer(
-              duration: baseAnimationDuration,
-              decoration: BoxDecoration(
-                borderRadius: context.radius,
-                border: Border.all(
-                  color: hasFocus ? colors.primary : colors.border,
-                  width: hasFocus ? 3 : 1,
-                ),
+          hint:
+              'Enter text. Use Tab to move forward or Escape to go back or close the menu.',
+          child: AnimatedContainer(
+            duration: baseAnimationDuration,
+            decoration: BoxDecoration(
+              borderRadius: context.radius,
+              border: Border.all(
+                color: hasFocus ? colors.primary : colors.border,
+                width: hasFocus ? 3 : 1,
               ),
-              padding: const EdgeInsets.all(2),
-              child: ShadInput(
-                controller: _controller,
-                focusNode: _focusNode,
-                enabled: widget.enabled,
-                minLines: widget.minLines,
-                maxLines: widget.maxLines,
-                placeholder: Text(widget.hintText),
-                onChanged: widget.onChanged,
-              ),
+            ),
+            padding: const EdgeInsets.all(2),
+            child: ShadInput(
+              controller: _controller,
+              focusNode: _focusNode,
+              enabled: widget.enabled,
+              minLines: widget.minLines,
+              maxLines: widget.maxLines,
+              placeholder: Text(widget.hintText),
+              onChanged: widget.onChanged,
             ),
           ),
         ),
@@ -815,9 +937,14 @@ class _SectionRange {
 }
 
 class _AccessibilitySectionList extends StatefulWidget {
-  const _AccessibilitySectionList({super.key, required this.sections});
+  const _AccessibilitySectionList({
+    super.key,
+    required this.sections,
+    required this.headerLabel,
+  });
 
   final List<AccessibilityMenuSection> sections;
+  final String headerLabel;
 
   @override
   State<_AccessibilitySectionList> createState() =>
@@ -913,25 +1040,30 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         sectionIndex < widget.sections.length;
         sectionIndex++) {
       final section = widget.sections[sectionIndex];
-      if (section.title != null) {
-        children.add(
-          Semantics(
-            container: true,
-            label:
-                '${section.title ?? 'Actions'} section with ${section.items.length} items',
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                section.title!,
-                style: context.textTheme.small.copyWith(
-                  color: context.colorScheme.mutedForeground,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        );
-      }
+      final sectionLabel = section.title ?? 'Actions';
+      final isDuplicateTitle =
+          section.title != null && section.title == widget.headerLabel;
+      children.add(
+        Semantics(
+          container: true,
+          label: '$sectionLabel section with ${section.items.length} items',
+          child: section.title != null && !isDuplicateTitle
+              ? Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      section.title!,
+                      style: context.textTheme.small.copyWith(
+                        color: context.colorScheme.mutedForeground,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      );
       for (final item in section.items) {
         final focusNode =
             nodeIndex < _itemNodes.length ? _itemNodes[nodeIndex] : null;
@@ -940,6 +1072,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
             padding: const EdgeInsets.only(bottom: 8),
             child: _AccessibilityActionTile(
               item: item,
+              index: nodeIndex,
+              totalCount: _itemNodes.length,
+              sectionLabel: sectionLabel,
               focusNode: focusNode,
               autofocus: nodeIndex == 0,
               onFocused: () => _lastFocusedIndex = nodeIndex,
@@ -977,6 +1112,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         return Semantics(
           container: true,
           label: 'Accessibility action list with ${_itemNodes.length} items',
+          hint:
+              'Use arrow keys to move, Shift plus arrows to switch lists, Home or End to jump, Enter to activate, Escape to exit.',
+          explicitChildNodes: true,
           child: AnimatedContainer(
             duration: baseAnimationDuration,
             padding: const EdgeInsets.all(4),
@@ -990,6 +1128,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
                 controller: _scrollController,
                 shrinkWrap: true,
                 physics: const ClampingScrollPhysics(),
+                semanticChildCount: children.length,
                 children: children,
               ),
             ),
@@ -1016,6 +1155,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         (_lastFocusedIndex! < 0 || _lastFocusedIndex! >= _itemNodes.length)) {
       _lastFocusedIndex = null;
     }
+    _hasFocusedItem = _itemNodes.any((node) => node.hasFocus);
     if (_itemNodes.isNotEmpty && _lastFocusedIndex == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -1023,6 +1163,21 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         }
       });
     }
+  }
+
+  void activateFocused() {
+    final current = _currentIndex();
+    if (current == null || current < 0 || current >= _itemNodes.length) return;
+    final item = _itemForIndex(current);
+    if (item == null ||
+        item.disabled ||
+        item.kind == AccessibilityMenuItemKind.readOnly) {
+      return;
+    }
+    if (!mounted) return;
+    context.read<AccessibilityActionBloc>().add(
+          AccessibilityMenuActionTriggered(item.action),
+        );
   }
 
   List<_SectionRange> _computeSectionRanges(
@@ -1061,28 +1216,37 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
     return index == -1 ? null : index;
   }
 
+  AccessibilityMenuItem? _itemForIndex(int index) {
+    var cursor = 0;
+    for (final section in widget.sections) {
+      for (final item in section.items) {
+        if (cursor == index) {
+          return item;
+        }
+        cursor++;
+      }
+    }
+    return null;
+  }
+
   void _focusIndex(int index) {
     if (_itemNodes.isEmpty) return;
+    final previousIndex = _lastFocusedIndex;
     final clamped = index.clamp(0, _itemNodes.length - 1);
     final focusNode = _itemNodes[clamped];
     _lastFocusedIndex = clamped;
     if (!focusNode.hasFocus) {
       focusNode.requestFocus();
     }
-    final focusContext = focusNode.context;
-    if (focusContext != null) {
-      Scrollable.ensureVisible(
-        focusContext,
-        duration: baseAnimationDuration,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-      );
-    }
+    _scrollToIndex(clamped, previousIndex);
   }
 
   void _handleFocusChanged(int index, bool hasFocus) {
     if (!mounted) return;
     if (hasFocus) {
+      final previousIndex = _lastFocusedIndex;
       _lastFocusedIndex = index;
+      _scrollToIndex(index, previousIndex);
       if (!_hasFocusedItem) {
         setState(() {
           _hasFocusedItem = true;
@@ -1098,6 +1262,21 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
     }
   }
 
+  void _scrollToIndex(int index, int? previousIndex) {
+    if (index < 0 || index >= _itemNodes.length) return;
+    final focusContext = _itemNodes[index].context;
+    if (focusContext != null) {
+      final alignmentPolicy = previousIndex != null && index < previousIndex
+          ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+          : ScrollPositionAlignmentPolicy.keepVisibleAtEnd;
+      Scrollable.ensureVisible(
+        focusContext,
+        duration: baseAnimationDuration,
+        alignmentPolicy: alignmentPolicy,
+      );
+    }
+  }
+
   void _disposeNodes() {
     for (final node in _itemNodes) {
       node.dispose();
@@ -1109,6 +1288,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
 class _AccessibilityActionTile extends StatelessWidget {
   const _AccessibilityActionTile({
     required this.item,
+    required this.index,
+    required this.totalCount,
+    required this.sectionLabel,
     required this.onTap,
     this.onDismiss,
     this.focusNode,
@@ -1118,6 +1300,9 @@ class _AccessibilityActionTile extends StatelessWidget {
   });
 
   final AccessibilityMenuItem item;
+  final int index;
+  final int totalCount;
+  final String sectionLabel;
   final VoidCallback onTap;
   final VoidCallback? onDismiss;
   final FocusNode? focusNode;
@@ -1129,10 +1314,12 @@ class _AccessibilityActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isReadOnly = item.kind == AccessibilityMenuItemKind.readOnly;
     final tileColor =
         item.highlight ? scheme.primary.withValues(alpha: 0.08) : scheme.card;
     final foreground =
         item.destructive ? scheme.destructive : scheme.foreground;
+    final positionLabel = 'Item ${index + 1} of $totalCount in $sectionLabel';
     final semanticsLabel = [
       item.label,
       if (item.description != null && item.description!.isNotEmpty)
@@ -1141,7 +1328,7 @@ class _AccessibilityActionTile extends StatelessWidget {
     return Focus(
       focusNode: focusNode,
       autofocus: autofocus,
-      canRequestFocus: !item.disabled,
+      canRequestFocus: true,
       onFocusChange: (hasFocus) {
         if (hasFocus) {
           onFocused?.call();
@@ -1153,15 +1340,19 @@ class _AccessibilityActionTile extends StatelessWidget {
           final hasFocus = Focus.of(context).hasFocus;
           final borderColor = hasFocus ? scheme.primary : scheme.border;
           final borderWidth = hasFocus ? 3.0 : 1.2;
+          final isEnabled = isReadOnly ? true : !item.disabled;
           return Semantics(
-            button: true,
+            button: !isReadOnly,
             focusable: true,
             label: semanticsLabel,
-            enabled: !item.disabled,
-            onTap: item.disabled ? null : onTap,
-            hint: item.disabled
-                ? null
-                : 'Press Enter to activate. Press Escape to go back or close.',
+            enabled: isEnabled,
+            value: positionLabel,
+            onTap: isReadOnly || item.disabled ? null : onTap,
+            hint: isReadOnly
+                ? 'Use arrow keys to move through the list'
+                : item.disabled
+                    ? null
+                    : 'Press Enter to activate',
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
@@ -1184,12 +1375,12 @@ class _AccessibilityActionTile extends StatelessWidget {
                 type: MaterialType.transparency,
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
-                  onTap: item.disabled ? null : onTap,
+                  onTap: isReadOnly || item.disabled ? null : onTap,
                   borderRadius: BorderRadius.circular(14),
                   focusColor: scheme.primary.withValues(alpha: 0.1),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     child: Row(
                       children: [
                         if (item.icon != null)
@@ -1206,9 +1397,9 @@ class _AccessibilityActionTile extends StatelessWidget {
                             children: [
                               Text(
                                 item.label,
-                                style: (textTheme.bodyMedium ??
-                                        const TextStyle())
-                                    .copyWith(
+                                style:
+                                    (textTheme.bodyMedium ?? const TextStyle())
+                                        .copyWith(
                                   color: foreground,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1243,15 +1434,24 @@ class _AccessibilityActionTile extends StatelessWidget {
                           ),
                         if (onDismiss != null) ...[
                           const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.notifications_off_outlined),
-                            tooltip: 'Dismiss',
-                            onPressed: onDismiss,
+                          AxiTooltip(
+                            builder: (_) => const Text('Dismiss'),
+                            child: Semantics(
+                              button: true,
+                              label: 'Dismiss highlight',
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.notifications_off_outlined,
+                                ),
+                                onPressed: onDismiss,
+                              ),
+                            ),
                           ),
                         ],
                       ],
                     ),
                   ),
+                ),
               ),
             ),
           );
@@ -1287,4 +1487,8 @@ class _FirstItemIntent extends Intent {
 
 class _LastItemIntent extends Intent {
   const _LastItemIntent();
+}
+
+class _ActivateItemIntent extends Intent {
+  const _ActivateItemIntent();
 }

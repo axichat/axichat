@@ -105,6 +105,39 @@ MenuSerializableShortcut findActionShortcut(TargetPlatform platform) {
   );
 }
 
+List<ShortcutActivator> findActionActivators(TargetPlatform platform) {
+  final isApple =
+      platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
+  return <ShortcutActivator>[
+    SingleActivator(
+      LogicalKeyboardKey.keyK,
+      meta: isApple,
+      control: !isApple,
+    ),
+    const SingleActivator(
+      LogicalKeyboardKey.keyK,
+      meta: true,
+    ),
+    const SingleActivator(
+      LogicalKeyboardKey.keyK,
+      control: true,
+    ),
+    LogicalKeySet(
+      isApple ? LogicalKeyboardKey.meta : LogicalKeyboardKey.control,
+      LogicalKeyboardKey.keyK,
+    ),
+    // Allow either modifier set in case the platform reports both.
+    LogicalKeySet(
+      LogicalKeyboardKey.meta,
+      LogicalKeyboardKey.keyK,
+    ),
+    LogicalKeySet(
+      LogicalKeyboardKey.control,
+      LogicalKeyboardKey.keyK,
+    ),
+  ];
+}
+
 const MenuSerializableShortcut escapeShortcut =
     SingleActivator(LogicalKeyboardKey.escape);
 
@@ -202,9 +235,15 @@ List<Widget> _buildKeycaps({
   required ShadColorScheme colors,
   required TextStyle textStyle,
 }) {
-  final padding = dense
-      ? const EdgeInsets.symmetric(horizontal: 8, vertical: 5)
-      : const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+  final topSheen = Color.lerp(colors.card, Colors.white, 0.35)!;
+  final midTone = Color.lerp(colors.card, Colors.white, 0.12)!;
+  final bottomShade = Color.lerp(colors.card, Colors.black, 0.2)!;
+  final borderWidth = dense ? 1.15 : 1.45;
+  const paddingDense = EdgeInsets.symmetric(horizontal: 8, vertical: 5);
+  const paddingComfort = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+  final EdgeInsets padding = dense ? paddingDense : paddingComfort;
+  const radiusValue = 8.0;
+  final radius = BorderRadius.circular(radiusValue);
   final keyStyle = textStyle.copyWith(
     color: colors.foreground,
     fontWeight: FontWeight.w700,
@@ -220,20 +259,98 @@ List<Widget> _buildKeycaps({
     widgets.add(
       DecoratedBox(
         decoration: BoxDecoration(
-          color: colors.card,
-          border: Border.all(color: colors.border),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: radius,
           boxShadow: [
             BoxShadow(
-              color: colors.border.withValues(alpha: 0.35),
-              offset: const Offset(0, 1.5),
-              blurRadius: 2,
+              color: colors.foreground.withValues(alpha: 0.25),
+              offset: const Offset(0, 1.4),
+              blurRadius: 3.2,
+              spreadRadius: 0.2,
+            ),
+            BoxShadow(
+              color: colors.foreground.withValues(alpha: 0.22),
+              offset: const Offset(0, 6.0),
+              blurRadius: 10.0,
+              spreadRadius: -0.5,
             ),
           ],
         ),
-        child: Padding(
-          padding: padding,
-          child: Text(parts[i], style: keyStyle),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Stack(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      topSheen,
+                      midTone,
+                      colors.card,
+                      bottomShade,
+                    ],
+                    stops: const [0, 0.35, 0.7, 1],
+                  ),
+                  border: Border.all(
+                    color: colors.border.withValues(alpha: 0.95),
+                    width: borderWidth,
+                  ),
+                  borderRadius: radius,
+                ),
+                child: Padding(
+                  padding: padding,
+                  child: Text(parts[i], style: keyStyle),
+                ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.08),
+                        Colors.transparent,
+                        colors.foreground.withValues(alpha: 0.04),
+                      ],
+                      stops: const [0, 0.45, 0.75],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  height: dense ? 7 : 9,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(radiusValue),
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        colors.foreground.withValues(alpha: 0.2),
+                        colors.foreground.withValues(alpha: 0.08),
+                        Colors.transparent,
+                      ],
+                      stops: const [0, 0.45, 1],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.foreground.withValues(alpha: 0.18),
+                        offset: const Offset(0, 1.2),
+                        blurRadius: 2.8,
+                        spreadRadius: 0.1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

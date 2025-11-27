@@ -47,6 +47,7 @@ import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -75,10 +76,17 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = false;
+  late final VoidCallback _focusFallbackListener;
+  bool Function(KeyEvent event)? _globalShortcutHandler;
+  AccessibilityActionBloc? _accessibilityBloc;
 
   @override
   void initState() {
     super.initState();
+    _focusFallbackListener = _restoreShortcutFocusIfEmpty;
+    FocusManager.instance.addListener(_focusFallbackListener);
+    _globalShortcutHandler = _handleGlobalShortcut;
+    HardwareKeyboard.instance.addHandler(_globalShortcutHandler!);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _shortcutFocusNode.requestFocus(),
     );
@@ -86,8 +94,66 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_focusFallbackListener);
+    final handler = _globalShortcutHandler;
+    if (handler != null) {
+      HardwareKeyboard.instance.removeHandler(handler);
+    }
+    _accessibilityBloc = null;
     _shortcutFocusNode.dispose();
     super.dispose();
+  }
+
+  KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasMeta = pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight) ||
+        pressed.contains(LogicalKeyboardKey.meta);
+    final hasControl = pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight) ||
+        pressed.contains(LogicalKeyboardKey.control);
+    final shouldOpen =
+        event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
+    if (shouldOpen) {
+      final bloc = _accessibilityBloc;
+      if (bloc != null && !bloc.isClosed) {
+        bloc.add(const AccessibilityMenuOpened());
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _restoreShortcutFocusIfEmpty() {
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null ||
+        primary.context == null ||
+        identical(primary, FocusManager.instance.rootScope)) {
+      if (_shortcutFocusNode.canRequestFocus) {
+        _shortcutFocusNode.requestFocus();
+      }
+    }
+  }
+
+  bool _handleGlobalShortcut(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasMeta = pressed.contains(LogicalKeyboardKey.metaLeft) ||
+        pressed.contains(LogicalKeyboardKey.metaRight) ||
+        pressed.contains(LogicalKeyboardKey.meta);
+    final hasControl = pressed.contains(LogicalKeyboardKey.controlLeft) ||
+        pressed.contains(LogicalKeyboardKey.controlRight) ||
+        pressed.contains(LogicalKeyboardKey.control);
+    if (event.logicalKey == LogicalKeyboardKey.keyK &&
+        (hasMeta || hasControl)) {
+      final bloc = _accessibilityBloc;
+      if (bloc != null && !bloc.isClosed) {
+        bloc.add(const AccessibilityMenuOpened());
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
@@ -431,22 +497,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     return BlocProvider(
-      create: (context) => AccessibilityActionBloc(
-        chatsService: context.read<XmppService>(),
-        messageService: context.read<XmppService>(),
-        rosterService:
-            isRoster ? context.read<XmppService>() as RosterService : null,
-        initialLocalization: l10n,
-      ),
+      create: (context) {
+        final bloc = AccessibilityActionBloc(
+          chatsService: context.read<XmppService>(),
+          messageService: context.read<XmppService>(),
+          rosterService:
+              isRoster ? context.read<XmppService>() as RosterService : null,
+          initialLocalization: l10n,
+        );
+        _accessibilityBloc = bloc;
+        return bloc;
+      },
       child: Builder(
         builder: (context) {
-          final findShortcut = findActionShortcut(Theme.of(context).platform);
+          final platform = Theme.of(context).platform;
+          final findActivators = findActionActivators(platform);
           return Focus(
             focusNode: _shortcutFocusNode,
             autofocus: true,
+            onKeyEvent: _handleHomeKeyEvent,
             child: Shortcuts(
               shortcuts: {
-                findShortcut: const OpenFindActionIntent(),
+                for (final activator in findActivators)
+                  activator: const OpenFindActionIntent(),
               },
               child: Actions(
                 actions: {
@@ -782,7 +855,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
     final shortcutText = shortcutLabel(context, shortcut);
     if (collapsed) {
       return AxiIconButton(
-        iconData: LucideIcons.accessibility,
+        iconData: LucideIcons.lifeBuoy,
         tooltip: 'Accessibility actions ($shortcutText)',
         onPressed: () => bloc.add(const AccessibilityMenuOpened()),
       );
@@ -805,7 +878,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                const Icon(LucideIcons.accessibility, size: 20),
+                const Icon(LucideIcons.lifeBuoy, size: 20),
                 const SizedBox(width: 12),
                 ShortcutHint(shortcut: shortcut, dense: true),
               ],
@@ -827,25 +900,23 @@ class _FindActionIconButton extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final shortcut = findActionShortcut(Theme.of(context).platform);
-    return ShadButton.ghost(
-      onPressed: () => bloc.add(const AccessibilityMenuOpened()),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Accessibility',
-            style: context.textTheme.small.copyWith(
-              color: context.colorScheme.foreground,
-              fontWeight: FontWeight.w600,
+    final shortcutText = shortcutLabel(context, shortcut);
+    return AxiTooltip(
+      builder: (_) => Text('Accessibility actions ($shortcutText)'),
+      child: ShadButton.ghost(
+        onPressed: () => bloc.add(const AccessibilityMenuOpened()),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(LucideIcons.lifeBuoy, size: 18),
+            const SizedBox(width: 10),
+            ShortcutHint(
+              shortcut: shortcut,
+              dense: true,
             ),
-          ),
-          const SizedBox(width: 8),
-          ShortcutHint(
-            shortcut: shortcut,
-            dense: true,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

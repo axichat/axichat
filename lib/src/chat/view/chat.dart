@@ -2328,7 +2328,8 @@ class _ChatState extends State<Chat> {
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Expanded(
+                                              Flexible(
+                                                fit: FlexFit.loose,
                                                 child: Text(
                                                   state.chat?.displayName ?? '',
                                                   maxLines: 1,

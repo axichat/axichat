@@ -9,6 +9,7 @@ enum AccessibilityStepKind {
   unread,
   invites,
   newContact,
+  chatMessages,
 }
 
 enum AccessibilityFlowPurpose {
@@ -25,6 +26,7 @@ enum AccessibilityMenuItemKind {
   inviteDecision,
   dismissHighlight,
   input,
+  readOnly,
 }
 
 class AccessibilityMenuSection extends Equatable {
@@ -156,6 +158,13 @@ class AccessibilityDismissHighlightAction extends AccessibilityMenuAction {
 
   @override
   List<Object?> get props => [highlightId];
+}
+
+class AccessibilityNoopAction extends AccessibilityMenuAction {
+  const AccessibilityNoopAction();
+
+  @override
+  List<Object?> get props => const [];
 }
 
 class AccessibilityStepEntry extends Equatable {

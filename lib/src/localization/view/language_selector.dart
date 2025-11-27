@@ -22,9 +22,10 @@ class LanguageSelector extends StatelessWidget {
       selector: (state) => state.language,
       builder: (context, language) {
         final maxWidth = compact ? 200.0 : 280.0;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: IntrinsicWidth(
+        return UnconstrainedBox(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: ShadSelect<AppLanguage>(
               initialValue: language,
               onChanged: (value) {

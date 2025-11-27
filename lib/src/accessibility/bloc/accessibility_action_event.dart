@@ -99,3 +99,16 @@ class AccessibilityLocaleUpdated extends AccessibilityActionEvent {
   @override
   List<Object?> get props => [localization.localeName];
 }
+
+class AccessibilityMessagesUpdated extends AccessibilityActionEvent {
+  const AccessibilityMessagesUpdated({
+    required this.jid,
+    required this.messages,
+  });
+
+  final String jid;
+  final List<Message> messages;
+
+  @override
+  List<Object?> get props => [jid, messages];
+}

@@ -59,7 +59,9 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: BorderRadius.zero,
-        border: Border.all(color: colors.border),
+        border: Border(
+          bottom: BorderSide(color: colors.border),
+        ),
       ),
       padding: calendarPaddingLg,
       child: Column(
@@ -88,16 +90,7 @@ class _CriticalPathPanelState extends State<CriticalPathPanel> {
                     ),
                   ),
                   const Spacer(),
-                  if (widget.focusedPathId != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: calendarInsetSm),
-                      child: ShadButton.ghost(
-                        size: ShadButtonSize.sm,
-                        onPressed: () => widget.onFocusPath(null),
-                        child: const Text('Show all'),
-                      ),
-                    ),
-                  ShadButton.outline(
+                  ShadButton.ghost(
                     size: ShadButtonSize.sm,
                     onPressed: () {
                       _expand();
@@ -362,7 +355,6 @@ class _PathActions extends StatefulWidget {
 }
 
 class _PathActionsState extends State<_PathActions> {
-  static const double _menuMinWidth = 180;
   late final ShadPopoverController _menuController;
 
   @override
@@ -378,7 +370,7 @@ class _PathActionsState extends State<_PathActions> {
   }
 
   void _closeMenu() {
-    _menuController.toggle();
+    _menuController.hide();
   }
 
   @override
@@ -414,7 +406,7 @@ class _PathActionsState extends State<_PathActions> {
             padding: EdgeInsets.zero,
             popover: (context) {
               return Material(
-                type: MaterialType.transparency,
+                color: Colors.transparent,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: colors.card,
@@ -422,8 +414,7 @@ class _PathActionsState extends State<_PathActions> {
                     border: Border.all(color: colors.border),
                     boxShadow: calendarElevation2,
                   ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: _menuMinWidth),
+                  child: IntrinsicWidth(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -460,7 +451,9 @@ class _PathActionsState extends State<_PathActions> {
               backgroundColor: colors.card,
               borderColor: colors.border,
               color: colors.mutedForeground,
-              tooltip: 'More actions',
+              buttonSize: 40,
+              tapTargetSize: 48,
+              iconSize: 20,
               onPressed: _menuController.toggle,
             ),
           ),

@@ -274,13 +274,8 @@ class _CompactTaskTile extends StatelessWidget {
           child: Padding(
             padding: calendarPaddingLg,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _TaskCompletionToggle(
-                  isUpdating: isUpdating,
-                  isCompleted: task.isCompleted,
-                  onToggle: onToggleCompletion,
-                ),
-                const SizedBox(width: calendarGutterMd),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,6 +298,12 @@ class _CompactTaskTile extends StatelessWidget {
                   onDelete: onDelete,
                   showIcons: false,
                   iconSize: 20,
+                ),
+                const SizedBox(width: calendarGutterMd),
+                _TaskCompletionToggle(
+                  isUpdating: isUpdating,
+                  isCompleted: task.isCompleted,
+                  onToggle: onToggleCompletion,
                 ),
               ],
             ),
@@ -484,14 +485,8 @@ class _FullTaskTile extends StatelessWidget {
           child: Padding(
             padding: calendarPaddingXl,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _TaskCompletionToggle(
-                  isUpdating: isUpdating,
-                  isCompleted: task.isCompleted,
-                  onToggle: onToggleCompletion,
-                ),
-                const SizedBox(width: calendarGutterLg),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -589,6 +584,12 @@ class _FullTaskTile extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(width: calendarGutterLg),
+                _TaskCompletionToggle(
+                  isUpdating: isUpdating,
+                  isCompleted: task.isCompleted,
+                  onToggle: onToggleCompletion,
                 ),
               ],
             ),

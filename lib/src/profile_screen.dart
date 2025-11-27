@@ -228,38 +228,35 @@ class _ProfileMainView extends StatelessWidget {
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 460,
-              minWidth: 340,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const ConnectivityIndicator(),
-                const SizedBox(height: 8),
-                const ShorebirdChecker(),
-                card,
-                const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: ProfileFingerprint(),
-                ),
-              ],
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 460,
+            minWidth: 340,
           ),
-          const SizedBox(width: 24),
-          Expanded(
-            child: SingleChildScrollView(
-              child: settings,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ConnectivityIndicator(),
+              const SizedBox(height: 8),
+              const ShorebirdChecker(),
+              card,
+              const Padding(
+                padding: EdgeInsets.all(12.0),
+                child: ProfileFingerprint(),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: SingleChildScrollView(
+            child: settings,
+          ),
+        ),
+      ],
     );
   }
 }
