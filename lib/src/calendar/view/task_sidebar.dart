@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
@@ -17,6 +18,7 @@ import '../bloc/calendar_event.dart';
 import '../bloc/calendar_state.dart';
 import '../constants.dart';
 import '../models/calendar_model.dart';
+import '../models/calendar_critical_path.dart';
 import '../models/calendar_task.dart';
 import '../utils/calendar_transfer_service.dart';
 import '../utils/location_autocomplete.dart';
@@ -44,6 +46,8 @@ import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_text_field.dart';
+import 'widgets/critical_path_panel.dart';
+import 'widgets/calendar_completion_checkbox.dart';
 
 class TaskSidebar extends StatefulWidget {
   const TaskSidebar({
@@ -574,15 +578,52 @@ class TaskSidebarState extends State<TaskSidebar>
                   builder: (context, state) {
                     final locationHelper =
                         LocationAutocompleteHelper.fromState(state);
+                    final settings = context.watch<SettingsCubit>();
                     List<CalendarTask> selectionTasks = const [];
                     if (state.isSelectionMode) {
                       selectionTasks = _selectedTasks(state);
                       _syncSelectionRecurrenceState(selectionTasks);
                       _syncSelectionFieldControllers(selectionTasks);
+                      selectionTasks = selectionTasks.where((task) {
+                        if (!state.isTaskInFocusedPath(task)) {
+                          return false;
+                        }
+                        if (task.scheduledTime != null &&
+                            settings.state.hideCompletedScheduled &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        if (task.scheduledTime == null &&
+                            task.deadline != null &&
+                            settings.state.hideCompletedReminders &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        if (task.scheduledTime == null &&
+                            task.deadline == null &&
+                            settings.state.hideCompletedUnscheduled &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
                     }
-                    Widget content;
+                    final Widget criticalPathsPanel = CriticalPathPanel(
+                      paths: state.criticalPaths,
+                      tasks: state.model.tasks,
+                      focusedPathId: state.focusedCriticalPathId,
+                      animationDuration: settings.animationDuration,
+                      onCreatePath: _handleCreateCriticalPath,
+                      onRenamePath: _handleRenameCriticalPath,
+                      onDeletePath: _handleDeleteCriticalPath,
+                      onFocusPath: _handleFocusCriticalPath,
+                    );
+
+                    List<CalendarTask> unscheduledTasks = const [];
+                    List<CalendarTask> reminderTasks = const [];
+                    Widget contentBody;
                     if (state.isSelectionMode) {
-                      content = _SelectionPanel(
+                      contentBody = _SelectionPanel(
                         tasks: selectionTasks,
                         uiState: uiState,
                         locationHelper: locationHelper,
@@ -646,19 +687,40 @@ class TaskSidebarState extends State<TaskSidebar>
                             taskIds: {task.id},
                           ),
                         ),
+                        onToggleCompletion: _toggleSidebarTaskCompletion,
                       );
                     } else {
-                      final unscheduledTasks = _sortTasksByDeadline(
-                        state.unscheduledTasks
-                            .where((task) => task.deadline == null)
-                            .toList(),
+                      unscheduledTasks = _sortTasksByDeadline(
+                        state.unscheduledTasks.where((task) {
+                          if (!state.isTaskInFocusedPath(task)) {
+                            return false;
+                          }
+                          if (task.deadline != null) {
+                            return false;
+                          }
+                          if (settings.state.hideCompletedUnscheduled &&
+                              task.isCompleted) {
+                            return false;
+                          }
+                          return true;
+                        }).toList(),
                       );
-                      final reminderTasks = _sortTasksByDeadline(
-                        state.unscheduledTasks
-                            .where((task) => task.deadline != null)
-                            .toList(),
+                      reminderTasks = _sortTasksByDeadline(
+                        state.unscheduledTasks.where((task) {
+                          if (!state.isTaskInFocusedPath(task)) {
+                            return false;
+                          }
+                          if (task.deadline == null) {
+                            return false;
+                          }
+                          if (settings.state.hideCompletedReminders &&
+                              task.isCompleted) {
+                            return false;
+                          }
+                          return true;
+                        }).toList(),
                       );
-                      content = _UnscheduledSidebarContent(
+                      contentBody = _UnscheduledSidebarContent(
                         uiState: uiState,
                         locationHelper: locationHelper,
                         formActivityListenable: _formActivityListenable,
@@ -683,6 +745,14 @@ class TaskSidebarState extends State<TaskSidebar>
                         onAddTask: _addTask,
                         unscheduledTasks: unscheduledTasks,
                         reminderTasks: reminderTasks,
+                        hideCompletedUnscheduled:
+                            settings.state.hideCompletedUnscheduled,
+                        hideCompletedReminders:
+                            settings.state.hideCompletedReminders,
+                        onToggleHideCompletedUnscheduled:
+                            settings.toggleHideCompletedUnscheduled,
+                        onToggleHideCompletedReminders:
+                            settings.toggleHideCompletedReminders,
                         sectionKeys: _sectionKeys,
                         onToggleSection: _sidebarController.toggleSection,
                         onSectionDragEnter: _handleSidebarSectionDragEnter,
@@ -707,9 +777,21 @@ class TaskSidebarState extends State<TaskSidebar>
                       );
                     }
 
+                    final Widget content = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        criticalPathsPanel,
+                        const SizedBox(height: calendarGutterLg),
+                        contentBody,
+                      ],
+                    );
+
                     final Set<String> activeTaskIds = state.isSelectionMode
-                        ? _selectedTasks(state).map((task) => task.id).toSet()
-                        : state.unscheduledTasks.map((task) => task.id).toSet();
+                        ? selectionTasks.map((task) => task.id).toSet()
+                        : {
+                            ...unscheduledTasks.map((task) => task.id),
+                            ...reminderTasks.map((task) => task.id),
+                          };
                     _pruneTaskPopoverControllers(activeTaskIds);
 
                     final bool enableKeyboardDismiss =
@@ -1496,6 +1578,11 @@ class TaskSidebarState extends State<TaskSidebar>
         label: context.l10n.calendarCopyToClipboardAction,
         onSelected: () => _copyTaskShareText(task),
       ),
+      TaskContextAction(
+        icon: Icons.route,
+        label: 'Add to critical path',
+        onSelected: () => _showAddToCriticalPathPicker(task),
+      ),
     ];
   }
 
@@ -1540,6 +1627,126 @@ class TaskSidebarState extends State<TaskSidebar>
     }
   }
 
+  Future<void> _handleCreateCriticalPath({String? taskId}) async {
+    await _promptForCriticalPathName(
+      title: 'New critical path',
+      onSubmit: (name) {
+        _bloc.add(
+          CalendarEvent.criticalPathCreated(
+            name: name,
+            taskId: taskId,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleRenameCriticalPath(CalendarCriticalPath path) async {
+    await _promptForCriticalPathName(
+      title: 'Rename critical path',
+      initialValue: path.name,
+      onSubmit: (name) {
+        _bloc.add(
+          CalendarEvent.criticalPathRenamed(
+            pathId: path.id,
+            name: name,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleDeleteCriticalPath(CalendarCriticalPath path) async {
+    final bool confirmed = await _confirmCriticalPathDeletion(path);
+    if (!confirmed) {
+      return;
+    }
+    _bloc.add(
+      CalendarEvent.criticalPathDeleted(pathId: path.id),
+    );
+  }
+
+  void _handleFocusCriticalPath(CalendarCriticalPath? path) {
+    _bloc.add(
+      CalendarEvent.criticalPathFocused(pathId: path?.id),
+    );
+  }
+
+  Future<void> _showAddToCriticalPathPicker(CalendarTask task) async {
+    final CriticalPathPickerResult? result = await showCriticalPathPicker(
+      context: context,
+      paths: _bloc.state.criticalPaths,
+    );
+    if (result == null) {
+      return;
+    }
+    if (result.createNew) {
+      await _handleCreateCriticalPath(taskId: task.id);
+      return;
+    }
+    final String? pathId = result.pathId;
+    if (pathId != null) {
+      _bloc.add(
+        CalendarEvent.criticalPathTaskAdded(
+          pathId: pathId,
+          taskId: task.id,
+        ),
+      );
+    }
+  }
+
+  void _toggleSidebarTaskCompletion(CalendarTask task, bool completed) {
+    _bloc.add(
+      CalendarEvent.taskCompleted(
+        taskId: task.baseId,
+        completed: completed,
+      ),
+    );
+  }
+
+  Future<void> _promptForCriticalPathName({
+    required String title,
+    String? initialValue,
+    required ValueChanged<String> onSubmit,
+  }) async {
+    final String? name = await promptCriticalPathName(
+      context: context,
+      title: title,
+      initialValue: initialValue,
+    );
+    if (name != null) {
+      onSubmit(name);
+    }
+  }
+
+  Future<bool> _confirmCriticalPathDeletion(CalendarCriticalPath path) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete critical path'),
+          content: Text(
+            'Remove "${path.name}"? Tasks will remain in the calendar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).maybePop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
   void _deleteSidebarTask(CalendarTask task) {
     _bloc.add(CalendarEvent.taskDeleted(taskId: task.id));
     _closeTaskPopover(task.id);
@@ -1557,6 +1764,11 @@ class TaskSidebarState extends State<TaskSidebar>
         leading: const Icon(Icons.share_outlined),
         onPressed: () => _copyTaskShareText(task),
         child: Text(context.l10n.calendarCopyToClipboardAction),
+      ),
+      ShadContextMenuItem(
+        leading: const Icon(Icons.route),
+        onPressed: () => _showAddToCriticalPathPicker(task),
+        child: const Text('Add to critical path'),
       ),
       ShadContextMenuItem(
         leading: const Icon(Icons.delete_outline),
@@ -1906,6 +2118,7 @@ class _SelectionPanel extends StatelessWidget {
     required this.scheduleLabelBuilder,
     required this.onFocusTask,
     required this.onRemoveTask,
+    required this.onToggleCompletion,
   });
 
   final List<CalendarTask> tasks;
@@ -1933,6 +2146,7 @@ class _SelectionPanel extends StatelessWidget {
   final String Function(CalendarTask task) scheduleLabelBuilder;
   final ValueChanged<CalendarTask> onFocusTask;
   final ValueChanged<CalendarTask> onRemoveTask;
+  final void Function(CalendarTask task, bool completed) onToggleCompletion;
 
   @override
   Widget build(BuildContext context) {
@@ -2043,6 +2257,7 @@ class _SelectionPanel extends StatelessWidget {
             scheduleLabelBuilder: scheduleLabelBuilder,
             onFocusTask: onFocusTask,
             onRemoveTask: onRemoveTask,
+            onToggleCompletion: onToggleCompletion,
           ),
         ),
       ],
@@ -2491,6 +2706,7 @@ class _SelectedTaskList extends StatelessWidget {
     required this.scheduleLabelBuilder,
     required this.onFocusTask,
     required this.onRemoveTask,
+    required this.onToggleCompletion,
   });
 
   final List<CalendarTask> tasks;
@@ -2498,6 +2714,7 @@ class _SelectedTaskList extends StatelessWidget {
   final String Function(CalendarTask task) scheduleLabelBuilder;
   final ValueChanged<CalendarTask> onFocusTask;
   final ValueChanged<CalendarTask> onRemoveTask;
+  final void Function(CalendarTask task, bool completed) onToggleCompletion;
 
   @override
   Widget build(BuildContext context) {
@@ -2529,6 +2746,7 @@ class _SelectedTaskList extends StatelessWidget {
             scheduleLabel: scheduleLabelBuilder(task),
             onFocusTask: onFocusTask,
             onRemoveTask: onRemoveTask,
+            onToggleCompletion: onToggleCompletion,
           ),
       ],
     );
@@ -2542,6 +2760,7 @@ class _SelectionTaskTile extends StatelessWidget {
     required this.scheduleLabel,
     required this.onFocusTask,
     required this.onRemoveTask,
+    required this.onToggleCompletion,
   });
 
   final CalendarTask task;
@@ -2549,6 +2768,7 @@ class _SelectionTaskTile extends StatelessWidget {
   final String scheduleLabel;
   final ValueChanged<CalendarTask> onFocusTask;
   final ValueChanged<CalendarTask> onRemoveTask;
+  final void Function(CalendarTask task, bool completed) onToggleCompletion;
 
   @override
   Widget build(BuildContext context) {
@@ -2576,6 +2796,8 @@ class _SelectionTaskTile extends StatelessWidget {
               child: _SidebarTaskTileBody(
                 task: task,
                 scheduleLabel: scheduleLabel,
+                onToggleCompletion: (completed) =>
+                    onToggleCompletion(task, completed),
                 trailing: Tooltip(
                   message: context.l10n.calendarSelectionRemove,
                   child: ShadIconButton.ghost(
@@ -2601,11 +2823,13 @@ class _SidebarTaskTileBody extends StatelessWidget {
     required this.task,
     this.trailing,
     this.scheduleLabel,
+    this.onToggleCompletion,
   });
 
   final CalendarTask task;
   final Widget? trailing;
   final String? scheduleLabel;
+  final ValueChanged<bool>? onToggleCompletion;
 
   @override
   Widget build(BuildContext context) {
@@ -2619,24 +2843,36 @@ class _SidebarTaskTileBody extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                CalendarCompletionCheckbox(
+                  value: task.isCompleted,
+                  onChanged: onToggleCompletion,
+                ),
+                const SizedBox(width: calendarInsetSm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         task.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: calendarTitleColor,
+                          color: task.isCompleted
+                              ? calendarPrimaryColor
+                              : calendarTitleColor,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                       if (scheduleLabel != null) ...[
                         const SizedBox(height: calendarInsetSm),
                         Text(
                           scheduleLabel!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: calendarSubtitleColor,
+                            color: task.isCompleted
+                                ? calendarPrimaryColor
+                                : calendarSubtitleColor,
                             letterSpacing: 0.1,
                           ),
                         ),
@@ -2940,6 +3176,10 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onAddTask,
     required this.unscheduledTasks,
     required this.reminderTasks,
+    required this.hideCompletedUnscheduled,
+    required this.hideCompletedReminders,
+    required this.onToggleHideCompletedUnscheduled,
+    required this.onToggleHideCompletedReminders,
     required this.sectionKeys,
     required this.onToggleSection,
     required this.onSectionDragEnter,
@@ -2974,6 +3214,10 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onAddTask;
   final List<CalendarTask> unscheduledTasks;
   final List<CalendarTask> reminderTasks;
+  final bool hideCompletedUnscheduled;
+  final bool hideCompletedReminders;
+  final ValueChanged<bool> onToggleHideCompletedUnscheduled;
+  final ValueChanged<bool> onToggleHideCompletedReminders;
   final Map<CalendarSidebarSection, GlobalKey> sectionKeys;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
   final ValueChanged<CalendarSidebarSection> onSectionDragEnter;
@@ -3015,6 +3259,10 @@ class _UnscheduledSidebarContent extends StatelessWidget {
         _TaskSectionsPanel(
           unscheduledTasks: unscheduledTasks,
           reminderTasks: reminderTasks,
+          hideCompletedUnscheduled: hideCompletedUnscheduled,
+          hideCompletedReminders: hideCompletedReminders,
+          onToggleHideCompletedUnscheduled: onToggleHideCompletedUnscheduled,
+          onToggleHideCompletedReminders: onToggleHideCompletedReminders,
           uiState: uiState,
           sectionKeys: sectionKeys,
           onToggleSection: onToggleSection,
@@ -3034,6 +3282,10 @@ class _TaskSectionsPanel extends StatelessWidget {
   const _TaskSectionsPanel({
     required this.unscheduledTasks,
     required this.reminderTasks,
+    required this.hideCompletedUnscheduled,
+    required this.hideCompletedReminders,
+    required this.onToggleHideCompletedUnscheduled,
+    required this.onToggleHideCompletedReminders,
     required this.uiState,
     required this.sectionKeys,
     required this.onToggleSection,
@@ -3047,6 +3299,10 @@ class _TaskSectionsPanel extends StatelessWidget {
 
   final List<CalendarTask> unscheduledTasks;
   final List<CalendarTask> reminderTasks;
+  final bool hideCompletedUnscheduled;
+  final bool hideCompletedReminders;
+  final ValueChanged<bool> onToggleHideCompletedUnscheduled;
+  final ValueChanged<bool> onToggleHideCompletedReminders;
   final CalendarSidebarState uiState;
   final Map<CalendarSidebarSection, GlobalKey> sectionKeys;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
@@ -3070,6 +3326,10 @@ class _TaskSectionsPanel extends StatelessWidget {
           sectionKey: sectionKeys[CalendarSidebarSection.unscheduled],
           onToggleSection: onToggleSection,
           onSectionDragEnter: onSectionDragEnter,
+          trailing: _HideCompletedToggle(
+            value: hideCompletedUnscheduled,
+            onChanged: onToggleHideCompletedUnscheduled,
+          ),
           onTaskDropped: onTaskDropped,
           collapsedChild: _CollapsedTaskPreview(tasks: unscheduledTasks),
           expandedChild: Padding(
@@ -3097,6 +3357,10 @@ class _TaskSectionsPanel extends StatelessWidget {
           sectionKey: sectionKeys[CalendarSidebarSection.reminders],
           onToggleSection: onToggleSection,
           onSectionDragEnter: onSectionDragEnter,
+          trailing: _HideCompletedToggle(
+            value: hideCompletedReminders,
+            onChanged: onToggleHideCompletedReminders,
+          ),
           onTaskDropped: onTaskDropped,
           collapsedChild: _CollapsedTaskPreview(tasks: reminderTasks),
           expandedChild: Padding(
@@ -3132,6 +3396,7 @@ class _SidebarAccordionSection extends StatelessWidget {
     required this.onToggleSection,
     required this.onSectionDragEnter,
     required this.onTaskDropped,
+    this.trailing,
   });
 
   final String title;
@@ -3144,6 +3409,7 @@ class _SidebarAccordionSection extends StatelessWidget {
   final ValueChanged<CalendarSidebarSection> onToggleSection;
   final ValueChanged<CalendarSidebarSection> onSectionDragEnter;
   final ValueChanged<CalendarTask> onTaskDropped;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -3187,6 +3453,10 @@ class _SidebarAccordionSection extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (trailing != null) ...[
+                          const SizedBox(width: calendarInsetSm),
+                          trailing!,
+                        ],
                         _SectionCountBadge(
                           count: itemCount,
                           isExpanded: isExpanded,
@@ -3288,6 +3558,25 @@ class _SidebarAccordionSection extends StatelessWidget {
       return content;
     }
     return KeyedSubtree(key: sectionKey, child: content);
+  }
+}
+
+class _HideCompletedToggle extends StatelessWidget {
+  const _HideCompletedToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadSwitch(
+      label: const Text('Hide completed'),
+      value: value,
+      onChanged: onChanged,
+    );
   }
 }
 
@@ -3504,6 +3793,8 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
         host: host,
         task: task,
         uiState: uiState,
+        onToggleCompletion: (completed) =>
+            host._toggleSidebarTaskCompletion(task, completed),
       ),
     );
     final Widget fadedTile = Opacity(
@@ -3513,6 +3804,8 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
         task: task,
         uiState: uiState,
         enableInteraction: false,
+        onToggleCompletion: (completed) =>
+            host._toggleSidebarTaskCompletion(task, completed),
       ),
     );
     final Widget feedback = Material(
@@ -3526,6 +3819,8 @@ class _SidebarDraggableTaskTile extends StatelessWidget {
             task: task,
             uiState: uiState,
             enableInteraction: false,
+            onToggleCompletion: (completed) =>
+                host._toggleSidebarTaskCompletion(task, completed),
           ),
         ),
       ),
@@ -3550,12 +3845,14 @@ class _SidebarTaskTile extends StatelessWidget {
     required this.task,
     required this.uiState,
     this.enableInteraction = true,
+    this.onToggleCompletion,
   });
 
   final TaskSidebarState host;
   final CalendarTask task;
   final CalendarSidebarState uiState;
   final bool enableInteraction;
+  final ValueChanged<bool>? onToggleCompletion;
 
   @override
   Widget build(BuildContext context) {
@@ -3592,7 +3889,10 @@ class _SidebarTaskTile extends StatelessWidget {
                                 .withValues(alpha: 0.5),
                             onTap: () =>
                                 host._showTaskEditSheet(tileContext, task),
-                            child: _SidebarTaskTileBody(task: task),
+                            child: _SidebarTaskTileBody(
+                              task: task,
+                              onToggleCompletion: onToggleCompletion,
+                            ),
                           ),
                         );
                       }
@@ -3798,13 +4098,19 @@ class _SidebarTaskTile extends StatelessWidget {
                             hoverColor: calendarSidebarBackgroundColor
                                 .withValues(alpha: 0.5),
                             onTap: () => host._toggleTaskPopover(task.id),
-                            child: _SidebarTaskTileBody(task: task),
+                            child: _SidebarTaskTileBody(
+                              task: task,
+                              onToggleCompletion: onToggleCompletion,
+                            ),
                           ),
                         ),
                       );
                     },
                   )
-                : _SidebarTaskTileBody(task: task),
+                : _SidebarTaskTileBody(
+                    task: task,
+                    onToggleCompletion: onToggleCompletion,
+                  ),
           ),
         ),
       ),

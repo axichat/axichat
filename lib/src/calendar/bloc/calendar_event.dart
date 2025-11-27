@@ -175,6 +175,35 @@ class CalendarEvent with _$CalendarEvent {
   }) = CalendarTaskFocusRequested;
 
   const factory CalendarEvent.taskFocusCleared() = CalendarTaskFocusCleared;
+
+  const factory CalendarEvent.criticalPathCreated({
+    required String name,
+    String? taskId,
+  }) = CalendarCriticalPathCreated;
+
+  const factory CalendarEvent.criticalPathRenamed({
+    required String pathId,
+    required String name,
+  }) = CalendarCriticalPathRenamed;
+
+  const factory CalendarEvent.criticalPathDeleted({
+    required String pathId,
+  }) = CalendarCriticalPathDeleted;
+
+  const factory CalendarEvent.criticalPathTaskAdded({
+    required String pathId,
+    required String taskId,
+    int? index,
+  }) = CalendarCriticalPathTaskAdded;
+
+  const factory CalendarEvent.criticalPathTaskRemoved({
+    required String pathId,
+    required String taskId,
+  }) = CalendarCriticalPathTaskRemoved;
+
+  const factory CalendarEvent.criticalPathFocused({
+    String? pathId,
+  }) = CalendarCriticalPathFocused;
 }
 
 enum CalendarView { week, day, month }

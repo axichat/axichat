@@ -22,6 +22,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/share/share_intent_cubit.dart';
+import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -234,6 +235,7 @@ class MaterialAxichat extends StatelessWidget {
         xmppService.toggleAllChatsMarkerResponsive(
           responsive: state.readReceipts,
         );
+        final localeOverride = state.language.locale;
         const chatNeutrals = ChatNeutrals();
         final lightTheme = AppTheme.build(
           shadColor: state.shadColor,
@@ -246,6 +248,7 @@ class MaterialAxichat extends StatelessWidget {
           neutrals: chatNeutrals,
         );
         final app = ShadApp.router(
+          locale: localeOverride,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,

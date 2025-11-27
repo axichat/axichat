@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
 import '../bloc/base_calendar_bloc.dart';
 import '../bloc/calendar_event.dart';
@@ -42,6 +43,7 @@ import 'widgets/calendar_task_geometry.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/task_form_section.dart';
 import 'feedback_system.dart';
+import 'widgets/critical_path_panel.dart';
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
@@ -181,6 +183,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _pendingPopoverGeometryUpdate = false;
   bool _dragSessionNotified = false;
   bool _suppressNextEmptySlotTap = false;
+  bool _hideCompletedScheduled = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -1313,6 +1316,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    _hideCompletedScheduled =
+        context.watch<SettingsCubit>().state.hideCompletedScheduled;
     _updateCompactState(context);
     return ResponsiveHelper.layoutBuilder(
       context,
@@ -1694,6 +1699,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       onEnterSelectionMode: () => _enterSelectionMode(task.id),
       onToggleSelection: () => _toggleTaskSelection(task.id),
       onTap: _onScheduledTaskTapped,
+      onToggleCompletion: (target, completed) =>
+          _setTaskCompletion(target, completed),
     );
   }
 
@@ -2375,6 +2382,55 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
+  void _setTaskCompletion(CalendarTask task, bool completed) {
+    _capturedBloc.add(
+      CalendarEvent.taskCompleted(
+        taskId: task.baseId,
+        completed: completed,
+      ),
+    );
+  }
+
+  Future<void> _showAddToCriticalPathPicker(CalendarTask task) async {
+    final CriticalPathPickerResult? result = await showCriticalPathPicker(
+      context: context,
+      paths: widget.state.criticalPaths,
+    );
+    if (result == null) {
+      return;
+    }
+    if (result.createNew) {
+      await _promptCriticalPathNameAndCreate(taskId: task.id);
+      return;
+    }
+    final String? pathId = result.pathId;
+    if (pathId != null) {
+      _capturedBloc.add(
+        CalendarEvent.criticalPathTaskAdded(
+          pathId: pathId,
+          taskId: task.id,
+        ),
+      );
+    }
+  }
+
+  Future<void> _promptCriticalPathNameAndCreate(
+      {required String taskId}) async {
+    final String? name = await promptCriticalPathName(
+      context: context,
+      title: 'New critical path',
+    );
+    if (name == null) {
+      return;
+    }
+    _capturedBloc.add(
+      CalendarEvent.criticalPathCreated(
+        name: name,
+        taskId: taskId,
+      ),
+    );
+  }
+
   List<TaskContextAction> _taskContextActions({
     required CalendarTask task,
     required CalendarState state,
@@ -2395,6 +2451,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         icon: Icons.share_outlined,
         label: 'Copy to Clipboard',
         onSelected: () => _copyTaskToClipboard(task),
+      ),
+      TaskContextAction(
+        icon: Icons.route,
+        label: 'Add to Critical Path',
+        onSelected: () => _showAddToCriticalPathPicker(task),
       ),
     ];
 
@@ -2707,7 +2768,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   List<CalendarTask> _getTasksForDay(DateTime date) {
     final tasks = widget.state.tasksForDate(date);
-    return tasks.where((task) => task.scheduledTime != null).map((task) {
+    return tasks
+        .where(_isTaskVisible)
+        .where((task) => task.scheduledTime != null)
+        .map((task) {
       final preview = _taskInteractionController.resizePreviews[task.id];
       return preview ?? task;
     }).toList()
@@ -2719,6 +2783,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         if (bTime == null) return -1;
         return aTime.compareTo(bTime);
       });
+  }
+
+  bool _isTaskVisible(CalendarTask task) {
+    if (_hideCompletedScheduled && task.isCompleted) {
+      return false;
+    }
+    return widget.state.isTaskInFocusedPath(task);
   }
 
   bool _isToday(DateTime date) {

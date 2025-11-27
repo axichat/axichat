@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 
+import '../models/calendar_critical_path.dart';
 import '../models/calendar_model.dart';
 import '../models/calendar_task.dart';
 import '../models/duration_adapter.dart';
@@ -28,6 +29,11 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
   if (!target.isAdapterRegistered(RecurrenceFrequencyAdapter().typeId)) {
     target.registerAdapter<RecurrenceFrequency>(
       RecurrenceFrequencyAdapter(),
+    );
+  }
+  if (!target.isAdapterRegistered(CalendarCriticalPathAdapter().typeId)) {
+    target.registerAdapter<CalendarCriticalPath>(
+      CalendarCriticalPathAdapter(),
     );
   }
   if (!target.isAdapterRegistered(CalendarModelAdapter().typeId)) {

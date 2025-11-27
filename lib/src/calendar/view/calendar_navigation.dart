@@ -25,6 +25,8 @@ class CalendarNavigation extends StatelessWidget {
     this.onRedo,
     this.canUndo = false,
     this.canRedo = false,
+    this.hideCompletedScheduled = false,
+    this.onToggleHideCompletedScheduled,
   });
 
   final CalendarState state;
@@ -36,6 +38,8 @@ class CalendarNavigation extends StatelessWidget {
   final VoidCallback? onRedo;
   final bool canUndo;
   final bool canRedo;
+  final bool hideCompletedScheduled;
+  final ValueChanged<bool>? onToggleHideCompletedScheduled;
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +124,8 @@ class CalendarNavigation extends StatelessWidget {
           isCompact: isCompact,
           hasUndoRedo: hasUndoRedo,
           undoRedoGroup: undoRedoGroup,
+          hideCompletedScheduled: hideCompletedScheduled,
+          onToggleHideCompletedScheduled: onToggleHideCompletedScheduled,
         );
 
         const Border? border = null;
@@ -456,6 +462,8 @@ class _TrailingControls extends StatelessWidget {
     required this.isCompact,
     required this.hasUndoRedo,
     required this.undoRedoGroup,
+    required this.hideCompletedScheduled,
+    required this.onToggleHideCompletedScheduled,
   });
 
   final CalendarState state;
@@ -464,12 +472,22 @@ class _TrailingControls extends StatelessWidget {
   final bool isCompact;
   final bool hasUndoRedo;
   final Widget undoRedoGroup;
+  final bool hideCompletedScheduled;
+  final ValueChanged<bool>? onToggleHideCompletedScheduled;
 
   @override
   Widget build(BuildContext context) {
     final double trailingGap = isCompact ? calendarGutterSm : calendarGutterMd;
     final double maxDateLabelWidth =
         isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
+
+    final Widget? hideToggle = onToggleHideCompletedScheduled == null
+        ? null
+        : ShadSwitch(
+            value: hideCompletedScheduled,
+            onChanged: onToggleHideCompletedScheduled,
+            label: const Text('Hide completed'),
+          );
 
     final trailingChildren = <Widget>[
       ConstrainedBox(
@@ -480,6 +498,7 @@ class _TrailingControls extends StatelessWidget {
           collapseText: collapseDateText,
         ),
       ),
+      if (hideToggle != null) hideToggle,
       if (hasUndoRedo) undoRedoGroup,
     ];
 

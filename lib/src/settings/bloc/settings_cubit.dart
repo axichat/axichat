@@ -1,4 +1,5 @@
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/message_storage_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -13,6 +14,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   Duration get animationDuration =>
       state.lowMotion ? Duration.zero : baseAnimationDuration;
+
+  void updateLanguage(AppLanguage language) {
+    emit(state.copyWith(language: language));
+  }
 
   void updateThemeMode(ThemeMode? themeMode) {
     if (themeMode == null) return;
@@ -50,6 +55,18 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void updateMessageStorageMode(MessageStorageMode mode) {
     emit(state.copyWith(messageStorageMode: mode));
+  }
+
+  void toggleHideCompletedScheduled(bool hide) {
+    emit(state.copyWith(hideCompletedScheduled: hide));
+  }
+
+  void toggleHideCompletedUnscheduled(bool hide) {
+    emit(state.copyWith(hideCompletedUnscheduled: hide));
+  }
+
+  void toggleHideCompletedReminders(bool hide) {
+    emit(state.copyWith(hideCompletedReminders: hide));
   }
 
   @override

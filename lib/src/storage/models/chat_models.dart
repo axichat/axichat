@@ -6,14 +6,6 @@ import 'package:flutter/material.dart' hide Column, Table;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
-import 'package:axichat/src/storage/database.dart'
-    show
-        BlocklistCompanion,
-        ChatsCompanion,
-        EmailBlocklistCompanion,
-        EmailSpamlistCompanion,
-        InvitesCompanion,
-        RosterCompanion;
 
 part 'chat_models.freezed.dart';
 part 'chat_models.g.dart';
@@ -182,19 +174,34 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
       );
 
   @override
-  Map<String, Expression> toColumns(bool nullToAbsent) => RosterCompanion(
-        jid: Value(jid),
-        title: Value(title),
-        presence: Value(presence),
-        status: Value.absentIfNull(status),
-        avatarPath: Value.absentIfNull(avatarPath),
-        avatarHash: Value.absentIfNull(avatarHash),
-        subscription: Value(subscription),
-        ask: Value(ask),
-        contactID: Value.absentIfNull(contactID),
-        contactAvatarPath: Value.absentIfNull(contactAvatarPath),
-        contactDisplayName: Value.absentIfNull(contactDisplayName),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{
+      'jid': Variable<String>(jid),
+      'title': Variable<String>(title),
+      'presence': Variable<String>(presence.name),
+      'subscription': Variable<String>(subscription.name),
+      'ask': Variable<String>(ask?.name),
+    };
+    if (status != null) {
+      map['status'] = Variable<String>(status);
+    }
+    if (avatarPath != null) {
+      map['avatar_path'] = Variable<String>(avatarPath);
+    }
+    if (avatarHash != null) {
+      map['avatar_hash'] = Variable<String>(avatarHash);
+    }
+    if (contactID != null) {
+      map['contact_i_d'] = Variable<String>(contactID);
+    }
+    if (contactAvatarPath != null) {
+      map['contact_avatar_path'] = Variable<String>(contactAvatarPath);
+    }
+    if (contactDisplayName != null) {
+      map['contact_display_name'] = Variable<String>(contactDisplayName);
+    }
+    return map;
+  }
 }
 
 @UseRowClass(RosterItem, constructor: 'fromDb')
@@ -232,11 +239,10 @@ class Invite with _$Invite implements Insertable<Invite> {
   const Invite._();
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      InvitesCompanion(
-        jid: Value(jid),
-        title: Value(title),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) => {
+        'jid': Variable<String>(jid),
+        'title': Variable<String>(title),
+      };
 }
 
 @UseRowClass(Invite)
@@ -324,36 +330,62 @@ class Chat with _$Chat implements Insertable<Chat> {
   const Chat._();
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      ChatsCompanion(
-        jid: Value(jid),
-        title: Value(title),
-        type: Value(type),
-        myNickname: Value.absentIfNull(myNickname),
-        avatarPath: Value.absentIfNull(avatarPath),
-        avatarHash: Value.absentIfNull(avatarHash),
-        lastMessage: Value.absentIfNull(lastMessage),
-        alert: Value(alert),
-        lastChangeTimestamp: Value(lastChangeTimestamp),
-        unreadCount: Value(unreadCount),
-        open: Value(open),
-        muted: Value(muted),
-        favorited: Value(favorited),
-        archived: Value(archived),
-        hidden: Value(hidden),
-        spam: Value(spam),
-        markerResponsive: Value(markerResponsive),
-        shareSignatureEnabled: Value(shareSignatureEnabled),
-        encryptionProtocol: Value(encryptionProtocol),
-        contactID: Value.absentIfNull(contactID),
-        contactDisplayName: Value.absentIfNull(contactDisplayName),
-        contactAvatarPath: Value.absentIfNull(contactAvatarPath),
-        contactAvatarHash: Value.absentIfNull(contactAvatarHash),
-        contactJid: Value.absentIfNull(contactJid),
-        chatState: Value.absentIfNull(chatState),
-        deltaChatId: Value.absentIfNull(deltaChatId),
-        emailAddress: Value.absentIfNull(emailAddress),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{
+      'jid': Variable<String>(jid),
+      'title': Variable<String>(title),
+      'type': Variable<int>(type.index),
+      'alert': Variable<String>(alert),
+      'last_change_timestamp': Variable<DateTime>(lastChangeTimestamp),
+      'unread_count': Variable<int>(unreadCount),
+      'open': Variable<bool>(open),
+      'muted': Variable<bool>(muted),
+      'favorited': Variable<bool>(favorited),
+      'archived': Variable<bool>(archived),
+      'hidden': Variable<bool>(hidden),
+      'spam': Variable<bool>(spam),
+      'marker_responsive': Variable<bool>(markerResponsive),
+      'share_signature_enabled': Variable<bool>(shareSignatureEnabled),
+      'encryption_protocol': Variable<int>(encryptionProtocol.index),
+    };
+    if (myNickname != null) {
+      map['my_nickname'] = Variable<String>(myNickname);
+    }
+    if (avatarPath != null) {
+      map['avatar_path'] = Variable<String>(avatarPath);
+    }
+    if (avatarHash != null) {
+      map['avatar_hash'] = Variable<String>(avatarHash);
+    }
+    if (lastMessage != null) {
+      map['last_message'] = Variable<String>(lastMessage);
+    }
+    if (contactID != null) {
+      map['contact_i_d'] = Variable<String>(contactID);
+    }
+    if (contactDisplayName != null) {
+      map['contact_display_name'] = Variable<String>(contactDisplayName);
+    }
+    if (contactAvatarPath != null) {
+      map['contact_avatar_path'] = Variable<String>(contactAvatarPath);
+    }
+    if (contactAvatarHash != null) {
+      map['contact_avatar_hash'] = Variable<String>(contactAvatarHash);
+    }
+    if (contactJid != null) {
+      map['contact_jid'] = Variable<String>(contactJid);
+    }
+    if (chatState != null) {
+      map['chat_state'] = Variable<String>(chatState!.name);
+    }
+    if (deltaChatId != null) {
+      map['delta_chat_id'] = Variable<int>(deltaChatId);
+    }
+    if (emailAddress != null) {
+      map['email_address'] = Variable<String>(emailAddress);
+    }
+    return map;
+  }
 }
 
 @UseRowClass(Chat, constructor: 'fromDb')
@@ -521,10 +553,8 @@ class BlocklistData with _$BlocklistData implements Insertable<BlocklistData> {
   const BlocklistData._();
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      BlocklistCompanion(
-        jid: Value(jid),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) =>
+      {'jid': Variable<String>(jid)};
 }
 
 @UseRowClass(BlocklistData)
@@ -549,13 +579,17 @@ class EmailBlocklistEntry
   const EmailBlocklistEntry._();
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      EmailBlocklistCompanion(
-        address: Value(address),
-        blockedAt: Value(blockedAt),
-        blockedMessageCount: Value(blockedMessageCount),
-        lastBlockedMessageAt: Value.absentIfNull(lastBlockedMessageAt),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{
+      'address': Variable<String>(address),
+      'blocked_at': Variable<DateTime>(blockedAt),
+      'blocked_message_count': Variable<int>(blockedMessageCount),
+    };
+    if (lastBlockedMessageAt != null) {
+      map['last_blocked_message_at'] = Variable<DateTime>(lastBlockedMessageAt);
+    }
+    return map;
+  }
 }
 
 @UseRowClass(EmailBlocklistEntry)
@@ -586,11 +620,10 @@ class EmailSpamEntry
   const EmailSpamEntry._();
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      EmailSpamlistCompanion(
-        address: Value(address),
-        flaggedAt: Value(flaggedAt),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) => {
+        'address': Variable<String>(address),
+        'flagged_at': Variable<DateTime>(flaggedAt),
+      };
 }
 
 @UseRowClass(EmailSpamEntry)

@@ -7,7 +7,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:uuid/uuid.dart';
-import 'package:axichat/src/storage/database.dart' show MessagesCompanion;
 
 part 'message_models.freezed.dart';
 
@@ -383,39 +382,71 @@ class Message with _$Message implements Insertable<Message> {
   }
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      MessagesCompanion(
-        id: Value.absentIfNull(id),
-        stanzaID: Value(stanzaID),
-        originID: Value.absentIfNull(originID),
-        occupantID: Value.absentIfNull(occupantID),
-        senderJid: Value(senderJid),
-        chatJid: Value(chatJid),
-        body: Value.absentIfNull(body),
-        timestamp: Value.absentIfNull(timestamp),
-        error: Value(error),
-        warning: Value(warning),
-        encryptionProtocol: Value(encryptionProtocol),
-        trust: Value.absentIfNull(trust),
-        trusted: Value.absentIfNull(trusted),
-        deviceID: Value.absentIfNull(deviceID),
-        noStore: Value(noStore),
-        acked: Value(acked),
-        received: Value(received),
-        displayed: Value(displayed),
-        edited: Value(edited),
-        retracted: Value(retracted),
-        isFileUploadNotification: Value(isFileUploadNotification),
-        fileDownloading: Value(fileDownloading),
-        fileUploading: Value(fileUploading),
-        fileMetadataID: Value(fileMetadataID),
-        quoting: Value.absentIfNull(quoting),
-        stickerPackID: Value.absentIfNull(stickerPackID),
-        pseudoMessageType: Value.absentIfNull(pseudoMessageType),
-        pseudoMessageData: Value.absentIfNull(pseudoMessageData),
-        deltaChatId: Value.absentIfNull(deltaChatId),
-        deltaMsgId: Value.absentIfNull(deltaMsgId),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{
+      'stanza_i_d': Variable<String>(stanzaID),
+      'sender_jid': Variable<String>(senderJid),
+      'chat_jid': Variable<String>(chatJid),
+      'error': Variable<int>(error.index),
+      'warning': Variable<int>(warning.index),
+      'encryption_protocol': Variable<int>(encryptionProtocol.index),
+      'no_store': Variable<bool>(noStore),
+      'acked': Variable<bool>(acked),
+      'received': Variable<bool>(received),
+      'displayed': Variable<bool>(displayed),
+      'edited': Variable<bool>(edited),
+      'retracted': Variable<bool>(retracted),
+      'is_file_upload_notification': Variable<bool>(isFileUploadNotification),
+      'file_downloading': Variable<bool>(fileDownloading),
+      'file_uploading': Variable<bool>(fileUploading),
+      'file_metadata_i_d': Variable<String>(fileMetadataID),
+    };
+    if (id != null) {
+      map['id'] = Variable<String>(id!);
+    }
+    if (originID != null) {
+      map['origin_i_d'] = Variable<String>(originID);
+    }
+    if (occupantID != null) {
+      map['occupant_i_d'] = Variable<String>(occupantID);
+    }
+    if (body != null) {
+      map['body'] = Variable<String>(body);
+    }
+    if (timestamp != null) {
+      map['timestamp'] = Variable<DateTime>(timestamp!);
+    }
+    if (trust != null) {
+      map['trust'] = Variable<int>(trust!.index);
+    }
+    if (trusted != null) {
+      map['trusted'] = Variable<bool>(trusted!);
+    }
+    if (deviceID != null) {
+      map['device_i_d'] = Variable<int>(deviceID);
+    }
+    if (quoting != null) {
+      map['quoting'] = Variable<String>(quoting);
+    }
+    if (stickerPackID != null) {
+      map['sticker_pack_i_d'] = Variable<String>(stickerPackID);
+    }
+    if (pseudoMessageType != null) {
+      map['pseudo_message_type'] = Variable<int>(pseudoMessageType!.index);
+    }
+    if (pseudoMessageData != null) {
+      map['pseudo_message_data'] = Variable<String>(
+        const MapStringDynamicConverter().toSql(pseudoMessageData!),
+      );
+    }
+    if (deltaChatId != null) {
+      map['delta_chat_id'] = Variable<int>(deltaChatId);
+    }
+    if (deltaMsgId != null) {
+      map['delta_msg_id'] = Variable<int>(deltaMsgId);
+    }
+    return map;
+  }
 }
 
 class _ParsedInvite {

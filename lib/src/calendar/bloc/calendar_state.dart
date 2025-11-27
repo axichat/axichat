@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../models/calendar_model.dart';
+import '../models/calendar_critical_path.dart';
 import '../models/calendar_task.dart';
 import '../utils/recurrence_utils.dart';
 import 'calendar_event.dart';
@@ -40,6 +41,7 @@ class CalendarState with _$CalendarState {
     @Default(false) bool canUndo,
     @Default(false) bool canRedo,
     TaskFocusRequest? pendingFocus,
+    String? focusedCriticalPathId,
   }) = _CalendarState;
 
   factory CalendarState.initial() => CalendarState(
@@ -54,6 +56,37 @@ extension CalendarStateExtensions on CalendarState {
 
   List<CalendarTask> get scheduledTasks =>
       model.tasks.values.where((task) => task.scheduledTime != null).toList();
+
+  List<CalendarCriticalPath> get criticalPaths => model.activeCriticalPaths;
+
+  CalendarCriticalPath? get focusedCriticalPath {
+    final String? targetId = focusedCriticalPathId;
+    if (targetId == null) {
+      return null;
+    }
+    final CalendarCriticalPath? path = model.criticalPaths[targetId];
+    if (path == null || path.isArchived) {
+      return null;
+    }
+    return path;
+  }
+
+  bool isTaskInFocusedPath(CalendarTask task) {
+    final CalendarCriticalPath? focus = focusedCriticalPath;
+    if (focus == null) {
+      return true;
+    }
+    if (focus.taskIds.isEmpty) {
+      return true;
+    }
+    final String baseId = task.baseId;
+    for (final String id in focus.taskIds) {
+      if (baseTaskIdFrom(id) == baseId) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   DateTime get weekStart {
     final date = selectedDate;
